@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500" viewBox="0 0 400 500" role="img" aria-label="">
+  <defs>
+    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="55%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#4ade80"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="500" fill="url(#sky)"/>
+  <ellipse cx="200" cy="420" rx="320" ry="140" fill="url(#hill)" opacity="0.95"/>
+  <rect x="168" y="220" width="64" height="120" rx="10" fill="#fef3c7" stroke="#ea580c" stroke-width="3"/>
+  <polygon points="200,200 240,240 160,240" fill="#f97316" stroke="#c2410c" stroke-width="2"/>
+  <ellipse cx="200" cy="360" rx="28" ry="18" fill="#fb7185"/>
+  <circle cx="120" cy="300" r="22" fill="#78716c" opacity="0.85"/>
+  <circle cx="290" cy="280" r="20" fill="#78716c" opacity="0.85"/>
+  <circle cx="310" cy="340" r="18" fill="#78716c" opacity="0.75"/>
+  <path d="M185 140 Q200 100 215 140 Q200 125 185 140" fill="#facc15" stroke="#ca8a04" stroke-width="2"/>
+</svg>

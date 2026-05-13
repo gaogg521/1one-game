@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 访客或未来登录用户的作品容器；ownerKey 由 HttpOnly Cookie 持有，便于后续接入 OAuth 时迁移合并。
+model Project {
+  id        String   @id @default(cuid())
+  ownerKey  String
+  /// 可选短链 slug，用于 /s/[shareCode] 跳转试玩页
+  shareCode String?  @unique
+  title     String
+  prompt    String
+  specJson  String
+  status    String   @default("ready")
+  /// 试玩首帧截图 URL 路径，如 /covers/{id}.jpg；由客户端截图后 PATCH 写入
+  coverPath String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerKey])
+}

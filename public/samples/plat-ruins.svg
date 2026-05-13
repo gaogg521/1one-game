@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500" viewBox="0 0 400 500" role="img" aria-label="">
+  <defs>
+    <linearGradient id="pr" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="50%" stop-color="#be185d"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="500" fill="url(#pr)"/>
+  <rect x="40" y="380" width="100" height="16" rx="4" fill="#f472b6" opacity="0.85"/>
+  <rect x="180" y="320" width="90" height="14" rx="4" fill="#22d3ee" opacity="0.9"/>
+  <rect x="300" y="260" width="70" height="12" rx="4" fill="#f472b6" opacity="0.8"/>
+  <rect x="100" y="220" width="60" height="12" rx="4" fill="#22d3ee" opacity="0.75"/>
+  <polygon points="320,400 340,360 360,400" fill="#facc15" opacity="0.9"/>
+  <circle cx="200" cy="180" r="14" fill="#fef08a"/>
+  <path d="M188 200 Q200 240 212 200" stroke="#fef08a" stroke-width="3" fill="none" opacity="0.8"/>
+  <rect x="0" y="440" width="400" height="60" fill="#0f172a" opacity="0.45"/>
+  <path d="M175 195 L185 175 L195 195 L205 175 L215 195" stroke="#67e8f9" stroke-width="2" fill="none" opacity="0.7"/>
+</svg>

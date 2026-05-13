@@ -1,0 +1,18 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: file:/app/data/app.sqlite
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.2}
+      OPENAI_MODEL_FALLBACKS: ${OPENAI_MODEL_FALLBACKS:-kimi-k2-6,gemini-3.1-pro-preview,Doubao-Seed-2-Code,gpt-5-4-mini,qwen-3-6-plus,glm-5-1}
+      OPENAI_EXTRA_HEADERS_JSON: ${OPENAI_EXTRA_HEADERS_JSON:-}
+      OPENAI_USER_AGENT: ${OPENAI_USER_AGENT:-}
+    volumes:
+      - sqlite_data:/app/data
+
+volumes:
+  sqlite_data:
