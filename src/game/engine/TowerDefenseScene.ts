@@ -1,8 +1,16 @@
 import Phaser from "phaser";
-import { playBleep } from "@/game/audio/webBleeps";
+import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import {
+  buildCohesivePresentation,
+  hexToPhaserUint,
+  mixHex,
+  phaserUintToCssHex,
+  type CohesivePresentation,
+} from "@/lib/cohesive-presentation";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -70,88 +78,159 @@ function ensureTdEnemyTextures(scene: Phaser.Scene, hazardHex: string, collectib
   const mk = (key: string, tw: number, th: number, draw: (g: Phaser.GameObjects.Graphics, w: number, h: number) => void) => {
     if (scene.textures.exists(key)) return;
     const g = scene.make.graphics({ x: 0, y: 0 });
-    draw(g, tw, th);
-    g.generateTexture(key, tw, th);
+    try {
+      draw(g, tw, th);
+      g.generateTexture(key, tw, th);
+    } catch {
+      /* silently skip bad draw */
+    }
     g.destroy();
   };
 
   const body = hexToRgbInt(hazardHex);
-  const dark = shiftRgb(body, -56, -56, -56);
-  const light = shiftRgb(body, 42, 42, 42);
+  const dark = shiftRgb(body, -60, -60, -60);
+  const light = shiftRgb(body, 55, 55, 55);
+  const veryLight = shiftRgb(body, 90, 90, 90);
 
-  mk("texEnemy", 36, 36, (g, w, h) => {
-    g.fillStyle(0x000000, 0.22);
-    g.fillRoundedRect(5, h - 8, w - 10, 7, 3);
-    g.lineStyle(2.5, dark, 1);
-    g.strokeRoundedRect(4, 6, w - 8, h - 16, 9);
-    g.fillStyle(body, 1);
-    g.fillRoundedRect(5, 7, w - 10, h - 18, 8);
-    g.fillStyle(light, 0.38);
-    g.fillRoundedRect(8, 9, w - 16, 11, 5);
-    const ey = 14;
+  // Grunt: round-bodied cute creature with big ears and expressive eyes
+  mk("texEnemy", 38, 40, (g, w, h) => {
+    const cx = w / 2;
+    // Drop shadow
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(cx + 2, h - 4, w - 10, 8);
+    // Ears (two circles behind the head)
     g.fillStyle(dark, 1);
-    g.fillCircle(11, ey, 3.5);
-    g.fillCircle(w - 11, ey, 3.5);
-    g.fillStyle(0xffffff, 0.55);
-    g.fillCircle(11.8, ey - 1.1, 1.3);
-    g.fillCircle(w - 10.2, ey - 1.1, 1.3);
-    g.fillStyle(dark, 0.92);
-    g.fillRoundedRect(9, h - 12, 7, 5, 2);
-    g.fillRoundedRect(w - 16, h - 12, 7, 5, 2);
+    g.fillCircle(cx - 9, 9, 7);
+    g.fillCircle(cx + 9, 9, 7);
+    g.fillStyle(light, 0.65);
+    g.fillCircle(cx - 9, 9, 4);
+    g.fillCircle(cx + 9, 9, 4);
+    // Body outline
+    g.lineStyle(2.5, dark, 1);
+    g.strokeCircle(cx, 21, 16);
+    // Body fill
+    g.fillStyle(body, 1);
+    g.fillCircle(cx, 21, 16);
+    // Body highlight
+    g.fillStyle(veryLight, 0.32);
+    g.fillEllipse(cx - 4, 14, 12, 9);
+    // Eyes
+    const ey = 19;
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillCircle(cx - 6, ey, 4.5);
+    g.fillCircle(cx + 6, ey, 4.5);
+    g.fillStyle(0xffffff, 0.75);
+    g.fillCircle(cx - 4.8, ey - 1.5, 1.8);
+    g.fillCircle(cx + 7.2, ey - 1.5, 1.8);
+    // Rosy cheeks
+    g.fillStyle(shiftRgb(body, 30, -10, -10), 0.45);
+    g.fillCircle(cx - 10, ey + 3, 3.5);
+    g.fillCircle(cx + 10, ey + 3, 3.5);
+    // Little feet
+    g.fillStyle(dark, 1);
+    g.fillRoundedRect(cx - 12, h - 10, 8, 6, 3);
+    g.fillRoundedRect(cx + 4, h - 10, 8, 6, 3);
   });
 
-  mk("texEnemyTank", 44, 44, (g, w, h) => {
-    const plate = 0x64748b;
-    const plateD = 0x334155;
+  // Tank: bulky armored golem with glowing eye visor
+  mk("texEnemyTank", 46, 46, (g, w, h) => {
+    const cx = w / 2;
+    const plate = 0x475569;
+    const plateD = 0x1e293b;
     const plateL = 0x94a3b8;
-    const visor = 0x0f172a;
-    g.fillStyle(0x000000, 0.24);
-    g.fillRoundedRect(6, h - 9, w - 12, 8, 3);
-    g.lineStyle(2.5, plateD, 1);
-    g.strokeRoundedRect(5, 10, w - 10, h - 22, 10);
-    g.fillStyle(plate, 1);
-    g.fillRoundedRect(6, 11, w - 12, h - 24, 9);
-    g.fillStyle(plateL, 0.45);
-    g.fillRoundedRect(9, 13, w - 18, 9, 4);
-    g.lineStyle(2, plateD, 0.95);
-    g.strokeRoundedRect(8, h - 14, w - 16, 8, 3);
+    const glowColor = 0xff4444;
+    // Drop shadow
+    g.fillStyle(0x000000, 0.3);
+    g.fillEllipse(cx + 2, h - 4, w - 8, 9);
+    // Shoulder pads (sides)
     g.fillStyle(plateD, 1);
-    g.fillRoundedRect(7, h - 13, w - 14, 6, 2);
-    g.fillStyle(visor, 0.92);
-    g.fillRoundedRect(11, 16, w - 22, 8, 3);
-    g.fillStyle(plateL, 0.65);
-    g.fillCircle(w / 2, 21, 5);
-    g.fillStyle(visor, 1);
-    g.fillCircle(w / 2, 21, 3);
+    g.fillRoundedRect(2, 12, 9, 18, 3);
+    g.fillRoundedRect(w - 11, 12, 9, 18, 3);
+    g.fillStyle(plateL, 0.4);
+    g.fillRoundedRect(3, 13, 6, 8, 2);
+    g.fillRoundedRect(w - 9, 13, 6, 8, 2);
+    // Body outline + fill
+    g.lineStyle(3, plateD, 1);
+    g.strokeRoundedRect(10, 8, w - 20, h - 18, 8);
+    g.fillStyle(plate, 1);
+    g.fillRoundedRect(11, 9, w - 22, h - 20, 7);
+    // Chest plate highlight
+    g.fillStyle(plateL, 0.38);
+    g.fillRoundedRect(14, 11, w - 28, 12, 5);
+    // Helmet
+    g.fillStyle(plateD, 1);
+    g.fillRoundedRect(14, 7, w - 28, 14, 5);
+    g.fillStyle(plate, 0.8);
+    g.fillRoundedRect(15, 8, w - 30, 11, 4);
+    // Visor glow (red angry eye strip)
+    g.fillStyle(glowColor, 0.22);
+    g.fillRoundedRect(15, 13, w - 30, 6, 2);
+    g.fillStyle(glowColor, 0.9);
+    g.fillRoundedRect(17, 14, 8, 4, 2);
+    g.fillRoundedRect(w - 25, 14, 8, 4, 2);
+    // Belly rivet
+    g.fillStyle(plateL, 0.7);
+    g.fillCircle(cx, 27, 4);
+    g.fillStyle(plateD, 0.8);
+    g.fillCircle(cx, 27, 2);
+    // Treads/feet
+    g.fillStyle(plateD, 1);
+    g.fillRoundedRect(10, h - 12, w - 20, 7, 3);
+    g.lineStyle(1.5, plateL, 0.45);
+    g.strokeRoundedRect(10, h - 12, w - 20, 7, 3);
+    // Tread details
+    for (let ti = 0; ti < 4; ti += 1) {
+      g.fillStyle(plate, 0.7);
+      g.fillRect(13 + ti * ((w - 26) / 4), h - 11, (w - 30) / 4 - 1, 5);
+    }
   });
 
+  // Runner: fast slim creature with long streamlined shape and sprint lines
   const run = hexToRgbInt(collectibleHex);
-  const runD = shiftRgb(run, -48, -48, -48);
-  const runL = shiftRgb(run, 38, 38, 38);
-  mk("texEnemyRunner", 32, 34, (g, w, h) => {
-    g.fillStyle(runD, 0.35);
-    g.fillRoundedRect(2, 12, 5, 4, 1);
-    g.fillRoundedRect(1, 17, 5, 3, 1);
-    g.fillStyle(0x000000, 0.2);
-    g.fillRoundedRect(4, h - 7, w - 8, 6, 2);
-    g.lineStyle(2, runD, 1);
-    g.strokeRoundedRect(6, 7, w - 12, h - 15, 8);
+  const runD = shiftRgb(run, -55, -55, -55);
+  const runL = shiftRgb(run, 50, 50, 50);
+  mk("texEnemyRunner", 34, 36, (g, w, h) => {
+    const cx = w / 2;
+    // Drop shadow
+    g.fillStyle(0x000000, 0.22);
+    g.fillEllipse(cx + 2, h - 3, w - 8, 6);
+    // Speed streak lines (behind the body)
+    g.lineStyle(1.5, runD, 0.5);
+    g.lineBetween(2, 14, 8, 18);
+    g.lineBetween(2, 18, 8, 22);
+    g.lineStyle(1, runD, 0.3);
+    g.lineBetween(1, 11, 6, 14);
+    // Tail
+    g.fillStyle(runD, 0.8);
+    g.fillRoundedRect(3, 20, 6, 3, 1);
+    // Body outline
+    g.lineStyle(2.5, runD, 1);
+    g.strokeEllipse(cx + 3, h / 2, w - 12, h - 10);
+    // Body fill
     g.fillStyle(run, 1);
-    g.fillRoundedRect(7, 8, w - 14, h - 17, 7);
-    g.fillStyle(runL, 0.42);
-    g.fillRoundedRect(9, 9, w - 18, 8, 4);
-    const ey = 13;
+    g.fillEllipse(cx + 3, h / 2, w - 12, h - 10);
+    // Body highlight
+    g.fillStyle(runL, 0.4);
+    g.fillEllipse(cx + 1, h / 2 - 5, (w - 14) * 0.7, (h - 10) * 0.45);
+    // Head (slightly larger front section)
+    g.fillStyle(run, 1);
+    g.fillCircle(cx + 8, 14, 9);
+    g.lineStyle(2, runD, 1);
+    g.strokeCircle(cx + 8, 14, 9);
+    // Eyes — large and alert
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillCircle(cx + 12, 12, 4);
+    g.fillStyle(0xffffff, 0.7);
+    g.fillCircle(cx + 13.5, 10.5, 1.6);
+    // Ears (pointy / swept back)
     g.fillStyle(runD, 1);
-    g.fillCircle(11, ey, 4);
-    g.fillCircle(w - 11, ey, 4);
-    g.fillStyle(0xffffff, 0.6);
-    g.fillCircle(12, ey - 1.2, 1.4);
-    g.fillCircle(w - 10, ey - 1.2, 1.4);
-    g.fillStyle(runD, 0.95);
-    g.fillRoundedRect(8, 5, 4, 5, 2);
-    g.fillRoundedRect(w - 12, 5, 4, 5, 2);
-    g.fillRoundedRect(10, h - 11, 5, 4, 2);
-    g.fillRoundedRect(w - 15, h - 11, 5, 4, 2);
+    g.fillTriangle(cx + 3, 6, cx + 8, 2, cx + 14, 7);
+    g.fillStyle(runL, 0.5);
+    g.fillTriangle(cx + 5, 6, cx + 8, 3, cx + 12, 6);
+    // Feet (speedy little legs)
+    g.fillStyle(runD, 1);
+    g.fillRoundedRect(cx - 2, h - 9, 6, 5, 2);
+    g.fillRoundedRect(cx + 7, h - 11, 6, 7, 2);
   });
 }
 
@@ -161,31 +240,55 @@ function tdRuntimeTextureKey(i: number): string {
 
 function classifyTdReferenceTextures(payloads: RuntimeReferencePayload[]): {
   bgKey: string | null;
+  protagonistKey: string | null;
   monsterKeyCandidates: string[];
-  skipKeys: Set<string>;
+  skipMonsterKeys: Set<string>;
 } {
   const bgKeys: string[] = [];
   const monKeys: string[] = [];
-  const towerKeys: string[] = [];
+  const protagonistKeys: string[] = [];
+  const towerSkinKeys: string[] = [];
 
   payloads.forEach((p, i) => {
     const key = tdRuntimeTextureKey(i);
     const pu = (p.purpose ?? "").trim();
-    if (/背景|地图|场景|底图|世界|world|tile|地表/i.test(pu)) bgKeys.push(key);
-    else if (/塔|主角|玩家|防守|萝卜|tower|hero|player|建塔/i.test(pu)) towerKeys.push(key);
-    else if (/怪|敌|小兵|野怪|mob|monster|hazard|精英/i.test(pu)) monKeys.push(key);
+    // 敌军优先，避免含「怪」的用途被误判成背景
+    if (/怪|敌|小兵|野怪|mob|monster|creep|hazard|精英|enemy|invader/i.test(pu)) {
+      monKeys.push(key);
+      return;
+    }
+    // 需保护的主角 / 萝卜 / 水晶等（≠ 防御塔皮肤）
+    if (
+      /主角|玩家|守护者|水晶|萝卜|老家|能量核心|基地核心|vip|goal|protect|被保护|carry|npc|citadel/i.test(pu) ||
+      /^基地$/i.test(pu)
+    ) {
+      protagonistKeys.push(key);
+      return;
+    }
+    // 塔造型参考（不当作行走怪贴图）
+    if (/箭塔|炮塔|建塔|防御塔|炮台|^塔$|tower\b|turret/i.test(pu)) {
+      towerSkinKeys.push(key);
+      return;
+    }
+    if (/背景|地图|场景|底图|世界|terrain|tilemap|tile|地表|ground|field|world|battlefield/i.test(pu)) {
+      bgKeys.push(key);
+    }
   });
 
   return {
     bgKey: bgKeys[0] ?? null,
+    protagonistKey: protagonistKeys[0] ?? null,
     monsterKeyCandidates: monKeys,
-    skipKeys: new Set(towerKeys),
+    skipMonsterKeys: new Set([...protagonistKeys, ...towerSkinKeys]),
   };
 }
 
 type Enemy = {
   id: string;
   sprite: Phaser.GameObjects.Image;
+  ring: Phaser.GameObjects.Graphics | null;
+  maskGfx: Phaser.GameObjects.Graphics | null;
+  maskRadius: number;
   dist: number;
   hp: number;
   maxHp: number;
@@ -210,6 +313,12 @@ export class TowerDefenseScene extends Phaser.Scene {
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
+
+  private readonly soundscape: GameSoundscape | null;
+
+  private readonly CELL_SZ = 40;
+
+  private pathCellSet: Set<string> = new Set();
 
   private path!: PathMetrics;
 
@@ -280,6 +389,16 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private banner!: HudBanner;
 
+  private cohesion!: CohesivePresentation;
+
+  private dangerVignette: Phaser.GameObjects.Graphics | null = null;
+
+  /** Range preview circle shown when hovering empty tower slots */
+  private rangePreviewGfx: Phaser.GameObjects.Graphics | null = null;
+
+  /** true 仅在 resumeCreateAfterReferences（含 HudBanner）跑完后置位；create 异步完成前禁止 update 跑游戏逻辑 */
+  private bootstrapComplete = false;
+
   private eventIndex = 0;
 
   private eventType: DirectorEvent["type"] | null = null;
@@ -298,30 +417,128 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private goalShiftUntil = 0;
 
+  private hpBarGfx!: Phaser.GameObjects.Graphics;
+
   private goalShiftFailed = false;
 
   private readonly runtimePayloads: RuntimeReferencePayload[];
 
   private userMonsterTexKeys: string[] = [];
 
+  /** Pre-cropped circular canvas textures for user monster images */
+  private userMonsterCircTexKeys: string[] = [];
+
   private userMonsterCycle = 0;
 
-  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, runtimePayloads: RuntimeReferencePayload[] = []) {
+  /**
+   * 已叠用途为「背景地图」的用户参考底图：Gameplay 轨迹线可以更贴地；与「全局低调路径/UI」可同时生效。
+   */
+  private referenceBackdropActive = false;
+
+  /** React / 路由快速卸载 Game 时置位：禁止异步纹理与延迟 bootstrap 写已销毁场景 */
+  private tdDisposed = false;
+
+  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, runtimePayloads: RuntimeReferencePayload[] = [], soundscape?: GameSoundscape) {
     super("TowerDefenseScene");
     this.spec = spec;
     this.onEnd = onEnd;
     this.runtimePayloads = runtimePayloads;
+    this.soundscape = soundscape ?? null;
+  }
+
+  /** Loader 对部分 data URL 不可靠；在读帧前用 Image + textures.addImage 补齐 */
+  private isPayloadTextureUsable(key: string): boolean {
+    if (!this.textures.exists(key)) return false;
+    try {
+      const f = this.textures.get(key).get();
+      return f.width > 0 && f.height > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async ensureRuntimeTexturesFromPayloads(): Promise<void> {
+    const jobs: Promise<void>[] = [];
+    for (let i = 0; i < this.runtimePayloads.length; i += 1) {
+      const p = this.runtimePayloads[i]!;
+      const key = tdRuntimeTextureKey(i);
+      if (typeof p.dataUrl !== "string" || !p.dataUrl.startsWith("data:")) continue;
+      if (this.isPayloadTextureUsable(key)) continue;
+
+      jobs.push(
+        new Promise((resolve) => {
+          try {
+            if (this.textures.exists(key)) this.textures.remove(key);
+          } catch {
+            /* ignore */
+          }
+          const img = new Image();
+          img.onload = () => {
+            try {
+              if (this.tdDisposed) {
+                resolve();
+                return;
+              }
+              if (!this.add) {
+                resolve();
+                return;
+              }
+              if (!this.textures.exists(key)) this.textures.addImage(key, img);
+            } catch {
+              /* ignore */
+            }
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = p.dataUrl;
+        }),
+      );
+    }
+    await Promise.all(jobs);
   }
 
   preload() {
-    this.runtimePayloads.forEach((p, i) => {
-      if (typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:")) {
-        this.load.image(tdRuntimeTextureKey(i), p.dataUrl);
-      }
-    });
+    /* 参考图改在 create() 中异步灌入 textures，避免 load.image 对部分 data URL 无效 */
   }
 
   create() {
+    this.tdDisposed = false;
+    /* Game.destroy → ScenePlugin shutdown：先于异步纹理完成则可能 this.add=null */
+    this.sys.events.once("shutdown", () => {
+      this.tdDisposed = true;
+    });
+
+    void this.ensureRuntimeTexturesFromPayloads()
+      .then(() => {
+        if (this.tdDisposed) return;
+        /* 再等一帧，确保 DisplayList / add 已从 boot 链路挂好（避免极少数竞态下 add 仍为 null） */
+        this.time.delayedCall(0, () => this.runBootstrapResume());
+      })
+      .catch((err) => {
+        console.error("TowerDefenseScene: texture preload failed", err);
+        if (!this.tdDisposed) {
+          this.time.delayedCall(0, () => this.runBootstrapResume());
+        }
+      });
+  }
+
+  private runBootstrapResume(): void {
+    if (this.tdDisposed || this.bootstrapComplete) return;
+    if (!this.add) {
+      console.warn("TowerDefenseScene: add plugin missing, bootstrap skipped");
+      return;
+    }
+    try {
+      this.resumeCreateAfterReferences();
+    } catch (e) {
+      console.error("TowerDefenseScene: bootstrap failed", e);
+    }
+  }
+
+  private resumeCreateAfterReferences(): void {
+    /* 异步完成时 Scene 可能已随 React unmount / 切换 spec 销毁，避免对 null.displayList 报错 */
+    if (this.tdDisposed || !this.add) return;
+
     const w = this.scale.width;
     const h = this.scale.height;
 
@@ -329,18 +546,26 @@ export class TowerDefenseScene extends Phaser.Scene {
     const classified = classifyTdReferenceTextures(payloads);
     const existingKeys = payloads
       .map((_, i) => tdRuntimeTextureKey(i))
-      .filter((k) => this.textures.exists(k));
+      .filter((k) => this.isPayloadTextureUsable(k));
 
     const bgKey =
-      classified.bgKey && this.textures.exists(classified.bgKey) ? classified.bgKey : null;
+      classified.bgKey && this.isPayloadTextureUsable(classified.bgKey) ? classified.bgKey : null;
+    this.referenceBackdropActive = !!bgKey;
+
+    const protagonistKeyResolved =
+      classified.protagonistKey && this.isPayloadTextureUsable(classified.protagonistKey)
+        ? classified.protagonistKey
+        : null;
 
     let mon = classified.monsterKeyCandidates.filter(
-      (k) => this.textures.exists(k) && k !== bgKey && !classified.skipKeys.has(k),
+      (k) =>
+        this.isPayloadTextureUsable(k) && k !== bgKey && !classified.skipMonsterKeys.has(k),
     );
     if (!mon.length) {
-      mon = existingKeys.filter((k) => k !== bgKey && !classified.skipKeys.has(k));
+      mon = existingKeys.filter((k) => k !== bgKey && !classified.skipMonsterKeys.has(k));
     }
-    this.userMonsterTexKeys = mon;
+    this.userMonsterTexKeys = mon.filter((k) => this.textures.exists(k));
+    this.userMonsterCircTexKeys = this.buildCircularTextures(this.userMonsterTexKeys, 22);
     this.userMonsterCycle = 0;
 
     this.bp = this.spec.towerDefense ?? null;
@@ -349,6 +574,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     this.baseHp = this.spec.gameplay.baseHealth ?? 42;
     this.coins = this.spec.gameplay.startingCoins ?? 120;
+
+    const ui = buildCohesivePresentation(this.spec);
+    this.cohesion = ui;
+    setBleepTemperament(ui.bleepTemperament);
 
     const relPath =
       this.bp?.path ?? [
@@ -370,28 +599,107 @@ export class TowerDefenseScene extends Phaser.Scene {
       const sc = Math.max(w / bg.width, h / bg.height) * 1.02;
       bg.setScale(sc);
       bg.setAlpha(0.92);
+      // Semi-transparent road overlay so path is readable on user bg image
+      const gRoad = this.add.graphics().setDepth(-16);
+      gRoad.lineStyle(38, 0x7c5233, 0.45);
+      gRoad.beginPath();
+      gRoad.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i += 1) gRoad.lineTo(points[i].x, points[i].y);
+      gRoad.strokePath();
+      for (const pt of points) { gRoad.fillStyle(0x7c5233, 0.45); gRoad.fillCircle(pt.x, pt.y, 19); }
+    } else {
+      this.drawGridMap(points, w, h);
     }
 
-    const gPath = this.add.graphics();
-    gPath.lineStyle(10, parseInt(this.spec.theme.hazardColor.slice(1), 16), 0.28);
-    gPath.beginPath();
-    gPath.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i += 1) {
-      gPath.lineTo(points[i].x, points[i].y);
+    /* ─── 起点 / 终点标记 ─── */
+    {
+      const p0 = points[0]!;
+      const gEntry = this.add.graphics().setDepth(-5);
+      gEntry.fillStyle(0xf59e0b, 0.22); gEntry.fillCircle(p0.x, p0.y, 22);
+      gEntry.lineStyle(2.5, 0xfbbf24, 0.72); gEntry.strokeCircle(p0.x, p0.y, 22);
+      this.add.text(p0.x, p0.y, '▶', { fontSize: '14px', color: '#fbbf24' }).setOrigin(0.5).setDepth(-4).setAlpha(0.9);
     }
-    gPath.strokePath();
-    gPath.setDepth(-5);
 
-    const rectTex = (key: string, rw: number, rh: number, color: string) => {
-      if (this.textures.exists(key)) return;
-      const gr = this.make.graphics({ x: 0, y: 0 });
-      gr.fillStyle(parseInt(color.replace("#", ""), 16));
-      gr.fillRoundedRect(0, 0, rw, rh, 8);
-      gr.generateTexture(key, rw, rh);
-      gr.destroy();
-    };
+    if (protagonistKeyResolved) {
+      const goal = points[points.length - 1]!;
+      const hero = this.add.image(goal.x, goal.y - 10, protagonistKeyResolved);
+      hero.setDepth(21);
+      const fw = hero.frame.width;
+      const fh = hero.frame.height;
+      hero.setScale(Math.min(76 / Math.max(fw, fh, 1), 1.4));
+    } else {
+      // Always draw a procedural defended object at the path endpoint
+      const goal = points[points.length - 1]!;
+      const collectLabel = (this.spec.labels.collectible ?? "").toLowerCase();
+      const titleLow = this.spec.title.toLowerCase();
+      const isCarrot = /萝卜|carrot/.test(collectLabel + titleLow);
+      const isCrystal = /水晶|crystal|能量|core|核心/.test(collectLabel + titleLow);
+      const playerCol = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
+      const collectCol = parseInt((this.spec.theme.collectibleColor ?? this.spec.theme.playerColor).replace("#", ""), 16);
 
-    rectTex("texTower", 46, 46, this.spec.theme.playerColor);
+      const gGoal = this.add.graphics().setDepth(20);
+      // Glow ring behind the object
+      gGoal.fillStyle(collectCol, 0.14); gGoal.fillCircle(goal.x, goal.y, 38);
+      gGoal.lineStyle(2.5, collectCol, 0.55); gGoal.strokeCircle(goal.x, goal.y, 38);
+      // Pulsing inner ring (drawn once, depth > enemies)
+      gGoal.fillStyle(collectCol, 0.10); gGoal.fillCircle(goal.x, goal.y, 28);
+
+      if (isCarrot) {
+        // Carrot: orange triangle body + green top
+        gGoal.fillStyle(0xff8c42, 1);
+        gGoal.fillTriangle(goal.x, goal.y - 26, goal.x - 14, goal.y + 14, goal.x + 14, goal.y + 14);
+        gGoal.fillStyle(0x6db33f, 1);
+        gGoal.fillEllipse(goal.x - 6, goal.y - 30, 10, 20); gGoal.fillEllipse(goal.x, goal.y - 34, 10, 22);
+        gGoal.fillEllipse(goal.x + 6, goal.y - 30, 10, 20);
+        gGoal.fillStyle(0xffffff, 0.35);
+        gGoal.fillEllipse(goal.x - 4, goal.y - 18, 5, 12);
+      } else if (isCrystal) {
+        // Crystal: hexagon with inner glow
+        const r = 20;
+        gGoal.fillStyle(collectCol, 0.9);
+        gGoal.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+          if (i === 0) gGoal.moveTo(goal.x + r * Math.cos(a), goal.y + r * Math.sin(a));
+          else gGoal.lineTo(goal.x + r * Math.cos(a), goal.y + r * Math.sin(a));
+        }
+        gGoal.closePath(); gGoal.fillPath();
+        gGoal.fillStyle(0xffffff, 0.45); gGoal.fillCircle(goal.x, goal.y, 10);
+        gGoal.lineStyle(2, shiftRgb(collectCol, -50, -50, -50), 0.9);
+        gGoal.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+          if (i === 0) gGoal.moveTo(goal.x + r * Math.cos(a), goal.y + r * Math.sin(a));
+          else gGoal.lineTo(goal.x + r * Math.cos(a), goal.y + r * Math.sin(a));
+        }
+        gGoal.closePath(); gGoal.strokePath();
+      } else {
+        // Generic base: shield/flag shape
+        gGoal.fillStyle(playerCol, 1);
+        gGoal.fillRoundedRect(goal.x - 16, goal.y - 22, 32, 36, 8);
+        gGoal.lineStyle(2.5, shiftRgb(playerCol, -60, -60, -60), 0.9);
+        gGoal.strokeRoundedRect(goal.x - 16, goal.y - 22, 32, 36, 8);
+        gGoal.fillStyle(0xffffff, 0.4); gGoal.fillRoundedRect(goal.x - 10, goal.y - 18, 20, 12, 4);
+        gGoal.fillStyle(collectCol, 0.9); gGoal.fillCircle(goal.x, goal.y + 4, 7);
+        gGoal.fillStyle(0xffffff, 0.6); gGoal.fillCircle(goal.x - 2, goal.y + 2, 3);
+      }
+
+      // Label under the goal
+      // Short label: use title-derived name or generic base
+      const rawLabel = this.spec.labels.collectible ?? "";
+      const goalLabel = (rawLabel !== "—" && rawLabel !== "无" && rawLabel.length > 0)
+        ? rawLabel.split(/[（(,，]/)[0]!.trim().slice(0, 6) || "基地"
+        : "基地";
+      this.add.text(goal.x, goal.y + 34, goalLabel, {
+        fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#fef3c7",
+        stroke: "#000000", strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(21);
+    }
+
+    // Pre-warm per-type tower textures
+    for (const towerId of ["dart", "splash", "frost"]) {
+      this.ensureTowerTextureForId(towerId, this.spec.theme.playerColor);
+    }
     if (this.userMonsterTexKeys.length === 0) {
       ensureTdEnemyTextures(
         this,
@@ -480,11 +788,36 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.tryBuildOrUpgrade(pointer.x, pointer.y);
     });
 
+    // Range preview on pointer hover over empty slots
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.finished || !this.rangePreviewGfx) return;
+      const hitR = 26;
+      for (const s of this.slots) {
+        if (Phaser.Math.Distance.Between(pointer.x, pointer.y, s.x, s.y) <= hitR) {
+          const towerId = s.towerId ?? this.selectedTowerId;
+          const def = this.getTowerDef(towerId);
+          if (!def) { this.rangePreviewGfx.setAlpha(0); return; }
+          const range = s.towerId
+            ? (def.range + (Math.max(1, s.level) - 1) * 16)
+            : def.range;
+          this.rangePreviewGfx.clear();
+          const playerColorInt = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
+          this.rangePreviewGfx.fillStyle(playerColorInt, 0.07);
+          this.rangePreviewGfx.fillCircle(s.x, s.y, range);
+          this.rangePreviewGfx.lineStyle(1.5, playerColorInt, 0.45);
+          this.rangePreviewGfx.strokeCircle(s.x, s.y, range);
+          this.rangePreviewGfx.setAlpha(1);
+          return;
+        }
+      }
+      this.rangePreviewGfx.setAlpha(0);
+    });
+
     this.add
       .text(w / 2, 20, this.spec.title, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "19px",
-        color: "#fafafa",
+        color: ui.hud.title,
       })
       .setOrigin(0.5)
       .setDepth(30);
@@ -494,7 +827,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         .text(w / 2, 44, this.spec.labels.subtitle, {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
-          color: "#a1a1aa",
+          color: ui.hud.subtitle,
         })
         .setOrigin(0.5)
         .setDepth(30);
@@ -504,7 +837,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(16, 68, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "15px",
-        color: "#fde047",
+        color: ui.hud.coins,
       })
       .setDepth(35);
 
@@ -512,7 +845,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(16, 92, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#fca5a5",
+        color: ui.hud.danger,
       })
       .setDepth(35);
 
@@ -520,7 +853,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(w - 16, 68, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#67e8f9",
+        color: ui.hud.accent,
       })
       .setOrigin(1, 0)
       .setDepth(35);
@@ -529,7 +862,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(w - 16, 92, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#a78bfa",
+        color: ui.hud.accent2,
       })
       .setOrigin(1, 0)
       .setDepth(35);
@@ -541,14 +874,14 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(16, h - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#e4e4e7",
+        color: ui.hud.body,
       })
       .setDepth(36);
     this.skillCdText = this.add
       .text(16, h - 38, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#94a3b8",
+        color: ui.hud.muted,
       })
       .setDepth(36);
 
@@ -562,22 +895,61 @@ export class TowerDefenseScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
-          color: "#71717a",
+          color: ui.hud.hint,
         },
       )
       .setOrigin(0.5)
       .setDepth(35);
 
     for (const s of this.slots) {
-      s.ring.lineStyle(2, 0x52525b, 0.45);
-      s.ring.strokeCircle(s.x, s.y, 24);
+      // 保卫萝卜风格：绿色圆形底座 + 向上指示箭头
+      // Outer glow
+      s.ring.fillStyle(0x22c55e, 0.18);
+      s.ring.fillCircle(s.x, s.y, 22);
+      // Green circle base
+      s.ring.fillStyle(0x16a34a, 1);
+      s.ring.fillCircle(s.x, s.y, 17);
+      s.ring.lineStyle(2.5, 0x14532d, 0.9);
+      s.ring.strokeCircle(s.x, s.y, 17);
+      // Inner lighter circle
+      s.ring.fillStyle(0x22c55e, 1);
+      s.ring.fillCircle(s.x, s.y, 13);
+      // White + symbol inside circle
+      s.ring.lineStyle(2.5, 0xffffff, 0.95);
+      s.ring.lineBetween(s.x - 7, s.y, s.x + 7, s.y);
+      s.ring.lineBetween(s.x, s.y - 7, s.x, s.y + 7);
+      // Upward arrow pin stem
+      s.ring.fillStyle(0x15803d, 1);
+      s.ring.fillRect(s.x - 2.5, s.y - 28, 5, 12);
+      // Arrow head (upward triangle)
+      s.ring.fillStyle(0x22c55e, 1);
+      s.ring.fillTriangle(s.x, s.y - 36, s.x - 7, s.y - 24, s.x + 7, s.y - 24);
+      s.ring.lineStyle(1.5, 0x14532d, 0.8);
+      s.ring.strokeTriangle(s.x, s.y - 36, s.x - 7, s.y - 24, s.x + 7, s.y - 24);
     }
 
     this.towerTimers = this.slots.map(() => 0);
     this.buildTowerPickerUI();
     this.refreshHud();
 
-    this.banner = new HudBanner(this);
+    this.banner = new HudBanner(this, ui.banner);
+
+    this.hpBarGfx = this.add.graphics();
+    this.hpBarGfx.setDepth(19);
+
+    this.rangePreviewGfx = this.add.graphics();
+    this.rangePreviewGfx.setDepth(6);
+    this.rangePreviewGfx.setAlpha(0);
+
+    this.bootstrapComplete = true;
+
+    // Danger vignette overlay (hidden until low HP)
+    const { width, height } = this.scale;
+    this.dangerVignette = this.add.graphics();
+    this.dangerVignette.setDepth(24);
+    this.dangerVignette.setAlpha(0);
+    this.dangerVignette.fillStyle(0xff2233, 1);
+    this.dangerVignette.fillRect(0, 0, width, height);
 
     const lead = this.waveDefs[0]?.leadInMs ?? 650;
     this.time.delayedCall(lead, () => this.startWave(0));
@@ -586,6 +958,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   private buildTowerPickerUI() {
     const w = this.scale.width;
     const h = this.scale.height;
+    const u = this.cohesion;
     const ids = Array.from(this.towerById.keys());
     const n = ids.length;
     if (n === 0) return;
@@ -602,18 +975,18 @@ export class TowerDefenseScene extends Phaser.Scene {
       const t = this.towerById.get(id);
       if (!t) continue;
 
-      const box = this.add.rectangle(0, 0, bw, bh, 0x0b1220, 0.55);
-      box.setStrokeStyle(1, 0xffffff, 0.12);
+      const box = this.add.rectangle(0, 0, bw, bh, u.panelFill, u.panelFillAlpha);
+      box.setStrokeStyle(1, u.panelStroke, u.panelStrokeAlpha);
       const title = this.add.text(-bw / 2 + 10, -10, t.name, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#e4e4e7",
+        color: u.hud.body,
       });
       const coinLabel = this.spec.labels.collectible ?? "金币";
       const cost = this.add.text(-bw / 2 + 10, 6, `${coinLabel} ${t.buildCost}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "10px",
-        color: "#a1a1aa",
+        color: u.hud.muted,
       });
       const btn = this.add.container(x, baseY, [box, title, cost]);
       btn.setDepth(40);
@@ -634,6 +1007,17 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private refreshPickerUI() {
     const selected = this.selectedTowerId;
+    const u = this.cohesion;
+    const activeFill =
+      hexToPhaserUint(mixHex(phaserUintToCssHex(u.panelFill), this.spec.theme.playerColor, 0.42)) ?? u.panelFill;
+    const activeStroke =
+      hexToPhaserUint(
+        mixHex(
+          phaserUintToCssHex(u.panelStroke),
+          this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
+          0.28,
+        ),
+      ) ?? u.panelStroke;
     this.children.list.forEach((obj) => {
       const anyObj = obj as unknown as { __td_id?: string; list?: Phaser.GameObjects.GameObject[] };
       if (!anyObj.__td_id || !(obj instanceof Phaser.GameObjects.Container)) return;
@@ -642,8 +1026,8 @@ export class TowerDefenseScene extends Phaser.Scene {
         | Phaser.GameObjects.Rectangle
         | undefined;
       if (rect) {
-        rect.setFillStyle(active ? 0x7c3aed : 0x0b1220, active ? 0.32 : 0.55);
-        rect.setStrokeStyle(1, active ? 0xc4b5fd : 0xffffff, active ? 0.35 : 0.12);
+        rect.setFillStyle(active ? activeFill : u.panelFill, active ? 0.5 : u.panelFillAlpha);
+        rect.setStrokeStyle(1, active ? activeStroke : u.panelStroke, active ? 0.55 : u.panelStrokeAlpha);
       }
     });
   }
@@ -666,6 +1050,19 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.nextSpawnAt = this.time.now + 280;
     playBleep("pickup");
     this.refreshHud();
+
+    const isFirst = index === 0;
+    const isLast = index === this.waveDefs.length - 1;
+    const waveLabel = `第 ${index + 1} / ${this.waveDefs.length} 波`;
+    const msg = isFirst
+      ? "战斗开始！善用金币建塔和升级"
+      : isLast
+        ? "最终波次！守住防线即可获胜 🏆"
+        : `新一波敌军袭来！坚守阵地`;
+    this.banner.show({ title: waveLabel, message: msg, ms: 1800 });
+
+    // Screen flash on wave start
+    this.cameras.main.flash(80, 255, 200, 80, false);
   }
 
   private makeSlots(
@@ -673,24 +1070,42 @@ export class TowerDefenseScene extends Phaser.Scene {
     w: number,
     h: number,
   ): TowerSlot[] {
-    const slots: TowerSlot[] = [];
-    const offset = Math.min(w, h) * 0.09;
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const a = points[i];
-      const b = points[i + 1];
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const flip = i % 2 === 0 ? 1 : -1;
-      const ox = (-dy / len) * offset * flip;
-      const oy = (dx / len) * offset * flip;
+    const C = this.CELL_SZ;
+    const cols = Math.ceil(w / C);
+    const rows = Math.ceil(h / C);
+    // Use the path cell set built by drawGridMap; if not available, build it now
+    const pathCells = this.pathCellSet.size > 0 ? this.pathCellSet : this.buildPathCells(points);
+
+    // Collect all non-path cells adjacent to path cells (4-directional)
+    const candidates: { c: number; r: number }[] = [];
+    const seen = new Set<string>();
+    for (const key of pathCells) {
+      const [cStr, rStr] = key.split(",");
+      const c = parseInt(cStr!, 10);
+      const r = parseInt(rStr!, 10);
+      for (const [dc, dr] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+        const nc = c + dc;
+        const nr = r + dr;
+        if (nc < 1 || nr < 1 || nc >= cols - 1 || nr >= rows - 1) continue;
+        const nk = `${nc},${nr}`;
+        if (pathCells.has(nk) || seen.has(nk)) continue;
+        seen.add(nk);
+        candidates.push({ c: nc, r: nr });
+      }
+    }
+
+    // Sample evenly for 12–14 well-distributed slots
+    const maxSlots = 14;
+    const step = Math.max(1, Math.floor(candidates.length / maxSlots));
+    const chosen = candidates.filter((_, i) => i % step === 0).slice(0, maxSlots);
+
+    return chosen.map(({ c, r }) => {
+      const x = c * C + C / 2;
+      const y = r * C + C / 2;
       const ring = this.add.graphics();
       ring.setDepth(4);
-      slots.push({ x: mx + ox, y: my + oy, towerId: null, level: 0, gfx: null, ring, label: null });
-    }
-    return slots.slice(0, 9);
+      return { x, y, towerId: null, level: 0, gfx: null, ring, label: null } satisfies TowerSlot;
+    });
   }
 
   private getTowerDef(id: string | null): TowerDef | null {
@@ -760,30 +1175,293 @@ export class TowerDefenseScene extends Phaser.Scene {
         s.level += 1;
       }
       if (!s.gfx) {
-        s.gfx = this.add.image(s.x, s.y, "texTower");
+        const towerTexKey = this.ensureTowerTextureForId(useId, this.spec.theme.playerColor);
+        s.gfx = this.add.image(s.x, s.y + 6, towerTexKey); // +6 so base sits on ground
         s.gfx.setDepth(10);
       }
-      const tint = parseInt(this.spec.theme.playerColor.slice(1), 16);
-      s.gfx.setTint(tint);
-      s.gfx.setScale(0.84 + s.level * 0.07);
+      // Don't tint — colors are baked into the texture
+      const targetScale = 0.84 + s.level * 0.07;
+      s.gfx.setScale(0.2);
+      this.tweens.add({ targets: s.gfx, scaleX: targetScale, scaleY: targetScale, duration: 300, ease: "Back.easeOut" });
+      // Build flash — use player color
+      const buildFlash = this.add.rectangle(s.x, s.y, 52, 52, parseInt(this.spec.theme.playerColor.slice(1), 16), 0.55);
+      buildFlash.setDepth(20);
+      this.tweens.add({ targets: buildFlash, alpha: 0, scaleX: 1.8, scaleY: 1.8, duration: 260, ease: "Quad.easeOut", onComplete: () => buildFlash.destroy() });
       if (!s.label) {
         s.label = this.add
           .text(s.x, s.y + 30, "", {
             fontFamily: "system-ui, sans-serif",
             fontSize: "10px",
-            color: "#a1a1aa",
+            color: this.cohesion.hud.muted,
           })
           .setOrigin(0.5)
           .setDepth(11);
       }
       s.label.setText(`${def.name} Lv.${s.level}`);
       s.ring.clear();
-      s.ring.lineStyle(2, 0x22c55e, 0.55);
-      s.ring.strokeCircle(s.x, s.y, 24);
+      // After building: draw a clean grass patch base (no pin indicator)
+      s.ring.fillStyle(0x3d8228, 0.8);
+      s.ring.fillCircle(s.x, s.y + 6, 20);
+      s.ring.lineStyle(2, 0x2d6a1e, 0.9);
+      s.ring.strokeCircle(s.x, s.y + 6, 20);
+      s.ring.fillStyle(0x4fa832, 0.5);
+      s.ring.fillEllipse(s.x, s.y + 3, 28, 12);
+
+      // Brief range ring flash on build/upgrade
+      if (this.rangePreviewGfx) {
+        const builtRange = def.range + (Math.max(1, s.level) - 1) * 16;
+        const playerColorInt = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
+        this.rangePreviewGfx.clear();
+        this.rangePreviewGfx.fillStyle(playerColorInt, 0.12);
+        this.rangePreviewGfx.fillCircle(s.x, s.y, builtRange);
+        this.rangePreviewGfx.lineStyle(2, playerColorInt, 0.7);
+        this.rangePreviewGfx.strokeCircle(s.x, s.y, builtRange);
+        this.rangePreviewGfx.setAlpha(1);
+        this.tweens.add({ targets: this.rangePreviewGfx, alpha: 0, delay: 600, duration: 400, ease: "Quad.easeOut" });
+      }
+
       playBleep("pickup");
       this.refreshHud();
       return;
     }
+  }
+
+  /** 卡通角色风格炮塔贴图：圆形身体+眼睛+类型专属装饰，保卫萝卜风格 */
+  private ensureTowerTextureForId(towerId: string, fillHex: string): string {
+    const key = `texTower_${towerId}`;
+    if (this.textures.exists(key)) return key;
+    const gr = this.make.graphics({ x: 0, y: 0 });
+    const base = parseInt(fillHex.replace("#", ""), 16);
+    const dark = shiftRgb(base, -65, -65, -65);
+    const light = shiftRgb(base, 60, 60, 60);
+    const W = 48, H = 52;
+    const cx = W / 2, bodyY = 28, bodyR = 16;
+
+    // ── Stone base platform (shared by all types) ──
+    gr.fillStyle(0x6b7280, 1);
+    gr.fillRoundedRect(4, H - 16, W - 8, 14, 6);
+    gr.lineStyle(1.5, 0x374151, 0.9);
+    gr.strokeRoundedRect(4, H - 16, W - 8, 14, 6);
+    gr.fillStyle(0x9ca3af, 0.5);
+    gr.fillRoundedRect(6, H - 14, W - 12, 5, 3);
+
+    if (towerId === "splash") {
+      // ── 炸弹塔：火焰系卡通角色 ──
+      const fireBody = shiftRgb(base, 20, -30, -50); // warm red-orange shift
+      const fireDark = shiftRgb(fireBody, -60, -60, -60);
+      const fireLight = shiftRgb(fireBody, 50, 50, 50);
+      // Flame petals (behind body)
+      const flameColors = [0xff6b1a, 0xff9500, 0xffcf00];
+      for (let fi = 0; fi < 5; fi++) {
+        const fa = (fi / 5) * Math.PI * 2 - Math.PI / 2;
+        gr.fillStyle(flameColors[fi % 3]!, 0.85);
+        gr.fillEllipse(cx + Math.cos(fa) * 13, bodyY + Math.sin(fa) * 10, 11, 9);
+      }
+      // Body outline + fill
+      gr.lineStyle(2.5, fireDark, 1); gr.strokeCircle(cx, bodyY, bodyR);
+      gr.fillStyle(fireBody, 1); gr.fillCircle(cx, bodyY, bodyR);
+      // Body highlight
+      gr.fillStyle(fireLight, 0.45); gr.fillEllipse(cx - 5, bodyY - 7, 13, 9);
+      // Flame on top
+      gr.fillStyle(0xff9500, 1);
+      gr.fillTriangle(cx, bodyY - bodyR - 12, cx - 7, bodyY - bodyR, cx + 7, bodyY - bodyR);
+      gr.fillStyle(0xffcf00, 0.9);
+      gr.fillTriangle(cx, bodyY - bodyR - 8, cx - 4, bodyY - bodyR + 2, cx + 4, bodyY - bodyR + 2);
+      // Angry eyes
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx - 6, bodyY - 2, 9, 8);
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx + 6, bodyY - 2, 9, 8);
+      gr.fillStyle(0x1a0a00, 1); gr.fillCircle(cx - 5, bodyY - 2, 3.5);
+      gr.fillStyle(0x1a0a00, 1); gr.fillCircle(cx + 7, bodyY - 2, 3.5);
+      gr.fillStyle(0xff4444, 0.7); gr.fillCircle(cx - 5, bodyY - 2, 2);
+      gr.fillStyle(0xff4444, 0.7); gr.fillCircle(cx + 7, bodyY - 2, 2);
+      gr.fillStyle(0xffffff, 0.9); gr.fillCircle(cx - 4, bodyY - 3.5, 1.2);
+      gr.fillStyle(0xffffff, 0.9); gr.fillCircle(cx + 8, bodyY - 3.5, 1.2);
+      // Angry eyebrows
+      gr.lineStyle(2, 0x1a0a00, 0.9);
+      gr.lineBetween(cx - 9, bodyY - 7, cx - 2, bodyY - 5);
+      gr.lineBetween(cx + 3, bodyY - 5, cx + 10, bodyY - 7);
+      // Mouth (determined)
+      gr.lineStyle(2, fireDark, 0.9);
+      gr.lineBetween(cx - 5, bodyY + 6, cx + 5, bodyY + 6);
+    } else if (towerId === "frost") {
+      // ── 寒霜塔：冰晶系卡通角色 ──
+      const iceBody = shiftRgb(base, -30, -10, 40); // cool blue shift
+      const iceDark = shiftRgb(iceBody, -50, -50, -50);
+      const iceLight = shiftRgb(iceBody, 55, 55, 55);
+      // Ice crystal spikes around body
+      gr.fillStyle(0xbae6fd, 0.7);
+      for (let si = 0; si < 4; si++) {
+        const sa = (si / 4) * Math.PI * 2 - Math.PI / 4;
+        const sx2 = cx + Math.cos(sa) * 14;
+        const sy2 = bodyY + Math.sin(sa) * 11;
+        gr.fillTriangle(sx2, sy2 - 8, sx2 - 4, sy2 + 3, sx2 + 4, sy2 + 3);
+      }
+      // Body outline + fill
+      gr.lineStyle(2.5, iceDark, 1); gr.strokeCircle(cx, bodyY, bodyR);
+      gr.fillStyle(iceBody, 1); gr.fillCircle(cx, bodyY, bodyR);
+      // Body highlight
+      gr.fillStyle(iceLight, 0.5); gr.fillEllipse(cx - 5, bodyY - 7, 14, 9);
+      gr.fillStyle(0xffffff, 0.25); gr.fillEllipse(cx + 3, bodyY + 3, 8, 6);
+      // Snowflake on top
+      gr.lineStyle(2.5, 0xffffff, 0.95);
+      for (let ni = 0; ni < 3; ni++) {
+        const na = (ni / 3) * Math.PI;
+        gr.lineBetween(cx + Math.cos(na) * 8, bodyY - bodyR - 3 + Math.sin(na) * 8,
+                       cx - Math.cos(na) * 8, bodyY - bodyR - 3 - Math.sin(na) * 8);
+      }
+      gr.fillStyle(0xffffff, 0.9); gr.fillCircle(cx, bodyY - bodyR - 3, 3);
+      // Sleepy half-closed eyes
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx - 6, bodyY - 1, 9, 7);
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx + 6, bodyY - 1, 9, 7);
+      gr.fillStyle(iceDark, 1); gr.fillCircle(cx - 5, bodyY, 3);
+      gr.fillStyle(iceDark, 1); gr.fillCircle(cx + 7, bodyY, 3);
+      gr.fillStyle(0xffffff, 0.9); gr.fillCircle(cx - 4, bodyY - 1, 1.2);
+      gr.fillStyle(0xffffff, 0.9); gr.fillCircle(cx + 8, bodyY - 1, 1.2);
+      // Sleepy eyelids
+      gr.fillStyle(iceBody, 0.7);
+      gr.fillRoundedRect(cx - 10, bodyY - 5, 10, 5, 2);
+      gr.fillRoundedRect(cx + 2, bodyY - 5, 10, 5, 2);
+      // Small smile
+      gr.lineStyle(1.8, iceDark, 0.8);
+      gr.beginPath();
+      gr.arc(cx, bodyY + 5, 5, 0.2, Math.PI - 0.2, false);
+      gr.strokePath();
+    } else {
+      // ── dart（箭塔）/ 默认：植物系卡通角色 ──
+      // Leaf decorations (behind body)
+      gr.fillStyle(dark, 0.7);
+      gr.fillEllipse(cx - 14, bodyY - 5, 10, 16);
+      gr.fillEllipse(cx + 14, bodyY - 5, 10, 16);
+      gr.fillStyle(light, 0.5);
+      gr.fillEllipse(cx - 14, bodyY - 6, 6, 10);
+      gr.fillEllipse(cx + 14, bodyY - 6, 6, 10);
+      // Arrow on top
+      gr.fillStyle(dark, 1);
+      gr.fillTriangle(cx, bodyY - bodyR - 13, cx - 6, bodyY - bodyR - 1, cx + 6, bodyY - bodyR - 1);
+      gr.fillStyle(light, 0.6);
+      gr.fillTriangle(cx, bodyY - bodyR - 11, cx - 3, bodyY - bodyR - 1, cx + 3, bodyY - bodyR - 1);
+      gr.fillStyle(dark, 1);
+      gr.fillRoundedRect(cx - 2.5, bodyY - bodyR - 1, 5, 6, 1);
+      // Body outline + fill
+      gr.lineStyle(2.5, dark, 1); gr.strokeCircle(cx, bodyY, bodyR);
+      gr.fillStyle(base, 1); gr.fillCircle(cx, bodyY, bodyR);
+      // Body highlight
+      gr.fillStyle(light, 0.45); gr.fillEllipse(cx - 5, bodyY - 7, 13, 8);
+      // Happy eyes
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx - 6, bodyY - 2, 9, 8);
+      gr.fillStyle(0xffffff, 1); gr.fillEllipse(cx + 6, bodyY - 2, 9, 8);
+      gr.fillStyle(0x0f172a, 1); gr.fillCircle(cx - 5, bodyY - 1, 3.5);
+      gr.fillStyle(0x0f172a, 1); gr.fillCircle(cx + 7, bodyY - 1, 3.5);
+      gr.fillStyle(0xffffff, 0.85); gr.fillCircle(cx - 4, bodyY - 2.5, 1.5);
+      gr.fillStyle(0xffffff, 0.85); gr.fillCircle(cx + 8, bodyY - 2.5, 1.5);
+      // Rosy cheeks
+      gr.fillStyle(0xff9999, 0.4); gr.fillCircle(cx - 10, bodyY + 4, 4);
+      gr.fillStyle(0xff9999, 0.4); gr.fillCircle(cx + 10, bodyY + 4, 4);
+      // Small smile
+      gr.lineStyle(2, dark, 0.85);
+      gr.beginPath();
+      gr.arc(cx, bodyY + 4, 5, 0.2, Math.PI - 0.2, false);
+      gr.strokePath();
+    }
+
+    gr.generateTexture(key, W, H);
+    gr.destroy();
+    return key;
+  }
+
+  private fireBullet(
+    tower: TowerSlot,
+    target: Enemy,
+    stats: NonNullable<ReturnType<TowerDefenseScene["towerStats"]>>,
+  ): void {
+    const sx = tower.x;
+    const sy = tower.y;
+    const tx = target.sprite.x;
+    const ty = target.sprite.y;
+    const isSplash = stats.splashRadius > 0;
+    const playerColor = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
+    const accentColor = parseInt((this.spec.theme.collectibleColor ?? "#fbbf24").replace("#", ""), 16);
+    const bulletColor = isSplash ? accentColor : playerColor;
+    const WHITE = 0xffffff;
+
+    // Muzzle flash: bright white core + colored ring
+    const muzzleR = isSplash ? 9 : 6;
+    const muzzle = this.add.graphics().setDepth(18);
+    muzzle.fillStyle(WHITE, 0.95);
+    muzzle.fillCircle(sx, sy, muzzleR * 0.55);
+    muzzle.lineStyle(2.5, bulletColor, 0.9);
+    muzzle.strokeCircle(sx, sy, muzzleR);
+    this.tweens.add({
+      targets: muzzle,
+      scaleX: 2.8,
+      scaleY: 2.8,
+      alpha: 0,
+      duration: 180,
+      ease: "Quad.easeOut",
+      onComplete: () => muzzle.destroy(),
+    });
+
+    // Bullet: elongated in travel direction for motion clarity
+    const bR = isSplash ? 7.5 : 5.5;
+    const bullet = this.add.graphics().setDepth(17);
+    const travelAngle = Phaser.Math.Angle.Between(sx, sy, tx, ty);
+    // Elongate bullet in travel direction (3:1 ratio)
+    const bW = bR * 2.8;
+    const bH = bR * 1.1;
+    bullet.fillStyle(bulletColor, 1);
+    bullet.fillEllipse(0, 0, bW, bH);
+    bullet.fillStyle(WHITE, 0.9);
+    bullet.fillEllipse(0, 0, bW * 0.5, bH * 0.55);
+    bullet.lineStyle(1.5, WHITE, 0.55);
+    bullet.strokeEllipse(0, 0, bW, bH);
+    bullet.setRotation(travelAngle);
+    bullet.x = sx;
+    bullet.y = sy;
+
+    const dist = Phaser.Math.Distance.Between(sx, sy, tx, ty);
+    const travelMs = Math.max(45, Math.min(140, dist * 0.48));
+
+    this.tweens.add({
+      targets: bullet,
+      x: tx,
+      y: ty,
+      duration: travelMs,
+      ease: "Linear",
+      onComplete: () => {
+        bullet.destroy();
+        // Impact burst: colored ring + white core flash
+        const impactR = isSplash ? Math.min(stats.splashRadius * 0.45, 32) : 10;
+        const imp = this.add.graphics().setDepth(18);
+        imp.fillStyle(WHITE, 0.9);
+        imp.fillCircle(tx, ty, impactR * 0.4);
+        imp.lineStyle(2.5, bulletColor, 0.85);
+        imp.strokeCircle(tx, ty, impactR);
+        this.tweens.add({
+          targets: imp,
+          scaleX: isSplash ? 3.8 : 2.6,
+          scaleY: isSplash ? 3.8 : 2.6,
+          alpha: 0,
+          duration: isSplash ? 340 : 220,
+          ease: "Quad.easeOut",
+          onComplete: () => imp.destroy(),
+        });
+        // Splash ring for bomb towers
+        if (isSplash) {
+          const ring = this.add.graphics().setDepth(17);
+          ring.lineStyle(3, bulletColor, 0.75);
+          ring.strokeCircle(tx, ty, 8);
+          this.tweens.add({
+            targets: ring,
+            scaleX: stats.splashRadius / 8,
+            scaleY: stats.splashRadius / 8,
+            alpha: 0,
+            duration: 360,
+            ease: "Quad.easeOut",
+            onComplete: () => ring.destroy(),
+          });
+        }
+      },
+    });
   }
 
   private spawnEnemy(enemyId: string) {
@@ -798,22 +1476,43 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     const texDefault =
       enemyId === "tank" ? "texEnemyTank" : enemyId === "runner" ? "texEnemyRunner" : "texEnemy";
+    const useCirc = this.userMonsterCircTexKeys.length > 0;
     let tex = texDefault;
-    if (this.userMonsterTexKeys.length > 0) {
-      tex = this.userMonsterTexKeys[this.userMonsterCycle % this.userMonsterTexKeys.length];
+    if (useCirc) {
+      const pick = this.userMonsterCircTexKeys[this.userMonsterCycle % this.userMonsterCircTexKeys.length]!;
       this.userMonsterCycle += 1;
+      if (this.textures.exists(pick)) tex = pick;
+    } else if (this.userMonsterTexKeys.length > 0) {
+      const pick = this.userMonsterTexKeys[this.userMonsterCycle % this.userMonsterTexKeys.length]!;
+      this.userMonsterCycle += 1;
+      if (this.textures.exists(pick)) tex = pick;
+    } else if (!this.textures.exists(texDefault)) {
+      ensureTdEnemyTextures(
+        this,
+        this.spec.theme.hazardColor,
+        this.spec.theme.collectibleColor ?? "#67e8f9",
+      );
     }
-    const spr = this.add.image(0, 0, tex);
+    const spr = this.add.image(0, 0, this.textures.exists(tex) ? tex : texDefault);
     spr.setDepth(8);
     spr.setAlpha(enemyId === "tank" ? 0.95 : 0.9);
-    if (this.userMonsterTexKeys.length > 0) {
-      const maxSide = enemyId === "tank" ? 46 : 40;
-      spr.setDisplaySize(maxSide, maxSide);
+    let enemyRing: Phaser.GameObjects.Graphics | null = null;
+    const maskRadius = enemyId === "tank" ? 23 : 20;
+    if (useCirc) {
+      spr.setDisplaySize(maskRadius * 2, maskRadius * 2);
       spr.clearTint();
+      const ringColor = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+      enemyRing = this.add.graphics();
+      enemyRing.lineStyle(3, ringColor, 0.9);
+      enemyRing.strokeCircle(0, 0, maskRadius + 2);
+      enemyRing.setDepth(9);
     }
     const e: Enemy = {
       id: enemyId,
       sprite: spr,
+      ring: enemyRing,
+      maskGfx: null,
+      maskRadius,
       dist: 0,
       hp,
       maxHp: hp,
@@ -825,6 +1524,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     };
     const p0 = posAtDist(this.path, 0);
     spr.setPosition(p0.x, p0.y);
+    if (enemyRing) enemyRing.setPosition(p0.x, p0.y);
+    this.showSpawnEffect(p0.x, p0.y);
     this.enemies.push(e);
   }
 
@@ -868,28 +1569,17 @@ export class TowerDefenseScene extends Phaser.Scene {
       }
       if (!best) continue;
 
+      // Rotate tower sprite to face the target
+      if (s.gfx) {
+        const aimDeg = Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(s.x, s.y, best.sprite.x, best.sprite.y));
+        this.tweens.add({ targets: s.gfx, angle: aimDeg, duration: 100, ease: "Linear" });
+      }
+
       this.towerTimers[i] = time + stats.cooldownMs;
       const boost = this.time.now < this.boostUntil ? 1.25 : 1;
       const dmg = stats.damage * boost;
       this.applyDamage(best, dmg, stats);
-      const px = (s.x + best.sprite.x) / 2;
-      const py = (s.y + best.sprite.y) / 2;
-      const bolt = this.add.rectangle(
-        px,
-        py,
-        22,
-        4,
-        parseInt(this.spec.theme.playerColor.slice(1), 16),
-        0.82,
-      );
-      bolt.setDepth(12);
-      this.tweens.add({
-        targets: bolt,
-        alpha: 0,
-        scaleX: 0.2,
-        duration: 140,
-        onComplete: () => bolt.destroy(),
-      });
+      this.fireBullet(s, best, stats);
     }
   }
 
@@ -926,10 +1616,286 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
   }
 
+  /** Pre-crop user textures into circular canvas textures; returns keys for the cropped versions */
+  private buildCircularTextures(keys: string[], radius: number): string[] {
+    const size = radius * 2;
+    const out: string[] = [];
+    for (const key of keys) {
+      const circKey = `${key}__circ`;
+      if (!this.textures.exists(circKey)) {
+        try {
+          const src = this.textures.get(key).getSourceImage() as CanvasImageSource;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d")!;
+          ctx.beginPath();
+          ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(src, 0, 0, size, size);
+          this.textures.addCanvas(circKey, canvas);
+        } catch {
+          out.push(key);
+          continue;
+        }
+      }
+      out.push(circKey);
+    }
+    return out;
+  }
+
+  /** 将路径折线转换为格子坐标集合（Bresenham 直线扫描） */
+  private buildPathCells(points: { x: number; y: number }[]): Set<string> {
+    const C = this.CELL_SZ;
+    const cells = new Set<string>();
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const p0 = points[i]!, p1 = points[i + 1]!;
+      const c0 = Math.floor(p0.x / C);
+      const r0 = Math.floor(p0.y / C);
+      const c1 = Math.floor(p1.x / C);
+      const r1 = Math.floor(p1.y / C);
+      const dc = Math.sign(c1 - c0);
+      const dr = Math.sign(r1 - r0);
+      let c = c0, r = r0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        cells.add(`${c},${r}`);
+        if (c === c1 && r === r1) break;
+        if (c !== c1) c += dc;
+        else r += dr;
+      }
+    }
+    return cells;
+  }
+
+  /** 保卫萝卜风格地图：明亮草地 + 沙色石板路 + 装饰元素 */
+  private drawGridMap(points: { x: number; y: number }[], w: number, h: number): void {
+    const C = this.CELL_SZ;
+    const cols = Math.ceil(w / C);
+    const rows = Math.ceil(h / C);
+
+    const pathCells = this.buildPathCells(points);
+    this.pathCellSet = pathCells;
+
+    // Seeded deterministic RNG
+    let rng = (w * 7 + h * 13) % 9999;
+    const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000; };
+
+    // Layers
+    const gBase  = this.add.graphics().setDepth(-22); // sky/ground fill
+    const gGrass = this.add.graphics().setDepth(-21); // grass tiles
+    const gPath  = this.add.graphics().setDepth(-20); // stone path tiles
+    const gDecor = this.add.graphics().setDepth(-19); // grass decorations
+    const gShadow= this.add.graphics().setDepth(-18); // path edge shadow
+
+    // ── Base background: gradient-like bright green ──
+    gBase.fillStyle(0x5aaa3a, 1);
+    gBase.fillRect(0, 0, w, h);
+    // Slight darker strip at bottom (ground depth)
+    gBase.fillStyle(0x3d8228, 0.35);
+    gBase.fillRect(0, h * 0.75, w, h * 0.25);
+
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const px = c * C;
+        const py = r * C;
+        const key = `${c},${r}`;
+
+        if (pathCells.has(key)) {
+          // ── Stone path tile (保卫萝卜 sandy brick style) ──
+          const MORTAR  = 0x9c7040; // dark mortar gap
+          const STONE   = 0xd4aa6a; // sandy stone base
+          const HI      = 0xe8c888; // top-left highlight
+          const SHADOW2 = 0xb08040; // bottom-right shadow
+          const CRACK   = 0xc09050; // inner texture
+
+          // Mortar (full tile dark)
+          gPath.fillStyle(MORTAR, 1);
+          gPath.fillRect(px, py, C, C);
+
+          // Stone inset (2px mortar on all sides)
+          const mg = 2;
+          gPath.fillStyle(STONE, 1);
+          gPath.fillRect(px + mg, py + mg, C - mg * 2, C - mg * 2);
+
+          // Top highlight strip
+          gPath.fillStyle(HI, 0.7);
+          gPath.fillRect(px + mg, py + mg, C - mg * 2, 4);
+          // Left highlight strip
+          gPath.fillStyle(HI, 0.45);
+          gPath.fillRect(px + mg, py + mg + 4, 3, C - mg * 2 - 4);
+
+          // Bottom shadow strip
+          gPath.fillStyle(SHADOW2, 0.6);
+          gPath.fillRect(px + mg, py + C - mg - 4, C - mg * 2, 4);
+          // Right shadow strip
+          gPath.fillStyle(SHADOW2, 0.4);
+          gPath.fillRect(px + C - mg - 3, py + mg, 3, C - mg * 2 - 4);
+
+          // Subtle crack/texture lines
+          const seed = c * 17 + r * 31;
+          if (seed % 3 !== 0) {
+            gPath.fillStyle(CRACK, 0.25);
+            const cx2 = px + mg + 5 + ((seed * 7) % (C - mg * 2 - 12));
+            const cy2 = py + mg + 4 + ((seed * 11) % (C - mg * 2 - 10));
+            gPath.fillRoundedRect(cx2, cy2, 4 + (seed % 6), 2, 1);
+          }
+
+        } else {
+          // ── Grass tile (bright, alternating) ──
+          const shade = (r + c) % 2 === 0 ? 0x4fa832 : 0x45982b;
+          gGrass.fillStyle(shade, 1);
+          gGrass.fillRect(px + 1, py + 1, C - 2, C - 2);
+          // Subtle top highlight
+          gGrass.fillStyle(0x6dc450, 0.35);
+          gGrass.fillRect(px + 1, py + 1, C - 2, 3);
+
+          // ── Grass decorations ──
+          const diceA = rand();
+          if (diceA > 0.60) {
+            // Grass tufts
+            const gx = px + 5 + rand() * (C - 14);
+            const gy = py + 5 + rand() * (C - 14);
+            gDecor.fillStyle(0x358022, 0.75);
+            gDecor.fillRect(gx, gy, 2, 7 + rand() * 5);
+            gDecor.fillRect(gx + 4, gy + 2, 2, 5 + rand() * 4);
+            gDecor.fillRect(gx + 8, gy + 1, 2, 6 + rand() * 4);
+          }
+          if (rand() > 0.82) {
+            // Small colorful flower (保卫萝卜风格)
+            const fx = px + 8 + rand() * (C - 18);
+            const fy = py + 8 + rand() * (C - 18);
+            const colors = [0xffdf00, 0xff9ec8, 0xffffff, 0xaaddff, 0xffb347];
+            const fc = colors[Math.floor(rand() * colors.length)]!;
+            // Petals
+            gDecor.fillStyle(fc, 0.9);
+            for (let pi = 0; pi < 4; pi += 1) {
+              const pa = (pi / 4) * Math.PI * 2;
+              gDecor.fillCircle(fx + Math.cos(pa) * 3.5, fy + Math.sin(pa) * 3.5, 2);
+            }
+            // Center
+            gDecor.fillStyle(0xffd700, 1);
+            gDecor.fillCircle(fx, fy, 2);
+          }
+          if (rand() > 0.91) {
+            // Small rounded rock
+            gDecor.fillStyle(0x9e9688, 0.55);
+            gDecor.fillRoundedRect(
+              px + 8 + rand() * (C - 18),
+              py + 8 + rand() * (C - 18),
+              5 + rand() * 6, 3 + rand() * 4, 2,
+            );
+          }
+          if (rand() > 0.95) {
+            // Tiny bush / shrub
+            const bx = px + 6 + rand() * (C - 16);
+            const by = py + 6 + rand() * (C - 16);
+            gDecor.fillStyle(0x2d7518, 0.7);
+            gDecor.fillCircle(bx, by, 5 + rand() * 3);
+            gDecor.fillStyle(0x3d9020, 0.5);
+            gDecor.fillCircle(bx - 4, by + 1, 4);
+            gDecor.fillCircle(bx + 4, by + 1, 4);
+          }
+        }
+      }
+    }
+
+    // ── Path edge: drop shadow onto adjacent grass ──
+    for (const key of pathCells) {
+      const [cStr, rStr] = key.split(",");
+      const c = parseInt(cStr!, 10);
+      const r = parseInt(rStr!, 10);
+      const px = c * C;
+      const py = r * C;
+      const sw = 5;
+      gShadow.fillStyle(0x000000, 0.14);
+      if (!pathCells.has(`${c},${r - 1}`)) gShadow.fillRect(px, py, C, sw);
+      if (!pathCells.has(`${c},${r + 1}`)) gShadow.fillRect(px, py + C - sw, C, sw);
+      if (!pathCells.has(`${c - 1},${r}`)) gShadow.fillRect(px, py, sw, C);
+      if (!pathCells.has(`${c + 1},${r}`)) gShadow.fillRect(px + C - sw, py, sw, C);
+    }
+  }
+
+  private showSpawnEffect(x: number, y: number): void {
+    const hazardColor = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+    // Expanding ring portal
+    const ring = this.add.graphics();
+    ring.lineStyle(3, hazardColor, 0.9);
+    ring.strokeCircle(x, y, 8);
+    ring.setDepth(20);
+    this.tweens.add({ targets: ring, scaleX: 4.5, scaleY: 4.5, alpha: 0, duration: 380, ease: "Quad.easeOut", onComplete: () => ring.destroy() });
+    // Inner flash
+    const flash = this.add.circle(x, y, 14, hazardColor, 0.55);
+    flash.setDepth(19);
+    this.tweens.add({ targets: flash, alpha: 0, scaleX: 0.05, scaleY: 0.05, duration: 220, ease: "Quad.easeIn", onComplete: () => flash.destroy() });
+  }
+
+  private showKillEffect(x: number, y: number, reward: number): void {
+    const hazardColor = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+    const coinColor = parseInt((this.spec.theme.collectibleColor ?? "#fbbf24").replace("#", ""), 16);
+    // Central explosion ring
+    const impGfx = this.add.graphics().setDepth(21);
+    impGfx.lineStyle(2.5, hazardColor, 0.85);
+    impGfx.strokeCircle(x, y, 10);
+    impGfx.fillStyle(0xffffff, 0.5);
+    impGfx.fillCircle(x, y, 7);
+    this.tweens.add({ targets: impGfx, scaleX: 2.8, scaleY: 2.8, alpha: 0, duration: 220, ease: "Quad.easeOut", onComplete: () => impGfx.destroy() });
+    // Burst particles
+    const count = 8;
+    for (let i = 0; i < count; i += 1) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const dist2 = 18 + Math.random() * 22;
+      const r2 = 2 + Math.random() * 2.5;
+      const dot = this.add.circle(x, y, r2, i % 2 === 0 ? hazardColor : 0xffffff, 0.9);
+      dot.setDepth(20);
+      this.tweens.add({
+        targets: dot,
+        x: x + Math.cos(angle) * dist2,
+        y: y + Math.sin(angle) * dist2,
+        alpha: 0,
+        scaleX: 0.1,
+        scaleY: 0.1,
+        duration: 280 + Math.random() * 140,
+        ease: "Quad.easeOut",
+        onComplete: () => dot.destroy(),
+      });
+    }
+    // Reward coin label
+    const coinLabel = this.spec.labels.collectible ?? "金币";
+    const txt = this.add
+      .text(x, y - 6, `+${reward} ${coinLabel}`, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        fontStyle: "bold",
+        color: `#${coinColor.toString(16).padStart(6, "0")}`,
+        stroke: "#000000",
+        strokeThickness: 2.5,
+      })
+      .setOrigin(0.5)
+      .setDepth(22);
+    this.tweens.add({
+      targets: txt,
+      y: y - 40,
+      alpha: 0,
+      duration: 700,
+      ease: "Quad.easeOut",
+      onComplete: () => txt.destroy(),
+    });
+  }
+
   private killEnemy(e: Enemy) {
-    this.coins += Math.floor(e.reward * this.coinRewardMult);
+    const reward = Math.floor(e.reward * this.coinRewardMult);
+    this.coins += reward;
     this.kills += 1;
+    this.showKillEffect(e.sprite.x, e.sprite.y, reward);
+    if (e.id === "tank") {
+      this.cameras.main.shake(100, 0.003);
+    }
+    e.sprite.clearMask();
+    e.maskGfx?.destroy();
     e.sprite.destroy();
+    e.ring?.destroy();
     this.enemies = this.enemies.filter((x) => x !== e);
     this.refreshHud();
   }
@@ -945,8 +1911,14 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
     this.baseHp -= amount;
     this.cameras.main.shake(120, 0.004);
+    this.cameras.main.flash(120, 255, 60, 60, false);
     playBleep("hit");
     this.refreshHud();
+    const maxHp = this.spec.gameplay.baseHealth ?? 50;
+    if (this.baseHp <= maxHp * 0.3 && this.baseHp > 0) {
+      this.soundscape?.triggerEvent("danger");
+      this.startDangerVignette();
+    }
     if (this.baseHp <= 0) {
       this.finish({ score: this.kills, won: false });
     }
@@ -1000,17 +1972,37 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
   }
 
+  private startDangerVignette() {
+    if (!this.dangerVignette) return;
+    this.tweens.killTweensOf(this.dangerVignette);
+    this.tweens.add({
+      targets: this.dangerVignette,
+      alpha: { from: 0.0, to: 0.18 },
+      duration: 800,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
   private finish(payload: EndPayload) {
     if (this.finished) return;
+    if (this.dangerVignette) {
+      this.tweens.killTweensOf(this.dangerVignette);
+      this.dangerVignette.setAlpha(0);
+    }
     this.finished = true;
     this.spawning = false;
     this.hintText.setText(payload.won ? "防线守住！塔防波次通关。" : "基地被突破 · 调整数值或塔位后再战。");
-    if (payload.won) playBleep("win");
+    if (payload.won) {
+      playBleep("win");
+      this.soundscape?.triggerEvent("victory");
+    }
     this.onEnd(payload);
   }
 
   update(time: number) {
-    if (this.finished) return;
+    if (!this.bootstrapComplete || this.finished) return;
 
     this.tickDirectorEvents();
     this.tickEventLoops();
@@ -1051,12 +2043,45 @@ export class TowerDefenseScene extends Phaser.Scene {
       e.dist += spd * dt;
       if (e.dist >= this.path.total) {
         this.damageBase(this.leakDamage);
+        e.sprite.clearMask();
+        e.maskGfx?.destroy();
         e.sprite.destroy();
+        e.ring?.destroy();
         this.enemies.splice(i, 1);
         continue;
       }
       const p = posAtDist(this.path, e.dist);
-      e.sprite.setPosition(p.x, p.y);
+      const bobY = Math.sin(time * 0.0048 + e.dist * 0.025) * 1.8;
+      e.sprite.setPosition(p.x, p.y + bobY);
+      if (e.ring) e.ring.setPosition(p.x, p.y + bobY);
+      if (e.maskGfx) e.maskGfx.setPosition(p.x, p.y + bobY);
+    }
+
+    // HP bars
+    this.hpBarGfx.clear();
+    for (const e of this.enemies) {
+      if (e.hp >= e.maxHp * 0.98) continue;
+      const ratio = Math.max(0, e.hp / e.maxHp);
+      const bw = 32;
+      const bh = 4;
+      const bx = e.sprite.x - bw / 2;
+      const by = e.sprite.y - (e.sprite.displayHeight / 2 + 9);
+      this.hpBarGfx.fillStyle(0x000000, 0.55);
+      this.hpBarGfx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+      const barColor = ratio > 0.6 ? 0x22c55e : ratio > 0.3 ? 0xf59e0b : 0xef4444;
+      this.hpBarGfx.fillStyle(barColor, 0.92);
+      this.hpBarGfx.fillRect(bx, by, bw * ratio, bh);
+    }
+
+    // Slow tint: only apply blue when slowed; clear tint otherwise (let baked texture colors show)
+    if (this.userMonsterTexKeys.length === 0) {
+      for (const e of this.enemies) {
+        if (time < e.slowUntil) {
+          e.sprite.setTint(0x88ccff);
+        } else {
+          e.sprite.clearTint();
+        }
+      }
     }
 
     this.tickTowers(time);
@@ -1151,6 +2176,10 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.eventUntil = now + durationMs;
     this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
 
+    if (ev.type === "miniBoss") {
+      this.soundscape?.triggerEvent("boss");
+    }
+
     if (ev.type === "coinRain") {
       this.coinRainUntil = this.eventUntil;
       this.coinRewardMult = 2;
@@ -1205,6 +2234,9 @@ export class TowerDefenseScene extends Phaser.Scene {
     const e: Enemy = {
       id: pick,
       sprite: spr,
+      ring: null,
+      maskGfx: null,
+      maskRadius: 0,
       dist: 0,
       hp,
       maxHp: hp,

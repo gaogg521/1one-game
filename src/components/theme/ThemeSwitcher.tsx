@@ -1,47 +1,63 @@
 "use client";
 
+import { useState } from "react";
 import type { ThemeId } from "@/lib/themes";
 import { THEMES } from "@/lib/themes";
 import { useTheme } from "./ThemeProvider";
 
-const STRIPE: Record<ThemeId, string> = {
-  dark: "linear-gradient(to bottom, #22d3ee, #38bdf8, #a78bfa)",
-  light: "linear-gradient(to bottom, #0e7490, #0369a1, #7c3aed)",
-  "cyber-blue": "linear-gradient(to bottom, #67e8f9, #22d3ee, #60a5fa)",
-  "warm-orange": "linear-gradient(to bottom, #fdba74, #fb923c, #f59e0b)",
-  "forest-green": "linear-gradient(to bottom, #6ee7b7, #34d399, #22c55e)",
+const DOT_COLOR: Record<ThemeId, string> = {
+  dark: "#22d3ee",
+  light: "#0e7490",
+  "cyber-blue": "#67e8f9",
+  "warm-orange": "#fb923c",
+  "forest-green": "#34d399",
 };
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
+  const [hovered, setHovered] = useState<ThemeId | null>(null);
 
   return (
-    <div className="space-y-2" role="group" aria-label="界面主题" suppressHydrationWarning>
-      <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--gc-text-faint)]">主题</p>
-      <div className="flex flex-col gap-1.5" suppressHydrationWarning>
-        {THEMES.map((t) => {
-          const active = theme === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTheme(t.id)}
-              aria-pressed={active}
-              className={`flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition ${
-                active
-                  ? "border-[color:var(--gc-accent)]/50 bg-[color:var(--gc-accent)]/12 text-[var(--gc-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
-                  : "border-transparent text-[color:var(--gc-muted)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] hover:text-[var(--gc-text)]"
-              }`}
-            >
-              <span aria-hidden className="h-6 w-1 shrink-0 rounded-full" style={{ backgroundImage: STRIPE[t.id] }} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-medium leading-tight">{t.name}</span>
-                <span className="mt-0.5 block truncate text-[10px] leading-tight opacity-80">{t.tag}</span>
+    <div className="flex items-center gap-1.5" role="group" aria-label="界面主题" suppressHydrationWarning>
+      {THEMES.map((t) => {
+        const active = theme === t.id;
+        const isHovered = hovered === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTheme(t.id)}
+            onMouseEnter={() => setHovered(t.id)}
+            onMouseLeave={() => setHovered((h) => (h === t.id ? null : h))}
+            aria-pressed={active}
+            title={t.name}
+            className={`relative rounded-full transition-all ${
+              active
+                ? "ring-2 ring-white/80 ring-offset-1 ring-offset-[var(--gc-bg)] scale-110"
+                : "hover:scale-105"
+            }`}
+            style={{
+              width: 14,
+              height: 14,
+              backgroundColor: DOT_COLOR[t.id],
+              opacity: active ? 1 : 0.65,
+            }}
+          >
+            {isHovered || active ? (
+              <span
+                className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-medium"
+                style={{
+                  backgroundColor: "var(--gc-surface-glass)",
+                  color: "var(--gc-text)",
+                  border: "1px solid var(--gc-border)",
+                }}
+              >
+                {t.name}
               </span>
-            </button>
-          );
-        })}
-      </div>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

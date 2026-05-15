@@ -8,6 +8,8 @@
     "build:full": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "qa:orch-smoke": "tsx scripts/qa-orchestration-smoke.ts",
+    "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push"
@@ -37,6 +39,8 @@
     "eslint-config-next": "16.2.6",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "@playwright/test": "^1.57.0"
   }
 }

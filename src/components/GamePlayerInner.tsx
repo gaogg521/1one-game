@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
 import { captureCanvasAsJpegDataUrl } from "@/lib/capture-game-thumb";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
+import { buildCohesivePresentation } from "@/lib/cohesive-presentation";
 import { createPhaserGame } from "@/game/engine/createPhaserGame";
 
 export default function GamePlayerInner({
@@ -19,6 +20,25 @@ export default function GamePlayerInner({
   const coverSentRef = useRef(false);
   const [session, setSession] = useState(0);
   const [result, setResult] = useState<{ score: number; won: boolean } | null>(null);
+
+  const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
+  const shellStyle = useMemo(
+    () =>
+      ({
+        ["--gc-accent"]: cohesive.chrome.accent,
+        ["--gc-accent2"]: cohesive.chrome.accent2,
+        ["--gc-cyan"]: cohesive.chrome.cyan,
+        ["--gc-text"]: cohesive.chrome.text,
+        ["--gc-muted"]: cohesive.chrome.muted,
+        ["--gc-bg-elevated"]: cohesive.chrome.elevated,
+        ["--gc-border"]: `rgba(${cohesive.chrome.borderRgb}, 0.22)`,
+        ["--gc-text-soft"]: `color-mix(in srgb, ${cohesive.chrome.text} 82%, ${cohesive.chrome.muted})`,
+        ["--gc-cta-a"]: cohesive.chrome.ctaA,
+        ["--gc-cta-b"]: cohesive.chrome.ctaB,
+        ["--gc-cta-c"]: cohesive.chrome.ctaC,
+      }) as React.CSSProperties,
+    [cohesive],
+  );
 
   useEffect(() => {
     coverSentRef.current = false;
@@ -101,6 +121,7 @@ export default function GamePlayerInner({
     <div className="space-y-4">
       <div
         ref={shellRef}
+        style={shellStyle}
         className="group relative overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"
       >
         <div

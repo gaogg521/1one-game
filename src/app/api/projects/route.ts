@@ -21,6 +21,8 @@ export async function GET() {
       status: true,
       shareCode: true,
       coverPath: true,
+      playCount: true,
+      likeCount: true,
       createdAt: true,
       updatedAt: true,
     },

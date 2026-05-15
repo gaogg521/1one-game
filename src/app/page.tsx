@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { FeaturedGamesSection } from "@/components/FeaturedGamesSection";
 
 const steps = [
-  "输入一句话：场景 + 目标 + 障碍（可选：塔防 / 平台跳跃 / 赛博 / 像素等关键词）。",
+  "输入一句话：场景 + 目标 + 障碍（可选：塔防、平台跳跃、像素、水彩风等玩法或画风）。",
   "系统自动扩写：章节与变奏、难度曲线、关卡蓝图（多塔多波次、多层平台等）。",
   "引擎编译为可玩版本：即时试玩、保存、分享链接，支持 Remix 继续进化。",
 ];
@@ -105,7 +106,7 @@ export default function Home() {
                 <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)]">Prompt 示例</p>
                 <p className="mt-2 text-sm leading-relaxed text-[var(--gc-muted)]">
                   <span className="text-[var(--gc-muted)]">「</span>
-                  <span className="text-[var(--gc-text-soft)]">赛博霓虹塔防，脉冲炮与减速协议，抵挡入侵程序的波次进攻</span>
+                  <span className="text-[var(--gc-text-soft)]">手绘草地塔防，箭塔守着萝卜小屋，拦住沿土路行军的小小动物</span>
                   <span className="text-[var(--gc-muted)]">」</span>
                 </p>
               </div>
@@ -155,6 +156,8 @@ export default function Home() {
           </div>
         </section>
 
+        <FeaturedGamesSection />
+
         <section
           className="mt-auto border-t border-[color:var(--gc-border)] bg-gradient-to-b from-transparent via-transparent to-transparent px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28"
           style={{
@@ -175,7 +178,7 @@ export default function Home() {
               灵感不必等排期；你说画风与玩法，下一刻就是可试玩的版本。
             </p>
             <p className="mt-8 text-sm leading-relaxed tracking-wide text-[var(--gc-text-faint)]">
-              塔防、平台跳跃、生存收集、像素霓虹……成章、成局、成链接；与好友分享，或在工作室继续 Remix，让作品一直进化。
+              塔防、平台跳跃、生存收集、田园水彩或像素手绘……成章、成局、成链接；与好友分享，或在工作室继续 Remix，让作品一直进化。
             </p>
           </div>
         </section>

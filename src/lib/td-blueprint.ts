@@ -42,39 +42,77 @@ export function buildTowerDefenseBlueprint(params: {
   const isOcean = /海|洋|珊瑚|章鱼|潜水|鱼/.test(params.prompt);
   const isSpace = /太空|宇宙|星|陨石|飞船|银河/.test(params.prompt);
 
-  const path: RelPoint[] = [
-    { x: 0.07, y: 0.60 },
-    { x: 0.26, y: 0.60 },
-    { x: 0.26, y: 0.34 },
-    { x: 0.53, y: 0.34 },
-    { x: 0.53, y: 0.74 },
-    { x: 0.78, y: 0.74 },
-    { x: 0.78, y: 0.44 },
-    { x: 0.93, y: 0.44 },
+  // 4 path templates — chosen by seed so same prompt always gets same layout
+  const PATH_TEMPLATES: RelPoint[][] = [
+    // A: classic Z/S turn
+    [
+      { x: 0.07, y: 0.60 }, { x: 0.26, y: 0.60 }, { x: 0.26, y: 0.34 },
+      { x: 0.53, y: 0.34 }, { x: 0.53, y: 0.74 }, { x: 0.78, y: 0.74 },
+      { x: 0.78, y: 0.44 }, { x: 0.93, y: 0.44 },
+    ],
+    // B: double-U (more turns, harder to cover)
+    [
+      { x: 0.07, y: 0.30 }, { x: 0.07, y: 0.70 }, { x: 0.35, y: 0.70 },
+      { x: 0.35, y: 0.30 }, { x: 0.62, y: 0.30 }, { x: 0.62, y: 0.70 },
+      { x: 0.93, y: 0.70 },
+    ],
+    // C: wide spiral — long exposure, good for slow/splash towers
+    [
+      { x: 0.07, y: 0.50 }, { x: 0.25, y: 0.50 }, { x: 0.25, y: 0.22 },
+      { x: 0.75, y: 0.22 }, { x: 0.75, y: 0.78 }, { x: 0.40, y: 0.78 },
+      { x: 0.40, y: 0.50 }, { x: 0.93, y: 0.50 },
+    ],
+    // D: wave/diagonal feel
+    [
+      { x: 0.07, y: 0.38 }, { x: 0.28, y: 0.38 }, { x: 0.28, y: 0.68 },
+      { x: 0.50, y: 0.68 }, { x: 0.50, y: 0.38 }, { x: 0.72, y: 0.38 },
+      { x: 0.72, y: 0.68 }, { x: 0.93, y: 0.68 },
+    ],
   ];
+  const path: RelPoint[] = PATH_TEMPLATES[seed % PATH_TEMPLATES.length]!;
 
-  // 塔位：沿路径段中点偏移并抖动，保证 1 句话也能生成“可玩的布局”
+  // 塔位：每段路径各取1-2个位置，确保覆盖全程且间距充足
+  const rawSlots: RelPoint[] = [];
+  const segs = path.length - 1;
+  // Generate 2 candidate slots per segment (both sides of path)
+  for (let seg = 0; seg < segs; seg += 1) {
+    const a = path[seg]!;
+    const b = path[seg + 1]!;
+    for (let side = 0; side < 2; side += 1) {
+      const t = 0.35 + rnd(seed, seg * 7 + side * 3 + 1) * 0.3; // position along segment
+      const px = a.x + (b.x - a.x) * t;
+      const py = a.y + (b.y - a.y) * t;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const flip = side === 0 ? 1 : -1;
+      const off = 0.085 + rnd(seed, seg * 11 + side * 5 + 2) * 0.025;
+      const ox = (-dy / len) * off * flip;
+      const oy = (dx / len) * off * flip;
+      rawSlots.push({
+        x: clamp(px + ox, 0.06, 0.94),
+        y: clamp(py + oy, 0.16, 0.90),
+      });
+    }
+  }
+
+  // Filter: keep slots with minimum relative distance of 0.13 between each other
   const slots: RelPoint[] = [];
-  const baseSlots = 10;
-  for (let i = 0; i < baseSlots; i += 1) {
-    const seg = i % (path.length - 1);
-    const a = path[seg];
-    const b = path[seg + 1];
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const flip = seg % 2 === 0 ? 1 : -1;
-    const off = 0.09 + rnd(seed, i + 11) * 0.03;
-    const ox = (-dy / len) * off * flip;
-    const oy = (dx / len) * off * flip;
-    const jx = (rnd(seed, i + 31) - 0.5) * 0.025;
-    const jy = (rnd(seed, i + 51) - 0.5) * 0.025;
-    slots.push({
-      x: clamp(mx + ox + jx, 0.06, 0.94),
-      y: clamp(my + oy + jy, 0.18, 0.92),
-    });
+  const minDist = 0.13;
+  for (const s of rawSlots) {
+    if (slots.every(f => Math.hypot(s.x - f.x, s.y - f.y) >= minDist)) {
+      slots.push(s);
+      if (slots.length >= 10) break;
+    }
+  }
+  // Guarantee at least 6 slots by relaxing constraint if needed
+  if (slots.length < 6) {
+    for (const s of rawSlots) {
+      if (slots.every(f => Math.hypot(s.x - f.x, s.y - f.y) >= 0.08) && !slots.includes(s)) {
+        slots.push(s);
+        if (slots.length >= 8) break;
+      }
+    }
   }
 
   const coinWord = params.spec.labels.collectible ?? "金币";

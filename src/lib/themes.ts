@@ -14,19 +14,19 @@ export const THEMES: readonly {
   name: string;
   tag: string;
 }[] = [
-  { id: "dark", name: "深海暗夜", tag: " slate 蓝 · 冰青点缀" },
-  { id: "light", name: "极简浅色", tag: "纸白底 · 深蓝字" },
-  { id: "cyber-blue", name: "蓝色科技风", tag: "电青网格 · 霓虹蓝" },
-  { id: "warm-orange", name: "橙色暖调", tag: "琥珀金 · 暖橙主色" },
-  { id: "forest-green", name: "森林绿境", tag: "松石绿 · 森系暗底" },
+  { id: "dark", name: "墨蓝暗夜", tag: "靛紫星夜 · 深邃午夜" },
+  { id: "light", name: "绢白极简", tag: "暖米宣纸 · 靛蓝点睛" },
+  { id: "cyber-blue", name: "深海电光", tag: "极深午夜 · 天青电光" },
+  { id: "warm-orange", name: "烟火琥珀", tag: "浓墨暖棕 · 琥珀金焰" },
+  { id: "forest-green", name: "竹影翡翠", tag: "林幽深绿 · 翡翠流光" },
 ] as const;
 
 export const THEME_META_COLOR: Record<ThemeId, string> = {
-  dark: "#0f172a",
-  light: "#f3f6fb",
-  "cyber-blue": "#061126",
-  "warm-orange": "#1a120a",
-  "forest-green": "#0c1f17",
+  dark: "#080f1e",
+  light: "#f9f8f5",
+  "cyber-blue": "#020b18",
+  "warm-orange": "#110c07",
+  "forest-green": "#071610",
 };
 
 /** 旧版游戏站主题 id → 1oneclaw id */

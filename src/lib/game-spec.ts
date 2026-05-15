@@ -150,7 +150,7 @@ const SystemsSchema = z.object({
 
 export const GameSpecSchema = z.object({
   version: z.literal(1),
-  templateId: z.enum(["avoider", "collector", "survivor", "platformer", "towerDefense"]),
+  templateId: z.enum(["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"]),
   title: z.string().min(1).max(80),
   theme: z.object({
     backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -175,6 +175,12 @@ export const GameSpecSchema = z.object({
     /** towerDefense：基地生命（与 avoider 的 lives 语义不同，仅塔防使用） */
     baseHealth: z.number().min(15).max(120).optional(),
   }),
+  /** 试听体验层：可选音频气质（省略时由系统从 theme 推断） */
+  presentation: z
+    .object({
+      musicProfile: z.enum(["organic", "pulse", "minimal", "neon"]).optional(),
+    })
+    .optional(),
   labels: z.object({
     player: z.string().max(32),
     hazard: z.string().max(32),

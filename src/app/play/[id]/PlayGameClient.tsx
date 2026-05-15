@@ -15,12 +15,18 @@ export function PlayGameClient({ id }: { id: string }) {
     prompt: string;
     isOwner: boolean;
     shareCode: string | null;
+    likeCount: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shortCopied, setShortCopied] = useState(false);
   const [remixBusy, setRemixBusy] = useState(false);
   const [mintBusy, setMintBusy] = useState(false);
+  const [patchPrompt, setPatchPrompt] = useState("");
+  const [patchBusy, setPatchBusy] = useState(false);
+  const [patchError, setPatchError] = useState<string | null>(null);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +40,7 @@ export function PlayGameClient({ id }: { id: string }) {
             prompt: string;
             isOwner: boolean;
             shareCode: string | null;
+            likeCount?: number;
           };
           error?: string;
         };
@@ -52,7 +59,14 @@ export function PlayGameClient({ id }: { id: string }) {
             prompt: data.project.prompt,
             isOwner: data.project.isOwner,
             shareCode: data.project.shareCode ?? null,
+            likeCount: data.project.likeCount ?? 0,
           });
+          setLikeCount(data.project.likeCount ?? 0);
+          if (typeof localStorage !== "undefined") {
+            setLiked(!!localStorage.getItem(`liked:${id}`));
+          }
+          // Increment play counter (fire-and-forget, no auth needed).
+          void fetch(`/api/projects/${id}/play`, { method: "POST" });
         }
       } catch {
         if (!cancelled) setError("网络异常");
@@ -111,6 +125,16 @@ export function PlayGameClient({ id }: { id: string }) {
     }
   }
 
+  function handleLike() {
+    if (liked) return;
+    setLiked(true);
+    setLikeCount((n) => n + 1);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(`liked:${id}`, "1");
+    }
+    void fetch(`/api/projects/${id}/like`, { method: "POST" });
+  }
+
   async function remix() {
     setRemixBusy(true);
     try {
@@ -125,6 +149,31 @@ export function PlayGameClient({ id }: { id: string }) {
       }
     } finally {
       setRemixBusy(false);
+    }
+  }
+
+  async function applyPatch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!spec || !patchPrompt.trim() || patchBusy) return;
+    setPatchBusy(true);
+    setPatchError(null);
+    try {
+      const res = await fetch("/api/generate/patch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: patchPrompt.trim(), currentSpec: spec }),
+      });
+      const data = (await res.json()) as { spec?: GameSpec; error?: string };
+      if (!res.ok || !data.spec) {
+        setPatchError(data.error ?? "修改失败");
+        return;
+      }
+      setSpec(data.spec);
+      setPatchPrompt("");
+    } catch {
+      setPatchError("网络异常，请稍后重试");
+    } finally {
+      setPatchBusy(false);
     }
   }
 
@@ -154,6 +203,17 @@ export function PlayGameClient({ id }: { id: string }) {
                 <p className="text-sm leading-relaxed text-[var(--gc-muted)]">{meta.prompt}</p>
               </div>
               <div className="flex flex-wrap gap-2 lg:justify-end">
+                <button
+                  type="button"
+                  onClick={handleLike}
+                  className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                    liked
+                      ? "border-red-400/40 bg-red-400/10 text-red-400"
+                      : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] text-[var(--gc-text)] hover:border-red-400/40 hover:text-red-400"
+                  }`}
+                >
+                  {liked ? "♥" : "♡"} {likeCount > 0 ? likeCount : "点赞"}
+                </button>
                 <button
                   type="button"
                   onClick={() => void copyLink()}
@@ -188,6 +248,12 @@ export function PlayGameClient({ id }: { id: string }) {
                   {remixBusy ? "复制中…" : "Remix 到我的工作室"}
                 </button>
                 <Link
+                  href={`/create?from=${encodeURIComponent(id)}`}
+                  className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-4 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)]"
+                >
+                  用同一设定再生成
+                </Link>
+                <Link
                   href="/create"
                   className="rounded-full px-4 py-2 text-sm font-medium text-[var(--gc-muted)] underline-offset-4 hover:text-[var(--gc-text)] hover:underline"
                 >
@@ -216,6 +282,30 @@ export function PlayGameClient({ id }: { id: string }) {
             ) : null}
 
             <GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} />
+
+            {/* Runtime AI patch panel */}
+            <form onSubmit={(e) => void applyPatch(e)} className="flex items-center gap-2">
+              <input
+                id="patch-prompt"
+                name="patch-prompt"
+                type="text"
+                value={patchPrompt}
+                onChange={(e) => { setPatchPrompt(e.target.value); setPatchError(null); }}
+                placeholder="用一句话修改游戏，例如：把敌人速度加快一倍，改成宇宙主题…"
+                disabled={patchBusy}
+                className="min-w-0 flex-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm text-[var(--gc-text)] placeholder:text-[var(--gc-muted)] focus:outline-none focus:ring-1 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={patchBusy || !patchPrompt.trim()}
+                className="shrink-0 rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-5 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_20%,transparent)] disabled:opacity-40"
+              >
+                {patchBusy ? "修改中…" : "AI 修改"}
+              </button>
+            </form>
+            {patchError ? (
+              <p className="text-xs text-red-400">{patchError}</p>
+            ) : null}
           </>
         )}
       </main>

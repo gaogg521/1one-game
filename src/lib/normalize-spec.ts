@@ -1,4 +1,5 @@
 import { GameSpecSchema, type GameSpec } from "@/lib/game-spec";
+import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 
 function normalizeHex(input: string): string | null {
   let s = input.trim();
@@ -128,16 +129,25 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
       ? lbIn.subtitle.trim().slice(0, 120)
       : undefined;
 
+  const presIn = o.presentation && typeof o.presentation === "object" ? (o.presentation as Record<string, unknown>) : null;
+  let presentation: GameSpec["presentation"] | undefined;
+  if (presIn) {
+    const mp = presIn.musicProfile;
+    if (mp === "organic" || mp === "pulse" || mp === "minimal" || mp === "neon") {
+      presentation = { musicProfile: mp };
+    }
+  }
+
   const candidate: GameSpec = {
     version: 1,
     templateId,
     title,
     theme: {
-      backgroundColor: bg ?? "#0b1020",
-      playerColor: pc ?? "#7ee787",
-      hazardColor: hc ?? "#ff6b6b",
-      collectibleColor: cc ?? undefined,
-      particleTint: pt ?? undefined,
+      backgroundColor: bg ?? "#141816",
+      playerColor: pc ?? "#89a884",
+      hazardColor: hc ?? "#9d5838",
+      collectibleColor: cc ?? "#c9a66b",
+      particleTint: pt ?? "#69746c",
     },
     gameplay: {
       playerSpeed,
@@ -157,11 +167,12 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
       collectible,
       subtitle,
     },
+    presentation,
   };
 
   const parsed = GameSpecSchema.safeParse(candidate);
   if (parsed.success) {
-    return { ok: true, spec: parsed.data };
+    return { ok: true, spec: withPresentationDefaults(parsed.data) };
   }
   parsed.error.issues.forEach((i) => issues.push(`${i.path.join(".")}: ${i.message}`));
   return { ok: false, issues };
@@ -202,6 +213,10 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
       typeof r.towerDefense === "object" && r.towerDefense !== null ? r.towerDefense : base.towerDefense,
     director: typeof r.director === "object" && r.director !== null ? r.director : base.director,
     systems: typeof r.systems === "object" && r.systems !== null ? r.systems : base.systems,
+    presentation:
+      typeof r.presentation === "object" && r.presentation !== null
+        ? { ...base.presentation, ...(r.presentation as GameSpec["presentation"]) }
+        : base.presentation,
   };
 
   const second = coerceGameSpec(merged);

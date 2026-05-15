@@ -1,7 +1,9 @@
 import Phaser from "phaser";
-import { playBleep } from "@/game/audio/webBleeps";
+import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
+import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { HudBanner } from "@/game/engine/HudBanner";
+import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -10,6 +12,8 @@ export class PlayScene extends Phaser.Scene {
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
+
+  private readonly soundscape: GameSoundscape | null;
 
   private player!: Phaser.Types.Physics.Arcade.ImageWithDynamicBody;
 
@@ -52,6 +56,10 @@ export class PlayScene extends Phaser.Scene {
   private shieldRing!: Phaser.GameObjects.Graphics;
 
   private banner!: HudBanner;
+
+  private cohesive!: CohesivePresentation;
+
+  private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
   private spawnTimer!: Phaser.Time.TimerEvent;
 
@@ -99,10 +107,11 @@ export class PlayScene extends Phaser.Scene {
 
   private goalText!: Phaser.GameObjects.Text;
 
-  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void) {
+  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlayScene");
     this.spec = spec;
     this.onEnd = onEnd;
+    this.soundscape = soundscape ?? null;
   }
 
   create() {
@@ -112,13 +121,17 @@ export class PlayScene extends Phaser.Scene {
     this.lives = this.spec.gameplay.lives ?? 3;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
+    const ui = buildCohesivePresentation(this.spec);
+    setBleepTemperament(ui.bleepTemperament);
+    this.cohesive = ui;
+
     this.addStarfield();
 
     this.add
       .text(width / 2, 22, this.spec.title, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "21px",
-        color: "#fafafa",
+        color: ui.hud.title,
       })
       .setOrigin(0.5)
       .setDepth(20);
@@ -128,7 +141,7 @@ export class PlayScene extends Phaser.Scene {
         .text(width / 2, 48, this.spec.labels.subtitle, {
           fontFamily: "system-ui, sans-serif",
           fontSize: "12px",
-          color: "#a1a1aa",
+          color: ui.hud.subtitle,
         })
         .setOrigin(0.5)
         .setDepth(20);
@@ -138,7 +151,7 @@ export class PlayScene extends Phaser.Scene {
       .text(18, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "17px",
-        color: "#f4f4f5",
+        color: ui.hud.body,
       })
       .setDepth(25);
 
@@ -146,7 +159,7 @@ export class PlayScene extends Phaser.Scene {
       .text(width - 18, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#a78bfa",
+        color: ui.hud.accent2,
       })
       .setOrigin(1, 0)
       .setDepth(25);
@@ -155,7 +168,7 @@ export class PlayScene extends Phaser.Scene {
       .text(width / 2, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#94a3b8",
+        color: ui.hud.muted,
       })
       .setOrigin(0.5, 0)
       .setDepth(25);
@@ -167,7 +180,7 @@ export class PlayScene extends Phaser.Scene {
           .text(18, 44, `生命 ${this.lives}`, {
             fontFamily: "system-ui, sans-serif",
             fontSize: "14px",
-            color: "#fca5a5",
+            color: ui.hud.danger,
           })
           .setDepth(25)
       : null;
@@ -185,42 +198,87 @@ export class PlayScene extends Phaser.Scene {
       .text(width / 2, height - 20, `${controls} · Shift 技能`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#71717a",
+        color: ui.hud.hint,
       })
       .setOrigin(0.5)
       .setDepth(25);
 
-    const rectTex = (key: string, w: number, h: number, color: string) => {
-      if (this.textures.exists(key)) return;
-      const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(parseInt(color.replace("#", ""), 16));
-      g.fillRect(0, 0, w, h);
-      g.generateTexture(key, w, h);
-      g.destroy();
+    const shiftCol = (c: number, d: number) => {
+      const r = Phaser.Math.Clamp(((c >> 16) & 0xff) + d, 0, 255);
+      const g2 = Phaser.Math.Clamp(((c >> 8) & 0xff) + d, 0, 255);
+      const b = Phaser.Math.Clamp((c & 0xff) + d, 0, 255);
+      return (r << 16) | (g2 << 8) | b;
     };
 
-    const circleTex = (key: string, size: number, color: string) => {
-      if (this.textures.exists(key)) return;
+    // Player: rounded body + highlight + eyes
+    if (!this.textures.exists("texPlayer")) {
+      const pc = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
+      const pd = shiftCol(pc, -55);
+      const pl = shiftCol(pc, 50);
       const g = this.make.graphics({ x: 0, y: 0 });
-      const c = parseInt(color.replace("#", ""), 16);
-      g.fillStyle(c);
-      g.fillCircle(size / 2, size / 2, size / 2 - 2);
-      g.generateTexture(key, size, size);
-      g.destroy();
-    };
+      g.fillStyle(0x000000, 0.18); g.fillEllipse(19, 37, 28, 7); // shadow
+      g.lineStyle(2.5, pd, 1); g.strokeRoundedRect(4, 6, 28, 28, 9);
+      g.fillStyle(pc, 1); g.fillRoundedRect(4, 6, 28, 28, 9);
+      g.fillStyle(pl, 0.4); g.fillRoundedRect(7, 8, 18, 9, 4); // highlight
+      g.fillStyle(0x0f172a, 1); g.fillCircle(13, 18, 4); g.fillCircle(23, 18, 4); // eyes
+      g.fillStyle(0xffffff, 0.75); g.fillCircle(14.2, 16.8, 1.5); g.fillCircle(24.2, 16.8, 1.5);
+      g.fillStyle(pd, 1); g.fillRoundedRect(8, 32, 8, 5, 2); g.fillRoundedRect(20, 32, 8, 5, 2); // feet
+      g.generateTexture("texPlayer", 36, 38); g.destroy();
+    }
 
-    rectTex("texPlayer", 36, 36, this.spec.theme.playerColor);
-    rectTex("texHazard", 42, 42, this.spec.theme.hazardColor);
-    circleTex(
-      "texGem",
-      28,
-      this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
-    );
-    circleTex(
-      "texPower",
-      26,
-      this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
-    );
+    // Hazard: angular menacing enemy with spiky silhouette
+    if (!this.textures.exists("texHazard")) {
+      const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+      const hd = shiftCol(hc, -55);
+      const hl = shiftCol(hc, 45);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x000000, 0.2); g.fillEllipse(22, 43, 30, 8); // shadow
+      // Spiky crown
+      g.fillStyle(hd, 1);
+      g.fillTriangle(10, 14, 14, 2, 18, 14);
+      g.fillTriangle(18, 14, 22, 0, 26, 14);
+      g.fillTriangle(26, 14, 30, 2, 34, 14);
+      // Body
+      g.lineStyle(2.5, hd, 1); g.strokeRoundedRect(6, 12, 32, 26, 8);
+      g.fillStyle(hc, 1); g.fillRoundedRect(6, 12, 32, 26, 8);
+      g.fillStyle(hl, 0.3); g.fillRoundedRect(9, 14, 22, 9, 4);
+      // Angry eyes
+      g.fillStyle(0xfef3c7, 1); g.fillEllipse(15, 24, 10, 8); g.fillEllipse(29, 24, 10, 8);
+      g.fillStyle(0x1a0000, 1); g.fillCircle(16, 25, 3.5); g.fillCircle(30, 25, 3.5);
+      g.fillStyle(0xff3333, 0.7); g.fillCircle(16, 25, 1.8); g.fillCircle(30, 25, 1.8);
+      g.generateTexture("texHazard", 44, 44); g.destroy();
+    }
+
+    // Gem: diamond with shine
+    if (!this.textures.exists("texGem")) {
+      const gc = parseInt((this.spec.theme.collectibleColor ?? this.spec.theme.playerColor).replace("#", ""), 16);
+      const gd = shiftCol(gc, -50);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(gc, 0.92);
+      g.fillTriangle(14, 0, 27, 11, 14, 27); g.fillTriangle(14, 0, 1, 11, 14, 27);
+      g.lineStyle(1.5, gd, 0.8);
+      g.strokeTriangle(14, 0, 27, 11, 14, 27); g.strokeTriangle(14, 0, 1, 11, 14, 27);
+      g.fillStyle(0xffffff, 0.6); g.fillTriangle(14, 1, 5, 10, 14, 10);
+      g.generateTexture("texGem", 28, 28); g.destroy();
+    }
+
+    // Power-up: star shape
+    if (!this.textures.exists("texPower")) {
+      const pc2 = parseInt((this.spec.theme.collectibleColor ?? this.spec.theme.playerColor).replace("#", ""), 16);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      const cx = 13, cy = 13, r1 = 12, r2 = 5.5, pts = 5;
+      g.fillStyle(pc2, 0.95);
+      g.beginPath();
+      for (let i = 0; i < pts * 2; i++) {
+        const ang = (i * Math.PI) / pts - Math.PI / 2;
+        const r = i % 2 === 0 ? r1 : r2;
+        if (i === 0) g.moveTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang));
+        else g.lineTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang));
+      }
+      g.closePath(); g.fillPath();
+      g.fillStyle(0xffffff, 0.5); g.fillCircle(cx - 3, cy - 3, 4);
+      g.generateTexture("texPower", 26, 26); g.destroy();
+    }
 
     const startX = width / 2;
     const startY =
@@ -245,7 +303,7 @@ export class PlayScene extends Phaser.Scene {
     this.shieldRing = this.add.graphics();
     this.shieldRing.setDepth(24);
 
-    this.banner = new HudBanner(this);
+    this.banner = new HudBanner(this, ui.banner);
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {
       if (this.finished) return;
@@ -307,14 +365,14 @@ export class PlayScene extends Phaser.Scene {
       .text(18, height - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#e4e4e7",
+        color: ui.hud.body,
       })
       .setDepth(26);
     this.skillCdText = this.add
       .text(18, height - 38, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#94a3b8",
+        color: ui.hud.muted,
       })
       .setDepth(26);
 
@@ -322,18 +380,25 @@ export class PlayScene extends Phaser.Scene {
       .text(width / 2, 64, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#e2e8f0",
+        color: ui.hud.accent,
       })
       .setOrigin(0.5, 0)
       .setDepth(26);
 
     this.refreshHud();
     this.spawnWave();
+
+    // Danger vignette overlay (hidden until low HP)
+    this.dangerVignette = this.add.graphics();
+    this.dangerVignette.setDepth(24);
+    this.dangerVignette.setAlpha(0);
+    this.dangerVignette.fillStyle(0xff2233, 1);
+    this.dangerVignette.fillRect(0, 0, width, height);
   }
 
   private addStarfield() {
     const { width, height } = this.scale;
-    const raw = this.spec.theme.particleTint?.replace("#", "") ?? "a78bfa";
+    const raw = this.spec.theme.particleTint?.replace("#", "") ?? "69746c";
     const parsed = parseInt(raw, 16);
     const tint = Number.isFinite(parsed) ? parsed : 0xa78bfa;
     for (let i = 0; i < 96; i += 1) {
@@ -402,7 +467,7 @@ export class PlayScene extends Phaser.Scene {
       .text(x, y - 14, "+1", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "16px",
-        color: "#e4e4e7",
+        color: this.cohesive.hud.body,
       })
       .setOrigin(0.5)
       .setDepth(35);
@@ -538,7 +603,8 @@ export class PlayScene extends Phaser.Scene {
 
     if (ev.type === "miniBoss") {
       this.miniBossUntil = this.eventUntil;
-      // 立即刷一个精英危险物
+      this.soundscape?.triggerEvent("boss");
+      this.cameras.main.shake(380, 0.018);
       const x = Phaser.Math.Between(90, this.scale.width - 90);
       const h = this.hazards.create(x, -60, "texHazard");
       h.setDepth(6);
@@ -574,6 +640,9 @@ export class PlayScene extends Phaser.Scene {
       const label = acts[idx]?.label ?? "";
       this.actText.setText(label ? `章节 · ${label}` : "");
       this.cameras.main.flash(90, 140, 120, 255, false);
+      // Dynamic music: increase tension as act progresses
+      const tension = this.intensity * (0.5 + 0.5 * (idx / Math.max(1, acts.length - 1)));
+      this.soundscape?.setTension(tension);
     }
   }
 
@@ -743,9 +812,16 @@ export class PlayScene extends Phaser.Scene {
     if (this.spec.templateId === "survivor") {
       this.invulnUntil = this.time.now + 720;
       this.lives -= 1;
+      this.cameras.main.shake(180, 0.009);
+      this.cameras.main.flash(130, 255, 60, 60, false);
+      playBleep("hit");
       this.player.setAlpha(0.35);
       this.time.delayedCall(200, () => this.player.setAlpha(1));
       if (this.livesText) this.livesText.setText(`生命 ${this.lives}`);
+      if (this.lives === 1) {
+        this.soundscape?.triggerEvent("danger");
+        this.startDangerVignette();
+      }
       if (this.lives <= 0) {
         this.finish({ score: this.score, won: false });
       }
@@ -754,18 +830,45 @@ export class PlayScene extends Phaser.Scene {
 
     if (this.spec.templateId === "collector") {
       this.lives -= 1;
+      this.cameras.main.shake(160, 0.008);
+      this.cameras.main.flash(120, 255, 60, 60, false);
+      playBleep("hit");
       if (this.livesText) this.livesText.setText(`生命 ${this.lives}`);
+      if (this.lives === 1) {
+        this.soundscape?.triggerEvent("danger");
+        this.startDangerVignette();
+      }
       if (this.lives <= 0) {
         this.finish({ score: this.score, won: false });
       }
       return;
     }
 
+    this.cameras.main.shake(200, 0.012);
+    this.cameras.main.flash(150, 255, 60, 60, false);
+    playBleep("hit");
     this.finish({ score: this.score, won: false });
+  }
+
+  private startDangerVignette() {
+    if (!this.dangerVignette) return;
+    this.tweens.killTweensOf(this.dangerVignette);
+    this.tweens.add({
+      targets: this.dangerVignette,
+      alpha: { from: 0.0, to: 0.18 },
+      duration: 800,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
   }
 
   private finish(payload: EndPayload) {
     if (this.finished) return;
+    if (this.dangerVignette) {
+      this.tweens.killTweensOf(this.dangerVignette);
+      this.dangerVignette.setAlpha(0);
+    }
     this.finished = true;
     this.spawnTimer.remove(false);
     this.physics.pause();
@@ -774,6 +877,7 @@ export class PlayScene extends Phaser.Scene {
     );
     if (payload.won) {
       playBleep("win");
+      this.soundscape?.triggerEvent("victory");
     }
     this.onEnd(payload);
   }

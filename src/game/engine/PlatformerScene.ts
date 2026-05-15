@@ -1,7 +1,13 @@
 import Phaser from "phaser";
-import { playBleep } from "@/game/audio/webBleeps";
+import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
+import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import {
+  buildCohesivePresentation,
+  phaserUintToCssHex,
+  type CohesivePresentation,
+} from "@/lib/cohesive-presentation";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -21,10 +27,19 @@ function rnd(seed: number, i: number): number {
   return x - Math.floor(x);
 }
 
+function shiftHex(c: number, d: number): number {
+  const r = Phaser.Math.Clamp(((c >> 16) & 0xff) + d, 0, 255);
+  const g = Phaser.Math.Clamp(((c >> 8) & 0xff) + d, 0, 255);
+  const b = Phaser.Math.Clamp((c & 0xff) + d, 0, 255);
+  return (r << 16) | (g << 8) | b;
+}
+
 export class PlatformerScene extends Phaser.Scene {
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
+
+  private readonly soundscape: GameSoundscape | null;
 
   private player!: Phaser.Types.Physics.Arcade.ImageWithDynamicBody;
 
@@ -63,6 +78,10 @@ export class PlatformerScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
 
   private banner!: HudBanner;
+
+  private cohesive!: CohesivePresentation;
+
+  private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
   private finished = false;
 
@@ -126,10 +145,11 @@ export class PlatformerScene extends Phaser.Scene {
 
   private nextMiniSpawnAt = 0;
 
-  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void) {
+  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlatformerScene");
     this.spec = spec;
     this.onEnd = onEnd;
+    this.soundscape = soundscape ?? null;
   }
 
   create() {
@@ -142,13 +162,17 @@ export class PlatformerScene extends Phaser.Scene {
     this.physics.world.gravity.y = grav;
     this.intensity = this.spec.director?.intensity ?? 0.6;
 
+    const ui = buildCohesivePresentation(this.spec);
+    setBleepTemperament(ui.bleepTemperament);
+    this.cohesive = ui;
+
     this.addStarfield();
 
     this.add
       .text(viewW / 2, 22, this.spec.title, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "21px",
-        color: "#fafafa",
+        color: ui.hud.title,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -159,7 +183,7 @@ export class PlatformerScene extends Phaser.Scene {
         .text(viewW / 2, 48, this.spec.labels.subtitle, {
           fontFamily: "system-ui, sans-serif",
           fontSize: "12px",
-          color: "#a1a1aa",
+          color: ui.hud.subtitle,
         })
         .setOrigin(0.5)
         .setScrollFactor(0)
@@ -170,7 +194,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(18, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "17px",
-        color: "#f4f4f5",
+        color: ui.hud.body,
       })
       .setScrollFactor(0)
       .setDepth(101);
@@ -179,7 +203,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(viewW - 18, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#67e8f9",
+        color: ui.hud.accent,
       })
       .setOrigin(1, 0)
       .setScrollFactor(0)
@@ -189,7 +213,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(viewW / 2, 14, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#94a3b8",
+        color: ui.hud.muted,
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
@@ -199,7 +223,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(18, 44, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#fca5a5",
+        color: ui.hud.danger,
       })
       .setScrollFactor(0)
       .setDepth(101);
@@ -209,46 +233,101 @@ export class PlatformerScene extends Phaser.Scene {
       .text(viewW / 2, viewH - 20, `← → / A D 移动 · Space / W / ↑ 跳跃 · Shift 技能 · 收集「${collLabel}」`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#71717a",
+        color: ui.hud.hint,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(101);
 
-    const rectTex = (key: string, w: number, h: number, color: string) => {
+    // ─── Procedural textures (much more detailed than flat rect/circle) ───
+    const makePlayerTex = (key: string, fillHex: string) => {
       if (this.textures.exists(key)) return;
       const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(parseInt(color.replace("#", ""), 16));
-      g.fillRect(0, 0, w, h);
-      g.generateTexture(key, w, h);
-      g.destroy();
+      const base = parseInt(fillHex.replace("#", ""), 16);
+      const dark = (base & 0xfefefe) >> 1; // roughly half brightness
+      const light = Math.min(0xffffff, base + 0x303030);
+      // Body
+      g.fillStyle(base, 1); g.fillRoundedRect(4, 10, 26, 26, 8);
+      g.lineStyle(2, dark, 0.8); g.strokeRoundedRect(4, 10, 26, 26, 8);
+      // Highlight
+      g.fillStyle(light, 0.35); g.fillRoundedRect(7, 12, 16, 8, 4);
+      // Head
+      g.fillStyle(base, 1); g.fillRoundedRect(7, 1, 20, 16, 6);
+      g.lineStyle(1.5, dark, 0.7); g.strokeRoundedRect(7, 1, 20, 16, 6);
+      // Eyes
+      g.fillStyle(0x0f172a, 1); g.fillCircle(12, 8, 3); g.fillCircle(22, 8, 3);
+      g.fillStyle(0xffffff, 0.7); g.fillCircle(13, 7, 1.2); g.fillCircle(23, 7, 1.2);
+      g.generateTexture(key, 34, 40); g.destroy();
     };
 
-    const circleTex = (key: string, size: number, color: string) => {
+    const makePlatTex = (key: string, fillHex: string, hiHex: string) => {
       if (this.textures.exists(key)) return;
       const g = this.make.graphics({ x: 0, y: 0 });
-      const c = parseInt(color.replace("#", ""), 16);
-      g.fillStyle(c);
-      g.fillCircle(size / 2, size / 2, size / 2 - 2);
-      g.generateTexture(key, size, size);
-      g.destroy();
+      const base = parseInt(fillHex.replace("#", ""), 16);
+      const hi = parseInt(hiHex.replace("#", ""), 16);
+      g.fillStyle(base, 1); g.fillRoundedRect(0, 2, 120, 20, 5);
+      g.lineStyle(1.5, 0x000000, 0.25); g.strokeRoundedRect(0, 2, 120, 20, 5);
+      // Top highlight strip
+      g.fillStyle(hi, 0.55); g.fillRoundedRect(2, 2, 116, 6, 3);
+      // Plank lines
+      g.lineStyle(1, 0x000000, 0.12);
+      for (let x = 24; x < 120; x += 24) g.lineBetween(x, 4, x, 20);
+      g.generateTexture(key, 120, 22); g.destroy();
     };
 
-    rectTex("texPlat", 120, 22, "#334155");
-    rectTex("texPlatHi", 120, 22, "#475569");
-    rectTex("texGround", 64, 40, "#1e293b");
-    rectTex("texPlayer", 34, 40, this.spec.theme.playerColor);
-    rectTex("texSpike", 36, 18, this.spec.theme.hazardColor);
-    circleTex(
-      "texGem",
-      26,
-      this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
-    );
-    circleTex(
-      "texPower",
-      26,
-      this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
-    );
+    const makeGemTex = (key: string, fillHex: string) => {
+      if (this.textures.exists(key)) return;
+      const g = this.make.graphics({ x: 0, y: 0 });
+      const col = parseInt(fillHex.replace("#", ""), 16);
+      const dark = (col & 0xfefefe) >> 1;
+      // Diamond shape
+      g.fillStyle(col, 0.9);
+      g.fillTriangle(13, 0, 26, 10, 13, 26);
+      g.fillTriangle(13, 0, 0, 10, 13, 26);
+      g.lineStyle(1.5, dark, 0.7);
+      g.strokeTriangle(13, 0, 26, 10, 13, 26);
+      g.strokeTriangle(13, 0, 0, 10, 13, 26);
+      // Shine
+      g.fillStyle(0xffffff, 0.55); g.fillTriangle(13, 1, 5, 9, 13, 9);
+      g.generateTexture(key, 26, 26); g.destroy();
+    };
+
+    const makeSpikeTex = (key: string, fillHex: string) => {
+      if (this.textures.exists(key)) return;
+      const g = this.make.graphics({ x: 0, y: 0 });
+      const col = parseInt(fillHex.replace("#", ""), 16);
+      // 3 triangular spikes
+      for (let i = 0; i < 3; i++) {
+        const bx = i * 12 + 6;
+        g.fillStyle(col, 1); g.fillTriangle(bx, 0, bx - 6, 18, bx + 6, 18);
+        g.lineStyle(1, 0x000000, 0.4); g.strokeTriangle(bx, 0, bx - 6, 18, bx + 6, 18);
+      }
+      g.generateTexture(key, 36, 18); g.destroy();
+    };
+
+    const makeGroundTex = (key: string, fillHex: string) => {
+      if (this.textures.exists(key)) return;
+      const g = this.make.graphics({ x: 0, y: 0 });
+      const col = parseInt(fillHex.replace("#", ""), 16);
+      const dark = (col & 0xfefefe) >> 1;
+      g.fillStyle(col, 1); g.fillRect(0, 0, 64, 40);
+      g.fillStyle(dark, 0.2);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
+        g.fillRect(c * 32 + (r % 2 === 0 ? 0 : 16), r * 14 + 1, 30, 12);
+      }
+      g.lineStyle(1, 0x000000, 0.18);
+      for (let x = 32; x < 64; x += 32) g.lineBetween(x, 0, x, 40);
+      for (let y = 14; y < 40; y += 14) g.lineBetween(0, y, 64, y);
+      g.generateTexture(key, 64, 40); g.destroy();
+    };
+
+    makePlayerTex("texPlayer", this.spec.theme.playerColor);
+    makePlatTex("texPlat", phaserUintToCssHex(ui.platformMid), phaserUintToCssHex(ui.platformHi));
+    makePlatTex("texPlatHi", phaserUintToCssHex(ui.platformHi), phaserUintToCssHex(ui.platformHi));
+    makeGroundTex("texGround", phaserUintToCssHex(ui.platformGround));
+    makeSpikeTex("texSpike", this.spec.theme.hazardColor);
+    makeGemTex("texGem", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
+    makeGemTex("texPower", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
 
     this.platforms = this.physics.add.staticGroup();
     this.spikes = this.physics.add.staticGroup();
@@ -312,7 +391,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
-    this.banner = new HudBanner(this);
+    this.banner = new HudBanner(this, ui.banner);
 
     this.shieldRing = this.add.graphics();
     this.shieldRing.setDepth(120);
@@ -323,7 +402,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(18, viewH - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "12px",
-        color: "#e4e4e7",
+        color: ui.hud.body,
       })
       .setScrollFactor(0)
       .setDepth(130);
@@ -331,7 +410,7 @@ export class PlatformerScene extends Phaser.Scene {
       .text(18, viewH - 38, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
-        color: "#94a3b8",
+        color: ui.hud.muted,
       })
       .setScrollFactor(0)
       .setDepth(130);
@@ -347,6 +426,13 @@ export class PlatformerScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(140, 80);
 
     this.refreshHud();
+
+    // Danger vignette overlay (hidden until low HP)
+    this.dangerVignette = this.add.graphics();
+    this.dangerVignette.setDepth(24);
+    this.dangerVignette.setAlpha(0);
+    this.dangerVignette.fillStyle(0xff2233, 1);
+    this.dangerVignette.fillRect(0, 0, viewW * 4, viewH);
   }
 
   private buildLevel(viewH: number) {
@@ -407,16 +493,109 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private addStarfield() {
-    const raw = this.spec.theme.particleTint?.replace("#", "") ?? "38bdf8";
+    const raw = this.spec.theme.particleTint?.replace("#", "") ?? "6b7f78";
     const parsed = parseInt(raw, 16);
     const tint = Number.isFinite(parsed) ? parsed : 0x38bdf8;
-    for (let i = 0; i < 110; i += 1) {
-      const x = Phaser.Math.Between(4, this.worldW - 4);
-      const y = Phaser.Math.Between(4, this.scale.height - 4);
-      const s = Phaser.Math.FloatBetween(1, 2.6);
-      const a = Phaser.Math.FloatBetween(0.05, 0.32);
-      const dot = this.add.rectangle(x, y, s, s, tint, a);
-      dot.setDepth(-12);
+    const W = this.worldW;
+    const H = this.scale.height;
+    const p = this.spec.labels.subtitle?.toLowerCase() ?? "";
+    const title = this.spec.title.toLowerCase();
+    const prompt = `${p} ${title}`;
+    const isOcean = /海|珊瑚|水下|ocean|sea|coral|bubble/.test(prompt);
+    const isForest = /森林|树|草地|丛林|forest|jungle|tree|meadow/.test(prompt);
+    const isSpace = /太空|宇宙|星|银河|space|galaxy|star|cosmos/.test(prompt);
+    const isCyber = /赛博|霓虹|cyber|neon|数字|digital/.test(prompt);
+
+    // Base particle dots (all themes)
+    for (let i = 0; i < 90; i += 1) {
+      const x = Phaser.Math.Between(4, W - 4);
+      const y = Phaser.Math.Between(4, H - 4);
+      const s = Phaser.Math.FloatBetween(1, 2.4);
+      const a = Phaser.Math.FloatBetween(0.06, 0.28);
+      this.add.rectangle(x, y, s, s, tint, a).setDepth(-12);
+    }
+
+    const bg = parseInt(this.spec.theme.backgroundColor.replace("#", ""), 16);
+
+    if (isSpace) {
+      // Stars: more dots, some bright + distant planets
+      for (let i = 0; i < 80; i += 1) {
+        const x = Phaser.Math.Between(4, W - 4);
+        const y = Phaser.Math.Between(4, H * 0.75);
+        const s = Phaser.Math.FloatBetween(1.5, 3.5);
+        this.add.circle(x, y, s, 0xffffff, Phaser.Math.FloatBetween(0.25, 0.85)).setDepth(-11);
+      }
+      // Distant planets / moons
+      for (let p2 = 0; p2 < 3; p2 += 1) {
+        const x = Phaser.Math.Between(W * 0.1, W * 0.9);
+        const y = Phaser.Math.Between(30, H * 0.45);
+        const r = Phaser.Math.Between(18, 42);
+        this.add.circle(x, y, r, tint, 0.18).setDepth(-13);
+        this.add.circle(x, y, r, 0xffffff, 0.06).setDepth(-12);
+      }
+    } else if (isOcean) {
+      // Bubbles drifting up
+      for (let i = 0; i < 55; i += 1) {
+        const x = Phaser.Math.Between(4, W - 4);
+        const y = Phaser.Math.Between(H * 0.1, H - 60);
+        const r = Phaser.Math.FloatBetween(2, 7);
+        const g = this.add.graphics().setDepth(-11);
+        g.lineStyle(1, 0xbae6fd, 0.35);
+        g.strokeCircle(x, y, r);
+        g.fillStyle(0xbae6fd, 0.08);
+        g.fillCircle(x, y, r);
+      }
+      // Wavy distant coral silhouettes
+      const gCoral = this.add.graphics().setDepth(-13);
+      for (let cx = 0; cx < W; cx += 180) {
+        const bx = cx + Phaser.Math.Between(0, 120);
+        const bh = Phaser.Math.Between(30, 80);
+        gCoral.fillStyle(tint, 0.2);
+        gCoral.fillEllipse(bx, H - bh / 2, 28, bh);
+        gCoral.fillEllipse(bx + 18, H - bh * 0.6, 20, bh * 0.7);
+        gCoral.fillEllipse(bx - 14, H - bh * 0.5, 18, bh * 0.5);
+      }
+    } else if (isForest) {
+      // Tree silhouettes in background
+      const gTree = this.add.graphics().setDepth(-13);
+      const bgDark = shiftHex(bg, -30);
+      for (let tx = 0; tx < W; tx += Phaser.Math.Between(60, 140)) {
+        const th = Phaser.Math.Between(60, 140);
+        const tw = Phaser.Math.Between(28, 55);
+        gTree.fillStyle(bgDark, 0.55);
+        // Trunk
+        gTree.fillRect(tx + tw / 2 - 5, H - 50, 10, 50);
+        // Canopy (3 circles)
+        gTree.fillCircle(tx + tw / 2, H - 50 - th * 0.4, tw / 2.2);
+        gTree.fillCircle(tx + tw / 2 - tw * 0.28, H - 50 - th * 0.3, tw / 3);
+        gTree.fillCircle(tx + tw / 2 + tw * 0.28, H - 50 - th * 0.3, tw / 3);
+      }
+      // Ground haze
+      const gHaze = this.add.graphics().setDepth(-12);
+      gHaze.fillStyle(tint, 0.07);
+      gHaze.fillRect(0, H - 80, W, 80);
+    } else if (isCyber) {
+      // Grid lines + scanlines
+      const gGrid = this.add.graphics().setDepth(-13);
+      gGrid.lineStyle(0.5, tint, 0.12);
+      for (let gx = 0; gx < W; gx += 80) gGrid.lineBetween(gx, 0, gx, H);
+      for (let gy = 0; gy < H; gy += 60) gGrid.lineBetween(0, gy, W, gy);
+      // Glowing data nodes
+      for (let i = 0; i < 22; i += 1) {
+        const x = Phaser.Math.Between(0, W);
+        const y = Phaser.Math.Between(0, H);
+        this.add.circle(x, y, Phaser.Math.FloatBetween(2, 5), tint, 0.45).setDepth(-11);
+      }
+    } else {
+      // Generic: soft hill silhouettes in distant background
+      const gHills = this.add.graphics().setDepth(-13);
+      gHills.fillStyle(bg, 1);
+      const hillColor = shiftHex(bg, -18);
+      gHills.fillStyle(hillColor, 0.6);
+      for (let hx = 0; hx < W; hx += 320) {
+        gHills.fillEllipse(hx + 160, H - 20, 380, 120);
+        gHills.fillEllipse(hx + 320, H - 10, 280, 80);
+      }
     }
   }
 
@@ -454,6 +633,10 @@ export class PlatformerScene extends Phaser.Scene {
     this.player.setVelocityY(-this.jumpVel * 0.55);
     this.player.setAlpha(0.35);
     this.time.delayedCall(220, () => this.player.setAlpha(1));
+    if (this.lives === 1) {
+      this.soundscape?.triggerEvent("danger");
+      this.startDangerVignette();
+    }
     if (this.lives <= 0) {
       this.finish({ score: this.score, won: false });
     }
@@ -481,6 +664,7 @@ export class PlatformerScene extends Phaser.Scene {
 
   private fxDamage() {
     this.cameras.main.shake(120, 0.005);
+    this.cameras.main.flash(130, 255, 60, 60, false);
     playBleep("hit");
   }
 
@@ -489,14 +673,34 @@ export class PlatformerScene extends Phaser.Scene {
     playBleep("pickup");
   }
 
+  private startDangerVignette() {
+    if (!this.dangerVignette) return;
+    this.tweens.killTweensOf(this.dangerVignette);
+    this.tweens.add({
+      targets: this.dangerVignette,
+      alpha: { from: 0.0, to: 0.18 },
+      duration: 800,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
   private finish(payload: EndPayload) {
     if (this.finished) return;
+    if (this.dangerVignette) {
+      this.tweens.killTweensOf(this.dangerVignette);
+      this.dangerVignette.setAlpha(0);
+    }
     this.finished = true;
     this.physics.pause();
     this.hintText.setText(
       payload.won ? "通关！大型关卡已征服 · 可保存分享链接。" : "再接再厉 · 再来一局或加强创意描述。",
     );
-    if (payload.won) playBleep("win");
+    if (payload.won) {
+      playBleep("win");
+      this.soundscape?.triggerEvent("victory");
+    }
     this.onEnd(payload);
   }
 
@@ -675,6 +879,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.miniBossUntil = this.eventUntil;
       this.nextMiniSpawnAt = 0;
       this.spawnMiniBossHazard();
+      this.cameras.main.shake(350, 0.016);
       this.refreshHud();
       return;
     }

@@ -19,8 +19,48 @@ model Project {
   status    String   @default("ready")
   /// 试玩首帧截图 URL 路径，如 /covers/{id}.jpg；由客户端截图后 PATCH 写入
   coverPath String?
+  /// 累计试玩次数（任何访客打开试玩页面时递增，不需要登录）
+  playCount Int      @default(0)
+  /// 累计点赞数（访客通过 localStorage 去重，防止重复点）
+  likeCount Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+model Novel {
+  id        String   @id @default(cuid())
+  ownerKey  String
+  shareCode String?  @unique
+  title     String
+  prompt    String
+  content   String
+  summary   String?
+  status    String   @default("ready")
+  coverPath String?
+  playCount Int      @default(0)
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comics Comic[]
+
   @@index([ownerKey])
+}
+
+model Comic {
+  id        String   @id @default(cuid())
+  ownerKey  String
+  novelId   String
+  shareCode String?  @unique
+  title     String
+  prompt    String
+  imageUrls String
+  status    String   @default("ready")
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@index([ownerKey])
+  @@index([novelId])
 }

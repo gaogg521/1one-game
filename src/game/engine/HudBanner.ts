@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { CohesiveHudBannerStyle } from "@/lib/cohesive-presentation";
 
 export class HudBanner {
   private readonly scene: Phaser.Scene;
@@ -11,12 +12,12 @@ export class HudBanner {
 
   private hideAt = 0;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, style: CohesiveHudBannerStyle) {
     this.scene = scene;
     const w = scene.scale.width;
 
-    this.box = scene.add.rectangle(w / 2, 96, Math.min(560, w - 40), 64, 0x0b1220, 0.55);
-    this.box.setStrokeStyle(1, 0xffffff, 0.12);
+    this.box = scene.add.rectangle(w / 2, 96, Math.min(560, w - 40), 64, style.fill, style.fillAlpha);
+    this.box.setStrokeStyle(1, style.stroke, style.strokeAlpha);
     this.box.setDepth(200);
     this.box.setScrollFactor(0);
     this.box.setAlpha(0);
@@ -24,7 +25,7 @@ export class HudBanner {
     this.title = scene.add.text(w / 2, 80, "", {
       fontFamily: "system-ui, sans-serif",
       fontSize: "14px",
-      color: "#f8fafc",
+      color: style.titleColor,
     });
     this.title.setOrigin(0.5, 0);
     this.title.setDepth(201);
@@ -34,7 +35,7 @@ export class HudBanner {
     this.message = scene.add.text(w / 2, 102, "", {
       fontFamily: "system-ui, sans-serif",
       fontSize: "12px",
-      color: "#cbd5e1",
+      color: style.messageColor,
     });
     this.message.setOrigin(0.5, 0);
     this.message.setDepth(201);
@@ -75,4 +76,3 @@ export class HudBanner {
     this.message.destroy();
   }
 }
-

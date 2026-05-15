@@ -5,8 +5,12 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,15 +23,38 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Prisma generate & migrate (SQLite)
-        env:
-          DATABASE_URL: file:./ci.sqlite
-        run: npx prisma migrate deploy && npx prisma generate
-
       - name: Lint
         run: npm run lint
 
+      - name: Orchestration smoke (mock spec + lint)
+        run: npm run qa:orch-smoke
+
+  bundle-e2e:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./ci.sqlite
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma migrate & generate (SQLite)
+        run: npx prisma migrate deploy && npx prisma generate
+
       - name: Build
-        env:
-          DATABASE_URL: file:./ci.sqlite
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E smoke (production server)
+        env:
+          CI: true
+          PW_START: "1"
+        run: npm run test:e2e

@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
+import { generateRateLimits } from "@/lib/api/generate-limits";
+import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
+import { readLimitedJson } from "@/lib/api/read-json-body";
 import { generateGameSpecVariantBatch } from "@/lib/generate-spec";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
@@ -7,38 +12,60 @@ import { getThrottleKey } from "@/lib/request-key";
 
 /** 并行生成 2～3 套不同风味的小游戏规格，供用户挑选预览。 */
 export async function POST(req: Request) {
+  const codes = generationErrorCodes();
+  const requestId = newGenerateRequestId();
+  const rl = generateRateLimits();
   const ownerKey = (await getOwnerKey()) ?? "anon";
   const throttleKey = await getThrottleKey("gen_variants", ownerKey);
-  if (!rateLimit(throttleKey, 10, 60_000)) {
-    return NextResponse.json({ error: "多套生成次数过多，请稍后再试" }, { status: 429 });
+  if (!rateLimit(throttleKey, rl.variantsMax, rl.windowMs)) {
+    return NextResponse.json(
+      { error: "多套生成次数过多，请稍后再试", code: codes.RATE_LIMITED, requestId },
+      { status: 429, headers: ridHeaders(requestId) },
+    );
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+  const json = await readLimitedJson(req, requestId);
+  if (!json.ok) {
+    return NextResponse.json(json.payload, {
+      status: json.status,
+      headers: ridHeaders(requestId),
+    });
   }
 
-  const parsed = parseGeneratePayload(body);
+  const parsed = parseGeneratePayload(json.body);
   if (!parsed.ok) {
-    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    return NextResponse.json(
+      { error: parsed.error, code: codes.BAD_REQUEST, requestId },
+      { status: parsed.status, headers: ridHeaders(requestId) },
+    );
   }
 
   let count = 3;
-  if (typeof body === "object" && body !== null && "count" in body) {
-    const c = Number((body as { count?: unknown }).count);
+  if (typeof json.body === "object" && json.body !== null && "count" in json.body) {
+    const c = Number((json.body as { count?: unknown }).count);
     if (c === 2 || c === 3) count = c;
   }
 
+  const startedAt = Date.now();
   try {
     const variants = await generateGameSpecVariantBatch(parsed.prompt, count === 2 ? 2 : 3, {
       searchEnhance: parsed.searchEnhance,
       templateHint: parsed.templateHint,
       enhancePass: parsed.enhancePass,
     });
-    return NextResponse.json({ variants });
+    emitGenerateServeLog({
+      phase: "variants",
+      requestId,
+      durationMs: Date.now() - startedAt,
+      byteLength: json.byteLength,
+      promptChars: parsed.prompt.length,
+      manifestItemCount: parsed.assetManifestSummary?.itemCount,
+    });
+    return NextResponse.json({ variants }, { headers: ridHeaders(requestId) });
   } catch {
-    return NextResponse.json({ error: "多套生成失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: "多套生成失败", code: codes.INTERNAL, requestId },
+      { status: 500, headers: ridHeaders(requestId) },
+    );
   }
 }

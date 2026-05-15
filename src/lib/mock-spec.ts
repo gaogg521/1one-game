@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
@@ -62,7 +63,9 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
   const space = /太空|宇宙|星星|陨石|飞船|卫星|银河|空间站/.test(prompt);
   const ocean = /海|洋|鱼|潜水|浪|船|珊瑚|章鱼/.test(prompt);
   const forest = /森|林|树|鹿|精灵|蘑菇|藤蔓/.test(prompt);
-  const city = /城市|夜市|霓虹|街道|高楼|无人机/.test(prompt);
+  const neonExplicit = /赛博|霓虹|cyber|neon(\b|$)|夜店|数据线|全息|故障艺术|机甲/.test(p) ||
+    /赛博|霓虹|全息|数据线|故障/.test(prompt);
+  const city = /城市|夜市|街道|高楼|无人机|通勤/.test(prompt);
 
   let templateId: GameSpec["templateId"] = "avoider";
   if (
@@ -73,6 +76,8 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     /平台跳跃|跳台|横版闯关|横版过关|多层平台|platformer|\bplatform\b|马里奥|恶魔城|关卡|闯关/.test(p)
   ) {
     templateId = "platformer";
+  } else if (/射击|飞船|太空战|弹幕|战机|消灭敌机|宇宙战|shooter|\bshoot/.test(p)) {
+    templateId = "shooter";
   } else if (/收集|捡|金币|宝石|吃豆|拾取|包裹|晶体|珍珠|蘑菇|能量|collect|coin|gem/.test(p)) {
     templateId = "collector";
   } else if (/生存|血条|生命|多条命|尽量久|扣血|surviv|hp|life|heart/.test(p)) {
@@ -81,46 +86,57 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     templateId = "avoider";
   }
 
-  const palettes = [
+  const palettesOrganic = [
     {
-      backgroundColor: "#0b1020",
-      playerColor: "#7ee787",
-      hazardColor: "#ff6b6b",
-      collectibleColor: "#ffd93d",
-      particleTint: "#6bcbff",
+      backgroundColor: "#141816",
+      playerColor: "#89a884",
+      hazardColor: "#9d5838",
+      collectibleColor: "#c9a66b",
+      particleTint: "#69746c",
     },
     {
-      backgroundColor: "#1a1a2e",
-      playerColor: "#e94560",
-      hazardColor: "#f9f871",
-      collectibleColor: "#00fff5",
-      particleTint: "#ff77ff",
+      backgroundColor: "#18221d",
+      playerColor: "#7da396",
+      hazardColor: "#8f4f32",
+      collectibleColor: "#d4bf94",
+      particleTint: "#5e6a61",
     },
     {
-      backgroundColor: "#14213d",
-      playerColor: "#fca311",
-      hazardColor: "#e63946",
-      collectibleColor: "#2a9d8f",
-      particleTint: "#a8dadc",
+      backgroundColor: "#1a1620",
+      playerColor: "#9b8cb2",
+      hazardColor: "#a85c40",
+      collectibleColor: "#c4a882",
+      particleTint: "#6f6778",
+    },
+  ];
+
+  /** 仅在描述里明确要带霓虹/赛博气质时使用 */
+  const palettesNeon = [
+    {
+      backgroundColor: "#0f172a",
+      playerColor: "#38bdf8",
+      hazardColor: "#fb7185",
+      collectibleColor: "#fbbf24",
+      particleTint: "#818cf8",
     },
     {
       backgroundColor: "#1e1b4b",
       playerColor: "#c4b5fd",
-      hazardColor: "#fb7185",
+      hazardColor: "#f472b6",
       collectibleColor: "#fde047",
       particleTint: "#67e8f9",
     },
   ];
 
   const roocPalette = {
-    backgroundColor: "#0b1222",
-    playerColor: "#f5d0fe",
-    hazardColor: "#fb7185",
-    collectibleColor: "#67e8f9",
-    particleTint: "#fde047",
+    backgroundColor: "#121a26",
+    playerColor: "#e8cfe8",
+    hazardColor: "#c97b89",
+    collectibleColor: "#7eb6c9",
+    particleTint: "#d4cf8f",
   };
 
-  const themePick = isRooc ? roocPalette : pick(palettes, seed, 0);
+  const themePick = neonExplicit ? pick(palettesNeon, seed, 99) : isRooc ? roocPalette : pick(palettesOrganic, seed, 0);
   const guessed = guessLabels(prompt);
 
   const title = isRooc ? "爱如初见 · 冒险经典" : extractTitle(prompt, seed);
@@ -129,19 +145,28 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
   const hazardSpeed = Math.round(
     (templateId === "towerDefense"
       ? pick([150, 175, 200, 225], seed, 3)
-      : pick([220, 260, 300, 340], seed, 3)) * speedScale,
+      : templateId === "shooter"
+        ? pick([100, 130, 160, 190], seed, 3)
+        : pick([220, 260, 300, 340], seed, 3)) * speedScale,
   );
   const spawnIntervalMs =
     templateId === "towerDefense"
       ? pick([340, 420, 500, 580], seed, 4)
-      : pick([520, 640, 760, 880], seed, 4);
+      : templateId === "shooter"
+        ? pick([900, 1200, 1500, 1800], seed, 4)
+        : pick([520, 640, 760, 880], seed, 4);
   const playerSpeed =
     templateId === "platformer"
       ? pick([240, 280, 320, 360], seed, 5)
       : templateId === "towerDefense"
         ? pick([270, 300, 330, 360], seed, 5)
-        : pick([260, 300, 340, 380], seed, 5);
-  const jumpStrength = pick([380, 410, 440, 470], seed, 51);
+        : templateId === "shooter"
+          ? pick([260, 300, 340, 380], seed, 5)
+          : pick([260, 300, 340, 380], seed, 5);
+  const jumpStrength =
+    templateId === "shooter"
+      ? pick([500, 540, 580, 620], seed, 51)
+      : pick([380, 410, 440, 470], seed, 51);
   const gravity = pick([880, 930, 980, 1040], seed, 52);
 
   const hazardLabel = isRooc
@@ -181,7 +206,9 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
             ? pick([30, 36, 42, 48], seed, 6)
             : templateId === "collector"
               ? pick([24, 30, 36, 42], seed, 6)
-              : pick([35, 45, 55], seed, 6),
+              : templateId === "shooter"
+                ? pick([35, 45, 55, 65], seed, 6)
+                : pick([35, 45, 55], seed, 6),
       lives:
         templateId === "survivor"
           ? pick([3, 4, 5], seed, 7)
@@ -189,9 +216,12 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
             ? pick([3, 4, 5], seed, 7)
             : templateId === "platformer"
               ? pick([3, 4, 5], seed, 7)
-              : 1,
+              : templateId === "shooter"
+                ? pick([3, 4, 5], seed, 7)
+                : 1,
       arenaPadding: 36,
       ...(templateId === "platformer" ? { jumpStrength, gravity } : {}),
+      ...(templateId === "shooter" ? { jumpStrength } : {}),
       ...(templateId === "towerDefense"
         ? {
             baseHealth: pick([36, 42, 48, 56], seed, 63),
@@ -200,12 +230,14 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
         : {}),
     },
     labels: {
-      player: templateId === "towerDefense" ? "防御塔" : playerLabel,
-      hazard: templateId === "towerDefense" ? "敌军" : hazardLabel,
+      player: templateId === "towerDefense" ? "防御塔" : templateId === "shooter" ? (space ? "战机" : "飞船") : playerLabel,
+      hazard: templateId === "towerDefense" ? "敌军" : templateId === "shooter" ? (space ? "敌舰" : "入侵者") : hazardLabel,
       collectible: templateId === "towerDefense" ? "金币" : collLabel,
       subtitle: templateId === "towerDefense"
         ? "波次防守 · 构筑火力网"
-        : isRooc
+        : templateId === "shooter"
+          ? (space ? "星际截击 · 消灭入侵舰队" : "空中射击 · 波次迎击")
+          : isRooc
           ? "Q版奇幻 · 职业技能 · 探索与成长"
           : space
             ? "在星尘间穿行"
@@ -213,9 +245,11 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
               ? "逐浪前进"
               : forest
                 ? "林间穿行"
-                : city
-                  ? "霓虹之下"
-                  : "一句话生成的小游戏",
+                : city && neonExplicit
+                  ? "灯海穿行"
+                  : city
+                    ? "街口穿行"
+                    : "一句话生成的小游戏",
     },
   };
 
@@ -229,5 +263,5 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     spec.systems = buildSystems({ prompt, spec });
   }
 
-  return spec;
+  return withPresentationDefaults(spec);
 }

@@ -20,6 +20,16 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
+
+  // Fetch likeCount via raw query (added after last prisma generate)
+  let likeCount = 0;
+  try {
+    const rows = await prisma.$queryRaw<{ likeCount: number }[]>`SELECT likeCount FROM "Project" WHERE id = ${id}`;
+    likeCount = rows[0]?.likeCount ?? 0;
+  } catch {
+    likeCount = 0;
+  }
+
   try {
     const spec = parseGameSpec(JSON.parse(row.specJson));
     return NextResponse.json({
@@ -30,6 +40,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
         createdAt: row.createdAt,
         shareCode: row.shareCode,
         coverPath: row.coverPath,
+        likeCount,
         isOwner: Boolean(isOwner),
       },
       spec,

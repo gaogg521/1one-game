@@ -13,6 +13,8 @@ type Row = {
   status: string;
   shareCode: string | null;
   coverPath: string | null;
+  playCount: number;
+  likeCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -178,6 +180,10 @@ export default function StudioPage() {
                     <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">短链 /s/{r.shareCode}</p>
                   ) : null}
                   <p className="text-[11px] uppercase tracking-wider text-[var(--gc-text-faint)]">更新 {formatWhen(r.updatedAt)}</p>
+                  <div className="flex items-center gap-3 text-[11px] text-[var(--gc-text-faint)]">
+                    {r.playCount > 0 && <span>▶ {r.playCount} 次试玩</span>}
+                    {r.likeCount > 0 && <span>♥ {r.likeCount} 点赞</span>}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 border-t border-[color:var(--gc-border)] px-5 pb-5 pt-3">
                   <Link
@@ -185,6 +191,12 @@ export default function StudioPage() {
                     className="rounded-full bg-[var(--gc-surface-glass-strong)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text)] hover:bg-[color:color-mix(in_srgb,var(--gc-text)_14%,transparent)]"
                   >
                     打开
+                  </Link>
+                  <Link
+                    href={`/create?from=${encodeURIComponent(r.id)}`}
+                    className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
+                  >
+                    再生成
                   </Link>
                   <button
                     type="button"

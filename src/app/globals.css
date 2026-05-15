@@ -1,113 +1,117 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════
-   五套主题：自 1oneclaw 宣传站 style.css 同步（html[data-theme]）
-   源码：D:\Openclaw项目和工具\Openclaw-SKILLS-OneOne-\软件SOFT\www\src\style.css
+   五套主题（重设计版）：深邃背景 · 宝石色调 · 冷暖分明
    ═══════════════════════════════════════════════════════════════════ */
 
+/* ── 1. 墨蓝暗夜：深邃午夜蓝底，靛紫流光 ── */
 [data-theme="dark"] {
-  --gc-bg: #0f172a;
-  --gc-bg-elevated: #111c2e;
-  --gc-border: rgba(148, 163, 184, 0.14);
-  --gc-text: #f1f5f9;
-  --gc-muted: #94a3b8;
-  --gc-accent: #38bdf8;
-  --gc-accent2: #a78bfa;
-  --gc-cyan: #22d3ee;
-  --gc-sidebar-bg: rgba(15, 23, 42, 0.78);
-  --gc-header-bg: rgba(15, 23, 42, 0.78);
-  --gc-footer-bg: rgba(15, 23, 42, 0.72);
-  --gc-selection-bg: rgba(56, 189, 248, 0.35);
+  --gc-bg: #080f1e;
+  --gc-bg-elevated: #0d1829;
+  --gc-border: rgba(140, 155, 190, 0.12);
+  --gc-text: #eceef8;
+  --gc-muted: #8a99b8;
+  --gc-accent: #818cf8;
+  --gc-accent2: #c084fc;
+  --gc-cyan: #34d9f5;
+  --gc-sidebar-bg: rgba(8, 15, 30, 0.82);
+  --gc-header-bg: rgba(8, 15, 30, 0.82);
+  --gc-footer-bg: rgba(8, 15, 30, 0.76);
+  --gc-selection-bg: rgba(129, 140, 248, 0.28);
   --gc-font-ui: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
   --gc-radius-lg: 1rem;
   --gc-radius-cta: 9999px;
-  --gc-cta-a: #22d3ee;
-  --gc-cta-b: #38bdf8;
-  --gc-cta-c: #a78bfa;
+  --gc-cta-a: #60a5fa;
+  --gc-cta-b: #818cf8;
+  --gc-cta-c: #c084fc;
 }
 
+/* ── 2. 绢白极简：暖米纸底，靛蓝点睛 ── */
 [data-theme="light"] {
-  --gc-bg: #f3f6fb;
-  --gc-bg-elevated: #e8edf5;
-  --gc-border: rgba(15, 23, 42, 0.12);
-  --gc-text: #0b1220;
-  --gc-muted: #475569;
-  --gc-accent: #0369a1;
-  --gc-accent2: #7c3aed;
-  --gc-cyan: #0e7490;
-  --gc-sidebar-bg: rgba(243, 246, 251, 0.88);
-  --gc-header-bg: rgba(243, 246, 251, 0.82);
-  --gc-footer-bg: rgba(255, 255, 255, 0.92);
-  --gc-selection-bg: rgba(3, 105, 161, 0.22);
+  --gc-bg: #f9f8f5;
+  --gc-bg-elevated: #edeae4;
+  --gc-border: rgba(28, 22, 14, 0.1);
+  --gc-text: #141210;
+  --gc-muted: #5a5347;
+  --gc-accent: #4338ca;
+  --gc-accent2: #9333ea;
+  --gc-cyan: #0f766e;
+  --gc-sidebar-bg: rgba(249, 248, 245, 0.9);
+  --gc-header-bg: rgba(249, 248, 245, 0.85);
+  --gc-footer-bg: rgba(255, 255, 255, 0.95);
+  --gc-selection-bg: rgba(67, 56, 202, 0.16);
   --gc-font-ui: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
   --gc-radius-lg: 1rem;
   --gc-radius-cta: 9999px;
-  --gc-cta-a: #0369a1;
-  --gc-cta-b: #0e7490;
-  --gc-cta-c: #7c3aed;
+  --gc-cta-a: #4338ca;
+  --gc-cta-b: #6d28d9;
+  --gc-cta-c: #9333ea;
 }
 
+/* ── 3. 深海电光：极深午夜蓝，天青电光 ── */
 [data-theme="cyber-blue"] {
-  --gc-bg: #061126;
-  --gc-bg-elevated: #0a1628;
-  --gc-border: rgba(34, 211, 238, 0.2);
-  --gc-text: #dbeafe;
-  --gc-muted: #93c5fd;
-  --gc-accent: #22d3ee;
-  --gc-accent2: #60a5fa;
-  --gc-cyan: #67e8f9;
-  --gc-sidebar-bg: rgba(6, 17, 38, 0.82);
-  --gc-header-bg: rgba(6, 17, 38, 0.82);
-  --gc-footer-bg: rgba(6, 17, 38, 0.75);
-  --gc-selection-bg: rgba(34, 211, 238, 0.3);
+  --gc-bg: #020b18;
+  --gc-bg-elevated: #071220;
+  --gc-border: rgba(56, 189, 248, 0.13);
+  --gc-text: #d4e5ff;
+  --gc-muted: #6a94c0;
+  --gc-accent: #38bdf8;
+  --gc-accent2: #818cf8;
+  --gc-cyan: #22d3ee;
+  --gc-sidebar-bg: rgba(2, 11, 24, 0.86);
+  --gc-header-bg: rgba(2, 11, 24, 0.86);
+  --gc-footer-bg: rgba(2, 11, 24, 0.8);
+  --gc-selection-bg: rgba(56, 189, 248, 0.2);
   --gc-font-ui: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
   --gc-radius-lg: 1rem;
   --gc-radius-cta: 9999px;
-  --gc-cta-a: #67e8f9;
-  --gc-cta-b: #22d3ee;
-  --gc-cta-c: #60a5fa;
+  --gc-cta-a: #38bdf8;
+  --gc-cta-b: #60a5fa;
+  --gc-cta-c: #818cf8;
 }
 
+/* ── 4. 烟火琥珀：浓墨暖棕底，琥珀金焰 ── */
 [data-theme="warm-orange"] {
-  --gc-bg: #1a120a;
-  --gc-bg-elevated: #22180d;
-  --gc-border: rgba(251, 146, 60, 0.22);
-  --gc-text: #fff3e6;
-  --gc-muted: #f5cba7;
-  --gc-accent: #fb923c;
-  --gc-accent2: #f59e0b;
-  --gc-cyan: #fdba74;
-  --gc-sidebar-bg: rgba(26, 18, 10, 0.82);
-  --gc-header-bg: rgba(26, 18, 10, 0.82);
-  --gc-footer-bg: rgba(26, 18, 10, 0.75);
-  --gc-selection-bg: rgba(251, 146, 60, 0.32);
+  --gc-bg: #110c07;
+  --gc-bg-elevated: #1b1309;
+  --gc-border: rgba(245, 158, 11, 0.14);
+  --gc-text: #fef2dc;
+  --gc-muted: #b5916c;
+  --gc-accent: #f59e0b;
+  --gc-accent2: #f97316;
+  --gc-cyan: #fbbf24;
+  --gc-sidebar-bg: rgba(17, 12, 7, 0.86);
+  --gc-header-bg: rgba(17, 12, 7, 0.86);
+  --gc-footer-bg: rgba(17, 12, 7, 0.8);
+  --gc-selection-bg: rgba(245, 158, 11, 0.24);
   --gc-font-ui: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
   --gc-radius-lg: 1rem;
-  --gc-radius-cta: 1rem;
-  --gc-cta-a: #fdba74;
-  --gc-cta-b: #fb923c;
-  --gc-cta-c: #f59e0b;
+  --gc-radius-cta: 0.875rem;
+  --gc-cta-a: #fbbf24;
+  --gc-cta-b: #f59e0b;
+  --gc-cta-c: #f97316;
 }
 
+/* ── 5. 竹影翡翠：林幽深绿底，翡翠流光 ── */
 [data-theme="forest-green"] {
-  --gc-bg: #0c1f17;
-  --gc-bg-elevated: #0f261c;
-  --gc-border: rgba(52, 211, 153, 0.22);
-  --gc-text: #e7f7ef;
-  --gc-muted: #9bcfb4;
-  --gc-accent: #34d399;
-  --gc-accent2: #22c55e;
+  --gc-bg: #071610;
+  --gc-bg-elevated: #0c2018;
+  --gc-border: rgba(16, 185, 129, 0.13);
+  --gc-text: #e2f5ea;
+  --gc-muted: #7aaa90;
+  --gc-accent: #10b981;
+  --gc-accent2: #34d399;
   --gc-cyan: #6ee7b7;
-  --gc-sidebar-bg: rgba(12, 31, 23, 0.82);
-  --gc-header-bg: rgba(12, 31, 23, 0.82);
-  --gc-footer-bg: rgba(12, 31, 23, 0.75);
-  --gc-selection-bg: rgba(52, 211, 153, 0.28);
+  --gc-sidebar-bg: rgba(7, 22, 16, 0.86);
+  --gc-header-bg: rgba(7, 22, 16, 0.86);
+  --gc-footer-bg: rgba(7, 22, 16, 0.8);
+  --gc-selection-bg: rgba(16, 185, 129, 0.22);
   --gc-font-ui: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
   --gc-radius-lg: 1rem;
   --gc-radius-cta: 9999px;
   --gc-cta-a: #6ee7b7;
   --gc-cta-b: #34d399;
-  --gc-cta-c: #22c55e;
+  --gc-cta-c: #10b981;
 }
 
 /* 派生字色：任意主题下随 --gc-text / --gc-muted / --gc-bg 变化 */
@@ -246,10 +250,10 @@ body {
 }
 
 [data-theme="light"] .gc-card {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  background: linear-gradient(165deg, rgba(255, 254, 250, 0.97) 0%, rgba(247, 244, 238, 0.93) 100%);
   box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.06),
-    0 18px 40px -28px rgba(15, 23, 42, 0.12);
+    0 0 0 1px rgba(28, 22, 14, 0.07),
+    0 18px 40px -28px rgba(28, 22, 14, 0.12);
 }
 
 .gc-chip {

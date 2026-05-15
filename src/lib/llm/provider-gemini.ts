@@ -1,6 +1,14 @@
 import { safeErrorSummary } from "@/lib/llm/errors";
 import type { LlmJsonRequest, LlmJsonResult, LlmMode } from "@/lib/llm/types";
 
+type GeminiPart = { text?: unknown };
+
+type GeminiResponse = {
+  candidates?: ReadonlyArray<{
+    content?: { parts?: ReadonlyArray<GeminiPart | undefined> | undefined };
+  }>;
+};
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   const ms = Math.max(1_000, Math.min(90_000, Math.floor(timeoutMs)));
   return Promise.race([
@@ -50,9 +58,11 @@ export async function llmJsonGemini(req: LlmJsonRequest): Promise<LlmJsonResult>
       const t = await res.text().catch(() => "");
       return { ok: false, provider: "gemini", model: req.model, modeTried: req.mode, error: `HTTP ${res.status} ${t}`.slice(0, 800) };
     }
-    const json = (await res.json()) as any;
-    const text =
-      json?.candidates?.[0]?.content?.parts?.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("\n").trim() ?? "";
+    const json = (await res.json()) as GeminiResponse;
+    const parts = json?.candidates?.[0]?.content?.parts;
+    const text = Array.isArray(parts)
+      ? parts.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n").trim()
+      : "";
     const raw = text ? (JSON.parse(text) as unknown) : null;
     if (raw === null) return { ok: false, provider: "gemini", model: req.model, modeTried: req.mode, error: "empty output" };
     return { ok: true, provider: "gemini", model: req.model, mode, raw };

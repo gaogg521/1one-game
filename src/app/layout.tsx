@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/SiteFooter";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { AppCapabilitiesRoot } from "@/providers/AppCapabilitiesRoot";
 import { htmlFontVariableClasses } from "@/lib/fonts";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init-script";
 import { THEME_META_COLOR, DEFAULT_THEME } from "@/lib/themes";
@@ -34,6 +34,7 @@ export default function RootLayout({
     <html
       lang="zh-Hans"
       data-theme={DEFAULT_THEME}
+      data-scroll-behavior="smooth"
       className={`h-full antialiased ${htmlFontVariableClasses}`.trim()}
       suppressHydrationWarning
     >
@@ -49,12 +50,12 @@ export default function RootLayout({
           <div className="page-bg-fx__scan" />
         </div>
         <div className="noise" aria-hidden="true" />
-        <ThemeProvider>
+        <AppCapabilitiesRoot>
           <div className="relative z-10 flex min-h-full flex-1 flex-col">
             <div className="flex min-h-full flex-1 flex-col">{children}</div>
             <SiteFooter />
           </div>
-        </ThemeProvider>
+        </AppCapabilitiesRoot>
       </body>
     </html>
   );

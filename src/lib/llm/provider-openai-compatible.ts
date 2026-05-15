@@ -1,5 +1,7 @@
 import type OpenAI from "openai";
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 import { safeErrorSummary } from "@/lib/llm/errors";
+import { envIntPositive, openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
 import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider } from "@/lib/llm/types";
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -37,21 +39,25 @@ export async function llmJsonOpenAICompatible(params: {
   ];
 
   async function run(mode: LlmMode): Promise<{ raw: unknown | null; mode: LlmMode }> {
-    const body =
+    const maxOut = envIntPositive("OPENAI_JSON_MAX_OUTPUT_TOKENS", 12_288);
+    const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
+    const completionParams: ChatCompletionCreateParamsNonStreaming =
       mode === "json_schema"
         ? ({
             model: req.model,
             temperature: req.temperature,
             messages,
             response_format: { type: "json_schema", json_schema: req.jsonSchema },
-          } as const)
+            ...tokenField,
+          } as ChatCompletionCreateParamsNonStreaming)
         : ({
             model: req.model,
             temperature: req.temperature,
             messages,
             response_format: { type: "json_object" },
-          } as const);
-    const p = client.chat.completions.create(body as any, { signal: ac.signal });
+            ...tokenField,
+          } as ChatCompletionCreateParamsNonStreaming);
+    const p = client.chat.completions.create(completionParams, { signal: ac.signal });
     const res = await withTimeout(p, req.timeoutMs + 2500, `llm ${req.provider} ${mode}`);
     return { raw: parseJsonContent(res.choices[0]?.message?.content), mode };
   }

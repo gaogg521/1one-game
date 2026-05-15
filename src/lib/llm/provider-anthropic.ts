@@ -1,6 +1,9 @@
 import { safeErrorSummary } from "@/lib/llm/errors";
 import type { LlmJsonRequest, LlmJsonResult } from "@/lib/llm/types";
 
+type AnthropicContentBlock = { text?: unknown };
+type AnthropicMessagesBody = { content?: AnthropicContentBlock[] };
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   const ms = Math.max(1_000, Math.min(90_000, Math.floor(timeoutMs)));
   return Promise.race([
@@ -57,9 +60,12 @@ export async function llmJsonAnthropic(req: LlmJsonRequest): Promise<LlmJsonResu
       const t = await res.text().catch(() => "");
       return { ok: false, provider: "anthropic", model: req.model, modeTried: req.mode, error: `HTTP ${res.status} ${t}`.slice(0, 800) };
     }
-    const json = (await res.json()) as any;
-    const blocks = Array.isArray(json?.content) ? json.content : [];
-    const text = blocks.map((b: any) => (typeof b?.text === "string" ? b.text : "")).join("\n").trim();
+    const json = (await res.json()) as AnthropicMessagesBody;
+    const blocks = Array.isArray(json.content) ? json.content : [];
+    const text = blocks
+      .map((b: AnthropicContentBlock) => (typeof b.text === "string" ? b.text : ""))
+      .join("\n")
+      .trim();
     const raw = text ? (JSON.parse(text) as unknown) : null;
     if (raw === null) {
       return { ok: false, provider: "anthropic", model: req.model, modeTried: req.mode, error: "empty output" };

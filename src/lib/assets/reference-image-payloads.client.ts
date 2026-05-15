@@ -14,6 +14,9 @@ export const REFERENCE_IMAGE_JPEG_QUALITY = 0.82;
 /** 弹窗「再降画质」时的 JPEG 质量下限 */
 export const REFERENCE_IMAGE_JPEG_QUALITY_MIN = 0.32;
 
+/** 角色/敌军等贴片：居中收入方形精灵格的长边像素（越小越省 session，过大易超配额） */
+export const REFERENCE_SPRITE_CELL_PX = 416;
+
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -33,7 +36,88 @@ function loadHtmlImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-/** 将已有 data URL（位图）按 JPEG 质量重编码；SVG 原样返回 */
+function dataUrlLooksLikeJpeg(dataUrl: string): boolean {
+  return dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg");
+}
+
+/** PNG/WebP 等编码为浏览器支持的带透明格式（优先 WebP 压体积）；失败则用 PNG */
+function rasterCanvasToPackedDataUrl(canvas: HTMLCanvasElement, webpQuality: number): string {
+  const webp = canvas.toDataURL("image/webp", webpQuality);
+  if (webp.startsWith("data:image/webp")) return webp;
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * 将「可走行单位 / 塔 / 主角」类参考图收进正方形精灵格：居中 contain，透明边，适配塔防贴片。
+ */
+export async function fitReferenceImageToSquareSpriteCell(dataUrl: string, cellPx: number): Promise<string | null> {
+  if (!dataUrl.startsWith("data:image/")) return null;
+  if (dataUrl.startsWith("data:image/svg+xml")) return null;
+  const cell = Math.max(64, Math.min(768, Math.floor(cellPx)));
+  try {
+    const img = await loadHtmlImageFromDataUrl(dataUrl);
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (iw <= 0 || ih <= 0) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = cell;
+    canvas.height = cell;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, cell, cell);
+    const scale = Math.min(cell / iw, cell / ih);
+    const dw = Math.max(1, Math.round(iw * scale));
+    const dh = Math.max(1, Math.round(ih * scale));
+    const ox = (cell - dw) / 2;
+    const oy = (cell - dh) / 2;
+    ctx.drawImage(img, ox, oy, dw, dh);
+    return rasterCanvasToPackedDataUrl(canvas, 0.84);
+  } catch {
+    return null;
+  }
+}
+
+/** 用途文本是否更应走「居中方形精灵」管线（≠ 整张地图背景） */
+export function purposeSuggestsSpriteCell(purpose: string): boolean {
+  const u = purpose.trim().toLowerCase();
+  return (
+    /怪|敌|小兵|野怪|mob|monster|creep|hazard|精英|enemy|invader/.test(u) ||
+      /主角|玩家|守护者|水晶|萝卜|老家|能量核心|vip|protect|被保护|citadel|carry|npc|hero|道具|tower|炮台|防御塔|箭塔|炮塔|\bturret\b|\btower\b/.test(u)
+  );
+}
+
+async function rasterDataUrlShrink(dataUrl: string, scale: number, jpegQuality: number): Promise<string | null> {
+  if (scale <= 0.08 || scale > 1.001) return null;
+  try {
+    const img = await loadHtmlImageFromDataUrl(dataUrl);
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    if (w <= 12 || h <= 12) return null;
+    w = Math.max(12, Math.round(w * scale));
+    h = Math.max(12, Math.round(h * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const opaqueJpeg = dataUrlLooksLikeJpeg(dataUrl);
+    if (!opaqueJpeg) {
+      ctx.clearRect(0, 0, w, h);
+    }
+    ctx.drawImage(img, 0, 0, w, h);
+
+    if (opaqueJpeg) {
+      const q = Math.min(1, Math.max(0.24, jpegQuality));
+      return canvas.toDataURL("image/jpeg", q);
+    }
+    return rasterCanvasToPackedDataUrl(canvas, 0.78);
+  } catch {
+    return null;
+  }
+}
+
+/** 将已有 data URL 做一轮瘦身：JPEG 降低质量；带透明格式则缩小画布（仍可保留 alpha）；SVG 原样返回 */
 export async function recompressPayloadsJpegQuality(
   payloads: RuntimeReferencePayload[],
   quality: number,
@@ -47,24 +131,28 @@ export async function recompressPayloadsJpegQuality(
       continue;
     }
     try {
-      const img = await loadHtmlImageFromDataUrl(dataUrl);
-      const w = img.naturalWidth || img.width;
-      const h = img.naturalHeight || img.height;
-      if (w <= 0 || h <= 0) {
-        out.push(p);
-        continue;
+      if (dataUrlLooksLikeJpeg(dataUrl)) {
+        const img = await loadHtmlImageFromDataUrl(dataUrl);
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w <= 0 || h <= 0) {
+          out.push(p);
+          continue;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          out.push(p);
+          continue;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        out.push({ ...p, dataUrl: canvas.toDataURL("image/jpeg", q) });
+      } else {
+        const shrunk = await rasterDataUrlShrink(dataUrl, 0.9, q);
+        out.push({ ...p, dataUrl: shrunk ?? dataUrl });
       }
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        out.push(p);
-        continue;
-      }
-      ctx.drawImage(img, 0, 0, w, h);
-      const next = canvas.toDataURL("image/jpeg", q);
-      out.push({ ...p, dataUrl: next });
     } catch {
       out.push(p);
     }
@@ -211,9 +299,10 @@ export async function autoFitAndWriteReferencePayloadsToSession(
 }
 
 /**
- * 将位图压成 JPEG data URL：长边不超过 maxLongEdge，避免高清原图撑爆 sessionStorage。
+ * 会话用参考图缩放：JPEG 仍为 JPEG（无透明度）；PNG/WebP/GIF 等在透明画布上绘制并输出 WebP→PNG，
+ * **不再**铺满白底后转 JPEG（那会抹掉 Alpha，塔防贴片周围出现整块白矩形）。
  */
-export async function compressImageToJpegDataUrl(
+export async function compressReferenceImageToSessionDataUrl(
   file: File,
   options?: { maxLongEdge?: number; quality?: number },
 ): Promise<string> {
@@ -223,6 +312,9 @@ export async function compressImageToJpegDataUrl(
   if (typeof createImageBitmap !== "function") {
     return fileToDataUrl(file);
   }
+
+  const mime = (file.type || "").toLowerCase();
+  const isJpeg = mime === "image/jpeg" || mime === "image/jpg";
 
   let bitmap: ImageBitmap;
   try {
@@ -249,19 +341,21 @@ export async function compressImageToJpegDataUrl(
       return fileToDataUrl(file);
     }
 
-    if (file.type === "image/png" || file.type === "image/webp" || file.type === "image/gif") {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
+    if (isJpeg) {
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const url = canvas.toDataURL("image/jpeg", quality);
+        if (url.length <= 900_000 || attempt >= 3) return url;
+        quality = Math.max(0.45, quality * 0.72);
+      }
+      return canvas.toDataURL("image/jpeg", 0.45);
     }
+
+    ctx.clearRect(0, 0, width, height);
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const url = canvas.toDataURL("image/jpeg", quality);
-      if (url.length <= 900_000 || attempt >= 3) return url;
-      quality = Math.max(0.45, quality * 0.72);
-    }
-    return canvas.toDataURL("image/jpeg", 0.45);
+    return rasterCanvasToPackedDataUrl(canvas, Math.min(0.9, quality + 0.04));
   } catch {
     try {
       bitmap.close();
@@ -271,6 +365,9 @@ export async function compressImageToJpegDataUrl(
     return fileToDataUrl(file);
   }
 }
+
+/** @deprecated 使用 compressReferenceImageToSessionDataUrl；历史上该实现曾错误地为 PNG 铺白底。 */
+export const compressImageToJpegDataUrl = compressReferenceImageToSessionDataUrl;
 
 /** 与 /api/ingest 提交顺序一致：先「选择文件」列表，再剪贴板行 */
 export function buildIngestFileOrder(fileList: FileList | null, pasted: { file: File; purpose: string }[]): {
@@ -291,7 +388,7 @@ export function buildIngestFileOrder(fileList: FileList | null, pasted: { file: 
 }
 
 /**
- * 生成可写入 session 的 payload：默认对位图做「长边≤1920 + JPEG」压缩；超大原图仅解码到 maxOriginalBytes 以内才处理。
+ * 生成可写入 session 的 payload：长边缩放 +（JPEG→JPEG | 带 Alpha→WebP/PNG）；单位图可选居中方形精灵格。
  */
 export async function buildRuntimePayloadsFromIngestOrder(
   ordered: { file: File; purpose: string }[],
@@ -304,13 +401,20 @@ export async function buildRuntimePayloadsFromIngestOrder(
     if (!file.type.startsWith("image/")) continue;
     if (file.size > maxOriginalBytes) continue;
     ord += 1;
-    const dataUrl =
+    let dataUrl =
       file.type === "image/svg+xml"
         ? await fileToDataUrl(file)
-        : await compressImageToJpegDataUrl(file, {
+        : await compressReferenceImageToSessionDataUrl(file, {
             maxLongEdge: REFERENCE_IMAGE_MAX_LONG_EDGE,
             quality: REFERENCE_IMAGE_JPEG_QUALITY,
           });
+
+    const cell =
+      purposeSuggestsSpriteCell(purpose) && !file.type.includes("svg")
+        ? await fitReferenceImageToSquareSpriteCell(dataUrl, REFERENCE_SPRITE_CELL_PX)
+        : null;
+    if (cell) dataUrl = cell;
+
     payloads.push({ ordinal: ord, purpose, dataUrl });
   }
   return payloads;
