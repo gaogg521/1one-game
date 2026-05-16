@@ -49,7 +49,7 @@ export default function Home() {
               </p>
 
               <h1
-                className="gc-theme-hero mt-10 text-nowrap bg-gradient-to-br from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text py-2 font-normal leading-[1.12] tracking-[0.03em] text-transparent [filter:drop-shadow(0_4px_48px_color-mix(in_srgb,var(--gc-text)_14%,transparent))] sm:mt-12"
+                className="gc-theme-hero mt-10 max-sm:text-pretty max-sm:whitespace-normal sm:mt-12 sm:text-nowrap bg-gradient-to-br from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text py-2 font-normal leading-[1.12] tracking-[0.03em] text-transparent [filter:drop-shadow(0_4px_48px_color-mix(in_srgb,var(--gc-text)_14%,transparent))]"
                 style={{
                   fontSize: "clamp(1.4rem, 0.4rem + 2.95cqi, 4.5rem)",
                 }}

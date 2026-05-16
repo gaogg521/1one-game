@@ -12,6 +12,14 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 24), 96);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const skip = (page - 1) * limit;
+  const mine = searchParams.get("mine") === "1";
+  const ownerKey = mine ? await getOwnerKey() : null;
+
+  if (mine && !ownerKey) {
+    return NextResponse.json({ novels: [], total: 0, page, limit });
+  }
+
+  const where = mine && ownerKey ? { ownerKey } : {};
 
   const orderBy =
     sort === "likeCount"
@@ -22,6 +30,7 @@ export async function GET(req: Request) {
 
   const [novels, total] = await Promise.all([
     prisma.novel.findMany({
+      where,
       orderBy,
       skip,
       take: limit,
@@ -34,9 +43,12 @@ export async function GET(req: Request) {
         playCount: true,
         likeCount: true,
         createdAt: true,
+        updatedAt: true,
+        status: true,
+        shareCode: true,
       },
     }),
-    prisma.novel.count(),
+    prisma.novel.count({ where }),
   ]);
 
   return NextResponse.json({ novels, total, page, limit });

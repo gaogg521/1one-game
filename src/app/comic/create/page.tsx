@@ -1,16 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import {
+  type DraftState,
+  loadDraft,
+  clearDraft,
+  markDraftGenerating,
+} from "@/lib/draft-storage";
+import { NOVEL_LENGTH_TIERS, type NovelLengthTier } from "@/lib/novel-length";
 
 export default function ComicCreatePage() {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
+  const [lengthTier, setLengthTier] = useState<NovelLengthTier>("medium");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
+  const [draft, setDraft] = useState<DraftState | null>(null);
+
+  // 恢复草稿
+  useEffect(() => {
+    const d = loadDraft("comic");
+    if (d && d.generating && !d.generatedId) {
+      setDraft(d);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,24 +36,58 @@ export default function ComicCreatePage() {
     setError("");
     setProgress("正在解析文本并提取漫画场景…");
 
+    // 保存草稿状态
+    markDraftGenerating("comic", content.trim(), title.trim() || undefined);
+
     try {
       const res = await fetch("/api/comic/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: content.trim(), title: title.trim() || undefined }),
+        body: JSON.stringify({
+          content: content.trim(),
+          title: title.trim() || undefined,
+          lengthTier,
+        }),
       });
-      const data = await res.json();
+      const ct = res.headers.get("content-type") ?? "";
+      const data = ct.includes("application/json")
+        ? ((await res.json()) as { error?: string; comic?: { id: string } })
+        : {};
       if (!res.ok) {
-        setError(data.error || "生成失败");
-        setLoading(false);
+        setError(
+          data.error ||
+            (res.status === 413
+              ? "正文过长，请在 .env 中增大 GENERATE_BODY_MAX_BYTES 或缩短梗概"
+              : `生成失败（HTTP ${res.status}）`),
+        );
+        return;
+      }
+      if (!data.comic?.id) {
+        setError("服务端未返回漫画 ID");
         return;
       }
       setProgress("正在渲染分镜…");
+      clearDraft("comic");
+      setDraft(null);
       router.push(`/comic/${data.comic.id}`);
     } catch {
       setError("网络错误，请重试");
+    } finally {
       setLoading(false);
     }
+  }
+
+  function handleRestoreDraft() {
+    if (draft) {
+      setContent(draft.prompt);
+      if (draft.title) setTitle(draft.title);
+      setDraft(null);
+    }
+  }
+
+  function handleDismissDraft() {
+    clearDraft("comic");
+    setDraft(null);
   }
 
   return (
@@ -47,11 +98,65 @@ export default function ComicCreatePage() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-[var(--gc-text)]">创作漫画</h1>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">
-              粘贴你的小说或故事文本，AI 自动解析并生成 4 格漫画
+              粘贴小说文本，AI 按篇幅生成多页漫画（每页 4 宫格，短篇约 2 页、中篇约 8 页、长篇最多 32 页）
             </p>
           </div>
 
+          {/* 草稿恢复提示 */}
+          {draft && (
+            <div className="mb-4 rounded-xl border border-[color:var(--gc-accent)]/30 bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-[var(--gc-text)]">
+                    检测到未完成的创作草稿
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--gc-muted)]">
+                    内容：{draft.prompt.slice(0, 60)}
+                    {draft.prompt.length > 60 ? "…" : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={handleRestoreDraft}
+                    className="rounded-lg bg-[var(--gc-accent)] px-3 py-1.5 text-xs font-medium text-white hover:brightness-110"
+                  >
+                    恢复草稿
+                  </button>
+                  <button
+                    onClick={handleDismissDraft}
+                    className="rounded-lg border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                  >
+                    忽略
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
+                篇幅（决定漫画页数）
+              </label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {NOVEL_LENGTH_TIERS.map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => setLengthTier(tier.id)}
+                    className={`rounded-xl border px-4 py-3 text-left transition ${
+                      lengthTier === tier.id
+                        ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
+                        : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] hover:border-[color:var(--gc-accent)]/30"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-[var(--gc-text)]">{tier.label}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
                 标题（可选）

@@ -37,6 +37,8 @@ model Novel {
   prompt    String
   content   String
   summary   String?
+  /// short | medium | long
+  lengthTier String? @default("medium")
   status    String   @default("ready")
   coverPath String?
   playCount Int      @default(0)

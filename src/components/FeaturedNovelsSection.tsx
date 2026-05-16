@@ -7,6 +7,7 @@ interface FeaturedNovel {
   id: string;
   title: string;
   summary: string | null;
+  coverPath: string | null;
   playCount: number;
   likeCount: number;
 }
@@ -54,9 +55,18 @@ export function FeaturedNovelsSection() {
                 className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
               >
                 <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
-                  <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--gc-muted)] opacity-30">
-                    📖
-                  </div>
+                  {n.coverPath ? (
+                    <img
+                      src={n.coverPath}
+                      alt={n.title}
+                      className="h-full w-full object-cover transition group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--gc-muted)] opacity-30">
+                      📖
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-0.5 px-3 py-2">
                   <p className="line-clamp-1 text-xs font-semibold text-[var(--gc-text)]">{n.title}</p>

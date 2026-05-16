@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* 移动端：横向导航隐藏滚动条、优先触控滚动 */
+.gc-mobile-nav-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.gc-mobile-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    五套主题（重设计版）：深邃背景 · 宝石色调 · 冷暖分明
    ═══════════════════════════════════════════════════════════════════ */

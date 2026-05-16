@@ -2,8 +2,8 @@ import { generationErrorCodes } from "@/lib/api/json-error-response";
 import type { ApiGenerateErrorPayload } from "@/lib/api/json-error-response";
 
 function maxBodyBytes(): number {
-  const n = Number(process.env.GENERATE_BODY_MAX_BYTES ?? "98304");
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 98304;
+  const n = Number(process.env.GENERATE_BODY_MAX_BYTES ?? "524288");
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 524288;
 }
 
 function previewClHeader(cl: string | null, maxBytes: number): ApiGenerateErrorPayload | null {

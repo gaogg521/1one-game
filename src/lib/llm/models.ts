@@ -1,5 +1,7 @@
-import { normalizeOpenAIModelId } from "@/lib/model-cascade";
+import { getModelCascade } from "@/lib/model-config";
 import type { LlmProvider } from "@/lib/llm/types";
+
+export { getNovelStyleTextModelCascade } from "@/lib/model-config";
 
 function splitList(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -20,18 +22,8 @@ export function getModelCascadeForProvider(provider: LlmProvider): string[] {
     const fallbacks = splitList(process.env.GEMINI_MODEL_FALLBACKS);
     return [primary, ...fallbacks].filter(Boolean);
   }
-  // OpenAI / LiteLLM(OpenAI-compatible)
-  const primary = normalizeOpenAIModelId(process.env.OPENAI_MODEL?.trim() || "gpt-5.2");
-  const fallbacks = splitList(process.env.OPENAI_MODEL_FALLBACKS).map(normalizeOpenAIModelId);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const m of [primary, ...fallbacks]) {
-    if (m && !seen.has(m)) {
-      seen.add(m);
-      out.push(m);
-    }
-  }
-  return out.length ? out : [primary];
+  // OpenAI / LiteLLM(OpenAI-compatible)：与 model-config（游戏 / 规格 JSON）一致
+  return getModelCascade();
 }
 
 export function getProviderKeyStatus(provider: LlmProvider): { ok: boolean; reason?: string } {
@@ -47,4 +39,3 @@ export function getProviderKeyStatus(provider: LlmProvider): { ok: boolean; reas
   const key = process.env.OPENAI_API_KEY?.trim();
   return key ? { ok: true } : { ok: false, reason: "未配置 OPENAI_API_KEY" };
 }
-

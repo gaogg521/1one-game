@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 
 interface Novel {
   id: string;
   title: string;
   summary: string | null;
   prompt: string;
+  coverPath: string | null;
   createdAt: string;
   playCount: number;
   likeCount: number;
 }
 
 function NovelCard({ n }: { n: Novel }) {
+  const title = normalizeNovelTitle(n.title, n.prompt);
+  const blurb = displayNovelSummary(n.summary, title, n.prompt);
   const [liked, setLiked] = useState(() => {
     if (typeof localStorage === "undefined") return false;
     return !!localStorage.getItem(`liked:novel:${n.id}`);
@@ -34,28 +38,43 @@ function NovelCard({ n }: { n: Novel }) {
   return (
     <Link
       href={`/novel/${n.id}`}
-      className="group flex flex-col rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 transition hover:border-[color:var(--gc-accent)]/40"
+      className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
     >
-      <h3 className="text-base font-semibold text-[var(--gc-text)] group-hover:text-[var(--gc-accent)]">
-        {n.title}
-      </h3>
-      {n.summary && (
-        <p className="mt-1 line-clamp-2 text-xs text-[var(--gc-text-soft)]">{n.summary}</p>
-      )}
-      <div className="mt-auto flex items-center justify-between pt-3 text-[10px] text-[var(--gc-muted)]">
-        <div className="flex items-center gap-3">
-          <span>▶ {n.playCount} 次阅读</span>
-          <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+        {n.coverPath ? (
+          <img
+            src={n.coverPath}
+            alt={title}
+            className="h-full w-full object-cover transition group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--gc-muted)] opacity-60">
+            <span className="text-2xl">📖</span>
+            <span className="text-[10px]">封面生成中…</span>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5 p-3">
+        <h3 className="line-clamp-1 text-sm font-semibold text-[var(--gc-text)] group-hover:text-[var(--gc-accent)]">
+          {title}
+        </h3>
+        {blurb && <p className="line-clamp-2 text-xs text-[var(--gc-text-soft)]">{blurb}</p>}
+        <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--gc-muted)]">
+          <div className="flex items-center gap-3">
+            <span>▶ {n.playCount}</span>
+            <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleLike}
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition ${
+              liked ? "text-red-400" : "text-[var(--gc-text-faint)] hover:text-red-400"
+            }`}
+          >
+            {liked ? "♥" : "♡"} {likes > 0 ? likes : ""}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleLike}
-          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition ${
-            liked ? "text-red-400" : "text-[var(--gc-text-faint)] hover:text-red-400"
-          }`}
-        >
-          {liked ? "♥" : "♡"} {likes > 0 ? likes : ""}
-        </button>
       </div>
     </Link>
   );
@@ -69,6 +88,7 @@ export default function NovelDiscoverPage() {
   const [loading, setLoading] = useState(true);
 
   const [, startTransition] = useTransition();
+  const coverRequested = useRef(new Set<string>());
 
   useEffect(() => {
     startTransition(() => setLoading(true));
@@ -80,6 +100,39 @@ export default function NovelDiscoverPage() {
       })
       .finally(() => setLoading(false));
   }, [page, limit]);
+
+  /** 广场列表：无封面时后台补生成（每本仅请求一次），完成后局部刷新卡片 */
+  useEffect(() => {
+    const missing = novels.filter((n) => !n.coverPath && !coverRequested.current.has(n.id));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    const run = async () => {
+      const queue = missing.slice(0, 12);
+      const concurrency = 2;
+      let idx = 0;
+      const worker = async () => {
+        while (idx < queue.length && !cancelled) {
+          const n = queue[idx++];
+          coverRequested.current.add(n.id);
+          try {
+            const res = await fetch(`/api/novel/${n.id}/cover`, { method: "POST" });
+            const data = (await res.json()) as { coverPath?: string };
+            if (data.coverPath && !cancelled) {
+              setNovels((prev) => prev.map((x) => (x.id === n.id ? { ...x, coverPath: data.coverPath! } : x)));
+            }
+          } catch {
+            /* 单本失败不影响其它 */
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()));
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [novels]);
 
   const totalPages = Math.ceil(total / limit);
 

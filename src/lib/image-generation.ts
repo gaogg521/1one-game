@@ -1,8 +1,8 @@
 /**
- * 文生图服务：优先 gpt-image-2，备选 gemini-3.1-flash-image-preview
- * 1K 分辨率（1024x1024）
+ * 文生图：模型与默认分辨率见 `src/lib/model-config.ts`（`IMAGE_GEN_*` / `GEMINI_IMAGE_MODEL`）。
  */
 
+import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
 import fs from "fs";
 import path from "path";
@@ -12,45 +12,55 @@ export interface ImageGenResult {
   localPath?: string;
 }
 
-const FALLBACK_MODELS = ["gpt-image-2", "gpt-image-1", "dall-e-3"];
+/**
+ * 使用 OpenAI 兼容网关生成图片（`IMAGE_GEN_OPENAI_MODEL`）；失败则由上层降级 Gemini。
+ */
+function imageItemToResult(item: { url?: string | null; b64_json?: string | null } | undefined): ImageGenResult | null {
+  if (!item) return null;
+  if (item.url) return { url: item.url };
+  if (item.b64_json) {
+    const buf = Buffer.from(item.b64_json, "base64");
+    const filename = `openai-${Date.now()}.png`;
+    const dir = path.join(process.cwd(), "public", "covers");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const localPath = path.join(dir, filename);
+    fs.writeFileSync(localPath, buf);
+    return { url: `/covers/${filename}`, localPath };
+  }
+  return null;
+}
 
 /**
- * 使用 OpenAI 兼容网关生成图片。
- * 优先尝试 gpt-image-2，失败后降级到 dall-e-3。
+ * LiteLLM / gpt-image-2 等网关常不支持 `response_format`、`quality`；按多种参数组合尝试。
  */
 export async function generateImageWithOpenAI(
   prompt: string,
   options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number }
 ): Promise<ImageGenResult | null> {
-  try {
-    const client = createOpenAIClient();
-    const size = options?.size ?? "1024x1024";
-    const quality = options?.quality ?? "standard";
-    const n = options?.n ?? 1;
+  const client = createOpenAIClient();
+  const model = getImageGenOpenAIModel();
+  const size = options?.size ?? getImageGenDefaultSize();
+  const n = options?.n ?? 1;
 
-    for (const model of FALLBACK_MODELS) {
-      try {
-        const response = await client.images.generate({
-          model,
-          prompt,
-          size,
-          quality,
-          n,
-          response_format: "url",
-        });
-
-        const url = response.data?.[0]?.url;
-        if (url) {
-          return { url };
-        }
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  } catch {
-    return null;
+  // 多数 LiteLLM / gpt-image-2 网关：默认返回 b64_json，且不支持 response_format / quality
+  const attempts: Record<string, unknown>[] = [{ model, prompt, size, n }];
+  if (options?.quality) {
+    attempts.push({ model, prompt, size, n, quality: options.quality });
   }
+
+  for (const body of attempts) {
+    try {
+      const response = await client.images.generate(
+        body as unknown as Parameters<typeof client.images.generate>[0],
+      );
+      if (!("data" in response) || !response.data?.length) continue;
+      const hit = imageItemToResult(response.data[0]);
+      if (hit) return hit;
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 /**
@@ -65,9 +75,10 @@ export async function generateImageWithGemini(
   if (!key) return null;
 
   try {
-    const size = options?.size ?? "1024x1024";
+    const size = options?.size ?? getImageGenDefaultSize();
+    const geminiModel = getImageGenGeminiModel();
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 
 interface NovelWork {
   id: string;
@@ -16,6 +17,8 @@ interface NovelWork {
 }
 
 function NovelCard({ novel }: { novel: NovelWork }) {
+  const title = normalizeNovelTitle(novel.title, novel.prompt);
+  const blurb = displayNovelSummary(novel.summary, title, novel.prompt);
   return (
     <Link
       href={`/novel/${novel.id}`}
@@ -25,7 +28,7 @@ function NovelCard({ novel }: { novel: NovelWork }) {
         {novel.coverPath ? (
           <img
             src={novel.coverPath}
-            alt={novel.title}
+            alt={title}
             className="h-full w-full object-cover transition group-hover:scale-105"
             loading="lazy"
           />
@@ -36,10 +39,8 @@ function NovelCard({ novel }: { novel: NovelWork }) {
         )}
       </div>
       <div className="flex flex-col gap-0.5 px-3 py-2">
-        <p className="line-clamp-1 text-sm font-semibold text-[var(--gc-text)]">{novel.title}</p>
-        {novel.summary && (
-          <p className="line-clamp-1 text-xs text-[var(--gc-muted)]">{novel.summary}</p>
-        )}
+        <p className="line-clamp-1 text-sm font-semibold text-[var(--gc-text)]">{title}</p>
+        {blurb && <p className="line-clamp-1 text-xs text-[var(--gc-muted)]">{blurb}</p>}
         <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--gc-text-faint)]">
           {novel.playCount > 0 && <span>▶ {novel.playCount} 读</span>}
           {novel.likeCount > 0 && <span>♥ {novel.likeCount}</span>}

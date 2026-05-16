@@ -23,6 +23,8 @@ export const viewport = {
   themeColor: THEME_META_COLOR[DEFAULT_THEME],
   width: "device-width",
   initialScale: 1,
+  /** 刘海屏安全区 env(safe-area-inset-*) 生效需要 cover */
+  viewportFit: "cover" as const,
 };
 
 export default function RootLayout({
@@ -38,7 +40,7 @@ export default function RootLayout({
       className={`h-full antialiased ${htmlFontVariableClasses}`.trim()}
       suppressHydrationWarning
     >
-      <body className="gc-page-bg relative flex min-h-[100dvh] min-h-full flex-col text-[var(--gc-text)]">
+      <body className="gc-page-bg relative flex min-h-[100dvh] min-h-full flex-col text-[var(--gc-text)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* 1oneclaw 同款全站背景层（www/index.html + style.css） */}
         <div className="page-bg-fx" aria-hidden="true">

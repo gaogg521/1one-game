@@ -1,9 +1,9 @@
 import type OpenAI from "openai";
 import { createOpenAIClient } from "@/lib/openai-client";
-import { llmJsonOpenAICompatible, llmTextOpenAICompatible } from "@/lib/llm/provider-openai-compatible";
+import { llmJsonOpenAICompatible, llmTextOpenAICompatible, llmTextStreamOpenAICompatible } from "@/lib/llm/provider-openai-compatible";
 import { llmJsonAnthropic } from "@/lib/llm/provider-anthropic";
 import { llmJsonGemini } from "@/lib/llm/provider-gemini";
-import { getModelCascadeForProvider, getProviderKeyStatus } from "@/lib/llm/models";
+import { getModelCascadeForProvider, getNovelStyleTextModelCascade, getProviderKeyStatus } from "@/lib/llm/models";
 import type { LlmJsonRequest, LlmJsonResult, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
 
 function normalizeProvider(p: string | undefined): LlmProvider {
@@ -60,7 +60,20 @@ export async function llmText(req: Omit<LlmTextRequest, "provider">): Promise<Ll
   return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
 }
 
+/** OpenAI 兼容网关流式文本（chunk 为增量字符串）；需网关支持 `stream: true`。 */
+export async function* llmTextStream(req: Omit<LlmTextRequest, "provider">): AsyncGenerator<string> {
+  const provider = getActiveProvider();
+  const keyStatus = getProviderKeyStatus(provider);
+  if (!keyStatus.ok) {
+    throw new Error(keyStatus.reason ?? "missing key");
+  }
+  const client = getOpenAIClient();
+  yield* llmTextStreamOpenAICompatible({ client, req: { ...req, provider } });
+}
+
 export function getProviderModelCascade(): string[] {
   return getModelCascadeForProvider(getActiveProvider());
 }
+
+export { getNovelStyleTextModelCascade };
 

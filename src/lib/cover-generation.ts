@@ -1,69 +1,148 @@
-"use server";
-
 import { prisma } from "./prisma";
 import { generateImage } from "./image-generation";
+import { persistNovelCoverFile, persistNovelCoverBuffer } from "./novel-cover-persist";
+import { inferCoverGenre, COVER_GENRE_STYLES, type CoverGenre } from "./cover-genre";
+import { compositeNovelCover } from "./cover-composite";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+export type { CoverGenre };
+export { inferCoverGenre };
 
 export interface CoverGenOptions {
   title: string;
   summary?: string;
-  genre?: "fantasy" | "scifi" | "romance" | "mystery" | "general";
+  storyHint?: string;
+  genre?: CoverGenre;
   type: "novel" | "comic";
 }
 
-function buildCoverPrompt(opts: CoverGenOptions): string {
-  const { title, summary = "", genre = "general", type } = opts;
+async function readImageBuffer(imageUrl: string): Promise<Buffer | null> {
+  try {
+    if (imageUrl.startsWith("/")) {
+      const abs = path.join(process.cwd(), "public", imageUrl.replace(/^\//, ""));
+      return await fs.readFile(abs);
+    }
+    if (/^https?:\/\//i.test(imageUrl)) {
+      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) return null;
+      return Buffer.from(await res.arrayBuffer());
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-  const genreStyle: Record<string, string> = {
-    fantasy: "fantasy art style, magical atmosphere, epic landscape, rich colors, detailed illustration",
-    scifi: "futuristic sci-fi style, neon accents, sleek technology, cinematic lighting",
-    romance: "soft romantic watercolor style, warm pastel tones, delicate flowers, dreamy atmosphere",
-    mystery: "dark noir style, moody shadows, rain-slicked streets, suspenseful atmosphere",
-    general: "modern book cover illustration style, clean composition, vibrant colors, professional design",
-  };
+function buildCoverPrompt(opts: CoverGenOptions): string {
+  const { title, summary = "", storyHint = "", genre = "general", type } = opts;
+  const genreStyle = COVER_GENRE_STYLES[genre] ?? COVER_GENRE_STYLES.general;
 
   const typeHint =
     type === "comic"
-      ? "manga/comic cover style, dynamic composition, bold lines, expressive characters"
-      : "novel book cover style, elegant typography space, atmospheric, literary feel";
+      ? "manga/comic cover style, dynamic composition, bold lines"
+      : "Chinese web novel cover illustration, vertical 3:4 portrait";
 
-  const base = genreStyle[genre] ?? genreStyle.general;
+  const hint = storyHint.trim().slice(0, 380);
+  const sum = summary.trim().slice(0, 220);
 
-  return `Create a stunning ${type === "comic" ? "manga/comic" : "book"} cover for "${title}". ${summary.slice(0, 200)}. ${base}. ${typeHint}. High quality, detailed, no text in image, central composition, suitable for a cover thumbnail.`;
+  return [
+    `Illustration background for Chinese novel "${title}".`,
+    sum ? `Plot: ${sum}.` : "",
+    hint ? `Elements: ${hint}.` : "",
+    genreStyle.backgroundPrompt,
+    typeHint,
+    "Lower third slightly darker for title overlay area. Absolutely no text, no letters, no watermarks, no logos.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
- * 生成封面图并返回 URL
+ * 生成封面：文生图背景 + 服务端叠加书名（网文平台风格）
  */
 export async function generateCover(opts: CoverGenOptions): Promise<string | null> {
   try {
-    const prompt = buildCoverPrompt(opts);
-    const result = await generateImage(prompt, { size: "1024x1024", quality: "high" });
-    return result?.url ?? null;
+    const genre = opts.genre ?? inferCoverGenre(opts.title, opts.summary ?? "", opts.storyHint ?? "");
+    const prompt = buildCoverPrompt({ ...opts, genre });
+    const result = await generateImage(prompt, { size: "1024x1536", quality: "standard" });
+    if (!result?.url) return null;
+
+    const bgBuf = await readImageBuffer(result.url);
+    if (!bgBuf) return result.url;
+
+    const composed = await compositeNovelCover(bgBuf, { title: opts.title, genre });
+    const tmpName = `composed-${Date.now()}.jpg`;
+    const tmpRel = `/covers/${tmpName}`;
+    const tmpAbs = path.join(process.cwd(), "public", "covers", tmpName);
+    await fs.mkdir(path.dirname(tmpAbs), { recursive: true });
+    await fs.writeFile(tmpAbs, composed);
+    return tmpRel;
   } catch {
     return null;
   }
 }
 
 /**
- * 尝试为 Novel 生成封面并更新数据库
+ * 为 Novel 生成封面：文生图 → 叠标题 → 落盘 public/covers → 更新 coverPath
  */
-export async function generateNovelCover(novelId: string, title: string, summary?: string): Promise<string | null> {
-  const coverUrl = await generateCover({ title, summary: summary ?? "", type: "novel" });
-  if (!coverUrl) return null;
-
-  await prisma.novel.update({
-    where: { id: novelId },
-    data: { coverPath: coverUrl },
+export async function generateNovelCover(
+  novelId: string,
+  title: string,
+  summary?: string,
+  storyHint?: string,
+): Promise<string | null> {
+  const genre = inferCoverGenre(title, summary ?? "", storyHint ?? "");
+  const prompt = buildCoverPrompt({
+    title,
+    summary: summary ?? "",
+    storyHint,
+    genre,
+    type: "novel",
   });
 
-  return coverUrl;
+  try {
+    const result = await generateImage(prompt, { size: "1024x1536", quality: "standard" });
+    if (!result?.url) return null;
+
+    const bgBuf = await readImageBuffer(result.url);
+    if (!bgBuf) {
+      return persistNovelCoverFile(novelId, result.url);
+    }
+
+    const composed = await compositeNovelCover(bgBuf, { title, genre });
+    const coverPath = await persistNovelCoverBuffer(novelId, composed);
+    if (!coverPath) return null;
+
+    await prisma.novel.update({
+      where: { id: novelId },
+      data: { coverPath },
+    });
+
+    return coverPath;
+  } catch {
+    return null;
+  }
 }
 
-/**
- * 尝试为 Comic 生成封面并更新数据库
- */
+/** 正文入库后生成封面（带超时，避免 SSE 永久挂起） */
+export async function ensureNovelCoverAfterCreate(
+  novelId: string,
+  title: string,
+  summary: string,
+  storyHint: string,
+  timeoutMs = 600_000,
+): Promise<string | null> {
+  const task = generateNovelCover(novelId, title, summary, storyHint);
+  const timeout = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), timeoutMs);
+  });
+  return Promise.race([task, timeout]);
+}
+
 export async function generateComicCover(comicId: string, title: string, summary?: string): Promise<string | null> {
-  const coverUrl = await generateCover({ title, summary: summary ?? "", type: "comic", genre: "fantasy" });
+  const genre = inferCoverGenre(title, summary ?? "");
+  const coverUrl = await generateCover({ title, summary: summary ?? "", type: "comic", genre });
   if (!coverUrl) return null;
 
   await prisma.comic.update({

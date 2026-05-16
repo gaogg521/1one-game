@@ -72,6 +72,49 @@ function getWorkTypeLabel(type: WorkType): string {
   }
 }
 
+async function readApiJson(res: Response): Promise<unknown | null> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) return null;
+  try {
+    return (await res.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeWorkRow(
+  row: Partial<BaseRow> & { id?: string },
+  defaults: { playCount?: number },
+): BaseRow | null {
+  if (!row.id || typeof row.title !== "string" || typeof row.prompt !== "string") return null;
+  const createdAt =
+    typeof row.createdAt === "string" ? row.createdAt : new Date(0).toISOString();
+  const updatedAt =
+    typeof row.updatedAt === "string" ? row.updatedAt : createdAt;
+  return {
+    id: row.id,
+    title: row.title,
+    prompt: row.prompt,
+    status: typeof row.status === "string" ? row.status : "ready",
+    shareCode:
+      row.shareCode === null
+        ? null
+        : typeof row.shareCode === "string"
+          ? row.shareCode
+          : null,
+    coverPath:
+      row.coverPath === null
+        ? null
+        : typeof row.coverPath === "string"
+          ? row.coverPath
+          : null,
+    playCount: typeof row.playCount === "number" ? row.playCount : defaults.playCount ?? 0,
+    likeCount: typeof row.likeCount === "number" ? row.likeCount : 0,
+    createdAt,
+    updatedAt,
+  };
+}
+
 export default function StudioPage() {
   const router = useRouter();
   const [rows, setRows] = useState<WorkRow[] | null>(null);
@@ -98,32 +141,100 @@ export default function StudioPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const warnings: string[] = [];
+
       try {
         const [projectsRes, novelsRes, comicsRes] = await Promise.all([
           fetch("/api/projects"),
-          fetch("/api/novel?limit=100"),
-          fetch("/api/comic?limit=100"),
+          fetch("/api/novel?limit=100&mine=1"),
+          fetch("/api/comic?limit=100&mine=1"),
         ]);
 
-        const projectsData = (await projectsRes.json()) as { projects?: BaseRow[] };
-        const novelsData = (await novelsRes.json()) as { novels?: BaseRow[] };
-        const comicsData = (await comicsRes.json()) as { comics?: BaseRow[] };
+        const projectsPayload = await readApiJson(projectsRes);
+        const novelsPayload = await readApiJson(novelsRes);
+        const comicsPayload = await readApiJson(comicsRes);
 
-        const allWorks: WorkRow[] = [
-          ...(projectsData.projects ?? []).map((p) => ({ ...p, type: "project" as WorkType })),
-          ...(novelsData.novels ?? []).map((n) => ({ ...n, type: "novel" as WorkType })),
-          ...(comicsData.comics ?? []).map((c) => ({ ...c, type: "comic" as WorkType })),
-        ];
+        const projectsRaw =
+          projectsRes.ok &&
+          projectsPayload &&
+          typeof projectsPayload === "object" &&
+          Array.isArray((projectsPayload as { projects?: unknown }).projects)
+            ? ((projectsPayload as { projects: Partial<BaseRow>[] }).projects ?? [])
+            : [];
+        if (!projectsRes.ok && projectsRes.status !== 401) {
+          const err =
+            projectsPayload &&
+            typeof projectsPayload === "object" &&
+            "error" in projectsPayload
+              ? String((projectsPayload as { error: unknown }).error)
+              : null;
+          warnings.push(err ? `游戏列表：${err}` : `游戏列表加载失败（HTTP ${projectsRes.status}）`);
+        }
 
-        // Sort by updatedAt desc
+        const novelsRaw =
+          novelsRes.ok &&
+          novelsPayload &&
+          typeof novelsPayload === "object" &&
+          Array.isArray((novelsPayload as { novels?: unknown }).novels)
+            ? ((novelsPayload as { novels: Partial<BaseRow>[] }).novels ?? [])
+            : [];
+        if (!novelsRes.ok) {
+          const err =
+            novelsPayload &&
+            typeof novelsPayload === "object" &&
+            "error" in novelsPayload
+              ? String((novelsPayload as { error: unknown }).error)
+              : null;
+          warnings.push(err ? `小说列表：${err}` : `小说列表加载失败（HTTP ${novelsRes.status}）`);
+        } else if (!novelsPayload && novelsRes.status !== 204) {
+          warnings.push("小说列表返回内容无法解析（可能不是 JSON）");
+        }
+
+        const comicsRaw =
+          comicsRes.ok &&
+          comicsPayload &&
+          typeof comicsPayload === "object" &&
+          Array.isArray((comicsPayload as { comics?: unknown }).comics)
+            ? ((comicsPayload as { comics: Partial<BaseRow>[] }).comics ?? [])
+            : [];
+        if (!comicsRes.ok) {
+          const err =
+            comicsPayload &&
+            typeof comicsPayload === "object" &&
+            "error" in comicsPayload
+              ? String((comicsPayload as { error: unknown }).error)
+              : null;
+          warnings.push(err ? `动漫列表：${err}` : `动漫列表加载失败（HTTP ${comicsRes.status}）`);
+        } else if (!comicsPayload && comicsRes.status !== 204) {
+          warnings.push("动漫列表返回内容无法解析（可能不是 JSON）");
+        }
+
+        const allWorks: WorkRow[] = [];
+        for (const p of projectsRaw) {
+          const row = normalizeWorkRow(p, {});
+          if (row) allWorks.push({ ...row, type: "project" });
+        }
+        for (const n of novelsRaw) {
+          const row = normalizeWorkRow(n, {});
+          if (row) allWorks.push({ ...row, type: "novel" });
+        }
+        for (const c of comicsRaw) {
+          const row = normalizeWorkRow(c, { playCount: 0 });
+          if (row) allWorks.push({ ...row, type: "comic" });
+        }
+
         allWorks.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
         if (!cancelled) {
           setRows(allWorks);
-          setError(null);
+          setError(warnings.length ? warnings.join("；") : null);
         }
-      } catch {
-        if (!cancelled) setError("网络异常");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "未知错误";
+        if (!cancelled) {
+          setRows([]);
+          setError(`加载失败：${msg}`);
+        }
       }
     })();
     return () => {

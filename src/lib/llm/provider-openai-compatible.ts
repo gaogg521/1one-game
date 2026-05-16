@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import type { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from "openai/resources/chat/completions";
 import { safeErrorSummary } from "@/lib/llm/errors";
 import { withTimeout } from "@/lib/llm/utils";
 import { envIntPositive, openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
@@ -45,6 +45,41 @@ export async function llmTextOpenAICompatible(params: {
     return { ok: true, provider: req.provider, model: req.model, text };
   } catch (e) {
     return { ok: false, provider: req.provider, model: req.model, error: safeErrorSummary(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * OpenAI 兼容网关流式输出（SSE 上游）；用于长篇小说等场景。
+ * 在 `timeoutMs` 到达时 abort；不按 chunk 做额外 Promise.race（避免误截断）。
+ */
+export async function* llmTextStreamOpenAICompatible(params: {
+  client: OpenAI;
+  req: LlmTextRequest & { provider: LlmProvider };
+}): AsyncGenerator<string, void, unknown> {
+  const { client, req } = params;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
+  const messages = [
+    { role: "system" as const, content: req.system },
+    { role: "user" as const, content: req.user },
+  ];
+  try {
+    const maxOut = req.maxTokens ?? envIntPositive("OPENAI_TEXT_MAX_OUTPUT_TOKENS", 16_000);
+    const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
+    const body = {
+      model: req.model,
+      temperature: req.temperature,
+      messages,
+      stream: true as const,
+      ...tokenField,
+    } satisfies ChatCompletionCreateParamsStreaming;
+    const stream = await client.chat.completions.create(body, { signal: ac.signal });
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) yield delta;
+    }
   } finally {
     clearTimeout(timer);
   }

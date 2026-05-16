@@ -2,7 +2,13 @@
  * GENERATE_STRUCTURED_LOG=1 时输出单行 JSON（便于 grep / 聚合）；默认不输出以免影响噪音。
  */
 
-export type GenerateServeLogPhase = "generate" | "generate_stream_done" | "variants" | "novel_generate" | "comic_generate";
+export type GenerateServeLogPhase =
+  | "generate"
+  | "generate_stream_done"
+  | "variants"
+  | "novel_generate"
+  | "novel_generate_stream"
+  | "comic_generate";
 
 export function emitGenerateServeLog(params: {
   phase: GenerateServeLogPhase;
