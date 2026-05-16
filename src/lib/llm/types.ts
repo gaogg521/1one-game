@@ -34,3 +34,15 @@ export type LlmJsonResult =
       error: string;
     };
 
+export type LlmTextRequest = {
+  model: string;
+  system: string;
+  user: string;
+  temperature: number;
+  maxTokens?: number;
+  timeoutMs: number;
+};
+
+export type LlmTextResult =
+  | { ok: true; provider: LlmProvider; model: string; text: string }
+  | { ok: false; provider: LlmProvider; model: string; error: string };

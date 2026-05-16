@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 
 type DiscoverProject = {
@@ -29,14 +29,11 @@ const ALL_TEMPLATES = ["avoider", "collector", "survivor", "platformer", "towerD
 
 function GameCard({ p }: { p: DiscoverProject }) {
   const label = p.templateId ? (TEMPLATE_LABELS[p.templateId] ?? p.templateId) : null;
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(() => {
+    if (typeof localStorage === "undefined") return false;
+    return !!localStorage.getItem(`liked:${p.id}`);
+  });
   const [likes, setLikes] = useState(p.likeCount);
-
-  useEffect(() => {
-    if (typeof localStorage !== "undefined") {
-      setLiked(!!localStorage.getItem(`liked:${p.id}`));
-    }
-  }, [p.id]);
 
   function handleLike(e: React.MouseEvent) {
     e.preventDefault();
@@ -104,13 +101,14 @@ const SORT_OPTIONS = [
 type SortKey = (typeof SORT_OPTIONS)[number]["key"];
 
 export default function DiscoverPage() {
+  const [, startTransition] = useTransition();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("playCount");
 
   useEffect(() => {
-    setLoading(true);
+    startTransition(() => setLoading(true));
     const params = new URLSearchParams();
     if (filter) params.set("template", filter);
     if (sort !== "playCount") params.set("sort", sort);

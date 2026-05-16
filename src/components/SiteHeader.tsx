@@ -10,25 +10,48 @@ const ThemeSwitcher = dynamic(() => import("@/components/theme/ThemeSwitcher").t
   ssr: false,
 });
 
-const nav = [
+const gameNav = [
+  { href: "/create", label: "游戏创作", match: (p: string) => p === "/create" || p.startsWith("/create/") },
+  { href: "/discover", label: "游戏发现", match: (p: string) => p === "/discover" || p.startsWith("/discover/") },
+  { href: "/samples", label: "游戏样品", match: (p: string) => p === "/samples" || p.startsWith("/samples/") },
+];
+
+const novelNav = [
+  { href: "/novel/create", label: "小说创作", match: (p: string) => p === "/novel/create" || p.startsWith("/novel/create") },
+  { href: "/novel/discover", label: "小说发现", match: (p: string) => p === "/novel/discover" || p.startsWith("/novel/") },
+];
+
+const comicNav = [
+  { href: "/comic/create", label: "动漫创作", match: (p: string) => p === "/comic/create" || p.startsWith("/comic/create") },
+  { href: "/comic/discover", label: "动漫发现", match: (p: string) => p === "/comic/discover" || p.startsWith("/comic/") },
+];
+
+const metaNav = [
   { href: "/", label: "首页", match: (p: string) => p === "/" },
-  { href: "/create", label: "创作", match: (p: string) => p === "/create" || p.startsWith("/create/") },
-  { href: "/discover", label: "发现", match: (p: string) => p === "/discover" || p.startsWith("/discover/") },
-  { href: "/samples", label: "样品", match: (p: string) => p === "/samples" || p.startsWith("/samples/") },
   { href: "/studio", label: "我的作品", match: (p: string) => p === "/studio" || p.startsWith("/studio/") },
 ];
 
-function NavLinks({ variant }: { variant: "sidebar" | "mobile" }) {
+function NavGroup({
+  label,
+  items,
+  variant,
+}: {
+  label: string;
+  items: { href: string; label: string; match: (p: string) => boolean }[];
+  variant: "sidebar" | "mobile";
+}) {
   const pathname = usePathname();
-
   const base =
     variant === "sidebar"
-      ? "flex w-full items-center gap-1 rounded-xl px-3 py-2.5 text-sm font-medium transition"
+      ? "flex w-full items-center gap-1 rounded-xl px-3 py-2 text-sm transition"
       : "rounded-full px-3 py-1.5 text-sm transition";
 
   return (
-    <nav className={variant === "sidebar" ? "flex flex-col gap-0.5" : "flex flex-wrap items-center gap-1"} aria-label="主导航">
-      {nav.map((item) => {
+    <div className={variant === "sidebar" ? "flex flex-col gap-0.5" : "flex flex-wrap items-center gap-1"}>
+      {variant === "sidebar" && (
+        <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--gc-muted)]">{label}</p>
+      )}
+      {items.map((item) => {
         const active = item.match(pathname);
         return (
           <Link
@@ -48,8 +71,12 @@ function NavLinks({ variant }: { variant: "sidebar" | "mobile" }) {
           </Link>
         );
       })}
-    </nav>
+    </div>
   );
+}
+
+function SidebarDivider() {
+  return <div className="mx-3 my-1 h-px" style={{ backgroundColor: "var(--gc-border)" }} />;
 }
 
 function BrandBlock({ compact }: { compact?: boolean }) {
@@ -86,7 +113,15 @@ export function SiteHeader() {
           </div>
         </div>
         <div className="mx-auto max-w-6xl px-4 pb-3">
-          <NavLinks variant="mobile" />
+          <div className="flex flex-wrap items-center gap-1">
+            <NavGroup label="" items={gameNav} variant="mobile" />
+            <span className="mx-1 text-[var(--gc-border)]">|</span>
+            <NavGroup label="" items={novelNav} variant="mobile" />
+            <span className="mx-1 text-[var(--gc-border)]">|</span>
+            <NavGroup label="" items={comicNav} variant="mobile" />
+            <span className="mx-1 text-[var(--gc-border)]">|</span>
+            <NavGroup label="" items={metaNav} variant="mobile" />
+          </div>
         </div>
       </header>
 
@@ -94,17 +129,21 @@ export function SiteHeader() {
         className="relative hidden h-screen w-[260px] shrink-0 border-r backdrop-blur-xl lg:flex lg:flex-col lg:sticky lg:top-0"
         style={{ borderColor: "var(--gc-border)", backgroundColor: "var(--gc-sidebar-bg)" }}
       >
-        <div className="flex flex-1 flex-col gap-6 px-4 py-8">
+        <div className="flex flex-1 flex-col gap-4 px-4 py-8 overflow-y-auto">
           <div className="flex flex-col gap-3">
             <BrandBlock />
             <ThemeSwitcher />
           </div>
 
-          <Link href="/create" className="gc-theme-cta flex w-full items-center justify-center px-4 py-3.5 text-sm font-semibold">
-            + 开始创作
-          </Link>
-
-          <NavLinks variant="sidebar" />
+          <nav className="flex flex-col gap-1" aria-label="主导航">
+            <NavGroup label="游戏" items={gameNav} variant="sidebar" />
+            <SidebarDivider />
+            <NavGroup label="小说" items={novelNav} variant="sidebar" />
+            <SidebarDivider />
+            <NavGroup label="动漫" items={comicNav} variant="sidebar" />
+            <SidebarDivider />
+            <NavGroup label="" items={metaNav} variant="sidebar" />
+          </nav>
 
           <div className="mt-auto border-t pt-6" style={{ borderColor: "var(--gc-border)" }}>
             <p className="gc-theme-soft text-center text-[15px] leading-snug tracking-wide text-[var(--gc-muted)] lg:text-left">

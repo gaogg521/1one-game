@@ -234,7 +234,27 @@ body {
   outline-offset: 2px;
 }
 
-/* 主底：纯色，动效交给 page-bg-fx（与 1oneclaw 一致） */
+/* ── 模块专属视觉标识 ── */
+/* 游戏模块：科技感，使用更锐利的字体 */
+[data-module="game"] {
+  --gc-module-accent: #60a5fa;
+  --gc-module-icon: "🎮";
+  --gc-module-font: var(--font-gc-dm), "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+/* 小说模块：文学感，使用更优雅的字体 */
+[data-module="novel"] {
+  --gc-module-accent: #818cf8;
+  --gc-module-icon: "📖";
+  --gc-module-font: var(--font-gc-serif), "Noto Serif SC", "PingFang SC", serif;
+}
+
+/* 漫画模块：艺术感，使用更活泼的字体 */
+[data-module="comic"] {
+  --gc-module-accent: #c084fc;
+  --gc-module-icon: "🎨";
+  --gc-module-font: var(--font-gc-kuaile), "PingFang SC", "Noto Sans SC", sans-serif;
+}
 .gc-page-bg {
   background-color: var(--gc-bg);
   transition: background-color 0.45s ease;

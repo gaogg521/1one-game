@@ -393,6 +393,84 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
+  /** Performance monitoring */
+  private fpsHistory: number[] = [];
+  private lastFpsCheck = 0;
+
+  /** 从错误中恢复，重置游戏状态 */
+  private recoverFromError(): void {
+    console.warn("[TowerDefenseScene] Attempting recovery from error state");
+    this.bootstrapComplete = false;
+    this.tdDisposed = false;
+    this.enemies.forEach((e) => {
+      e.sprite?.destroy();
+      e.ring?.destroy();
+      e.maskGfx?.destroy();
+    });
+    this.enemies = [];
+    this.slots = [];
+    this.wavePlan = [];
+    this.spawning = false;
+    this.finished = false;
+  }
+
+  /** 清理所有游戏对象（用于错误恢复） */
+  private cleanupAllGameObjects(): void {
+    this.enemies.forEach((e) => {
+      e.sprite?.destroy();
+      e.ring?.destroy();
+      e.maskGfx?.destroy();
+    });
+    this.enemies = [];
+    this.slots.forEach((s) => {
+      s.ring?.destroy();
+      s.gfx?.destroy();
+      s.label?.destroy();
+    });
+    this.slots = [];
+    if (this.hpBarGfx) {
+      this.hpBarGfx.destroy();
+      this.hpBarGfx = this.add.graphics();
+      this.hpBarGfx.setDepth(19);
+    }
+    if (this.rangePreviewGfx) {
+      this.rangePreviewGfx.destroy();
+      this.rangePreviewGfx = this.add.graphics();
+      this.rangePreviewGfx.setDepth(6);
+      this.rangePreviewGfx.setAlpha(0);
+    }
+    if (this.dangerVignette) {
+      this.dangerVignette.destroy();
+      this.dangerVignette = this.add.graphics();
+      this.dangerVignette.setDepth(24);
+      this.dangerVignette.setAlpha(0);
+    }
+  }
+
+  /** 批量预加载所有需要的资源 */
+  private preloadAllResources(): void {
+    // 预生成塔纹理
+    const towerIds = ["dart", "splash", "frost"];
+    for (const towerId of towerIds) {
+      this.ensureTowerTextureForId(towerId, this.spec.theme.playerColor);
+    }
+    // 预生成敌军纹理
+    ensureTdEnemyTextures(this, this.spec.theme.hazardColor, this.spec.theme.collectibleColor ?? "#67e8f9");
+  }
+
+  /** 监控性能：记录帧率 */
+  private monitorPerformance(time: number): void {
+    if (time - this.lastFpsCheck < 5000) return;
+    this.lastFpsCheck = time;
+    const fps = this.game.loop.actualFps;
+    this.fpsHistory.push(fps);
+    if (this.fpsHistory.length > 6) this.fpsHistory.shift();
+    const avgFps = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+    if (avgFps < 30) {
+      console.warn(`[TowerDefenseScene] Low FPS detected: ${avgFps.toFixed(1)}. Consider reducing enemy count.`);
+    }
+  }
+
   /** Range preview circle shown when hovering empty tower slots */
   private rangePreviewGfx: Phaser.GameObjects.Graphics | null = null;
 
@@ -538,6 +616,14 @@ export class TowerDefenseScene extends Phaser.Scene {
   private resumeCreateAfterReferences(): void {
     /* 异步完成时 Scene 可能已随 React unmount / 切换 spec 销毁，避免对 null.displayList 报错 */
     if (this.tdDisposed || !this.add) return;
+
+    // Error recovery: if bootstrap failed previously, clean up
+    if (this.bootstrapComplete) {
+      this.cleanupAllGameObjects();
+    } else if (this.slots.length > 0) {
+      // First-time cleanup if slots were partially initialized
+      this.cleanupAllGameObjects();
+    }
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -697,16 +783,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
 
     // Pre-warm per-type tower textures
-    for (const towerId of ["dart", "splash", "frost"]) {
-      this.ensureTowerTextureForId(towerId, this.spec.theme.playerColor);
-    }
-    if (this.userMonsterTexKeys.length === 0) {
-      ensureTdEnemyTextures(
-        this,
-        this.spec.theme.hazardColor,
-        this.spec.theme.collectibleColor ?? "#67e8f9",
-      );
-    }
+    this.preloadAllResources();
 
     const relSlots = this.bp?.slots ?? null;
     this.slots = relSlots
@@ -941,15 +1018,14 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.rangePreviewGfx.setDepth(6);
     this.rangePreviewGfx.setAlpha(0);
 
-    this.bootstrapComplete = true;
+    // Initialize danger vignette if not already present
+    if (!this.dangerVignette) {
+      this.dangerVignette = this.add.graphics();
+      this.dangerVignette.setDepth(24);
+      this.dangerVignette.setAlpha(0);
+    }
 
-    // Danger vignette overlay (hidden until low HP)
-    const { width, height } = this.scale;
-    this.dangerVignette = this.add.graphics();
-    this.dangerVignette.setDepth(24);
-    this.dangerVignette.setAlpha(0);
-    this.dangerVignette.fillStyle(0xff2233, 1);
-    this.dangerVignette.fillRect(0, 0, width, height);
+    this.bootstrapComplete = true;
 
     const lead = this.waveDefs[0]?.leadInMs ?? 650;
     this.time.delayedCall(lead, () => this.startWave(0));
@@ -1658,7 +1734,6 @@ export class TowerDefenseScene extends Phaser.Scene {
       const dc = Math.sign(c1 - c0);
       const dr = Math.sign(r1 - r0);
       let c = c0, r = r0;
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         cells.add(`${c},${r}`);
         if (c === c1 && r === r1) break;
@@ -2059,7 +2134,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     // HP bars
     this.hpBarGfx.clear();
-    for (const e of this.enemies) {
+    // Limit max enemies rendered for performance
+    const MAX_ENEMIES_RENDERED = 80;
+    const enemiesToRender = this.enemies.length > MAX_ENEMIES_RENDERED ? this.enemies.slice(0, MAX_ENEMIES_RENDERED) : this.enemies;
+    for (const e of enemiesToRender) {
       if (e.hp >= e.maxHp * 0.98) continue;
       const ratio = Math.max(0, e.hp / e.maxHp);
       const bw = 32;
@@ -2085,6 +2163,9 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
 
     this.tickTowers(time);
+
+    // Performance monitoring
+    this.monitorPerformance(time);
 
     if (
       !this.interWaveLock &&

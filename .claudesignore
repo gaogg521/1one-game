@@ -1,0 +1,30 @@
+# ==========================================
+# Claude Code 绝对禁止访问的文件与目录
+# 目的：防止吞噬超大文件导致 Token 溢出卡死
+# ==========================================
+
+# 1. 庞大的依赖库（绝对不准读，里面有几万个文件）
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# 2. 编译后的产物和静态大文件
+dist/
+build/
+.next/
+out/
+public/assets/
+
+# 3. 日志与数据库文件（动辄几十MB，读了必死）
+*.log
+npm-debug.log*
+*.sqlite
+*.db
+
+
+# 5. 锁文件（没必要让 AI 看极其冗长的锁定树）
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+poetry.lock

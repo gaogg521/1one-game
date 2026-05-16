@@ -12,6 +12,8 @@ export function generationErrorCodes() {
     BAD_JSON: "BAD_JSON",
     RATE_LIMITED: "RATE_LIMITED",
     BAD_REQUEST: "BAD_REQUEST",
+    UNAUTHORIZED: "UNAUTHORIZED",
+    LLM_FAILED: "LLM_FAILED",
     INTERNAL: "INTERNAL",
   } as const;
 }

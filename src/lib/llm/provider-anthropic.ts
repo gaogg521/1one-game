@@ -1,21 +1,9 @@
 import { safeErrorSummary } from "@/lib/llm/errors";
+import { withTimeout } from "@/lib/llm/utils";
 import type { LlmJsonRequest, LlmJsonResult } from "@/lib/llm/types";
 
 type AnthropicContentBlock = { text?: unknown };
 type AnthropicMessagesBody = { content?: AnthropicContentBlock[] };
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  const ms = Math.max(1_000, Math.min(90_000, Math.floor(timeoutMs)));
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      const timer = setTimeout(() => {
-        clearTimeout(timer);
-        reject(new Error(`${label} timeout after ${ms}ms`));
-      }, ms);
-    }),
-  ]);
-}
 
 export async function llmJsonAnthropic(req: LlmJsonRequest): Promise<LlmJsonResult> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();

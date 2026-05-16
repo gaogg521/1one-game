@@ -46,7 +46,8 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
     o.templateId === "collector" ||
     o.templateId === "survivor" ||
     o.templateId === "platformer" ||
-    o.templateId === "towerDefense"
+    o.templateId === "towerDefense" ||
+    o.templateId === "shooter"
   ) {
     templateId = o.templateId;
   } else if (o.templateId !== undefined) {
@@ -193,7 +194,8 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
       r.templateId === "collector" ||
       r.templateId === "survivor" ||
       r.templateId === "platformer" ||
-      r.templateId === "towerDefense"
+      r.templateId === "towerDefense" ||
+      r.templateId === "shooter"
         ? r.templateId
         : base.templateId,
     title: typeof r.title === "string" && r.title.trim() ? r.title.trim().slice(0, 80) : base.title,

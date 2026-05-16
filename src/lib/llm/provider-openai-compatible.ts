@@ -1,21 +1,9 @@
 import type OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 import { safeErrorSummary } from "@/lib/llm/errors";
+import { withTimeout } from "@/lib/llm/utils";
 import { envIntPositive, openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
-import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider } from "@/lib/llm/types";
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  const ms = Math.max(1_000, Math.min(90_000, Math.floor(timeoutMs)));
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      const timer = setTimeout(() => {
-        clearTimeout(timer);
-        reject(new Error(`${label} timeout after ${ms}ms`));
-      }, ms);
-    }),
-  ]);
-}
+import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
 
 function parseJsonContent(text: string | null | undefined): unknown | null {
   if (!text?.trim()) return null;
@@ -23,6 +11,42 @@ function parseJsonContent(text: string | null | undefined): unknown | null {
     return JSON.parse(text) as unknown;
   } catch {
     return null;
+  }
+}
+
+export async function llmTextOpenAICompatible(params: {
+  client: OpenAI;
+  req: LlmTextRequest & { provider: LlmProvider };
+}): Promise<LlmTextResult> {
+  const { client, req } = params;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
+  const messages = [
+    { role: "system" as const, content: req.system },
+    { role: "user" as const, content: req.user },
+  ];
+  try {
+    const maxOut = req.maxTokens ?? envIntPositive("OPENAI_TEXT_MAX_OUTPUT_TOKENS", 16_000);
+    const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
+    const p = client.chat.completions.create(
+      {
+        model: req.model,
+        temperature: req.temperature,
+        messages,
+        ...tokenField,
+      } as ChatCompletionCreateParamsNonStreaming,
+      { signal: ac.signal },
+    );
+    const res = await withTimeout(p, req.timeoutMs + 2500, `llm-text ${req.provider}`);
+    const text = res.choices[0]?.message?.content ?? "";
+    if (!text || text.length < 10) {
+      return { ok: false, provider: req.provider, model: req.model, error: "empty text output" };
+    }
+    return { ok: true, provider: req.provider, model: req.model, text };
+  } catch (e) {
+    return { ok: false, provider: req.provider, model: req.model, error: safeErrorSummary(e) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

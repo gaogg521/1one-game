@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "qa:orch-smoke": "tsx scripts/qa-orchestration-smoke.ts",
+    "qa:novel-comic-smoke": "tsx scripts/qa-novel-comic-smoke.ts",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",

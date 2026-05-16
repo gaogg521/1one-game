@@ -26,6 +26,9 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([ownerKey])
+}
+
 model Novel {
   id        String   @id @default(cuid())
   ownerKey  String
@@ -55,6 +58,7 @@ model Comic {
   prompt    String
   imageUrls String
   status    String   @default("ready")
+  coverPath String?
   likeCount Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

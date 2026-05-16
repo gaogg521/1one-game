@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { FeaturedGamesSection } from "@/components/FeaturedGamesSection";
+import { FeaturedNovelsSection } from "@/components/FeaturedNovelsSection";
+import { FeaturedComicsSection } from "@/components/FeaturedComicsSection";
 
 const steps = [
   "输入一句话：场景 + 目标 + 障碍（可选：塔防、平台跳跃、像素、水彩风等玩法或画风）。",
@@ -157,6 +159,12 @@ export default function Home() {
         </section>
 
         <FeaturedGamesSection />
+
+        <FeaturedNovelsSection />
+
+        <FeaturedComicsSection />
+        <FeaturedNovelsSection />
+        <FeaturedComicsSection />
 
         <section
           className="mt-auto border-t border-[color:var(--gc-border)] bg-gradient-to-b from-transparent via-transparent to-transparent px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28"

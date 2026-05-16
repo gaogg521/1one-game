@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__list_pages",
+      "PowerShell(npm run *)",
+      "Skill(update-config)",
+      "PowerShell(npm exec *)"
+    ]
+  }
+}
