@@ -1,31 +1,47 @@
 # CURRENT_STATUS
 
-更新时间：**2026-05-16**（工作室 / 漫画链路稳定性修复会话）
+更新时间：**2026-05-16**（文生图批量 / 漫画配图 / 小说广场删除）
 
 ## 项目整体进度
 
-完成度：**主链路可用，本地需对齐 Prisma Client**  
-当前阶段：小说 / 漫画 / 游戏三模块 + Studio；近期聚焦 **工作台加载** 与 **漫画生成** 容错
+完成度：**主链路可用**  
+当前阶段：小说 / 漫画 / 游戏三模块 + Studio；近期完成 **漫画配图可观测性**、**OpenAI 网关批量 n=4**、**小说广场作者删除**
 
 ## 各模块状态
 
 | 模块 | 状态 | 备注 |
 |------|------|------|
-| 游戏生成 / 试玩 | ✅ | TowerDefense 已优化（见 `iterations/2026-05-16.md`） |
-| 小说生成 / 阅读 | ✅ | 流式生成、章节、阅读主题、封面 API |
-| 漫画生成 / 阅读 | ⚠️ | 分镜规范化与前端错误提示已修；**依赖 Prisma generate + LLM/文生图** |
-| Studio 我的作品 | ✅ | 三源合并加载；`mine=1`；401 不阻断整页 |
-| 发现 / 列表页 | ✅ | `/games` `/novels` `/comics` |
+| 游戏生成 / 试玩 | ✅ | TowerDefense 已优化 |
+| 小说生成 / 阅读 | ✅ | 流式、章节、封面；书名最长 15 字 |
+| 漫画生成 / 阅读 | ✅ | 分镜 + SSE 配图进度；>4 格创建时不内联配图 |
+| 文生图 | ✅ | **默认 OpenAI 兼容网关**（`gpt-image-2`）；未配 `COMFY_UI_BASE_URL` 不走 Comfy |
+| Studio 我的作品 | ✅ | 三源合并；`mine=1`；支持删除 |
+| 发现 / 列表 | ✅ | 小说广场 **本人作品可删** |
 
-## 当前运行状态
+## 文生图路径（已确认）
 
-构建状态：**`npm run build` 已通过**（会话内；改代码后需本地再跑）  
-测试状态：E2E / QA 冒烟以 `iterations/2026-05-16.md` 为准；**本次未全量重跑**  
-本地运行：默认 **`npm run dev -p 8888`**；记忆与 Cookie 按 origin 隔离
+- **无 ComfyUI**：`.env` 未配置 `COMFY_UI_BASE_URL` → 仅 `images.generate` 经 LiteLLM
+- **短篇 4 格**：`IMAGE_GEN_BATCH_PANELS=4` 时 **单次请求 n=4**（实测 ~4 分 25 秒 / 批）
+- **>4 格**：`COMIC_PANEL_GEN_CONCURRENCY` 默认 **4** 路并行逐张
+- 漫画配图 SSE：`/api/comic/[id]/panels/stream`，心跳含 **已用时**
 
-## 当前已知问题
+## 实测数据（2026-05-16）
 
-1. **Prisma Client 与 schema 可能不同步**：日志出现 `Unknown argument lengthTier`、`Comic.coverPath` 不存在于 client → 关 dev 后执行 **`npx prisma generate`**（Windows 若 EPERM 先结束占用 `node` 的进程），必要时 **`npm run build:full`**。  
-2. **漫画长篇 + 多格配图耗时长**：易触发网关/平台超时；建议先用 **短篇（约 2 页）** 验通路。  
-3. **工作区大量未提交变更**：含 `PROJECT_MEMORY/`、小说/漫画/Studio 等（见 `git status`），尚未形成新 commit。  
-4. **`.env` 中 `GENERATE_BODY_MAX_BYTES`**：代码默认已提高到 **524288**；若 `.env` 仍写 98304 会覆盖默认，长梗概仍可能 413。
+| 场景 | 结果 |
+|------|------|
+| 批量 4 张（HTTP stream） | 4/4 成功，**4 分 25 秒** |
+| 《煤山崇祯》2 页 8 格配图 | comic `cmp8e84lk0001x6zgo8jrd8jg`，**12 分 12 秒** |
+| 《煤山崇祯》中篇 8 页分镜（一次） | LLM 502，未返回有效分镜 |
+
+## 构建与运行
+
+- **`npm run build`**：已通过（含 `format-duration.ts` 避免客户端引 `fs`）
+- 本地：**`npm run dev -p 8888`**
+- Prisma：列表曾用 `$queryRaw` 绕过未 generate 的 `Comic.coverPath`；仍建议关 dev 后 **`npx prisma generate`**
+
+## 已知问题
+
+1. **中篇 8 页分镜**：单次 LLM 易 502；可先 **2 页短篇** 验配图，或后续拆分分镜请求  
+2. **32 格全配图**：约 **40～50 分钟**（网关耗时），需流式接口 + 耐心等  
+3. **工作区大量未提交变更**（含 `PROJECT_MEMORY/`），未形成新 commit  
+4. 后台任务 **607426**（8 页分镜）失败；**213531**（2 页 8 格）成功

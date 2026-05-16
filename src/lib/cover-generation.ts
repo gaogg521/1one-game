@@ -145,10 +145,14 @@ export async function generateComicCover(comicId: string, title: string, summary
   const coverUrl = await generateCover({ title, summary: summary ?? "", type: "comic", genre });
   if (!coverUrl) return null;
 
-  await prisma.comic.update({
-    where: { id: comicId },
-    data: { coverPath: coverUrl },
-  });
+  try {
+    await prisma.comic.update({
+      where: { id: comicId },
+      data: { coverPath: coverUrl },
+    });
+  } catch {
+    await prisma.$executeRaw`UPDATE "Comic" SET "coverPath" = ${coverUrl} WHERE id = ${comicId}`;
+  }
 
   return coverUrl;
 }

@@ -2,20 +2,23 @@
 
 更新时间：**2026-05-16**
 
-## 最高优先级任务
+## 最高优先级
 
-1. **本机**：关闭 `npm run dev` / `next start` → **`npx prisma generate`** → 重启 dev → 打开 **`http://localhost:8888/studio`** 确认无红条。  
-2. **验证漫画**：`/comic/create`，篇幅选 **短篇**，粘贴梗概（如「煤山崇祯·社畜魂穿」）→ 生成；失败则看 Network 中 **`/api/comic/generate`** 的 status 与 JSON `error`。  
-3. **环境**：确认 `.env` 中 `NOVEL_LLM_*`、`OPENAI_*` / 文生图或 `COMFY_UI_BASE_URL` 可用。
+1. **本机**（若 API 仍报 Prisma 字段不存在）：关 dev → **`npx prisma generate`** → 重启 **`npm run dev -p 8888`**  
+2. **验收《煤山崇祯》漫画预览**：打开 [http://localhost:8888/comic/cmp8e84lk0001x6zgo8jrd8jg](http://localhost:8888/comic/cmp8e84lk0001x6zgo8jrd8jg)（2 页 / 8 格已配图）  
+3. **清理低质量小说**：小说广场悬停 **本人卡片 → 删除**，或 **工作室** 筛选小说删除  
 
-## 当前最优推进路径
+## 产品 / 技术后续
 
-1. Prisma 对齐 → Studio + 漫画冒烟  
-2. 若 LLM 分镜仍 502：查网关日志与 `NOVEL_LLM_PRIMARY` / `FALLBACK`  
-3. 按需将工作区变更 **git commit**（用户未要求则勿代提交）  
-4. 漫画生成可考虑 **SSE 进度**（未做，属体验增强）
+1. **中篇 8 页分镜 502**：降低单次 Schema 页数、分段 LLM、或加强 cascade 重试  
+2. **可选**：`.env` 确认 `IMAGE_GEN_BATCH_PANELS=4`、`COMIC_PANEL_GEN_CONCURRENCY=4`  
+3. 回归：`npm run build`；`node scripts/benchmark-comic-panel-http.mjs`（可选）  
+4. 工作区变更 **git commit**（需用户明确要求）
 
-## 当前需要优先解决的问题
+## 脚本速查
 
-- **Prisma Client 过期**（阻塞 API 500）  
-- 用户侧 **长正文漫画** 超时与配图成本（产品策略，非单点 bug）
+| 脚本 | 用途 |
+|------|------|
+| `node scripts/generate-comic-for-novel.mjs <novelId> [pageCount]` | 分镜 + 流式配图 |
+| `node scripts/benchmark-comic-panel-http.mjs` | HTTP 配图耗时 |
+| `node scripts/peek-novel-comic.mjs <novelId>` | 查小说与关联漫画 |

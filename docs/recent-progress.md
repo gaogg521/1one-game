@@ -5,6 +5,18 @@
 
 **给其他 AI / 协作者的完整架构 + 接手说明**：见 [`ai-handoff-architecture-cn.md`](ai-handoff-architecture-cn.md)。
 
+**结构化记忆（推荐下一棒先读）**：[`PROJECT_MEMORY/INDEX.md`](../PROJECT_MEMORY/INDEX.md) → `CURRENT_STATUS.md` / `NEXT_ACTION.md`。
+
+---
+
+## 2026-05-16 小说 / 漫画：文生图批量与广场删除
+
+- **文生图**：未配置 `COMFY_UI_BASE_URL` 时走 **OpenAI 兼容网关**（`gpt-image-2`）。短篇 ≤4 格支持 **`IMAGE_GEN_BATCH_PANELS=4`** 单次 `n=4`（实测约 4 分半 / 批）。
+- **漫画**：`panelCount > 4` 时创建接口 **不内联配图**，由 `POST /api/comic/[id]/panels/stream` 流式补图；SSE 推送每格 **已用时**。
+- **小说广场**：列表返回 `isOwner`，本人作品卡片悬停可 **删除**（`DELETE /api/novel/[id]`）。
+- **样例**：《煤山崇祯》`cmp7w7381000auz81yisafq0h` → 漫画 `cmp8e84lk0001x6zgo8jrd8jg`（2 页 8 格，配图约 12 分钟）。中篇 8 页分镜单次 LLM 仍可能 502。
+- 细节见 [`PROJECT_MEMORY/iterations/2026-05-16.md`](../PROJECT_MEMORY/iterations/2026-05-16.md) §三轮。
+
 ---
 
 ## 2026-05 游戏画面视觉大升级（全模板）

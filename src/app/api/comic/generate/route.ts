@@ -9,9 +9,6 @@ import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
-import { generateComfyImages, comfyImageUrl } from "@/lib/comfy-image-gen";
-import { generateImage } from "@/lib/image-generation";
-import { getComfyBaseUrl } from "@/lib/orchestration/comfy-gateway";
 import {
   buildComicJsonSchema,
   buildComicSystemPrompt,
@@ -19,27 +16,15 @@ import {
   PANELS_PER_PAGE,
   normalizeComicPagesForGeneration,
 } from "@/lib/comic-generate-config";
+import { formatComicStorageTitle } from "@/lib/comic-display";
+import { renderComicPanels, serializeComicPanels } from "@/lib/comic-panel-render";
+import {
+  extractNovelTitleFromContent,
+  normalizeNovelTitle,
+  validateNovelTitleInput,
+} from "@/lib/novel-display";
 import { parseNovelLengthTier } from "@/lib/novel-length";
 import type { ComicPage } from "@/lib/comic-format";
-import { serializeComicDocument } from "@/lib/comic-format";
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const i = cursor++;
-      results[i] = await fn(items[i]!, i);
-    }
-  }
-  const workers = Math.min(concurrency, items.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-  return results;
-}
 
 export async function POST(req: Request) {
   const codes = generationErrorCodes();
@@ -86,13 +71,23 @@ export async function POST(req: Request) {
         { status: 403, headers: ridHeaders(requestId) },
       );
     }
-    novelTitle = novel.title;
     novelContent = novel.content;
+    novelTitle = normalizeNovelTitle(novel.title, novel.prompt);
     if (novel.lengthTier) novelLengthTier = parseNovelLengthTier(novel.lengthTier);
   } else if (content && typeof content === "string" && content.trim().length > 0) {
     novelContent = content.trim();
-    const firstLine = novelContent.split("\n")[0].replace(/^#+\s*/, "").slice(0, 80);
-    if (firstLine && firstLine.length > 3) novelTitle = firstLine;
+    if (title?.trim()) {
+      const tv = validateNovelTitleInput(title.trim());
+      novelTitle = tv.ok
+        ? tv.value
+        : normalizeNovelTitle(title.trim(), novelContent.slice(0, 500));
+    } else {
+      novelTitle = extractNovelTitleFromContent(
+        novelContent,
+        undefined,
+        novelContent.slice(0, 500),
+      );
+    }
 
     const novel = await prisma.novel.create({
       data: {
@@ -161,61 +156,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const flatPrompts = pages.flatMap((pg) =>
-      pg.panels.map((p) => ({ caption: p.caption, prompt: p.prompt })),
-    );
-
-    const comfyBase = getComfyBaseUrl();
-    let imageSource = "none";
-
-    if (comfyBase) {
-      const comfyImages = await generateComfyImages(flatPrompts.map((p) => p.prompt));
-      if (comfyImages.length > 0) {
-        let idx = 0;
-        for (const pg of pages) {
-          for (const panel of pg.panels) {
-            const img = comfyImages[idx];
-            if (img) panel.imageUrl = comfyImageUrl(comfyBase, img);
-            idx += 1;
-          }
-        }
-        imageSource = "comfy";
-      }
-    }
-
-    if (imageSource === "none") {
-      const generated = await mapWithConcurrency(flatPrompts, 2, async (p) => {
-        const result = await generateImage(p.prompt, { size: "1024x1024", quality: "standard" });
-        return { ...p, imageUrl: result?.url };
-      });
-      let idx = 0;
-      for (const pg of pages) {
-        for (const panel of pg.panels) {
-          const g = generated[idx++];
-          if (g?.imageUrl) panel.imageUrl = g.imageUrl;
-        }
-      }
-      if (generated.some((g) => g.imageUrl)) imageSource = "openai";
-    }
-
-    const imageUrls = serializeComicDocument({
+    const comicDoc = {
       formatVersion: 2,
       pageCount: pages.length,
       pages,
-    });
+    };
+    const skipInlinePanels = panelCount > PANELS_PER_PAGE;
+    const { doc: docWithImages, rendered, imageSource } = skipInlinePanels
+      ? { doc: comicDoc, rendered: 0, imageSource: "none" as const }
+      : await renderComicPanels(comicDoc, { onlyMissing: false });
+    const imageUrls = serializeComicPanels(docWithImages);
+    const storageTitle = formatComicStorageTitle(novelTitle, novelContent.slice(0, 300));
 
     const comic = await prisma.comic.create({
       data: {
         ownerKey,
         novelId: actualNovelId!,
-        title: `${novelTitle} · 漫画版`,
+        title: storageTitle,
         prompt: novelContent.slice(0, 200),
         imageUrls,
-        status: "ready",
+        status: rendered > 0 ? "ready" : "pending_images",
       },
     });
 
-    void generateComicCover(comic.id, `${novelTitle} · 漫画版`, novelContent.slice(0, 200)).catch(() => {});
+    void generateComicCover(comic.id, storageTitle, novelContent.slice(0, 200)).catch(() => {});
 
     return NextResponse.json(
       {
@@ -224,10 +188,14 @@ export async function POST(req: Request) {
         pages,
         pageCount: pages.length,
         panelCount,
+        panelsRendered: rendered,
         provider: providerUsed,
         model: modelUsed,
-        comfyUsed: !!comfyBase,
         imageSource,
+        imagesWarning:
+          rendered < panelCount
+            ? "部分分镜配图未生成，可在漫画页点击「生成配图」重试"
+            : undefined,
       },
       { headers: ridHeaders(requestId) },
     );

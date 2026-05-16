@@ -1,5 +1,5 @@
 /** 小说书名最大字数（含用户手动编辑） */
-export const NOVEL_TITLE_MAX_LEN = 10;
+export const NOVEL_TITLE_MAX_LEN = 15;
 
 /** 展示用：判断字符串是否像大纲/创意说明（用于书名/摘要，勿用于长正文） */
 export function looksLikeOutlineOrPrompt(text: string): boolean {
@@ -37,7 +37,7 @@ export function shortTitleFromPrompt(prompt: string, maxLen = NOVEL_TITLE_MAX_LE
   const cleaned = first.replace(/^(请|帮我|写|创作|生成)+/u, "").trim();
   if (cleaned.length < 2) return null;
   if (looksLikeOutlineOrPrompt(cleaned)) {
-    const m = cleaned.match(/《([^》]{2,10})》/);
+    const m = cleaned.match(/《([^》]{2,15})》/);
     if (m?.[1]) return clampNovelTitle(m[1], maxLen);
     const hit = cleaned.match(/(?:穿越|重生|魂穿|回到)(.{2,8}?)(?:的|之|，|。|,|$)/);
     if (hit?.[1]) return clampNovelTitle((hit[0].includes("魂穿") || hit[0].includes("穿越") ? hit[0].slice(0, 4) : "") + hit[1], maxLen);
@@ -50,7 +50,7 @@ export function shortTitleFromPrompt(prompt: string, maxLen = NOVEL_TITLE_MAX_LE
   return null;
 }
 
-/** 入库 / 展示用书名规范化（≤10 字） */
+/** 入库 / 展示用书名规范化（≤15 字） */
 export function normalizeNovelTitle(
   title: string,
   prompt?: string,

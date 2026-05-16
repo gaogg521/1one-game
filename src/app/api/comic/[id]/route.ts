@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
+import { displayComicTitle } from "@/lib/comic-display";
+import { countPanelsWithImages, parseComicDocument } from "@/lib/comic-panel-render";
+import { normalizeNovelTitle } from "@/lib/novel-display";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,11 +22,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
+  const doc = parseComicDocument(row.imageUrls);
+  const panelStats = countPanelsWithImages(doc);
 
   return NextResponse.json({
     comic: {
       id: row.id,
       title: row.title,
+      displayTitle: displayComicTitle(row.title, row.novel.title, row.prompt),
       prompt: row.prompt,
       imageUrls: row.imageUrls,
       createdAt: row.createdAt,
@@ -32,7 +38,12 @@ export async function GET(_req: Request, ctx: RouteContext) {
       likeCount: row.likeCount,
       status: row.status,
       isOwner: Boolean(isOwner),
-      novel: row.novel,
+      panelsWithImage: panelStats.withImage,
+      panelsTotal: panelStats.total,
+      novel: {
+        ...row.novel,
+        displayTitle: normalizeNovelTitle(row.novel.title, row.prompt),
+      },
     },
   });
 }

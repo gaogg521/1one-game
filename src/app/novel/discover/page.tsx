@@ -14,9 +14,10 @@ interface Novel {
   createdAt: string;
   playCount: number;
   likeCount: number;
+  isOwner?: boolean;
 }
 
-function NovelCard({ n }: { n: Novel }) {
+function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => void }) {
   const title = normalizeNovelTitle(n.title, n.prompt);
   const blurb = displayNovelSummary(n.summary, title, n.prompt);
   const [liked, setLiked] = useState(() => {
@@ -35,12 +36,36 @@ function NovelCard({ n }: { n: Novel }) {
     void fetch(`/api/novel/${n.id}/like`, { method: "POST" });
   }
 
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const title = normalizeNovelTitle(n.title, n.prompt);
+    if (!confirm(`确定删除《${title}》？关联漫画也会一并删除，且无法恢复。`)) return;
+    const res = await fetch(`/api/novel/${n.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "删除失败，请确认使用创作时的浏览器登录态");
+      return;
+    }
+    onDeleted?.(n.id);
+  }
+
   return (
     <Link
       href={`/novel/${n.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+        {n.isOwner ? (
+          <button
+            type="button"
+            title="删除"
+            onClick={(e) => void handleDelete(e)}
+            className="absolute right-2 top-2 z-10 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-medium text-red-200 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 hover:bg-red-950/80"
+          >
+            删除
+          </button>
+        ) : null}
         {n.coverPath ? (
           <img
             src={n.coverPath}
@@ -164,7 +189,14 @@ export default function NovelDiscoverPage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {novels.map((n) => (
-                  <NovelCard key={n.id} n={n} />
+                  <NovelCard
+                    key={n.id}
+                    n={n}
+                    onDeleted={(id) => {
+                      setNovels((prev) => prev.filter((x) => x.id !== id));
+                      setTotal((t) => Math.max(0, t - 1));
+                    }}
+                  />
                 ))}
               </div>
 

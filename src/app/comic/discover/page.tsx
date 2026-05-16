@@ -7,16 +7,11 @@ import { SiteHeader } from "@/components/SiteHeader";
 interface Comic {
   id: string;
   title: string;
-  imageUrls: string;
-  novel: { id: string; title: string };
+  imageUrls?: string;
+  coverPath?: string | null;
+  novel: { title: string };
   createdAt: string;
   likeCount: number;
-}
-
-interface ComicPanel {
-  caption: string;
-  prompt: string;
-  imageUrl?: string;
 }
 
 function ComicCard({ c }: { c: Comic }) {
@@ -26,13 +21,26 @@ function ComicCard({ c }: { c: Comic }) {
   });
   const [likes, setLikes] = useState(c.likeCount);
 
-  function firstImage(): string | null {
+  function coverImage(): string | null {
+    if (c.coverPath?.trim()) return c.coverPath.trim();
+    if (!c.imageUrls) return null;
     try {
-      const panels: ComicPanel[] = JSON.parse(c.imageUrls);
-      return panels[0]?.imageUrl || null;
+      const parsed = JSON.parse(c.imageUrls) as unknown;
+      if (Array.isArray(parsed)) {
+        return (parsed[0] as { imageUrl?: string } | undefined)?.imageUrl?.trim() || null;
+      }
+      if (parsed && typeof parsed === "object" && "pages" in parsed) {
+        const pages = (parsed as { pages: { panels?: { imageUrl?: string }[] }[] }).pages;
+        for (const page of pages) {
+          for (const panel of page.panels ?? []) {
+            if (panel.imageUrl?.trim()) return panel.imageUrl.trim();
+          }
+        }
+      }
     } catch {
       return null;
     }
+    return null;
   }
 
   function handleLike(e: React.MouseEvent) {
@@ -45,7 +53,7 @@ function ComicCard({ c }: { c: Comic }) {
     void fetch(`/api/comic/${c.id}/like`, { method: "POST" });
   }
 
-  const img = firstImage();
+  const img = coverImage();
 
   return (
     <Link
@@ -98,10 +106,17 @@ export default function ComicDiscoverPage() {
   useEffect(() => {
     startTransition(() => setLoading(true));
     fetch(`/api/comic?page=${page}&limit=${limit}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<{ comics?: Comic[]; total?: number }>;
+      })
       .then((data) => {
         setComics(data.comics || []);
         setTotal(data.total || 0);
+      })
+      .catch(() => {
+        setComics([]);
+        setTotal(0);
       })
       .finally(() => setLoading(false));
   }, [page, limit]);

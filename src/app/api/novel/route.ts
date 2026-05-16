@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const skip = (page - 1) * limit;
   const mine = searchParams.get("mine") === "1";
-  const ownerKey = mine ? await getOwnerKey() : null;
+  const ownerKey = await getOwnerKey();
 
   if (mine && !ownerKey) {
     return NextResponse.json({ novels: [], total: 0, page, limit });
@@ -36,6 +36,7 @@ export async function GET(req: Request) {
       take: limit,
       select: {
         id: true,
+        ownerKey: true,
         title: true,
         summary: true,
         prompt: true,
@@ -51,5 +52,10 @@ export async function GET(req: Request) {
     prisma.novel.count({ where }),
   ]);
 
-  return NextResponse.json({ novels, total, page, limit });
+  const novelsPublic = novels.map(({ ownerKey: rowOwner, ...rest }) => ({
+    ...rest,
+    isOwner: Boolean(ownerKey && rowOwner === ownerKey),
+  }));
+
+  return NextResponse.json({ novels: novelsPublic, total, page, limit });
 }

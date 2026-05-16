@@ -45,6 +45,7 @@
 |------|------------------|------|----------|
 | 2026-05-16 | 稳定性会话 | Studio 加载容错 + `mine=1`；漫画分镜 normalize / 放宽 Schema / body 上限；Prisma generate 阻塞说明 | `SESSION_LOG.md`，`iterations/2026-05-16.md` §二轮 |
 | 2026-05-16 | 全自动迭代 | 塔防引擎优化；`/games` `/novels` `/comics`；Studio 三类型；小说漫画封面与分享 | `iterations/2026-05-16.md`，commit `d380c4e` |
+| 2026-05-16 | 配图与广场 | OpenAI 批量 n=4；SSE 耗时；>4 格跳过内联配图；小说广场删除；煤山崇祯 2 页漫画 8/8 格 | `SESSION_LOG.md` 置顶条，`iterations/2026-05-16.md` §三轮 |
 | *（下一棒在此追加）* | | | |
 
 ---

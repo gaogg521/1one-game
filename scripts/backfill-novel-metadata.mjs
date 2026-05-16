@@ -1,5 +1,5 @@
 /**
- * 批量修正小说书名（≤10 字）并可选重生成封面。
+ * 批量修正小说书名（≤15 字）并可选重生成封面。
  *
  * 用法：
  *   npx tsx scripts/backfill-novel-metadata.mjs           # 仅修正书名

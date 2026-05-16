@@ -78,3 +78,25 @@ export function getImageGenDefaultSize(): ImageGenSizeOption {
   if (v === "1024x1536" || v === "1536x1024" || v === "1024x1024") return v;
   return "1024x1024";
 }
+
+/** `COMIC_PANEL_GEN_CONCURRENCY`：漫画分镜配图并发数，1～4，默认 4 */
+export function getComicPanelGenConcurrency(): number {
+  const raw = process.env.COMIC_PANEL_GEN_CONCURRENCY?.trim();
+  if (raw === undefined || raw === "") return 4;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(4, Math.floor(n));
+}
+
+/**
+ * `IMAGE_GEN_BATCH_PANELS`：单次 `images.generate` 的 `n`（一次请求多张，同一次网关往返）。
+ * 0 / false 关闭批量，回退为逐张或并发；默认 4。
+ */
+export function getImageGenBatchPanelCount(): number {
+  const raw = process.env.IMAGE_GEN_BATCH_PANELS?.trim();
+  if (raw === "0" || raw === "false" || raw === "off") return 0;
+  if (raw === undefined || raw === "") return 4;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return 0;
+  return Math.min(4, Math.floor(n));
+}

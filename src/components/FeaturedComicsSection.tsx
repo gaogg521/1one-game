@@ -6,15 +6,10 @@ import { useEffect, useState } from "react";
 interface FeaturedComic {
   id: string;
   title: string;
-  imageUrls: string;
+  imageUrls?: string;
+  coverPath?: string | null;
   novel: { title: string };
   likeCount: number;
-}
-
-interface ComicPanel {
-  caption: string;
-  prompt: string;
-  imageUrl?: string;
 }
 
 export function FeaturedComicsSection() {
@@ -33,13 +28,27 @@ export function FeaturedComicsSection() {
 
   if (loaded && comics.length === 0) return null;
 
-  function firstImage(c: FeaturedComic): string | null {
+  function coverImage(c: FeaturedComic): string | null {
+    if (c.coverPath?.trim()) return c.coverPath.trim();
+    if (!c.imageUrls) return null;
     try {
-      const panels: ComicPanel[] = JSON.parse(c.imageUrls);
-      return panels[0]?.imageUrl || null;
+      const parsed = JSON.parse(c.imageUrls) as unknown;
+      if (Array.isArray(parsed)) {
+        const first = parsed[0] as { imageUrl?: string } | undefined;
+        return first?.imageUrl?.trim() || null;
+      }
+      if (parsed && typeof parsed === "object" && "pages" in parsed) {
+        const pages = (parsed as { pages: { panels?: { imageUrl?: string }[] }[] }).pages;
+        for (const page of pages) {
+          for (const panel of page.panels ?? []) {
+            if (panel.imageUrl?.trim()) return panel.imageUrl.trim();
+          }
+        }
+      }
     } catch {
       return null;
     }
+    return null;
   }
 
   return (
@@ -63,7 +72,7 @@ export function FeaturedComicsSection() {
               <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-[var(--gc-surface-glass)]" />
             ))
           : comics.map((c) => {
-              const img = firstImage(c);
+              const img = coverImage(c);
               return (
                 <Link
                   key={c.id}
