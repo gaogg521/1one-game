@@ -59,3 +59,5 @@ public/covers/*.jpeg
 
 # E2E / 手测用 SQLite（无业务密钥；CI 亦可 migrate 重建）
 !prisma/ci.sqlite
+# 误创建的嵌套目录（勿提交）
+prisma/prisma/
