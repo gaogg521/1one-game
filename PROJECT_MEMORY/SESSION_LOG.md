@@ -11,7 +11,7 @@
 - **git**：`1e44a87` 已推 `main`（https://github.com/gaogg521/1one-game）  
 - **记忆**：`iterations/2026-05-17-summary.md`、`CURRENT_STATUS`、`NEXT_ACTION`、`DECISIONS`  
 - **README**：模型/环境变量章节改为 product-config 说明  
-- **待提交**：`prisma/ci.sqlite`、`public/covers/openai-*.png`、手测矩阵文档  
+- **已推送**：`e79bd50` — `ci.sqlite`、24 张 `openai-*.png`、`src/png/小说生成.png`、README/日结  
 
 ### Tests
 
