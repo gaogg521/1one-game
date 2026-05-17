@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
 import { GamePlayer } from "@/components/GamePlayer";
+import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export function PlayGameClient({ id }: { id: string }) {
@@ -23,8 +24,14 @@ export function PlayGameClient({ id }: { id: string }) {
   const [remixBusy, setRemixBusy] = useState(false);
   const [mintBusy, setMintBusy] = useState(false);
   const [patchPrompt, setPatchPrompt] = useState("");
+  const [refineMode, setRefineMode] = useState<"patch" | "regenerate">("patch");
+  const [refinementHistory, setRefinementHistory] = useState<Array<{ at: string; mode: string; instruction: string }>>(
+    [],
+  );
   const [patchBusy, setPatchBusy] = useState(false);
   const [patchError, setPatchError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
 
@@ -42,6 +49,7 @@ export function PlayGameClient({ id }: { id: string }) {
             shareCode: string | null;
             likeCount?: number;
           };
+          refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           error?: string;
         };
         if (!res.ok) {
@@ -65,8 +73,11 @@ export function PlayGameClient({ id }: { id: string }) {
           if (typeof localStorage !== "undefined") {
             setLiked(!!localStorage.getItem(`liked:${id}`));
           }
-          // Increment play counter (fire-and-forget, no auth needed).
-          void fetch(`/api/projects/${id}/play`, { method: "POST" });
+          if (Array.isArray(data.refinementHistory)) {
+            setRefinementHistory(data.refinementHistory);
+          } else {
+            setRefinementHistory([]);
+          }
         }
       } catch {
         if (!cancelled) setError("网络异常");
@@ -158,22 +169,89 @@ export function PlayGameClient({ id }: { id: string }) {
     setPatchBusy(true);
     setPatchError(null);
     try {
+      if (meta?.isOwner) {
+        const res = await fetch(`/api/projects/${id}/refine`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: patchPrompt.trim(), mode: refineMode }),
+        });
+        const data = (await res.json()) as {
+          spec?: GameSpec;
+          prompt?: string;
+          refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
+          error?: string;
+        };
+        if (!res.ok || !data.spec) {
+          setPatchError(data.error ?? "精炼失败");
+          return;
+        }
+        setSpec(data.spec);
+        if (typeof data.prompt === "string" && data.prompt.trim()) {
+          setMeta((m) => (m ? { ...m, prompt: data.prompt! } : m));
+        }
+        if (Array.isArray(data.refinementHistory)) {
+          setRefinementHistory(data.refinementHistory);
+        }
+        setPatchPrompt("");
+        return;
+      }
+
       const res = await fetch("/api/generate/patch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: patchPrompt.trim(), currentSpec: spec }),
+        body: JSON.stringify({ prompt: patchPrompt.trim(), currentSpec: spec, currentPrompt: meta?.prompt ?? "" }),
       });
-      const data = (await res.json()) as { spec?: GameSpec; error?: string };
+      const data = (await res.json()) as { spec?: GameSpec; prompt?: string; error?: string };
       if (!res.ok || !data.spec) {
         setPatchError(data.error ?? "修改失败");
         return;
       }
       setSpec(data.spec);
+      if (typeof data.prompt === "string" && data.prompt.trim()) {
+        setMeta((m) => (m ? { ...m, prompt: data.prompt! } : m));
+      }
       setPatchPrompt("");
     } catch {
       setPatchError("网络异常，请稍后重试");
     } finally {
       setPatchBusy(false);
+    }
+  }
+
+  async function saveProjectSpec() {
+    if (!spec || !meta || !meta.isOwner || saveBusy) return;
+    setSaveBusy(true);
+    setSaveMsg(null);
+    setPatchError(null);
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: meta.prompt, spec }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        project?: { title?: string; prompt?: string };
+      };
+      if (!res.ok) {
+        setPatchError(data.error ?? "保存失败");
+        return;
+      }
+      setMeta((m) =>
+        m
+          ? {
+              ...m,
+              title: typeof data.project?.title === "string" ? data.project.title : m.title,
+              prompt: typeof data.project?.prompt === "string" ? data.project.prompt : m.prompt,
+            }
+          : m,
+      );
+      setSaveMsg("已保存到项目版本");
+      window.setTimeout(() => setSaveMsg(null), 2200);
+    } catch {
+      setPatchError("保存时网络异常");
+    } finally {
+      setSaveBusy(false);
     }
   }
 
@@ -282,27 +360,101 @@ export function PlayGameClient({ id }: { id: string }) {
             ) : null}
 
             <GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} />
+            {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 
             {/* Runtime AI patch panel */}
-            <form onSubmit={(e) => void applyPatch(e)} className="flex items-center gap-2">
-              <input
-                id="patch-prompt"
-                name="patch-prompt"
-                type="text"
-                value={patchPrompt}
-                onChange={(e) => { setPatchPrompt(e.target.value); setPatchError(null); }}
-                placeholder="用一句话修改游戏，例如：把敌人速度加快一倍，改成宇宙主题…"
-                disabled={patchBusy}
-                className="min-w-0 flex-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm text-[var(--gc-text)] placeholder:text-[var(--gc-muted)] focus:outline-none focus:ring-1 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={patchBusy || !patchPrompt.trim()}
-                className="shrink-0 rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-5 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_20%,transparent)] disabled:opacity-40"
-              >
-                {patchBusy ? "修改中…" : "AI 修改"}
-              </button>
-            </form>
+            <div className="space-y-3 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--gc-text-soft)]">继续共创</p>
+                <p className="text-xs leading-relaxed text-[var(--gc-muted)]">
+                  AI patch 和上方快速调参都可以继续沉淀回当前项目，不再只是一次性试玩结果。
+                  {meta.isOwner ? " 你是作品主人：精炼会记入版本日志（「局部 patch」或「整盘 regenerate」）。访客仍走匿名 patch。" : ""}
+                </p>
+              </div>
+              {meta.isOwner ? (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="text-[var(--gc-muted)]">模式：</span>
+                  <button
+                    type="button"
+                    onClick={() => setRefineMode("patch")}
+                    className={`rounded-full px-3 py-1 font-medium ${
+                      refineMode === "patch"
+                        ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)] text-[var(--gc-text)]"
+                        : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+                    }`}
+                  >
+                    局部 patch
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRefineMode("regenerate")}
+                    className={`rounded-full px-3 py-1 font-medium ${
+                      refineMode === "regenerate"
+                        ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)] text-[var(--gc-text)]"
+                        : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+                    }`}
+                  >
+                    整盘 regenerate
+                  </button>
+                </div>
+              ) : null}
+              <form onSubmit={(e) => void applyPatch(e)} className="flex items-center gap-2">
+                <input
+                  id="patch-prompt"
+                  name="patch-prompt"
+                  type="text"
+                  value={patchPrompt}
+                  onChange={(e) => {
+                    setPatchPrompt(e.target.value);
+                    setPatchError(null);
+                    setSaveMsg(null);
+                  }}
+                  placeholder="用一句话修改游戏，例如：把敌人速度加快一倍，改成宇宙主题…"
+                  disabled={patchBusy}
+                  className="min-w-0 flex-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm text-[var(--gc-text)] placeholder:text-[var(--gc-muted)] focus:outline-none focus:ring-1 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={patchBusy || !patchPrompt.trim()}
+                  className="shrink-0 rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-5 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_20%,transparent)] disabled:opacity-40"
+                >
+                  {patchBusy
+                    ? refineMode === "regenerate"
+                      ? "生成中…"
+                      : "修改中…"
+                    : meta?.isOwner && refineMode === "regenerate"
+                      ? "AI 重新生成"
+                      : "AI 修改"}
+                </button>
+                {meta.isOwner ? (
+                  <button
+                    type="button"
+                    disabled={saveBusy}
+                    onClick={() => void saveProjectSpec()}
+                    className="shrink-0 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] px-5 py-2 text-sm font-medium text-[var(--gc-text)] hover:bg-[var(--gc-surface-glass-strong)] disabled:opacity-40"
+                  >
+                    {saveBusy ? "保存中…" : "应用并保存"}
+                  </button>
+                ) : null}
+              </form>
+              {meta.isOwner && refinementHistory.length > 0 ? (
+                <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] px-3 py-2 text-[11px] text-[var(--gc-muted)]">
+                  <p className="mb-1 font-medium text-[var(--gc-text-soft)]">最近精炼（最新在后）</p>
+                  <ul className="max-h-28 space-y-1 overflow-y-auto">
+                    {refinementHistory.map((r, i) => (
+                      <li key={`${r.at}-${i}`} className="truncate">
+                        <span className="text-[var(--gc-text-faint)]">{r.mode}</span> · {r.instruction}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+            {saveMsg ? (
+              <p className="text-xs text-emerald-400" role="status">
+                {saveMsg}
+              </p>
+            ) : null}
             {patchError ? (
               <p className="text-xs text-red-400">{patchError}</p>
             ) : null}

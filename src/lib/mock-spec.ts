@@ -76,12 +76,12 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     /平台跳跃|跳台|横版闯关|横版过关|多层平台|platformer|\bplatform\b|马里奥|恶魔城|关卡|闯关/.test(p)
   ) {
     templateId = "platformer";
+  } else if (/生存|血条|生命|多条命|尽量久|扣血|surviv|hp|life|heart/.test(p)) {
+    templateId = "survivor";
   } else if (/射击|飞船|太空战|弹幕|战机|消灭敌机|宇宙战|shooter|\bshoot/.test(p)) {
     templateId = "shooter";
   } else if (/收集|捡|金币|宝石|吃豆|拾取|包裹|晶体|珍珠|蘑菇|能量|collect|coin|gem/.test(p)) {
     templateId = "collector";
-  } else if (/生存|血条|生命|多条命|尽量久|扣血|surviv|hp|life|heart/.test(p)) {
-    templateId = "survivor";
   } else if (/躲|落下|砸|闪|弹幕|跑酷|坠落/.test(p)) {
     templateId = "avoider";
   }
@@ -236,7 +236,13 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
       subtitle: templateId === "towerDefense"
         ? "波次防守 · 构筑火力网"
         : templateId === "shooter"
-          ? (space ? "星际截击 · 消灭入侵舰队" : "空中射击 · 波次迎击")
+          ? (space ? "星际截击 · 波次升级与火力窗口" : "空中射击 · 敌群波次迎击")
+          : templateId === "platformer"
+            ? (forest ? "多段地形 · 收集推进与精英阻截" : "关卡推进 · 平台跳跃与阶段目标")
+            : templateId === "collector"
+              ? "收集冲刺 · 限时目标与局势变化"
+              : templateId === "survivor"
+                ? "越撑越险 · 事件升级与生存压力"
           : isRooc
           ? "Q版奇幻 · 职业技能 · 探索与成长"
           : space

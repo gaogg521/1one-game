@@ -3,7 +3,7 @@ import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { getActiveProvider, getNovelStyleTextModelCascade, llmTextStream } from "@/lib/llm";
+import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelTextStream } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import {
   getNovelSystemPrompt,
@@ -14,10 +14,20 @@ import {
   parseNovelLengthTier,
 } from "@/lib/novel-generate-config";
 import { extractNovelTitleFromContent, validateNovelTitleInput } from "@/lib/novel-display";
+import { novelGenerationEtaHint } from "@/lib/novel-length";
+import {
+  planLongNovelSegments,
+  streamLongNovelBody,
+  usesSegmentedLongGeneration,
+} from "@/lib/novel-long-generate";
+import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
+
+/** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
+export const maxDuration = 3600;
 
 /** SSE：增量推送正文 token，完成后写入 DB 并发送 `done`（含完整 novel）。 */
 export async function POST(req: Request) {
@@ -66,10 +76,11 @@ export async function POST(req: Request) {
 
   const promptTrim = prompt.trim();
   const titleTrim = title?.trim();
-  const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier);
   const minChars = novelMinAcceptChars(lengthTier);
-  const timeoutMs = novelLlmTimeoutMs();
+  const timeoutMs = novelLlmTimeoutMs(lengthTier);
   const maxTokens = novelLlmMaxOutputTokens(lengthTier);
+  const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier);
+  const longPlan = usesSegmentedLongGeneration(lengthTier) ? planLongNovelSegments(lengthTier) : null;
   const cascade = getNovelStyleTextModelCascade();
   const providerLabel = getActiveProvider();
 
@@ -82,32 +93,56 @@ export async function POST(req: Request) {
 
       const startedAt = Date.now();
       try {
-        send({ step: "start", message: "已开始生成，正文将逐段推送…", requestId });
+        send({
+          step: "start",
+          message: longPlan
+            ? `长篇将先定大纲再分 ${longPlan.totalSegments} 段续写（${novelGenerationEtaHint(lengthTier)}）…`
+            : `已开始生成，正文将逐段推送（${novelGenerationEtaHint(lengthTier)}）…`,
+          requestId,
+        });
 
         let saved = false;
         for (const model of cascade) {
           send({ step: "model_start", model });
           let content = "";
+          const ping = setInterval(() => send({ step: "ping" }), 15_000);
           try {
-            for await (const delta of llmTextStream({
-              model,
-              system: getNovelSystemPrompt(lengthTier),
-              user: userMsg,
-              temperature: 0.85,
-              maxTokens,
-              timeoutMs,
-            })) {
-              content += delta;
-              send({ step: "delta", text: delta });
+            if (longPlan) {
+              content = await streamLongNovelBody({
+                model,
+                promptTrim,
+                titleTrim,
+                plan: longPlan,
+                lengthTier,
+                emit: send,
+              });
+            } else {
+              for await (const delta of llmNovelTextStream(
+                {
+                  model,
+                  system: getNovelSystemPrompt(lengthTier),
+                  user: userMsg,
+                  temperature: 0.85,
+                  maxTokens,
+                  timeoutMs,
+                },
+                lengthTier,
+              )) {
+                content += delta;
+                send({ step: "delta", text: delta });
+              }
             }
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             send({ step: "model_error", model, message });
             continue;
+          } finally {
+            clearInterval(ping);
           }
 
-          if (content.length < minChars) {
-            send({ step: "model_short", model, length: content.length, minChars });
+          const acceptChars = longPlan?.minAcceptChars ?? minChars;
+          if (content.length < acceptChars) {
+            send({ step: "model_short", model, length: content.length, minChars: acceptChars });
             continue;
           }
 
@@ -121,10 +156,10 @@ export async function POST(req: Request) {
               prompt: promptTrim,
               content,
               summary,
-              lengthTier,
               status: "ready",
             },
           });
+          await persistNovelLengthTier(novel.id, lengthTier);
 
           emitGenerateServeLog({
             phase: "novel_generate_stream",

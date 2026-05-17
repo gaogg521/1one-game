@@ -23,6 +23,8 @@ model Project {
   playCount Int      @default(0)
   /// 累计点赞数（访客通过 localStorage 去重，防止重复点）
   likeCount Int      @default(0)
+  /// 试玩页多回合 refine 日志 JSON（仅主人可读写入）
+  refinementLogJson String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

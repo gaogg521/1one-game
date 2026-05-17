@@ -7,6 +7,8 @@ import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { parseRefinementLog } from "@/lib/refinement-log";
+import { fetchRefinementLogJson } from "@/lib/project-refinement-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -32,6 +34,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
 
   try {
     const spec = parseGameSpec(JSON.parse(row.specJson));
+
+    let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
+    if (isOwner) {
+      const logRaw = await fetchRefinementLogJson(id);
+      refinementHistory = parseRefinementLog(logRaw).slice(-12);
+    }
+
     return NextResponse.json({
       project: {
         id: row.id,
@@ -44,6 +53,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
         isOwner: Boolean(isOwner),
       },
       spec,
+      ...(refinementHistory !== undefined ? { refinementHistory } : {}),
     });
   } catch {
     return NextResponse.json({ error: "损坏的作品数据" }, { status: 500 });
@@ -99,6 +109,14 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     body !== null &&
     "ensureShareCode" in body &&
     Boolean((body as { ensureShareCode?: unknown }).ensureShareCode);
+  const promptRaw =
+    typeof body === "object" && body !== null && "prompt" in body
+      ? String((body as { prompt?: unknown }).prompt ?? "")
+      : undefined;
+  const specRaw =
+    typeof body === "object" && body !== null && "spec" in body
+      ? (body as { spec?: unknown }).spec
+      : undefined;
 
   if (titleRaw !== undefined) {
     const t = titleRaw.trim().slice(0, 80);
@@ -106,6 +124,38 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
     }
     await prisma.project.update({ where: { id }, data: { title: t } });
+  }
+
+  if (promptRaw !== undefined || specRaw !== undefined) {
+    const updateData: {
+      prompt?: string;
+      title?: string;
+      specJson?: string;
+      status?: string;
+    } = {};
+
+    if (promptRaw !== undefined) {
+      const nextPrompt = promptRaw.trim().slice(0, 4000);
+      if (nextPrompt.length < 1) {
+        return NextResponse.json({ error: "描述不能为空" }, { status: 400 });
+      }
+      updateData.prompt = nextPrompt;
+    }
+
+    if (specRaw !== undefined) {
+      try {
+        const spec = parseGameSpec(specRaw);
+        updateData.specJson = JSON.stringify(spec);
+        updateData.title = spec.title;
+        updateData.status = "ready";
+      } catch {
+        return NextResponse.json({ error: "规格无效，无法保存" }, { status: 400 });
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.project.update({ where: { id }, data: updateData });
+    }
   }
 
   let shareCode = row.shareCode;
@@ -127,15 +177,17 @@ export async function PATCH(req: Request, ctx: RouteContext) {
 
   const fresh = await prisma.project.findUnique({
     where: { id },
-    select: { title: true, shareCode: true, coverPath: true },
+    select: { title: true, shareCode: true, coverPath: true, prompt: true, status: true },
   });
 
   return NextResponse.json({
     project: {
       id,
       title: fresh?.title ?? row.title,
+      prompt: fresh?.prompt ?? row.prompt,
       shareCode: fresh?.shareCode ?? shareCode,
       coverPath: fresh?.coverPath ?? row.coverPath,
+      status: fresh?.status ?? row.status,
     },
   });
 }

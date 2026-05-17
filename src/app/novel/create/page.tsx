@@ -9,7 +9,12 @@ import {
   clearDraft,
   markDraftGenerating,
 } from "@/lib/draft-storage";
-import { NOVEL_LENGTH_TIERS, type NovelLengthTier } from "@/lib/novel-length";
+import {
+  NOVEL_LENGTH_TIERS,
+  novelGenerationEtaHint,
+  novelStreamInterruptHint,
+  type NovelLengthTier,
+} from "@/lib/novel-length";
 import { NOVEL_TITLE_MAX_LEN } from "@/lib/novel-display";
 
 const EXAMPLES = [
@@ -102,6 +107,10 @@ export default function NovelCreatePage() {
               novel?: { id?: string };
               length?: number;
               minChars?: number;
+              index?: number;
+              total?: number;
+              label?: string;
+              target?: number;
             };
             let ev: Ev;
             try {
@@ -109,8 +118,29 @@ export default function NovelCreatePage() {
             } catch {
               continue;
             }
+            if (ev.step === "ping") {
+              continue;
+            }
             if (ev.step === "start") {
               setProgress(ev.message ?? "生成中…");
+            }
+            if (ev.step === "outline_start") {
+              setProgress(ev.message ?? "正在生成全书大纲…");
+            }
+            if (ev.step === "outline_ready") {
+              setProgress(ev.message ?? "大纲完成，分段续写中…");
+            }
+            if (ev.step === "segment_start") {
+              setProgress(
+                ev.message ??
+                  `长篇第 ${ev.index ?? "?"}/${ev.total ?? "?"} 段（${ev.label ?? "续写"}）…`,
+              );
+            }
+            if (ev.step === "segment_done" && typeof ev.length === "number") {
+              setProgress(
+                `已完成 ${ev.index ?? "?"}/${ev.total ?? "?"} 段 · 全文约 ${ev.length} 字` +
+                  (typeof ev.target === "number" ? ` / 目标约 ${ev.target}` : ""),
+              );
             }
             if (ev.step === "model_start" && ev.model) {
               setProgress(`正在连接模型 ${ev.model}（首字出现前可能需 30～90 秒）…`);
@@ -147,8 +177,10 @@ export default function NovelCreatePage() {
         setError(streamError || "生成未完成或未返回作品 ID");
       }
       setLoading(false);
-    } catch {
-      setError("网络错误，请重试");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const timedOut = /abort|timeout|timed out|network|failed to fetch|incomplete/i.test(msg);
+      setError(timedOut ? novelStreamInterruptHint(lengthTier) : `连接异常：${msg || "请重试"}`);
       setLoading(false);
     }
   }
@@ -245,6 +277,11 @@ export default function NovelCreatePage() {
                   >
                     <span className="block text-sm font-semibold text-[var(--gc-text)]">{tier.label}</span>
                     <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
+                    {lengthTier === tier.id && !loading ? (
+                      <span className="mt-1 block text-[10px] text-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]">
+                        预计 {novelGenerationEtaHint(tier.id)}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>

@@ -2,6 +2,8 @@
  * 「策展上下文」—— 编排上游各节点的统一可读切片（Phase 0：类型 + builder；后续 ingest URL 聚合可挂载于此）。
  */
 
+import { PRODUCT } from "@/lib/product-config";
+
 export type OrchestrationQualityTier = "fast" | "standard" | "rich";
 
 export type ContextPack = {
@@ -47,14 +49,14 @@ export function buildContextPack(input: BuildContextPackInput): ContextPack {
     searchEnhance: input.searchEnhance,
     enhancePass: input.enhancePass,
     hasReferenceSnippet: inferHasReferenceSnippet(userPromptTrimmed),
-    qualityTier: resolveQualityTierFromEnv(),
+    qualityTier: resolveQualityTier(),
   };
 }
 
-/** 服务端 / Node：ORCHESTRATION_QUALITY_TIER=fast|standard|rich（默认 standard） */
-export function resolveQualityTierFromEnv(): OrchestrationQualityTier {
-  if (typeof process === "undefined" || !process.env) return "standard";
-  const t = process.env.ORCHESTRATION_QUALITY_TIER?.trim().toLowerCase();
-  if (t === "fast" || t === "rich") return t;
-  return "standard";
+/** 编排质量档位（见 `product-config.ts`） */
+export function resolveQualityTier(): OrchestrationQualityTier {
+  return PRODUCT.orchestration.qualityTier;
 }
+
+/** @deprecated 使用 resolveQualityTier */
+export const resolveQualityTierFromEnv = resolveQualityTier;

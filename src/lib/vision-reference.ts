@@ -1,5 +1,6 @@
 import { createOpenAIClient } from "@/lib/openai-client";
-import { envIntPositive, openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
+import { PRODUCT } from "@/lib/product-config";
+import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
 import { getModelCascade } from "@/lib/model-cascade";
 
 const MAX_SIDE_NOTE =
@@ -37,7 +38,7 @@ export async function describeReferenceImage(params: {
     },
   ];
 
-  const visionOut = envIntPositive("OPENAI_VISION_MAX_OUTPUT_TOKENS", 512);
+  const visionOut = PRODUCT.llm.visionMaxOutputTokens;
   for (const model of models) {
     try {
       const res = await client.chat.completions.create({

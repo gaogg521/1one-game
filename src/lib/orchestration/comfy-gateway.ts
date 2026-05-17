@@ -3,9 +3,10 @@
  * 未配置 COMFY_UI_BASE_URL 时不发起请求。
  */
 
+import { PRODUCT } from "@/lib/product-config";
+
 function probeTimeoutMs(): number {
-  const n = Number(process.env.COMFY_PROBE_TIMEOUT_MS ?? "2800");
-  return Number.isFinite(n) ? Math.max(300, Math.min(30_000, Math.floor(n))) : 2800;
+  return PRODUCT.comfy.probeTimeoutMs;
 }
 
 export function getComfyBaseUrl(): string | null {

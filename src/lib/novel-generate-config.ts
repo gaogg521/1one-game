@@ -1,4 +1,4 @@
-import { envIntPositive } from "@/lib/llm/openai-token-param";
+import { PRODUCT } from "@/lib/product-config";
 import { novelLengthConfig, parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
 
 /** @deprecated 使用 getNovelSystemPrompt(tier) */
@@ -18,29 +18,24 @@ export function getNovelSystemPrompt(tier: NovelLengthTier): string {
 7. 开篇第一句或第一章标题要吸引人，贴合创意核心。`;
 }
 
-export function novelLlmTimeoutMs(): number {
-  return envIntPositive("NOVEL_LLM_TIMEOUT_MS", 600_000);
+/** 单次小说 LLM 调用超时（流式/非流式、网关 x-openclaw-timeout-ms 对齐）。 */
+export function novelLlmTimeoutMs(tier?: NovelLengthTier): number {
+  const t = tier ?? "medium";
+  return PRODUCT.novel.llmTimeoutMs[t];
 }
 
 export function novelLlmMaxOutputTokens(tier?: NovelLengthTier): number {
-  const base = envIntPositive("NOVEL_LLM_MAX_OUTPUT_TOKENS", 65_536);
+  const base = PRODUCT.novel.maxOutputTokens;
   if (tier === "short") return Math.min(base, 8_192);
-  if (tier === "long") return base;
   return base;
 }
 
 export function novelMinAcceptChars(tier?: NovelLengthTier): number {
   const t = tier ?? "medium";
   const cfg = novelLengthConfig(t);
-  const envKey =
-    t === "short"
-      ? "NOVEL_MIN_ACCEPT_CHARS_SHORT"
-      : t === "long"
-        ? "NOVEL_MIN_ACCEPT_CHARS_LONG"
-        : "NOVEL_MIN_ACCEPT_CHARS_MEDIUM";
-  const fallback =
-    t === "short" ? Math.max(180, Math.floor(cfg.minChars * 0.6)) : t === "long" ? Math.max(8000, Math.floor(cfg.minChars * 0.85)) : Math.max(1600, Math.floor(cfg.minChars * 0.85));
-  return Math.max(200, envIntPositive(envKey, fallback));
+  const floor = PRODUCT.novel.minAcceptCharsFloor[t];
+  const ratio = PRODUCT.novel.minAcceptCharsRatio[t];
+  return Math.max(200, Math.max(floor, Math.floor(cfg.minChars * ratio)));
 }
 
 export function buildNovelUserMessage(prompt: string, title?: string, lengthTier?: NovelLengthTier): string {

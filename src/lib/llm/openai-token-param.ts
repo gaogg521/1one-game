@@ -3,13 +3,13 @@
  * LiteLLM/网关有时也会给缺省字段；此处显式传参可避免错误字段。
  */
 
+import { PRODUCT } from "@/lib/product-config";
+
 export function openAiCompletionPrefersCompletionTokenParam(modelId: string): boolean {
   const m = modelId.trim().toLowerCase().replace(/^litellm\//, "");
-  const flag = typeof process.env.OPENAI_CHAT_USE_MAX_COMPLETION_TOKENS === "string"
-    ? process.env.OPENAI_CHAT_USE_MAX_COMPLETION_TOKENS.trim().toLowerCase()
-    : "";
-  if (flag === "1" || flag === "true" || flag === "yes") return true;
-  if (flag === "0" || flag === "false" || flag === "no") return false;
+  const forced = PRODUCT.llm.forceMaxCompletionTokens;
+  if (forced === true) return true;
+  if (forced === false) return false;
   /* o‑series、gpt‑5.*：与 OpenAI Responses 对齐的命名空间 */
   if (/^o[0-9]/.test(m)) return true;
   if (/\bgpt-5\b/.test(m)) return true;

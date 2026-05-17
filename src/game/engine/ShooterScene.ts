@@ -56,6 +56,8 @@ export class ShooterScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private actText!: Phaser.GameObjects.Text;
   private progressText!: Phaser.GameObjects.Text;
+  private skillText!: Phaser.GameObjects.Text;
+  private skillCdText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
   private cohesive!: CohesivePresentation;
   private dangerVignette: Phaser.GameObjects.Graphics | null = null;
@@ -64,6 +66,12 @@ export class ShooterScene extends Phaser.Scene {
   private enemyFireTimer!: Phaser.Time.TimerEvent;
   private currentFireDelay = 220;
   private currentEnemyFireDelay = 1800;
+  private skillReadyAt = 0;
+  private shieldUntil = 0;
+  private slowUntil = 0;
+  private magnetUntil = 0;
+  private coinRainUntil = 0;
+  private supportWingUntil = 0;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("ShooterScene");
@@ -128,13 +136,22 @@ export class ShooterScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(25);
 
+    this.skillText = this.add
+      .text(18, 60, "", { fontFamily: "system-ui, sans-serif", fontSize: "12px", color: ui.hud.accent2 })
+      .setDepth(25);
+
+    this.skillCdText = this.add
+      .text(width - 18, 60, "", { fontFamily: "system-ui, sans-serif", fontSize: "11px", color: ui.hud.muted })
+      .setOrigin(1, 0)
+      .setDepth(25);
+
     this.actText = this.add
       .text(width / 2, 14, "", { fontFamily: "system-ui, sans-serif", fontSize: "11px", color: ui.hud.muted })
       .setOrigin(0.5, 0)
       .setDepth(25);
 
     this.hintText = this.add
-      .text(width / 2, height - 20, `← → / A D 移动 · 自动射击「${this.spec.labels.hazard}」· Shift 急速射`, {
+      .text(width / 2, height - 20, `← → / A D 移动 · 自动射击「${this.spec.labels.hazard}」· Shift 技能`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -379,19 +396,22 @@ export class ShooterScene extends Phaser.Scene {
 
   private firePlayerBullet() {
     if (this.finished) return;
-    const b = this.playerBullets.get(
-      this.player.x,
-      this.player.y - 20,
-      "texPlayerBullet",
-    ) as Phaser.Physics.Arcade.Image | null;
-    if (!b) return;
-    b.setActive(true);
-    b.setVisible(true);
-    b.setDepth(7);
     const isBurst = this.currentFireDelay <= 140;
-    const speed = isBurst ? this.bulletSpeed * 1.4 : this.bulletSpeed;
-    (b.body as Phaser.Physics.Arcade.Body).setVelocityY(-speed);
-    (b.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
+    const spread = this.time.now < this.supportWingUntil ? [-18, 0, 18] : [0];
+    for (const offset of spread) {
+      const b = this.playerBullets.get(
+        this.player.x + offset,
+        this.player.y - 20,
+        "texPlayerBullet",
+      ) as Phaser.Physics.Arcade.Image | null;
+      if (!b) continue;
+      b.setActive(true);
+      b.setVisible(true);
+      b.setDepth(7);
+      const speed = isBurst ? this.bulletSpeed * 1.4 : this.bulletSpeed;
+      (b.body as Phaser.Physics.Arcade.Body).setVelocityY(-speed);
+      (b.body as Phaser.Physics.Arcade.Body).setVelocityX(offset * 1.5);
+    }
   }
 
   private fireEnemyBullet() {
@@ -447,6 +467,11 @@ export class ShooterScene extends Phaser.Scene {
   }
 
   private onPlayerHit() {
+    if (this.time.now < this.shieldUntil) {
+      this.cameras.main.flash(80, 120, 220, 255, false);
+      playBleep("pickup");
+      return;
+    }
     this.lives -= 1;
     this.invulnUntil = this.time.now + 1200;
     this.cameras.main.shake(180, 0.006);
@@ -561,13 +586,64 @@ export class ShooterScene extends Phaser.Scene {
 
     if (ev.type === "coinRain") {
       this.scoreMult = 2;
+      this.coinRainUntil = now + durationMs;
     }
     if (ev.type === "miniBoss") {
       this.spawnBoss();
     }
     if (ev.type === "goalShift") {
-      // Rapid fire burst for player
       this.burstUntil = now + durationMs;
+      this.supportWingUntil = now + durationMs;
+      return;
+    }
+
+    // 未知类型：仅横幅计时，勿改动 scoreMult / burst 等状态
+  }
+
+  private tryCastSkill() {
+    const skill = this.spec.systems?.skill;
+    if (!skill) return;
+    if (this.time.now < this.skillReadyAt) return;
+    this.skillReadyAt = this.time.now + skill.cooldownMs;
+    const dur = Math.max(1200, skill.durationMs ?? 0);
+
+    if (skill.effect === "shield") {
+      this.shieldUntil = this.time.now + dur;
+      this.cameras.main.flash(80, 140, 220, 255, false);
+      playBleep("pickup");
+      this.refreshHud();
+      return;
+    }
+    if (skill.effect === "timeSlow") {
+      this.slowUntil = this.time.now + dur;
+      playBleep("pickup");
+      this.refreshHud();
+      return;
+    }
+    if (skill.effect === "dash") {
+      this.burstUntil = this.time.now + Math.max(1600, dur);
+      this.supportWingUntil = this.time.now + Math.max(1600, dur);
+      this.currentFireDelay = 110;
+      playBleep("pickup");
+      this.refreshHud();
+      return;
+    }
+    if (skill.effect === "bomb") {
+      const enemies = this.enemies.getChildren();
+      for (const obj of enemies) {
+        const enemy = obj as Phaser.Physics.Arcade.Image;
+        if (!enemy.active) continue;
+        enemy.setData("hp", 0);
+        this.fxExplosion(enemy.x, enemy.y, Boolean(enemy.getData("isBoss")));
+        enemy.destroy();
+        this.waveEnemiesLeft = Math.max(0, this.waveEnemiesLeft - 1);
+        this.totalKills += 1;
+        this.score += 2 * this.scoreMult;
+      }
+      this.cameras.main.flash(120, 255, 200, 90, false);
+      playBleep("hit");
+      this.refreshHud();
+      return;
     }
   }
 
@@ -579,6 +655,11 @@ export class ShooterScene extends Phaser.Scene {
     this.waveText.setText(`第 ${this.wave} 波`);
     const prog = Math.min(this.totalKills, this.winScore);
     this.progressText.setText(`击杀 ${prog}/${this.winScore}`);
+    const skillName = this.spec.systems?.skill?.name ?? "技能";
+    const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
+    const status = this.time.now < this.shieldUntil ? "护盾" : this.time.now < this.slowUntil ? "减速场" : this.time.now < this.supportWingUntil ? "僚机援护" : "待命";
+    this.skillText.setText(`${skillName} · ${status}`);
+    this.skillCdText.setText(cdLeft <= 0 ? "Shift 已就绪" : `Shift ${(cdLeft / 1000).toFixed(1)}s`);
 
     const acts = this.spec.director?.acts ?? null;
     const label = acts?.[this.actIndex]?.label;
@@ -626,19 +707,14 @@ export class ShooterScene extends Phaser.Scene {
   update(time: number) {
     if (this.finished) return;
 
-    // Burst fire toggle
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
-      const now = this.time.now;
-      if (now >= this.burstCoolUntil) {
-        this.burstUntil = now + 2200;
-        this.burstCoolUntil = now + 6000;
-        this.currentFireDelay = 120;
-        this.time.delayedCall(2200, () => {
-          if (!this.finished) {
-            this.currentFireDelay = Math.max(120, Math.floor(260 - this.intensity * 60));
-          }
-        });
-      }
+      this.tryCastSkill();
+    }
+
+    if (time >= this.burstUntil) {
+      this.currentFireDelay = Math.max(120, Math.floor(260 - this.intensity * 60));
+    } else {
+      this.currentFireDelay = 110;
     }
 
     // Player movement
@@ -669,14 +745,16 @@ export class ShooterScene extends Phaser.Scene {
 
       if (e.y < entryY) {
         // Still entering: move down
-        (e.body as Phaser.Physics.Arcade.Body).setVelocityY(this.enemySpeed * 2.5);
+        const slowMul = time < this.slowUntil ? 0.72 : 1;
+        (e.body as Phaser.Physics.Arcade.Body).setVelocityY(this.enemySpeed * 2.5 * slowMul);
         (e.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
       } else {
         // In formation: drift sideways + slow descent
         const drift = Math.sin(time * 0.0008 + phase) * amp;
         const newX = Phaser.Math.Clamp(baseX + drift, 30, this.scale.width - 30);
         e.setX(newX);
-        (e.body as Phaser.Physics.Arcade.Body).setVelocityY(this.enemySpeed * 0.15 * (1 + this.intensity * 0.5));
+        const slowMul = time < this.slowUntil ? 0.72 : 1;
+        (e.body as Phaser.Physics.Arcade.Body).setVelocityY(this.enemySpeed * 0.15 * (1 + this.intensity * 0.5) * slowMul);
         (e.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
       }
 
@@ -701,5 +779,6 @@ export class ShooterScene extends Phaser.Scene {
     }
 
     this.tickDirectorEvents();
+    this.refreshHud();
   }
 }

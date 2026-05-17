@@ -6,6 +6,7 @@ import { newShareCode } from "@/lib/share-code";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
+import { resolveNovelCoverFallbacks } from "@/lib/novel-cover-resolve";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
+  const coverFallback = row.coverPath?.trim()
+    ? null
+    : (
+        await resolveNovelCoverFallbacks([
+          { id: row.id, title: row.title, summary: row.summary, prompt: row.prompt },
+        ])
+      ).get(row.id);
 
   return NextResponse.json({
     novel: {
@@ -34,7 +42,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       shareCode: row.shareCode,
-      coverPath: row.coverPath,
+      coverPath: row.coverPath?.trim() || coverFallback || null,
       playCount: row.playCount,
       likeCount: row.likeCount,
       status: row.status,

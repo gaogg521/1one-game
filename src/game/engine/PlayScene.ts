@@ -105,7 +105,42 @@ export class PlayScene extends Phaser.Scene {
 
   private goalShiftUntil = 0;
 
+  private goalShiftNeed = 0;
+
+  private goalShiftHave = 0;
+
+  private goalShiftSucceeded = false;
+
   private goalText!: Phaser.GameObjects.Text;
+
+  /** survivor：连续成功躲避（障碍落出屏）未受伤 */
+  private survivorDodgeStreak = 0;
+
+  /** collector：短时间内连续拾取形成 combo，受伤清零 */
+  private collectorCombo = 0;
+
+  private lastCollectorPickupAt = 0;
+
+  /** survivor：最后一波倒计时窗口（默认自动触发一次） */
+  private survivorLastStandUntil = 0;
+
+  private survivorLastStandStarted = false;
+
+  private survivorLastStandRewarded = false;
+
+  /** avoider：近距离擦弹连击 */
+  private avoiderNearMissChain = 0;
+
+  private avoiderLastNearMissAt = 0;
+
+  /** avoider：终局密集弹幕倒计时 */
+  private avoiderFinalBarrageUntil = 0;
+
+  /** collector：黄金收集物窗口 */
+  private goldenPickupUntil = 0;
+
+  /** survivor：喘息窗口（低压段） */
+  private breathingRoomUntil = 0;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlayScene");
@@ -325,9 +360,51 @@ export class PlayScene extends Phaser.Scene {
       const g = gem as Phaser.Physics.Arcade.Image;
       const gx = g.x;
       const gy = g.y;
+      const riskBonus = Number(g.getData("riskBonus") ?? 0);
+      const goldenBonus = Number(g.getData("goldenBonus") ?? 0);
       g.destroy();
       this.fxCollect(gx, gy);
-      this.score += 1 * this.scoreMult;
+      let comboBonus = 0;
+      if (this.spec.templateId === "collector") {
+        const now = this.time.now;
+        const windowMs = 1350;
+        if (now - this.lastCollectorPickupAt <= windowMs && this.lastCollectorPickupAt > 0) {
+          this.collectorCombo = Math.min(12, this.collectorCombo + 1);
+        } else {
+          this.collectorCombo = 1;
+        }
+        this.lastCollectorPickupAt = now;
+        comboBonus = Math.min(this.collectorCombo - 1, 5);
+        if (comboBonus > 0) {
+          this.showFloater(gx, gy - 22, `连收 ×${this.collectorCombo}`, this.cohesive.hud.accent2);
+        }
+      }
+      this.score += 1 * this.scoreMult + comboBonus + riskBonus + goldenBonus;
+      if (goldenBonus > 0) {
+        this.showFloater(gx, gy - 38, `黄金 +${goldenBonus}`, "#ffd700");
+        this.cameras.main.flash(100, 255, 220, 80, false);
+        playBleep("pickup");
+      }
+      if (riskBonus > 0 && this.spec.templateId === "collector") {
+        this.showFloater(gx, gy - 38, `险境 +${riskBonus}`, this.cohesive.hud.danger);
+        const { width, height } = this.scale;
+        const margin = 80;
+        for (let i = 0; i < 2; i += 1) {
+          const hx = Phaser.Math.Clamp(gx + Phaser.Math.Between(-100, 100), margin, width - margin);
+          const hy = Phaser.Math.Clamp(gy + Phaser.Math.Between(-90, 90), 110, height - 110);
+          this.spawnHazard(hx, hy);
+        }
+        this.cameras.main.shake(160, 0.006);
+      }
+      if (this.time.now < this.goalShiftUntil) {
+        this.goalShiftHave += 1;
+        if (!this.goalShiftSucceeded && this.goalShiftHave >= this.goalShiftNeed) {
+          this.goalShiftSucceeded = true;
+          const bonus = Math.max(3, Math.floor(4 + this.eventStrength * 4));
+          this.score += bonus;
+          this.banner.show({ title: "限时目标完成", message: `额外奖励 +${bonus} 分`, ms: 1600 });
+        }
+      }
       this.refreshHud();
       if (this.score >= this.winScore) {
         this.finish({ score: this.score, won: true });
@@ -437,7 +514,14 @@ export class PlayScene extends Phaser.Scene {
 
     const now = this.time.now;
     if (now < this.goalShiftUntil) {
-      this.goalText.setText("限时目标 · 疯狂收集 / 回避（奖励更高）");
+      this.goalText.setText(`限时目标 · ${this.goalShiftHave}/${this.goalShiftNeed}`);
+      this.goalText.setAlpha(1);
+    } else if (this.spec.templateId === "survivor" && this.survivorLastStandUntil > now) {
+      const sec = Math.max(1, Math.ceil((this.survivorLastStandUntil - now) / 1000));
+      this.goalText.setText(`最后一波 ${sec}s`);
+      this.goalText.setAlpha(1);
+    } else if (this.spec.templateId === "survivor" && this.survivorDodgeStreak >= 3) {
+      this.goalText.setText(`生存连躲 ${this.survivorDodgeStreak}`);
       this.goalText.setAlpha(1);
     } else {
       this.goalText.setText("");
@@ -498,12 +582,27 @@ export class PlayScene extends Phaser.Scene {
     if (this.finished) return;
     const { width } = this.scale;
     const margin = 80;
+    const mods = this.getActModifiers();
+    const isFinale = mods.includes("finale");
+    const isDoubleSpawn = mods.includes("doubleSpawn");
+    const extraHazards = isFinale ? 2 : isDoubleSpawn ? 1 : 0;
 
     this.updateAct();
     this.tickDirectorEvents();
 
     if (this.spec.templateId === "collector") {
-      if (Phaser.Math.Between(0, 1) === 0) {
+      const collectibleBursts = isFinale ? 2 : this.time.now < this.goalShiftUntil ? 2 : 1;
+      const isBonusField = mods.includes("bonusField");
+      for (let i = 0; i < collectibleBursts; i += 1) {
+        if (Phaser.Math.Between(0, 1) === 0 || isFinale || isBonusField) {
+          this.spawnCollectible(
+            Phaser.Math.Between(margin, width - margin),
+            Phaser.Math.Between(120, this.scale.height - 120),
+          );
+        }
+      }
+      // bonusField 章节：额外刷一个普通收集物
+      if (isBonusField && Phaser.Math.Between(0, 1) === 0) {
         this.spawnCollectible(
           Phaser.Math.Between(margin, width - margin),
           Phaser.Math.Between(120, this.scale.height - 120),
@@ -515,19 +614,34 @@ export class PlayScene extends Phaser.Scene {
           Phaser.Math.Between(120, this.scale.height - 120),
         );
       }
-      this.spawnHazard(
-        Phaser.Math.Between(margin, width - margin),
-        Phaser.Math.Between(120, this.scale.height - 120),
-      );
+      for (let i = 0; i <= extraHazards; i += 1) {
+        this.spawnHazard(
+          Phaser.Math.Between(margin, width - margin),
+          Phaser.Math.Between(120, this.scale.height - 120),
+        );
+      }
       if (this.time.now < this.miniBossUntil && Phaser.Math.Between(0, 1) === 0) {
         this.spawnEliteHazard();
+      }
+      if (isFinale && Phaser.Math.Between(0, 1) === 0) {
+        this.spawnEliteHazard();
+      }
+      if (
+        this.countRiskCollectiblesOnField() < 2 &&
+        (isFinale || Phaser.Math.Between(0, 16) === 0) &&
+        Phaser.Math.Between(0, 2) === 0 &&
+        this.time.now > 2200
+      ) {
+        this.spawnRiskCollectible();
       }
       return;
     }
 
-    const x = Phaser.Math.Between(margin, width - margin);
-    const y = -40;
-    this.spawnHazard(x, y);
+    for (let i = 0; i <= extraHazards; i += 1) {
+      const x = Phaser.Math.Between(margin, width - margin);
+      const y = -40 - i * 28;
+      this.spawnHazard(x, y);
+    }
 
     if (this.time.now < this.coinRainUntil && Phaser.Math.Between(0, 1) === 0) {
       this.spawnPowerup();
@@ -535,18 +649,43 @@ export class PlayScene extends Phaser.Scene {
     if (this.time.now < this.miniBossUntil && Phaser.Math.Between(0, 1) === 0) {
       this.spawnEliteHazard();
     }
+    if (this.spec.templateId === "survivor" && (isFinale || this.lives <= 2) && Phaser.Math.Between(0, 2) === 0) {
+      this.spawnPowerup();
+    }
+    // survivor 喘息窗口：降低刷怪密度，额外补充道具
+    if (this.spec.templateId === "survivor" && this.time.now < this.breathingRoomUntil) {
+      if (Phaser.Math.Between(0, 2) === 0) this.spawnPowerup();
+      return; // 跳过本轮额外刷怪
+    }
+    if (this.spec.templateId === "avoider" && isFinale && Phaser.Math.Between(0, 2) !== 0) {
+      this.spawnEliteHazard();
+    }
+    // avoider 终局弹幕：持续高密度刷精英
+    if (this.spec.templateId === "avoider" && this.time.now < this.avoiderFinalBarrageUntil) {
+      this.spawnEliteHazard();
+      if (Phaser.Math.Between(0, 1) === 0) this.spawnEliteHazard();
+    }
+    if (this.spec.templateId === "survivor" && this.time.now < this.survivorLastStandUntil && Phaser.Math.Between(0, 2) === 0) {
+      const x = Phaser.Math.Between(margin, width - margin);
+      const y = -40 - Phaser.Math.Between(0, 40);
+      this.spawnHazard(x, y);
+    }
   }
 
   private spawnEliteHazard() {
     const { width } = this.scale;
+    const collectorMode = this.spec.templateId === "collector";
     const x = Phaser.Math.Between(90, width - 90);
-    const h = this.hazards.create(x, -70, "texHazard");
+    const y = collectorMode ? Phaser.Math.Between(100, this.scale.height - 100) : -70;
+    const h = this.hazards.create(x, y, "texHazard");
     h.setDepth(6);
-    h.setScale(1.55);
+    h.setScale(collectorMode ? 1.42 : 1.55);
     h.setAlpha(0.9);
     h.setVelocity(
-      Phaser.Math.Between(-80, 80),
-      Math.floor(this.spec.gameplay.hazardSpeed * (1.25 + this.eventStrength * 0.25)),
+      Phaser.Math.Between(-110, 110),
+      collectorMode
+        ? Phaser.Math.Between(-120, 120)
+        : Math.floor(this.spec.gameplay.hazardSpeed * (1.25 + this.eventStrength * 0.25)),
     );
     const body = h.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
@@ -562,7 +701,27 @@ export class PlayScene extends Phaser.Scene {
       // 事件结束
       if (this.eventType === "coinRain") this.scoreMult = 1;
       if (this.eventType === "goalShift") this.scoreMult = 1;
-      this.banner.show({ title: "事件结束", message: "准备迎接下一段挑战", ms: 1400 });
+      if (this.eventType === "goalShift" && !this.goalShiftSucceeded) {
+        this.banner.show({ title: "限时目标失败", message: "继续撑住，下一段节奏会更猛", ms: 1500 });
+      } else if (this.eventType === "finalBarrage") {
+        // avoider 终局弹幕结束 → 直接胜利
+        if (!this.finished) {
+          const bonus = Math.max(4, Math.floor(5 + this.eventStrength * 5));
+          this.score += bonus;
+          this.banner.show({ title: "弹幕穿越", message: `终局弹幕结束 · 奖励 +${bonus}`, ms: 1800 });
+          playBleep("pickup");
+          this.refreshHud();
+          if (this.score >= this.winScore) {
+            this.finish({ score: this.score, won: true });
+          }
+        }
+      } else if (this.eventType === "goldenPickup") {
+        this.banner.show({ title: "黄金窗口结束", message: "继续收集，保持节奏", ms: 1200 });
+      } else if (this.eventType === "breathingRoom") {
+        this.banner.show({ title: "喘息结束", message: "压力回升，注意走位", ms: 1200 });
+      } else {
+        this.banner.show({ title: "事件结束", message: "准备迎接下一段挑战", ms: 1400 });
+      }
       this.eventType = null;
       this.eventUntil = 0;
       this.eventStrength = 0;
@@ -621,7 +780,38 @@ export class PlayScene extends Phaser.Scene {
     if (ev.type === "goalShift") {
       this.goalShiftUntil = this.eventUntil;
       this.scoreMult = 2;
+      this.goalShiftNeed =
+        this.spec.templateId === "collector"
+          ? Math.max(4, Math.floor(5 + strength * 5))
+          : Math.max(5, Math.floor(6 + strength * 6));
+      this.goalShiftHave = 0;
+      this.goalShiftSucceeded = false;
+      return;
     }
+
+    if (ev.type === "finalBarrage") {
+      // avoider 专属：终局密集弹幕倒计时
+      this.avoiderFinalBarrageUntil = this.eventUntil;
+      this.soundscape?.triggerEvent("danger");
+      this.cameras.main.shake(220, 0.012);
+      this.startDangerVignette();
+      return;
+    }
+
+    if (ev.type === "goldenPickup") {
+      // collector 专属：生成黄金收集物
+      this.spawnGoldenPickup();
+      this.goldenPickupUntil = this.eventUntil;
+      return;
+    }
+
+    if (ev.type === "breathingRoom") {
+      // survivor 专属：喘息窗口，降低刷怪密度
+      this.breathingRoomUntil = this.eventUntil;
+      return;
+    }
+
+    // 其它 type：仅横幅与时间轴，不产生数值副作用（结束逻辑走通用分支）
   }
 
   private updateAct() {
@@ -638,7 +828,36 @@ export class PlayScene extends Phaser.Scene {
     if (idx !== this.actIndex) {
       this.actIndex = idx;
       const label = acts[idx]?.label ?? "";
+      const mods = acts[idx]?.modifiers ?? [];
       this.actText.setText(label ? `章节 · ${label}` : "");
+      const stageMessage =
+        this.spec.templateId === "collector"
+          ? mods.includes("finale")
+            ? "终局收集潮：危险和奖励同时暴涨"
+            : mods.includes("bonusField")
+              ? "奖励场：高价值物件出现，优先拾取"
+              : mods.includes("doubleSpawn")
+                ? "物场升温：收集物与威胁同时增多"
+                : "保持走位，扩大收集优势"
+          : this.spec.templateId === "survivor"
+            ? mods.includes("finale")
+              ? "终局生存波：扛住最后高压"
+              : mods.includes("doubleSpawn")
+                ? "压力抬升：同时来袭的威胁变多"
+                : "继续生存，稳住血量和节奏"
+            : mods.includes("finale")
+              ? "终局回避段：密集威胁正在压下"
+              : mods.includes("doubleSpawn")
+                ? "双重来袭：注意连续回避"
+                : "保持节奏，准备下一段躲避";
+      if (mods.includes("finale")) {
+        this.soundscape?.triggerEvent("boss");
+        this.cameras.main.shake(180, 0.008);
+        if (this.spec.templateId === "survivor") {
+          this.startSurvivorLastStand("终局章节");
+        }
+      }
+      this.banner.show({ title: label ? `章节 · ${label}` : "章节推进", message: stageMessage, ms: 1400 });
       this.cameras.main.flash(90, 140, 120, 255, false);
       // Dynamic music: increase tension as act progresses
       const tension = this.intensity * (0.5 + 0.5 * (idx / Math.max(1, acts.length - 1)));
@@ -649,43 +868,90 @@ export class PlayScene extends Phaser.Scene {
   private spawnHazard(x: number, y: number) {
     const h = this.hazards.create(x, y, "texHazard");
     h.setDepth(4);
-    const acts = this.spec.director?.acts ?? null;
-    const mods = acts?.[this.actIndex]?.modifiers ?? [];
+    const mods = this.getActModifiers();
     const zigzag = mods.includes("zigzag");
-    const doubleSpawn = mods.includes("doubleSpawn");
+    const finale = mods.includes("finale");
+    const collectorMode = this.spec.templateId === "collector";
 
     h.setVelocity(
-      this.spec.templateId === "collector"
-        ? Phaser.Math.Between(-90, 90)
+      collectorMode
+        ? zigzag || finale
+          ? Phaser.Math.Between(-140, 140)
+          : Phaser.Math.Between(-90, 90)
         : zigzag
           ? Phaser.Math.Between(-120, 120)
           : Phaser.Math.Between(-50, 50),
-      this.spec.templateId === "collector"
-        ? Phaser.Math.Between(-90, 90)
-        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * 0.22)),
+      collectorMode
+        ? finale
+          ? Phaser.Math.Between(-140, 140)
+          : Phaser.Math.Between(-90, 90)
+        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * (finale ? 0.34 : 0.22))),
     );
     const body = h.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
     body.setBounce(1, 1);
-    if (this.spec.templateId !== "collector") {
+    if (!collectorMode) {
       body.setAngularVelocity(Phaser.Math.Between(-120, 120));
-    }
-
-    if (doubleSpawn && this.spec.templateId !== "collector") {
-      const x2 = Phaser.Math.Clamp(x + Phaser.Math.Between(-120, 120), 80, this.scale.width - 80);
-      const h2 = this.hazards.create(x2, y - 40, "texHazard");
-      h2.setDepth(4);
-      h2.setVelocity(Phaser.Math.Between(-60, 60), Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * 0.18)));
-      const b2 = h2.body as Phaser.Physics.Arcade.Body;
-      b2.setCollideWorldBounds(true);
-      b2.setBounce(1, 1);
-      b2.setAngularVelocity(Phaser.Math.Between(-120, 120));
+    } else if (finale) {
+      h.setScale(1.12);
+      h.setAlpha(0.96);
     }
   }
 
   private spawnCollectible(x: number, y: number) {
     const g = this.collectibles.create(x, y, "texGem");
     g.setDepth(6);
+  }
+
+  private spawnRiskCollectible() {
+    if (this.countRiskCollectiblesOnField() >= 2) return;
+    const { width, height } = this.scale;
+    const margin = 88;
+    const x = Phaser.Math.Between(margin, width - margin);
+    const y = Phaser.Math.Between(130, height - 130);
+    const g = this.collectibles.create(x, y, "texGem") as Phaser.Physics.Arcade.Image;
+    g.setDepth(7);
+    g.setScale(1.14);
+    const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+    g.setTint(hc);
+    g.setData("riskBonus", 5);
+    const gb = g.body as Phaser.Physics.Arcade.Body | null;
+    if (gb) gb.setAllowGravity(false);
+  }
+
+  private countRiskCollectiblesOnField(): number {
+    const kids = this.collectibles.getChildren();
+    let n = 0;
+    for (let i = 0; i < kids.length; i += 1) {
+      const c = kids[i] as Phaser.Physics.Arcade.Image;
+      if (!c?.active) continue;
+      if (Number(c.getData("riskBonus") ?? 0) > 0) n += 1;
+    }
+    return n;
+  }
+
+  /** collector 专属：黄金收集物（高价值，限时出现，闪烁提示） */
+  private spawnGoldenPickup() {
+    const { width, height } = this.scale;
+    const margin = 100;
+    const x = Phaser.Math.Between(margin, width - margin);
+    const y = Phaser.Math.Between(margin, height - margin);
+    const g = this.collectibles.create(x, y, "texGem") as Phaser.Physics.Arcade.Image;
+    g.setDepth(8);
+    g.setScale(1.32);
+    const gc = parseInt((this.spec.theme.collectibleColor ?? "#ffd700").replace("#", ""), 16);
+    g.setTint(gc);
+    g.setData("goldenBonus", 8);
+    const gb = g.body as Phaser.Physics.Arcade.Body | null;
+    if (gb) gb.setAllowGravity(false);
+    // 闪烁动画提示高价值
+    this.tweens.add({
+      targets: g,
+      alpha: { from: 1, to: 0.45 },
+      duration: 380,
+      yoyo: true,
+      repeat: -1,
+    });
   }
 
   private spawnPowerup() {
@@ -810,6 +1076,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.finished) return;
 
     if (this.spec.templateId === "survivor") {
+      this.survivorDodgeStreak = 0;
       this.invulnUntil = this.time.now + 720;
       this.lives -= 1;
       this.cameras.main.shake(180, 0.009);
@@ -829,6 +1096,8 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (this.spec.templateId === "collector") {
+      this.collectorCombo = 0;
+      this.lastCollectorPickupAt = 0;
       this.lives -= 1;
       this.cameras.main.shake(160, 0.008);
       this.cameras.main.flash(120, 255, 60, 60, false);
@@ -872,9 +1141,19 @@ export class PlayScene extends Phaser.Scene {
     this.finished = true;
     this.spawnTimer.remove(false);
     this.physics.pause();
-    this.hintText.setText(
-      payload.won ? "胜利！可在页面按钮再来一局或分享链接。" : "再接再厉 · 再来一局或调整创意描述。",
-    );
+    const winText =
+      this.spec.templateId === "collector"
+        ? "收集完成！本轮资源回收成功，可继续分享或再来一局。"
+        : this.spec.templateId === "survivor"
+          ? "生存成功！你撑过了最后压力段，可继续分享或再来一局。"
+          : "回避成功！你已经穿过终局弹幕，可继续分享或再来一局。";
+    const loseText =
+      this.spec.templateId === "collector"
+        ? "差一点就能带走这批资源，再试一次或调整创意描述。"
+        : this.spec.templateId === "survivor"
+          ? "没扛住最后一波，再来一局或调整创意描述。"
+          : "这轮回避失败了，再来一局或调整创意描述。";
+    this.hintText.setText(payload.won ? winText : loseText);
     if (payload.won) {
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
@@ -884,6 +1163,10 @@ export class PlayScene extends Phaser.Scene {
 
   update() {
     if (this.finished) return;
+    if (this.spec.templateId === "survivor") {
+      this.maybeStartSurvivorLastStandByProgress();
+      this.tickSurvivorLastStandEnd();
+    }
     const baseSpeed = this.spec.gameplay.playerSpeed;
     const speed =
       this.time.now < this.magnetUntil && this.spec.templateId === "collector"
@@ -949,10 +1232,43 @@ export class PlayScene extends Phaser.Scene {
     for (let i = 0; i < hazards.length; i += 1) {
       const s = hazards[i] as Phaser.Physics.Arcade.Image;
       if (!s.active) continue;
+      if (this.spec.templateId === "avoider") {
+        const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.x, s.y);
+        if (d < 60 && d > 26) {
+          this.triggerNearMiss(s);
+        }
+      }
       if (s.y > height + 80) {
         s.destroy();
         if (!this.finished) {
-          this.score += 1 * this.scoreMult;
+          let add = 1 * this.scoreMult;
+          if (this.spec.templateId === "survivor") {
+            this.survivorDodgeStreak += 1;
+            const lastStand =
+              this.lives <= 2 ||
+              this.getActModifiers().includes("finale") ||
+              this.time.now < this.survivorLastStandUntil;
+            if (lastStand) add += 1;
+            if (this.survivorDodgeStreak % 6 === 0) {
+              const grit = 2 + Math.min(3, Math.floor(this.survivorDodgeStreak / 12));
+              add += grit;
+              this.banner.show({
+                title: "苟住节奏",
+                message: `连续躲避 ${this.survivorDodgeStreak} · 坚韧 +${grit}`,
+                ms: 1200,
+              });
+            }
+          }
+          this.score += add;
+          if (this.time.now < this.goalShiftUntil) {
+            this.goalShiftHave += 1;
+            if (!this.goalShiftSucceeded && this.goalShiftHave >= this.goalShiftNeed) {
+              this.goalShiftSucceeded = true;
+              const bonus = Math.max(3, Math.floor(4 + this.eventStrength * 4));
+              this.score += bonus;
+              this.banner.show({ title: "限时目标完成", message: `额外奖励 +${bonus} 分`, ms: 1600 });
+            }
+          }
           this.refreshHud();
           if (this.score >= this.winScore) {
             this.finish({ score: this.score, won: true });
@@ -960,6 +1276,28 @@ export class PlayScene extends Phaser.Scene {
         }
       }
     }
+
+    if (this.spec.templateId === "survivor" && this.survivorLastStandUntil > this.time.now) {
+      this.refreshHud();
+    }
+  }
+
+  private showFloater(x: number, y: number, message: string, color: string) {    const floater = this.add
+      .text(x, y, message, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        color,
+      })
+      .setOrigin(0.5)
+      .setDepth(36);
+    this.tweens.add({
+      targets: floater,
+      y: y - 28,
+      alpha: 0,
+      duration: 480,
+      ease: "Quad.Out",
+      onComplete: () => floater.destroy(),
+    });
   }
 
   private drawShieldRing() {
@@ -969,5 +1307,94 @@ export class PlayScene extends Phaser.Scene {
     this.shieldRing.lineStyle(2, c, 0.65);
     this.shieldRing.strokeCircle(this.player.x, this.player.y, 28);
     this.shieldRing.strokeCircle(this.player.x, this.player.y, 22);
+  }
+
+  private getActModifiers(): string[] {
+    const acts = this.spec.director?.acts ?? null;
+    return acts?.[this.actIndex]?.modifiers ?? [];
+  }
+
+  private startSurvivorLastStand(reason: string) {
+    if (this.spec.templateId !== "survivor" || this.finished) return;
+    if (this.survivorLastStandStarted) return;
+    this.survivorLastStandStarted = true;
+    const ms = Math.floor(10000 + this.intensity * 3500);
+    this.survivorLastStandUntil = this.time.now + ms;
+    const sec = Math.ceil(ms / 1000);
+    this.banner.show({
+      title: "最后一波",
+      message: `${reason} · 撑住 ${sec}s`,
+      ms: 2200,
+    });
+    this.soundscape?.triggerEvent("danger");
+    this.refreshHud();
+  }
+
+  private maybeStartSurvivorLastStandByProgress() {
+    if (this.spec.templateId !== "survivor" || this.survivorLastStandStarted || this.finished) return;
+    if (this.winScore <= 0) return;
+    if (this.score / this.winScore >= 0.88) {
+      this.startSurvivorLastStand("终点冲刺");
+    }
+  }
+
+  private tickSurvivorLastStandEnd() {
+    if (this.spec.templateId !== "survivor" || this.finished) return;
+    if (!this.survivorLastStandStarted || this.survivorLastStandRewarded) return;
+    if (this.survivorLastStandUntil <= 0 || this.time.now < this.survivorLastStandUntil) return;
+
+    this.survivorLastStandRewarded = true;
+    this.survivorLastStandUntil = 0;
+    const bonus = 5;
+    this.score += bonus;
+    this.banner.show({
+      title: "扛过来了",
+      message: `最后一波结束 · 士气 +${bonus}`,
+      ms: 1800,
+    });
+    playBleep("pickup");
+    this.refreshHud();
+    if (this.score >= this.winScore) {
+      this.finish({ score: this.score, won: true });
+    }
+  }
+
+  private triggerNearMiss(hazard: Phaser.Physics.Arcade.Image) {
+    if (this.spec.templateId !== "avoider") return;
+    if (hazard.getData("nearMissAwarded")) return;
+    hazard.setData("nearMissAwarded", true);
+    const now = this.time.now;
+    const chainWindow = 1600;
+    if (now - this.avoiderLastNearMissAt <= chainWindow && this.avoiderLastNearMissAt > 0) {
+      this.avoiderNearMissChain = Math.min(16, this.avoiderNearMissChain + 1);
+    } else {
+      this.avoiderNearMissChain = 1;
+    }
+    this.avoiderLastNearMissAt = now;
+    const chainBonus = Math.min(this.avoiderNearMissChain - 1, 5);
+    const add = 1 + chainBonus;
+    this.score += add;
+    const label = chainBonus > 0 ? `险避 +${add}（×${this.avoiderNearMissChain}）` : "险避 +1";
+    const floater = this.add
+      .text(hazard.x, Math.max(80, hazard.y - 18), label, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        color: this.cohesive.hud.accent,
+      })
+      .setOrigin(0.5)
+      .setDepth(35);
+    this.tweens.add({
+      targets: floater,
+      y: floater.y - 26,
+      alpha: 0,
+      duration: 520,
+      ease: "Quad.Out",
+      onComplete: () => floater.destroy(),
+    });
+    this.cameras.main.flash(70, 180, 220, 255, false);
+    this.refreshHud();
+    if (this.score >= this.winScore) {
+      this.finish({ score: this.score, won: true });
+    }
   }
 }

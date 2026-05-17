@@ -17,7 +17,12 @@ import {
   writeAssetManifestToSession,
 } from "@/lib/assets/asset-manifest-session.client";
 import { buildAssetManifestFromReferencePayloads } from "@/lib/orchestration/asset-manifest";
-import { describeQueuedAssetSummary, summarizePromptForStudio } from "@/lib/create-studio-narrative";
+import {
+  buildCoCreationDirections,
+  buildCoCreationIntent,
+  describeQueuedAssetSummary,
+  summarizePromptForStudio,
+} from "@/lib/create-studio-narrative";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSpec } from "@/lib/game-spec";
 import type { OrchestrationRunTrace } from "@/lib/orchestration/run-trace";
@@ -41,6 +46,8 @@ const SOURCE_HINT: Record<string, string> = {
 };
 
 type VariantRow = { spec: GameSpec; source: string; label: string };
+type CoCreationIntent = ReturnType<typeof buildCoCreationIntent>;
+type CoCreationDirection = ReturnType<typeof buildCoCreationDirections>[number];
 
 type StudioLogKind = "user" | "asset" | "intent" | "sse" | "done" | "error";
 type StudioLogEntry = { id: string; t: number; kind: StudioLogKind; title: string; bullets?: string[] };
@@ -191,12 +198,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [etaText, setEtaText] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [studioLog, setStudioLog] = useState<StudioLogEntry[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(replayId ?? null);
+  const [creationMode, setCreationMode] = useState<"flow" | "generated">("flow");
+  const [coCreationIntent, setCoCreationIntent] = useState<CoCreationIntent | null>(null);
+  const [coDirections, setCoDirections] = useState<CoCreationDirection[]>([]);
+  const [selectedDirectionId, setSelectedDirectionId] = useState<string | null>(null);
+  const [coCreationStep, setCoCreationStep] = useState<1 | 2 | 3 | 4>(1);
   /** 与本轮流式生成绑定，卡片区展示一行「正在按此理解」摘要，避免仅显示远端阶段名而造成误解 */
   const [streamIntentBrief, setStreamIntentBrief] = useState<string | null>(null);
   const studioLogSeq = useRef(0);
   const studioLogEndRef = useRef<HTMLDivElement | null>(null);
   const [replayStatus, setReplayStatus] = useState<null | "loading" | "ok" | "error">(replayId ? "loading" : null);
   const [replayTitle, setReplayTitle] = useState<string | null>(null);
+  const [replayRefinements, setReplayRefinements] = useState<Array<{ at: string; mode: string; instruction: string }>>(
+    [],
+  );
   /** 剪贴板图片队列由全站 ClipboardImageQueueProvider（AppCapabilitiesRoot）挂载 */
   const {
     rows: pastedImages,
@@ -214,6 +230,46 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setStudioLog((prev) => [...prev, { ...entry, id, t: Date.now() }]);
   }, []);
 
+  const currentDirection =
+    selectedDirectionId && coDirections.length ? coDirections.find((x) => x.id === selectedDirectionId) ?? null : null;
+
+  const effectivePromptForGeneration = currentDirection
+    ? `${prompt.trim()}\n\n${currentDirection.promptAddon}`.trim().slice(0, 4000)
+    : prompt.trim();
+
+  const buildCoCreationPlan = useCallback(() => {
+    const intent = buildCoCreationIntent(prompt, templateHint);
+    const directions = buildCoCreationDirections(intent);
+    setCoCreationIntent(intent);
+    setCoDirections(directions);
+    setSelectedDirectionId(directions[0]?.id ?? null);
+    setCoCreationStep(2);
+    setCreationMode("flow");
+    appendStudioLog({
+      kind: "intent",
+      title: "系统提炼了你的创作意图",
+      bullets: [intent.premise, `目标模板：**${intent.templateId}**`, `核心玩法：${intent.gameplayCore}`, ...intent.strengths],
+    });
+    if (intent.risks.length) {
+      appendStudioLog({ kind: "sse", title: "当前仍有待补足的点", bullets: intent.risks });
+    }
+  }, [appendStudioLog, prompt, templateHint]);
+
+  const chooseCoCreationDirection = useCallback(
+    (directionId: string) => {
+      const row = coDirections.find((item) => item.id === directionId);
+      if (!row) return;
+      setSelectedDirectionId(directionId);
+      setCoCreationStep(3);
+      appendStudioLog({
+        kind: "sse",
+        title: `已选方向：${row.title}`,
+        bullets: [row.summary, ...row.bullets],
+      });
+    },
+    [appendStudioLog, coDirections],
+  );
+
   /** 试玩页 / 工作室带入 ?from=<projectId>：加载已保存的完整描述（含此前合并进的参考摘录），省去重复上传解析 */
   useEffect(() => {
     if (!replayId) return;
@@ -224,11 +280,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       if (cancelled) return;
       setReplayStatus("loading");
       setReplayTitle(null);
+      setReplayRefinements([]);
       try {
         const res = await fetch(`/api/projects/${encodeURIComponent(replayId)}`);
         const data = (await res.json()) as {
           error?: string;
-          project?: { title?: string; prompt?: string };
+          project?: { id?: string; title?: string; prompt?: string };
+          spec?: GameSpec;
+          refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
         };
         if (cancelled) return;
         if (!res.ok || typeof data.project?.prompt !== "string" || !data.project.prompt.trim()) {
@@ -236,6 +295,17 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           return;
         }
         setPrompt(data.project.prompt.trim().slice(0, 4000));
+        setProjectId(data.project.id ?? replayId);
+        if (data.spec) {
+          setSpec(data.spec);
+          setCreationMode("generated");
+          setCoCreationStep(4);
+        }
+        if (Array.isArray(data.refinementHistory)) {
+          setReplayRefinements(data.refinementHistory);
+        } else {
+          setReplayRefinements([]);
+        }
         const t = data.project.title?.trim();
         setReplayTitle(t && t.length ? t : null);
         setReplayStatus("ok");
@@ -363,7 +433,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   /** 默认：SSE 流式进度 + 单次生成 */
   const generateStream = useCallback(async () => {
     setError(null);
-    let effectivePrompt = prompt;
+    let effectivePrompt = effectivePromptForGeneration;
     const hasQueuedAssetFiles = (fileRef.current?.files?.length ?? 0) > 0 || pastedImages.length > 0;
     setBusy("gen");
     const intentBrief = summarizePromptForStudio(prompt);
@@ -382,11 +452,20 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setWebMeta(null);
     setGenDebug(null);
     setStudioLog([]);
+    setCreationMode("generated");
+    setCoCreationStep(4);
     appendStudioLog({
       kind: "user",
       title: "你的创意原文（节选）",
       bullets: [summarizePromptForStudio(prompt)],
     });
+    if (currentDirection) {
+      appendStudioLog({
+        kind: "intent",
+        title: "本轮按以下共创方向生成",
+        bullets: [currentDirection.title, currentDirection.summary, ...currentDirection.bullets],
+      });
+    }
     appendStudioLog({
       kind: "asset",
       title: "本次排队的参考素材",
@@ -580,18 +659,30 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setElapsedSec(0);
       setStreamIntentBrief(null);
     }
-  }, [appendStudioLog, enhancePass, pastedImages, performReferenceIngest, prompt, searchEnhance, templateHint]);
+  }, [
+    appendStudioLog,
+    currentDirection,
+    effectivePromptForGeneration,
+    enhancePass,
+    pastedImages,
+    performReferenceIngest,
+    prompt,
+    searchEnhance,
+    templateHint,
+  ]);
 
   /** 并行三套备选（风味后缀不同） */
   const generateVariants = useCallback(async () => {
     setError(null);
-    let effectivePrompt = prompt;
+    let effectivePrompt = effectivePromptForGeneration;
     const hasQueuedAssetFiles = (fileRef.current?.files?.length ?? 0) > 0 || pastedImages.length > 0;
     setStreamMsg(null);
     setBusy("gen_variants");
     setWebMeta(null);
     setGenDebug(null);
     setStudioLog([]);
+    setCreationMode("generated");
+    setCoCreationStep(4);
     appendStudioLog({
       kind: "sse",
       title: "多套并行模式",
@@ -665,7 +756,17 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     } finally {
       setBusy("idle");
     }
-  }, [appendStudioLog, applyVariant, enhancePass, pastedImages, performReferenceIngest, prompt, searchEnhance, templateHint]);
+  }, [
+    appendStudioLog,
+    applyVariant,
+    effectivePromptForGeneration,
+    enhancePass,
+    pastedImages,
+    performReferenceIngest,
+    prompt,
+    searchEnhance,
+    templateHint,
+  ]);
 
   useEffect(() => {
     if (busy !== "gen") return;
@@ -701,8 +802,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setError(null);
     setBusy("save");
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const isUpdate = Boolean(projectId);
+      const res = await fetch(isUpdate ? `/api/projects/${projectId}` : "/api/projects", {
+        method: isUpdate ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, spec }),
       });
@@ -711,17 +813,23 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         setError(data.error ?? "保存失败");
         return;
       }
-      if (!data.project?.id) {
+      if (!isUpdate && !data.project?.id) {
         setError("未返回作品 id");
         return;
       }
-      router.push(`/play/${data.project.id}`);
+      const nextProjectId = data.project?.id ?? projectId;
+      if (!nextProjectId) {
+        setError("未返回作品 id");
+        return;
+      }
+      setProjectId(nextProjectId);
+      router.push(`/play/${nextProjectId}`);
     } catch {
       setError("网络异常");
     } finally {
       setBusy("idle");
     }
-  }, [prompt, router, spec]);
+  }, [projectId, prompt, router, spec]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -750,13 +858,83 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         <header className="max-w-2xl space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">创作台</h1>
           <p className="text-sm leading-relaxed text-[var(--gc-muted)]">
-            描述一句话，AI 生成规格并即时试玩。支持<strong className="text-[var(--gc-text-soft)]">流式进度</strong>与<strong className="text-[var(--gc-text-soft)]">三套并行备选</strong>。
+            从一句话创意进入 4 步共创：提炼意图、挑方向、生成规格、试玩并保存版本。支持
+            <strong className="text-[var(--gc-text-soft)]">流式过程可视化</strong>与
+            <strong className="text-[var(--gc-text-soft)]">三套并行备选</strong>。
           </p>
           <p className="text-xs text-[var(--gc-text-faint)]">快捷键：Ctrl / ⌘ + Enter → 流式生成一套方案</p>
         </header>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
           <div className="flex flex-col gap-5">
+            <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  [1, "输入创意"],
+                  [2, "提炼意图"],
+                  [3, "选择方向"],
+                  [4, "生成试玩"],
+                ] as const).map(([step, label]) => {
+                  const active = coCreationStep === step;
+                  const done = coCreationStep > step;
+                  return (
+                    <div
+                      key={step}
+                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${
+                        active
+                          ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
+                          : done
+                            ? "bg-emerald-500/12 text-emerald-200"
+                            : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+                      }`}
+                    >
+                      <span className="font-semibold">{step}</span>
+                      <span>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-[var(--gc-muted)]">
+                当前模式：{creationMode === "generated" ? "已进入试玩与保存阶段" : "仍在共创流程中"}。
+                {projectId ? " 当前创意已绑定已有项目，可继续覆盖保存。" : " 生成后可直接保存为新项目。"}
+              </p>
+              {coCreationIntent ? (
+                <div className="mt-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/60 px-3 py-3 text-xs text-[var(--gc-muted)]">
+                  <p className="font-semibold text-[var(--gc-text-soft)]">当前理解</p>
+                  <p className="mt-1">{coCreationIntent.premise}</p>
+                  <p className="mt-2">模板倾向：<strong className="text-[var(--gc-text-soft)]">{coCreationIntent.templateId}</strong></p>
+                  <p className="mt-1">玩法主轴：{coCreationIntent.gameplayCore}</p>
+                </div>
+              ) : null}
+              {coDirections.length ? (
+                <div className="mt-3 grid gap-2">
+                  {coDirections.map((row) => {
+                    const active = row.id === selectedDirectionId;
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => chooseCoCreationDirection(row.id)}
+                        className={`rounded-xl border px-3 py-3 text-left transition ${
+                          active
+                            ? "border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)]"
+                            : "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/45 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-[var(--gc-text-soft)]">{row.title}</p>
+                        <p className="mt-1 text-xs text-[var(--gc-muted)]">{row.summary}</p>
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-[var(--gc-text-faint)]">
+                          {row.bullets.map((bullet) => (
+                            <li key={bullet}>{bullet}</li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-sm font-medium text-[var(--gc-text-soft)]" htmlFor="prompt">
@@ -785,6 +963,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     若要在试玩里恢复参考图的像素贴片，需在本地浏览器会话重新上传素材（服务端目前只存文本与规格）。
                   </span>
                 </p>
+              ) : null}
+              {replayStatus === "ok" && replayRefinements.length > 0 ? (
+                <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-[11px] text-[var(--gc-muted)]">
+                  <p className="mb-1 font-medium text-[var(--gc-text-soft)]">试玩页精炼记录（摘要）</p>
+                  <ul className="max-h-24 space-y-0.5 overflow-y-auto">
+                    {replayRefinements.map((r, i) => (
+                      <li key={`${r.at}-${i}`} className="truncate">
+                        <span className="text-[var(--gc-text-faint)]">{r.mode}</span> · {r.instruction}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               <textarea
                 id="prompt"
@@ -1039,11 +1229,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => void generateStream()}
+                onClick={() => {
+                  if (!coCreationIntent) {
+                    buildCoCreationPlan();
+                    return;
+                  }
+                  if (!currentDirection) {
+                    setError("请先选择一个共创方向");
+                    return;
+                  }
+                  void generateStream();
+                }}
                 disabled={busy !== "idle" || prompt.trim().length < 2}
                 className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "gen" ? "流式生成中…" : "生成可玩版本（SSE）"}
+                {busy === "gen" ? "流式生成中…" : !coCreationIntent ? "1. 提炼创作方向" : "2. 生成可玩版本（SSE）"}
               </button>
               <button
                 type="button"
@@ -1059,7 +1259,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 disabled={busy !== "idle" || !spec}
                 className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-6 py-2.5 text-sm font-medium text-[var(--gc-text)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "save" ? "保存中…" : "保存并分享"}
+                {busy === "save" ? "保存中…" : projectId ? "更新项目并试玩" : "保存并试玩"}
               </button>
             </div>
 

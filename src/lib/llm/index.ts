@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
-import { createOpenAIClient } from "@/lib/openai-client";
+import { createNovelOpenAIClient, createOpenAIClient } from "@/lib/openai-client";
+import type { NovelLengthTier } from "@/lib/novel-length";
 import { llmJsonOpenAICompatible, llmTextOpenAICompatible, llmTextStreamOpenAICompatible } from "@/lib/llm/provider-openai-compatible";
 import { llmJsonAnthropic } from "@/lib/llm/provider-anthropic";
 import { llmJsonGemini } from "@/lib/llm/provider-gemini";
@@ -17,11 +18,21 @@ function normalizeProvider(p: string | undefined): LlmProvider {
 }
 
 let _openaiClient: OpenAI | null = null;
+const _novelOpenaiClients = new Map<NovelLengthTier, OpenAI>();
 
 function getOpenAIClient(): OpenAI {
   if (_openaiClient) return _openaiClient;
   _openaiClient = createOpenAIClient();
   return _openaiClient;
+}
+
+function getNovelOpenAIClient(tier: NovelLengthTier = "medium"): OpenAI {
+  let client = _novelOpenaiClients.get(tier);
+  if (!client) {
+    client = createNovelOpenAIClient(tier);
+    _novelOpenaiClients.set(tier, client);
+  }
+  return client;
 }
 
 export function getActiveProvider(): LlmProvider {
@@ -41,34 +52,51 @@ export async function llmJson(req: Omit<LlmJsonRequest, "provider">): Promise<Ll
   return await llmJsonOpenAICompatible({ client, req: { ...req, provider } });
 }
 
-export async function llmText(req: Omit<LlmTextRequest, "provider">): Promise<LlmTextResult> {
+export async function llmText(
+  req: Omit<LlmTextRequest, "provider">,
+  opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
+): Promise<LlmTextResult> {
   const provider = getActiveProvider();
   const keyStatus = getProviderKeyStatus(provider);
   if (!keyStatus.ok) {
     return { ok: false, provider, model: req.model, error: keyStatus.reason ?? "missing key" };
   }
-  if (provider === "anthropic") {
-    // Anthropic 也走 OpenAI-compatible 客户端（LiteLLM 等代理可转接）
-    const client = getOpenAIClient();
+  const tier = opts?.lengthTier ?? "medium";
+  const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
+  if (provider === "anthropic" || provider === "gemini") {
     return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
   }
-  if (provider === "gemini") {
-    const client = getOpenAIClient();
-    return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
-  }
-  const client = getOpenAIClient();
   return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
 }
 
+export function llmNovelText(
+  req: Omit<LlmTextRequest, "provider">,
+  lengthTier: NovelLengthTier = "medium",
+): Promise<LlmTextResult> {
+  return llmText(req, { novelLongRun: true, lengthTier });
+}
+
 /** OpenAI 兼容网关流式文本（chunk 为增量字符串）；需网关支持 `stream: true`。 */
-export async function* llmTextStream(req: Omit<LlmTextRequest, "provider">): AsyncGenerator<string> {
+export async function* llmTextStream(
+  req: Omit<LlmTextRequest, "provider">,
+  opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
+): AsyncGenerator<string> {
   const provider = getActiveProvider();
   const keyStatus = getProviderKeyStatus(provider);
   if (!keyStatus.ok) {
     throw new Error(keyStatus.reason ?? "missing key");
   }
-  const client = getOpenAIClient();
+  const tier = opts?.lengthTier ?? "medium";
+  const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
   yield* llmTextStreamOpenAICompatible({ client, req: { ...req, provider } });
+}
+
+/** 小说正文流式：按篇幅使用对应网关超时头（长篇默认 30 分钟）。 */
+export async function* llmNovelTextStream(
+  req: Omit<LlmTextRequest, "provider">,
+  lengthTier: NovelLengthTier = "medium",
+): AsyncGenerator<string> {
+  yield* llmTextStream(req, { novelLongRun: true, lengthTier });
 }
 
 export function getProviderModelCascade(): string[] {

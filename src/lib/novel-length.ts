@@ -18,6 +18,18 @@ export function parseNovelLengthTier(raw: unknown): NovelLengthTier {
   return "medium";
 }
 
+/** 创作页提示：预计耗时与保持页面打开说明。 */
+export function novelGenerationEtaHint(tier: NovelLengthTier): string {
+  if (tier === "short") return "短篇约 1–3 分钟";
+  if (tier === "long") return "长篇分段续写约 1–3 小时（约 8 万字级），请勿关闭页面";
+  return "中篇约 5–15 分钟";
+}
+
+export function novelStreamInterruptHint(tier: NovelLengthTier): string {
+  const eta = novelGenerationEtaHint(tier);
+  return `生成连接中断（多为网关或代理超时）。${eta}，请保持页面打开后重试；若反复失败请联系管理员检查 LLM 网关超时设置。`;
+}
+
 export function novelLengthConfig(tier: NovelLengthTier) {
   const row = NOVEL_LENGTH_TIERS.find((t) => t.id === tier) ?? NOVEL_LENGTH_TIERS[1];
   const chapterHint =

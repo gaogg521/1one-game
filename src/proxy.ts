@@ -21,7 +21,7 @@ export function proxy(request: NextRequest) {
           sameSite: "lax",
           path: "/",
           maxAge: 60 * 60 * 24 * 400,
-          secure: process.env.NODE_ENV === "production",
+          secure: request.nextUrl.protocol === "https:",
         });
       }
       return res;
@@ -38,7 +38,7 @@ export function proxy(request: NextRequest) {
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 400,
-    secure: process.env.NODE_ENV === "production",
+    secure: request.nextUrl.protocol === "https:",
   });
   return res;
 }

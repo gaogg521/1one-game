@@ -40,7 +40,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
   intensity = clamp(intensity, 0.22, 0.92);
 
   const acts: Director["acts"] = [];
-  const actCount = params.spec.templateId === "towerDefense" ? 4 : params.spec.templateId === "platformer" ? 4 : 3;
+  /** B 档目标：所有可玩模板统一「四幕」节奏，便于运行时章节与事件对齐 */
+  const actCount = 4;
   for (let i = 0; i < actCount; i += 1) {
     const at = i === 0 ? 0 : i === actCount - 1 ? 1 : clamp(i / (actCount - 1) + (rnd(seed, i + 10) - 0.5) * 0.06, 0, 1);
     const label =
@@ -63,6 +64,11 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       if (i === actCount - 1) mods.push("precision");
     } else {
       if (i === 1) mods.push("doubleSpawn");
+      if (i === 2) {
+        if (params.spec.templateId === "collector") mods.push("bonusField");
+        else if (params.spec.templateId === "survivor") mods.push("doubleSpawn");
+        else mods.push("zigzag"); // avoider
+      }
       if (i === actCount - 1) mods.push("finale");
       if (rnd(seed, 300 + i) > 0.72) mods.push("zigzag");
     }
@@ -162,6 +168,100 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
         durationMs: template === "towerDefense" ? 5200 : 4800,
         title: template === "towerDefense" ? "守点目标" : "目标变化",
         message: template === "towerDefense" ? "守住这一段，稳住经济与阵型" : "短时间目标：完成可获得额外奖励",
+      });
+    }
+  }
+
+  /**
+   * PlayScene 三模板：保底「奖励窗 → 限时目标 → 高压段」三件事都存在，
+   * 避免仅靠随机 roll 导致一局里没有事件、不像关卡。
+   */
+  if (template === "avoider" || template === "collector" || template === "survivor") {
+    const playEventCopy: Record<
+      string,
+      { title: string; message: string; durationMs: number }
+    > = {
+      coinRain: {
+        title: "奖励窗口",
+        message:
+          template === "collector"
+            ? "收集物更密集，走位与技能换节奏"
+            : template === "survivor"
+              ? "稳住血量，趁窗口拉开分数"
+              : "空隙变窄，保持横向节奏蹭险避",
+        durationMs: 4400,
+      },
+      goalShift: {
+        title: "限时目标",
+        message:
+          template === "collector"
+            ? "限时内多捡资源；未完成也会进入下一段"
+            : template === "survivor"
+              ? "限时内把进度打满，抗压换回报"
+              : "限时内叠险避与落点分",
+        durationMs: 5000,
+      },
+      miniBoss: {
+        title: "高压段",
+        message:
+          template === "collector"
+            ? "精英混入场地，清威胁再贪收集"
+            : template === "survivor"
+              ? "密度陡升，技能留给这一波"
+              : "精英干扰走位，专注回避",
+        durationMs: 5400,
+      },
+    };
+    const pushIfMissing = (type: string, at: number, salt: number) => {
+      if (events.some((e) => e.type === type)) return;
+      const meta = playEventCopy[type];
+      if (!meta) return;
+      events.push({
+        at: clamp(at + (rnd(seed, salt) - 0.5) * 0.07, 0.12, 0.88),
+        type,
+        strength: evStrength(salt + 920),
+        durationMs: meta.durationMs,
+        title: meta.title,
+        message: meta.message,
+      });
+    };
+    pushIfMissing("coinRain", 0.36, 930);
+    pushIfMissing("goalShift", 0.58, 931);
+    pushIfMissing("miniBoss", 0.82, 932);
+
+    // avoider 专属：终局密集弹幕倒计时（类似 survivor lastStand）
+    if (template === "avoider" && !events.some((e) => e.type === "finalBarrage")) {
+      events.push({
+        at: clamp(0.88 + (rnd(seed, 940) - 0.5) * 0.06, 0.82, 0.94),
+        type: "finalBarrage",
+        strength: evStrength(941, 0.12),
+        durationMs: Math.floor(7000 + intensity * 3000),
+        title: "终局弹幕",
+        message: "密集威胁压下，撑过这段即可完成",
+      });
+    }
+
+    // collector 专属：黄金收集物窗口（高价值限时物件）
+    if (template === "collector" && !events.some((e) => e.type === "goldenPickup")) {
+      events.push({
+        at: clamp(0.52 + (rnd(seed, 950) - 0.5) * 0.10, 0.42, 0.68),
+        type: "goldenPickup",
+        strength: evStrength(951, 0.05),
+        durationMs: 5200,
+        title: "黄金收集物",
+        message: "限时出现高价值物件，优先拾取可大幅拉开分数",
+      });
+    }
+
+    // survivor 专属：喘息窗口（低压段 + 道具补给）
+    if (template === "survivor" && !events.some((e) => e.type === "breathingRoom")) {
+      events.push({
+        at: clamp(0.44 + (rnd(seed, 960) - 0.5) * 0.10, 0.34, 0.56),
+        type: "breathingRoom",
+        strength: evStrength(961, -0.15),
+        durationMs: 4000,
+        title: "喘息窗口",
+        message: "威胁密度短暂降低，趁机补充道具与血量",
       });
     }
   }

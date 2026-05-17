@@ -1,0 +1,1 @@
+-- Comic.coverPath 已在 20260515000000_add_novel_comic 中创建；本迁移目录为历史占位，保持 migrate deploy 可继续。

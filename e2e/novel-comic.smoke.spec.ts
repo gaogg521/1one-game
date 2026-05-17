@@ -9,11 +9,11 @@ test.describe("小说模块", () => {
   });
 
   test("小说创作页在接口失败时会退出加载态", async ({ page }) => {
-    await page.route("**/api/novel/generate", async (route) => {
+    await page.route("**/api/novel/generate/stream", async (route) => {
       await route.fulfill({
-        status: 502,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "小说生成失败", code: "LLM_FAILED" }),
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({ step: "error", message: "小说生成失败：模型未返回足够内容" })}\n\n`,
       });
     });
 
@@ -21,8 +21,8 @@ test.describe("小说模块", () => {
     await page.locator("textarea").fill("一个会在请求失败时正确恢复状态的故事");
     await page.locator("button:has-text('开始创作')").click();
 
-    await expect(page.locator("text=正在构思大纲…")).toBeVisible();
-    await expect(page.getByText("小说生成失败")).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成中…" })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/小说生成失败/)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("button:has-text('开始创作')")).toBeEnabled();
   });
 

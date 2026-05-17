@@ -1,5 +1,5 @@
 /**
- * 文生图：模型与默认分辨率见 `src/lib/model-config.ts`（`IMAGE_GEN_*` / `GEMINI_IMAGE_MODEL`）。
+ * 文生图：模型与默认分辨率见 `src/lib/product-config.ts` / `model-config.ts`。
  */
 
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
@@ -54,7 +54,7 @@ export function getImageGenAvailability(): {
 }
 
 /**
- * 使用 OpenAI 兼容网关生成图片（`IMAGE_GEN_OPENAI_MODEL`）；失败则由上层降级 Gemini。
+ * 使用 OpenAI 兼容网关生成图片；失败则由上层降级 Gemini。
  */
 function imageItemToResult(
   item: { url?: string | null; b64_json?: string | null } | undefined,

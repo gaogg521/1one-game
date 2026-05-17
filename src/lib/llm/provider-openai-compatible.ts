@@ -2,7 +2,8 @@ import type OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from "openai/resources/chat/completions";
 import { safeErrorSummary } from "@/lib/llm/errors";
 import { withTimeout } from "@/lib/llm/utils";
-import { envIntPositive, openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
+import { PRODUCT } from "@/lib/product-config";
+import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
 import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
 
 function parseJsonContent(text: string | null | undefined): unknown | null {
@@ -26,7 +27,7 @@ export async function llmTextOpenAICompatible(params: {
     { role: "user" as const, content: req.user },
   ];
   try {
-    const maxOut = req.maxTokens ?? envIntPositive("OPENAI_TEXT_MAX_OUTPUT_TOKENS", 16_000);
+    const maxOut = req.maxTokens ?? PRODUCT.llm.textMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const p = client.chat.completions.create(
       {
@@ -66,7 +67,7 @@ export async function* llmTextStreamOpenAICompatible(params: {
     { role: "user" as const, content: req.user },
   ];
   try {
-    const maxOut = req.maxTokens ?? envIntPositive("OPENAI_TEXT_MAX_OUTPUT_TOKENS", 16_000);
+    const maxOut = req.maxTokens ?? PRODUCT.llm.textMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const body = {
       model: req.model,
@@ -98,7 +99,7 @@ export async function llmJsonOpenAICompatible(params: {
   ];
 
   async function run(mode: LlmMode): Promise<{ raw: unknown | null; mode: LlmMode }> {
-    const maxOut = envIntPositive("OPENAI_JSON_MAX_OUTPUT_TOKENS", 12_288);
+    const maxOut = PRODUCT.llm.jsonMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const completionParams: ChatCompletionCreateParamsNonStreaming =
       mode === "json_schema"

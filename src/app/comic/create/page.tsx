@@ -57,7 +57,7 @@ export default function ComicCreatePage() {
         setError(
           data.error ||
             (res.status === 413
-              ? "正文过长，请在 .env 中增大 GENERATE_BODY_MAX_BYTES 或缩短梗概"
+              ? "正文过长，请缩短梗概后重试"
               : `生成失败（HTTP ${res.status}）`),
         );
         return;

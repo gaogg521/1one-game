@@ -61,7 +61,21 @@ export async function POST(req: Request) {
       promptChars: parsed.prompt.length,
       manifestItemCount: parsed.assetManifestSummary?.itemCount,
     });
-    return NextResponse.json({ variants }, { headers: ridHeaders(requestId) });
+    const showDirector =
+      process.env.NODE_ENV !== "production" && process.env.VARIANTS_DIRECTOR_SUMMARY === "1";
+    const payload = showDirector
+      ? {
+          variants: variants.map((v) => ({
+            ...v,
+            directorSummary: {
+              actCount: v.spec.director?.acts?.length ?? 0,
+              eventTypes: (v.spec.director?.events ?? []).map((e) => e.type),
+            },
+          })),
+        }
+      : { variants };
+
+    return NextResponse.json(payload, { headers: ridHeaders(requestId) });
   } catch {
     return NextResponse.json(
       { error: "多套生成失败", code: codes.INTERNAL, requestId },

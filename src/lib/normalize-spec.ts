@@ -1,4 +1,9 @@
-import { GameSpecSchema, type GameSpec } from "@/lib/game-spec";
+import {
+  DirectorSchema,
+  GameSpecSchema,
+  SystemsSchema,
+  type GameSpec,
+} from "@/lib/game-spec";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 
 function normalizeHex(input: string): string | null {
@@ -139,6 +144,18 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
     }
   }
 
+  let directorOpt: GameSpec["director"] | undefined;
+  if (typeof o.director === "object" && o.director !== null) {
+    const d = DirectorSchema.safeParse(o.director);
+    if (d.success) directorOpt = d.data;
+  }
+
+  let systemsOpt: GameSpec["systems"] | undefined;
+  if (typeof o.systems === "object" && o.systems !== null) {
+    const s = SystemsSchema.safeParse(o.systems);
+    if (s.success) systemsOpt = s.data;
+  }
+
   const candidate: GameSpec = {
     version: 1,
     templateId,
@@ -169,6 +186,8 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
       subtitle,
     },
     presentation,
+    ...(directorOpt !== undefined ? { director: directorOpt } : {}),
+    ...(systemsOpt !== undefined ? { systems: systemsOpt } : {}),
   };
 
   const parsed = GameSpecSchema.safeParse(candidate);
@@ -187,6 +206,22 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
   if (!raw || typeof raw !== "object") return base;
 
   const r = raw as Record<string, unknown>;
+  let overlayDirector: GameSpec["director"] | undefined = base.director;
+  if (r.director === null) {
+    overlayDirector = undefined;
+  } else if (typeof r.director === "object" && r.director !== null) {
+    const parsed = DirectorSchema.safeParse(r.director);
+    overlayDirector = parsed.success ? parsed.data : base.director;
+  }
+
+  let overlaySystems: GameSpec["systems"] | undefined = base.systems;
+  if (r.systems === null) {
+    overlaySystems = undefined;
+  } else if (typeof r.systems === "object" && r.systems !== null) {
+    const parsed = SystemsSchema.safeParse(r.systems);
+    overlaySystems = parsed.success ? parsed.data : base.systems;
+  }
+
   const merged: Record<string, unknown> = {
     version: 1,
     templateId:
@@ -213,8 +248,8 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
     },
     towerDefense:
       typeof r.towerDefense === "object" && r.towerDefense !== null ? r.towerDefense : base.towerDefense,
-    director: typeof r.director === "object" && r.director !== null ? r.director : base.director,
-    systems: typeof r.systems === "object" && r.systems !== null ? r.systems : base.systems,
+    director: overlayDirector,
+    systems: overlaySystems,
     presentation:
       typeof r.presentation === "object" && r.presentation !== null
         ? { ...base.presentation, ...(r.presentation as GameSpec["presentation"]) }

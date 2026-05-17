@@ -9,6 +9,38 @@
 
 ---
 
+## 2026-05-16 游戏生成产品升级（Phase 1 起步）
+
+- **创作台共创流程**：`/create` 已从“一句话直接出结果”升级成 **4 步共创**：
+  1. 输入创意  
+  2. 系统提炼意图  
+  3. 提供 2~3 个候选方向  
+  4. 确认方向后再生成试玩规格
+- **SSE 体验**：日志中新增“当前理解 / 已选方向 / 成品提要”，更接近产品化创作工具，而不是黑盒生成器。
+- **项目版本化**：
+  - `PATCH /api/projects/[id]` 可直接更新 `prompt + spec`
+  - `/create?from=` 可恢复完整项目上下文（而非只回填 prompt）
+  - `play/[id]` 支持 **AI patch 后保存**、**快速调参后保存**
+- **共享玩法层推进**：
+  - `shooter` 已开始真正消费 `systems.skill` 与 `director.events`
+  - 支持护盾、减速场、爆发射击、goalShift 演出窗口与 HUD 冷却显示
+- **塔防蓝图增强**：
+  - `td-blueprint.ts` 波次加入 `rush / elite` 变体，强化中层节奏，不再只是线性堆数量
+
+实现重点：
+- `src/app/create/CreateClient.tsx`
+- `src/app/play/[id]/PlayGameClient.tsx`
+- `src/app/api/projects/[id]/route.ts`
+- `src/app/api/generate/patch/route.ts`
+- `src/game/engine/ShooterScene.ts`
+- `src/lib/td-blueprint.ts`
+
+验证：
+- `npm run build` 通过
+- 本轮相关文件 `ReadLints` 无新增问题
+
+---
+
 ## 2026-05-16 小说 / 漫画：文生图批量与广场删除
 
 - **文生图**：未配置 `COMFY_UI_BASE_URL` 时走 **OpenAI 兼容网关**（`gpt-image-2`）。短篇 ≤4 格支持 **`IMAGE_GEN_BATCH_PANELS=4`** 单次 `n=4`（实测约 4 分半 / 批）。

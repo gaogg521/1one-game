@@ -272,6 +272,26 @@ export default function StudioPage() {
     }
   }
 
+  async function duplicateNovel(id: string) {
+    const res = await fetch(`/api/novel/${id}/duplicate`, { method: "POST" });
+    const data = (await res.json()) as { novel?: { id: string }; error?: string };
+    if (!res.ok) {
+      alert(data.error ?? "复制失败");
+      return;
+    }
+    if (data.novel?.id) router.push(`/novel/${data.novel.id}`);
+  }
+
+  async function duplicateComic(id: string) {
+    const res = await fetch(`/api/comic/${id}/duplicate`, { method: "POST" });
+    const data = (await res.json()) as { comic?: { id: string }; error?: string };
+    if (!res.ok) {
+      alert(data.error ?? "复制失败");
+      return;
+    }
+    if (data.comic?.id) router.push(`/comic/${data.comic.id}`);
+  }
+
   const filterButtons: { key: WorkType | "all"; label: string }[] = [
     { key: "all", label: "全部" },
     { key: "project", label: "游戏" },
@@ -433,6 +453,24 @@ export default function StudioPage() {
                         复制副本
                       </button>
                     </>
+                  )}
+                  {r.type === "novel" && (
+                    <button
+                      type="button"
+                      onClick={() => void duplicateNovel(r.id)}
+                      className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                    >
+                      复制副本
+                    </button>
+                  )}
+                  {r.type === "comic" && (
+                    <button
+                      type="button"
+                      onClick={() => void duplicateComic(r.id)}
+                      className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                    >
+                      复制副本
+                    </button>
                   )}
                   <button
                     type="button"

@@ -24,6 +24,7 @@ import {
   validateNovelTitleInput,
 } from "@/lib/novel-display";
 import { parseNovelLengthTier } from "@/lib/novel-length";
+import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import type { ComicPage } from "@/lib/comic-format";
 
 export async function POST(req: Request) {
@@ -96,10 +97,10 @@ export async function POST(req: Request) {
         prompt: novelContent.slice(0, 200),
         content: novelContent,
         summary: novelContent.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…",
-        lengthTier: novelLengthTier,
         status: "ready",
       },
     });
+    await persistNovelLengthTier(novel.id, novelLengthTier);
     actualNovelId = novel.id;
   } else {
     return NextResponse.json(
@@ -115,37 +116,72 @@ export async function POST(req: Request) {
   });
   const totalPanels = pageCount * PANELS_PER_PAGE;
 
+  const CHUNK_SIZE = 4; // 每次最多生成 4 页，避免大 JSON Schema 超时
+
   try {
     const cascade = getNovelStyleTextModelCascade();
     let pages: ComicPage[] = [];
     let providerUsed = "";
     let modelUsed = "";
 
-    const comicSystem = buildComicSystemPrompt(pageCount);
-    const comicSchema = buildComicJsonSchema(pageCount);
     const contentSnippet = novelContent.slice(0, 12000);
 
-    for (const model of cascade) {
-      const result = await llmJson({
-        model,
-        system: comicSystem,
-        user: `请为以下小说改编 **${pageCount} 页**漫画（每页 4 格，共 ${totalPanels} 格）。按页推进剧情，格与格之间连贯。\n\n小说标题：${novelTitle}\n\n小说正文（节选）：\n${contentSnippet}\n\n请输出 JSON，根对象包含长度为 ${pageCount} 的 "pages" 数组。`,
-        jsonSchema: comicSchema,
-        temperature: 0.8,
-        mode: "json_schema",
-        timeoutMs: Math.min(180_000, 30_000 + pageCount * 8_000),
-      });
-      if (result.ok && result.raw && typeof result.raw === "object" && "pages" in result.raw) {
-        const rawPages = (result.raw as { pages: ComicPage[] }).pages;
-        if (!Array.isArray(rawPages) || rawPages.length < 1) continue;
+    // 分段生成：每 CHUNK_SIZE 页一批，合并结果
+    const chunkCount = Math.ceil(pageCount / CHUNK_SIZE);
+    for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
+      const chunkStart = chunkIdx * CHUNK_SIZE + 1; // 1-indexed
+      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, pageCount);
+      const chunkPages = chunkEnd - chunkStart + 1;
+      const chunkPanels = chunkPages * PANELS_PER_PAGE;
 
-        pages = normalizeComicPagesForGeneration(rawPages, pageCount);
-        if (pages.length < 1) continue;
+      const comicSystem = buildComicSystemPrompt(chunkPages);
+      const comicSchema = buildComicJsonSchema(chunkPages);
 
-        providerUsed = result.provider;
-        modelUsed = result.model;
-        break;
+      let chunkResult: ComicPage[] = [];
+      for (const model of cascade) {
+        const result = await llmJson({
+          model,
+          system: comicSystem,
+          user: `请为以下小说改编漫画，输出第 ${chunkStart}～${chunkEnd} 页（共 ${chunkPages} 页，每页 4 格，共 ${chunkPanels} 格）。\n全书共 ${pageCount} 页，请按比例推进剧情（第 ${chunkStart} 页对应故事进度约 ${Math.round((chunkStart - 1) / pageCount * 100)}%）。格与格之间连贯。\n\n小说标题：${novelTitle}\n\n小说正文（节选）：\n${contentSnippet}\n\n请输出 JSON，根对象包含长度为 ${chunkPages} 的 "pages" 数组。`,
+          jsonSchema: comicSchema,
+          temperature: 0.8,
+          mode: "json_schema",
+          timeoutMs: Math.min(120_000, 30_000 + chunkPages * 10_000),
+        });
+        if (result.ok && result.raw && typeof result.raw === "object" && "pages" in result.raw) {
+          const rawPages = (result.raw as { pages: ComicPage[] }).pages;
+          if (!Array.isArray(rawPages) || rawPages.length < 1) continue;
+
+          chunkResult = normalizeComicPagesForGeneration(rawPages, chunkPages);
+          if (chunkResult.length < 1) continue;
+
+          if (!providerUsed) {
+            providerUsed = result.provider;
+            modelUsed = result.model;
+          }
+          break;
+        }
       }
+
+      if (chunkResult.length < 1) {
+        // 某段失败：用占位页填充，不中断整体
+        for (let i = chunkStart; i <= chunkEnd; i++) {
+          chunkResult.push({
+            page: i,
+            panels: Array.from({ length: PANELS_PER_PAGE }, (_, j) => ({
+              scene: (i - 1) * PANELS_PER_PAGE + j + 1,
+              caption: "……",
+              prompt: "Comic panel, story continues",
+            })),
+          });
+        }
+      }
+
+      // 修正 page 编号为全局序号
+      for (let i = 0; i < chunkResult.length; i++) {
+        chunkResult[i] = { ...chunkResult[i]!, page: chunkStart + i };
+      }
+      pages.push(...chunkResult);
     }
 
     const panelCount = pages.reduce((n, p) => n + p.panels.length, 0);

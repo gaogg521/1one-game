@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveNovelCoverFallbacks } from "@/lib/novel-cover-resolve";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 
@@ -52,8 +53,14 @@ export async function GET(req: Request) {
     prisma.novel.count({ where }),
   ]);
 
-  const novelsPublic = novels.map(({ ownerKey: rowOwner, ...rest }) => ({
+  const needFallback = novels
+    .filter((n) => !n.coverPath?.trim())
+    .map((n) => ({ id: n.id, title: n.title, summary: n.summary, prompt: n.prompt }));
+  const comicCovers = await resolveNovelCoverFallbacks(needFallback);
+
+  const novelsPublic = novels.map(({ ownerKey: rowOwner, coverPath, ...rest }) => ({
     ...rest,
+    coverPath: coverPath?.trim() || comicCovers.get(rest.id) || null,
     isOwner: Boolean(ownerKey && rowOwner === ownerKey),
   }));
 

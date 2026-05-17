@@ -1,9 +1,9 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import type { ApiGenerateErrorPayload } from "@/lib/api/json-error-response";
+import { PRODUCT } from "@/lib/product-config";
 
 function maxBodyBytes(): number {
-  const n = Number(process.env.GENERATE_BODY_MAX_BYTES ?? "524288");
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 524288;
+  return PRODUCT.api.bodyMaxBytes;
 }
 
 function previewClHeader(cl: string | null, maxBytes: number): ApiGenerateErrorPayload | null {

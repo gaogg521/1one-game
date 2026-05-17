@@ -4,7 +4,7 @@ import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { llmText, getNovelStyleTextModelCascade } from "@/lib/llm";
+import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelText } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import {
   getNovelSystemPrompt,
@@ -15,10 +15,18 @@ import {
   parseNovelLengthTier,
 } from "@/lib/novel-generate-config";
 import { extractNovelTitleFromContent, validateNovelTitleInput } from "@/lib/novel-display";
+import {
+  generateLongNovelBody,
+  planLongNovelSegments,
+  usesSegmentedLongGeneration,
+} from "@/lib/novel-long-generate";
+import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
+
+export const maxDuration = 3600;
 
 export async function POST(req: Request) {
   const codes = generationErrorCodes();
@@ -70,24 +78,48 @@ export async function POST(req: Request) {
     let modelUsed = "";
 
     const minChars = novelMinAcceptChars(lengthTier);
-    const timeoutMs = novelLlmTimeoutMs();
+    const timeoutMs = novelLlmTimeoutMs(lengthTier);
     const maxTokens = novelLlmMaxOutputTokens(lengthTier);
     const userMsg = buildNovelUserMessage(prompt.trim(), title?.trim(), lengthTier);
+    const longPlan = usesSegmentedLongGeneration(lengthTier) ? planLongNovelSegments(lengthTier) : null;
 
     for (const model of cascade) {
-      const result = await llmText({
-        model,
-        system: getNovelSystemPrompt(lengthTier),
-        user: userMsg,
-        temperature: 0.85,
-        maxTokens,
-        timeoutMs,
-      });
-      if (result.ok && result.text.length >= minChars) {
-        content = result.text;
-        providerUsed = result.provider;
-        modelUsed = result.model;
-        break;
+      if (longPlan) {
+        try {
+          const text = await generateLongNovelBody({
+            model,
+            promptTrim: prompt.trim(),
+            titleTrim: title?.trim(),
+            plan: longPlan,
+            lengthTier,
+          });
+          if (text.length >= longPlan.minAcceptChars) {
+            content = text;
+            modelUsed = model;
+            providerUsed = getActiveProvider();
+            break;
+          }
+        } catch {
+          continue;
+        }
+      } else {
+        const result = await llmNovelText(
+          {
+            model,
+            system: getNovelSystemPrompt(lengthTier),
+            user: userMsg,
+            temperature: 0.85,
+            maxTokens,
+            timeoutMs,
+          },
+          lengthTier,
+        );
+        if (result.ok && result.text.length >= minChars) {
+          content = result.text;
+          providerUsed = result.provider;
+          modelUsed = result.model;
+          break;
+        }
       }
     }
 
@@ -108,10 +140,10 @@ export async function POST(req: Request) {
         prompt: prompt.trim(),
         content,
         summary,
-        lengthTier,
         status: "ready",
       },
     });
+    await persistNovelLengthTier(novel.id, lengthTier);
 
     const coverPath = await ensureNovelCoverAfterCreate(
       novel.id,

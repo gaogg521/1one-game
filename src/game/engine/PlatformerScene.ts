@@ -53,6 +53,8 @@ export class PlatformerScene extends Phaser.Scene {
 
   private eliteHazards!: Phaser.Physics.Arcade.Group;
 
+  private sentryHazards!: Phaser.Physics.Arcade.Group;
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   private keyW!: Phaser.Input.Keyboard.Key;
@@ -90,6 +92,8 @@ export class PlatformerScene extends Phaser.Scene {
   private winScore = 36;
 
   private jumpVel = 420;
+
+  private baseGravity = 980;
 
   private readonly worldW = 4400;
 
@@ -159,6 +163,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.lives = this.spec.gameplay.lives ?? 4;
     this.jumpVel = this.spec.gameplay.jumpStrength ?? 420;
     const grav = this.spec.gameplay.gravity ?? 980;
+    this.baseGravity = grav;
     this.physics.world.gravity.y = grav;
     this.intensity = this.spec.director?.intensity ?? 0.6;
 
@@ -334,6 +339,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.gems = this.physics.add.group();
     this.powerups = this.physics.add.group();
     this.eliteHazards = this.physics.add.group();
+    this.sentryHazards = this.physics.add.group();
 
     this.buildLevel(viewH);
 
@@ -383,6 +389,7 @@ export class PlatformerScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.spikes, () => this.onHitHazard());
     this.physics.add.overlap(this.player, this.eliteHazards, () => this.onHitHazard());
+    this.physics.add.overlap(this.player, this.sentryHazards, () => this.onHitHazard());
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -439,6 +446,16 @@ export class PlatformerScene extends Phaser.Scene {
     const seed = hashTitle(this.spec.title);
     const groundY = viewH - 36;
     const pad = this.spec.gameplay.arenaPadding ?? 36;
+    const acts = this.spec.director?.acts ?? [];
+    const totalLayers = 44;
+
+    const getActIndexForRatio = (ratio: number) => {
+      let idx = 0;
+      for (let i = 0; i < acts.length; i += 1) {
+        if (acts[i] && ratio >= acts[i]!.at) idx = i;
+      }
+      return idx;
+    };
 
     let gx = 0;
     while (gx < this.worldW) {
@@ -451,31 +468,89 @@ export class PlatformerScene extends Phaser.Scene {
     let x = pad + 40;
     let y = groundY - 120;
     let layer = 0;
-    const totalLayers = 42;
+    let lastActIdx = -1;
 
     while (layer < totalLayers && x < this.worldW - pad - 80) {
+      const ratio = layer / Math.max(1, totalLayers - 1);
+      const actIdx = getActIndexForRatio(ratio);
+      const mods = acts[actIdx]?.modifiers ?? [];
+      const isGapAct = mods.includes("gaps");
+      const isSpikeAct = mods.includes("spikes");
+      const isPrecisionAct = mods.includes("precision");
+      const isFinaleAct = mods.includes("finale");
+
+      if (actIdx !== lastActIdx) {
+        const stageWidth = isFinaleAct ? 220 : 180;
+        const stage = this.platforms.create(x + stageWidth / 2, y + 18, "texPlatHi");
+        stage.setDisplaySize(stageWidth, 24);
+        stage.refreshBody();
+
+        for (let i = 0; i < 2 + (isFinaleAct ? 1 : 0); i += 1) {
+          const gem = this.gems.create(x + 44 + i * 42, y - 24, "texGem");
+          gem.setDepth(8);
+          const gb = gem.body as Phaser.Physics.Arcade.Body | null;
+          if (gb) gb.setAllowGravity(false);
+        }
+
+        if ((isSpikeAct || isFinaleAct) && actIdx > 0) {
+          this.spawnSentryHazard(x + stageWidth + 18, y - 18, isFinaleAct ? 72 : 52, isFinaleAct ? 1.15 : 0.92);
+        }
+
+        x += stageWidth - 26;
+        y = Phaser.Math.Clamp(y - (isPrecisionAct ? 18 : 8), 190, groundY - 120);
+        lastActIdx = actIdx;
+      }
+
       const rw = rnd(seed, layer * 3);
-      const platW = Math.floor(72 + rw * 110);
+      const platW = Math.floor(
+        isPrecisionAct
+          ? 68 + rw * 64
+          : isGapAct
+            ? 82 + rw * 78
+            : isFinaleAct
+              ? 88 + rw * 86
+              : 78 + rw * 112,
+      );
       const plat = this.platforms.create(x + platW / 2, y, rnd(seed, layer) > 0.55 ? "texPlatHi" : "texPlat");
       plat.setDisplaySize(platW, 22);
       plat.refreshBody();
 
       const gemRoll = rnd(seed, layer * 7 + 1);
-      if (gemRoll > 0.18) {
+      const gemThreshold = isPrecisionAct ? 0.28 : isGapAct ? 0.2 : 0.16;
+      if (gemRoll > gemThreshold) {
         const gem = this.gems.create(x + platW / 2, y - 36, "texGem");
         gem.setDepth(8);
         const gb = gem.body as Phaser.Physics.Arcade.Body | null;
         if (gb) gb.setAllowGravity(false);
       }
 
-      if (rnd(seed, layer * 11 + 2) > 0.72 && platW > 95) {
-        const spike = this.spikes.create(x + platW * 0.72, y - 11 + 9, "texSpike");
-        spike.setDisplaySize(32, 16);
-        spike.refreshBody();
+      const spikeRoll = rnd(seed, layer * 11 + 2);
+      const spikeThreshold = isSpikeAct ? 0.46 : isPrecisionAct ? 0.58 : 0.72;
+      if (spikeRoll > spikeThreshold && platW > (isPrecisionAct ? 82 : 95)) {
+        const spikeCount = isSpikeAct || isFinaleAct ? 2 : 1;
+        for (let i = 0; i < spikeCount; i += 1) {
+          const spikeX = x + platW * (spikeCount === 1 ? 0.72 : 0.52 + i * 0.22);
+          const spike = this.spikes.create(spikeX, y - 2, "texSpike");
+          spike.setDisplaySize(32, 16);
+          spike.refreshBody();
+        }
       }
 
-      const stepX = 96 + rnd(seed, layer * 5 + 4) * 88;
-      const stepY = -48 + rnd(seed, layer * 6 + 5) * 112;
+      if ((isSpikeAct || isFinaleAct) && rnd(seed, layer * 13 + 9) > (isFinaleAct ? 0.58 : 0.76)) {
+        this.spawnSentryHazard(
+          x + platW + Phaser.Math.Between(42, 74),
+          y - Phaser.Math.Between(26, 54),
+          isFinaleAct ? 84 : 58,
+          isFinaleAct ? 1.08 : 0.82,
+        );
+      }
+
+      const stepX =
+        (isGapAct ? 124 : isPrecisionAct ? 88 : isFinaleAct ? 118 : 96) +
+        rnd(seed, layer * 5 + 4) * (isGapAct ? 110 : isPrecisionAct ? 68 : 88);
+      const stepY =
+        (isPrecisionAct ? -62 : -48) +
+        rnd(seed, layer * 6 + 5) * (isPrecisionAct ? 132 : isGapAct ? 126 : 112);
       x += stepX;
       y += stepY;
       if (y < 160) y = 200 + rnd(seed, layer + 99) * 80;
@@ -490,6 +565,26 @@ export class PlatformerScene extends Phaser.Scene {
     flagGem.setDepth(12);
     const fb = flagGem.body as Phaser.Physics.Arcade.Body | null;
     if (fb) fb.setAllowGravity(false);
+  }
+
+  private spawnSentryHazard(x: number, y: number, patrolRange: number, speedScale: number) {
+    const sentry = this.sentryHazards.create(x, y, "texSpike") as Phaser.Physics.Arcade.Image;
+    sentry.setDepth(9);
+    sentry.setScale(1.18);
+    sentry.setAlpha(0.96);
+    const b = sentry.body as Phaser.Physics.Arcade.Body | null;
+    if (b) {
+      b.setAllowGravity(false);
+      b.setImmovable(true);
+    }
+    this.tweens.add({
+      targets: sentry,
+      x: x + patrolRange,
+      duration: Math.floor(1200 / Math.max(0.45, speedScale)),
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
   }
 
   private addStarfield() {
@@ -891,7 +986,10 @@ export class PlatformerScene extends Phaser.Scene {
       this.goalShiftHave = 0;
       this.goalShiftSucceeded = false;
       this.refreshHud();
+      return;
     }
+
+    // 未知事件类型：横幅即可，避免残留 scoreMult / 刷怪窗口
   }
 
   private updateAct() {
@@ -905,10 +1003,21 @@ export class PlatformerScene extends Phaser.Scene {
     if (idx !== this.actIndex) {
       this.actIndex = idx;
       const mods = acts[idx]?.modifiers ?? [];
-      if (mods.includes("precision")) {
-        // 精准段落：稍微增强重力/缩短容错
-        this.physics.world.gravity.y = Math.min(1400, (this.spec.gameplay.gravity ?? 980) * (1 + this.intensity * 0.12));
+      const gravityMul = mods.includes("precision") ? 1.12 : mods.includes("gaps") ? 0.96 : 1;
+      this.physics.world.gravity.y = Math.min(1400, this.baseGravity * gravityMul);
+      if (mods.includes("finale")) {
+        this.soundscape?.triggerEvent("boss");
       }
+      const stageMessage = mods.includes("precision")
+        ? "精准段落：容错变小，注意落点"
+        : mods.includes("gaps")
+          ? "断层段落：准备连续长跳"
+          : mods.includes("spikes")
+            ? "陷阱段落：平台上危险更密集"
+            : mods.includes("finale")
+              ? "终局冲刺：精英守卫正在拦截"
+              : "进入下一段关卡";
+      this.banner.show({ title: `章节 · ${acts[idx]?.label ?? "推进"}`, message: stageMessage, ms: 1400 });
       this.cameras.main.flash(90, 140, 120, 255, false);
       this.refreshHud();
     }

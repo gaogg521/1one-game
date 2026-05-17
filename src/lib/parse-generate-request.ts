@@ -1,6 +1,6 @@
 /** 供 /api/generate、stream、variants 共用的请求体解析与长度校验。 */
 /** 模板提示：与 GameSpec.templateId / 字面量白名单一致（含 auto）。 */
-export type GenerateTemplateHint = "auto" | "platformer" | "towerDefense" | "collector" | "survivor" | "avoider";
+export type GenerateTemplateHint = "auto" | "platformer" | "towerDefense" | "collector" | "survivor" | "avoider" | "shooter";
 
 /** 创作台 session AssetManifest 的脱敏摘要（仅条数/revision）。 */
 export type AssetManifestSummary = {
@@ -16,6 +16,7 @@ function normalizeTemplateHint(raw: string): GenerateTemplateHint {
     case "collector":
     case "survivor":
     case "avoider":
+    case "shooter":
       return raw;
     default:
       return "auto";

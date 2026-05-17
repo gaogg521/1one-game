@@ -29,6 +29,9 @@ jobs:
       - name: Orchestration smoke (mock spec + lint)
         run: npm run qa:orch-smoke
 
+      - name: Director & refinement unit smokes
+        run: npm run qa:director-spec && npm run qa:refinement-log && npm run qa:template-matrix
+
   bundle-e2e:
     runs-on: ubuntu-latest
     env:

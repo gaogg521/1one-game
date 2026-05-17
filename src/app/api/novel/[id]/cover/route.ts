@@ -3,6 +3,7 @@ import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
+import { persistNovelCoverPath } from "@/lib/cover-path-db";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -31,7 +32,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   if (force && row.coverPath) {
     await deleteNovelCoverFile(row.id);
-    await prisma.novel.update({ where: { id }, data: { coverPath: null } });
+    await persistNovelCoverPath(id, null);
   }
 
   const coverPath = await ensureNovelCoverAfterCreate(
@@ -44,7 +45,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   if (!coverPath) {
     return NextResponse.json(
-      { error: "封面生成失败，请检查 IMAGE_GEN_* / GEMINI_API_KEY 配置", code: codes.LLM_FAILED, requestId },
+      { error: "封面生成失败，请检查 OPENAI_API_KEY / GEMINI_API_KEY 是否已配置", code: codes.LLM_FAILED, requestId },
       { status: 502, headers: ridHeaders(requestId) },
     );
   }

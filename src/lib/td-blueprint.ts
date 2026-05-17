@@ -220,30 +220,32 @@ export function buildTowerDefenseBlueprint(params: {
   for (let w = 0; w < wavesN; w += 1) {
     const leadInMs = w === 0 ? 650 : 1200;
     const ramp = 1 + w * 0.18;
-    const aCount = clamp(Math.round((4 + w) * ramp), 4, 34);
+    const rushWave = w > 0 && (w + 1) % 4 === 0;
+    const eliteWave = w >= 2 && (w + 1) % 3 === 0;
+    const aCount = clamp(Math.round((rushWave ? 6 + w : 4 + w) * ramp), 4, 34);
     const hasRunner = w >= 2;
     const hasTank = w >= 3;
-    const tankCount = hasTank ? clamp(Math.round((1 + w * 0.55) * (1 + rnd(seed, w + 7) * 0.25)), 1, 18) : 0;
-    const runnerCount = hasRunner ? clamp(Math.round((2 + w * 0.65) * (1 + rnd(seed, w + 17) * 0.25)), 2, 24) : 0;
+    const tankCount = hasTank ? clamp(Math.round((1 + w * 0.55 + (eliteWave ? 1 : 0)) * (1 + rnd(seed, w + 7) * 0.25)), 1, 18) : 0;
+    const runnerCount = hasRunner ? clamp(Math.round((2 + w * 0.65 + (rushWave ? 2 : 0)) * (1 + rnd(seed, w + 17) * 0.25)), 2, 24) : 0;
 
     const spawns: TowerDefenseBlueprint["waves"][number]["spawns"] = [];
     spawns.push({
       enemyId: "grunt",
       count: aCount,
-      intervalMs: clamp(Math.round(baseInterval * (1 - w * 0.04)), 140, 900),
+      intervalMs: clamp(Math.round(baseInterval * (rushWave ? 0.72 : 1 - w * 0.04)), 140, 900),
     });
     if (hasRunner) {
       spawns.push({
         enemyId: "runner",
         count: runnerCount,
-        intervalMs: clamp(Math.round(baseInterval * 0.85), 140, 900),
+        intervalMs: clamp(Math.round(baseInterval * (rushWave ? 0.68 : 0.85)), 140, 900),
       });
     }
     if (hasTank) {
       spawns.push({
         enemyId: "tank",
         count: tankCount,
-        intervalMs: clamp(Math.round(baseInterval * 1.05), 160, 1000),
+        intervalMs: clamp(Math.round(baseInterval * (eliteWave ? 0.94 : 1.05)), 160, 1000),
       });
     }
 

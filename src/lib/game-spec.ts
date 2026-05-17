@@ -74,7 +74,7 @@ const TowerDefenseBlueprintSchema = z.object({
   leakDamage: z.number().min(1).max(40).optional(),
 });
 
-const DirectorSchema = z.object({
+export const DirectorSchema = z.object({
   /**
    * 难度曲线 0..1：越高越紧张（影响刷怪密度/速度/波次强度等，由引擎映射）
    */
@@ -117,7 +117,7 @@ const DirectorSchema = z.object({
     .optional(),
 });
 
-const SystemsSchema = z.object({
+export const SystemsSchema = z.object({
   /** 主动技能（按键触发） */
   skill: z
     .object({

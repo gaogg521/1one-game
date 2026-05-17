@@ -2259,6 +2259,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     if (ev.type === "miniBoss") {
       this.soundscape?.triggerEvent("boss");
+      this.miniBossUntil = this.eventUntil;
+      this.spawnMiniBossEnemy();
+      this.refreshHud();
+      return;
     }
 
     if (ev.type === "coinRain") {
@@ -2269,18 +2273,14 @@ export class TowerDefenseScene extends Phaser.Scene {
       return;
     }
 
-    if (ev.type === "miniBoss") {
-      this.miniBossUntil = this.eventUntil;
-      this.spawnMiniBossEnemy();
-      this.refreshHud();
-      return;
-    }
-
     if (ev.type === "goalShift") {
       this.goalShiftUntil = this.eventUntil;
       this.goalShiftFailed = false;
       this.refreshHud();
+      return;
     }
+
+    // 未知类型：仅横幅与计时，依赖 tickDirectorEvents 通用清理
   }
 
   private spawnMiniBossEnemy() {

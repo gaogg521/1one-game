@@ -139,15 +139,15 @@ export default function NovelDiscoverPage() {
       const worker = async () => {
         while (idx < queue.length && !cancelled) {
           const n = queue[idx++];
-          coverRequested.current.add(n.id);
           try {
             const res = await fetch(`/api/novel/${n.id}/cover`, { method: "POST" });
             const data = (await res.json()) as { coverPath?: string };
             if (data.coverPath && !cancelled) {
+              coverRequested.current.add(n.id);
               setNovels((prev) => prev.map((x) => (x.id === n.id ? { ...x, coverPath: data.coverPath! } : x)));
             }
           } catch {
-            /* 单本失败不影响其它 */
+            /* 单本失败不影响其它；未标记 requested，刷新后可重试 */
           }
         }
       };
