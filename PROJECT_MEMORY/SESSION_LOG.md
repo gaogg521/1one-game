@@ -2,6 +2,23 @@
 
 > 新条目置顶。
 
+## 2026-05-17 — 产品配置内聚 + README/记忆 + 测试资产入库
+
+### Completed
+
+- **`src/lib/product-config.ts`**：小说/游戏/漫画模型、超时、限流、长篇分段等迁出 `.env`  
+- **长篇分段续写**：`novel-long-generate.ts`（大纲 + 多段 + 前文摘要）  
+- **git**：`1e44a87` 已推 `main`（https://github.com/gaogg521/1one-game）  
+- **记忆**：`iterations/2026-05-17-summary.md`、`CURRENT_STATUS`、`NEXT_ACTION`、`DECISIONS`  
+- **README**：模型/环境变量章节改为 product-config 说明  
+- **待提交**：`prisma/ci.sqlite`、`public/covers/openai-*.png`、手测矩阵文档  
+
+### Tests
+
+- `npm run build` ✅ · `qa-novel-long-plan` ✅ · 此前 E2E **24/24**
+
+---
+
 ## 2026-05-17 — 全量自测 `npm run qa:full`
 
 ### Completed

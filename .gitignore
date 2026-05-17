@@ -54,3 +54,8 @@ next-env.d.ts
 public/covers/*.jpg
 public/covers/*.jpeg
 !public/covers/.gitkeep
+# 网关文生图回归样例（无密钥，供 README/QA 对照）
+!public/covers/openai-*.png
+
+# E2E / 手测用 SQLite（无业务密钥；CI 亦可 migrate 重建）
+!prisma/ci.sqlite

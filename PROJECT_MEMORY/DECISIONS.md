@@ -2,6 +2,12 @@
 
 更新时间：**2026-05-17**
 
+## 2026-05-17 — 产品配置内聚
+
+- **业务参数不进 `.env`**：模型 ID、超时、限流、漫画并发、长篇分段等统一在 **`src/lib/product-config.ts`**（长篇分段细节在 **`novel-long-config.ts`**）。**.env 仅密钥与网关**（`OPENAI_API_KEY`、`OPENAI_BASE_URL` 等）。发版改行为改代码并走 CI，避免终端用户/运营误配环境变量。
+- **网关超时**：默认 `x-openclaw-timeout-ms` 由 product-config 注入；小说 **`createNovelOpenAIClient(tier)`** 按篇幅覆盖（中篇 10min、长篇 30min）。
+- **测试资产入库**：`prisma/ci.sqlite`、`public/covers/openai-*.png` 等无敏感信息样例随仓库提交，供 E2E/手测/文档对照。
+
 ## 架构决策（三轮追加）
 
 - **Director「B 档」对齐**：`buildDirector` 固定 **`actCount = 4`**（开场 / 加速 / 变奏 / 终局），便于各模板章节 banner 与难度弧线一致；**`avoider` / `collector` / `survivor`** 在随机 roll 之后 **保底注入 `coinRain`、`goalShift`、`miniBoss` 各至多一次**（模板差异化 title/message），避免一局「像无尽而没有关卡结构」。  
@@ -22,7 +28,7 @@
 
 - **Studio「我的作品」**：游戏走 `/api/projects`（须 owner Cookie）；小说 / 漫画列表用 **`GET ?mine=1`**，与公开发现页（无 `mine`）分离。  
 - **漫画分镜 LLM 输出**：不再要求模型 **恰好** 返回目标页数 × 4 格；服务端用 **`normalizeComicPagesForGeneration`** 补齐，降低 502 率。  
-- **生成 API 请求体**：默认上限 **524288 字节**（`read-json-body.ts`）；可通过 `GENERATE_BODY_MAX_BYTES` 覆盖。
+- **生成 API 请求体**：默认上限 **524288 字节**（`PRODUCT.api.bodyMaxBytes`）。
 
 ## 技术取舍
 
