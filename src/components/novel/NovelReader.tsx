@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseNovelChapters, type NovelChapter } from "@/lib/novel-chapters";
 import { stripLeadingTitleFromBody } from "@/lib/novel-display";
 import { splitNovelParagraphs } from "@/lib/novel-paragraphs";
+import { NovelListenBar } from "@/components/novel/NovelListenBar";
+import { useNovelListen } from "@/hooks/use-novel-listen";
 import { NOVEL_READER_THEMES, type NovelReaderPalette, type NovelReaderThemeId } from "@/lib/novel-reader-theme";
 
 interface NovelReaderProps {
@@ -45,6 +47,14 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
     }
     setTocOpen(false);
   }, []);
+
+  const listen = useNovelListen(chapters, {
+    syncChapterId: activeId,
+    onChapterFocus: (id) => {
+      const ch = chapters.find((c) => c.id === id);
+      if (ch) scrollToChapter(ch);
+    },
+  });
 
   useEffect(() => {
     if (chapters.length === 0) return;
@@ -135,11 +145,36 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
               </p>
               <ThemePicker theme={theme} onChange={setTheme} t={t} />
             </div>
+            {listen.supported && chapters.length > 0 ?
+              <div className="mt-4 border-t pt-3" style={{ borderColor: t.border }}>
+                <p className="mb-2 px-1 text-xs" style={{ color: t.muted }}>
+                  听书
+                </p>
+                <button
+                  type="button"
+                  onClick={listen.toggle}
+                  className="w-full rounded-lg px-2 py-2 text-left text-xs font-medium"
+                  style={{
+                    border: `1px solid ${t.border}`,
+                    color: listen.state !== "idle" ? t.tocActive : t.text,
+                    backgroundColor: listen.state !== "idle" ? `${t.tocActive}14` : "transparent",
+                  }}
+                >
+                  {listen.state === "playing" ?
+                    "暂停朗读"
+                  : listen.state === "paused" ?
+                    "继续朗读"
+                  : "从当前章开始听"}
+                </button>
+              </div>
+            : null}
           </div>
         </aside>
 
         {/* 正文区 */}
-        <article className="min-w-0 flex-1 pb-16 pt-4 lg:pt-0">
+        <article
+          className={`min-w-0 flex-1 pt-4 lg:pt-0 ${listen.state !== "idle" ? "pb-36" : "pb-16"}`}
+        >
           <div
             className="mx-auto max-w-[42rem] rounded-none px-5 py-8 sm:px-10 sm:py-10 lg:rounded-2xl lg:shadow-sm"
             style={{ backgroundColor: t.panel, color: t.text }}
@@ -176,6 +211,8 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
           </div>
         </article>
       </div>
+
+      {chapters.length > 0 ? <NovelListenBar listen={listen} palette={t} /> : null}
     </div>
   );
 }

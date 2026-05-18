@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveNovelCoverFallbacks } from "@/lib/novel-cover-resolve";
+import { resolveNovelCoverFallbackUrls } from "@/lib/novel-cover-resolve";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
+import { isSuperAdmin } from "@/lib/super-admin";
 
 const VALID_SORTS = new Set(["playCount", "likeCount", "createdAt"]);
 
@@ -56,13 +57,18 @@ export async function GET(req: Request) {
   const needFallback = novels
     .filter((n) => !n.coverPath?.trim())
     .map((n) => ({ id: n.id, title: n.title, summary: n.summary, prompt: n.prompt }));
-  const comicCovers = await resolveNovelCoverFallbacks(needFallback);
+  const comicCovers = await resolveNovelCoverFallbackUrls(needFallback);
 
-  const novelsPublic = novels.map(({ ownerKey: rowOwner, coverPath, ...rest }) => ({
-    ...rest,
-    coverPath: coverPath?.trim() || comicCovers.get(rest.id) || null,
-    isOwner: Boolean(ownerKey && rowOwner === ownerKey),
-  }));
+  const superAdmin = isSuperAdmin(req, ownerKey);
+  const novelsPublic = novels.map(({ ownerKey: rowOwner, coverPath, ...rest }) => {
+    const owned = Boolean(ownerKey && rowOwner === ownerKey);
+    return {
+      ...rest,
+      coverPath: coverPath?.trim() || comicCovers.get(rest.id) || null,
+      isOwner: owned,
+      canDelete: owned || superAdmin,
+    };
+  });
 
   return NextResponse.json({ novels: novelsPublic, total, page, limit });
 }

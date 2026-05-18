@@ -1,7 +1,12 @@
 import { persistComicCoverPath, persistNovelCoverPath } from "./cover-path-db";
 import { generateImage } from "./image-generation";
 import { persistNovelCoverFile, persistNovelCoverBuffer } from "./novel-cover-persist";
-import { inferCoverGenre, COVER_GENRE_STYLES, type CoverGenre } from "./cover-genre";
+import {
+  inferCoverGenre,
+  inferStoryGenre,
+  COVER_GENRE_STYLES,
+  type CoverGenre,
+} from "./cover-genre";
 import { normalizeNovelTitle } from "./novel-display";
 import { compositeNovelCover } from "./cover-composite";
 import fs from "node:fs/promises";
@@ -42,16 +47,22 @@ function buildCoverPrompt(opts: CoverGenOptions): string {
   const typeHint =
     type === "comic"
       ? "manga/comic cover style, dynamic composition, bold lines"
-      : "Chinese web novel cover illustration, vertical 3:4 portrait";
+      : "Chinese web novel cover illustration, vertical 3:4 portrait, editorial book cover";
 
-  const hint = storyHint.trim().slice(0, 380);
-  const sum = summary.trim().slice(0, 220);
+  const hint = storyHint.trim().slice(0, 500);
+  const sum = summary.trim().slice(0, 320);
+
+  const urbanExtra =
+    genre === "urban"
+      ? "Setting is present-day China only: office towers, banquet hall, business suit, city night. Forbidden: fantasy, ancient China, magic effects, ruined world."
+      : "";
 
   return [
     `Illustration background for Chinese novel "${title}".`,
     sum ? `Plot: ${sum}.` : "",
-    hint ? `Elements: ${hint}.` : "",
+    hint ? `Story elements: ${hint}.` : "",
     genreStyle.backgroundPrompt,
+    urbanExtra,
     typeHint,
     "Lower third slightly darker for title overlay area. Absolutely no text, no letters, no watermarks, no logos.",
   ]
@@ -59,14 +70,28 @@ function buildCoverPrompt(opts: CoverGenOptions): string {
     .join(" ");
 }
 
+function resolveCoverGenre(opts: CoverGenOptions): CoverGenre {
+  if (opts.genre) return opts.genre;
+  return inferStoryGenre({
+    title: opts.title,
+    summary: opts.summary,
+    prompt: opts.storyHint,
+    contentSnippet: opts.storyHint,
+  });
+}
+
 /**
  * 生成封面：文生图背景 + 服务端叠加书名（网文平台风格）
  */
 export async function generateCover(opts: CoverGenOptions): Promise<string | null> {
   try {
-    const genre = opts.genre ?? inferCoverGenre(opts.title, opts.summary ?? "", opts.storyHint ?? "");
+    const genre = resolveCoverGenre(opts);
     const prompt = buildCoverPrompt({ ...opts, genre });
-    const result = await generateImage(prompt, { size: "1024x1536", quality: "standard" });
+    const result = await generateImage(prompt, {
+      size: "1024x1536",
+      quality: "standard",
+      coverGenre: genre,
+    });
     if (!result?.url) return null;
 
     const bgBuf = await readImageBuffer(result.url);
@@ -93,25 +118,37 @@ export async function generateNovelCover(
   title: string,
   summary?: string,
   storyHint?: string,
+  genre?: CoverGenre,
 ): Promise<string | null> {
-  const genre = inferCoverGenre(title, summary ?? "", storyHint ?? "");
+  const g =
+    genre ??
+    inferStoryGenre({
+      title,
+      summary,
+      prompt: storyHint,
+      contentSnippet: storyHint,
+    });
   const prompt = buildCoverPrompt({
     title,
     summary: summary ?? "",
     storyHint,
-    genre,
+    genre: g,
     type: "novel",
   });
 
   try {
-    const result = await generateImage(prompt, { size: "1024x1536", quality: "standard" });
+    const result = await generateImage(prompt, {
+      size: "1024x1536",
+      quality: "standard",
+      coverGenre: g,
+    });
     if (!result?.url) return null;
 
     const displayTitle = normalizeNovelTitle(title, storyHint);
     const bgBuf = await readImageBuffer(result.url);
     if (!bgBuf) return null;
 
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre });
+    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre: g });
     const coverPath = await persistNovelCoverBuffer(novelId, composed);
     if (!coverPath) return null;
 
@@ -130,8 +167,9 @@ export async function ensureNovelCoverAfterCreate(
   summary: string,
   storyHint: string,
   timeoutMs = 600_000,
+  genre?: CoverGenre,
 ): Promise<string | null> {
-  const task = generateNovelCover(novelId, title, summary, storyHint);
+  const task = generateNovelCover(novelId, title, summary, storyHint, genre);
   const timeout = new Promise<null>((resolve) => {
     setTimeout(() => resolve(null), timeoutMs);
   });
@@ -150,7 +188,13 @@ export async function composeAndPersistNovelCoverFromBackground(
   storyHint?: string,
 ): Promise<string | null> {
   const displayTitle = normalizeNovelTitle(title, storyHint);
-  const genre = inferCoverGenre(displayTitle, summary ?? "", storyHint ?? "");
+  const genre = inferStoryGenre({
+    title: displayTitle,
+    summary,
+    prompt: storyHint,
+  });
+  /** 都市小说禁止用漫画分镜图覆盖已生成的小说封面 */
+  if (genre === "urban") return null;
   const bgBuf = await readImageBuffer(backgroundUrl);
   if (!bgBuf) return null;
 
@@ -169,9 +213,21 @@ export async function composeAndPersistNovelCoverFromBackground(
   }
 }
 
-export async function generateComicCover(comicId: string, title: string, summary?: string): Promise<string | null> {
-  const genre = inferCoverGenre(title, summary ?? "");
-  const coverUrl = await generateCover({ title, summary: summary ?? "", type: "comic", genre });
+export async function generateComicCover(
+  comicId: string,
+  title: string,
+  summary?: string,
+  storyHint?: string,
+  genre?: CoverGenre,
+): Promise<string | null> {
+  const g = genre ?? inferCoverGenre(title, summary ?? "", storyHint ?? "");
+  const coverUrl = await generateCover({
+    title,
+    summary: summary ?? "",
+    storyHint,
+    type: "comic",
+    genre: g,
+  });
   if (!coverUrl) return null;
 
   await persistComicCoverPath(comicId, coverUrl);

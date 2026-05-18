@@ -2,6 +2,11 @@
  * 文生图：模型与默认分辨率见 `src/lib/product-config.ts` / `model-config.ts`。
  */
 
+import {
+  buildComicStyleReferenceInstruction,
+  loadStyleReferenceImages,
+} from "@/lib/comic-style-reference";
+import type { CoverGenre } from "@/lib/cover-genre";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
 import fs from "fs";
@@ -286,7 +291,7 @@ export async function generateImagesBatchDetailed(
  */
 export async function generateImageWithGemini(
   prompt: string,
-  options?: { size?: string }
+  options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre },
 ): Promise<ImageGenResult | null> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return null;
@@ -294,26 +299,38 @@ export async function generateImageWithGemini(
   try {
     const size = options?.size ?? getImageGenDefaultSize();
     const geminiModel = getImageGenGeminiModel();
+    const refImages = options?.styleReferenceUrls?.length
+      ? await loadStyleReferenceImages(options.styleReferenceUrls)
+      : [];
+    const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [];
+    for (const ref of refImages) {
+      parts.push({ inline_data: { mime_type: ref.mimeType, data: ref.base64 } });
+    }
+    const refPrefix =
+      refImages.length > 0 ? buildComicStyleReferenceInstruction(options?.styleGenre) : "";
+    const textPrompt = refImages.length > 0 ? `${refPrefix}${prompt}` : prompt;
+    parts.push({ text: textPrompt });
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts }],
           generationConfig: {
             responseModalities: ["TEXT", "IMAGE"],
           },
         }),
-      }
+      },
     );
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
       candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[];
     };
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((p) => p.inlineData?.data);
+    const responseParts = data.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = responseParts.find((p) => p.inlineData?.data);
     if (!imagePart?.inlineData?.data) return null;
 
     // 保存到 public/comics/
@@ -335,10 +352,46 @@ export async function generateImageWithGemini(
  */
 export async function generateImageDetailed(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high" },
+  options?: {
+    size?: "1024x1024" | "1024x1536" | "1536x1024";
+    quality?: "standard" | "high";
+    /** 首张分镜图 + 封面等，用于 Gemini 多模态风格锚定 */
+    styleReferenceUrls?: string[];
+    /** 与参考图一并约束题材（如都市禁止玄幻画风） */
+    styleGenre?: CoverGenre;
+  },
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
-  const openai = await generateImageWithOpenAIDetail(prompt, options);
+  const styleRefs = options?.styleReferenceUrls?.filter(Boolean) ?? [];
+
+  if (styleRefs.length > 0) {
+    const geminiRef = await generateImageWithGemini(prompt, {
+      size: options?.size,
+      styleReferenceUrls: styleRefs,
+      styleGenre: options?.styleGenre,
+    });
+    if (geminiRef?.url) {
+      return {
+        ok: true,
+        url: geminiRef.url,
+        localPath: geminiRef.localPath,
+        provider: "gemini",
+        model: getImageGenGeminiModel(),
+        durationMs: Date.now() - t0,
+      };
+    }
+  }
+
+  const urbanPrefix =
+    options?.styleGenre === "urban"
+      ? "Modern contemporary urban China manhua, realistic clothing, city or office setting, NO fantasy magic, NO purple energy, NO ancient costumes. "
+      : "";
+  const openai = await generateImageWithOpenAIDetail(
+    styleRefs.length > 0
+      ? `Same manga series, consistent art style, line weight and color palette as previous panels. ${urbanPrefix}${prompt}`
+      : `${urbanPrefix}${prompt}`,
+    options,
+  );
   if (openai.ok) return { ...openai, durationMs: openai.durationMs ?? Date.now() - t0 };
 
   const gemini = await generateImageWithGemini(prompt, { size: options?.size });
@@ -367,8 +420,15 @@ export async function generateImageDetailed(
 
 export async function generateImage(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high" }
+  options?: {
+    size?: "1024x1024" | "1024x1536" | "1536x1024";
+    quality?: "standard" | "high";
+    coverGenre?: CoverGenre;
+  },
 ): Promise<ImageGenResult | null> {
-  const detail = await generateImageDetailed(prompt, options);
+  const detail = await generateImageDetailed(prompt, {
+    ...options,
+    styleGenre: options?.coverGenre,
+  });
   return detail.ok && detail.url ? { url: detail.url, localPath: detail.localPath } : null;
 }

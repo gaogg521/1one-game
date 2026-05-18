@@ -5,6 +5,7 @@ import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelTextStream } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
+import { inferStoryGenre } from "@/lib/cover-genre";
 import {
   getNovelSystemPrompt,
   buildNovelUserMessage,
@@ -14,7 +15,9 @@ import {
   parseNovelLengthTier,
 } from "@/lib/novel-generate-config";
 import { extractNovelTitleFromContent, validateNovelTitleInput } from "@/lib/novel-display";
-import { novelGenerationEtaHint } from "@/lib/novel-length";
+import { generateNovelSynopsis } from "@/lib/novel-synopsis";
+import { novelGenerationEtaHint, novelLengthConfig, novelMaxChars } from "@/lib/novel-length";
+import { accumulateNovelTextStream } from "@/lib/novel-stream-accumulate";
 import {
   planLongNovelSegments,
   streamLongNovelBody,
@@ -81,6 +84,8 @@ export async function POST(req: Request) {
   const maxTokens = novelLlmMaxOutputTokens(lengthTier);
   const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier);
   const longPlan = usesSegmentedLongGeneration(lengthTier) ? planLongNovelSegments(lengthTier) : null;
+  const maxCharsLimit = novelMaxChars(lengthTier);
+  const tierLabel = novelLengthConfig(lengthTier).label;
   const cascade = getNovelStyleTextModelCascade();
   const providerLabel = getActiveProvider();
 
@@ -117,19 +122,29 @@ export async function POST(req: Request) {
                 emit: send,
               });
             } else {
-              for await (const delta of llmNovelTextStream(
-                {
-                  model,
-                  system: getNovelSystemPrompt(lengthTier),
-                  user: userMsg,
-                  temperature: 0.85,
-                  maxTokens,
-                  timeoutMs,
-                },
-                lengthTier,
-              )) {
-                content += delta;
-                send({ step: "delta", text: delta });
+              const { content: accumulated, capped } = await accumulateNovelTextStream({
+                maxChars: maxCharsLimit,
+                stream: llmNovelTextStream(
+                  {
+                    model,
+                    system: getNovelSystemPrompt(lengthTier),
+                    user: userMsg,
+                    temperature: 0.85,
+                    maxTokens,
+                    timeoutMs,
+                  },
+                  lengthTier,
+                ),
+                onDelta: (text) => send({ step: "delta", text }),
+              });
+              content = accumulated;
+              if (capped) {
+                send({
+                  step: "length_capped",
+                  message: `已达${tierLabel}字数上限（约 ${maxCharsLimit.toLocaleString()} 字），已自动收束`,
+                  maxChars: maxCharsLimit,
+                  length: content.length,
+                });
               }
             }
           } catch (e) {
@@ -147,7 +162,14 @@ export async function POST(req: Request) {
           }
 
           const extractedTitle = extractNovelTitleFromContent(content, titleTrim, promptTrim);
-          const summary = content.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…";
+          send({ step: "synopsis_start", message: "正在撰写剧情简介…" });
+          const summary = await generateNovelSynopsis({
+            model,
+            title: extractedTitle,
+            prompt: promptTrim,
+            content,
+            lengthTier,
+          });
 
           const novel = await prisma.novel.create({
             data: {
@@ -182,12 +204,19 @@ export async function POST(req: Request) {
           });
           saved = true;
 
+          const coverGenre = inferStoryGenre({
+            title: extractedTitle,
+            summary,
+            prompt: promptTrim,
+            contentSnippet: content.slice(0, 1200),
+          });
           void ensureNovelCoverAfterCreate(
             novel.id,
             extractedTitle,
             summary,
-            promptTrim,
+            [promptTrim, content.slice(0, 600)].filter(Boolean).join(" "),
             600_000,
+            coverGenre,
           ).catch(() => {});
 
           break;

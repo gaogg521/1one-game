@@ -6,7 +6,8 @@ import { newShareCode } from "@/lib/share-code";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
-import { resolveNovelCoverFallbacks } from "@/lib/novel-cover-resolve";
+import { buildNovelSynopsisHeuristic } from "@/lib/novel-synopsis";
+import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,14 +24,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
-  const coverFallback = row.coverPath?.trim()
-    ? null
-    : (
-        await resolveNovelCoverFallbacks([
-          { id: row.id, title: row.title, summary: row.summary, prompt: row.prompt },
-        ])
-      ).get(row.id);
-
+  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
   return NextResponse.json({
     novel: {
       id: row.id,
@@ -42,11 +36,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       shareCode: row.shareCode,
-      coverPath: row.coverPath?.trim() || coverFallback || null,
+      /** 仅使用小说专属封面，禁止用漫画首格顶替（避免玄幻配图污染小说封面） */
+      coverPath: row.coverPath?.trim() || null,
       playCount: row.playCount,
       likeCount: row.likeCount,
       status: row.status,
       isOwner: Boolean(isOwner),
+      canDelete,
       comics: row.comics,
     },
   });
@@ -99,14 +95,16 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     }
     const content = serializeNovelChapters(normalized);
     data.content = content;
-    data.summary = content.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…";
+    const titleForSummary = data.title ?? row.title;
+    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary);
   } else if (payload.content !== undefined) {
     const content = String(payload.content).trim();
     if (content.length < 10) {
       return NextResponse.json({ error: "正文过短" }, { status: 400 });
     }
     data.content = content;
-    data.summary = content.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…";
+    const titleForSummary = data.title ?? row.title;
+    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary);
   }
 
   const ensureShareCode = Boolean(payload.ensureShareCode);
@@ -145,15 +143,18 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   });
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext) {
+export async function DELETE(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
-  if (!ownerKey) {
+  if (!ownerKey && !isSuperAdmin(req)) {
     return NextResponse.json({ error: "未授权" }, { status: 401 });
   }
 
   const row = await prisma.novel.findUnique({ where: { id } });
-  if (!row || row.ownerKey !== ownerKey) {
+  if (!row) {
+    return NextResponse.json({ error: "未找到" }, { status: 404 });
+  }
+  if (!canDeleteOwnedResource(row.ownerKey, ownerKey, req)) {
     return NextResponse.json({ error: "未找到" }, { status: 404 });
   }
 

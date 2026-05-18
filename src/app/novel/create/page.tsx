@@ -12,6 +12,7 @@ import {
 import {
   NOVEL_LENGTH_TIERS,
   novelGenerationEtaHint,
+  novelMaxChars,
   novelStreamInterruptHint,
   type NovelLengthTier,
 } from "@/lib/novel-length";
@@ -148,7 +149,16 @@ export default function NovelCreatePage() {
             if (ev.step === "delta" && typeof ev.text === "string") {
               totalChars += ev.text.length;
               setStreamPreview((p) => p + ev.text);
-              setProgress(`生成中… 已约 ${totalChars} 字`);
+              const cap = novelMaxChars(lengthTier);
+              setProgress(
+                `生成中… 已约 ${totalChars.toLocaleString()} / ${cap.toLocaleString()} 字`,
+              );
+            }
+            if (ev.step === "length_capped") {
+              setProgress(ev.message ?? "已达篇幅上限，正在收束…");
+            }
+            if (ev.step === "synopsis_start") {
+              setProgress(ev.message ?? "正在撰写剧情简介…");
             }
             if (ev.step === "model_short" && ev.model) {
               setProgress(

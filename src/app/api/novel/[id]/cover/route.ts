@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
+import { inferStoryGenre } from "@/lib/cover-genre";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { persistNovelCoverPath } from "@/lib/cover-path-db";
 import { prisma } from "@/lib/prisma";
@@ -35,12 +36,24 @@ export async function POST(req: Request, ctx: RouteContext) {
     await persistNovelCoverPath(id, null);
   }
 
+  const storyHint = [row.prompt, row.content?.slice(0, 800)]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const genre = inferStoryGenre({
+    title: row.title,
+    summary: row.summary,
+    prompt: row.prompt,
+    contentSnippet: row.content?.slice(0, 1200),
+  });
+
   const coverPath = await ensureNovelCoverAfterCreate(
     row.id,
     row.title,
     row.summary ?? "",
-    row.prompt,
+    storyHint || row.prompt,
     600_000,
+    genre,
   );
 
   if (!coverPath) {

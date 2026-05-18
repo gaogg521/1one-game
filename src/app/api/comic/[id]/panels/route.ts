@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { generateComicCover } from "@/lib/cover-generation";
+import { resolveComicStoryContext } from "@/lib/comic-story-genre";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import {
+  clearComicPanelImages,
   countPanelsWithImages,
   parseComicDocument,
   renderComicPanels,
@@ -14,7 +17,9 @@ export const maxDuration = 600;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(_req: Request, ctx: RouteContext) {
+type PanelsBody = { regenerate?: boolean; page?: number };
+
+export async function POST(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
     return NextResponse.json({ error: "未授权" }, { status: 401 });
@@ -26,13 +31,31 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ error: "未找到" }, { status: 404 });
   }
 
+  let body: PanelsBody = {};
+  const reqCt = req.headers.get("content-type") ?? "";
+  if (reqCt.includes("application/json")) {
+    try {
+      body = (await req.json()) as PanelsBody;
+    } catch {
+      body = {};
+    }
+  }
+
   const doc = parseComicDocument(row.imageUrls);
   if (doc.pages.length === 0) {
     return NextResponse.json({ error: "暂无分镜数据" }, { status: 400 });
   }
 
+  if (body.regenerate) {
+    const scope =
+      typeof body.page === "number" && body.page >= 1
+        ? { pageNumber: Math.floor(body.page) }
+        : "all";
+    clearComicPanelImages(doc, scope);
+  }
+
   const before = countPanelsWithImages(doc);
-  if (before.withImage >= before.total) {
+  if (!body.regenerate && before.withImage >= before.total) {
     return NextResponse.json({
       ok: true,
       comic: { id, imageUrls: row.imageUrls },
@@ -45,11 +68,35 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const availability = getImageGenAvailability();
+  const { title: storyTitle, summary: storySummary, genre: storyGenre } =
+    await resolveComicStoryContext(row);
+  let coverPath = row.coverPath;
+
+  const fullRegenerate =
+    body.regenerate && !(typeof body.page === "number" && body.page >= 1);
+  if (fullRegenerate && row.novelId) {
+    const novel = await prisma.novel.findUnique({
+      where: { id: row.novelId },
+      select: { summary: true, content: true },
+    });
+    const newCover = await generateComicCover(
+      id,
+      row.title,
+      novel?.summary ?? "",
+      novel?.content?.slice(0, 800) ?? row.prompt ?? "",
+      storyGenre,
+    );
+    if (newCover) coverPath = newCover;
+  }
 
   try {
     const { doc: updated, rendered, total, imageSource, errors, imageGenHint } =
       await renderComicPanels(doc, {
         onlyMissing: true,
+        coverPath,
+        storyGenre,
+        storyContext: { title: storyTitle, summary: storySummary },
+        skipStyleRefs: fullRegenerate,
       });
     const after = countPanelsWithImages(updated);
     const imageUrls = serializeComicPanels(updated);

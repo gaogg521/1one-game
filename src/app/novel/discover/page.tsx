@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
+import { SuperAdminPanel } from "@/components/SuperAdminPanel";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 
 interface Novel {
   id: string;
@@ -15,6 +17,7 @@ interface Novel {
   playCount: number;
   likeCount: number;
   isOwner?: boolean;
+  canDelete?: boolean;
 }
 
 function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => void }) {
@@ -41,7 +44,7 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
     e.stopPropagation();
     const title = normalizeNovelTitle(n.title, n.prompt);
     if (!confirm(`确定删除《${title}》？关联漫画也会一并删除，且无法恢复。`)) return;
-    const res = await fetch(`/api/novel/${n.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/novel/${n.id}`, superAdminFetchInit({ method: "DELETE" }));
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       alert(data.error ?? "删除失败，请确认使用创作时的浏览器登录态");
@@ -56,14 +59,14 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
       className="group relative flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
-        {n.isOwner ? (
+        {n.isOwner || n.canDelete ? (
           <button
             type="button"
-            title="删除"
+            title={n.canDelete && !n.isOwner ? "管理员删除" : "删除"}
             onClick={(e) => void handleDelete(e)}
             className="absolute right-2 top-2 z-10 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-medium text-red-200 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 hover:bg-red-950/80"
           >
-            删除
+            {n.canDelete && !n.isOwner ? "管理删除" : "删除"}
           </button>
         ) : null}
         {n.coverPath ? (
@@ -111,53 +114,46 @@ export default function NovelDiscoverPage() {
   const [total, setTotal] = useState(0);
   const limit = 24;
   const [loading, setLoading] = useState(true);
-
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const coverRequested = useRef(new Set<string>());
 
   useEffect(() => {
+    let stale = false;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 45_000);
     startTransition(() => setLoading(true));
-    fetch(`/api/novel?page=${page}&limit=${limit}`)
-      .then((r) => r.json())
+    setLoadError(null);
+    fetch(`/api/novel?page=${page}&limit=${limit}`, superAdminFetchInit({ signal: ac.signal }))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
+        if (stale) return;
         setNovels(data.novels || []);
         setTotal(data.total || 0);
       })
-      .finally(() => setLoading(false));
-  }, [page, limit]);
-
-  /** 广场列表：无封面时后台补生成（每本仅请求一次），完成后局部刷新卡片 */
-  useEffect(() => {
-    const missing = novels.filter((n) => !n.coverPath && !coverRequested.current.has(n.id));
-    if (missing.length === 0) return;
-
-    let cancelled = false;
-    const run = async () => {
-      const queue = missing.slice(0, 12);
-      const concurrency = 2;
-      let idx = 0;
-      const worker = async () => {
-        while (idx < queue.length && !cancelled) {
-          const n = queue[idx++];
-          try {
-            const res = await fetch(`/api/novel/${n.id}/cover`, { method: "POST" });
-            const data = (await res.json()) as { coverPath?: string };
-            if (data.coverPath && !cancelled) {
-              coverRequested.current.add(n.id);
-              setNovels((prev) => prev.map((x) => (x.id === n.id ? { ...x, coverPath: data.coverPath! } : x)));
-            }
-          } catch {
-            /* 单本失败不影响其它；未标记 requested，刷新后可重试 */
-          }
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()));
-    };
-    void run();
+      .catch((e: unknown) => {
+        if (stale) return;
+        setNovels([]);
+        setTotal(0);
+        const aborted = e instanceof DOMException && e.name === "AbortError";
+        setLoadError(
+          aborted
+            ? "加载超时：服务响应过慢，请稍后重试；若刚启动 dev 请等几秒再刷新"
+            : "加载失败：请确认 npm run dev 已启动并访问 http://localhost:8888",
+        );
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (!stale) setLoading(false);
+      });
     return () => {
-      cancelled = true;
+      stale = true;
+      ac.abort();
+      clearTimeout(timer);
     };
-  }, [novels]);
+  }, [page, limit]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -176,7 +172,18 @@ export default function NovelDiscoverPage() {
             </Link>
           </div>
 
-          {loading ? (
+          {loadError ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-sm text-amber-100/90">
+              <p>{loadError}</p>
+              <button
+                type="button"
+                className="mt-3 rounded-lg border border-[color:var(--gc-border)] px-4 py-2 text-[var(--gc-text)]"
+                onClick={() => window.location.reload()}
+              >
+                重新加载
+              </button>
+            </div>
+          ) : loading ? (
             <p className="text-[var(--gc-muted)]">加载中…</p>
           ) : novels.length === 0 ? (
             <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-8 text-center">
@@ -223,6 +230,8 @@ export default function NovelDiscoverPage() {
                   </button>
                 </div>
               )}
+
+              <SuperAdminPanel scope="novel" />
             </>
           )}
         </div>

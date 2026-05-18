@@ -1,4 +1,5 @@
 import { generateComicCover } from "@/lib/cover-generation";
+import { inferStoryGenre } from "@/lib/cover-genre";
 import { NextResponse } from "next/server";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { generateRateLimits } from "@/lib/api/generate-limits";
@@ -12,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import {
   buildComicJsonSchema,
   buildComicSystemPrompt,
+  defaultPanelPrompt,
   resolveComicPageCount,
   PANELS_PER_PAGE,
   normalizeComicPagesForGeneration,
@@ -55,6 +57,8 @@ export async function POST(req: Request) {
 
   let novelTitle = title?.trim() || "未命名小说";
   let novelContent = "";
+  let novelSummary = "";
+  let novelPrompt = "";
   let actualNovelId = novelId;
   let novelLengthTier = parseNovelLengthTier(lengthTierRaw);
 
@@ -73,6 +77,8 @@ export async function POST(req: Request) {
       );
     }
     novelContent = novel.content;
+    novelSummary = novel.summary ?? "";
+    novelPrompt = novel.prompt ?? "";
     novelTitle = normalizeNovelTitle(novel.title, novel.prompt);
     if (novel.lengthTier) novelLengthTier = parseNovelLengthTier(novel.lengthTier);
   } else if (content && typeof content === "string" && content.trim().length > 0) {
@@ -115,6 +121,12 @@ export async function POST(req: Request) {
     contentLength: novelContent.length,
   });
   const totalPanels = pageCount * PANELS_PER_PAGE;
+  const storyGenre = inferStoryGenre({
+    title: novelTitle,
+    summary: novelSummary,
+    prompt: novelPrompt,
+    contentSnippet: novelContent.slice(0, 1200),
+  });
 
   const CHUNK_SIZE = 4; // 每次最多生成 4 页，避免大 JSON Schema 超时
 
@@ -134,7 +146,7 @@ export async function POST(req: Request) {
       const chunkPages = chunkEnd - chunkStart + 1;
       const chunkPanels = chunkPages * PANELS_PER_PAGE;
 
-      const comicSystem = buildComicSystemPrompt(chunkPages);
+      const comicSystem = buildComicSystemPrompt(chunkPages, storyGenre);
       const comicSchema = buildComicJsonSchema(chunkPages);
 
       let chunkResult: ComicPage[] = [];
@@ -152,7 +164,7 @@ export async function POST(req: Request) {
           const rawPages = (result.raw as { pages: ComicPage[] }).pages;
           if (!Array.isArray(rawPages) || rawPages.length < 1) continue;
 
-          chunkResult = normalizeComicPagesForGeneration(rawPages, chunkPages);
+          chunkResult = normalizeComicPagesForGeneration(rawPages, chunkPages, storyGenre);
           if (chunkResult.length < 1) continue;
 
           if (!providerUsed) {
@@ -171,7 +183,7 @@ export async function POST(req: Request) {
             panels: Array.from({ length: PANELS_PER_PAGE }, (_, j) => ({
               scene: (i - 1) * PANELS_PER_PAGE + j + 1,
               caption: "……",
-              prompt: "Comic panel, story continues",
+              prompt: defaultPanelPrompt(storyGenre),
             })),
           });
         }
@@ -200,7 +212,15 @@ export async function POST(req: Request) {
     const skipInlinePanels = panelCount > PANELS_PER_PAGE;
     const { doc: docWithImages, rendered, imageSource } = skipInlinePanels
       ? { doc: comicDoc, rendered: 0, imageSource: "none" as const }
-      : await renderComicPanels(comicDoc, { onlyMissing: false });
+      : await renderComicPanels(comicDoc, {
+          onlyMissing: false,
+          storyGenre,
+          storyContext: {
+            title: novelTitle,
+            summary: novelSummary || novelContent.slice(0, 400).replace(/\n/g, " "),
+          },
+          skipStyleRefs: true,
+        });
     const imageUrls = serializeComicPanels(docWithImages);
     const storageTitle = formatComicStorageTitle(novelTitle, novelContent.slice(0, 300));
 
@@ -215,7 +235,14 @@ export async function POST(req: Request) {
       },
     });
 
-    void generateComicCover(comic.id, storageTitle, novelContent.slice(0, 200)).catch(() => {});
+    void generateComicCover(
+      comic.id,
+      storageTitle,
+      novelSummary || novelContent.slice(0, 400).replace(/\n/g, " "),
+      novelContent.slice(0, 800),
+      storyGenre,
+    ).catch(() => {});
+    // 漫画生成不得写入或覆盖 Novel.coverPath（见 composeAndPersistNovelCoverFromBackground 都市保护）
 
     return NextResponse.json(
       {

@@ -40,7 +40,7 @@ export const COVER_GENRE_STYLES: Record<CoverGenre, CoverGenreStyle> = {
   urban: {
     label: "都市",
     backgroundPrompt:
-      "modern Chinese urban fiction book cover, neon city skyline at night, luxury office or street bokeh, sleek contemporary mood, cinematic photography style, no text",
+      "modern Chinese urban web novel cover, contemporary China: luxury CBD skyscrapers, five-star hotel banquet hall or corner office with city view, young businessman in tailored suit, sports car, smartphones, cinematic photorealistic illustration, slice-of-life drama and corporate wealth, absolutely NO xianxia, NO cultivation, NO purple energy, NO magic vortex, NO ancient palace, NO fantasy armor, NO apocalyptic ruins, no text",
     titleColor: "#FFFFFF",
     titleGlow: "0 2px 8px rgba(0,0,0,0.85), 0 0 16px rgba(80,160,255,0.4)",
     accentColor: "#4A9EFF",
@@ -103,19 +103,65 @@ export const COVER_GENRE_STYLES: Record<CoverGenre, CoverGenreStyle> = {
   },
 };
 
+/** 漫画分镜 / 配图统一画风（英文，拼进 panel prompt） */
+export const COMIC_PANEL_STYLE_LOCKS: Record<CoverGenre, string> = {
+  urban:
+    "modern contemporary urban China, realistic clothing, city skyline or office or apartment interior, cars and smartphones, cinematic realism, slice-of-life drama, NO fantasy magic, NO ancient costume, NO xianxia robes, NO purple energy vortex",
+  xianxia:
+    "Chinese xianxia cultivation fantasy, spiritual energy, flowing robes, mountains and clouds, ethereal lighting, consistent character design",
+  wuxia:
+    "Chinese wuxia martial arts, period hanfu or martial attire, bamboo and mountains, ink-wash cinematic style",
+  transmigration:
+    "Chinese web novel fantasy, clear era contrast if needed, polished digital illustration, consistent characters",
+  historical:
+    "Chinese historical period drama, traditional architecture and costumes matching dynasty, cinematic lighting",
+  fantasy:
+    "Chinese xuanhuan fantasy illustration, dramatic energy effects, detailed digital painting",
+  scifi: "science fiction, futuristic technology, neon and metallic surfaces, cinematic sci-fi",
+  romance: "romantic contemporary or soft pastel atmosphere, elegant characters, warm lighting",
+  mystery: "noir urban suspense, rain and shadows, cool tones, contemporary or period as story demands",
+  general:
+    "professional Chinese web comic panel, cinematic lighting, consistent character design, match story setting",
+};
+
+export function getComicPanelStyleLock(genre: CoverGenre): string {
+  return COMIC_PANEL_STYLE_LOCKS[genre] ?? COMIC_PANEL_STYLE_LOCKS.general;
+}
+
+const URBAN_GENRE_RE =
+  /都市|现代|当代|总裁|豪门|职场|校园|娱乐圈|神医|兵王|赘婿|首富|继承人|千亿|亿万|富豪|商战|集团|董事|CEO|别墅|豪宅|写字楼|直播|网红|外卖|地铁|藏拙|被曝光|隐瞒.*身份|都市生活|一线城市|打工人|月薪|写字楼|宴会|晚宴|商战/;
+
 /** 根据标题、摘要、创意推断题材 */
 export function inferCoverGenre(title: string, summary = "", storyHint = ""): CoverGenre {
   const t = `${title} ${summary} ${storyHint}`;
+  const headline = `${title} ${summary}`.trim();
 
-  if (/仙侠|修仙|渡劫|仙界|天道|灵根|飞升|宗门|元婴|金丹/.test(t)) return "xianxia";
-  if (/武侠|江湖|剑客|武林|门派|大侠|刀光/.test(t)) return "wuxia";
-  if (/穿越|重生|穿成|回到.*(年|朝|代)|转生|逆袭/.test(t)) return "transmigration";
-  if (/都市|总裁|豪门|职场|校园|娱乐圈|神医|兵王|赘婿/.test(t)) return "urban";
-  if (/崇祯|明末|大清|三国|秦汉|唐宋|历史|王朝|京城|宫廷|朝堂|皇帝|皇后/.test(t)) return "historical";
-  if (/科幻|赛博|星际|未来|机器人|太空|末世/.test(t)) return "scifi";
+  if (/仙侠|修仙|渡劫|仙界|天道|灵根|飞升|宗门|元婴|金丹|剑仙|功法/.test(t)) return "xianxia";
+  if (/武侠|江湖|剑客|武林|门派|大侠|刀光|内力/.test(t)) return "wuxia";
+
+  /** 标题/摘要含豪门都市信号时优先（正文「未来」等勿判科幻） */
+  if (URBAN_GENRE_RE.test(headline)) return "urban";
+  if (URBAN_GENRE_RE.test(t)) return "urban";
+
   if (/言情|恋爱|甜宠|婚恋|竹马|青梅/.test(t)) return "romance";
   if (/悬疑|推理|侦探|谋杀|密室|刑侦/.test(t)) return "mystery";
-  if (/玄幻|异界|魔兽|斗气|魔法|系统|升级流/.test(t)) return "fantasy";
+  if (/崇祯|明末|大清|三国|秦汉|唐宋|历史|王朝|朝堂|皇帝|皇后|宫廷(?!.*都市)/.test(t)) return "historical";
+  if (/科幻|赛博|星际|机器人|太空|末世|机甲|未来世界|未来都市|未来科技/.test(t)) return "scifi";
+
+  if (/穿越|穿成|回到.*(年|朝|代)|转生/.test(t)) return "transmigration";
+  if (/重生|逆袭/.test(t) && !/古代|宫廷|仙侠|修仙|异界|玄幻|王朝|皇上|陛下/.test(t)) return "urban";
+  if (/玄幻|异界|魔兽|斗气|魔法|系统|升级流|灵力|血脉觉醒/.test(t)) return "fantasy";
 
   return "general";
+}
+
+/** 从标题 + 摘要 + 创意/正文片段推断题材（漫画/封面共用） */
+export function inferStoryGenre(opts: {
+  title: string;
+  summary?: string | null;
+  prompt?: string | null;
+  contentSnippet?: string | null;
+}): CoverGenre {
+  const hint = [opts.prompt, opts.contentSnippet].filter(Boolean).join(" ").trim();
+  return inferCoverGenre(opts.title, opts.summary ?? "", hint);
 }

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
+import { NovelSynopsisBlurb } from "@/components/novel/NovelSynopsisBlurb";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 import {
@@ -105,7 +106,7 @@ export default function NovelDetailPage() {
   const displayMeta = useMemo(() => {
     if (!novel) return null;
     const displayTitle = normalizeNovelTitle(novel.title, novel.prompt);
-    const blurb = displayNovelSummary(novel.summary, displayTitle, novel.prompt);
+    const blurb = displayNovelSummary(novel.summary, displayTitle, novel.prompt, novel.content);
     const chapters = parseNovelChapters(novel.content);
     return { displayTitle, blurb, chapters };
   }, [novel]);
@@ -143,7 +144,13 @@ export default function NovelDetailPage() {
       });
       const ct = res.headers.get("content-type") ?? "";
       const data = ct.includes("application/json")
-        ? ((await res.json()) as { error?: string; comic?: { id: string } })
+        ? ((await res.json()) as {
+            error?: string;
+            comic?: { id: string };
+            imagesWarning?: string;
+            panelsRendered?: number;
+            panelCount?: number;
+          })
         : {};
       if (!res.ok) {
         const msg = data.error || "漫画生成失败";
@@ -158,7 +165,14 @@ export default function NovelDetailPage() {
         setError("服务端未返回漫画 ID");
         return;
       }
-      router.push(`/comic/${data.comic.id}`);
+      const needsPanelRender =
+        Boolean(data.imagesWarning) ||
+        (typeof data.panelsRendered === "number" &&
+          typeof data.panelCount === "number" &&
+          data.panelsRendered < data.panelCount);
+      router.push(
+        needsPanelRender ? `/comic/${data.comic.id}?renderPanels=1` : `/comic/${data.comic.id}`,
+      );
     } catch {
       setError("网络错误");
     } finally {
@@ -258,12 +272,7 @@ export default function NovelDetailPage() {
                 {chapters.length} 章
               </p>
               {!editing && blurb && (
-                <p
-                  className="mt-2 line-clamp-2 max-w-2xl text-sm leading-relaxed"
-                  style={{ color: readPalette.muted }}
-                >
-                  {blurb}
-                </p>
+                <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
               )}
             </div>
 

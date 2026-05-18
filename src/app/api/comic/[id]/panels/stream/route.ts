@@ -1,8 +1,12 @@
+import { generateComicCover } from "@/lib/cover-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
+import { COVER_GENRE_STYLES } from "@/lib/cover-genre";
+import { resolveComicStoryContext } from "@/lib/comic-story-genre";
 import { getComicPanelGenConcurrency, getImageGenBatchPanelCount } from "@/lib/model-config";
 import { getOwnerKey } from "@/lib/owner";
 import { prisma } from "@/lib/prisma";
 import {
+  clearComicPanelImages,
   countPanelsWithImages,
   parseComicDocument,
   renderComicPanels,
@@ -17,7 +21,14 @@ function sseData(obj: Record<string, unknown>): string {
   return `data: ${JSON.stringify(obj)}\n\n`;
 }
 
-export async function POST(_req: Request, ctx: RouteContext) {
+type PanelStreamBody = {
+  /** 清空已有配图后全部重画（封面仍作风格参考） */
+  regenerate?: boolean;
+  /** 仅重画指定页（1-based，与分镜 page 字段一致） */
+  page?: number;
+};
+
+export async function POST(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
     return new Response(JSON.stringify({ error: "未授权" }), {
@@ -35,6 +46,16 @@ export async function POST(_req: Request, ctx: RouteContext) {
     });
   }
 
+  let body: PanelStreamBody = {};
+  const reqCt = req.headers.get("content-type") ?? "";
+  if (reqCt.includes("application/json")) {
+    try {
+      body = (await req.json()) as PanelStreamBody;
+    } catch {
+      body = {};
+    }
+  }
+
   const doc = parseComicDocument(row.imageUrls);
   if (doc.pages.length === 0) {
     return new Response(JSON.stringify({ error: "暂无分镜数据" }), {
@@ -45,6 +66,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
 
   const availability = getImageGenAvailability();
   const encoder = new TextEncoder();
+  const { title: storyTitle, summary: storySummary, genre: storyGenre } =
+    await resolveComicStoryContext(row);
+  let coverPath = row.coverPath;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -55,17 +79,65 @@ export async function POST(_req: Request, ctx: RouteContext) {
       try {
         const batchPanels = getImageGenBatchPanelCount();
         const concurrency = getComicPanelGenConcurrency();
-        send({
-          type: "status",
-          message: availability.ok
-            ? batchPanels > 0
-              ? `已连接文生图：${availability.openaiModel}，一次请求最多 ${batchPanels} 张，开始生成…`
-              : `已连接文生图：${availability.openaiModel}，并发 ${concurrency} 格，开始生成…`
-            : availability.message,
-        });
+        const fullRegenerate =
+          body.regenerate &&
+          !(typeof body.page === "number" && body.page >= 1);
+
+        if (fullRegenerate && row.novelId) {
+          const novel = await prisma.novel.findUnique({
+            where: { id: row.novelId },
+            select: { summary: true, content: true },
+          });
+          const genreLabel = COVER_GENRE_STYLES[storyGenre]?.label ?? "题材";
+          send({ type: "status", message: `正在按${genreLabel}风格重生成漫画封面…` });
+          const newCover = await generateComicCover(
+            id,
+            row.title,
+            novel?.summary ?? "",
+            novel?.content?.slice(0, 800) ?? row.prompt ?? "",
+            storyGenre,
+          );
+          if (newCover) coverPath = newCover;
+        }
+
+        if (body.regenerate) {
+          const scope =
+            typeof body.page === "number" && body.page >= 1
+              ? { pageNumber: Math.floor(body.page) }
+              : "all";
+          const cleared = clearComicPanelImages(doc, scope);
+          const clearedUrls = serializeComicPanels(doc);
+          await prisma.comic.update({
+            where: { id },
+            data: { imageUrls: clearedUrls },
+          });
+          send({
+            type: "status",
+            message:
+              cleared > 0
+                ? scope === "all"
+                  ? `已清空 ${cleared} 格配图，开始重新生成…`
+                  : `已清空第 ${scope.pageNumber} 页 ${cleared} 格配图，开始重新生成…`
+                : "所选范围暂无配图，将按缺图补全…",
+            imageUrls: clearedUrls,
+          });
+        } else {
+          send({
+            type: "status",
+            message: availability.ok
+              ? batchPanels > 0
+                ? `已连接文生图：${availability.openaiModel}，一次请求最多 ${batchPanels} 张，开始生成…`
+                : `已连接文生图：${availability.openaiModel}，并发 ${concurrency} 格，开始生成…`
+              : availability.message,
+          });
+        }
 
         const result = await renderComicPanels(doc, {
           onlyMissing: true,
+          coverPath,
+          storyGenre,
+          storyContext: { title: storyTitle, summary: storySummary },
+          skipStyleRefs: fullRegenerate,
           onProgress: (ev) => {
             send(ev as unknown as Record<string, unknown>);
             if (ev.type === "panel_done") {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { parseComicImageUrls, type ComicPage } from "@/lib/comic-format";
@@ -17,6 +17,7 @@ interface Comic {
   createdAt: string;
   shareCode: string | null;
   isOwner?: boolean;
+  status?: string;
   panelsWithImage?: number;
   panelsTotal?: number;
 }
@@ -54,7 +55,7 @@ function ShareButton({ comicId }: { comicId: string }) {
   );
 }
 
-function ComicPageGrid({ page }: { page: ComicPage }) {
+function ComicPageGrid({ page, rendering }: { page: ComicPage; rendering?: boolean }) {
   const panels = page.panels.slice(0, 4);
   while (panels.length < 4) {
     panels.push({ caption: "", prompt: "" });
@@ -78,7 +79,9 @@ function ComicPageGrid({ page }: { page: ComicPage }) {
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-center">
-                <span className="text-[10px] uppercase tracking-wider text-[var(--gc-muted)]">待生成</span>
+                <span className="text-[10px] uppercase tracking-wider text-[var(--gc-muted)]">
+                  {rendering ? "生成中…" : "待配图"}
+                </span>
                 {panel.caption ? (
                   <p className="line-clamp-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
                     {panel.caption}
@@ -100,6 +103,8 @@ function ComicPageGrid({ page }: { page: ComicPage }) {
 
 export default function ComicDetailPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const autoRenderStarted = useRef(false);
   const [comic, setComic] = useState<Comic | null>(null);
   const [pages, setPages] = useState<ComicPage[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -138,35 +143,53 @@ export default function ComicDetailPage() {
       .finally(() => setLoading(false));
   }, [id, loadComic]);
 
-  const missingImages = useMemo(() => {
-    if (comic?.panelsTotal != null && comic.panelsWithImage != null) {
-      return comic.panelsWithImage < comic.panelsTotal;
-    }
+  const panelStats = useMemo(() => {
     let total = 0;
-    let withImg = 0;
+    let withImage = 0;
     for (const p of pages) {
       for (const panel of p.panels) {
         total += 1;
-        if (panel.imageUrl?.trim()) withImg += 1;
+        if (panel.imageUrl?.trim()) withImage += 1;
       }
     }
-    return total > 0 && withImg < total;
-  }, [comic, pages]);
+    if (total === 0 && comic?.panelsTotal) {
+      const t = comic.panelsTotal;
+      const w = comic.panelsWithImage ?? 0;
+      return { total: t, withImage: w, missing: Math.max(0, t - w) };
+    }
+    return { total, withImage, missing: Math.max(0, total - withImage) };
+  }, [pages, comic]);
 
-  async function handleRenderPanels() {
-    if (!comic || rendering) return;
-    setRendering(true);
-    setRenderMsg(null);
-    setError("");
+  const missingImages = panelStats.total > 0 && panelStats.missing > 0;
+
+  const handleRenderPanels = useCallback(
+    async (opts?: { regenerate?: boolean; page?: number }) => {
+      if (!comic) return;
+      setRendering(true);
+      setRenderMsg(null);
+      setError("");
+    const regenPage = opts?.page;
     setRenderProgress({
-      total: comic.panelsTotal ?? 4,
-      current: 0,
-      withImage: comic.panelsWithImage ?? 0,
-      message: "正在连接文生图服务…",
+      total: panelStats.total || comic.panelsTotal || 4,
+      current: opts?.regenerate ? 0 : panelStats.withImage,
+      withImage: opts?.regenerate ? 0 : panelStats.withImage,
+      message: opts?.regenerate
+        ? regenPage != null
+          ? `正在清空第 ${regenPage} 页配图并重新生成…`
+          : "正在清空已有配图并重新生成…"
+        : "正在连接文生图服务…",
     });
 
     try {
-      const res = await fetch(`/api/comic/${comic.id}/panels/stream`, { method: "POST" });
+      const res = await fetch(`/api/comic/${comic.id}/panels/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          opts?.regenerate
+            ? { regenerate: true, ...(regenPage != null ? { page: regenPage } : {}) }
+            : {},
+        ),
+      });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setError(data.error || `配图生成失败（${res.status}）`);
@@ -182,8 +205,17 @@ export default function ComicDetailPage() {
       await consumeSSE(res, (ev) => {
         const t = ev.type as string | undefined;
         if (t === "status" && typeof ev.message === "string") {
+          if (typeof ev.imageUrls === "string") {
+            setPages(parseComicImageUrls(ev.imageUrls as string).pages);
+          }
           setRenderProgress((p) =>
-            p ? { ...p, message: ev.message as string } : { total: 4, current: 0, withImage: 0, message: ev.message as string },
+            p
+              ? {
+                  ...p,
+                  message: ev.message as string,
+                  ...(opts?.regenerate ? { current: 0, withImage: 0 } : {}),
+                }
+              : { total: 4, current: 0, withImage: 0, message: ev.message as string },
           );
         }
         if (t === "start") {
@@ -244,6 +276,7 @@ export default function ComicDetailPage() {
         if (t === "done") {
           const withImage = typeof ev.withImage === "number" ? ev.withImage : 0;
           const total = typeof ev.total === "number" ? ev.total : 4;
+          const doneMsg = typeof ev.message === "string" ? ev.message : "配图完成";
           if (ev.comic && typeof ev.comic === "object" && "imageUrls" in ev.comic) {
             const urls = (ev.comic as { imageUrls?: string }).imageUrls;
             if (urls) setPages(parseComicImageUrls(urls).pages);
@@ -252,12 +285,20 @@ export default function ComicDetailPage() {
             total,
             current: total,
             withImage,
-            message: typeof ev.message === "string" ? (ev.message as string) : "配图完成",
+            message: doneMsg,
           });
-          setRenderMsg(typeof ev.message === "string" ? (ev.message as string) : "配图已更新");
+          if (withImage === 0) {
+            setError(doneMsg);
+            setRenderMsg(null);
+          } else {
+            setRenderMsg(doneMsg);
+            setError("");
+          }
         }
         if (t === "error") {
-          setError(typeof ev.error === "string" ? (ev.error as string) : "配图生成失败");
+          const errMsg = typeof ev.error === "string" ? ev.error : "配图生成失败";
+          setError(errMsg);
+          setRenderProgress((p) => (p ? { ...p, message: errMsg } : p));
         }
       });
 
@@ -266,9 +307,35 @@ export default function ComicDetailPage() {
       setError("配图请求失败，请稍后重试");
     } finally {
       setRendering(false);
-      setTimeout(() => setRenderProgress(null), 4000);
+      setTimeout(() => setRenderProgress(null), 8000);
     }
-  }
+    },
+    [comic, loadComic, panelStats.total, panelStats.withImage],
+  );
+
+  const confirmRegenerate = useCallback(
+    (scope: "all" | "page") => {
+      if (!comic || rendering) return;
+      const pageNum = pages[currentPage]?.page ?? currentPage + 1;
+      const msg =
+        scope === "all"
+          ? `将清空全部 ${panelStats.withImage} 格已有配图，按小说都市题材重生成封面与配图（不使用旧玄幻图作参考）。\n\n过程较长，请勿关闭页面。确定继续？`
+          : `将清空第 ${pageNum} 页的配图并重新生成（共 4 格）。\n\n确定继续？`;
+      if (!window.confirm(msg)) return;
+      void handleRenderPanels(
+        scope === "all" ? { regenerate: true } : { regenerate: true, page: pageNum },
+      );
+    },
+    [comic, rendering, pages, currentPage, panelStats.withImage, handleRenderPanels],
+  );
+
+  useEffect(() => {
+    if (autoRenderStarted.current || !comic?.isOwner || rendering || !missingImages) return;
+    if (searchParams.get("renderPanels") !== "1") return;
+    autoRenderStarted.current = true;
+    window.history.replaceState({}, "", window.location.pathname);
+    void handleRenderPanels();
+  }, [comic?.isOwner, missingImages, rendering, searchParams, handleRenderPanels]);
 
   if (loading) {
     return (
@@ -318,18 +385,27 @@ export default function ComicDetailPage() {
             <ShareButton comicId={comic.id} />
           </div>
 
-          {(missingImages || rendering) && (
+          {(missingImages || rendering || (comic.isOwner && panelStats.withImage > 0)) && (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-              {rendering && renderProgress ? (
+              {error && !rendering ? (
+                <p className="mb-3 text-sm text-red-300">{error}</p>
+              ) : null}
+              {rendering ? (
                 <div className="space-y-3">
+                  {!renderProgress ? (
+                    <p className="text-sm text-amber-100/90">正在连接文生图服务，请稍候…</p>
+                  ) : (
+                    <>
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--gc-accent)] border-t-transparent"
                       aria-hidden
                     />
-                    <p className="text-sm font-medium text-amber-100">配图生成进行中</p>
+                    <p className="text-sm font-medium text-amber-100">正在生成中</p>
                   </div>
-                  <p className="text-sm text-amber-100/90">{renderProgress.message}</p>
+                  <p className="text-sm text-amber-100/90">
+                    {renderProgress.message || "四宫格分镜配图生成中，与列表封面无关，请勿关闭页面。"}
+                  </p>
                   <div className="h-2 overflow-hidden rounded-full bg-black/30">
                     <div
                       className="h-full rounded-full bg-[var(--gc-accent)] transition-all duration-500"
@@ -351,28 +427,61 @@ export default function ComicDetailPage() {
                       : null}{" "}
                     · 单格通常约 2～8 分钟（视网关负载），请勿关闭页面
                   </p>
+                    </>
+                  )}
                 </div>
               ) : (
-                <p className="text-sm text-amber-100/90">
-                  分镜脚本已生成，但配图尚未就绪。点击后逐格调用文生图，界面会显示实时进度与每格耗时。
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-100">四宫格分镜配图（不是封面）</p>
+                  <p className="text-sm text-amber-100/90">
+                    {panelStats.withImage === 0
+                      ? `分镜脚本已就绪，共 ${panelStats.total} 格尚未出图。中文对白在格子下方/叠字显示，配图应为无字纯画面；小说页「生成漫画」超过 1 页时只生成分镜，需在本页配图。`
+                      : panelStats.missing === 0
+                        ? `配图已全部完成（${panelStats.withImage}/${panelStats.total} 格）。若不满意可重新生成；续画会跳过已有图。`
+                        : `配图未完成：已完成 ${panelStats.withImage}/${panelStats.total} 格。续画逐格串行，以首张分镜+封面为风格锚点（需 GEMINI_API_KEY），跳过已有图。`}
+                  </p>
+                </div>
               )}
               {comic.isOwner && !rendering ? (
-                <button
-                  type="button"
-                  onClick={() => void handleRenderPanels()}
-                  className="mt-3 rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-sm font-medium text-white"
-                >
-                  生成配图
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {panelStats.missing > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRenderPanels()}
+                      className="rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-sm font-medium text-white"
+                    >
+                      {panelStats.withImage > 0 ? "继续生成配图" : "开始生成配图"}
+                    </button>
+                  ) : null}
+                  {panelStats.withImage > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => confirmRegenerate("all")}
+                        className="rounded-lg border border-amber-400/50 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-950/70"
+                      >
+                        重新生成全部
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => confirmRegenerate("page")}
+                        className="rounded-lg border border-[color:var(--gc-border)] px-4 py-2 text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                      >
+                        重新生成本页
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               ) : !comic.isOwner ? (
                 <p className="mt-2 text-xs text-amber-200/70">请使用创作时的浏览器登录态后重试。</p>
               ) : null}
             </div>
           )}
 
-          {renderMsg ? <p className="mb-4 text-sm text-[color:var(--gc-accent)]">{renderMsg}</p> : null}
-          {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
+          {renderMsg && !error ? (
+            <p className="mb-4 text-sm text-[color:var(--gc-accent)]">{renderMsg}</p>
+          ) : null}
+          {error && rendering ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
 
           {total === 0 ? (
             <p className="text-[var(--gc-muted)]">暂无分镜数据</p>
@@ -400,7 +509,7 @@ export default function ComicDetailPage() {
                 </button>
               </div>
 
-              {page && <ComicPageGrid page={page} />}
+              {page && <ComicPageGrid page={page} rendering={rendering} />}
 
               {total > 1 && (
                 <div className="mt-6 flex flex-wrap justify-center gap-2">

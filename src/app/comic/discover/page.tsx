@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SuperAdminPanel } from "@/components/SuperAdminPanel";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 
 interface Comic {
   id: string;
@@ -12,9 +14,11 @@ interface Comic {
   novel: { title: string };
   createdAt: string;
   likeCount: number;
+  isOwner?: boolean;
+  canDelete?: boolean;
 }
 
-function ComicCard({ c }: { c: Comic }) {
+function ComicCard({ c, onDeleted }: { c: Comic; onDeleted?: (id: string) => void }) {
   const [liked, setLiked] = useState(() => {
     if (typeof localStorage === "undefined") return false;
     return !!localStorage.getItem(`liked:comic:${c.id}`);
@@ -53,13 +57,36 @@ function ComicCard({ c }: { c: Comic }) {
     void fetch(`/api/comic/${c.id}/like`, { method: "POST" });
   }
 
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`确定删除漫画《${c.title}》？无法恢复。`)) return;
+    const res = await fetch(`/api/comic/${c.id}`, superAdminFetchInit({ method: "DELETE" }));
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "删除失败");
+      return;
+    }
+    onDeleted?.(c.id);
+  }
+
   const img = coverImage();
 
   return (
     <Link
       href={`/comic/${c.id}`}
-      className="group flex flex-col rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 transition hover:border-[color:var(--gc-accent)]/40"
+      className="group relative flex flex-col rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 transition hover:border-[color:var(--gc-accent)]/40"
     >
+      {c.isOwner || c.canDelete ? (
+        <button
+          type="button"
+          title={c.canDelete && !c.isOwner ? "管理员删除" : "删除"}
+          onClick={(e) => void handleDelete(e)}
+          className="absolute right-3 top-3 z-10 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-medium text-red-200 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 hover:bg-red-950/80"
+        >
+          {c.canDelete && !c.isOwner ? "管理删除" : "删除"}
+        </button>
+      ) : null}
       {img ? (
         <div className="mb-3 aspect-[4/3] overflow-hidden rounded-lg bg-[var(--gc-bg)]">
           <img
@@ -105,7 +132,7 @@ export default function ComicDiscoverPage() {
 
   useEffect(() => {
     startTransition(() => setLoading(true));
-    fetch(`/api/comic?page=${page}&limit=${limit}`)
+    fetch(`/api/comic?page=${page}&limit=${limit}`, superAdminFetchInit())
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<{ comics?: Comic[]; total?: number }>;
@@ -151,7 +178,14 @@ export default function ComicDiscoverPage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {comics.map((c) => (
-                  <ComicCard key={c.id} c={c} />
+                  <ComicCard
+                    key={c.id}
+                    c={c}
+                    onDeleted={(id) => {
+                      setComics((prev) => prev.filter((x) => x.id !== id));
+                      setTotal((t) => Math.max(0, t - 1));
+                    }}
+                  />
                 ))}
               </div>
 
@@ -178,6 +212,8 @@ export default function ComicDiscoverPage() {
                   </button>
                 </div>
               )}
+
+              <SuperAdminPanel scope="comic" />
             </>
           )}
         </div>
@@ -185,3 +221,4 @@ export default function ComicDiscoverPage() {
     </div>
   );
 }
+

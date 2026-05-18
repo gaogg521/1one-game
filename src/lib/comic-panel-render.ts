@@ -4,8 +4,16 @@ import {
   generateImagesBatchDetailed,
   getImageGenAvailability,
 } from "@/lib/image-generation";
-import { getComicPanelGenConcurrency, getImageGenBatchPanelCount } from "@/lib/model-config";
 import { getComfyBaseUrl } from "@/lib/orchestration/comfy-gateway";
+import { buildPanelImagePrompt } from "@/lib/comic-generate-config";
+import type { ComicStoryContext } from "@/lib/comic-panel-prompt-urban";
+import { docHasPlaceholderPanels } from "@/lib/comic-panel-prompt-urban";
+import type { CoverGenre } from "@/lib/cover-genre";
+import {
+  collectComicStyleReferenceUrls,
+  comicPanelRenderNeedsGemini,
+  COMIC_STYLE_GEMINI_REQUIRED_MSG,
+} from "@/lib/comic-style-reference";
 import {
   parseComicImageUrls,
   serializeComicDocument,
@@ -64,8 +72,24 @@ export type ComicPanelProgressEvent =
 /** 为分镜生成配图并写入 panel.imageUrl。 */
 export async function renderComicPanels(
   doc: ComicDocument,
-  opts?: { onlyMissing?: boolean; onProgress?: (ev: ComicPanelProgressEvent) => void },
+  opts?: {
+    onlyMissing?: boolean;
+    onProgress?: (ev: ComicPanelProgressEvent) => void;
+    /** 漫画封面路径，与首张已有分镜图一并作为风格参考 */
+    coverPath?: string | null;
+    /** 题材画风锁（都市/仙侠等），拼入 prompt 与 Gemini 参考图指令 */
+    storyGenre?: CoverGenre;
+    /** 小说标题/摘要：占位分镜时按都市节奏重建画面 prompt */
+    storyContext?: ComicStoryContext;
+    /** 强制不用参考图（如重生成全部后的首格） */
+    skipStyleRefs?: boolean;
+  },
 ): Promise<RenderComicPanelsResult> {
+  const storyGenre = opts?.storyGenre ?? "general";
+  const skipStyleRefs =
+    opts?.skipStyleRefs === true ||
+    (storyGenre === "urban" && docHasPlaceholderPanels(doc));
+  const totalScenes = doc.pages.reduce((n, p) => n + p.panels.length, 0);
   const onlyMissing = opts?.onlyMissing !== false;
   const availability = getImageGenAvailability();
   const flat: { panel: ComicPanel; index: number }[] = [];
@@ -91,25 +115,64 @@ export async function renderComicPanels(
     return { doc, rendered: 0, total: 0, imageSource: "none", errors: [] };
   }
 
-  const panelConcurrency = getComicPanelGenConcurrency();
-  const batchPanelCount = getImageGenBatchPanelCount();
-  const useOpenAIBatch =
-    batchPanelCount > 0 && flat.length > 1 && flat.length <= batchPanelCount;
+  const styleRefUrls = collectComicStyleReferenceUrls(doc, opts?.coverPath, {
+    storyGenre,
+    skipStyleRefs,
+  });
+  const useStyleRefs = styleRefUrls.length > 0;
+  const needsGeminiForRefs = comicPanelRenderNeedsGemini(styleRefUrls);
+  const hasPanelAnchor = countPanelsWithImages(doc).withImage > 0;
+  /** 漫画禁用 OpenAI 批量：无法锚定参考图，格与格之间易画风不一 */
+  const useOpenAIBatch = false;
+
+  if (hasPanelAnchor && needsGeminiForRefs && !availability.hasGemini) {
+    opts?.onProgress?.({
+      type: "done",
+      rendered: 0,
+      total: flat.length,
+      withImage: countPanelsWithImages(doc).withImage,
+      message: COMIC_STYLE_GEMINI_REQUIRED_MSG,
+    });
+    return {
+      doc,
+      rendered: 0,
+      total: flat.length,
+      imageSource: "none",
+      errors: [COMIC_STYLE_GEMINI_REQUIRED_MSG],
+      imageGenHint: COMIC_STYLE_GEMINI_REQUIRED_MSG,
+    };
+  }
+
+  const styleConsistencyNote =
+    !availability.hasGemini && flat.length > 1
+      ? "未配置 GEMINI_API_KEY，将用 OpenAI 逐格生成（画风一致性较弱，建议补配 Gemini）"
+      : null;
 
   opts?.onProgress?.({
     type: "start",
     total: flat.length,
     message: availability.ok
-      ? useOpenAIBatch
-        ? `${availability.message} · 一次请求生成 ${flat.length} 张`
-        : `${availability.message} · 并发 ${panelConcurrency} 格`
+      ? [
+          useStyleRefs
+            ? `${availability.message} · 已锚定首张分镜${styleRefUrls.length > 1 ? "+封面" : ""}，逐格串行续画`
+            : flat.length > 1
+              ? `${availability.message} · 逐格串行（首格定调后后续格锚定画风）`
+              : availability.message,
+          styleConsistencyNote,
+        ]
+          .filter(Boolean)
+          .join(" · ")
       : availability.message,
     model: availability.openaiModel,
-    concurrency: useOpenAIBatch ? 1 : panelConcurrency,
+    concurrency: 1,
   });
 
-  const prompts = flat.map(
-    (f) => f.panel.prompt?.trim() || f.panel.caption?.trim() || "Chinese historical manga panel, cinematic",
+  const prompts = flat.map((f) =>
+    buildPanelImagePrompt(f.panel, storyGenre, {
+      sceneIndex: f.index,
+      totalScenes,
+      story: opts?.storyContext,
+    }),
   );
 
   const comfyBase = getComfyBaseUrl();
@@ -225,91 +288,92 @@ export async function renderComicPanels(
       }
     } else {
       console.info(
-        `[comic-panels] 开始文生图 ${flat.length} 格 · 并发 ${panelConcurrency} · ${availability.message}`,
+        `[comic-panels] 开始文生图 ${flat.length} 格 · 逐格串行（画风一致）· ${availability.message}`,
       );
-    }
 
-    const generated = useOpenAIBatch
-      ? urls
-      : await mapWithConcurrency(prompts, panelConcurrency, async (prompt, i) => {
-      const label = flat[i]!.index;
-      const caption = flat[i]!.panel.caption;
-      const panelT0 = Date.now();
-      opts?.onProgress?.({
-        type: "panel_start",
-        index: label,
-        total: flat.length,
-        caption,
-      });
-      console.info(`[comic-panels] 第 ${label} 格请求中…`);
-
-      const heartbeat = setInterval(() => {
-        const elapsedMs = Date.now() - panelT0;
+      for (let i = 0; i < flat.length; i++) {
+        const prompt = prompts[i]!;
+        const label = flat[i]!.index;
+        const caption = flat[i]!.panel.caption;
+        const panelT0 = Date.now();
         opts?.onProgress?.({
-          type: "heartbeat",
+          type: "panel_start",
           index: label,
           total: flat.length,
-          elapsedMs,
-          message: `第 ${label}/${flat.length} 格：已用时 ${formatImageGenElapsed(elapsedMs)}，文生图生成中…`,
+          caption,
         });
-      }, 5_000);
+        console.info(`[comic-panels] 第 ${label} 格请求中…`);
 
+        const heartbeat = setInterval(() => {
+          const elapsedMs = Date.now() - panelT0;
+          opts?.onProgress?.({
+            type: "heartbeat",
+            index: label,
+            total: flat.length,
+            elapsedMs,
+            message: `第 ${label}/${flat.length} 格：已用时 ${formatImageGenElapsed(elapsedMs)}，文生图生成中…`,
+          });
+        }, 5_000);
+
+      const panelStyleRefs = collectComicStyleReferenceUrls(doc, opts?.coverPath, {
+        storyGenre,
+        skipStyleRefs,
+      });
+      const useRefs =
+        panelStyleRefs.length > 0 && availability.hasGemini ? panelStyleRefs : undefined;
       let detail;
       try {
-        detail = await generateImageDetailed(prompt, { size: "1024x1024", quality: "standard" });
-      } finally {
-        clearInterval(heartbeat);
-      }
+        detail = await generateImageDetailed(prompt, {
+          size: "1024x1024",
+          quality: "standard",
+          styleReferenceUrls: useRefs,
+          styleGenre: storyGenre,
+        });
+        } finally {
+          clearInterval(heartbeat);
+        }
 
-      const elapsedMs = Date.now() - panelT0;
-      const apiMs = detail.durationMs;
+        const elapsedMs = Date.now() - panelT0;
+        const apiMs = detail.durationMs;
 
-      if (!detail.ok || !detail.url) {
-        const err = detail.error || "未知错误";
-        errors.push(`第 ${label} 格：${err}`);
-        console.warn(
-          `[comic-panels] 第 ${label} 格失败 · 总 ${formatImageGenElapsed(elapsedMs)}`,
-          err,
+        if (!detail.ok || !detail.url) {
+          const err = detail.error || "未知错误";
+          errors.push(`第 ${label} 格：${err}`);
+          console.warn(
+            `[comic-panels] 第 ${label} 格失败 · 总 ${formatImageGenElapsed(elapsedMs)}`,
+            err,
+          );
+          opts?.onProgress?.({
+            type: "panel_done",
+            index: label,
+            total: flat.length,
+            ok: false,
+            error: err,
+            withImage: countPanelsWithImages(doc).withImage,
+            imageUrls: serializeComicDocument(doc),
+            elapsedMs,
+            durationMs: apiMs,
+          });
+          continue;
+        }
+        console.info(
+          `[comic-panels] 第 ${label} 格成功 · ${detail.provider}/${detail.model} · 总 ${formatImageGenElapsed(elapsedMs)}` +
+            (apiMs != null ? ` · API ${formatImageGenElapsed(apiMs)}` : ""),
         );
+        flat[i]!.panel.imageUrl = detail.url;
+        urls[i] = detail.url;
         opts?.onProgress?.({
           type: "panel_done",
           index: label,
           total: flat.length,
-          ok: false,
-          error: err,
+          ok: true,
           withImage: countPanelsWithImages(doc).withImage,
           imageUrls: serializeComicDocument(doc),
           elapsedMs,
           durationMs: apiMs,
+          provider: detail.provider,
         });
-        return undefined;
-      }
-      console.info(
-        `[comic-panels] 第 ${label} 格成功 · ${detail.provider}/${detail.model} · 总 ${formatImageGenElapsed(elapsedMs)}` +
-          (apiMs != null ? ` · API ${formatImageGenElapsed(apiMs)}` : ""),
-      );
-      flat[i]!.panel.imageUrl = detail.url;
-      opts?.onProgress?.({
-        type: "panel_done",
-        index: label,
-        total: flat.length,
-        ok: true,
-        withImage: countPanelsWithImages(doc).withImage,
-        imageUrls: serializeComicDocument(doc),
-        elapsedMs,
-        durationMs: apiMs,
-        provider: detail.provider,
-      });
-      return detail.url;
-    });
-
-    if (!useOpenAIBatch) {
-      for (let i = 0; i < generated.length; i++) {
-        if (generated[i]) urls[i] = generated[i];
-      }
-      if (generated.some(Boolean)) {
-        imageSource = generated.some((u) => u && errors.length === 0) ? "openai" : "openai_partial";
-        if (imageSource === "openai_partial") imageSource = "openai";
+        if (detail.provider) imageSource = detail.provider;
       }
     }
   }
@@ -346,6 +410,24 @@ export async function renderComicPanels(
     errors,
     imageGenHint: availability.ok ? availability.message : availability.message,
   };
+}
+
+/** 清空分镜配图 URL（保留 caption/prompt；封面在 comic.coverPath 不受影响）。 */
+export function clearComicPanelImages(
+  doc: ComicDocument,
+  scope: "all" | { pageNumber: number } = "all",
+): number {
+  let cleared = 0;
+  for (const page of doc.pages) {
+    if (scope !== "all" && page.page !== scope.pageNumber) continue;
+    for (const panel of page.panels) {
+      if (panel.imageUrl?.trim()) {
+        delete panel.imageUrl;
+        cleared += 1;
+      }
+    }
+  }
+  return cleared;
 }
 
 export function countPanelsWithImages(doc: ComicDocument): { withImage: number; total: number } {

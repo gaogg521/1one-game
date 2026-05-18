@@ -6,6 +6,7 @@ import { newShareCode } from "@/lib/share-code";
 import { displayComicTitle } from "@/lib/comic-display";
 import { countPanelsWithImages, parseComicDocument } from "@/lib/comic-panel-render";
 import { normalizeNovelTitle } from "@/lib/novel-display";
+import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
+  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
   const doc = parseComicDocument(row.imageUrls);
   const panelStats = countPanelsWithImages(doc);
 
@@ -38,6 +40,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
       likeCount: row.likeCount,
       status: row.status,
       isOwner: Boolean(isOwner),
+      canDelete,
       panelsWithImage: panelStats.withImage,
       panelsTotal: panelStats.total,
       novel: {
@@ -101,15 +104,18 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   });
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext) {
+export async function DELETE(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
-  if (!ownerKey) {
+  if (!ownerKey && !isSuperAdmin(req)) {
     return NextResponse.json({ error: "未授权" }, { status: 401 });
   }
 
   const row = await prisma.comic.findUnique({ where: { id } });
-  if (!row || row.ownerKey !== ownerKey) {
+  if (!row) {
+    return NextResponse.json({ error: "未找到" }, { status: 404 });
+  }
+  if (!canDeleteOwnedResource(row.ownerKey, ownerKey, req)) {
     return NextResponse.json({ error: "未找到" }, { status: 404 });
   }
 

@@ -6,6 +6,7 @@ import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelText } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
+import { inferStoryGenre } from "@/lib/cover-genre";
 import {
   getNovelSystemPrompt,
   buildNovelUserMessage,
@@ -15,11 +16,14 @@ import {
   parseNovelLengthTier,
 } from "@/lib/novel-generate-config";
 import { extractNovelTitleFromContent, validateNovelTitleInput } from "@/lib/novel-display";
+import { generateNovelSynopsis } from "@/lib/novel-synopsis";
+import { truncateNovelToMaxChars } from "@/lib/novel-chapters";
 import {
   generateLongNovelBody,
   planLongNovelSegments,
   usesSegmentedLongGeneration,
 } from "@/lib/novel-long-generate";
+import { novelMaxChars } from "@/lib/novel-length";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
@@ -130,8 +134,16 @@ export async function POST(req: Request) {
       );
     }
 
+    content = truncateNovelToMaxChars(content, novelMaxChars(lengthTier));
+
     const extractedTitle = extractNovelTitleFromContent(content, title?.trim(), prompt.trim());
-    const summary = content.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…";
+    const summary = await generateNovelSynopsis({
+      model: modelUsed || cascade[0]!,
+      title: extractedTitle,
+      prompt: prompt.trim(),
+      content,
+      lengthTier,
+    });
 
     const novel = await prisma.novel.create({
       data: {
@@ -145,11 +157,19 @@ export async function POST(req: Request) {
     });
     await persistNovelLengthTier(novel.id, lengthTier);
 
+    const coverGenre = inferStoryGenre({
+      title: extractedTitle,
+      summary,
+      prompt: prompt.trim(),
+      contentSnippet: content.slice(0, 1200),
+    });
     const coverPath = await ensureNovelCoverAfterCreate(
       novel.id,
       extractedTitle,
       summary,
-      prompt.trim(),
+      [prompt.trim(), content.slice(0, 600)].filter(Boolean).join(" "),
+      600_000,
+      coverGenre,
     );
     const novelOut = coverPath
       ? await prisma.novel.findUnique({ where: { id: novel.id } })
