@@ -90,14 +90,14 @@ async function main() {
   });
 
   const imageUrls = serializeComicPanels(result.doc);
-  await p.comic.update({
-    where: { id: comic.id },
-    data: {
-      imageUrls,
-      status: result.rendered > 0 ? "ready" : comic.status,
-      coverPath: comicCover ?? comic.coverPath,
-    },
-  });
+  const { persistComicPanelsDb } = await import("../src/lib/comic-path-db.ts");
+  const { persistComicCoverPath } = await import("../src/lib/cover-path-db.ts");
+  await persistComicPanelsDb(
+    comic.id,
+    imageUrls,
+    result.rendered > 0 ? "ready" : comic.status,
+  );
+  if (comicCover) await persistComicCoverPath(comic.id, comicCover);
 
   console.log(
     `\n完成: 渲染 ${result.rendered} 格, 耗时 ${Math.round((Date.now() - t0) / 60000)} 分钟`,
