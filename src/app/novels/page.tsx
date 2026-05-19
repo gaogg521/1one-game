@@ -18,7 +18,7 @@ interface NovelWork {
 
 function NovelCard({ novel }: { novel: NovelWork }) {
   const title = normalizeNovelTitle(novel.title, novel.prompt);
-  const blurb = displayNovelSummary(novel.summary, title, novel.prompt);
+  const blurb = displayNovelSummary(novel.summary, title, novel.prompt, undefined);
   return (
     <Link
       href={`/novel/${novel.id}`}

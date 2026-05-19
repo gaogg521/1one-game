@@ -1,6 +1,7 @@
 import { llmNovelText } from "@/lib/llm";
 import { llmNovelTextStream } from "@/lib/llm";
-import { parseNovelChapters } from "@/lib/novel-chapters";
+import { parseNovelChapters, truncateNovelToMaxChars } from "@/lib/novel-chapters";
+import { novelMaxChars } from "@/lib/novel-length";
 import { getNovelSystemPrompt } from "@/lib/novel-generate-config";
 import { LONG_NOVEL_PRODUCT, planLongNovelSegments, type LongNovelSegmentPlan } from "@/lib/novel-long-config";
 import { novelLengthConfig, type NovelLengthTier } from "@/lib/novel-length";
@@ -182,10 +183,11 @@ export async function streamLongNovelBody(params: {
       target: plan.targetTotalChars,
     });
 
-    if (content.length >= plan.targetTotalChars) break;
+    const hardMax = novelMaxChars(lengthTier);
+    if (content.length >= plan.targetTotalChars || content.length >= hardMax) break;
   }
 
-  return content;
+  return truncateNovelToMaxChars(content, novelMaxChars(lengthTier));
 }
 
 /** 长篇：非流式分段生成（供 POST /api/novel/generate）。 */

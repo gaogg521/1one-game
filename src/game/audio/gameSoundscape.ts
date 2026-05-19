@@ -3,6 +3,19 @@ import type { MusicProfile } from "@/lib/cohesive-presentation";
 
 type SoundscapeCleanup = () => void;
 
+export type GameSoundscapeOptions = {
+  /** 明亮方块户外风（我的世界等）：更清晰的铺底与慢速五声音阶 */
+  blocky?: boolean;
+};
+
+function profileBaseGain(profile: MusicProfile, blocky: boolean): number {
+  if (blocky) return 0.078;
+  if (profile === "minimal") return 0.034;
+  if (profile === "organic") return 0.064;
+  if (profile === "neon") return 0.068;
+  return 0.066;
+}
+
 /**
  * 与主题一致的轻量程序化铺底（无外部音频素材）。
  * - 与用户蜂鸣共用 AudioContext；
@@ -29,9 +42,14 @@ export class GameSoundscape {
     private readonly profile: MusicProfile,
     private readonly rootHz: number,
     private readonly intensity: number,
+    private readonly opts: GameSoundscapeOptions = {},
   ) {
     this.currentTension = intensity;
     this.tensionTarget = intensity;
+  }
+
+  private get blocky(): boolean {
+    return this.opts.blocky === true;
   }
 
   /**
@@ -55,8 +73,7 @@ export class GameSoundscape {
     const rampTime = 1.2;
 
     // Master gain
-    const base =
-      this.profile === "minimal" ? 0.028 : this.profile === "organic" ? 0.048 : this.profile === "neon" ? 0.058 : 0.052;
+    const base = profileBaseGain(this.profile, this.blocky);
     const targetGain = base * (0.72 + t * 0.28);
     this.masterGain.gain.linearRampToValueAtTime(targetGain, now + rampTime);
 
@@ -127,8 +144,7 @@ export class GameSoundscape {
 
     const master = ctx.createGain();
     const lvl = Math.min(1, Math.max(0, this.intensity));
-    const base =
-      this.profile === "minimal" ? 0.028 : this.profile === "organic" ? 0.048 : this.profile === "neon" ? 0.058 : 0.052;
+    const base = profileBaseGain(this.profile, this.blocky);
     master.gain.setValueAtTime(base * (0.72 + lvl * 0.22), ctx.currentTime);
     master.connect(ctx.destination);
     this.masterGain = master;
@@ -202,8 +218,62 @@ export class GameSoundscape {
       try { lfo.stop(); lfo.disconnect(); lfoGain.disconnect(); } catch { /* ignore */ }
     });
 
+    // 方块户外：五声音阶琶音 + 低音铺底（C418 式舒缓冒险感）
+    if (this.blocky) {
+      const pent = [1, 1.125, 1.25, 1.5, 1.667, 2];
+      let step = 0;
+      const arpOsc = ctx.createOscillator();
+      arpOsc.type = "square";
+      arpOsc.frequency.setValueAtTime(root * pent[0]!, now);
+      const arpFilter = ctx.createBiquadFilter();
+      arpFilter.type = "lowpass";
+      arpFilter.frequency.setValueAtTime(2400, now);
+      arpFilter.Q.setValueAtTime(0.5, now);
+      const ag = ctx.createGain();
+      ag.gain.setValueAtTime(0.032, now);
+      arpOsc.connect(arpFilter);
+      arpFilter.connect(ag);
+      ag.connect(filter);
+      arpOsc.start(now);
+
+      const bass = ctx.createOscillator();
+      bass.type = "triangle";
+      bass.frequency.setValueAtTime(root * 0.5, now);
+      const bg = ctx.createGain();
+      bg.gain.setValueAtTime(0.055, now);
+      bass.connect(bg);
+      bg.connect(filter);
+      bass.start(now);
+
+      const id = window.setInterval(() => {
+        step += 1;
+        const mul = pent[step % pent.length]!;
+        try {
+          arpOsc.frequency.setTargetAtTime(root * mul, ctx.currentTime, 0.06);
+        } catch {
+          /* ignore */
+        }
+      }, 560);
+      this.arpSteps = id;
+      this.cleanups.push(() => {
+        window.clearInterval(id);
+        this.arpSteps = null;
+        try {
+          arpOsc.stop();
+          arpOsc.disconnect();
+          arpFilter.disconnect();
+          ag.disconnect();
+          bass.stop();
+          bass.disconnect();
+          bg.disconnect();
+        } catch {
+          /* ignore */
+        }
+      });
+    }
+
     // neon：极简琶音移位
-    if (this.profile === "neon") {
+    if (this.profile === "neon" && !this.blocky) {
       let step = 0;
       const arpOsc = ctx.createOscillator();
       arpOsc.type = "triangle";

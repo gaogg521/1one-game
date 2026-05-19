@@ -44,5 +44,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  /** 静态资源与封面不走 proxy，减轻 dev 下偶发「This page couldn't load」 */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|covers/|brand/|samples/).*)"],
 };

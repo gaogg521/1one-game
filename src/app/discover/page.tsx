@@ -104,22 +104,48 @@ export default function DiscoverPage() {
   const [, startTransition] = useTransition();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("playCount");
 
   useEffect(() => {
+    let stale = false;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 45_000);
     startTransition(() => setLoading(true));
+    setLoadError(null);
     const params = new URLSearchParams();
     if (filter) params.set("template", filter);
     if (sort !== "playCount") params.set("sort", sort);
     const url = `/api/discover${params.size > 0 ? `?${params.toString()}` : ""}`;
-    fetch(url)
-      .then((r) => r.json())
+    fetch(url, { signal: ac.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d: { projects?: DiscoverProject[] }) => {
+        if (stale) return;
         setProjects(d.projects ?? []);
       })
-      .catch(() => setProjects([]))
-      .finally(() => setLoading(false));
+      .catch((e: unknown) => {
+        if (stale) return;
+        setProjects([]);
+        const aborted = e instanceof DOMException && e.name === "AbortError";
+        setLoadError(
+          aborted
+            ? "加载超时：服务响应过慢，请稍后重试"
+            : "加载失败：请确认 npm run dev 已启动并访问 http://localhost:8888",
+        );
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (!stale) setLoading(false);
+      });
+    return () => {
+      stale = true;
+      ac.abort();
+      clearTimeout(timer);
+    };
   }, [filter, sort]);
 
   const sortMeta = SORT_OPTIONS.find((o) => o.key === sort) ?? SORT_OPTIONS[0];
@@ -188,7 +214,18 @@ export default function DiscoverPage() {
           ))}
         </div>
 
-        {loading ? (
+        {loadError ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-sm text-amber-200/90">{loadError}</p>
+            <button
+              type="button"
+              className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-text)]"
+              onClick={() => window.location.reload()}
+            >
+              重新加载
+            </button>
+          </div>
+        ) : loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="aspect-[920/560] animate-pulse rounded-2xl bg-[var(--gc-surface-glass)]" />

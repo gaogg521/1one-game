@@ -50,11 +50,14 @@ next-env.d.ts
 /prisma/*.db
 /prisma/*.db-journal
 
-# 试玩自动截图封面（可再生）
-public/covers/*.jpg
-public/covers/*.jpeg
+# 封面目录：勿用 public/covers/*.jpg 整段忽略——Next.js dev 不会提供被 gitignore 的 public 文件，会导致广场封面全 404
+# 仅忽略明确临时文件；作品封面 cmp*.jpg/png 与 openai-*.png 可提交或仅本地保留
+public/covers/composed-*.jpg
+public/covers/debug-*
 !public/covers/.gitkeep
-# 网关文生图回归样例（无密钥，供 README/QA 对照）
+!public/covers/cmp*.jpg
+!public/covers/cmp*.jpeg
+!public/covers/cmp*.png
 !public/covers/openai-*.png
 
 # E2E / 手测用 SQLite（无业务密钥；CI 亦可 migrate 重建）

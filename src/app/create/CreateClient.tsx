@@ -435,15 +435,20 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setError(null);
     let effectivePrompt = effectivePromptForGeneration;
     const hasQueuedAssetFiles = (fileRef.current?.files?.length ?? 0) > 0 || pastedImages.length > 0;
+    const hasIngestUrl = ingestUrl.trim().length > 0;
     setBusy("gen");
     const intentBrief = summarizePromptForStudio(prompt);
     setStreamIntentBrief(intentBrief);
-    if (hasQueuedAssetFiles) {
+    if (hasQueuedAssetFiles || hasIngestUrl) {
       setStreamStep("ingest");
-      setStreamMsg("正在解析队列中的参考素材（上传优先于剪贴板）；创意原文节选已写入下方日志…");
+      setStreamMsg(
+        hasQueuedAssetFiles
+          ? "正在解析队列中的参考素材（上传优先于剪贴板）；创意原文节选已写入下方日志…"
+          : "正在抓取参考链接正文并合并到描述…",
+      );
     } else {
       setStreamStep("received");
-      setStreamMsg("创意概要已写入下方制作过程，下一步将连接云端并完成解析。");
+      setStreamMsg("创意概要已写入右侧制作过程，下一步将连接云端并完成解析。");
     }
     setStreamStartedAt(Date.now());
     setEtaText(null);
@@ -475,10 +480,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       }),
     });
     try {
-      if (hasQueuedAssetFiles) {
+      if (hasQueuedAssetFiles || hasIngestUrl) {
         setIngestBusy(true);
         try {
-          const ing = await performReferenceIngest(prompt, { includeUrlField: false });
+          const ing = await performReferenceIngest(prompt, { includeUrlField: true });
           if (!ing.ok) {
             appendStudioLog({ kind: "error", title: "参考素材解析失败", bullets: [ing.error] });
             setError(ing.error);
@@ -506,7 +511,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
       setStreamStep("handshake");
       setStreamMsg(
-        hasQueuedAssetFiles ? "参考素材已合并至描述；正在连接生成服务并把任务送进队列…" : "正在连接生成服务并把任务送进队列…",
+        hasQueuedAssetFiles || hasIngestUrl
+          ? "参考素材已合并至描述；正在连接生成服务并把任务送进队列…"
+          : "正在连接生成服务并把任务送进队列…",
       );
 
       const assetManifestPayload = summarizeAssetManifestForGenerateApi();
@@ -664,6 +671,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     currentDirection,
     effectivePromptForGeneration,
     enhancePass,
+    ingestUrl,
     pastedImages,
     performReferenceIngest,
     prompt,
@@ -676,6 +684,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setError(null);
     let effectivePrompt = effectivePromptForGeneration;
     const hasQueuedAssetFiles = (fileRef.current?.files?.length ?? 0) > 0 || pastedImages.length > 0;
+    const hasIngestUrl = ingestUrl.trim().length > 0;
     setStreamMsg(null);
     setBusy("gen_variants");
     setWebMeta(null);
@@ -692,10 +701,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       ],
     });
     try {
-      if (hasQueuedAssetFiles) {
+      if (hasQueuedAssetFiles || hasIngestUrl) {
         setIngestBusy(true);
         try {
-          const ing = await performReferenceIngest(prompt, { includeUrlField: false });
+          const ing = await performReferenceIngest(prompt, { includeUrlField: true });
           if (!ing.ok) {
             appendStudioLog({ kind: "error", title: "参考素材解析失败", bullets: [ing.error] });
             setError(ing.error);
@@ -850,6 +859,88 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const stepProgress = stepMeta?.progress ?? 0;
   const stepText = stepMeta?.label ?? "";
   const stepMsg = streamMsg || stepMeta?.defaultMsg || "";
+
+  const studioProcessPanel =
+    busy === "gen" || studioLog.length > 0 ? (
+      <div className="space-y-2">
+        {busy === "gen" && stepMeta ? (
+          <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] border-t-[color:var(--gc-accent)]"
+                  aria-hidden
+                />
+                <p className="text-xs font-semibold text-[var(--gc-text-soft)]">阶段：{stepText}</p>
+              </div>
+              <p className="text-[11px] tabular-nums text-[var(--gc-text-faint)]">ETA {etaText ?? "…"}</p>
+            </div>
+            {streamIntentBrief ? (
+              <p className="mt-1 text-[11px] leading-snug text-[var(--gc-text-faint)]">
+                当前按此理解你的创意：<span className="text-[var(--gc-muted)]">{streamIntentBrief}</span>
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs leading-relaxed text-[var(--gc-muted)]">{stepMsg}</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--gc-border)_55%,transparent)]">
+              <div
+                className="relative h-full rounded-full bg-gradient-to-r from-[var(--gc-accent)] via-[color:color-mix(in_srgb,var(--gc-cta-b)_75%,white)] to-[var(--gc-cta-c)] transition-[width] duration-300"
+                style={{ width: `${Math.max(4, Math.floor(stepProgress * 100))}%` }}
+              >
+                <div className="absolute inset-0 animate-pulse bg-white/10" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--gc-text-faint)]">
+              <span className="tabular-nums">粗略进度 {Math.floor(stepProgress * 100)}%</span>
+              <span className="tabular-nums">已用时 {elapsedSec}s</span>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[var(--gc-bg-elevated)]/85 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--gc-muted)]">制作过程 · 滚动可见</p>
+          <div className="mt-2 max-h-72 min-h-[4.5rem] space-y-2 overflow-y-auto pr-1 text-[11px] leading-relaxed [scrollbar-width:thin]">
+            {studioLog.length === 0 ? (
+              <p className="text-[var(--gc-text-faint)]">开始流式生成后，这里会持续追加提示词摘要、素材与系统提要。</p>
+            ) : (
+              studioLog.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`rounded-lg border px-2.5 py-2 ${
+                    entry.kind === "error"
+                      ? "border-red-500/30 bg-red-500/10"
+                      : entry.kind === "done"
+                        ? "border-emerald-500/25 bg-emerald-500/10"
+                        : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"
+                  }`}
+                >
+                  <p className="text-[10px] tabular-nums text-[var(--gc-text-faint)]">
+                    {new Date(entry.t).toLocaleTimeString(undefined, {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </p>
+                  <p className="mt-1 font-semibold text-[var(--gc-text-soft)]">{entry.title}</p>
+                  {entry.bullets?.length ? (
+                    <ul className="mt-1.5 list-inside list-disc space-y-1 text-[var(--gc-muted)]">
+                      {entry.bullets.map((b, idx) => (
+                        <li key={idx}>
+                          <EmText s={b} />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ))
+            )}
+            <div ref={studioLogEndRef} />
+          </div>
+          <p className="mt-2 text-[10px] text-[var(--gc-text-faint)]">
+            说明：计划摘要为规则与安全文案，不包含模型隐性推理全文；后端耗时段会停留在「深度生成」。
+          </p>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div className="flex min-h-full flex-1 flex-col text-[var(--gc-text)] lg:flex-row">
@@ -1110,11 +1201,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 </details>
               ) : null}
               <p className="mt-2 text-xs font-medium text-[var(--gc-text-soft)]">
-                点击「生成」时队列里的素材会自动解析合并；链接框需单独点「解析并追加」
+                点击「生成」时会自动解析队列素材；参考链接框有 URL 时也会一并抓取合并
                 <span className="group/tip2 relative ml-1.5 inline-block align-middle">
                   <span className="cursor-help select-none rounded-full border border-[color:var(--gc-border)] px-1.5 py-0.5 text-[10px] text-[var(--gc-text-faint)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text-soft)]">?</span>
                   <span className="pointer-events-none absolute bottom-[calc(100%+6px)] right-0 z-50 w-80 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-3 text-[10px] leading-relaxed text-[var(--gc-muted)] opacity-0 shadow-2xl transition-opacity duration-150 group-hover/tip2:opacity-100">
-                    点击「生成」时，若队列里仍有「选择文件」或剪贴板粘贴的素材，会先自动走一遍解析并追加到描述（本地上传排在剪贴板图片之前）；上方的链接框不会自动带入，需单独点「解析并追加」。<br /><br />
+                    点击「生成」时，若队列里有文件/剪贴板图，或链接框填了公开 URL（如 mc.163.com），都会先解析并追加到描述再生成。<br /><br />
                     支持上传 PDF / DOCX / TXT / MD / 图片，或<strong className="text-[var(--gc-text-soft)]">Ctrl+V / ⌘V 粘贴截图</strong>，或粘贴公开网页链接。写入会话前会<strong className="text-[var(--gc-text-soft)]">自动缩图压缩</strong>；超出存储上限则自动降质或从末尾删图，无需手动处理。塔防试玩会按用途把<strong className="text-[var(--gc-text-soft)]">背景地图类</strong>作底图、<strong className="text-[var(--gc-text-soft)]">怪物类</strong>作敌军贴图。
                   </span>
                 </span>
@@ -1267,86 +1358,6 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               <p className="text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)]">{busyLabel}</p>
             ) : null}
 
-            {(busy === "gen" || studioLog.length > 0) && (
-              <div className="space-y-2">
-                {busy === "gen" && stepMeta ? (
-                  <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] border-t-[color:var(--gc-accent)]"
-                          aria-hidden
-                        />
-                        <p className="text-xs font-semibold text-[var(--gc-text-soft)]">阶段：{stepText}</p>
-                      </div>
-                      <p className="text-[11px] tabular-nums text-[var(--gc-text-faint)]">ETA {etaText ?? "…"}</p>
-                    </div>
-                    {streamIntentBrief ? (
-                      <p className="mt-1 text-[11px] leading-snug text-[var(--gc-text-faint)]">
-                        当前按此理解你的创意：<span className="text-[var(--gc-muted)]">{streamIntentBrief}</span>
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--gc-muted)]">{stepMsg}</p>
-                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--gc-border)_55%,transparent)]">
-                      <div
-                        className="relative h-full rounded-full bg-gradient-to-r from-[var(--gc-accent)] via-[color:color-mix(in_srgb,var(--gc-cta-b)_75%,white)] to-[var(--gc-cta-c)] transition-[width] duration-300"
-                        style={{ width: `${Math.max(4, Math.floor(stepProgress * 100))}%` }}
-                      >
-                        <div className="absolute inset-0 animate-pulse bg-white/10" />
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--gc-text-faint)]">
-                      <span className="tabular-nums">粗略进度 {Math.floor(stepProgress * 100)}%</span>
-                      <span className="tabular-nums">已用时 {elapsedSec}s</span>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[var(--gc-bg-elevated)]/85 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--gc-muted)]">制作过程 · 滚动可见</p>
-                  <div className="mt-2 max-h-72 min-h-[4.5rem] space-y-2 overflow-y-auto pr-1 text-[11px] leading-relaxed [scrollbar-width:thin]">
-                    {studioLog.length === 0 ? (
-                      <p className="text-[var(--gc-text-faint)]">开始流式生成后，这里会持续追加提示词摘要、素材与系统提要。</p>
-                    ) : (
-                      studioLog.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className={`rounded-lg border px-2.5 py-2 ${
-                            entry.kind === "error"
-                              ? "border-red-500/30 bg-red-500/10"
-                              : entry.kind === "done"
-                                ? "border-emerald-500/25 bg-emerald-500/10"
-                                : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"
-                          }`}
-                        >
-                          <p className="text-[10px] tabular-nums text-[var(--gc-text-faint)]">
-                            {new Date(entry.t).toLocaleTimeString(undefined, {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
-                          </p>
-                          <p className="mt-1 font-semibold text-[var(--gc-text-soft)]">{entry.title}</p>
-                          {entry.bullets?.length ? (
-                            <ul className="mt-1.5 list-inside list-disc space-y-1 text-[var(--gc-muted)]">
-                              {entry.bullets.map((b, idx) => (
-                                <li key={idx}>
-                                  <EmText s={b} />
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ))
-                    )}
-                    <div ref={studioLogEndRef} />
-                  </div>
-                  <p className="mt-2 text-[10px] text-[var(--gc-text-faint)]">
-                    说明：计划摘要为规则与安全文案，不包含模型隐性推理全文；后端耗时段会停留在「深度生成」。
-                  </p>
-                </div>
-              </div>
-            )}
 
             {busy !== "gen" && ingestBusy ? (
               <p className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs text-[var(--gc-muted)]">
@@ -1477,6 +1488,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 </p>
               </div>
             )}
+            {studioProcessPanel}
           </div>
         </div>
       </main>

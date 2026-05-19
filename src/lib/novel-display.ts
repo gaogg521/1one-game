@@ -1,3 +1,5 @@
+import { buildNovelSynopsisHeuristic } from "@/lib/novel-synopsis";
+
 /** 小说书名最大字数（含用户手动编辑） */
 export const NOVEL_TITLE_MAX_LEN = 15;
 
@@ -112,21 +114,40 @@ export function extractNovelTitleFromContent(
   return normalized;
 }
 
-/** 阅读页摘要：过滤与标题重复或过长的大纲式 summary */
+/** 阅读页摘要：优先 DB 梗概，否则用正文启发式（见 novel-synopsis）。 */
 export function displayNovelSummary(
   summary: string | null | undefined,
   displayTitle: string,
   prompt?: string,
+  content?: string,
 ): string | null {
   const s = summary?.trim();
-  if (!s || s.length < 8) return null;
-  if (s === displayTitle || s.startsWith(displayTitle)) return null;
-  if (looksLikeOutlineOrPrompt(s) || s.length > 160) {
-    const fromPrompt = prompt ? shortTitleFromPrompt(prompt, 40) : null;
-    if (fromPrompt && fromPrompt !== displayTitle) return fromPrompt;
-    return null;
+  const excerptLike =
+    s &&
+    content?.trim() &&
+    s.replace(/…+$/u, "").length >= 20 &&
+    content.replace(/\s+/g, " ").includes(s.replace(/…+$/u, "").slice(0, 48));
+
+  if (
+    s &&
+    s.length >= 8 &&
+    s !== displayTitle &&
+    !s.startsWith(`${displayTitle}：`) &&
+    !excerptLike
+  ) {
+    if (!looksLikeOutlineOrPrompt(s)) {
+      return s.length > 220 ? `${s.slice(0, 218)}…` : s;
+    }
   }
-  return s.length > 120 ? s.slice(0, 118) + "…" : s;
+  if (content?.trim()) {
+    const h = buildNovelSynopsisHeuristic(content, prompt ?? "", displayTitle).trim();
+    if (h.length >= 8 && h !== displayTitle) return h;
+  }
+  const fromPrompt = prompt ? shortTitleFromPrompt(prompt, 80) : null;
+  if (fromPrompt && fromPrompt !== displayTitle && !looksLikeOutlineOrPrompt(fromPrompt)) {
+    return fromPrompt;
+  }
+  return null;
 }
 
 /** 去掉章节正文开头重复的书名/标题段（不删减正常叙事段落） */

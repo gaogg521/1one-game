@@ -61,3 +61,37 @@ export function serializeNovelChapters(
     .filter((block) => block.length > 20)
     .join("\n\n");
 }
+
+const LENGTH_CAP_FOOTER = "（已达本篇幅字数上限，故事在此收束。）";
+
+/** 超出 maxChars 时保留完整章节，丢弃后续未完成章。 */
+export function truncateNovelToMaxChars(content: string, maxChars: number): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+
+  const chapters = parseNovelChapters(trimmed);
+  if (chapters.length <= 1) {
+    const slice = trimmed.slice(0, Math.max(0, maxChars - LENGTH_CAP_FOOTER.length - 2)).trimEnd();
+    return `${slice}\n\n${LENGTH_CAP_FOOTER}`;
+  }
+
+  const kept: Array<{ num: number; title: string; body: string }> = [];
+  for (const ch of chapters) {
+    const trial = serializeNovelChapters([...kept, { num: ch.num, title: ch.title, body: ch.body }]);
+    if (trial.length > maxChars) break;
+    kept.push({ num: ch.num, title: ch.title, body: ch.body });
+  }
+
+  if (kept.length === 0) {
+    const first = chapters[0]!;
+    const head = `=== 第${first.num}章 ${first.title} ===\n\n`;
+    const bodyRoom = Math.max(80, maxChars - head.length - LENGTH_CAP_FOOTER.length - 4);
+    return `${head}${first.body.slice(0, bodyRoom).trimEnd()}\n\n${LENGTH_CAP_FOOTER}`;
+  }
+
+  let out = serializeNovelChapters(kept);
+  if (kept.length < chapters.length && out.length + LENGTH_CAP_FOOTER.length + 2 <= maxChars) {
+    out += `\n\n${LENGTH_CAP_FOOTER}`;
+  }
+  return out.length > maxChars ? out.slice(0, maxChars).trimEnd() : out;
+}

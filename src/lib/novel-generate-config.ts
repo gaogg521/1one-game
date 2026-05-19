@@ -1,5 +1,10 @@
 import { PRODUCT } from "@/lib/product-config";
-import { novelLengthConfig, parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
+import {
+  novelLengthConfig,
+  novelMaxChars,
+  parseNovelLengthTier,
+  type NovelLengthTier,
+} from "@/lib/novel-length";
 
 /** @deprecated 使用 getNovelSystemPrompt(tier) */
 export const NOVEL_SYSTEM_PROMPT = getNovelSystemPrompt("medium");
@@ -9,7 +14,7 @@ export function getNovelSystemPrompt(tier: NovelLengthTier): string {
   return `你是一位擅长中文网络小说的 AI 作家。用户会给出一句话创意，你需要扩展为一篇**结构完整的${cfg.label}小说**。
 
 要求：
-1. **篇幅**：全文 **不少于约 ${cfg.minChars} 汉字**，尽量充实但不超过约 ${cfg.maxChars} 字；${cfg.chapterHint}。
+1. **篇幅（硬性）**：全文 **${cfg.minChars}–${cfg.maxChars} 汉字**，不得超过 ${cfg.maxChars} 字；${cfg.chapterHint}。接近上限时必须在**当前章节内**写完高潮与结局，**禁止**继续新开章节。
 2. 结构完整：有起承转合，包含开端、发展、高潮、收束；禁止半成品烂尾。
 3. 角色鲜明：至少 2–3 个有名字的主要角色，性格立体。
 4. 文笔流畅：适合在线阅读，段落分明，对话生动。
@@ -25,10 +30,16 @@ export function novelLlmTimeoutMs(tier?: NovelLengthTier): number {
 }
 
 export function novelLlmMaxOutputTokens(tier?: NovelLengthTier): number {
+  const t = tier ?? "medium";
   const base = PRODUCT.novel.maxOutputTokens;
-  if (tier === "short") return Math.min(base, 8_192);
+  const cap = novelMaxChars(t);
+  const estimated = Math.ceil(cap * 1.35) + 512;
+  if (t === "short") return Math.min(base, Math.max(2_048, estimated));
+  if (t === "medium") return Math.min(base, Math.max(8_192, estimated));
   return base;
 }
+
+export { novelMaxChars };
 
 export function novelMinAcceptChars(tier?: NovelLengthTier): number {
   const t = tier ?? "medium";

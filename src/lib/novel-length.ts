@@ -36,7 +36,12 @@ export function novelLengthConfig(tier: NovelLengthTier) {
     tier === "short"
       ? "2–4 章，每章 80–600 字"
       : tier === "medium"
-        ? "4–10 章，每章 400–1200 字"
+        ? "4–8 章，每章 400–1200 字（全文不得超过上限）"
         : "10–40 章，每章 800–3000 字（可分多段输出）";
   return { ...row, chapterHint };
+}
+
+/** 该档位允许写入 DB 的正文汉字上限（硬截断）。 */
+export function novelMaxChars(tier: NovelLengthTier): number {
+  return novelLengthConfig(tier).maxChars;
 }

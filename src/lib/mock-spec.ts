@@ -3,6 +3,11 @@ import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
+import {
+  applyMinecraftThemeOverlay,
+  detectMinecraftIntent,
+  MINECRAFT_THEME,
+} from "@/lib/minecraft-franchise";
 
 function hashPrompt(s: string): number {
   let h = 2166136261;
@@ -60,6 +65,8 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     /爱如初见|rooc|roocasia|gnjoy|仙境传说|ragnarok|ro\b/.test(prompt) ||
     /rooc/.test(p);
 
+  const isMc = detectMinecraftIntent(prompt);
+
   const space = /太空|宇宙|星星|陨石|飞船|卫星|银河|空间站/.test(prompt);
   const ocean = /海|洋|鱼|潜水|浪|船|珊瑚|章鱼/.test(prompt);
   const forest = /森|林|树|鹿|精灵|蘑菇|藤蔓/.test(prompt);
@@ -72,6 +79,10 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     /塔防|保卫萝卜|防御塔|箭塔|炮塔|放置塔|波次防守|tower\s*defen[cs]e|\btd\b|tower\s*defence/i.test(p)
   ) {
     templateId = "towerDefense";
+  } else if (
+    isMc && /奔跑|跑酷|冲刺|闯关|跳跃|platformer/.test(prompt)
+  ) {
+    templateId = "platformer";
   } else if (
     /平台跳跃|跳台|横版闯关|横版过关|多层平台|platformer|\bplatform\b|马里奥|恶魔城|关卡|闯关/.test(p)
   ) {
@@ -136,10 +147,25 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     particleTint: "#d4cf8f",
   };
 
-  const themePick = neonExplicit ? pick(palettesNeon, seed, 99) : isRooc ? roocPalette : pick(palettesOrganic, seed, 0);
-  const guessed = guessLabels(prompt);
+  const mcPalette = { ...MINECRAFT_THEME };
+  const themePick = isMc
+    ? mcPalette
+    : neonExplicit
+      ? pick(palettesNeon, seed, 99)
+      : isRooc
+        ? roocPalette
+        : pick(palettesOrganic, seed, 0);
+  const guessed = isMc
+    ? { player: "史蒂夫", hazard: "苦力怕", collectible: "绿宝石" }
+    : guessLabels(prompt);
 
-  const title = isRooc ? "爱如初见 · 冒险经典" : extractTitle(prompt, seed);
+  const title = isRooc
+    ? "爱如初见 · 冒险经典"
+    : isMc
+      ? extractTitle(prompt, seed).includes("方块")
+        ? extractTitle(prompt, seed)
+        : `方块世界 · ${extractTitle(prompt, seed)}`
+      : extractTitle(prompt, seed);
 
   const speedScale = templateId === "survivor" ? 1.12 : 1;
   const hazardSpeed = Math.round(
@@ -243,7 +269,9 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
               ? "收集冲刺 · 限时目标与局势变化"
               : templateId === "survivor"
                 ? "越撑越险 · 事件升级与生存压力"
-          : isRooc
+          : isMc
+            ? "方块草地 · 网易我的世界风奔跑闯关"
+            : isRooc
           ? "Q版奇幻 · 职业技能 · 探索与成长"
           : space
             ? "在星尘间穿行"
@@ -269,5 +297,5 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     spec.systems = buildSystems({ prompt, spec });
   }
 
-  return withPresentationDefaults(spec);
+  return withPresentationDefaults(applyMinecraftThemeOverlay(spec));
 }

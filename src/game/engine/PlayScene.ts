@@ -3,6 +3,12 @@ import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { HudBanner } from "@/game/engine/HudBanner";
+import {
+  addMinecraftBackdrop,
+  ensureMinecraftEntityTextures,
+  ensureMinecraftPlayerTexture,
+  isMinecraftLikeSpec,
+} from "@/game/engine/minecraft-visuals";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 
 type EndPayload = { score: number; won: boolean };
@@ -160,7 +166,12 @@ export class PlayScene extends Phaser.Scene {
     setBleepTemperament(ui.bleepTemperament);
     this.cohesive = ui;
 
-    this.addStarfield();
+    const blockyWorld = isMinecraftLikeSpec(this.spec);
+    if (blockyWorld) {
+      addMinecraftBackdrop(this);
+    } else {
+      this.addStarfield();
+    }
 
     this.add
       .text(width / 2, 22, this.spec.title, {
@@ -245,8 +256,13 @@ export class PlayScene extends Phaser.Scene {
       return (r << 16) | (g2 << 8) | b;
     };
 
+    if (blockyWorld) {
+      ensureMinecraftPlayerTexture(this, this.spec);
+      ensureMinecraftEntityTextures(this, this.spec);
+    }
+
     // Player: rounded body + highlight + eyes
-    if (!this.textures.exists("texPlayer")) {
+    if (!blockyWorld && !this.textures.exists("texPlayer")) {
       const pc = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
       const pd = shiftCol(pc, -55);
       const pl = shiftCol(pc, 50);
@@ -262,7 +278,7 @@ export class PlayScene extends Phaser.Scene {
     }
 
     // Hazard: angular menacing enemy with spiky silhouette
-    if (!this.textures.exists("texHazard")) {
+    if (!blockyWorld && !this.textures.exists("texHazard")) {
       const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
       const hd = shiftCol(hc, -55);
       const hl = shiftCol(hc, 45);

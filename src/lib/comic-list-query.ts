@@ -4,6 +4,7 @@ import { resolveComicCoverPath } from "@/lib/comic-display";
 
 const comicListSelect = {
   id: true,
+  ownerKey: true,
   title: true,
   prompt: true,
   imageUrls: true,
@@ -17,6 +18,7 @@ const comicListSelect = {
 
 export type ComicListRow = {
   id: string;
+  ownerKey: string;
   title: string;
   prompt: string;
   imageUrls: string;

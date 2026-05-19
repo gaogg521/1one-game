@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { isMinecraftLikeSpec, MINECRAFT_THEME } from "@/lib/minecraft-franchise";
 
 /** 程序化环境音气质：由模型可选指定，或由主题饱和度/亮度推断。 */
 export type MusicProfile = "organic" | "pulse" | "minimal" | "neon";
@@ -146,6 +147,12 @@ function inferMusicProfile(theme: GameSpec["theme"]): MusicProfile {
   const pv = hexToRgb(theme.playerColor);
   const hz = hexToRgb(theme.hazardColor);
   if (!bg || !pv || !hz) return "pulse";
+  if (
+    theme.backgroundColor.toLowerCase() === MINECRAFT_THEME.backgroundColor.toLowerCase() &&
+    theme.playerColor.toLowerCase() === MINECRAFT_THEME.playerColor.toLowerCase()
+  ) {
+    return "organic";
+  }
   const h1 = rgbToHsl(pv.r, pv.g, pv.b);
   const h2 = rgbToHsl(hz.r, hz.g, hz.b);
   const sat = (h1.s + h2.s) / 2;
@@ -283,9 +290,10 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
     ctaC: chAccent2,
   };
 
-  const platHexMid = mixHex(mixHex(bg, coll, 0.38), "#1e293b", 0.52);
-  const platHexHi = mixHex(platHexMid, mixHex(accent2, "#e2e8f0", 0.55), 0.22);
-  const platHexGround = mixHex(mixHex(bg, "#020617", 0.72), platHexMid, 0.35);
+  const mc = isMinecraftLikeSpec(specW);
+  const platHexMid = mc ? "#5d9b47" : mixHex(mixHex(bg, coll, 0.38), "#1e293b", 0.52);
+  const platHexHi = mc ? "#6eb854" : mixHex(platHexMid, mixHex(accent2, "#e2e8f0", 0.55), 0.22);
+  const platHexGround = mc ? "#8b6914" : mixHex(mixHex(bg, "#020617", 0.72), platHexMid, 0.35);
   const platMid = hexToPhaserUint(platHexMid) ?? 0x334155;
   const platHi = hexToPhaserUint(platHexHi) ?? 0x475569;
   const platGround = hexToPhaserUint(platHexGround) ?? 0x1e293b;

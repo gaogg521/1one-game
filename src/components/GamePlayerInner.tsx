@@ -6,6 +6,7 @@ import { captureCanvasAsJpegDataUrl } from "@/lib/capture-game-thumb";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
 import { buildCohesivePresentation } from "@/lib/cohesive-presentation";
 import { createPhaserGame } from "@/game/engine/createPhaserGame";
+import type Phaser from "phaser";
 
 export default function GamePlayerInner({
   spec,
@@ -16,8 +17,11 @@ export default function GamePlayerInner({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<ReturnType<typeof createPhaserGame> | null>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
+  const bootAudioRef = useRef<(() => void) | null>(null);
+  const pendingAudioBootRef = useRef(false);
   const coverSentRef = useRef(false);
+  const [audioHint, setAudioHint] = useState(true);
   const [session, setSession] = useState(0);
   const [result, setResult] = useState<{ score: number; won: boolean } | null>(null);
 
@@ -94,18 +98,47 @@ export default function GamePlayerInner({
     if (!el) return;
     setResult(null);
     const refPayloads = readReferenceImagePayloadsFromSession();
-    const game = createPhaserGame(el, spec, (r) => setResult(r), { referencePayloads: refPayloads });
-    gameRef.current = game;
+    const handle = createPhaserGame(el, spec, (r) => setResult(r), { referencePayloads: refPayloads });
+    gameRef.current = handle.game;
+    bootAudioRef.current = handle.bootAudio;
+    el.focus({ preventScroll: true });
+    if (pendingAudioBootRef.current) {
+      pendingAudioBootRef.current = false;
+      handle.bootAudio();
+      setAudioHint(false);
+    }
     return () => {
-      game.destroy(true);
+      handle.game.destroy(true);
       gameRef.current = null;
+      bootAudioRef.current = null;
     };
   }, [spec, session]);
 
+  useEffect(() => {
+    if (!audioHint) return;
+    const hide = () => setAudioHint(false);
+    const el = hostRef.current;
+    el?.addEventListener("pointerdown", hide, { once: true });
+    window.addEventListener("keydown", hide, { once: true, capture: true });
+    const t = window.setTimeout(() => setAudioHint(false), 8000);
+    return () => {
+      el?.removeEventListener("pointerdown", hide);
+      window.removeEventListener("keydown", hide, true);
+      window.clearTimeout(t);
+    };
+  }, [audioHint, session]);
+
+  const armAudioBoot = useCallback(() => {
+    pendingAudioBootRef.current = true;
+    bootAudioRef.current?.();
+    setAudioHint(false);
+  }, []);
+
   const restart = useCallback(() => {
+    armAudioBoot();
     setResult(null);
     setSession((s) => s + 1);
-  }, []);
+  }, [armAudioBoot]);
 
   const fullscreen = useCallback(() => {
     const node = shellRef.current;
@@ -126,8 +159,16 @@ export default function GamePlayerInner({
       >
         <div
           ref={hostRef}
-          className="aspect-[920/560] w-full max-h-[min(70vh,620px)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)]"
+          tabIndex={0}
+          role="application"
+          aria-label="游戏画面"
+          className="aspect-[920/560] w-full max-h-[min(70vh,620px)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)]"
         />
+        {audioHint && !result ? (
+          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1 text-[10px] text-[var(--gc-muted)] backdrop-blur-sm">
+            点击画面或按任意键开启背景音乐
+          </p>
+        ) : null}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end gap-2 p-3">
           <button
             type="button"

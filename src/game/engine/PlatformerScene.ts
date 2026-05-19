@@ -1,6 +1,11 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import {
+  addMinecraftPlatformerBackdrop,
+  ensureMinecraftPlatformerTextures,
+  isMinecraftLikeSpec,
+} from "@/game/engine/minecraft-visuals";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import {
@@ -171,7 +176,12 @@ export class PlatformerScene extends Phaser.Scene {
     setBleepTemperament(ui.bleepTemperament);
     this.cohesive = ui;
 
-    this.addStarfield();
+    const blockyWorld = isMinecraftLikeSpec(this.spec);
+    if (blockyWorld) {
+      addMinecraftPlatformerBackdrop(this, this.worldW);
+    } else {
+      this.addStarfield();
+    }
 
     this.add
       .text(viewW / 2, 22, this.spec.title, {
@@ -326,13 +336,17 @@ export class PlatformerScene extends Phaser.Scene {
       g.generateTexture(key, 64, 40); g.destroy();
     };
 
-    makePlayerTex("texPlayer", this.spec.theme.playerColor);
-    makePlatTex("texPlat", phaserUintToCssHex(ui.platformMid), phaserUintToCssHex(ui.platformHi));
-    makePlatTex("texPlatHi", phaserUintToCssHex(ui.platformHi), phaserUintToCssHex(ui.platformHi));
-    makeGroundTex("texGround", phaserUintToCssHex(ui.platformGround));
-    makeSpikeTex("texSpike", this.spec.theme.hazardColor);
-    makeGemTex("texGem", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
-    makeGemTex("texPower", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
+    if (blockyWorld) {
+      ensureMinecraftPlatformerTextures(this, this.spec);
+    } else {
+      makePlayerTex("texPlayer", this.spec.theme.playerColor);
+      makePlatTex("texPlat", phaserUintToCssHex(ui.platformMid), phaserUintToCssHex(ui.platformHi));
+      makePlatTex("texPlatHi", phaserUintToCssHex(ui.platformHi), phaserUintToCssHex(ui.platformHi));
+      makeGroundTex("texGround", phaserUintToCssHex(ui.platformGround));
+      makeSpikeTex("texSpike", this.spec.theme.hazardColor);
+      makeGemTex("texGem", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
+      makeGemTex("texPower", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
+    }
 
     this.platforms = this.physics.add.staticGroup();
     this.spikes = this.physics.add.staticGroup();

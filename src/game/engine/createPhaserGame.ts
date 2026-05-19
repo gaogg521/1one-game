@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { GameSpec } from "@/lib/game-spec";
+import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft-franchise";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { PlayScene } from "@/game/engine/PlayScene";
 import { PlatformerScene } from "@/game/engine/PlatformerScene";
@@ -16,38 +17,47 @@ export type CreatePhaserGameOptions = {
   referencePayloads?: RuntimeReferencePayload[];
 };
 
+export type PhaserGameHandle = {
+  game: Phaser.Game;
+  /** 在用户手势后启动程序化铺底（满足自动播放策略） */
+  bootAudio: () => void;
+};
+
 export function createPhaserGame(
   parent: HTMLElement,
   spec: GameSpec,
   onEnd: (r: { score: number; won: boolean }) => void,
   opts?: CreatePhaserGameOptions,
-): Phaser.Game {
+): PhaserGameHandle {
   const ref =
     opts?.referencePayloads?.filter((p) => typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:")) ??
     [];
 
-  const presentation = buildCohesivePresentation(spec);
+  const specPlay = applyMinecraftThemeOverlay(spec);
+  const presentation = buildCohesivePresentation(specPlay);
+  const blockyAdventure = isMinecraftLikeSpec(specPlay);
   const soundscape = new GameSoundscape(
     presentation.musicProfile,
-    thematicRootFrequencyHz(spec.theme),
-    spec.director?.intensity ?? 0.55,
+    thematicRootFrequencyHz(specPlay.theme),
+    specPlay.director?.intensity ?? 0.55,
+    { blocky: blockyAdventure },
   );
 
   const scene =
-    spec.templateId === "towerDefense"
-      ? new TowerDefenseScene(spec, onEnd, ref, soundscape)
-      : spec.templateId === "platformer"
-        ? new PlatformerScene(spec, onEnd, soundscape)
-        : spec.templateId === "shooter"
-          ? new ShooterScene(spec, onEnd, soundscape)
-          : new PlayScene(spec, onEnd, soundscape);
+    specPlay.templateId === "towerDefense"
+      ? new TowerDefenseScene(specPlay, onEnd, ref, soundscape)
+      : specPlay.templateId === "platformer"
+        ? new PlatformerScene(specPlay, onEnd, soundscape)
+        : specPlay.templateId === "shooter"
+          ? new ShooterScene(specPlay, onEnd, soundscape)
+          : new PlayScene(specPlay, onEnd, soundscape);
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     parent,
     width: Math.min(920, Math.max(640, parent.clientWidth || 920)),
     height: 560,
-    backgroundColor: spec.theme.backgroundColor,
+    backgroundColor: specPlay.theme.backgroundColor,
     physics: {
       default: "arcade",
       arcade: {
@@ -68,16 +78,31 @@ export function createPhaserGame(
 
   const game = new Phaser.Game(config);
 
-  const onFirstPointer = () => {
+  const bootAudio = () => {
     void soundscape.startInteractive();
-    parent.removeEventListener("pointerdown", onFirstPointer);
   };
-  parent.addEventListener("pointerdown", onFirstPointer, { passive: true });
+
+  let audioArmed = true;
+  const onUserGesture = () => {
+    if (!audioArmed) return;
+    bootAudio();
+    detachAudioGestures();
+  };
+  const detachAudioGestures = () => {
+    audioArmed = false;
+    parent.removeEventListener("pointerdown", onUserGesture);
+    parent.removeEventListener("keydown", onUserGesture);
+    window.removeEventListener("keydown", onUserGesture, true);
+  };
+
+  parent.addEventListener("pointerdown", onUserGesture, { passive: true });
+  parent.addEventListener("keydown", onUserGesture);
+  window.addEventListener("keydown", onUserGesture, true);
 
   game.events.once(Phaser.Core.Events.DESTROY, () => {
-    parent.removeEventListener("pointerdown", onFirstPointer);
+    detachAudioGestures();
     soundscape.dispose();
   });
 
-  return game;
+  return { game, bootAudio };
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { CoverThumb } from "@/components/CoverThumb";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 
 type WorkType = "project" | "novel" | "comic";
 
@@ -247,13 +248,13 @@ export default function StudioPage() {
     let res: Response;
     switch (type) {
       case "project":
-        res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+        res = await fetch(`/api/projects/${id}`, superAdminFetchInit({ method: "DELETE" }));
         break;
       case "novel":
-        res = await fetch(`/api/novel/${id}`, { method: "DELETE" });
+        res = await fetch(`/api/novel/${id}`, superAdminFetchInit({ method: "DELETE" }));
         break;
       case "comic":
-        res = await fetch(`/api/comic/${id}`, { method: "DELETE" });
+        res = await fetch(`/api/comic/${id}`, superAdminFetchInit({ method: "DELETE" }));
         break;
     }
     if (!res!.ok) return;
@@ -386,25 +387,21 @@ export default function StudioPage() {
                   href={getWorkLink(r.type, r.id)}
                   className="relative block aspect-video w-full overflow-hidden bg-[var(--gc-bg-elevated)]"
                 >
-                  {r.coverPath ? (
-                    <Image
-                      src={r.coverPath}
-                      alt={`《${r.title}》封面`}
-                      fill
-                      className="object-cover transition duration-300 hover:scale-[1.03]"
-                      sizes="(max-width: 640px) 100vw, 360px"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
-                      <span className="text-3xl opacity-50" aria-hidden>
-                        {getWorkIcon(r.type)}
-                      </span>
-                      <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
-                        {r.type === "project" ? "试玩后自动生成封面" : "封面生成中…"}
-                      </span>
-                    </div>
-                  )}
+                  <CoverThumb
+                    coverPath={r.coverPath}
+                    alt={`《${r.title}》封面`}
+                    className="h-full min-h-[140px] w-full object-cover transition duration-300 hover:scale-[1.03]"
+                    placeholder={
+                      <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
+                        <span className="text-3xl opacity-50" aria-hidden>
+                          {getWorkIcon(r.type)}
+                        </span>
+                        <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
+                          {r.type === "project" ? "试玩后自动生成封面" : "封面生成中…"}
+                        </span>
+                      </div>
+                    }
+                  />
                   <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
                     {getWorkTypeLabel(r.type)}
                   </span>

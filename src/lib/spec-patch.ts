@@ -5,6 +5,7 @@ import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
+import { applyMinecraftThemeOverlay } from "@/lib/minecraft-franchise";
 
 /** 与 `/api/generate/patch` 共用；修改规则时请同步验收「director / systems 不被无损删掉」。 */
 export const SPEC_PATCH_SYSTEM = `你是「游戏规格修改器」。根据用户的一句话修改指令，在现有 GameSpec 基础上做出精准修改。
@@ -31,7 +32,7 @@ export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
-  return withPresentationDefaults(next);
+  return withPresentationDefaults(applyMinecraftThemeOverlay(next));
 }
 
 export type PatchGameSpecResult =
