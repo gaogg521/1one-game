@@ -4,6 +4,7 @@ import {
   SystemsSchema,
   type GameSpec,
 } from "@/lib/game-spec";
+const TowerDefenseBlueprintSchema = GameSpecSchema.shape.towerDefense;
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 
 function normalizeHex(input: string): string | null {
@@ -156,6 +157,13 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
     if (s.success) systemsOpt = s.data;
   }
 
+  let towerDefenseOpt: GameSpec["towerDefense"] | undefined;
+  if (templateId === "towerDefense" && typeof o.towerDefense === "object" && o.towerDefense !== null) {
+    const td = TowerDefenseBlueprintSchema.safeParse(o.towerDefense);
+    if (td.success) towerDefenseOpt = td.data;
+    else issues.push("towerDefense 蓝图未通过校验，保存时将自动生成默认关卡");
+  }
+
   const candidate: GameSpec = {
     version: 1,
     templateId,
@@ -188,6 +196,7 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
     presentation,
     ...(directorOpt !== undefined ? { director: directorOpt } : {}),
     ...(systemsOpt !== undefined ? { systems: systemsOpt } : {}),
+    ...(towerDefenseOpt !== undefined ? { towerDefense: towerDefenseOpt } : {}),
   };
 
   const parsed = GameSpecSchema.safeParse(candidate);

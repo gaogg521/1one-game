@@ -8,6 +8,7 @@ type CreateArgs = {
   prompt: string;
   specJson: string;
   status?: string;
+  creativeBriefJson?: string | null;
 };
 
 /** 创建作品并分配唯一 shareCode；极低概率碰撞时自动重试。 */
@@ -21,6 +22,7 @@ export async function createProjectRecord(args: CreateArgs) {
           title: args.title,
           prompt: args.prompt,
           specJson: args.specJson,
+          creativeBriefJson: args.creativeBriefJson ?? null,
           status,
           shareCode: newShareCode(),
         },

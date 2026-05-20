@@ -1,0 +1,216 @@
+import type { NovelGenreTagId } from "@/lib/novel-genre-tags";
+
+export type NovelBriefPack = {
+  id: NovelGenreTagId;
+  label: string;
+  logline: (ctx: { title: string; userLine: string }) => string;
+  setting: string;
+  world: string;
+  protagonist: string;
+  characters: string[];
+  antagonists: string[];
+  coreConflict: string;
+  protagonistGoal: string;
+  plotBeats: string[];
+  keyScenes: string[];
+  tone: string;
+  writingStyle: string[];
+  narrativeHints: string[];
+  negatives: string[];
+};
+
+export const NOVEL_BRIEF_PACKS: NovelBriefPack[] = [
+  {
+    id: "transmigration",
+    label: "穿越",
+    logline: ({ title, userLine }) =>
+      `《${title}》：${userLine.includes("穿越") ? "现代人意外落入异时异空" : "命运在关键时刻被改写"}，主角必须在陌生时代凭有限筹码求生并撬动历史走向。`,
+    setting: "具体朝代与地理须与书名、用户设定一致；写清时代物质条件与社会规则。",
+    world: "双重时空认知碰撞：来自异世的现代思维与本地权力结构、伦理秩序持续摩擦。",
+    protagonist: "穿越者（可带现代知识/技能，但须受时代条件约束）",
+    characters: ["本土盟友或引路人", "立场暧昧的中间人物", "旧身份羁绊者"],
+    antagonists: ["时代结构性压迫", "既得利益集团", "利用信息差的对立势力"],
+    coreConflict: "异世生存与「改变历史 / 守住底线」之间的拉扯，每一步选择都有代价。",
+    protagonistGoal: "在乱局中立足，并兑现穿越契机带来的使命或执念。",
+    plotBeats: ["建立穿越契机与时代压迫", "试探规则、组建班底", "卷入核心历史矛盾", "高潮抉择与余波收束"],
+    keyScenes: ["穿越落点与身份危机", "首次与关键历史人物/势力交锋", "生死局中的价值抉择", "结局时代余波"],
+    tone: "史诗感与个体渺小感并存",
+    writingStyle: ["第三人称限知或贴近主角内心", "历史细节可感", "对话符合时代语感（勿现代口癖泛滥）"],
+    narrativeHints: [
+      "开篇 1～2 章内说清穿越逻辑与当下危机",
+      "中盘用具体事件展示「现代思维」的收益与反噬",
+      "避免百科式科普，用戏剧冲突承载设定",
+      "章末留钩，节奏按网文连载习惯推进",
+    ],
+    negatives: ["写成游戏关卡或系统面板文（除非用户明确要求）", "OOC 现代口语满天飞", "未授权历史名人丑化"],
+  },
+  {
+    id: "fantasy",
+    label: "玄幻",
+    logline: ({ title }) =>
+      `《${title}》：在力量为尊的异世界，主角从底层卷入势力漩涡，踏上升级与证道之路。`,
+    setting: "异界大陆或多元位面，须有可感知的修炼/魔力规则边界。",
+    world: "宗门、皇朝、秘境与禁地并存；资源稀缺驱动冲突。",
+    protagonist: "开局弱势的主角（可带特殊体质/机缘）",
+    characters: ["师长或引路者", "同门/队友", "红颜或挚友（可选）"],
+    antagonists: ["宿敌天骄", "幕后黑手", "世界规则本身的残酷"],
+    coreConflict: "力量增长与人心考验并行，越大机缘越大风险。",
+    protagonistGoal: "突破境界桎梏，揭开自身与世界的隐秘联系。",
+    plotBeats: ["觉醒与初入江湖", "小高潮立威", "地图升级与势力博弈", "终极对决与格局揭开"],
+    keyScenes: ["机缘觉醒", "越级之战", "宗门/秘境试炼", "证道或称尊时刻"],
+    tone: "热血升级、压迫与释放交替",
+    writingStyle: ["想象力鲜明", "战斗场面可视化", "节奏明快"],
+    narrativeHints: ["升级节奏清晰，每 3～5 章给小爽点", "伏笔回收", "力量体系前后一致"],
+    negatives: ["战力崩坏无代价", "纯堆砌设定不讲人戏"],
+  },
+  {
+    id: "xianxia",
+    label: "仙侠",
+    logline: ({ title }) => `《${title}》：修仙问道路上，主角在天地劫波与人情劫中寻道证真。`,
+    setting: "修仙宗门、凡俗王朝、秘境洞天",
+    world: "天道、因果、灵气与人心劫并存",
+    protagonist: "入门修士或散修主角",
+    characters: ["同门", "前辈高人", "凡俗羁绊者"],
+    antagonists: ["心魔", "敌对宗门", "天道考验"],
+    coreConflict: "求长生与守本心的矛盾",
+    protagonistGoal: "证道飞升或守护重要之人",
+    plotBeats: ["入门筑基", "历练成长", "大劫将至", "证道抉择"],
+    keyScenes: ["灵根测试或奇遇", "剑试天下", "天劫/心魔劫", "飞升或留白结局"],
+    tone: "飘逸空灵与肃杀并存",
+    writingStyle: ["文言感适度", "意境描写", "道法自然"],
+    narrativeHints: ["修炼阶段清晰", "人情线勿喧宾夺主", "大战有诗意"],
+    negatives: ["游戏化数值面板", "现代网络梗"],
+  },
+  {
+    id: "wuxia",
+    label: "武侠",
+    logline: ({ title }) => `《${title}》：江湖风起，主角在恩仇与道义间走出自己的侠路。`,
+    setting: "架空或半架空古代江湖",
+    world: "门派林立、朝堂与江湖暗流交织",
+    protagonist: "少年侠客或隐世传人",
+    characters: ["师父", "红颜/挚友", "宿敌"],
+    antagonists: ["邪派", "权谋者", "旧日恩怨"],
+    coreConflict: "个人恩仇与天下大义",
+    protagonistGoal: "雪恨/护道/止戈",
+    plotBeats: ["入世", "历练", "大会或决战", "归隐或新秩序"],
+    keyScenes: ["竹林对决", "酒楼听闻江湖事", "华山论剑", "最后一战"],
+    tone: "快意恩仇、苍凉侠气",
+    writingStyle: ["动作利落", "江湖气味", "人物有骨气"],
+    narrativeHints: ["武功描写服务人物", "反转讲逻辑", "结局有余味"],
+    negatives: ["玄幻飞天遁地过度", "游戏模板词"],
+  },
+  {
+    id: "historical",
+    label: "历史",
+    logline: ({ title }) => `《${title}》：在真实与虚构交织的时代棋局中，小人物撬动大历史。`,
+    setting: "须贴合书名所指朝代与重大事件（如安史之乱）",
+    world: "朝堂、军镇、民间多线交织",
+    protagonist: "可考或虚构视角人物",
+    characters: ["盟友", "名臣或将领", "家人"],
+    antagonists: ["战乱", "权臣", "命运无常"],
+    coreConflict: "个体生存与历史洪流",
+    protagonistGoal: "保全身旁之人或改变关键节点",
+    plotBeats: ["乱世将至", "卷入事件", "抉择时刻", "战后余波"],
+    keyScenes: ["战火逼近", "朝堂博弈", "城破/突围", "尘埃落定"],
+    tone: "厚重、命运感",
+    writingStyle: ["细节可考", "群像克制", "悲剧与希望并存"],
+    narrativeHints: ["大事件服务人物", "避免现代价值硬套", "考据适度不教科书"],
+    negatives: ["戏说过度歪曲史实", "游戏化用语"],
+  },
+  {
+    id: "urban",
+    label: "都市",
+    logline: ({ title }) => `《${title}》：现代都市中，主角在规则与欲望之间逆袭翻盘。`,
+    setting: "当代中国一线/新一线城市",
+    world: "职场、商业、人情社会",
+    protagonist: "普通人或隐藏身份的强者",
+    characters: ["贵人", "对手", "感情线对象"],
+    antagonists: ["资本/权力对手", "过去阴影"],
+    coreConflict: "阶层跃迁与道德底线",
+    protagonistGoal: "事业成功/守护家人/揭开真相",
+    plotBeats: ["低谷开局", "小胜积累", "对决高潮", "新生活"],
+    keyScenes: ["羞辱与觉醒", "关键谈判", "身份曝光", "胜利时刻"],
+    tone: "爽感、现实感",
+    writingStyle: ["对话利落", "专业细节可信", "节奏快"],
+    narrativeHints: ["打脸节奏克制有力", "金手指若有须合理", "贴近当代生活"],
+    negatives: ["悬浮财富数字", "游戏 template 词"],
+  },
+  {
+    id: "romance",
+    label: "言情",
+    logline: ({ title }) => `《${title}》：情感为主线，主角在误会与成长中抵达真心。`,
+    setting: "当代或古代，须与类型一致",
+    world: "社会关系与情感伦理",
+    protagonist: "有缺陷但可爱的主角",
+    characters: ["男主/女主", "闺蜜/兄弟", "情敌或家族长辈"],
+    antagonists: ["误会", "门第/现实阻碍", "自我封闭"],
+    coreConflict: "爱与自我保护的矛盾",
+    protagonistGoal: "确认心意、修复关系或自我成长",
+    plotBeats: ["相遇", "靠近与误会", "决裂点", "和解/HE或成长结局"],
+    keyScenes: ["初见高光", "甜蜜日常", "误会爆发", "追妻/追夫火葬场（可选）"],
+    tone: "甜虐交织",
+    writingStyle: ["细腻心理", "氛围感", "对话有火花"],
+    narrativeHints: ["情感动机每一步可追溯", "避免工具人", "副线服务主线"],
+    negatives: ["游戏用语", "侮辱性情节"],
+  },
+  {
+    id: "scifi",
+    label: "科幻",
+    logline: ({ title }) => `《${title}》：科技或宇宙尺度下，人类面对未知与自身的答案。`,
+    setting: "近未来/星际/末世",
+    world: "科学规则或明确科幻设定",
+    protagonist: "科学家/舰长/幸存者",
+    characters: ["团队", "AI或外星存在", "反派"],
+    antagonists: ["未知文明", "技术失控", "人性"],
+    coreConflict: "生存与伦理",
+    protagonistGoal: "拯救文明或证明假说",
+    plotBeats: ["发现异常", "探索", "危机", "抉择"],
+    keyScenes: ["第一次接触", "舰桥抉择", "牺牲或突破"],
+    tone: "冷峻、宏大",
+    writingStyle: ["硬科幻细节或社会科幻思辨", "画面感强"],
+    narrativeHints: ["设定自洽", "科技服务剧情", "人戏优先"],
+    negatives: ["游戏 HUD 叙事", "伪科幻"],
+  },
+  {
+    id: "mystery",
+    label: "悬疑",
+    logline: ({ title }) => `《${title}》：真相被层层包裹，主角在误导与线索中逼近核心。`,
+    setting: "当代或近代封闭空间/小城/都市",
+    world: "看似正常实则暗流",
+    protagonist: "侦探/记者/当事人",
+    characters: ["助手", "嫌疑人", "受害者关联人"],
+    antagonists: ["真凶", "体制遮蔽", "时间"],
+    coreConflict: "揭露真相的代价",
+    protagonistGoal: "破案/洗冤/自救",
+    plotBeats: ["案发", "调查与红鲱鱼", "反转", "收网"],
+    keyScenes: ["案发现场", "关键审讯", "真相揭示"],
+    tone: "压迫、紧张",
+    writingStyle: ["线索公平", "节奏紧凑", "少废话"],
+    narrativeHints: ["伏笔可回收", "反转合理", "信息控制"],
+    negatives: ["游戏关卡式推进", "为反转而反转"],
+  },
+  {
+    id: "horror",
+    label: "灵异",
+    logline: ({ title }) => `《${title}》：日常之下潜藏不可名状之物，主角在恐惧中寻找生路。`,
+    setting: "封闭老宅/废弃医院/边陲小镇",
+    world: "规则诡异的超自然空间",
+    protagonist: "卷入事件的普通人",
+    characters: ["同伴", "知情者", "受害者"],
+    antagonists: ["未知存在", "人心黑暗"],
+    coreConflict: "生存与理智",
+    protagonistGoal: "逃离或封印/解开诅咒",
+    plotBeats: ["异常初现", "规则摸索", "绝境", "代价性结局"],
+    keyScenes: ["第一次惊吓", "禁忌触发", "最终对峙"],
+    tone: "压抑、不安",
+    writingStyle: ["感官描写", "留白", "少血腥猎奇"],
+    narrativeHints: ["恐惧递进", "规则一致", "结局有余悸"],
+    negatives: ["游戏生存话术", "无脑虐"],
+  },
+];
+
+const PACK_MAP = new Map(NOVEL_BRIEF_PACKS.map((p) => [p.id, p]));
+
+export function getNovelBriefPack(genreId: string | undefined): NovelBriefPack {
+  return PACK_MAP.get(genreId as NovelGenreTagId) ?? NOVEL_BRIEF_PACKS[0]!;
+}

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 
 const MAX_BYTES = 320_000;
 const COVERS_DIR = path.join(process.cwd(), "public", "covers");
@@ -30,6 +31,30 @@ export async function saveProjectCoverJpeg(projectId: string, raw: string): Prom
   const rel = `/covers/${projectId}.jpg`;
   const abs = path.join(process.cwd(), "public", "covers", `${projectId}.jpg`);
   await fs.writeFile(abs, buf, { mode: 0o644 });
+  return rel;
+}
+
+/** Comfy / 文生图返回的 PNG/JPEG 缓冲，统一落盘为 public/covers/{id}.jpg */
+export async function saveProjectCoverFromBuffer(projectId: string, raw: Buffer): Promise<string> {
+  if (raw.length < 512) {
+    throw new Error("封面文件过小");
+  }
+  if (raw.length > MAX_BYTES * 2) {
+    throw new Error("封面过大");
+  }
+  let jpeg: Buffer;
+  try {
+    jpeg = await sharp(raw).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  } catch {
+    throw new Error("无法处理封面图像");
+  }
+  if (jpeg.length > MAX_BYTES) {
+    throw new Error("封面过大，请压缩后重试");
+  }
+  await fs.mkdir(COVERS_DIR, { recursive: true });
+  const rel = `/covers/${projectId}.jpg`;
+  const abs = path.join(process.cwd(), "public", "covers", `${projectId}.jpg`);
+  await fs.writeFile(abs, jpeg, { mode: 0o644 });
   return rel;
 }
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
+import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type WorkType = "project" | "novel" | "comic";
 
@@ -229,6 +230,8 @@ export default function StudioPage() {
         if (!cancelled) {
           setRows(allWorks);
           setError(warnings.length ? warnings.join("；") : null);
+          const gameIds = allWorks.filter((w) => w.type === "project").map((w) => w.id);
+          prefetchGameProjectsByIds(gameIds, 8);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "未知错误";

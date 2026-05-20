@@ -5,7 +5,7 @@
 ## Phase 0（已实现）
 
 - **`ContextPack`**：从创作请求推导出的策展上下文（路由、布尔开关、`hasReferenceSnippet`、**`qualityTier`** 来自环境变量）。
-- **`RunTraceRecorder`**：`web_search`、`spec_draft`、`spec_enhance`、编排 **note**：`client_asset_manifest`（条目/revision）、`comfy_probe`（见 Phase 3）等；SSE `done.debug.orchestrationTrace` 与前端「生成证据」折叠。
+- **`RunTraceRecorder`**：`creative_brief_expand`、`web_search`、`spec_draft`、`spec_enhance`、编排 **note**：`client_asset_manifest`（条目/revision）、`comfy_probe`（见 Phase 3）、**`godot_web_prefetch`**（生成完成后异步 Godot Web 预导出，不阻塞 SSE）等；SSE `done.debug.orchestrationTrace` 与前端「生成证据」折叠。
 - 入口：`createRunTraceRecorder()`（`src/lib/orchestration/run-trace.ts`）。
 
 ### 并行与等待时间（已实现）
@@ -43,6 +43,10 @@
 |------|------|
 | 编排导出 | `src/lib/orchestration/index.ts` |
 | 生成流水线（草稿 / 强化 / lint-repair） | `src/lib/generate-spec.ts` |
+| 一句话深度扩写（Creative Brief） | `src/lib/creative-brief/` |
+| Godot 预导出调度 | `src/lib/godot-prefetch-scheduler.ts`、`src/lib/godot-prefetch.client.ts` |
+| 双轨规格 enrich | `src/lib/enrich-game-spec.ts` |
+| 参考图分类（Phaser/Godot） | `src/lib/reference-classify.ts` |
 | SSE 附带 trace | `src/app/api/generate/stream/route.ts` |
 | 近期迭代纪要 | `docs/recent-progress.md` |
 | AI 接手稿（架构总览） | `docs/ai-handoff-architecture-cn.md` |

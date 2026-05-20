@@ -20,3 +20,12 @@ export function planLongNovelSegments(tier: NovelLengthTier): LongNovelSegmentPl
   const totalSegments = Math.min(maxSegments, Math.max(3, Math.ceil(targetTotalChars / charsPerSegment)));
   return { totalSegments, charsPerSegment, targetTotalChars, minAcceptChars };
 }
+
+export function estimateLongNovelChapterCount(plan: LongNovelSegmentPlan): number {
+  const avg = LONG_NOVEL_PRODUCT.avgCharsPerChapter;
+  const raw = Math.round(plan.targetTotalChars / avg);
+  return Math.min(
+    LONG_NOVEL_PRODUCT.maxChapterCount,
+    Math.max(LONG_NOVEL_PRODUCT.minChapterCount, raw),
+  );
+}

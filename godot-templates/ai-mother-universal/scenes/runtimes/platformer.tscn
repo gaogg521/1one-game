@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://runtime_platformer"]
+
+[ext_resource type="Script" path="res://scripts/runtimes/platformer_runtime.gd" id="1_plat"]
+[ext_resource type="PackedScene" uid="uid://ai_mother_player" path="res://scenes/player.tscn" id="2_player"]
+
+[node name="Platformer" type="Node2D"]
+script = ExtResource("1_plat")
+
+[node name="Platforms" type="Node2D" parent="."]
+
+[node name="Gems" type="Node2D" parent="."]
+
+[node name="Hazards" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(120, 460)

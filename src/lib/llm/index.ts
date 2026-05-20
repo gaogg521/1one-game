@@ -1,7 +1,11 @@
 import type OpenAI from "openai";
 import { createNovelOpenAIClient, createOpenAIClient } from "@/lib/openai-client";
 import type { NovelLengthTier } from "@/lib/novel-length";
-import { llmJsonOpenAICompatible, llmTextOpenAICompatible, llmTextStreamOpenAICompatible } from "@/lib/llm/provider-openai-compatible";
+import {
+  llmJsonOpenAICompatible,
+  llmTextOpenAICompatible,
+  llmTextStreamOpenAICompatible,
+} from "@/lib/llm/provider-openai-compatible";
 import { llmJsonAnthropic } from "@/lib/llm/provider-anthropic";
 import { llmJsonGemini } from "@/lib/llm/provider-gemini";
 import { getModelCascadeForProvider, getNovelStyleTextModelCascade, getProviderKeyStatus } from "@/lib/llm/models";
@@ -39,7 +43,10 @@ export function getActiveProvider(): LlmProvider {
   return normalizeProvider(process.env.LLM_PROVIDER);
 }
 
-export async function llmJson(req: Omit<LlmJsonRequest, "provider">): Promise<LlmJsonResult> {
+export async function llmJson(
+  req: Omit<LlmJsonRequest, "provider">,
+  opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
+): Promise<LlmJsonResult> {
   const provider = getActiveProvider();
   const keyStatus = getProviderKeyStatus(provider);
   if (!keyStatus.ok) {
@@ -47,9 +54,17 @@ export async function llmJson(req: Omit<LlmJsonRequest, "provider">): Promise<Ll
   }
   if (provider === "anthropic") return await llmJsonAnthropic({ ...req, provider });
   if (provider === "gemini") return await llmJsonGemini({ ...req, provider });
-  // 默认走 OpenAI-compatible（包含 LiteLLM/OpenAI 官方）
-  const client = getOpenAIClient();
+  const tier = opts?.lengthTier ?? "medium";
+  const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
   return await llmJsonOpenAICompatible({ client, req: { ...req, provider } });
+}
+
+/** 长篇流水线 JSON（设定圣经 / 章规划）：使用小说网关超时头。 */
+export async function llmNovelJson(
+  req: Omit<LlmJsonRequest, "provider">,
+  lengthTier: NovelLengthTier = "long",
+): Promise<LlmJsonResult> {
+  return llmJson(req, { novelLongRun: true, lengthTier });
 }
 
 export async function llmText(

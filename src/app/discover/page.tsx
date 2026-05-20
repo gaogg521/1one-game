@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type DiscoverProject = {
   id: string;
@@ -125,7 +126,12 @@ export default function DiscoverPage() {
       })
       .then((d: { projects?: DiscoverProject[] }) => {
         if (stale) return;
-        setProjects(d.projects ?? []);
+        const list = d.projects ?? [];
+        setProjects(list);
+        prefetchGameProjectsByIds(
+          list.map((p) => p.id),
+          8,
+        );
       })
       .catch((e: unknown) => {
         if (stale) return;

@@ -89,9 +89,17 @@ function ComicPageGrid({ page, rendering }: { page: ComicPage; rendering?: boole
                 ) : null}
               </div>
             )}
-            {hasImage && panel.caption ? (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2 pb-2 pt-6">
-                <p className="text-xs font-medium leading-snug text-white">{panel.caption}</p>
+            {panel.caption ? (
+              <div
+                className={`pointer-events-none absolute inset-x-0 bottom-0 px-2 pb-2 pt-8 ${
+                  hasImage
+                    ? "bg-gradient-to-t from-black/90 via-black/55 to-transparent"
+                    : "bg-black/70"
+                }`}
+              >
+                <p className="text-sm font-semibold leading-snug text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                  {panel.caption}
+                </p>
               </div>
             ) : null}
           </div>
@@ -380,6 +388,9 @@ export default function ComicDetailPage() {
                   {novelLabel}
                 </Link>
                 》· {total} 页（每页 4 格）· {new Date(comic.createdAt).toLocaleDateString()}
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-[var(--gc-text-faint)]">
+                对白/旁白在每格底部黑条显示（不画进图内）；缺图格会先展示分镜文字。
               </p>
             </div>
             <ShareButton comicId={comic.id} />

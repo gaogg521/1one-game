@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "templateId": "platformer",
+  "title": "松径寻宝人",
+  "theme": {
+    "backgroundColor": "#1a2220",
+    "playerColor": "#8faf8c",
+    "hazardColor": "#a65f3f",
+    "collectibleColor": "#c9a66b",
+    "particleTint": "#6b7468"
+  },
+  "gameplay": {
+    "playerSpeed": 305,
+    "hazardSpeed": 205,
+    "spawnIntervalMs": 740,
+    "winScore": 26,
+    "lives": 4,
+    "jumpStrength": 430,
+    "gravity": 980
+  },
+  "labels": {
+    "player": "旅行者",
+    "hazard": "刺藤鼠",
+    "collectible": "松鳞果",
+    "subtitle": "暮色小径上的收集之旅"
+  }
+}

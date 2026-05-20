@@ -9,12 +9,26 @@ import {
   clearDraft,
   markDraftGenerating,
 } from "@/lib/draft-storage";
+import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPanel";
+import { fetchCreativeBriefPreview } from "@/lib/creative-brief/preview-client";
+import { extractComicCreativePitch } from "@/lib/creative-brief/resolve-media-brief";
+import { consumeComicGenerateStream } from "@/lib/comic-generate-stream.client";
+import {
+  NOVEL_CREATIVE_BRIEF_SCHEMA,
+  type NovelBriefUserRevision,
+  type NovelCreativeBrief,
+} from "@/lib/literary-brief";
 import { NOVEL_LENGTH_TIERS, type NovelLengthTier } from "@/lib/novel-length";
 
 export default function ComicCreatePage() {
   const router = useRouter();
   const [content, setContent] = useState("");
+  const [creativePrompt, setCreativePrompt] = useState("");
   const [title, setTitle] = useState("");
+  const [creativeBrief, setCreativeBrief] = useState<NovelCreativeBrief | null>(null);
+  const [creativeBriefSummary, setCreativeBriefSummary] = useState<string | null>(null);
+  const [briefRevision, setBriefRevision] = useState<NovelBriefUserRevision | null>(null);
+  const [briefPreviewBusy, setBriefPreviewBusy] = useState(false);
   const [lengthTier, setLengthTier] = useState<NovelLengthTier>("medium");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,42 +48,47 @@ export default function ComicCreatePage() {
     if (!content.trim() || loading) return;
     setLoading(true);
     setError("");
-    setProgress("正在解析文本并提取漫画场景…");
+    setProgress("连接漫画生成服务…");
+    setCreativeBrief(null);
+    setCreativeBriefSummary(null);
+    setBriefRevision(null);
 
     // 保存草稿状态
     markDraftGenerating("comic", content.trim(), title.trim() || undefined);
 
     try {
-      const res = await fetch("/api/comic/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const result = await consumeComicGenerateStream(
+        {
           content: content.trim(),
+          creativePrompt: creativePrompt.trim() || undefined,
           title: title.trim() || undefined,
           lengthTier,
-        }),
-      });
-      const ct = res.headers.get("content-type") ?? "";
-      const data = ct.includes("application/json")
-        ? ((await res.json()) as { error?: string; comic?: { id: string } })
-        : {};
-      if (!res.ok) {
-        setError(
-          data.error ||
-            (res.status === 413
-              ? "正文过长，请缩短梗概后重试"
-              : `生成失败（HTTP ${res.status}）`),
-        );
+          ...(creativeBrief ? { creativeBrief } : {}),
+          ...(briefRevision ? { briefRevision } : {}),
+        },
+        (ev) => {
+          if (ev.step === "brief") {
+            const data = ev as { summary?: string; brief?: unknown };
+            if (typeof data.summary === "string") setCreativeBriefSummary(data.summary);
+            const briefOk = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(data.brief);
+            if (briefOk.success) setCreativeBrief(briefOk.data);
+            setProgress("AI 已扩写漫画改编理解，开始分镜…");
+            return;
+          }
+          if (ev.message) setProgress(ev.message);
+        },
+      );
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
-      if (!data.comic?.id) {
-        setError("服务端未返回漫画 ID");
-        return;
-      }
-      setProgress("正在渲染分镜…");
       clearDraft("comic");
       setDraft(null);
-      router.push(`/comic/${data.comic.id}`);
+      router.push(
+        result.needsPanelRender
+          ? `/comic/${result.comicId}?renderPanels=1`
+          : `/comic/${result.comicId}`,
+      );
     } catch {
       setError("网络错误，请重试");
     } finally {
@@ -90,6 +109,28 @@ export default function ComicCreatePage() {
     setDraft(null);
   }
 
+  function comicPitch(): string {
+    return extractComicCreativePitch(content, creativePrompt);
+  }
+
+  async function handlePreviewBrief() {
+    const pitch = comicPitch();
+    if (pitch.length < 2 || briefPreviewBusy) return;
+    setError("");
+    setBriefPreviewBusy(true);
+    try {
+      const r = await fetchCreativeBriefPreview(pitch, "comic");
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      setCreativeBrief(r.brief);
+      setCreativeBriefSummary(r.oneLineSummary);
+    } finally {
+      setBriefPreviewBusy(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen">
       <SiteHeader />
@@ -98,7 +139,7 @@ export default function ComicCreatePage() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-[var(--gc-text)]">创作漫画</h1>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">
-              粘贴小说文本，AI 按篇幅生成多页漫画（每页 4 宫格，短篇约 2 页、中篇约 8 页、长篇最多 32 页）
+              可粘贴全文，或只写一句话创意；系统会先 <strong>AI 深度扩写</strong> 改编 Brief，再导演包 → 分镜 → 配图（每页 4 格）
             </p>
           </div>
 
@@ -172,6 +213,19 @@ export default function ComicCreatePage() {
 
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
+                一句话创意（可选；粘贴长文时可单独写改编方向）
+              </label>
+              <input
+                type="text"
+                value={creativePrompt}
+                onChange={(e) => setCreativePrompt(e.target.value)}
+                placeholder="例：赛博朋克都市里退役黑客追查 AI 觉醒案…"
+                className="w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:var(--gc-accent)]"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
                 小说 / 故事文本
               </label>
               <textarea
@@ -185,6 +239,27 @@ export default function ComicCreatePage() {
               <p className="mt-1 text-xs text-[var(--gc-muted)]">
                 已输入 {content.length} 字符
               </p>
+            </div>
+
+            {(creativeBrief || creativeBriefSummary) ? (
+              <NovelCreativeBriefPanel
+                brief={creativeBrief}
+                summary={creativeBriefSummary}
+                onRevisionChange={setBriefRevision}
+                onRegenerateWithRevision={() => void handlePreviewBrief()}
+                regenerateDisabled={loading || briefPreviewBusy}
+              />
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={loading || briefPreviewBusy || comicPitch().length < 2}
+                onClick={() => void handlePreviewBrief()}
+                className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] hover:border-[color:var(--gc-accent)]/40 disabled:opacity-50"
+              >
+                {briefPreviewBusy ? "扩写预览中…" : "预览改编 Brief"}
+              </button>
             </div>
 
             {error && <p className="text-sm text-red-400">{error}</p>}

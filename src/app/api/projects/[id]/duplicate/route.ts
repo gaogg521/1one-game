@@ -4,6 +4,7 @@ import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
 import { createProjectRecord } from "@/lib/project-create";
 import { copyProjectCoverFile } from "@/lib/project-cover";
+import { fetchCreativeBriefJson, saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 
@@ -48,6 +49,11 @@ export async function POST(_req: Request, ctx: RouteContext) {
     if (rel) {
       await prisma.project.update({ where: { id: clone.id }, data: { coverPath: rel } });
     }
+  }
+
+  const briefJson = await fetchCreativeBriefJson(source.id);
+  if (briefJson?.trim()) {
+    await saveCreativeBriefJson(clone.id, briefJson);
   }
 
   return NextResponse.json({

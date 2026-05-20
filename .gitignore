@@ -24,6 +24,16 @@
 # production
 /build
 
+# godot portable toolchain (npm run godot:install)
+/tools/godot/*.exe
+/tools/godot/*.zip
+/tools/godot/*.tpz
+/tools/godot/templates_extract/
+/godot-templates/**/.godot/
+/public/godot-builds/
+/public/godot-artifacts/
+/workspaces/godot-exports/
+
 # misc
 .DS_Store
 *.pem

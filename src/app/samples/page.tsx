@@ -1,11 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SAMPLE_SHELVES, type Sample, samplesByShelf, shelfConfig } from "@/lib/samples";
 import type { GameSpec } from "@/lib/game-spec";
+import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
+import { prefetchSamplesGodotExports } from "@/lib/samples-godot-prefetch.client";
 
 type BusyMap = Record<string, "idle" | "creating" | "error">;
 
@@ -151,6 +153,10 @@ export default function SamplesPage() {
   const [busy, setBusy] = useState<BusyMap>({});
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    prefetchSamplesGodotExports();
+  }, []);
+
   const goEdit = useCallback(
     (prompt: string) => {
       router.push(`/create?prefill=${encodeURIComponent(prompt)}`);
@@ -186,6 +192,7 @@ export default function SamplesPage() {
           setBusy((m) => ({ ...m, [id]: "error" }));
           return;
         }
+        prefetchGodotExport(genData.spec, { projectId: saveData.project.id });
         router.push(`/play/${saveData.project.id}`);
       } catch {
         setError("网络异常");

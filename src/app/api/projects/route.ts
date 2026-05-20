@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
-import { parseGameSpec } from "@/lib/game-spec";
+import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { createProjectRecord } from "@/lib/project-create";
+import {
+  parseCreativeBriefBody,
+  serializeCreativeBrief,
+} from "@/lib/project-creative-brief-parse";
+import { saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 
@@ -56,6 +61,10 @@ export async function POST(req: Request) {
     typeof body === "object" && body !== null && "spec" in body
       ? (body as { spec?: unknown }).spec
       : undefined;
+  const briefRaw =
+    typeof body === "object" && body !== null && "creativeBrief" in body
+      ? (body as { creativeBrief?: unknown }).creativeBrief
+      : undefined;
 
   const trimmed = prompt.trim();
   if (trimmed.length < 1) {
@@ -63,18 +72,25 @@ export async function POST(req: Request) {
   }
 
   try {
-    const spec = parseGameSpec(specRaw);
+    const spec = prepareGameSpecForPersist(specRaw, trimmed);
+    const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
+    const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const project = await createProjectRecord({
       ownerKey,
       title: spec.title,
       prompt: trimmed,
       specJson: JSON.stringify(spec),
+      creativeBriefJson: briefJson,
       status: "ready",
     });
+    if (briefJson && !project.creativeBriefJson) {
+      await saveCreativeBriefJson(project.id, briefJson);
+    }
     return NextResponse.json({
       project: { id: project.id, title: project.title, shareCode: project.shareCode },
     });
-  } catch {
-    return NextResponse.json({ error: "保存失败，规格无效" }, { status: 400 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "保存失败";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

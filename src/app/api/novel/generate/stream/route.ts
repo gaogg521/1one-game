@@ -5,7 +5,7 @@ import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelTextStream } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
-import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import {
   getNovelSystemPrompt,
   buildNovelUserMessage,
@@ -24,10 +24,23 @@ import {
   usesSegmentedLongGeneration,
 } from "@/lib/novel-long-generate";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
+import { persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
+import { resolveMediaCreativeBrief } from "@/lib/creative-brief/resolve-media-brief";
+import { parseNovelCreativeBrief, type NovelBriefUserRevision } from "@/lib/literary-brief";
+import {
+  saveNovelCreativeBriefJson,
+  serializeNovelCreativeBrief,
+} from "@/lib/novel-creative-brief-db";
+import {
+  buildNovelBriefSeed,
+  buildNovelStoredPrompt,
+  getNovelGenreTag,
+} from "@/lib/novel-genre-tags";
+import { PRODUCT } from "@/lib/product-config";
 
 /** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
 export const maxDuration = 3600;
@@ -54,14 +67,32 @@ export async function POST(req: Request) {
     });
   }
 
-  const { prompt, title, lengthTier: lengthTierRaw } = json.body as {
+  const {
+    prompt,
+    title,
+    lengthTier: lengthTierRaw,
+    polish: polishRaw,
+    creativeBrief: creativeBriefRaw,
+    briefRevision: briefRevisionRaw,
+    novelGenreTag,
+  } = json.body as {
     prompt?: string;
     title?: string;
     lengthTier?: string;
+    polish?: boolean;
+    creativeBrief?: unknown;
+      briefRevision?: NovelBriefUserRevision;
+      novelGenreTag?: string;
   };
   const lengthTier = parseNovelLengthTier(lengthTierRaw);
-  if (!prompt || typeof prompt !== "string" || prompt.trim().length < 2) {
-    return new Response(JSON.stringify({ error: "请提供小说创意描述（至少 2 个字符）", code: codes.BAD_REQUEST, requestId }), {
+  const genreTag = getNovelGenreTag(novelGenreTag);
+  const titleTrimEarly = title?.trim();
+  let promptTrim = typeof prompt === "string" ? prompt.trim() : "";
+  if (promptTrim.length < 2 && titleTrimEarly && genreTag) {
+    promptTrim = buildNovelStoredPrompt(titleTrimEarly, genreTag);
+  }
+  if (promptTrim.length < 2) {
+    return new Response(JSON.stringify({ error: "请提供书名并选择类型", code: codes.BAD_REQUEST, requestId }), {
       status: 400,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
@@ -77,13 +108,16 @@ export async function POST(req: Request) {
     }
   }
 
-  const promptTrim = prompt.trim();
-  const titleTrim = title?.trim();
+  const titleTrim = titleTrimEarly;
+  let pipelinePrompt = promptTrim;
   const minChars = novelMinAcceptChars(lengthTier);
   const timeoutMs = novelLlmTimeoutMs(lengthTier);
   const maxTokens = novelLlmMaxOutputTokens(lengthTier);
-  const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier);
   const longPlan = usesSegmentedLongGeneration(lengthTier) ? planLongNovelSegments(lengthTier) : null;
+  const longPolish =
+    longPlan &&
+    polishRaw !== false &&
+    (polishRaw === true || PRODUCT.novel.longSegmented.polishAfterSegment);
   const maxCharsLimit = novelMaxChars(lengthTier);
   const tierLabel = novelLengthConfig(lengthTier).label;
   const cascade = getNovelStyleTextModelCascade();
@@ -97,11 +131,35 @@ export async function POST(req: Request) {
       };
 
       const startedAt = Date.now();
+      let briefToPersist: import("@/lib/literary-brief").NovelCreativeBrief | null = null;
       try {
+        if (PRODUCT.novel.creativeBriefExpand) {
+          const preParsed = parseNovelCreativeBrief(creativeBriefRaw);
+          const briefSeed =
+            titleTrim && genreTag ? buildNovelBriefSeed(titleTrim, genreTag) : promptTrim;
+          const briefResult = await resolveMediaCreativeBrief(briefSeed, "novel", {
+            preExpanded: preParsed ?? undefined,
+            userRevision: briefRevisionRaw ?? undefined,
+            novelGenreId: genreTag?.id,
+            title: titleTrim,
+          });
+          if (briefResult) {
+            briefToPersist = briefResult.brief;
+            pipelinePrompt = briefResult.augmentedPrompt;
+            send({
+              step: "brief",
+              summary: briefResult.oneLineSummary,
+              brief: briefResult.brief,
+            });
+          }
+        }
+
+        const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier, pipelinePrompt);
+
         send({
           step: "start",
           message: longPlan
-            ? `长篇将先定大纲再分 ${longPlan.totalSegments} 段续写（${novelGenerationEtaHint(lengthTier)}）…`
+            ? `长篇流水线：设定圣经 → 章规划 → 分批写作${longPolish ? " → 分批润色" : ""}（${novelGenerationEtaHint(lengthTier)}）…`
             : `已开始生成，正文将逐段推送（${novelGenerationEtaHint(lengthTier)}）…`,
           requestId,
         });
@@ -110,17 +168,22 @@ export async function POST(req: Request) {
         for (const model of cascade) {
           send({ step: "model_start", model });
           let content = "";
+          let pipelineMeta: Awaited<ReturnType<typeof streamLongNovelBody>>["pipelineMeta"] | null =
+            null;
           const ping = setInterval(() => send({ step: "ping" }), 15_000);
           try {
             if (longPlan) {
-              content = await streamLongNovelBody({
+              const longResult = await streamLongNovelBody({
                 model,
-                promptTrim,
+                promptTrim: pipelinePrompt,
                 titleTrim,
                 plan: longPlan,
                 lengthTier,
+                polish: Boolean(longPolish),
                 emit: send,
               });
+              content = longResult.content;
+              pipelineMeta = longResult.pipelineMeta;
             } else {
               const { content: accumulated, capped } = await accumulateNovelTextStream({
                 maxChars: maxCharsLimit,
@@ -182,13 +245,19 @@ export async function POST(req: Request) {
             },
           });
           await persistNovelLengthTier(novel.id, lengthTier);
+          if (pipelineMeta) {
+            await persistNovelGenerationMeta(novel.id, pipelineMeta);
+          }
+          if (briefToPersist) {
+            await saveNovelCreativeBriefJson(novel.id, serializeNovelCreativeBrief(briefToPersist));
+          }
 
           emitGenerateServeLog({
             phase: "novel_generate_stream",
             requestId,
             durationMs: Date.now() - startedAt,
             byteLength: json.byteLength,
-            promptChars: prompt.length,
+            promptChars: promptTrim.length,
             source: "llm",
             llmProvider: String(providerLabel),
           });
@@ -204,7 +273,8 @@ export async function POST(req: Request) {
           });
           saved = true;
 
-          const coverGenre = inferStoryGenre({
+          const coverGenre = resolveNovelCoverGenre({
+            genreTagCoverGenre: genreTag?.coverGenre,
             title: extractedTitle,
             summary,
             prompt: promptTrim,

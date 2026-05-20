@@ -2,7 +2,6 @@ import { generateComicCover } from "@/lib/cover-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import { COVER_GENRE_STYLES } from "@/lib/cover-genre";
 import { resolveComicStoryContext } from "@/lib/comic-story-genre";
-import { getComicPanelGenConcurrency, getImageGenBatchPanelCount } from "@/lib/model-config";
 import { getOwnerKey } from "@/lib/owner";
 import { prisma } from "@/lib/prisma";
 import {
@@ -77,8 +76,6 @@ export async function POST(req: Request, ctx: RouteContext) {
       };
 
       try {
-        const batchPanels = getImageGenBatchPanelCount();
-        const concurrency = getComicPanelGenConcurrency();
         const fullRegenerate =
           body.regenerate &&
           !(typeof body.page === "number" && body.page >= 1);
@@ -125,9 +122,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           send({
             type: "status",
             message: availability.ok
-              ? batchPanels > 0
-                ? `已连接文生图：${availability.openaiModel}，一次请求最多 ${batchPanels} 张，开始生成…`
-                : `已连接文生图：${availability.openaiModel}，并发 ${concurrency} 格，开始生成…`
+              ? `已连接文生图：${availability.message}，逐格串行生成（缺图自动补全）…`
               : availability.message,
           });
         }

@@ -2,8 +2,8 @@ import { persistComicCoverPath, persistNovelCoverPath } from "./cover-path-db";
 import { generateImage } from "./image-generation";
 import { persistNovelCoverFile, persistNovelCoverBuffer } from "./novel-cover-persist";
 import {
-  inferCoverGenre,
   inferStoryGenre,
+  resolveNovelCoverGenre,
   COVER_GENRE_STYLES,
   type CoverGenre,
 } from "./cover-genre";
@@ -20,7 +20,9 @@ export interface CoverGenOptions {
   summary?: string;
   storyHint?: string;
   genre?: CoverGenre;
-  type: "novel" | "comic";
+  type: "novel" | "comic" | "game";
+  /** 游戏 key art：由 Creative Brief 生成的英文 prompt（优先于 storyHint） */
+  gameKeyArtPrompt?: string;
 }
 
 async function readImageBuffer(imageUrl: string): Promise<Buffer | null> {
@@ -40,14 +42,23 @@ async function readImageBuffer(imageUrl: string): Promise<Buffer | null> {
   }
 }
 
-function buildCoverPrompt(opts: CoverGenOptions): string {
+export function buildCoverPrompt(opts: CoverGenOptions): string {
   const { title, summary = "", storyHint = "", genre = "general", type } = opts;
   const genreStyle = COVER_GENRE_STYLES[genre] ?? COVER_GENRE_STYLES.general;
 
   const typeHint =
     type === "comic"
       ? "manga/comic cover style, dynamic composition, bold lines"
-      : "Chinese web novel cover illustration, vertical 3:4 portrait, editorial book cover";
+      : type === "game"
+        ? "mobile game key art, hero readable at small size, cinematic game marketing illustration"
+        : "Chinese web novel cover illustration, vertical 3:4 portrait, editorial book cover";
+
+  if (type === "game" && opts.gameKeyArtPrompt?.trim()) {
+    return [
+      opts.gameKeyArtPrompt.trim(),
+      "Lower third slightly darker for title overlay. No text, no logos, no watermarks.",
+    ].join(" ");
+  }
 
   const hint = storyHint.trim().slice(0, 500);
   const sum = summary.trim().slice(0, 320);
@@ -57,12 +68,16 @@ function buildCoverPrompt(opts: CoverGenOptions): string {
       ? "Setting is present-day China only: office towers, banquet hall, business suit, city night. Forbidden: fantasy, ancient China, magic effects, ruined world."
       : "";
 
+  const transmigrationExtra =
+    genre === "transmigration" ? buildTransmigrationCoverSceneHint(title, sum, hint) : "";
+
   return [
     `Illustration background for Chinese novel "${title}".`,
     sum ? `Plot: ${sum}.` : "",
     hint ? `Story elements: ${hint}.` : "",
     genreStyle.backgroundPrompt,
     urbanExtra,
+    transmigrationExtra,
     typeHint,
     "Lower third slightly darker for title overlay area. Absolutely no text, no letters, no watermarks, no logos.",
   ]
@@ -70,9 +85,26 @@ function buildCoverPrompt(opts: CoverGenOptions): string {
     .join(" ");
 }
 
+function buildTransmigrationCoverSceneHint(title: string, summary: string, hint: string): string {
+  const t = `${title} ${summary} ${hint}`;
+  const parts = [
+    "Required: modern protagonist (contemporary clothing) visibly in the same illustration as the historical/other-world setting; dual-era contrast, not a pure modern lifestyle photo.",
+  ];
+  if (/雍正|四爷|康熙|乾隆|清朝|清代|紫禁|皇子|阿哥|九子夺嫡/.test(t)) {
+    parts.push(
+      "Historical side: Qing dynasty Yongzheng era imperial court, prince in court robe silhouette, vermilion palace walls, East Asian cinematic lighting, political intrigue atmosphere.",
+    );
+  } else if (/大明|锦衣卫|明朝|唐宋|秦汉|三国|古代|宫廷|王朝/.test(t)) {
+    parts.push("Historical side: Chinese imperial period drama setting matching the title era.");
+  } else if (/仙侠|修仙|异界|玄幻/.test(t)) {
+    parts.push("Other-world side: xianxia or fantasy cultivation world with spiritual atmosphere.");
+  }
+  return parts.join(" ");
+}
+
 function resolveCoverGenre(opts: CoverGenOptions): CoverGenre {
   if (opts.genre) return opts.genre;
-  return inferStoryGenre({
+  return resolveNovelCoverGenre({
     title: opts.title,
     summary: opts.summary,
     prompt: opts.storyHint,
@@ -122,7 +154,7 @@ export async function generateNovelCover(
 ): Promise<string | null> {
   const g =
     genre ??
-    inferStoryGenre({
+    resolveNovelCoverGenre({
       title,
       summary,
       prompt: storyHint,

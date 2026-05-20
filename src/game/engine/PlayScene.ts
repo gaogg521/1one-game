@@ -3,6 +3,7 @@ import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import {
   addMinecraftBackdrop,
   ensureMinecraftEntityTextures,
@@ -211,7 +212,7 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(25);
 
     this.actText = this.add
-      .text(width / 2, 14, "", {
+      .text(width / 2, 68, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.muted,
@@ -398,7 +399,7 @@ export class PlayScene extends Phaser.Scene {
       this.score += 1 * this.scoreMult + comboBonus + riskBonus + goldenBonus;
       if (goldenBonus > 0) {
         this.showFloater(gx, gy - 38, `黄金 +${goldenBonus}`, "#ffd700");
-        this.cameras.main.flash(100, 255, 220, 80, false);
+        juiceFlash(this, { r: 255, g: 220, b: 80 }, { durationMs: 100 });
         playBleep("pickup");
       }
       if (riskBonus > 0 && this.spec.templateId === "collector") {
@@ -410,7 +411,8 @@ export class PlayScene extends Phaser.Scene {
           const hy = Phaser.Math.Clamp(gy + Phaser.Math.Between(-90, 90), 110, height - 110);
           this.spawnHazard(hx, hy);
         }
-        this.cameras.main.shake(160, 0.006);
+        juiceShake(this, { durationMs: 160, intensity: 0.006 });
+        juiceBurst(this, gx, gy, themeParticleHex(this.spec), 10);
       }
       if (this.time.now < this.goalShiftUntil) {
         this.goalShiftHave += 1;
@@ -546,51 +548,20 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private fxCollect(x: number, y: number) {
-    const tintStr = this.spec.theme.collectibleColor ?? this.spec.theme.playerColor;
-    const tint = parseInt(tintStr.replace("#", ""), 16);
-    const n = 14;
-    for (let i = 0; i < n; i += 1) {
-      const bits = this.add.rectangle(x, y, 3, 3, tint, 0.95);
-      bits.setDepth(30);
-      this.tweens.add({
-        targets: bits,
-        x: x + Phaser.Math.Between(-72, 72),
-        y: y + Phaser.Math.Between(-72, 72),
-        alpha: 0,
-        scale: 0.2,
-        duration: Phaser.Math.Between(280, 420),
-        ease: "Cubic.Out",
-        onComplete: () => bits.destroy(),
-      });
-    }
-    const floater = this.add
-      .text(x, y - 14, "+1", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "16px",
-        color: this.cohesive.hud.body,
-      })
-      .setOrigin(0.5)
-      .setDepth(35);
-    this.tweens.add({
-      targets: floater,
-      y: y - 52,
-      alpha: 0,
-      duration: 520,
-      ease: "Quad.Out",
-      onComplete: () => floater.destroy(),
-    });
-    this.cameras.main.flash(120, 180, 160, 255, false);
+    juiceBurst(this, x, y, themeParticleHex(this.spec), 14);
+    juiceFloater(this, x, y - 14, "+1", this.cohesive.hud.body);
+    juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 120 });
     playBleep("pickup");
   }
 
   private fxDamage() {
-    this.cameras.main.shake(140, 0.0045);
-    this.cameras.main.flash(160, 255, 90, 90, false);
+    juiceShake(this, { durationMs: 140, intensity: 0.0045 });
+    juiceFlash(this, { r: 255, g: 90, b: 90 }, { durationMs: 160 });
     playBleep("hit");
   }
 
   private fxShield() {
-    this.cameras.main.flash(120, 120, 220, 255, false);
+    juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 120 });
     playBleep("pickup");
   }
 
@@ -779,7 +750,7 @@ export class PlayScene extends Phaser.Scene {
     if (ev.type === "miniBoss") {
       this.miniBossUntil = this.eventUntil;
       this.soundscape?.triggerEvent("boss");
-      this.cameras.main.shake(380, 0.018);
+      juiceShake(this, { durationMs: 380, intensity: 0.018 });
       const x = Phaser.Math.Between(90, this.scale.width - 90);
       const h = this.hazards.create(x, -60, "texHazard");
       h.setDepth(6);
@@ -809,7 +780,7 @@ export class PlayScene extends Phaser.Scene {
       // avoider 专属：终局密集弹幕倒计时
       this.avoiderFinalBarrageUntil = this.eventUntil;
       this.soundscape?.triggerEvent("danger");
-      this.cameras.main.shake(220, 0.012);
+      juiceShake(this, { durationMs: 220, intensity: 0.012 });
       this.startDangerVignette();
       return;
     }
@@ -868,13 +839,13 @@ export class PlayScene extends Phaser.Scene {
                 : "保持节奏，准备下一段躲避";
       if (mods.includes("finale")) {
         this.soundscape?.triggerEvent("boss");
-        this.cameras.main.shake(180, 0.008);
+        juiceShake(this, { durationMs: 180, intensity: 0.008 });
         if (this.spec.templateId === "survivor") {
           this.startSurvivorLastStand("终局章节");
         }
       }
       this.banner.show({ title: label ? `章节 · ${label}` : "章节推进", message: stageMessage, ms: 1400 });
-      this.cameras.main.flash(90, 140, 120, 255, false);
+      juiceFlash(this, { r: 140, g: 120, b: 255 }, { durationMs: 90 });
       // Dynamic music: increase tension as act progresses
       const tension = this.intensity * (0.5 + 0.5 * (idx / Math.max(1, acts.length - 1)));
       this.soundscape?.setTension(tension);
@@ -1061,7 +1032,7 @@ export class PlayScene extends Phaser.Scene {
         const d = Phaser.Math.Distance.Between(hx, hy, s.x, s.y);
         if (d <= r) s.destroy();
       }
-      this.cameras.main.flash(120, 255, 200, 90, false);
+      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -1076,7 +1047,7 @@ export class PlayScene extends Phaser.Scene {
       this.time.delayedCall(boostUntil - this.time.now, () => {
         this.intensity = old;
       });
-      this.cameras.main.flash(90, 120, 255, 160, false);
+      juiceFlash(this, { r: 120, g: 255, b: 160 }, { durationMs: 90 });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -1095,8 +1066,8 @@ export class PlayScene extends Phaser.Scene {
       this.survivorDodgeStreak = 0;
       this.invulnUntil = this.time.now + 720;
       this.lives -= 1;
-      this.cameras.main.shake(180, 0.009);
-      this.cameras.main.flash(130, 255, 60, 60, false);
+      juiceShake(this, { durationMs: 180, intensity: 0.009 });
+      juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 130 });
       playBleep("hit");
       this.player.setAlpha(0.35);
       this.time.delayedCall(200, () => this.player.setAlpha(1));
@@ -1115,8 +1086,8 @@ export class PlayScene extends Phaser.Scene {
       this.collectorCombo = 0;
       this.lastCollectorPickupAt = 0;
       this.lives -= 1;
-      this.cameras.main.shake(160, 0.008);
-      this.cameras.main.flash(120, 255, 60, 60, false);
+      juiceShake(this, { durationMs: 160, intensity: 0.008 });
+      juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 120 });
       playBleep("hit");
       if (this.livesText) this.livesText.setText(`生命 ${this.lives}`);
       if (this.lives === 1) {
@@ -1129,8 +1100,8 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    this.cameras.main.shake(200, 0.012);
-    this.cameras.main.flash(150, 255, 60, 60, false);
+    juiceShake(this, { durationMs: 200, intensity: 0.012 });
+    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 150 });
     playBleep("hit");
     this.finish({ score: this.score, won: false });
   }
@@ -1407,7 +1378,7 @@ export class PlayScene extends Phaser.Scene {
       ease: "Quad.Out",
       onComplete: () => floater.destroy(),
     });
-    this.cameras.main.flash(70, 180, 220, 255, false);
+    juiceFlash(this, { r: 180, g: 220, b: 255 }, { durationMs: 70 });
     this.refreshHud();
     if (this.score >= this.winScore) {
       this.finish({ score: this.score, won: true });

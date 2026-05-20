@@ -9,6 +9,61 @@
 
 ---
 
+## 2026-05-20 小说创作四步流程
+
+- **1 书名** → **2 类型标签**（穿越/玄幻/仙侠/武侠/历史/都市/言情/科幻/悬疑/灵异）→ **3 AI 扩写构思**（可修订、确认）→ **4 选篇幅并写作**。
+- `novel-genre-tags.ts`：类型映射题材知识包；`NovelGenreTagPicker` 组件。
+- 生成 API 支持 `novelGenreTag` + 已确认 `creativeBrief`。
+
+---
+
+## 2026-05-20 小说 / 漫画「文学创意构思」（与游戏 Brief 分离）
+
+- **游戏**仍走 `src/lib/creative-brief/`（templateId、HUD、玩法区域等）。
+- **小说 / 漫画**走 `src/lib/literary-brief/`：网文字段（主角、核心矛盾、世界观、情节节拍、连载结构提示等），**禁止**小游戏 / templateId / 玩家单位等游戏术语。
+- `novel-packs.ts` 按类型标签（穿越、玄幻、武侠…）提供骨架；`expandNovelCreativeBrief` + 可选 LLM。
+- 小说四步创作页用 `NovelCreativeBriefPanel`；漫画改编页共用同一构思结构（分镜仍走导演包）。
+- API：`POST /api/creative-brief/expand` 在 `medium=novel|comic` 时调用文学扩写；生成管线注入 `formatNovelBriefForPipeline`。
+- 配置：`PRODUCT.novel/comic.creativeBriefExpand` 与 `creativeBriefLlm`。
+
+---
+
+## 2026-05-20 Creative Brief 路线图 5～8 项
+
+- **题材包**：`folklore-festival`（民俗节庆）、`sports-arcade`（体育街机）、`puzzle-logic`（解谜逻辑）。
+- **持久化**：`Project.creativeBriefJson`；保存/加载作品时携带 `creativeBrief`；副本复制 Brief。
+- **独立 API**：`POST /api/creative-brief/expand`。
+- **Comfy 消费 Brief**：`game-brief-comfy-cover.ts` + `POST /api/projects/:id/brief-cover`（正/负面词来自 Brief）。
+- **多语言**：`detect-input-locale` / `locale-prompts`；Brief 字段 `inputLocale`；英/日匹配词扩展。
+
+验证：`npm run qa:creative-brief`（12 条离线用例）
+
+---
+
+## 2026-05-19 游戏双轨 + Creative Brief 深度扩写
+
+### 一句话 → 八维扩写（Creative Brief）
+
+- 新增 `src/lib/creative-brief/`：意图解析、题材知识包（星际/塔防/平台/治愈/武侠/恐怖/二次元等）、可选 LLM 润色、注入 `generate-spec` 流水线。
+- SSE 阶段 `brief`：创作台展示 Logline 与八维摘要；`CreativeBriefPanel` 支持**修订**与**按理解重新生成**。
+- `lint-theme.ts`：Brief 与 `GameSpec.theme` / `templateId` 一致性检查，并自动对齐 `themeHints`。
+- `cover-prompt.ts`：`buildGameKeyArtPromptFromBrief` 供游戏 key art / 封面文生图；`cover-generation` 支持 `type: "game"`。
+
+### Godot 在线试玩
+
+- 中文字体 `NotoSansSC` 打包进母版；`GameUiFont` autoload。
+- 铺底音乐循环、射击 `fire`/`explode` 音效；Web 构建缓存（`sessionStorage` + 服务端 `public/godot-builds`）。
+- 创作台 Godot 标签后台预构建，同规格免重复导出。
+
+### Phaser 预览
+
+- HUD 章节标签下移，避免与标题叠字；画布 `resolution` 提升清晰度。
+- `webBleeps` 战斗音加强（开火/击毁/受击）。
+
+验证：`npm run qa:creative-brief`
+
+---
+
 ## 2026-05-16 游戏生成产品升级（Phase 1 起步）
 
 - **创作台共创流程**：`/create` 已从“一句话直接出结果”升级成 **4 步共创**：

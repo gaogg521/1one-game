@@ -8,6 +8,7 @@ import {
 } from "@/lib/extract-document";
 import { fetchUrlPlainText } from "@/lib/fetch-url-text";
 import { getReferenceImageStorage } from "@/lib/assets/reference-image-storage.factory";
+import { cacheIngestReferenceBuffer } from "@/lib/reference-ingest-server-cache";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import { describeReferenceImage } from "@/lib/vision-reference";
 
@@ -134,6 +135,11 @@ export async function POST(req: Request): Promise<NextResponse> {
           purpose,
         });
         referenceAssets.push(handle);
+        try {
+          await cacheIngestReferenceBuffer(handle.refId, buf, mt2);
+        } catch {
+          warnings.push(`${name}：参考图未能写入服务端缓存，Godot 导出可能无法使用贴图`);
+        }
 
         if (!process.env.OPENAI_API_KEY?.trim()) {
           warnings.push(`${name}：未配置 OPENAI_API_KEY，无法解读参考图`);

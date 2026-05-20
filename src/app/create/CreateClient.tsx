@@ -25,11 +25,26 @@ import {
 } from "@/lib/create-studio-narrative";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSpec } from "@/lib/game-spec";
+import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import type { OrchestrationRunTrace } from "@/lib/orchestration/run-trace";
 import { consumeSSE } from "@/lib/read-sse";
 import { GamePlayer } from "@/components/GamePlayer";
+import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
+import { GameRuntimePreferenceControl } from "@/components/GameRuntimePreferenceControl";
+import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
+import { readReferenceHandlesFromSession } from "@/lib/assets/reference-image-storage.client";
+import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
+import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
+import { PRODUCT } from "@/lib/product-config";
+import { CreativeBriefPanel } from "@/components/CreativeBriefPanel";
 import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
 import { SiteHeader } from "@/components/SiteHeader";
+import {
+  buildPromptWithBriefRevision,
+  type BriefUserRevision,
+} from "@/lib/creative-brief/format-revision";
+import type { CreativeBrief } from "@/lib/creative-brief/types";
+import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import { useClipboardImageQueue } from "@/providers/ClipboardImageQueueProvider";
 
 const EXAMPLES = [
@@ -96,6 +111,7 @@ const STEP_META: Record<string, { label: string; progress: number; defaultMsg: s
   handshake: { label: "连接云端", progress: 0.14, defaultMsg: "正在建立会话并把你的创意送达生成服务…" },
   /** 服务端 SSE：首帧，与后端「已接收创意」一致 */
   start: { label: "云端接单", progress: 0.16, defaultMsg: "生成服务已收到任务，稍后进入管线…" },
+  brief: { label: "深度扩写", progress: 0.2, defaultMsg: "题材知识包 + 模型正在补齐八维创意 Brief…" },
   prep: { label: "解读创意", progress: 0.18, defaultMsg: "把你的提示与选项整理成可执行计划…" },
   running: { label: "深度生成", progress: 0.58, defaultMsg: "大模型起草 + 本地纠错 + 规格校验（可能需几十秒～数分钟）…" },
   recap: { label: "成品摘要", progress: 0.9, defaultMsg: "提炼模板、标题与关键数值…" },
@@ -206,6 +222,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [coCreationStep, setCoCreationStep] = useState<1 | 2 | 3 | 4>(1);
   /** 与本轮流式生成绑定，卡片区展示一行「正在按此理解」摘要，避免仅显示远端阶段名而造成误解 */
   const [streamIntentBrief, setStreamIntentBrief] = useState<string | null>(null);
+  const [creativeBrief, setCreativeBrief] = useState<CreativeBrief | null>(null);
+  const [creativeBriefSummary, setCreativeBriefSummary] = useState<string | null>(null);
+  const [briefRevision, setBriefRevision] = useState<BriefUserRevision | null>(null);
   const studioLogSeq = useRef(0);
   const studioLogEndRef = useRef<HTMLDivElement | null>(null);
   const [replayStatus, setReplayStatus] = useState<null | "loading" | "ok" | "error">(replayId ? "loading" : null);
@@ -224,6 +243,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   /** 参考图写入 session 后递增，强制试玩区重挂 Phaser 以加载新贴图 */
   const [refPixelEpoch, setRefPixelEpoch] = useState(0);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  /** 生成完成后后台预导出 Godot，切换引擎时尽量命中缓存 */
+  useEffect(() => {
+    if (!spec || !PRODUCT.godot.enabled || !isGodotExportSupported(spec)) return;
+    const refs = readReferenceImagePayloadsFromSession();
+    const handles = readReferenceHandlesFromSession();
+    prefetchGodotExport(spec, { referencePayloads: refs, referenceHandles: handles });
+  }, [spec, refPixelEpoch]);
 
   const appendStudioLog = useCallback((entry: Omit<StudioLogEntry, "id" | "t"> & { id?: string }) => {
     const id = entry.id ?? `sl_${Date.now()}_${studioLogSeq.current++}`;
@@ -287,6 +314,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           error?: string;
           project?: { id?: string; title?: string; prompt?: string };
           spec?: GameSpec;
+          creativeBrief?: CreativeBrief;
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
         };
         if (cancelled) return;
@@ -300,6 +328,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           setSpec(data.spec);
           setCreationMode("generated");
           setCoCreationStep(4);
+        }
+        if (data.creativeBrief) {
+          setCreativeBrief(data.creativeBrief);
         }
         if (Array.isArray(data.refinementHistory)) {
           setReplayRefinements(data.refinementHistory);
@@ -439,6 +470,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setBusy("gen");
     const intentBrief = summarizePromptForStudio(prompt);
     setStreamIntentBrief(intentBrief);
+    setCreativeBrief(null);
+    setCreativeBriefSummary(null);
+    setBriefRevision(null);
     if (hasQueuedAssetFiles || hasIngestUrl) {
       setStreamStep("ingest");
       setStreamMsg(
@@ -517,11 +551,19 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       );
 
       const assetManifestPayload = summarizeAssetManifestForGenerateApi();
+      let sendPrompt = effectivePrompt;
+      if (creativeBrief && briefRevision) {
+        sendPrompt = buildPromptWithBriefRevision(prompt.trim(), creativeBrief, briefRevision);
+        const refMarker = effectivePrompt.indexOf("【参考素材】");
+        if (refMarker >= 0) {
+          sendPrompt = `${sendPrompt.slice(0, 3600)}\n\n${effectivePrompt.slice(refMarker)}`.slice(0, 4000);
+        }
+      }
       const res = await fetch("/api/generate/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: effectivePrompt,
+          prompt: sendPrompt,
           searchEnhance,
           templateHint,
           enhancePass,
@@ -545,7 +587,26 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         const step = ev.step as string | undefined;
         const msg = ev.message as string | undefined;
         if (typeof step === "string" && step) {
-          if (step === "prep") {
+          if (step === "brief") {
+            const summary = typeof ev.summary === "string" ? ev.summary : null;
+            const lines = Array.isArray(ev.lines)
+              ? (ev.lines as unknown[]).filter((x): x is string => typeof x === "string")
+              : [];
+            if (summary) {
+              setStreamIntentBrief(summary);
+              setCreativeBriefSummary(summary);
+            }
+            const briefRaw = ev.brief;
+            const briefOk = CREATIVE_BRIEF_SCHEMA.safeParse(briefRaw);
+            if (briefOk.success) setCreativeBrief(briefOk.data);
+            appendStudioLog({
+              kind: "intent",
+              title: "AI 深度扩写（Creative Brief）",
+              bullets: lines.length ? lines : summary ? [summary] : ["（无扩写行）"],
+            });
+            setStreamStep("brief");
+            setStreamMsg("已生成八维创意理解，正在起草可玩规格…");
+          } else if (step === "prep") {
             const lines = Array.isArray(ev.lines)
               ? (ev.lines as unknown[]).filter((x): x is string => typeof x === "string")
               : [];
@@ -600,6 +661,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               templateHint?: unknown;
               enhanceWarning?: unknown;
               orchestrationTrace?: unknown;
+              creativeBrief?: unknown;
+              briefSummary?: unknown;
             };
             const otRaw = d.orchestrationTrace;
             let orchestrationTrace: OrchestrationRunTrace | undefined;
@@ -612,6 +675,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               Array.isArray((otRaw as { steps?: unknown }).steps)
             ) {
               orchestrationTrace = otRaw as OrchestrationRunTrace;
+            }
+            const briefParsed = CREATIVE_BRIEF_SCHEMA.safeParse(d.creativeBrief);
+            if (briefParsed.success) setCreativeBrief(briefParsed.data);
+            if (typeof d.briefSummary === "string") {
+              setCreativeBriefSummary(d.briefSummary);
+              setStreamIntentBrief(d.briefSummary);
             }
             setGenDebug({
               model: typeof d.model === "string" ? d.model : undefined,
@@ -811,11 +880,22 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setError(null);
     setBusy("save");
     try {
+      let specToSave: GameSpec;
+      try {
+        specToSave = prepareGameSpecForPersist(spec, prompt);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "当前规格无效，无法保存");
+        return;
+      }
       const isUpdate = Boolean(projectId);
       const res = await fetch(isUpdate ? `/api/projects/${projectId}` : "/api/projects", {
         method: isUpdate ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, spec }),
+        body: JSON.stringify({
+          prompt,
+          spec: specToSave,
+          ...(creativeBrief ? { creativeBrief } : {}),
+        }),
       });
       const data = (await res.json()) as { project?: { id: string }; error?: string };
       if (!res.ok) {
@@ -838,7 +918,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     } finally {
       setBusy("idle");
     }
-  }, [projectId, prompt, router, spec]);
+  }, [creativeBrief, projectId, prompt, router, spec]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -954,78 +1034,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <strong className="text-[var(--gc-text-soft)]">三套并行备选</strong>。
           </p>
           <p className="text-xs text-[var(--gc-text-faint)]">快捷键：Ctrl / ⌘ + Enter → 流式生成一套方案</p>
+          <GameRuntimePreferenceControl className="mt-2" />
         </header>
 
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+        <div className="flex flex-col gap-10">
           <div className="flex flex-col gap-5">
-            <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {([
-                  [1, "输入创意"],
-                  [2, "提炼意图"],
-                  [3, "选择方向"],
-                  [4, "生成试玩"],
-                ] as const).map(([step, label]) => {
-                  const active = coCreationStep === step;
-                  const done = coCreationStep > step;
-                  return (
-                    <div
-                      key={step}
-                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${
-                        active
-                          ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
-                          : done
-                            ? "bg-emerald-500/12 text-emerald-200"
-                            : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
-                      }`}
-                    >
-                      <span className="font-semibold">{step}</span>
-                      <span>{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-[var(--gc-muted)]">
-                当前模式：{creationMode === "generated" ? "已进入试玩与保存阶段" : "仍在共创流程中"}。
-                {projectId ? " 当前创意已绑定已有项目，可继续覆盖保存。" : " 生成后可直接保存为新项目。"}
-              </p>
-              {coCreationIntent ? (
-                <div className="mt-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/60 px-3 py-3 text-xs text-[var(--gc-muted)]">
-                  <p className="font-semibold text-[var(--gc-text-soft)]">当前理解</p>
-                  <p className="mt-1">{coCreationIntent.premise}</p>
-                  <p className="mt-2">模板倾向：<strong className="text-[var(--gc-text-soft)]">{coCreationIntent.templateId}</strong></p>
-                  <p className="mt-1">玩法主轴：{coCreationIntent.gameplayCore}</p>
-                </div>
-              ) : null}
-              {coDirections.length ? (
-                <div className="mt-3 grid gap-2">
-                  {coDirections.map((row) => {
-                    const active = row.id === selectedDirectionId;
-                    return (
-                      <button
-                        key={row.id}
-                        type="button"
-                        onClick={() => chooseCoCreationDirection(row.id)}
-                        className={`rounded-xl border px-3 py-3 text-left transition ${
-                          active
-                            ? "border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)]"
-                            : "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/45 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-[var(--gc-text-soft)]">{row.title}</p>
-                        <p className="mt-1 text-xs text-[var(--gc-muted)]">{row.summary}</p>
-                        <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-[var(--gc-text-faint)]">
-                          {row.bullets.map((bullet) => (
-                            <li key={bullet}>{bullet}</li>
-                          ))}
-                        </ul>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-
+            <div className="flex flex-col gap-5 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/80 px-1 py-2">
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-sm font-medium text-[var(--gc-text-soft)]" htmlFor="prompt">
@@ -1299,6 +1313,76 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               ) : null}
             </div>
 
+          </div>
+
+          <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  [1, "输入创意"],
+                  [2, "提炼意图"],
+                  [3, "选择方向"],
+                  [4, "生成试玩"],
+                ] as const).map(([step, label]) => {
+                  const active = coCreationStep === step;
+                  const done = coCreationStep > step;
+                  return (
+                    <div
+                      key={step}
+                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${
+                        active
+                          ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
+                          : done
+                            ? "bg-emerald-500/12 text-emerald-200"
+                            : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+                      }`}
+                    >
+                      <span className="font-semibold">{step}</span>
+                      <span>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-[var(--gc-muted)]">
+                当前模式：{creationMode === "generated" ? "已进入试玩与保存阶段" : "仍在共创流程中"}。
+                {projectId ? " 当前创意已绑定已有项目，可继续覆盖保存。" : " 生成后可直接保存为新项目。"}
+              </p>
+              {coDirections.length ? (
+                <div className="mt-3 grid gap-2">
+                  {coDirections.map((row) => {
+                    const active = row.id === selectedDirectionId;
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => chooseCoCreationDirection(row.id)}
+                        className={`rounded-xl border px-3 py-3 text-left transition ${
+                          active
+                            ? "border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)]"
+                            : "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/45 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-[var(--gc-text-soft)]">{row.title}</p>
+                        <p className="mt-1 text-xs text-[var(--gc-muted)]">{row.summary}</p>
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-[var(--gc-text-faint)]">
+                          {row.bullets.map((bullet) => (
+                            <li key={bullet}>{bullet}</li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {coCreationIntent ? (
+                <div className="mt-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/60 px-3 py-3 text-xs text-[var(--gc-muted)]">
+                  <p className="font-semibold text-[var(--gc-text-soft)]">当前理解</p>
+                  <p className="mt-1">{coCreationIntent.premise}</p>
+                  <p className="mt-2">模板倾向：<strong className="text-[var(--gc-text-soft)]">{coCreationIntent.templateId}</strong></p>
+                  <p className="mt-1">玩法主轴：{coCreationIntent.gameplayCore}</p>
+                </div>
+              ) : null}
+            </div>
+
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">试一试</p>
               <div className="flex flex-wrap gap-2">
@@ -1378,15 +1462,24 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-4 lg:sticky lg:top-24">
+          <section
+            className="flex flex-col gap-4 border-t border-[color:var(--gc-border)] pt-8"
+            aria-label="试玩预览"
+          >
+            <p className="text-xs text-[var(--gc-muted)]">
+              完成创意描述与参考素材配置并生成后，在下方试玩；先选 Godot（在线）完整版，Phaser 用于秒开预览。
+            </p>
             {spec ? (
               <>
                 <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--gc-border)] pb-4">
                   <div>
                     <h2 className="text-lg font-semibold text-[var(--gc-text)]">{spec.title}</h2>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">
-                      {spec.templateId} · 实时预览
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">
+                        {spec.templateId} · 实时预览
+                      </p>
+                      <GameRuntimePreferenceControl />
+                    </div>
                     {genSource ? (
                       <p className="mt-2 max-w-md text-xs leading-relaxed text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
                         {SOURCE_HINT[genSource] ?? genSource}
@@ -1477,19 +1570,36 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                   </div>
                 ) : null}
 
-                <GamePlayer key={`${variants ? `v-${variantIndex}` : "one-shot"}-px-${refPixelEpoch}`} spec={spec} />
+                <CreativeBriefPanel
+                  brief={creativeBrief}
+                  summary={creativeBriefSummary}
+                  onRevisionChange={setBriefRevision}
+                  onRegenerateWithRevision={() => void generateStream()}
+                  regenerateDisabled={busy !== "idle" || prompt.trim().length < 2}
+                />
+
+                <GameRuntimeTabs
+                  spec={spec}
+                  refEpoch={refPixelEpoch}
+                  phaser={
+                    <GamePlayer
+                      key={`${variants ? `v-${variantIndex}` : "one-shot"}-px-${refPixelEpoch}`}
+                      spec={spec}
+                    />
+                  }
+                />
                 <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} />
               </>
             ) : (
               <div className="gc-card flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 py-16 text-center">
                 <div className="h-12 w-12 rounded-2xl border border-dashed border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" />
                 <p className="max-w-xs text-sm text-[var(--gc-muted)]">
-                  点击「生成可玩版本」或「三套备选」，Phaser 预览将出现在此处。
+                  点击「生成可玩版本」或「三套备选」，试玩区将出现在创意描述与参考素材下方。
                 </p>
               </div>
             )}
             {studioProcessPanel}
-          </div>
+          </section>
         </div>
       </main>
     </div>

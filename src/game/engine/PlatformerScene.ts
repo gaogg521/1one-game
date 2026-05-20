@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { juiceBurst, juiceFlash, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import {
   addMinecraftPlatformerBackdrop,
   ensureMinecraftPlatformerTextures,
@@ -225,7 +226,7 @@ export class PlatformerScene extends Phaser.Scene {
       .setDepth(101);
 
     this.actText = this.add
-      .text(viewW / 2, 14, "", {
+      .text(viewW / 2, 68, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.muted,
@@ -752,33 +753,19 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private fxCollect(x: number, y: number) {
-    const tintStr = this.spec.theme.collectibleColor ?? this.spec.theme.playerColor;
-    const tint = parseInt(tintStr.replace("#", ""), 16);
-    for (let i = 0; i < 12; i += 1) {
-      const bits = this.add.rectangle(x, y, 3, 3, tint, 0.95);
-      bits.setDepth(30);
-      this.tweens.add({
-        targets: bits,
-        x: x + Phaser.Math.Between(-64, 64),
-        y: y + Phaser.Math.Between(-64, 64),
-        alpha: 0,
-        scale: 0.2,
-        duration: Phaser.Math.Between(260, 400),
-        ease: "Cubic.Out",
-        onComplete: () => bits.destroy(),
-      });
-    }
+    juiceBurst(this, x, y, themeParticleHex(this.spec), 12);
+    juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 100 });
     playBleep("pickup");
   }
 
   private fxDamage() {
-    this.cameras.main.shake(120, 0.005);
-    this.cameras.main.flash(130, 255, 60, 60, false);
+    juiceShake(this, { durationMs: 120, intensity: 0.005 });
+    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 130 });
     playBleep("hit");
   }
 
   private fxShield() {
-    this.cameras.main.flash(120, 120, 220, 255, false);
+    juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 120 });
     playBleep("pickup");
   }
 
@@ -988,7 +975,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.miniBossUntil = this.eventUntil;
       this.nextMiniSpawnAt = 0;
       this.spawnMiniBossHazard();
-      this.cameras.main.shake(350, 0.016);
+      juiceShake(this, { durationMs: 350, intensity: 0.016 });
       this.refreshHud();
       return;
     }
@@ -1032,7 +1019,7 @@ export class PlatformerScene extends Phaser.Scene {
               ? "终局冲刺：精英守卫正在拦截"
               : "进入下一段关卡";
       this.banner.show({ title: `章节 · ${acts[idx]?.label ?? "推进"}`, message: stageMessage, ms: 1400 });
-      this.cameras.main.flash(90, 140, 120, 255, false);
+      juiceFlash(this, { r: 140, g: 120, b: 255 }, { durationMs: 90 });
       this.refreshHud();
     }
   }
@@ -1112,7 +1099,7 @@ export class PlatformerScene extends Phaser.Scene {
         const d = Phaser.Math.Distance.Between(hx, hy, sp.x, sp.y);
         if (d <= r) sp.destroy();
       }
-      this.cameras.main.flash(120, 255, 200, 90, false);
+      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -1121,7 +1108,7 @@ export class PlatformerScene extends Phaser.Scene {
     if (skill.effect === "dash") {
       this.dashUntil = this.time.now + 1100;
       this.invulnUntil = Math.max(this.invulnUntil, this.time.now + 520);
-      this.cameras.main.flash(90, 120, 255, 160, false);
+      juiceFlash(this, { r: 120, g: 255, b: 160 }, { durationMs: 90 });
       playBleep("pickup");
       this.refreshHud();
       return;

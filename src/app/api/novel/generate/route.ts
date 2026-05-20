@@ -6,7 +6,7 @@ import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelText } from "@/lib/llm";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
-import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import {
   getNovelSystemPrompt,
   buildNovelUserMessage,
@@ -23,12 +23,21 @@ import {
   planLongNovelSegments,
   usesSegmentedLongGeneration,
 } from "@/lib/novel-long-generate";
+import { persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { novelMaxChars } from "@/lib/novel-length";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
+import { resolveMediaCreativeBrief } from "@/lib/creative-brief/resolve-media-brief";
+import { parseNovelCreativeBrief, type NovelBriefUserRevision } from "@/lib/literary-brief";
+import { PRODUCT } from "@/lib/product-config";
+import {
+  saveNovelCreativeBriefJson,
+  serializeNovelCreativeBrief,
+} from "@/lib/novel-creative-brief-db";
+import { buildNovelBriefSeed, getNovelGenreTag } from "@/lib/novel-genre-tags";
 
 export const maxDuration = 3600;
 
@@ -50,10 +59,20 @@ export async function POST(req: Request) {
     return NextResponse.json(json.payload, { status: json.status, headers: ridHeaders(requestId) });
   }
 
-  const { prompt, title, lengthTier: lengthTierRaw } = json.body as {
+  const {
+    prompt,
+    title,
+    lengthTier: lengthTierRaw,
+    creativeBrief: creativeBriefRaw,
+    briefRevision: briefRevisionRaw,
+    novelGenreTag,
+  } = json.body as {
     prompt?: string;
     title?: string;
     lengthTier?: string;
+    creativeBrief?: unknown;
+    briefRevision?: NovelBriefUserRevision;
+    novelGenreTag?: string;
   };
   const lengthTier = parseNovelLengthTier(lengthTierRaw);
   if (!prompt || typeof prompt !== "string" || prompt.trim().length < 2) {
@@ -78,27 +97,48 @@ export async function POST(req: Request) {
 
   try {
     let content = "";
+    let pipelineMeta: Awaited<ReturnType<typeof generateLongNovelBody>>["pipelineMeta"] | null = null;
     let providerUsed = "";
     let modelUsed = "";
 
     const minChars = novelMinAcceptChars(lengthTier);
     const timeoutMs = novelLlmTimeoutMs(lengthTier);
     const maxTokens = novelLlmMaxOutputTokens(lengthTier);
-    const userMsg = buildNovelUserMessage(prompt.trim(), title?.trim(), lengthTier);
+    let pipelinePrompt = prompt.trim();
+    let briefToPersist: import("@/lib/literary-brief").NovelCreativeBrief | null = null;
+    const genreTag = getNovelGenreTag(novelGenreTag);
+    const titleTrim = title?.trim();
+    if (PRODUCT.novel.creativeBriefExpand) {
+      const preParsed = parseNovelCreativeBrief(creativeBriefRaw);
+      const seed =
+        titleTrim && genreTag ? buildNovelBriefSeed(titleTrim, genreTag) : prompt.trim();
+      const briefResult = await resolveMediaCreativeBrief(seed, "novel", {
+        preExpanded: preParsed ?? undefined,
+        userRevision: briefRevisionRaw ?? undefined,
+        novelGenreId: genreTag?.id,
+        title: titleTrim,
+      });
+      if (briefResult) {
+        pipelinePrompt = briefResult.augmentedPrompt;
+        briefToPersist = briefResult.brief;
+      }
+    }
+    const userMsg = buildNovelUserMessage(prompt.trim(), title?.trim(), lengthTier, pipelinePrompt);
     const longPlan = usesSegmentedLongGeneration(lengthTier) ? planLongNovelSegments(lengthTier) : null;
 
     for (const model of cascade) {
       if (longPlan) {
         try {
-          const text = await generateLongNovelBody({
+          const longResult = await generateLongNovelBody({
             model,
-            promptTrim: prompt.trim(),
+            promptTrim: pipelinePrompt,
             titleTrim: title?.trim(),
             plan: longPlan,
             lengthTier,
           });
-          if (text.length >= longPlan.minAcceptChars) {
-            content = text;
+          if (longResult.content.length >= longPlan.minAcceptChars) {
+            content = longResult.content;
+            pipelineMeta = longResult.pipelineMeta;
             modelUsed = model;
             providerUsed = getActiveProvider();
             break;
@@ -156,8 +196,15 @@ export async function POST(req: Request) {
       },
     });
     await persistNovelLengthTier(novel.id, lengthTier);
+    if (pipelineMeta) {
+      await persistNovelGenerationMeta(novel.id, pipelineMeta);
+    }
+    if (briefToPersist) {
+      await saveNovelCreativeBriefJson(novel.id, serializeNovelCreativeBrief(briefToPersist));
+    }
 
-    const coverGenre = inferStoryGenre({
+    const coverGenre = resolveNovelCoverGenre({
+      genreTagCoverGenre: genreTag?.coverGenre,
       title: extractedTitle,
       summary,
       prompt: prompt.trim(),

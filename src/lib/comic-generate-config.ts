@@ -1,5 +1,6 @@
 import type { ComicPage } from "@/lib/comic-format";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import { PRODUCT } from "@/lib/product-config";
 import {
   buildUrbanPanelImagePrompt,
   isPlaceholderComicPanel,
@@ -10,6 +11,8 @@ import {
   getComicPanelStyleLock,
   type CoverGenre,
 } from "@/lib/cover-genre";
+import type { ComicDirectorPack } from "@/lib/comic-director-types";
+import { buildFinalPanelImagePrompt, type PlannedComicPanel } from "@/lib/comic-shot-plan";
 
 export const PANELS_PER_PAGE = 4;
 export const COMIC_MAX_PAGES = 32;
@@ -37,10 +40,23 @@ export type PanelImagePromptOpts = {
 
 /** 将分镜格转为文生图 prompt（英文画面描述 + 题材画风锁 + 禁止图内文字）。 */
 export function buildPanelImagePrompt(
-  panel: { prompt?: string; caption?: string },
+  panel: {
+    prompt?: string;
+    caption?: string;
+    characterIds?: string[];
+    locationId?: string;
+    shotType?: string;
+    sceneDescriptionEn?: string;
+  },
   genre: CoverGenre = "general",
-  opts?: PanelImagePromptOpts,
+  opts?: PanelImagePromptOpts & { director?: ComicDirectorPack },
 ): string {
+  if (opts?.director && (panel.sceneDescriptionEn || panel.characterIds?.length)) {
+    return buildFinalPanelImagePrompt(opts.director, panel as PlannedComicPanel, genre);
+  }
+  if (panel.prompt?.includes("Illustration only") && panel.prompt.length > 120) {
+    return panel.prompt;
+  }
   if (
     genre === "urban" &&
     opts?.story &&
@@ -110,6 +126,15 @@ export function normalizeComicPagesForGeneration(
     out.push({ page: i + 1, panels });
   }
   return out;
+}
+
+/** 长篇或页数较多时使用导演流水线。 */
+export function shouldUseLongComicPipeline(
+  pageCount: number,
+  lengthTier?: NovelLengthTier | null,
+): boolean {
+  if (lengthTier === "long") return true;
+  return pageCount >= PRODUCT.comic.directorPipelineMinPages;
 }
 
 export function resolveComicPageCount(opts: {

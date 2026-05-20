@@ -3,9 +3,12 @@ import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
+import { expandCreativeBrief } from "@/lib/creative-brief";
+import { buildStudioBriefBullets } from "@/lib/creative-brief/format-prompt";
 import { buildServerPrepLines } from "@/lib/create-studio-narrative";
 import { generateGameSpecWithMeta } from "@/lib/generate-spec";
 import { createRunTraceRecorder } from "@/lib/orchestration/run-trace";
+import { PRODUCT } from "@/lib/product-config";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
 import { rateLimit } from "@/lib/rate-limit";
@@ -51,6 +54,25 @@ export async function POST(req: Request) {
       const startedAt = Date.now();
       try {
         send({ step: "start", message: "已接收创意，准备生成…" });
+        const orch = createRunTraceRecorder();
+
+        let creativeBriefPreExpanded: Awaited<ReturnType<typeof expandCreativeBrief>> | undefined;
+        if (PRODUCT.game.creativeBriefExpand) {
+          creativeBriefPreExpanded = await orch.span("creative_brief_expand", () =>
+            expandCreativeBrief({
+              prompt: parsed.prompt,
+              templateHint: parsed.templateHint,
+              orchestration: orch,
+            }),
+          );
+          send({
+            step: "brief",
+            summary: creativeBriefPreExpanded.oneLineSummary,
+            lines: buildStudioBriefBullets(creativeBriefPreExpanded.brief),
+            brief: creativeBriefPreExpanded.brief,
+          });
+        }
+
         send({
           step: "prep",
           lines: buildServerPrepLines(parsed.prompt, {
@@ -59,12 +81,12 @@ export async function POST(req: Request) {
             enhancePass: parsed.enhancePass,
           }),
         });
-        const orch = createRunTraceRecorder();
         const result = await generateGameSpecWithMeta(parsed.prompt, {
           searchEnhance: parsed.searchEnhance,
           templateHint: parsed.templateHint,
           enhancePass: parsed.enhancePass,
           orchestration: orch,
+          creativeBriefPreExpanded,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
         const spec = result.spec;

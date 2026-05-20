@@ -1,12 +1,14 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
+import { ComicGenerateButton } from "@/components/comic/ComicGenerateButton";
+import { NovelContinueButton } from "@/components/novel/NovelContinueButton";
 import { NovelSynopsisBlurb } from "@/components/novel/NovelSynopsisBlurb";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
@@ -28,6 +30,9 @@ interface Novel {
   comics: { id: string; title: string }[];
   shareCode: string | null;
   isOwner?: boolean;
+  canContinue?: boolean;
+  continuationReason?: string;
+  remainingChapterCount?: number;
 }
 
 function ShareButton({ novelId }: { novelId: string }) {
@@ -65,12 +70,10 @@ function ShareButton({ novelId }: { novelId: string }) {
 
 export default function NovelDetailPage() {
   const { id } = useParams();
-  const router = useRouter();
   const [novel, setNovel] = useState<Novel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [generatingComic, setGeneratingComic] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
   const [readerTheme, setReaderTheme] = useState<NovelReaderThemeId>("paper");
@@ -130,53 +133,6 @@ export default function NovelDetailPage() {
       setError("封面生成请求失败");
     } finally {
       setCoverRegenerating(false);
-    }
-  }
-
-  async function handleGenerateComic() {
-    if (!novel || generatingComic) return;
-    setGeneratingComic(true);
-    try {
-      const res = await fetch("/api/comic/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ novelId: novel.id }),
-      });
-      const ct = res.headers.get("content-type") ?? "";
-      const data = ct.includes("application/json")
-        ? ((await res.json()) as {
-            error?: string;
-            comic?: { id: string };
-            imagesWarning?: string;
-            panelsRendered?: number;
-            panelCount?: number;
-          })
-        : {};
-      if (!res.ok) {
-        const msg = data.error || "漫画生成失败";
-        setError(
-          res.status === 403
-            ? "当前账号与创建该小说时不一致，无法生成漫画。请用创作时的浏览器登录态，或在「我的小说」中打开自己的作品。"
-            : msg,
-        );
-        return;
-      }
-      if (!data.comic?.id) {
-        setError("服务端未返回漫画 ID");
-        return;
-      }
-      const needsPanelRender =
-        Boolean(data.imagesWarning) ||
-        (typeof data.panelsRendered === "number" &&
-          typeof data.panelCount === "number" &&
-          data.panelsRendered < data.panelCount);
-      router.push(
-        needsPanelRender ? `/comic/${data.comic.id}?renderPanels=1` : `/comic/${data.comic.id}`,
-      );
-    } catch {
-      setError("网络错误");
-    } finally {
-      setGeneratingComic(false);
     }
   }
 
@@ -305,17 +261,59 @@ export default function NovelDetailPage() {
                       查看漫画版
                     </Link>
                   ) : (
-                    <button
-                      onClick={handleGenerateComic}
-                      disabled={generatingComic}
+                    <ComicGenerateButton
+                      novelId={novel.id}
+                      lengthTier={novel.lengthTier ?? undefined}
+                      label="生成漫画"
+                      onError={(msg) =>
+                        setError(
+                          msg.includes("无权")
+                            ? "当前账号与创建该小说时不一致，无法生成漫画。请用创作时的浏览器登录态，或在「我的小说」中打开自己的作品。"
+                            : msg,
+                        )
+                      }
                       className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
                       style={{
                         borderColor: `${readPalette.tocActive}55`,
                         color: readPalette.tocActive,
                       }}
-                    >
-                      {generatingComic ? "生成漫画中…" : "生成漫画"}
-                    </button>
+                    />
+                  )}
+                  {novel.isOwner && novel.canContinue && (
+                    <NovelContinueButton
+                      novelId={novel.id}
+                      initialContent={novel.content}
+                      lengthTier={novel.lengthTier}
+                      canContinue={Boolean(novel.canContinue)}
+                      continuationReason={novel.continuationReason ?? "续写长篇"}
+                      remainingChapterCount={novel.remainingChapterCount}
+                      onCompleted={async (data) => {
+                        setNovel((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                content: data.content,
+                                ...(data.summary !== undefined ? { summary: data.summary } : {}),
+                              }
+                            : prev,
+                        );
+                        setError("");
+                        try {
+                          const r = await fetch(`/api/novel/${encodeURIComponent(novel.id)}`);
+                          const j = (await r.json()) as { novel?: Novel };
+                          if (j.novel) setNovel(j.novel);
+                        } catch {
+                          /* 保留本地已更新正文 */
+                        }
+                      }}
+                      onError={setError}
+                      className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
+                      style={{
+                        borderColor: `${readPalette.tocActive}88`,
+                        color: readPalette.tocActive,
+                        backgroundColor: `${readPalette.tocActive}18`,
+                      }}
+                    />
                   )}
                   {novel.isOwner && (
                     <button

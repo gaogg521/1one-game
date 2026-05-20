@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type FeaturedGame = {
   id: string;
@@ -20,7 +21,12 @@ export function FeaturedGamesSection() {
     fetch("/api/discover?limit=6")
       .then((r) => r.json())
       .then((d: { projects?: FeaturedGame[] }) => {
-        setGames((d.projects ?? []).slice(0, 6));
+        const list = (d.projects ?? []).slice(0, 6);
+        setGames(list);
+        prefetchGameProjectsByIds(
+          list.map((g) => g.id),
+          6,
+        );
         setLoaded(true);
       })
       .catch(() => setLoaded(true));

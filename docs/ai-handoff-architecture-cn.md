@@ -7,7 +7,7 @@
 
 ## 1. 项目一句话
 
-**1ONE 游戏平台**：用户自然语言描述玩法 → **大模型产出 `GameSpec`（JSON）** → 浏览器 **Phaser 4** 即时试玩 → 保存 / 工作室 / 短链分享。
+**1ONE 游戏平台**：用户自然语言描述玩法 → **大模型产出 `GameSpec`（JSON）** → **`enrichGameSpecForRuntime` 补全导演/蓝图** → 浏览器 **Phaser 4** 即时试玩（或 **Godot Web** 完整版）→ 保存 / 工作室 / 短链分享。
 
 - **前端**：Next.js App Router、React 19、`data-theme` 全站主题。  
 - **后端**：Route Handlers、Prisma + **SQLite**、`Project.specJson` 存规格。  
@@ -24,6 +24,7 @@
 | 3 | [`recent-progress.md`](recent-progress.md) | 近期功能迭代细节（一致性、音频、参考图、并行、塔防稳健性等） |
 | 4 | [`architecture-orchestration.md`](architecture-orchestration.md) | 编排 Phase 0～4、RunTrace、Comfy、并行说明、冒烟与 CI |
 | 5 | [`../ai_game_generation_platform_architecture_cn.md`](../ai_game_generation_platform_architecture_cn.md) | **中长期愿景**（多 Agent、资产协议、DSL Runtime）；**≠ 当前仓库实现**，对照用 |
+| 5b | [`godot-quickstart-cn.md`](godot-quickstart-cn.md) | **Godot 速成**、GameSpec 映射、多 Agent 契约；母版 `godot-templates/ai-mother-universal/`（与 Phaser 双轨） |
 | 6 | [`../AGENTS.md`](../AGENTS.md) | Next.js 与本训练数据可能不一致，改框架相关代码前先查官方文档 |
 | 7 | [`.env.example`](../.env.example) | 环境变量注释 |
 
@@ -38,21 +39,27 @@ flowchart TB
   subgraph Client [浏览器]
     UI[Next.js App Router + React 19]
     Theme[data-theme + ThemeProvider]
-    Phaser[Phaser 4 运行时]
+    Phaser[Phaser 4 即时试玩]
+    GodotTab[Godot Web iframe]
     Cap[Canvas 截图 → 封面上传]
-    Session[sessionStorage 参考图 / AssetManifest 元数据]
+    Session[sessionStorage 参考图 / AssetManifest]
   end
   subgraph Server [Node Server]
     API[Route Handlers]
     OAI[OpenAI 兼容 SDK]
+    GodotExport[godot headless 导出]
     Prisma[Prisma + SQLite]
-    FS[public/covers 封面文件]
+    FS[public/covers + godot-builds]
   end
   UI --> API
   Phaser --> Cap
+  GodotTab --> GodotExport
   Session --> UI
+  Session --> GodotExport
   Cap --> API
   API --> OAI
+  API --> GodotExport
+  GodotExport --> FS
   API --> Prisma
   API --> FS
 ```
@@ -80,12 +87,14 @@ flowchart LR
 
 ```text
 用户 Prompt（+ 可选参考摘要 / 联网块 / assetManifest）
+    → creative_brief_expand（题材知识包 + 可选 LLM → Creative Brief 八维扩写）
     → ContextPack（编排 trace 记 context_pack）
     → [可选] tryWebEnhance（Tavily + 并行抓取 URL 正文）
     → spec_draft：LLM json_schema → GameSpec 初稿（或 mock）
     → [可选] spec_enhance：二次强化 LLM
     → finish：lintGameSpecForOrchestration + 多轮 repair
     → finalizeSpec（塔防蓝图 / director / systems / presentation 默认）
+    → [可选] scheduleGodotPrefetch + trace 步 godot_web_prefetch
     → 返回 spec（SSE 最后一帧带完整 spec + orchestrationTrace）
 ```
 
@@ -166,6 +175,13 @@ flowchart LR
 | 编排 trace / lint | `src/lib/orchestration/run-trace.ts`、`lint-spec.ts`、`index.ts` |
 | Asset 清单 | `src/lib/orchestration/asset-manifest.ts` |
 | **塔防路径与塔位** | **`src/lib/td-blueprint.ts`**（4 种路径模板、间距过滤） |
+| **Godot 导出** | **`src/lib/godot-export.ts`**、`POST /api/godot/export`（可带 `referencePayloads`）、`prefetchGodotExport` 后台预构建、`GameRuntimeTabs` |
+| **双轨品质** | `enrichGameSpecForRuntime`、`gameJuice.ts` / `game_juice.gd`、`GameAudio`、`RuntimeReferenceRegistry` |
+| **参考图分类** | `src/lib/reference-classify.ts`（Phaser / Godot 共用） |
+| **Godot 预导出** | `godot-prefetch-scheduler.ts`、`godot-prefetch.client.ts`、`studio-godot-prefetch.client.ts` |
+| **Godot E2E** | `e2e/godot-runtime.smoke.spec.ts`、`e2e/godot-templates-matrix.spec.ts`；CI job `godot-export` |
+| **Godot CI 安装** | `scripts/godot-install-ci.sh`、`qa:godot-export:matrix` |
+| Godot 母版 | `godot-templates/ai-mother-universal/`（全模板；`game-runtime-preference.ts` 全局引擎偏好） |
 | Phaser 工厂 | `src/game/engine/createPhaserGame.ts` |
 | **PlayScene 贴图** | **`src/game/engine/PlayScene.ts`**（卡通玩家/敌人/收集物） |
 | **塔防场景（地图/炮塔/敌人）** | **`src/game/engine/TowerDefenseScene.ts`**（`drawGridMap`、`ensureTowerTextureForId`、守护目标、建造针） |
@@ -193,6 +209,20 @@ flowchart LR
 [`ai_game_generation_platform_architecture_cn.md`](../ai_game_generation_platform_architecture_cn.md) 描述 **多 Agent、统一资产协议、DSL、QA 自动修 Bug、秒级重型 Runtime** 等。  
 **当前仓库**是轻量落地：**一句话 → GameSpec → Phaser 2D 模板**。若要做「真·多 Agent」，需在服务端增加 **任务 DAG、合并层、额外模型调用与成本策略**，而非仅加文档。
 
+### 8.1 Godot 深度路线（与产品方对齐）
+
+**共识**：Godot 是「全能跨平台引擎」（编辑器 + 2D/3D），在本平台不是 Phaser 的弱化副本，而是 **可进编辑器、可导出、可扩展的专业轨**。
+
+| 阶段 | 状态 | 内容 |
+|------|------|------|
+| A | 已落地 | GameSpec → headless Web 导出；六模板 `*_runtime.gd`；双轨手感/音频/参考图/导演 |
+| B | 已落地 | 全入口预取；CI `godot-export` 六模板矩阵；E2E Godot 标签 |
+| C | 进行中 | 文档与母版对齐 4.4.1；Linux/Windows 安装脚本统一 |
+| D | 规划 | 桌面/移动 export preset；「下载 Godot 工程」；官方 demo 反哺母版 |
+| E | 规划 | 3D `templateId` + 新母版（不推翻现有 2D JSON） |
+
+Phaser 继续承担 **秒开预览**；Godot 承担 **更接近成品的运行时与工程资产**。详见 [`godot-quickstart-cn.md`](godot-quickstart-cn.md) 开篇「产品定位」。
+
 ---
 
 ## 9. 常用命令
@@ -204,6 +234,9 @@ npm run dev          # 默认 http://localhost:8888
 npm run lint
 npm run qa:orch-smoke
 npm run test:e2e     # CI 对齐：build 后 PW_START=1
+npm run godot:install:ci          # Linux：引擎 + 导出模板
+npm run qa:godot-export:matrix    # 六模板 Web 导出冒烟
+npm run test:e2e:godot            # Godot 标签 E2E
 ```
 
 ---

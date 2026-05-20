@@ -25,6 +25,8 @@ model Project {
   likeCount Int      @default(0)
   /// 试玩页多回合 refine 日志 JSON（仅主人可读写入）
   refinementLogJson String?
+  /// Creative Brief 结构化扩写 JSON（与 specJson 并列持久化）
+  creativeBriefJson String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -41,6 +43,10 @@ model Novel {
   summary   String?
   /// short | medium | long
   lengthTier String? @default("medium")
+  /// 长篇流水线元数据 JSON：设定圣经、章规划等（NovelGenerationMeta）
+  generationMetaJson String?
+  /// Creative Brief 结构化扩写 JSON
+  creativeBriefJson String?
   status    String   @default("ready")
   coverPath String?
   playCount Int      @default(0)
@@ -61,6 +67,8 @@ model Comic {
   title     String
   prompt    String
   imageUrls String
+  /// 漫画改编 Brief JSON（可与关联 Novel 的 Brief 并存）
+  creativeBriefJson String?
   status    String   @default("ready")
   coverPath String?
   likeCount Int      @default(0)

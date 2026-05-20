@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
+import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
@@ -9,6 +10,15 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { parseRefinementLog } from "@/lib/refinement-log";
 import { fetchRefinementLogJson } from "@/lib/project-refinement-db";
+import {
+  fetchCreativeBriefJson,
+  parseStoredCreativeBrief,
+  saveCreativeBriefJson,
+} from "@/lib/project-creative-brief-db";
+import {
+  parseCreativeBriefBody,
+  serializeCreativeBrief,
+} from "@/lib/project-creative-brief-parse";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -36,9 +46,12 @@ export async function GET(_req: Request, ctx: RouteContext) {
     const spec = parseGameSpec(JSON.parse(row.specJson));
 
     let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
+    let creativeBrief: ReturnType<typeof parseStoredCreativeBrief> = null;
     if (isOwner) {
       const logRaw = await fetchRefinementLogJson(id);
       refinementHistory = parseRefinementLog(logRaw).slice(-12);
+      const briefRaw = await fetchCreativeBriefJson(id);
+      creativeBrief = parseStoredCreativeBrief(briefRaw);
     }
 
     return NextResponse.json({
@@ -53,6 +66,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
         isOwner: Boolean(isOwner),
       },
       spec,
+      ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
     });
   } catch {
@@ -117,6 +131,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     typeof body === "object" && body !== null && "spec" in body
       ? (body as { spec?: unknown }).spec
       : undefined;
+  const briefRaw =
+    typeof body === "object" && body !== null && "creativeBrief" in body
+      ? (body as { creativeBrief?: unknown }).creativeBrief
+      : undefined;
 
   if (titleRaw !== undefined) {
     const t = titleRaw.trim().slice(0, 80);
@@ -144,18 +162,30 @@ export async function PATCH(req: Request, ctx: RouteContext) {
 
     if (specRaw !== undefined) {
       try {
-        const spec = parseGameSpec(specRaw);
+        const spec = prepareGameSpecForPersist(
+          specRaw,
+          typeof promptRaw === "string" ? promptRaw.trim() : "",
+        );
         updateData.specJson = JSON.stringify(spec);
         updateData.title = spec.title;
         updateData.status = "ready";
-      } catch {
-        return NextResponse.json({ error: "规格无效，无法保存" }, { status: 400 });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "规格无效，无法保存";
+        return NextResponse.json({ error: msg }, { status: 400 });
       }
     }
 
     if (Object.keys(updateData).length > 0) {
       await prisma.project.update({ where: { id }, data: updateData });
     }
+  }
+
+  if (briefRaw !== undefined) {
+    const brief = parseCreativeBriefBody(briefRaw);
+    if (!brief) {
+      return NextResponse.json({ error: "Creative Brief 无效" }, { status: 400 });
+    }
+    await saveCreativeBriefJson(id, serializeCreativeBrief(brief));
   }
 
   let shareCode = row.shareCode;

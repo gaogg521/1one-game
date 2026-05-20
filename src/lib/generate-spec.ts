@@ -19,6 +19,15 @@ import {
   minecraftFranchiseAugment,
 } from "@/lib/minecraft-franchise";
 import { PRODUCT } from "@/lib/product-config";
+import { godotPrefetchTraceDetail, scheduleGodotPrefetch } from "@/lib/godot-prefetch-scheduler";
+import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
+import {
+  alignSpecThemeFromBrief,
+  expandCreativeBrief,
+  lintBriefThemeAlignment,
+  type ExpandCreativeBriefResult,
+} from "@/lib/creative-brief";
+import type { CreativeBrief } from "@/lib/creative-brief/types";
 
 const SYSTEM = `你是「一句话小游戏」规格生成器。用户用中文或英文描述想要的极简 2D 网页小游戏（单次会话内可玩）。
 
@@ -225,6 +234,9 @@ export type GenerationDebug = {
   enhancedApplied: boolean;
   templateHint?: GenerateOptions["templateHint"];
   enhanceWarning?: string;
+  /** 一句话深度扩写稿（Creative Brief） */
+  creativeBrief?: CreativeBrief;
+  briefSummary?: string;
   /** Phase 0 编排：各 DAG 节点耗时快照（SSE / 可调式接口附带）。 */
   orchestrationTrace?: OrchestrationRunTrace;
 };
@@ -335,6 +347,7 @@ async function runFinalizeLintRepair(
   userPrompt: string,
   initial: GameSpec,
   orch?: RunTraceRecorder,
+  brief?: CreativeBrief | null,
 ): Promise<GameSpec> {
   const maxRounds = Math.min(4, Math.max(0, Math.floor(PRODUCT.game.maxRepairRounds)));
 
@@ -343,10 +356,22 @@ async function runFinalizeLintRepair(
       ? orch.span("lint_spec", async () => lintGameSpecForOrchestration(s))
       : Promise.resolve(lintGameSpecForOrchestration(s));
 
-  let current = initial;
+  let current = brief ? alignSpecThemeFromBrief(initial, brief) : initial;
+
+  if (brief) {
+    const briefIssues = lintBriefThemeAlignment(brief, current);
+    if (briefIssues.length) {
+      orch?.note("brief_theme_align", { issues: briefIssues.slice(0, 6) });
+      current = alignSpecThemeFromBrief(current, brief);
+    }
+  }
+
   let lint = await doLint(current);
   if (lint.ok) return current;
-  let lastIssues = lint.issues;
+  let lastIssues = [...lint.issues];
+  if (brief) {
+    lastIssues = [...lintBriefThemeAlignment(brief, current), ...lastIssues];
+  }
 
   for (let round = 0; round < maxRounds; round += 1) {
     const broken: unknown = JSON.parse(JSON.stringify(current)) as unknown;
@@ -457,6 +482,8 @@ export type GenerateOptions = {
   orchestration?: RunTraceRecorder;
   /** 创作台 session 资产摘要（记入 trace）；不含像素数据 */
   assetManifestSummary?: { schemaVersion: number; revision: number; itemCount: number };
+  /** 流式接口已先扩写时传入，避免重复调用 */
+  creativeBriefPreExpanded?: ExpandCreativeBriefResult;
 };
 
 const VARIANT_FLAVORS = [
@@ -606,27 +633,72 @@ async function tryEnhanceWithModelChain(
   return null;
 }
 
+async function resolvePromptWithCreativeBrief(
+  prompt: string,
+  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "creativeBriefPreExpanded">,
+): Promise<{
+  clean: string;
+  pipelinePrompt: string;
+  briefResult: ExpandCreativeBriefResult | null;
+}> {
+  const clean0 = minecraftFranchiseAugment(prompt.trim());
+  const clean = clean0;
+
+  if (!PRODUCT.game.creativeBriefExpand) {
+    return { clean, pipelinePrompt: clean, briefResult: null };
+  }
+
+  if (options?.creativeBriefPreExpanded) {
+    return {
+      clean,
+      pipelinePrompt: options.creativeBriefPreExpanded.augmentedPrompt,
+      briefResult: options.creativeBriefPreExpanded,
+    };
+  }
+
+  const briefResult = await expandCreativeBrief({
+    prompt: clean,
+    templateHint: options?.templateHint,
+    orchestration: options?.orchestration,
+  });
+  return { clean, pipelinePrompt: briefResult.augmentedPrompt, briefResult };
+}
+
+function attachBriefToDebug(
+  debug: GenerationDebug,
+  briefResult: ExpandCreativeBriefResult | null,
+): GenerationDebug {
+  if (!briefResult) return debug;
+  return {
+    ...debug,
+    creativeBrief: briefResult.brief,
+    briefSummary: briefResult.oneLineSummary,
+  };
+}
+
 export async function generateGameSpecDraftWithMeta(
   prompt: string,
   options?: Omit<GenerateOptions, "enhancePass">,
 ): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
-  const clean0 = minecraftFranchiseAugment(prompt.trim());
-  const clean = clean0;
+  const { clean, pipelinePrompt, briefResult } = await resolvePromptWithCreativeBrief(prompt, options);
   let web: WebEnhanceMeta | null = null;
 
-  let augmented = clean;
+  let augmented = pipelinePrompt;
   if (options?.searchEnhance) {
     const orch = options.orchestration;
     const bundle = orch
-      ? await orch.span("web_search", () => tryWebEnhance(clean))
-      : await tryWebEnhance(clean);
+      ? await orch.span("web_search", () => tryWebEnhance(pipelinePrompt))
+      : await tryWebEnhance(pipelinePrompt);
     augmented = bundle.prompt;
     web = bundle.meta;
   } else {
     options?.orchestration?.note("web_search_skipped", { reason: "disabled" });
   }
 
-  const hint = normalizeTemplateHint(options?.templateHint);
+  const hint =
+    briefResult?.brief.intent.templateHint && briefResult.brief.intent.templateHint !== "auto"
+      ? normalizeTemplateHint(briefResult.brief.intent.templateHint)
+      : normalizeTemplateHint(options?.templateHint);
   const mock = mockSpecFromPrompt(clean);
   const base = augmented;
   const userContent = options?.flavorSuffix ? `${base}\n\n${options.flavorSuffix}` : base;
@@ -640,14 +712,17 @@ export async function generateGameSpecDraftWithMeta(
       spec: finalizeSpec(clean, hinted),
       source: "mock",
       web,
-      debug: {
-        fallback: true,
-        fallbackReason: "未配置可用模型或 Provider",
-        searchEnhance: Boolean(options?.searchEnhance),
-        enhancedRequested: false,
-        enhancedApplied: false,
-        templateHint: hint,
-      },
+      debug: attachBriefToDebug(
+        {
+          fallback: true,
+          fallbackReason: "未配置可用模型或 Provider",
+          searchEnhance: Boolean(options?.searchEnhance),
+          enhancedRequested: false,
+          enhancedApplied: false,
+          templateHint: hint,
+        },
+        briefResult,
+      ),
     };
   }
 
@@ -673,16 +748,19 @@ export async function generateGameSpecDraftWithMeta(
       spec: finalizeSpec(clean, hinted),
       source: fromLlm.source,
       web,
-      debug: {
-        model: fromLlm.model,
-        fallback: false,
-        llmMode,
-        provider,
-        searchEnhance: Boolean(options?.searchEnhance),
-        enhancedRequested: false,
-        enhancedApplied: false,
-        templateHint: hint,
-      },
+      debug: attachBriefToDebug(
+        {
+          model: fromLlm.model,
+          fallback: false,
+          llmMode,
+          provider,
+          searchEnhance: Boolean(options?.searchEnhance),
+          enhancedRequested: false,
+          enhancedApplied: false,
+          templateHint: hint,
+        },
+        briefResult,
+      ),
     };
   }
 
@@ -691,16 +769,19 @@ export async function generateGameSpecDraftWithMeta(
     spec: finalizeSpec(clean, hinted),
     source: "mock",
     web,
-    debug: {
-      fallback: true,
-      fallbackReason: "模型调用失败或超时，已回退本地规则生成",
-      llmError,
-      provider,
-      searchEnhance: Boolean(options?.searchEnhance),
-      enhancedRequested: false,
-      enhancedApplied: false,
-      templateHint: hint,
-    },
+    debug: attachBriefToDebug(
+      {
+        fallback: true,
+        fallbackReason: "模型调用失败或超时，已回退本地规则生成",
+        llmError,
+        provider,
+        searchEnhance: Boolean(options?.searchEnhance),
+        enhancedRequested: false,
+        enhancedApplied: false,
+        templateHint: hint,
+      },
+      briefResult,
+    ),
   };
 }
 
@@ -889,6 +970,17 @@ export async function generateGameSpecWithMeta(
   options?: GenerateOptions,
 ): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
   const orch = options?.orchestration;
+
+  let briefPre = options?.creativeBriefPreExpanded;
+  if (!briefPre && PRODUCT.game.creativeBriefExpand) {
+    briefPre = await expandCreativeBrief({
+      prompt: prompt.trim(),
+      templateHint: options?.templateHint,
+      orchestration: orch,
+    });
+  }
+  const genOpts: GenerateOptions = { ...options, creativeBriefPreExpanded: briefPre };
+
   if (orch) {
     const pack = buildContextPack({
       prompt: prompt.trim(),
@@ -920,15 +1012,28 @@ export async function generateGameSpecWithMeta(
     source: GenerationSource;
     web?: WebEnhanceMeta | null;
     debug: GenerationDebug;
-  }) =>
-    orch ? { ...r, debug: { ...r.debug, orchestrationTrace: orch.snapshot() } } : r;
+  }) => {
+    const debug = attachBriefToDebug(r.debug, briefPre ?? null);
+    return orch ? { ...r, debug: { ...debug, orchestrationTrace: orch.snapshot() } } : { ...r, debug };
+  };
 
   const finish = async (r: {
     spec: GameSpec;
     source: GenerationSource;
     web?: WebEnhanceMeta | null;
     debug: GenerationDebug;
-  }) => withTrace({ ...r, spec: await runFinalizeLintRepair(prompt, r.spec, orch) });
+  }) => {
+    const spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
+    if (orch) {
+      if (PRODUCT.godot.enabled && isGodotExportSupported(spec)) {
+        scheduleGodotPrefetch(spec);
+        orch.note("godot_web_prefetch", godotPrefetchTraceDetail(spec));
+      } else {
+        orch.note("godot_web_prefetch", { ...godotPrefetchTraceDetail(spec), scheduled: false });
+      }
+    }
+    return withTrace({ ...r, spec });
+  };
 
   const enhancedRequested = options?.enhancePass !== false;
   const isRich = resolveQualityTierFromEnv() === "rich";
@@ -937,7 +1042,7 @@ export async function generateGameSpecWithMeta(
   // Comfy probe fires at the same time to avoid adding latency.
   if (isRich) {
     const [maResult, comfy] = await Promise.all([
-      generateWithMultiAgent(prompt.trim(), orch),
+      generateWithMultiAgent(briefPre?.augmentedPrompt ?? prompt.trim(), orch),
       orch ? probeComfyHealthDetailed() : Promise.resolve(null),
     ]);
 
@@ -978,7 +1083,7 @@ export async function generateGameSpecWithMeta(
   }
 
   // Standard (fast / standard) path or rich fallback: sequential draft → enhance.
-  const draftPromise = generateGameSpecDraftWithMeta(prompt, options);
+  const draftPromise = generateGameSpecDraftWithMeta(prompt, genOpts);
   const draft = await draftPromise;
 
   if (!enhancedRequested) {
@@ -1000,12 +1105,12 @@ export async function generateGameSpecWithMeta(
   }
 
   const enhanced = await enhanceGameSpecFromDraftWithMeta({
-    prompt,
+    prompt: briefPre?.augmentedPrompt ?? prompt,
     draft: draft.spec,
     draftSource: draft.source,
     draftDebug: { ...draft.debug, enhancedRequested: true },
     web: draft.web ?? null,
-    options: { templateHint: options?.templateHint, orchestration: orch },
+    options: { templateHint: genOpts.templateHint, orchestration: orch },
   });
 
   return finish(enhanced);

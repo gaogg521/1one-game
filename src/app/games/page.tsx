@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 interface GameWork {
   id: string;
@@ -73,7 +74,12 @@ export default function GamesPage() {
     fetch(`/api/discover?sort=${sort}&limit=48`)
       .then((r) => r.json())
       .then((d) => {
-        setGames(d.projects ?? []);
+        const list = d.projects ?? [];
+        setGames(list);
+        prefetchGameProjectsByIds(
+          list.map((g: GameWork) => g.id),
+          8,
+        );
         setLoading(false);
       })
       .catch(() => setLoading(false));

@@ -3,10 +3,31 @@ import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import { classifyReferencePayloads } from "@/lib/reference-classify";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import {
+  juiceBurst,
+  juiceFlash,
+  juiceShake,
+  themeParticleHex,
+} from "@/game/engine/gameJuice";
+import { styleHudText } from "@/game/engine/hudTextStyle";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
+
+function isSpaceShooterSpec(spec: GameSpec): boolean {
+  const blob = [
+    spec.title,
+    spec.labels?.subtitle ?? "",
+    spec.labels?.player ?? "",
+    spec.labels?.hazard ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return /星|舰|太空|space|star|war|星际|galaxy|fleet/.test(blob);
+}
 
 /** 俯视角射击场景：玩家在底部消灭从上方降落的敌舰，敌人会反击。 */
 export class ShooterScene extends Phaser.Scene {
@@ -26,6 +47,7 @@ export class ShooterScene extends Phaser.Scene {
 
   private score = 0;
   private lives = 3;
+  private shotsFired = 0;
   private wave = 0;
   private totalKills = 0;
   private waveEnemiesLeft = 0;
@@ -72,15 +94,99 @@ export class ShooterScene extends Phaser.Scene {
   private magnetUntil = 0;
   private coinRainUntil = 0;
   private supportWingUntil = 0;
+  private readonly runtimePayloads: RuntimeReferencePayload[];
+  private playerTextureKey: string | null = null;
+  private enemyTextureKey: string | null = null;
+  private enemySpriteKey = "texEnemy";
+  private bootstrapDone = false;
+  private sceneDisposed = false;
 
-  constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
+  constructor(
+    spec: GameSpec,
+    onEnd: (r: EndPayload) => void,
+    runtimePayloads: RuntimeReferencePayload[] = [],
+    soundscape?: GameSoundscape,
+  ) {
     super("ShooterScene");
     this.spec = spec;
     this.onEnd = onEnd;
+    this.runtimePayloads = runtimePayloads;
     this.soundscape = soundscape ?? null;
   }
 
   create() {
+    this.sceneDisposed = false;
+    this.sys.events.once("shutdown", () => {
+      this.sceneDisposed = true;
+    });
+
+    void this.ensureRuntimeTexturesFromPayloads()
+      .then(() => {
+        if (this.sceneDisposed) return;
+        this.time.delayedCall(0, () => this.runBootstrapResume());
+      })
+      .catch((err) => {
+        console.error("ShooterScene: texture preload failed", err);
+        if (!this.sceneDisposed) {
+          this.time.delayedCall(0, () => this.runBootstrapResume());
+        }
+      });
+  }
+
+  private runBootstrapResume(): void {
+    if (this.sceneDisposed || this.bootstrapDone || !this.add) return;
+    try {
+      this.bootstrapPlay();
+    } catch (e) {
+      console.error("ShooterScene: bootstrap failed", e);
+    }
+  }
+
+  private async ensureRuntimeTexturesFromPayloads(): Promise<void> {
+    const classified = classifyReferencePayloads(this.runtimePayloads);
+    const jobs: Promise<void>[] = [];
+
+    const loadOne = (key: string, dataUrl: string) =>
+      new Promise<void>((resolve) => {
+        if (!dataUrl.startsWith("data:")) {
+          resolve();
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          try {
+            if (this.textures.exists(key)) this.textures.remove(key);
+            this.textures.addImage(key, img);
+          } catch {
+            /* ignore */
+          }
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = dataUrl;
+      });
+
+    if (classified.protagonistOrdinal != null) {
+      const p = this.runtimePayloads.find((x) => x.ordinal === classified.protagonistOrdinal);
+      if (p?.dataUrl) {
+        this.playerTextureKey = "refPlayer";
+        jobs.push(loadOne("refPlayer", p.dataUrl));
+      }
+    }
+    const monsterOrd = classified.monsterOrdinals[0];
+    if (monsterOrd != null) {
+      const p = this.runtimePayloads.find((x) => x.ordinal === monsterOrd);
+      if (p?.dataUrl) {
+        this.enemyTextureKey = "refEnemy";
+        jobs.push(loadOne("refEnemy", p.dataUrl));
+      }
+    }
+    await Promise.all(jobs);
+  }
+
+  private bootstrapPlay() {
+    if (this.bootstrapDone) return;
+    this.bootstrapDone = true;
     const { width, height } = this.scale;
 
     this.playerSpeed = this.spec.gameplay.playerSpeed ?? 280;
@@ -97,30 +203,36 @@ export class ShooterScene extends Phaser.Scene {
 
     this.addStarfield();
 
-    // Title + subtitle
-    this.add
-      .text(width / 2, 22, this.spec.title, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "19px",
-        color: ui.hud.title,
-      })
-      .setOrigin(0.5)
-      .setDepth(20);
-
-    if (this.spec.labels.subtitle) {
+    // Title + subtitle（章节标签单独一行，避免与标题 y 重叠发糊）
+    styleHudText(
       this.add
-        .text(width / 2, 48, this.spec.labels.subtitle, {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          color: ui.hud.subtitle,
+        .text(width / 2, 22, this.spec.title, {
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+          fontSize: "19px",
+          color: ui.hud.title,
         })
         .setOrigin(0.5)
-        .setDepth(20);
+        .setDepth(20),
+    );
+
+    if (this.spec.labels.subtitle) {
+      styleHudText(
+        this.add
+          .text(width / 2, 48, this.spec.labels.subtitle, {
+            fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+            fontSize: "11px",
+            color: ui.hud.subtitle,
+          })
+          .setOrigin(0.5)
+          .setDepth(20),
+      );
     }
 
-    this.scoreText = this.add
-      .text(18, 14, "", { fontFamily: "system-ui, sans-serif", fontSize: "16px", color: ui.hud.body })
-      .setDepth(25);
+    this.scoreText = styleHudText(
+      this.add
+        .text(18, 14, "", { fontFamily: "system-ui, sans-serif", fontSize: "16px", color: ui.hud.body })
+        .setDepth(25),
+    );
 
     this.livesText = this.add
       .text(18, 38, "", { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: ui.hud.danger })
@@ -145,10 +257,12 @@ export class ShooterScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(25);
 
-    this.actText = this.add
-      .text(width / 2, 14, "", { fontFamily: "system-ui, sans-serif", fontSize: "11px", color: ui.hud.muted })
-      .setOrigin(0.5, 0)
-      .setDepth(25);
+    this.actText = styleHudText(
+      this.add
+        .text(width / 2, 68, "", { fontFamily: "system-ui, sans-serif", fontSize: "11px", color: ui.hud.muted })
+        .setOrigin(0.5, 0)
+        .setDepth(25),
+    );
 
     this.hintText = this.add
       .text(width / 2, height - 20, `← → / A D 移动 · 自动射击「${this.spec.labels.hazard}」· Shift 技能`, {
@@ -161,16 +275,25 @@ export class ShooterScene extends Phaser.Scene {
 
     this.banner = new HudBanner(this, ui.banner);
 
-    // Textures
-    this.makeShipTexture("texPlayer", 34, 38, this.spec.theme.playerColor);
-    this.makeEnemyTexture("texEnemy", 30, 26, this.spec.theme.hazardColor);
-    this.makeEnemyTexture("texElite", 36, 32, this.spec.theme.hazardColor);
-    this.makeBossTexture("texBoss", 56, 48, this.spec.theme.hazardColor);
+    // 射击模板默认星舰造型；有参考图则贴主角/敌舰
+    const playerTex =
+      this.playerTextureKey && this.textures.exists(this.playerTextureKey)
+        ? this.playerTextureKey
+        : (this.makeStarshipTexture("texPlayer", 48, 52, this.spec.theme.playerColor), "texPlayer");
+    const enemyTex =
+      this.enemyTextureKey && this.textures.exists(this.enemyTextureKey)
+        ? this.enemyTextureKey
+        : (this.makeInterceptorTexture("texEnemy", 36, 32, this.spec.theme.hazardColor, false), "texEnemy");
+    this.enemySpriteKey = enemyTex;
+    if (!this.textures.exists("texElite")) {
+      this.makeInterceptorTexture("texElite", 42, 36, this.spec.theme.hazardColor, true);
+    }
+    this.makeBossTexture("texBoss", 64, 52, this.spec.theme.hazardColor);
     this.makeRectTexture("texPlayerBullet", 5, 14, this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
     this.makeRectTexture("texEnemyBullet", 5, 12, this.spec.theme.hazardColor);
 
     // Player ship
-    this.player = this.physics.add.image(width / 2, height - 56, "texPlayer");
+    this.player = this.physics.add.image(width / 2, height - 56, playerTex);
     this.player.setCollideWorldBounds(true);
     this.player.body.setSize(28, 32);
     this.player.setDepth(8);
@@ -254,6 +377,51 @@ export class ShooterScene extends Phaser.Scene {
   }
 
   // ─── Texture builders ──────────────────────────────────────────────────────
+
+  private makeStarshipTexture(key: string, w: number, h: number, color: string): void {
+    if (this.textures.exists(key)) return;
+    const g = this.make.graphics({ x: 0, y: 0 });
+    const c = parseInt(color.replace("#", ""), 16);
+    const dark = Phaser.Display.Color.ValueToColor(c).darken(28).color;
+    const light = Phaser.Display.Color.ValueToColor(c).lighten(22).color;
+    // 机身
+    g.fillStyle(c, 1);
+    g.fillRoundedRect(w * 0.34, h * 0.18, w * 0.32, h * 0.52, 6);
+    // 主翼
+    g.fillStyle(dark, 1);
+    g.fillTriangle(w * 0.12, h * 0.62, w * 0.34, h * 0.42, w * 0.34, h * 0.72);
+    g.fillTriangle(w * 0.88, h * 0.62, w * 0.66, h * 0.42, w * 0.66, h * 0.72);
+    // 机头
+    g.fillStyle(light, 1);
+    g.fillTriangle(w * 0.5, h * 0.06, w * 0.38, h * 0.22, w * 0.62, h * 0.22);
+    g.fillStyle(0xb8e8ff, 0.95);
+    g.fillCircle(w * 0.5, h * 0.28, 6);
+    // 引擎焰
+    g.fillStyle(0x55ccff, 0.85);
+    g.fillEllipse(w * 0.42, h * 0.86, 5, 10);
+    g.fillEllipse(w * 0.58, h * 0.86, 5, 10);
+    g.generateTexture(key, w, h);
+    g.destroy();
+  }
+
+  private makeInterceptorTexture(key: string, w: number, h: number, color: string, elite: boolean): void {
+    if (this.textures.exists(key)) return;
+    const g = this.make.graphics({ x: 0, y: 0 });
+    const c = parseInt(color.replace("#", ""), 16);
+    g.fillStyle(c, 1);
+    g.fillRoundedRect(w * 0.22, h * 0.2, w * 0.56, h * 0.48, 4);
+    g.fillTriangle(w * 0.5, h * 0.92, w * 0.18, h * 0.35, w * 0.82, h * 0.35);
+    g.fillStyle(Phaser.Display.Color.ValueToColor(c).darken(20).color, 1);
+    g.fillRect(w * 0.3, h * 0.38, w * 0.4, 4);
+    if (elite) {
+      g.fillStyle(0xff8844, 0.9);
+      g.fillRect(w * 0.15, h * 0.48, w * 0.7, 6);
+      g.lineStyle(2, 0xffcc66, 0.7);
+      g.strokeCircle(w / 2, h / 2, w * 0.42);
+    }
+    g.generateTexture(key, w, h);
+    g.destroy();
+  }
 
   private makeShipTexture(key: string, w: number, h: number, color: string) {
     if (this.textures.exists(key)) return;
@@ -358,7 +526,7 @@ export class ShooterScene extends Phaser.Scene {
       for (let col = 0; col < cols; col += 1) {
         const x = startX + col * (enemyW + 18);
         const y = -40 - row * 48;
-        const key = elite ? "texElite" : "texEnemy";
+        const key = elite ? "texElite" : this.enemySpriteKey;
         const hp = elite ? 2 : 1;
         const e = this.enemies.create(x, y, key) as Phaser.Physics.Arcade.Image;
         e.setDepth(5);
@@ -396,8 +564,13 @@ export class ShooterScene extends Phaser.Scene {
 
   private firePlayerBullet() {
     if (this.finished) return;
+    if (this.shotsFired % 4 === 0) playBleep("fire");
+    this.shotsFired += 1;
     const isBurst = this.currentFireDelay <= 140;
-    const spread = this.time.now < this.supportWingUntil ? [-18, 0, 18] : [0];
+    const spread = this.time.now < this.supportWingUntil ? [-18, 0, 18] : isBurst ? [-12, 0, 12] : [0];
+    if (isBurst) {
+      juiceShake(this, { durationMs: 36, intensity: 0.0018 });
+    }
     for (const offset of spread) {
       const b = this.playerBullets.get(
         this.player.x + offset,
@@ -438,7 +611,7 @@ export class ShooterScene extends Phaser.Scene {
 
     bullet.destroy();
     const hp = (enemy.getData("hp") as number) - 1;
-    this.cameras.main.flash(60, 220, 160, 60, false);
+    juiceFlash(this, { r: 220, g: 160, b: 60 }, { durationMs: 60 });
 
     if (hp <= 0) {
       const isBoss = Boolean(enemy.getData("isBoss"));
@@ -447,7 +620,7 @@ export class ShooterScene extends Phaser.Scene {
       this.waveEnemiesLeft = Math.max(0, this.waveEnemiesLeft - 1);
       this.totalKills += 1;
       this.score += (isBoss ? 10 : 1) * this.scoreMult;
-      playBleep(isBoss ? "win" : "pickup");
+      playBleep(isBoss ? "win" : "explode");
       this.refreshHud();
       if (this.totalKills >= this.winScore) {
         this.finish({ score: this.score, won: true });
@@ -468,14 +641,14 @@ export class ShooterScene extends Phaser.Scene {
 
   private onPlayerHit() {
     if (this.time.now < this.shieldUntil) {
-      this.cameras.main.flash(80, 120, 220, 255, false);
+      juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 80 });
       playBleep("pickup");
       return;
     }
     this.lives -= 1;
     this.invulnUntil = this.time.now + 1200;
-    this.cameras.main.shake(180, 0.006);
-    this.cameras.main.flash(180, 255, 80, 80, false);
+    juiceShake(this, { durationMs: 180, intensity: 0.006 });
+    juiceFlash(this, { r: 255, g: 80, b: 80 }, { durationMs: 180 });
     playBleep("hit");
     this.player.setAlpha(0.3);
     this.time.delayedCall(300, () => {
@@ -494,27 +667,10 @@ export class ShooterScene extends Phaser.Scene {
   // ─── Effects ───────────────────────────────────────────────────────────────
 
   private fxExplosion(x: number, y: number, large = false) {
-    const tintStr = this.spec.theme.hazardColor;
-    const tint = parseInt(tintStr.replace("#", ""), 16);
-    const n = large ? 22 : 10;
-    const range = large ? 100 : 55;
-    for (let i = 0; i < n; i += 1) {
-      const bit = this.add.rectangle(x, y, large ? 5 : 3, large ? 5 : 3, tint, 0.9);
-      bit.setDepth(30);
-      this.tweens.add({
-        targets: bit,
-        x: x + Phaser.Math.Between(-range, range),
-        y: y + Phaser.Math.Between(-range, range),
-        alpha: 0,
-        scale: 0.2,
-        duration: Phaser.Math.Between(280, large ? 600 : 380),
-        ease: "Cubic.Out",
-        onComplete: () => bit.destroy(),
-      });
-    }
+    juiceBurst(this, x, y, themeParticleHex(this.spec), large ? 22 : 10);
     if (large) {
-      this.cameras.main.flash(220, 255, 180, 60, false);
-      this.cameras.main.shake(200, 0.005);
+      juiceFlash(this, { r: 255, g: 180, b: 60 }, { durationMs: 220 });
+      juiceShake(this, { durationMs: 200, intensity: 0.005 });
     }
   }
 
@@ -609,7 +765,7 @@ export class ShooterScene extends Phaser.Scene {
 
     if (skill.effect === "shield") {
       this.shieldUntil = this.time.now + dur;
-      this.cameras.main.flash(80, 140, 220, 255, false);
+      juiceFlash(this, { r: 140, g: 220, b: 255 }, { durationMs: 80 });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -640,7 +796,7 @@ export class ShooterScene extends Phaser.Scene {
         this.totalKills += 1;
         this.score += 2 * this.scoreMult;
       }
-      this.cameras.main.flash(120, 255, 200, 90, false);
+      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -705,9 +861,9 @@ export class ShooterScene extends Phaser.Scene {
   // ─── Update ────────────────────────────────────────────────────────────────
 
   update(time: number) {
-    if (this.finished) return;
+    if (this.finished || !this.bootstrapDone) return;
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
+    if (this.keyShift && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
       this.tryCastSkill();
     }
 

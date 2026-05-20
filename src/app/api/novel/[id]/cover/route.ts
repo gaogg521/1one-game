@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
-import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveNovelCoverGenre } from "@/lib/cover-genre";
+import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { persistNovelCoverPath } from "@/lib/cover-path-db";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     .filter(Boolean)
     .join(" ")
     .trim();
-  const genre = inferStoryGenre({
+  const tagFromPrompt = inferNovelGenreTagFromStoredPrompt(row.prompt);
+  const genre = resolveNovelCoverGenre({
+    genreTagCoverGenre: tagFromPrompt?.coverGenre,
     title: row.title,
     summary: row.summary,
     prompt: row.prompt,

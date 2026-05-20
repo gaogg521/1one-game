@@ -49,11 +49,18 @@ export function novelMinAcceptChars(tier?: NovelLengthTier): number {
   return Math.max(200, Math.max(floor, Math.floor(cfg.minChars * ratio)));
 }
 
-export function buildNovelUserMessage(prompt: string, title?: string, lengthTier?: NovelLengthTier): string {
+export function buildNovelUserMessage(
+  prompt: string,
+  title?: string,
+  lengthTier?: NovelLengthTier,
+  /** 含 Creative Brief 扩写块时使用完整上下文 */
+  pipelinePrompt?: string,
+): string {
   const tier = lengthTier ?? "medium";
   const cfg = novelLengthConfig(tier);
   const t = title?.trim();
-  return `请根据以下创意写完整${cfg.label}小说正文（目标 ${cfg.minChars}–${cfg.maxChars} 字，多章、每章带标题）：\n\n创意：${prompt.trim()}\n\n${t ? `建议标题：${t}` : ""}`;
+  const creativeBlock = (pipelinePrompt ?? prompt).trim();
+  return `请根据以下创意写完整${cfg.label}小说正文（目标 ${cfg.minChars}–${cfg.maxChars} 字，多章、每章带标题）：\n\n${creativeBlock}\n\n${t ? `建议标题：${t}` : ""}`;
 }
 
 export { parseNovelLengthTier, type NovelLengthTier };

@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
 import { GamePlayer } from "@/components/GamePlayer";
+import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
+import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
+import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
+import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
+import { PRODUCT } from "@/lib/product-config";
+import { GameRuntimePreferenceControl } from "@/components/GameRuntimePreferenceControl";
 import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -62,6 +68,9 @@ export function PlayGameClient({ id }: { id: string }) {
         }
         if (!cancelled) {
           setSpec(data.spec);
+          if (PRODUCT.godot.enabled && isGodotExportSupported(data.spec)) {
+            prefetchGodotExport(data.spec, { projectId: id });
+          }
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
@@ -280,7 +289,8 @@ export function PlayGameClient({ id }: { id: string }) {
                 <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">{meta.title}</h1>
                 <p className="text-sm leading-relaxed text-[var(--gc-muted)]">{meta.prompt}</p>
               </div>
-              <div className="flex flex-wrap gap-2 lg:justify-end">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <GameRuntimePreferenceControl />
                 <button
                   type="button"
                   onClick={handleLike}
@@ -359,7 +369,11 @@ export function PlayGameClient({ id }: { id: string }) {
               </div>
             ) : null}
 
-            <GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} />
+            <GameRuntimeTabs
+              spec={spec}
+              projectId={id}
+              phaser={<GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} />}
+            />
             {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 
             {/* Runtime AI patch panel */}

@@ -13,12 +13,15 @@ interface ComfyImageResult {
   type: string;
 }
 
+const DEFAULT_NEGATIVE = "blurry, low quality, worst quality, text, watermark, logo";
+
 /** 极简 txt2img 工作流：LoadCheckpoint → CLIP → KSampler → VAE → SaveImage */
-function buildWorkflowJson(positive: string, seed: number) {
+function buildWorkflowJson(positive: string, seed: number, negative = DEFAULT_NEGATIVE) {
+  const neg = negative.trim().slice(0, 800) || DEFAULT_NEGATIVE;
   return {
     1: { inputs: { ckpt_name: "sdxl_base.safetensors" }, class_type: "CheckpointLoaderSimple" },
     2: { inputs: { text: positive, clip: ["1", 0] }, class_type: "CLIPTextEncode" },
-    3: { inputs: { text: "blurry, low quality, worst quality", clip: ["1", 0] }, class_type: "CLIPTextEncode" },
+    3: { inputs: { text: neg, clip: ["1", 0] }, class_type: "CLIPTextEncode" },
     4: { inputs: { width: 1024, height: 1024, batch_size: 1 }, class_type: "EmptyLatentImage" },
     5: {
       inputs: {
@@ -40,15 +43,29 @@ function buildWorkflowJson(positive: string, seed: number) {
   };
 }
 
-export async function generateComfyImages(prompts: string[]): Promise<ComfyImageResult[]> {
+export type ComfyTxt2ImgOptions = {
+  negative?: string;
+  filenamePrefix?: string;
+};
+
+export async function generateComfyImages(
+  prompts: string[],
+  options?: ComfyTxt2ImgOptions,
+): Promise<ComfyImageResult[]> {
   const base = getComfyBaseUrl();
   if (!base) return [];
 
   const results: ComfyImageResult[] = [];
+  const negative = options?.negative;
+  const prefix = options?.filenamePrefix ?? "comic";
 
   for (let i = 0; i < prompts.length; i++) {
     const seed = Math.floor(Math.random() * 1_000_000_000);
-    const workflow = buildWorkflowJson(prompts[i], seed);
+    const workflow = buildWorkflowJson(prompts[i], seed, negative);
+    if (prefix !== "comic") {
+      const node7 = workflow["7"] as { inputs: Record<string, unknown> };
+      node7.inputs.filename_prefix = prefix;
+    }
     const clientId = `comic_${Date.now()}_${i}`;
 
     try {
@@ -71,6 +88,15 @@ export async function generateComfyImages(prompts: string[]): Promise<ComfyImage
   }
 
   return results;
+}
+
+/** 单张 txt2img（游戏 key art / Brief 封面） */
+export async function generateComfySingleImage(
+  positive: string,
+  options?: ComfyTxt2ImgOptions,
+): Promise<ComfyImageResult | null> {
+  const list = await generateComfyImages([positive], options);
+  return list[0] ?? null;
 }
 
 async function pollForResult(base: string, promptId: string, _clientId: string): Promise<ComfyImageResult | null> {

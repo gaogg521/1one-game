@@ -11,6 +11,11 @@ import {
   phaserUintToCssHex,
   type CohesivePresentation,
 } from "@/lib/cohesive-presentation";
+import {
+  classifyTdReferenceTextureKeys,
+  tdRuntimeTextureKey,
+} from "@/lib/reference-classify";
+import { juiceBurst, juiceFlash, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -232,55 +237,6 @@ function ensureTdEnemyTextures(scene: Phaser.Scene, hazardHex: string, collectib
     g.fillRoundedRect(cx - 2, h - 9, 6, 5, 2);
     g.fillRoundedRect(cx + 7, h - 11, 6, 7, 2);
   });
-}
-
-function tdRuntimeTextureKey(i: number): string {
-  return `td_user_ref_${i}`;
-}
-
-function classifyTdReferenceTextures(payloads: RuntimeReferencePayload[]): {
-  bgKey: string | null;
-  protagonistKey: string | null;
-  monsterKeyCandidates: string[];
-  skipMonsterKeys: Set<string>;
-} {
-  const bgKeys: string[] = [];
-  const monKeys: string[] = [];
-  const protagonistKeys: string[] = [];
-  const towerSkinKeys: string[] = [];
-
-  payloads.forEach((p, i) => {
-    const key = tdRuntimeTextureKey(i);
-    const pu = (p.purpose ?? "").trim();
-    // 敌军优先，避免含「怪」的用途被误判成背景
-    if (/怪|敌|小兵|野怪|mob|monster|creep|hazard|精英|enemy|invader/i.test(pu)) {
-      monKeys.push(key);
-      return;
-    }
-    // 需保护的主角 / 萝卜 / 水晶等（≠ 防御塔皮肤）
-    if (
-      /主角|玩家|守护者|水晶|萝卜|老家|能量核心|基地核心|vip|goal|protect|被保护|carry|npc|citadel/i.test(pu) ||
-      /^基地$/i.test(pu)
-    ) {
-      protagonistKeys.push(key);
-      return;
-    }
-    // 塔造型参考（不当作行走怪贴图）
-    if (/箭塔|炮塔|建塔|防御塔|炮台|^塔$|tower\b|turret/i.test(pu)) {
-      towerSkinKeys.push(key);
-      return;
-    }
-    if (/背景|地图|场景|底图|世界|terrain|tilemap|tile|地表|ground|field|world|battlefield/i.test(pu)) {
-      bgKeys.push(key);
-    }
-  });
-
-  return {
-    bgKey: bgKeys[0] ?? null,
-    protagonistKey: protagonistKeys[0] ?? null,
-    monsterKeyCandidates: monKeys,
-    skipMonsterKeys: new Set([...protagonistKeys, ...towerSkinKeys]),
-  };
 }
 
 type Enemy = {
@@ -629,7 +585,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     const h = this.scale.height;
 
     const payloads = this.runtimePayloads;
-    const classified = classifyTdReferenceTextures(payloads);
+    const classified = classifyTdReferenceTextureKeys(payloads);
     const existingKeys = payloads
       .map((_, i) => tdRuntimeTextureKey(i))
       .filter((k) => this.isPayloadTextureUsable(k));
@@ -1138,7 +1094,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.banner.show({ title: waveLabel, message: msg, ms: 1800 });
 
     // Screen flash on wave start
-    this.cameras.main.flash(80, 255, 200, 80, false);
+    juiceFlash(this, { r: 255, g: 200, b: 80 }, { durationMs: 80 });
   }
 
   private makeSlots(
@@ -1296,6 +1252,8 @@ export class TowerDefenseScene extends Phaser.Scene {
         this.tweens.add({ targets: this.rangePreviewGfx, alpha: 0, delay: 600, duration: 400, ease: "Quad.easeOut" });
       }
 
+      juiceBurst(this, s.x, s.y, themeParticleHex(this.spec), isBuild ? 12 : 8);
+      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: isBuild ? 100 : 80 });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -1964,8 +1922,10 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.coins += reward;
     this.kills += 1;
     this.showKillEffect(e.sprite.x, e.sprite.y, reward);
-    if (e.id === "tank") {
-      this.cameras.main.shake(100, 0.003);
+    const isTank = e.id === "tank";
+    juiceBurst(this, e.sprite.x, e.sprite.y, themeParticleHex(this.spec), isTank ? 18 : 12);
+    if (isTank) {
+      juiceShake(this, { durationMs: 100, intensity: 0.003 });
     }
     e.sprite.clearMask();
     e.maskGfx?.destroy();
@@ -1977,7 +1937,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private damageBase(amount: number) {
     if (this.time.now < this.baseShieldUntil) {
-      this.cameras.main.flash(90, 120, 220, 255, false);
+      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: 90 });
       playBleep("pickup");
       return;
     }
@@ -1985,8 +1945,8 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.goalShiftFailed = true;
     }
     this.baseHp -= amount;
-    this.cameras.main.shake(120, 0.004);
-    this.cameras.main.flash(120, 255, 60, 60, false);
+    juiceShake(this, { durationMs: 120, intensity: 0.004 });
+    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 120 });
     playBleep("hit");
     this.refreshHud();
     const maxHp = this.spec.gameplay.baseHealth ?? 50;
@@ -2009,7 +1969,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     if (skill.effect === "shield") {
       this.baseShieldUntil = this.time.now + Math.max(1600, dur || 2200);
-      this.cameras.main.flash(90, 120, 220, 255, false);
+      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: 90 });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -2032,7 +1992,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         const e = this.enemies[i];
         if (e && e.hp <= 0) this.killEnemy(e);
       }
-      this.cameras.main.flash(120, 255, 200, 90, false);
+      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -2041,7 +2001,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     if (skill.effect === "dash") {
       // 塔防中映射为“短暂增伤/加速射击”
       this.boostUntil = this.time.now + 2000;
-      this.cameras.main.flash(90, 120, 255, 160, false);
+      juiceFlash(this, { r: 120, g: 255, b: 160 }, { durationMs: 90 });
       playBleep("pickup");
       this.refreshHud();
     }
@@ -2195,7 +2155,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       if (now >= this.nextCoinTickAt) {
         const gain = Math.max(6, Math.floor(8 + this.eventStrength * 14));
         this.coins += gain;
-        this.cameras.main.flash(60, 255, 230, 120, false);
+        juiceFlash(this, { r: 255, g: 230, b: 120 }, { durationMs: 60 });
         this.refreshHud();
         this.nextCoinTickAt = now + 900;
       }

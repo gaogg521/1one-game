@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { GameSpec } from "@/lib/game-spec";
+import { enrichGameSpecForRuntime } from "@/lib/enrich-game-spec";
 import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft-franchise";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { PlayScene } from "@/game/engine/PlayScene";
@@ -33,7 +34,7 @@ export function createPhaserGame(
     opts?.referencePayloads?.filter((p) => typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:")) ??
     [];
 
-  const specPlay = applyMinecraftThemeOverlay(spec);
+  const specPlay = applyMinecraftThemeOverlay(enrichGameSpecForRuntime(spec));
   const presentation = buildCohesivePresentation(specPlay);
   const blockyAdventure = isMinecraftLikeSpec(specPlay);
   const soundscape = new GameSoundscape(
@@ -49,15 +50,19 @@ export function createPhaserGame(
       : specPlay.templateId === "platformer"
         ? new PlatformerScene(specPlay, onEnd, soundscape)
         : specPlay.templateId === "shooter"
-          ? new ShooterScene(specPlay, onEnd, soundscape)
+          ? new ShooterScene(specPlay, onEnd, ref, soundscape)
           : new PlayScene(specPlay, onEnd, soundscape);
 
-  const config: Phaser.Types.Core.GameConfig = {
+  const dpr =
+    typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+
+  const config = {
     type: Phaser.AUTO,
     parent,
     width: Math.min(920, Math.max(640, parent.clientWidth || 920)),
     height: 560,
     backgroundColor: specPlay.theme.backgroundColor,
+    resolution: dpr,
     physics: {
       default: "arcade",
       arcade: {
@@ -68,13 +73,15 @@ export function createPhaserGame(
       // Must be true for canvas.toDataURL() to work with WebGL renderer.
       // Without this, WebGL clears the framebuffer after each frame → black covers.
       preserveDrawingBuffer: true,
+      antialias: true,
+      roundPixels: true,
     },
     scene: [scene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-  };
+  } as Phaser.Types.Core.GameConfig;
 
   const game = new Phaser.Game(config);
 

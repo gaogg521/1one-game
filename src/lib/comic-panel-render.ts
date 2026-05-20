@@ -6,6 +6,7 @@ import {
 } from "@/lib/image-generation";
 import { getComfyBaseUrl } from "@/lib/orchestration/comfy-gateway";
 import { buildPanelImagePrompt } from "@/lib/comic-generate-config";
+import type { ComicDirectorPack } from "@/lib/comic-director-types";
 import type { ComicStoryContext } from "@/lib/comic-panel-prompt-urban";
 import { docHasPlaceholderPanels } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
@@ -83,6 +84,8 @@ export async function renderComicPanels(
     storyContext?: ComicStoryContext;
     /** 强制不用参考图（如重生成全部后的首格） */
     skipStyleRefs?: boolean;
+    /** 长篇导演包（优先 doc.director） */
+    director?: ComicDirectorPack | null;
   },
 ): Promise<RenderComicPanelsResult> {
   const storyGenre = opts?.storyGenre ?? "general";
@@ -167,11 +170,13 @@ export async function renderComicPanels(
     concurrency: 1,
   });
 
+  const director = opts?.director ?? doc.director;
   const prompts = flat.map((f) =>
     buildPanelImagePrompt(f.panel, storyGenre, {
       sceneIndex: f.index,
       totalScenes,
       story: opts?.storyContext,
+      director,
     }),
   );
 
@@ -182,30 +187,34 @@ export async function renderComicPanels(
 
   if (comfyBase) {
     const comfyImages = await generateComfyImages(prompts);
-    if (comfyImages.length > 0) {
-      for (let i = 0; i < flat.length; i++) {
-        const img = comfyImages[i];
-        if (img) urls[i] = comfyImageUrl(comfyBase, img);
-      }
-      imageSource = "comfy";
-    } else {
-      errors.push("ComfyUI 未返回图片");
+    for (let i = 0; i < flat.length; i++) {
+      const img = comfyImages[i];
+      if (img) urls[i] = comfyImageUrl(comfyBase, img);
+    }
+    const comfyOk = urls.filter(Boolean).length;
+    if (comfyOk > 0) imageSource = "comfy";
+    if (comfyOk === 0) {
+      errors.push("ComfyUI 未返回图片，将尝试云端文生图");
+    } else if (comfyOk < flat.length) {
+      errors.push(`ComfyUI 仅成功 ${comfyOk}/${flat.length} 格，缺图将改用云端文生图补全`);
     }
   }
 
-  if (imageSource === "none") {
-    if (!availability.ok) {
-      return {
-        doc,
-        rendered: 0,
-        total: flat.length,
-        imageSource: "none",
-        errors: [availability.message],
-        imageGenHint: availability.message,
-      };
-    }
+  const needsCloudPanels = () => flat.some((_, i) => !urls[i]);
 
-    if (useOpenAIBatch) {
+  if (needsCloudPanels()) {
+    if (!availability.ok) {
+      if (!urls.some(Boolean)) {
+        return {
+          doc,
+          rendered: 0,
+          total: flat.length,
+          imageSource: "none",
+          errors: [...errors, availability.message],
+          imageGenHint: availability.message,
+        };
+      }
+    } else if (useOpenAIBatch && flat.every((_, i) => !urls[i])) {
       for (const f of flat) {
         opts?.onProgress?.({
           type: "panel_start",
@@ -247,6 +256,7 @@ export async function renderComicPanels(
       );
 
       for (let i = 0; i < batch.results.length; i++) {
+        if (urls[i]) continue;
         const label = flat[i]!.index;
         const detail = batch.results[i]!;
         const elapsedMs = batch.durationMs;
@@ -292,6 +302,7 @@ export async function renderComicPanels(
       );
 
       for (let i = 0; i < flat.length; i++) {
+        if (urls[i]) continue;
         const prompt = prompts[i]!;
         const label = flat[i]!.index;
         const caption = flat[i]!.panel.caption;

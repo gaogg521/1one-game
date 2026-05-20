@@ -48,7 +48,7 @@ export const COVER_GENRE_STYLES: Record<CoverGenre, CoverGenreStyle> = {
   transmigration: {
     label: "穿越",
     backgroundPrompt:
-      "Chinese time travel fantasy cover, portal between ancient palace and modern city, swirling golden light, dual era contrast, magical realism, epic composition, no text",
+      "Chinese time-travel web novel cover, dual-era composition in one frame: young modern Chinese protagonist in contemporary casual clothes (clear portrait, foreground or left half) combined with historical destination world (right half or background), golden portal or time-rift between eras, cinematic magical realism, epic vertical composition, NOT only modern city alone, NOT only ancient scene without any modern person, no text",
     titleColor: "#FFE566",
     titleGlow: "0 0 20px rgba(255, 200, 80, 0.8), 0 4px 10px rgba(0,0,0,0.85)",
     accentColor: "#9B6BFF",
@@ -164,4 +164,30 @@ export function inferStoryGenre(opts: {
 }): CoverGenre {
   const hint = [opts.prompt, opts.contentSnippet].filter(Boolean).join(" ").trim();
   return inferCoverGenre(opts.title, opts.summary ?? "", hint);
+}
+
+/** 封面题材：优先创作台类型（genreTagCoverGenre），再标题/摘要，最后才看正文片段。 */
+export function resolveNovelCoverGenre(opts: {
+  title: string;
+  summary?: string | null;
+  prompt?: string | null;
+  contentSnippet?: string | null;
+  /** 创作台所选类型对应的 coverGenre */
+  genreTagCoverGenre?: CoverGenre | null;
+}): CoverGenre {
+  if (opts.genreTagCoverGenre) return opts.genreTagCoverGenre;
+
+  const headline = inferCoverGenre(
+    opts.title,
+    opts.summary ?? "",
+    [opts.prompt, opts.title].filter(Boolean).join(" "),
+  );
+  if (headline !== "general") return headline;
+
+  if (opts.contentSnippet?.trim()) {
+    const withBody = inferStoryGenre(opts);
+    if (withBody !== "general") return withBody;
+  }
+
+  return headline;
 }

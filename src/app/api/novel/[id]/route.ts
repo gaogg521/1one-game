@@ -7,6 +7,11 @@ import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
 import { buildNovelSynopsisHeuristic } from "@/lib/novel-synopsis";
+import { NOVEL_CONTINUE_CHAPTER_PRESETS } from "@/lib/novel-continue-options";
+import { assessNovelContinuation } from "@/lib/novel-long-continue";
+import { PRODUCT } from "@/lib/product-config";
+import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
+import { loadNovelCreativeBrief } from "@/lib/novel-creative-brief-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -25,6 +30,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
+  const pipelineMeta = await loadNovelGenerationMeta(id);
+  const creativeBrief = isOwner ? await loadNovelCreativeBrief(id) : null;
+  const continuation = assessNovelContinuation({
+    lengthTier: row.lengthTier,
+    content: row.content,
+    meta: pipelineMeta,
+  });
   return NextResponse.json({
     novel: {
       id: row.id,
@@ -43,8 +55,17 @@ export async function GET(_req: Request, ctx: RouteContext) {
       status: row.status,
       isOwner: Boolean(isOwner),
       canDelete,
+      canContinue: Boolean(isOwner) && continuation.canContinue,
+      continuationReason: continuation.reason,
+      remainingChapterCount: continuation.remainingChapterCount,
+      charsRemaining: continuation.charsRemaining,
+      hasPipelineMeta: Boolean(pipelineMeta),
+      continueChapterPresets: NOVEL_CONTINUE_CHAPTER_PRESETS,
+      continueDefaultMaxChapters: PRODUCT.novel.longSegmented.continueDefaultMaxChapters,
+      polishDefault: PRODUCT.novel.longSegmented.polishAfterSegment,
       comics: row.comics,
     },
+    ...(creativeBrief ? { creativeBrief } : {}),
   });
 }
 

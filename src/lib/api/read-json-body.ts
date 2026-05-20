@@ -31,8 +31,12 @@ export type ReadJsonLimitedResult<T = unknown> =
 /**
  * 受限长度 JSON 读取（先于 JSON.parse，避免超长 prompt 与其它字段撑爆）。
  */
-export async function readLimitedJson(req: Request, requestId: string): Promise<ReadJsonLimitedResult> {
-  const max = maxBodyBytes();
+export async function readLimitedJson(
+  req: Request,
+  requestId: string,
+  opts?: { maxBytes?: number },
+): Promise<ReadJsonLimitedResult> {
+  const max = opts?.maxBytes ?? maxBodyBytes();
   const clErr =
     previewClHeader(req.headers.get("content-length"), max) ?? previewClHeader(req.headers.get("Content-Length"), max);
   if (clErr) {

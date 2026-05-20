@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "templateId": "platformer",
+  "title": "AI Mother Universal",
+  "theme": {
+    "backgroundColor": "#1a2220",
+    "playerColor": "#8faf8c",
+    "hazardColor": "#a65f3f",
+    "collectibleColor": "#c9a66b"
+  },
+  "gameplay": {
+    "playerSpeed": 280,
+    "hazardSpeed": 200,
+    "spawnIntervalMs": 800,
+    "winScore": 10,
+    "lives": 3,
+    "jumpStrength": 420,
+    "gravity": 980
+  },
+  "labels": {
+    "player": "旅行者",
+    "hazard": "障碍",
+    "collectible": "收集物",
+    "subtitle": "占位 spec，导出时由平台覆盖"
+  }
+}

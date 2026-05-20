@@ -8,6 +8,7 @@ export type GenerateServeLogPhase =
   | "variants"
   | "novel_generate"
   | "novel_generate_stream"
+  | "novel_continue_stream"
   | "comic_generate";
 
 export function emitGenerateServeLog(params: {
