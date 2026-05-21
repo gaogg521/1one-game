@@ -2,31 +2,49 @@ import { llmJson } from "@/lib/llm";
 import type { ComicPage } from "@/lib/comic-format";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { PRODUCT } from "@/lib/product-config";
-import { formatComicDirectorForPrompt, type ComicDirectorPack } from "@/lib/comic-director";
+import { formatComicDirectorForPrompt } from "@/lib/comic-director";
+import type { ComicDirectorPack } from "@/lib/comic-director-types";
 import { buildComicStoryboardJsonSchema, type ComicStoryboardPanel } from "@/lib/comic-director-types";
-import { PANELS_PER_PAGE, defaultPanelPrompt, normalizeComicPagesForGeneration } from "@/lib/comic-generate-config";
+import {
+  COMIC_MASTER_QUALITY_BLOCK,
+  PANELS_PER_PAGE,
+  defaultPanelPrompt,
+  normalizeComicPagesForGeneration,
+} from "@/lib/comic-generate-config";
+import { normalizePanelTextFields } from "@/lib/comic-panel-text";
+import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import type { PlannedComicPanel } from "@/lib/comic-shot-plan";
 
 const STORYBOARD_SYSTEM = `你是漫画分镜师。必须严格使用导演包中的角色 id、场景 id 与页节拍，不得发明新主角外貌。
-每格输出：caption（中文对白/旁白）、sceneDescriptionEn（英文画面动作，不含台词文字）、characterIds、locationId、shotType。
-全片 ${PANELS_PER_PAGE} 格/页为宜；格间叙事连贯。`;
+
+${COMIC_MASTER_QUALITY_BLOCK}
+
+每格输出：textType、speaker（对白时）、caption、sceneDescriptionEn、characterIds、locationId、shotType、sourceSegmentIndex（若提供段落编号）。
+全片 ${PANELS_PER_PAGE} 格/页；格间叙事连贯；约 1 段落 1～2 格。`;
 
 function storyboardPanelsToComicPage(
   pageNum: number,
   panels: ComicStoryboardPanel[],
   genre: CoverGenre,
+  stylePreset?: ComicStylePresetId,
 ): ComicPage {
-  const fallback = defaultPanelPrompt(genre);
+  const fallback = defaultPanelPrompt(genre, stylePreset);
   return {
     page: pageNum,
     panels: panels.map((p, j) => {
+      const text = normalizePanelTextFields(p);
       const planned: PlannedComicPanel = {
         scene: p.scene > 0 ? p.scene : (pageNum - 1) * PANELS_PER_PAGE + j + 1,
-        caption: p.caption.trim().slice(0, 120) || "……",
+        caption: text.caption,
+        textType: text.textType,
+        ...(text.speaker ? { speaker: text.speaker } : {}),
+        ...(text.sourceSegmentIndex !== undefined
+          ? { sourceSegmentIndex: text.sourceSegmentIndex }
+          : {}),
         prompt: p.sceneDescriptionEn.trim() || fallback,
         characterIds: [...p.characterIds],
         locationId: p.locationId,
-        shotType: p.shotType,
+        shotType: text.shotType,
         sceneDescriptionEn: p.sceneDescriptionEn.trim(),
       };
       return planned;
@@ -41,8 +59,9 @@ export async function fetchComicStoryboardChunk(params: {
   chunkEnd: number;
   totalPages: number;
   genre: CoverGenre;
+  stylePreset?: ComicStylePresetId;
 }): Promise<ComicPage[]> {
-  const { model, director, chunkStart, chunkEnd, totalPages, genre } = params;
+  const { model, director, chunkStart, chunkEnd, totalPages, genre, stylePreset } = params;
   const chunkPages = chunkEnd - chunkStart + 1;
 
   const result = await llmJson({
@@ -62,9 +81,9 @@ export async function fetchComicStoryboardChunk(params: {
     const rawPages = (result.raw as { pages: Array<{ page?: number; panels: ComicStoryboardPanel[] }> }).pages;
     if (Array.isArray(rawPages) && rawPages.length > 0) {
       const mapped: ComicPage[] = rawPages.map((rp, i) =>
-        storyboardPanelsToComicPage(rp.page ?? chunkStart + i, rp.panels ?? [], genre),
+        storyboardPanelsToComicPage(rp.page ?? chunkStart + i, rp.panels ?? [], genre, stylePreset),
       );
-      return normalizeComicPagesForGeneration(mapped, chunkPages, genre);
+      return normalizeComicPagesForGeneration(mapped, chunkPages, genre, stylePreset);
     }
   }
 

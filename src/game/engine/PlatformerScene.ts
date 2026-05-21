@@ -756,6 +756,7 @@ export class PlatformerScene extends Phaser.Scene {
     juiceBurst(this, x, y, themeParticleHex(this.spec), 12);
     juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 100 });
     playBleep("pickup");
+    this.soundscape?.triggerKillStinger();
   }
 
   private fxDamage() {
@@ -1009,6 +1010,8 @@ export class PlatformerScene extends Phaser.Scene {
       if (mods.includes("finale")) {
         this.soundscape?.triggerEvent("boss");
       }
+      const sections = ["intro", "build", "drop", "climax"] as const;
+      this.soundscape?.setSection(sections[idx] ?? "intro");
       const stageMessage = mods.includes("precision")
         ? "精准段落：容错变小，注意落点"
         : mods.includes("gaps")

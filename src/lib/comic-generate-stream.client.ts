@@ -20,7 +20,7 @@ export type ComicGenerateStreamEvent = {
 };
 
 export type ComicGenerateStreamResult =
-  | { ok: true; comicId: string; needsPanelRender: boolean; events: ComicGenerateStreamEvent }
+  | { ok: true; comicId: string; needsPanelRender: boolean; events: ComicGenerateStreamEvent[] }
   | { ok: false; error: string };
 
 export async function consumeComicGenerateStream(
@@ -82,7 +82,7 @@ export async function consumeComicGenerateStream(
   }
 
   if (comicId) {
-    return { ok: true, comicId, needsPanelRender, events: [] };
+    return { ok: true, comicId, needsPanelRender, events: [] as ComicGenerateStreamEvent[] };
   }
   return { ok: false, error: streamError || "漫画生成未完成" };
 }

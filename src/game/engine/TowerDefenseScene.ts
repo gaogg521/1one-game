@@ -1095,6 +1095,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     // Screen flash on wave start
     juiceFlash(this, { r: 255, g: 200, b: 80 }, { durationMs: 80 });
+    this.soundscape?.triggerWaveStart(index, this.waveDefs.length);
   }
 
   private makeSlots(
@@ -1922,6 +1923,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.coins += reward;
     this.kills += 1;
     this.showKillEffect(e.sprite.x, e.sprite.y, reward);
+    this.soundscape?.triggerKillStinger();
     const isTank = e.id === "tank";
     juiceBurst(this, e.sprite.x, e.sprite.y, themeParticleHex(this.spec), isTank ? 18 : 12);
     if (isTank) {

@@ -4,8 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ChildrenAgePicker } from "@/components/novel/ChildrenAgePicker";
 import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPanel";
 import { NovelGenreTagPicker } from "@/components/novel/NovelGenreTagPicker";
+import {
+  childrenMaxCharsForAge,
+  DEFAULT_CHILDREN_TARGET_AGE,
+  type ChildrenTargetAge,
+} from "@/lib/children-age-length";
 import {
   type DraftState,
   loadDraft,
@@ -13,10 +19,12 @@ import {
   markDraftGenerating,
 } from "@/lib/draft-storage";
 import {
-  NOVEL_LENGTH_TIERS,
+  NOVEL_LENGTH_TIERS_FOR_UI,
   novelGenerationEtaHint,
+  novelLengthConfig,
   novelMaxChars,
   novelStreamInterruptHint,
+  resolveNovelLengthTier,
   type NovelLengthTier,
 } from "@/lib/novel-length";
 import {
@@ -31,6 +39,7 @@ import {
   buildNovelBriefSeed,
   buildNovelStoredPrompt,
   getNovelGenreTag,
+  isChildrenGenreTag,
   type NovelGenreTagId,
 } from "@/lib/novel-genre-tags";
 import { PRODUCT } from "@/lib/product-config";
@@ -51,6 +60,9 @@ export default function NovelCreatePage() {
   const [genreId, setGenreId] = useState<NovelGenreTagId | null>(null);
   const [addonNotes, setAddonNotes] = useState("");
   const [lengthTier, setLengthTier] = useState<NovelLengthTier>("medium");
+  const [childrenTargetAge, setChildrenTargetAge] = useState<ChildrenTargetAge>(
+    DEFAULT_CHILDREN_TARGET_AGE,
+  );
   const [longPolish, setLongPolish] = useState<boolean>(PRODUCT.novel.longSegmented.polishAfterSegment);
 
   const [creativeBrief, setCreativeBrief] = useState<NovelCreativeBrief | null>(null);
@@ -83,6 +95,19 @@ export default function NovelCreatePage() {
   const coverRequested = useRef(false);
 
   const genre = genreId ? getNovelGenreTag(genreId) : null;
+  const isChildrenGenre = isChildrenGenreTag(genreId);
+  const effectiveLengthTier = resolveNovelLengthTier({
+    genreTagId: genreId,
+    lengthTierPick: lengthTier,
+  });
+  const childrenLengthOpts = isChildrenGenre ? { childrenTargetAge } : undefined;
+  const childrenMaxChars = childrenMaxCharsForAge(childrenTargetAge);
+
+  function handleGenreChange(id: NovelGenreTagId) {
+    setGenreId(id);
+    if (isChildrenGenreTag(id)) setLengthTier("children");
+    else if (lengthTier === "children") setLengthTier("short");
+  }
 
   useEffect(() => {
     const d = loadDraft("novel");
@@ -95,10 +120,16 @@ export default function NovelCreatePage() {
     setBriefPreviewBusy(true);
     setBriefConfirmed(false);
     try {
-      const seed = buildNovelBriefSeed(title, genre, addonNotes);
+      const seed = buildNovelBriefSeed(
+        title,
+        genre,
+        addonNotes,
+        isChildrenGenre ? childrenTargetAge : undefined,
+      );
       const r = await fetchCreativeBriefPreview(seed, "novel", {
         novelGenreId: genre.id,
         title: title.trim(),
+        childrenTargetAge: isChildrenGenre ? childrenTargetAge : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -109,7 +140,7 @@ export default function NovelCreatePage() {
     } finally {
       setBriefPreviewBusy(false);
     }
-  }, [title, genre, addonNotes]);
+  }, [title, genre, addonNotes, isChildrenGenre, childrenTargetAge]);
 
   useEffect(() => {
     if (step === 2 && title.trim() && genre && !creativeBrief && !briefPreviewBusy) {
@@ -174,8 +205,10 @@ export default function NovelCreatePage() {
     let cancelled = false;
 
     async function loadPublishedNovel() {
+      const id = publishedNovelId;
+      if (!id) return;
       try {
-        const res = await fetch(`/api/novel/${encodeURIComponent(publishedNovelId)}`);
+        const res = await fetch(`/api/novel/${encodeURIComponent(id)}`);
         const data = (await res.json()) as {
           novel?: {
             id: string;
@@ -268,9 +301,10 @@ export default function NovelCreatePage() {
         body: JSON.stringify({
           prompt: storedPrompt,
           title: title.trim(),
-          lengthTier,
+          lengthTier: effectiveLengthTier,
           novelGenreTag: genreId,
-          ...(lengthTier === "long" ? { polish: longPolish } : {}),
+          ...(isChildrenGenre ? { childrenTargetAge } : {}),
+          ...(effectiveLengthTier === "long" ? { polish: longPolish } : {}),
           creativeBrief,
           ...(briefRevision ? { briefRevision } : {}),
         }),
@@ -369,7 +403,7 @@ export default function NovelCreatePage() {
               totalChars += ev.text.length;
               setStreamPreview((p) => p + ev.text);
               setProgress(
-                `生成中… 已约 ${totalChars.toLocaleString()} / ${novelMaxChars(lengthTier).toLocaleString()} 字`,
+                `生成中… 已约 ${totalChars.toLocaleString()} / ${novelMaxChars(effectiveLengthTier, childrenLengthOpts).toLocaleString()} 字`,
               );
             }
             if (ev.step === "length_capped") setProgress(ev.message ?? "已达篇幅上限…");
@@ -404,7 +438,7 @@ export default function NovelCreatePage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const timedOut = /abort|timeout|timed out|network|failed to fetch|incomplete/i.test(msg);
-      setError(timedOut ? novelStreamInterruptHint(lengthTier) : `连接异常：${msg || "请重试"}`);
+      setError(timedOut ? novelStreamInterruptHint(effectiveLengthTier) : `连接异常：${msg || "请重试"}`);
     } finally {
       setLoading(false);
     }
@@ -483,7 +517,7 @@ export default function NovelCreatePage() {
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
                   小说类型
                 </label>
-                <NovelGenreTagPicker value={genreId} onChange={setGenreId} />
+                <NovelGenreTagPicker value={genreId} onChange={handleGenreChange} />
                 {genre ? (
                   <p className="mt-2 text-xs leading-relaxed text-[var(--gc-text-faint)]">
                     {genre.label}：{genre.desc}
@@ -494,6 +528,59 @@ export default function NovelCreatePage() {
                   </p>
                 )}
               </div>
+
+              {isChildrenGenre ? (
+                <div className="border-t border-[color:var(--gc-border)] pt-5">
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
+                    读者年龄（决定正文字数）
+                  </label>
+                  <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
+                    3岁以下约 200 字，4–10 岁每增一岁约多 100 字（上限 900 字）。AI 会从书名与补充想法提取主题、原创角色与情节，禁止模板角色；漫画为 Q
+                    版小人书五格。
+                  </p>
+                  <ChildrenAgePicker
+                    value={childrenTargetAge}
+                    onChange={setChildrenTargetAge}
+                    disabled={loading}
+                  />
+                  <p className="mt-2 text-[10px] text-[var(--gc-muted)]">
+                    预计 {novelGenerationEtaHint("children")} · 本次目标约 {childrenMaxChars} 字
+                  </p>
+                </div>
+              ) : (
+                <div className="border-t border-[color:var(--gc-border)] pt-5">
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
+                    篇幅
+                  </label>
+                  <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
+                    短篇 / 中篇 / 长篇。进入「写作」步骤前仍可修改。
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => setLengthTier(tier.id)}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                          lengthTier === tier.id
+                            ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
+                            : "border-[color:var(--gc-border)] bg-[var(--gc-bg)]/50 hover:border-[color:var(--gc-accent)]/30"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{tier.label}</span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-[var(--gc-muted)]">
+                          {tier.desc}
+                        </span>
+                        {lengthTier === tier.id ? (
+                          <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
+                            预计 {novelGenerationEtaHint(tier.id)}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {error ? <p className="text-sm text-red-400">{error}</p> : null}
               <button
@@ -511,6 +598,20 @@ export default function NovelCreatePage() {
             <div className="flex flex-col gap-4">
               <p className="text-sm text-[var(--gc-text-soft)]">
                 《{title}》· <span className="text-[var(--gc-accent)]">{genre.label}</span>
+                <span className="text-[var(--gc-muted)]">
+                  {" "}
+                  {isChildrenGenre ? (
+                    <span className="text-[var(--gc-muted)]">
+                      {" "}
+                      · 约 {childrenMaxChars} 字
+                    </span>
+                  ) : (
+                    <span className="text-[var(--gc-muted)]">
+                      {" "}
+                      · {novelLengthConfig(effectiveLengthTier).label}
+                    </span>
+                  )}
+                </span>
                 {briefPreviewBusy ? " — 正在根据书名与类型扩写构思…" : ""}
               </p>
               <div>
@@ -575,35 +676,50 @@ export default function NovelCreatePage() {
                 ) : null}
               </div>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                  篇幅
-                </label>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {NOVEL_LENGTH_TIERS.map((tier) => (
-                    <button
-                      key={tier.id}
-                      type="button"
-                      onClick={() => setLengthTier(tier.id)}
-                      className={`rounded-xl border px-4 py-3 text-left transition ${
-                        lengthTier === tier.id
-                          ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
-                          : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold">{tier.label}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
-                      {lengthTier === tier.id && !loading ? (
-                        <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
-                          预计 {novelGenerationEtaHint(tier.id)}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
+              {isChildrenGenre ? (
+                <div>
+                  <p className="mb-2 text-xs text-[var(--gc-muted)]">
+                    儿童短篇 · 读者 {childrenTargetAge === 2 ? "3岁以下" : `${childrenTargetAge}岁`}，正文约{" "}
+                    {childrenMaxChars} 字（±50），含【故事标题】【正文】【家长共读】三块成稿。
+                  </p>
+                  <ChildrenAgePicker
+                    value={childrenTargetAge}
+                    onChange={setChildrenTargetAge}
+                    disabled={loading}
+                  />
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
+                    篇幅（与第 1 步同步，可在此修改）
+                  </label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => setLengthTier(tier.id)}
+                        disabled={loading}
+                        className={`rounded-xl border px-4 py-3 text-left transition disabled:opacity-50 ${
+                          lengthTier === tier.id
+                            ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
+                            : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{tier.label}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
+                        {lengthTier === tier.id && !loading ? (
+                          <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
+                            预计 {novelGenerationEtaHint(tier.id)}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              {lengthTier === "long" ? (
+              {effectiveLengthTier === "long" ? (
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--gc-text-soft)]">
                   <input
                     type="checkbox"

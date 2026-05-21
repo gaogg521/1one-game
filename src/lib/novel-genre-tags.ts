@@ -11,7 +11,11 @@ export type NovelGenreTagId =
   | "romance"
   | "scifi"
   | "mystery"
-  | "horror";
+  | "horror"
+  | "children";
+
+/** 儿童类型标签 id（篇幅固定为 children 档位，配套小人书漫画） */
+export const CHILDREN_GENRE_TAG_ID = "children" as const;
 
 export type NovelGenreTag = {
   id: NovelGenreTagId;
@@ -82,7 +86,17 @@ export const NOVEL_GENRE_TAGS: NovelGenreTag[] = [
     desc: "诡秘怪谈、生存惊悚、未知禁忌",
     coverGenre: "mystery",
   },
+  {
+    id: "children",
+    label: "儿童短篇",
+    desc: "睡前童话、亲子共读；按年龄段约 200–900 字，可生成 Q 版小人书五格漫画",
+    coverGenre: "general",
+  },
 ];
+
+export function isChildrenGenreTag(id: string | null | undefined): boolean {
+  return id === CHILDREN_GENRE_TAG_ID;
+}
 
 const TAG_BY_ID = new Map(NOVEL_GENRE_TAGS.map((t) => [t.id, t]));
 
@@ -92,9 +106,28 @@ export function getNovelGenreTag(id: string | null | undefined): NovelGenreTag |
 }
 
 /** 由书名 + 类型生成 Brief 扩写用的创意种子（非正文 prompt） */
-export function buildNovelBriefSeed(title: string, genre: NovelGenreTag, addon?: string): string {
+export function buildNovelBriefSeed(
+  title: string,
+  genre: NovelGenreTag,
+  addon?: string,
+  childrenTargetAge?: number,
+): string {
   const t = title.trim();
   const extra = addon?.trim();
+  if (genre.id === "children") {
+    const ageLine =
+      childrenTargetAge !== undefined
+        ? `目标读者年龄：${childrenTargetAge === 2 ? "3岁以下" : `${childrenTargetAge}岁`}`
+        : "";
+    return [
+      `书名：${t}`,
+      `类型：${genre.label}（${genre.desc}）`,
+      ageLine,
+      `家长一句话创意（请从中提取主题、原创角色类型、小困境与情节方向，勿用模板角色）：${extra || t}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
   return [
     `书名：${t}`,
     `类型：${genre.label}（${genre.desc}）`,

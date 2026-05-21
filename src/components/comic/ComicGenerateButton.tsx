@@ -3,6 +3,9 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
+import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
+import type { ComicReadMode } from "@/lib/comic-format";
 import {
   consumeComicGenerateStream,
   type ComicGenerateStreamEvent,
@@ -14,6 +17,10 @@ type Props = {
   title?: string;
   lengthTier?: string;
   pageCount?: number;
+  stylePreset?: string;
+  readMode?: ComicReadMode;
+  chapterScope?: ComicChapterScope | null;
+  characterRoster?: ComicCharacterRoster | null;
   label?: string;
   className?: string;
   style?: CSSProperties;
@@ -26,6 +33,10 @@ export function ComicGenerateButton({
   title,
   lengthTier,
   pageCount,
+  stylePreset,
+  readMode,
+  chapterScope,
+  characterRoster,
   label = "生成漫画",
   className,
   style,
@@ -47,6 +58,10 @@ export function ComicGenerateButton({
     if (title) body.title = title;
     if (lengthTier) body.lengthTier = lengthTier;
     if (pageCount) body.pageCount = pageCount;
+    if (stylePreset) body.stylePreset = stylePreset;
+    if (readMode) body.readMode = readMode;
+    if (chapterScope) body.chapterScope = chapterScope;
+    if (characterRoster?.characters.length) body.characterRoster = characterRoster;
 
     const result = await consumeComicGenerateStream(body, (ev: ComicGenerateStreamEvent) => {
       if (ev.message) setProgress(ev.message);

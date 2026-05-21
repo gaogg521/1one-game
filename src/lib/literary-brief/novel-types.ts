@@ -33,6 +33,8 @@ export type ExpandNovelBriefParams = {
   title?: string;
   genreId?: string;
   skipLlm?: boolean;
+  /** 儿童短篇：目标读者年龄（2=3岁以下，4–10） */
+  childrenTargetAge?: number;
 };
 
 export type ExpandNovelBriefResult = {

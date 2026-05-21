@@ -1,10 +1,22 @@
 import { generateComicCover } from "@/lib/cover-generation";
 import { inferStoryGenre } from "@/lib/cover-genre";
+import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
+import {
+  resolvePageCountForChapterScope,
+  sliceNovelByChapterScope,
+} from "@/lib/comic-chapter-scope";
+import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
+import type { ComicReadMode } from "@/lib/comic-format";
+import { resolveComicStylePreset } from "@/lib/comic-style-presets";
 import { getNovelStyleTextModelCascade } from "@/lib/llm";
 import { generateComicPages } from "@/lib/comic-pipeline";
 import type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 import { formatComicConsistencyIssues } from "@/lib/comic-panel-consistency";
-import { PANELS_PER_PAGE, resolveComicPageCount } from "@/lib/comic-generate-config";
+import {
+  panelsPerPageForLayout,
+  resolveComicLayoutId,
+  resolveComicPageCount,
+} from "@/lib/comic-generate-config";
 import { formatComicStorageTitle } from "@/lib/comic-display";
 import { renderComicPanels, serializeComicPanels } from "@/lib/comic-panel-render";
 import {
@@ -12,7 +24,8 @@ import {
   normalizeNovelTitle,
   validateNovelTitleInput,
 } from "@/lib/novel-display";
-import { parseNovelLengthTier } from "@/lib/novel-length";
+import { parseNovelLengthTier, resolveNovelLengthTier } from "@/lib/novel-length";
+import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import {
@@ -43,6 +56,14 @@ export type ComicGenerateRunInput = {
   title?: string;
   pageCount?: number;
   lengthTier?: string;
+  /** 漫画画风预设：japanese_clean | chibi_cute | korean_shoujo | chinese_wuxia | chinese_campus */
+  stylePreset?: string;
+  /** segment=按段落分批；full=全书精读后再分镜 */
+  readMode?: ComicReadMode;
+  /** 按章改编（不传=全书） */
+  chapterScope?: ComicChapterScope | null;
+  /** 用户锁定的人设（优先于自动提取） */
+  characterRoster?: ComicCharacterRoster | null;
 };
 
 export type ComicGenerateRunResult = {
@@ -87,6 +108,11 @@ export async function resolveComicGenerateNovel(
     novelPrompt = novel.prompt ?? "";
     novelTitle = normalizeNovelTitle(novel.title, novel.prompt);
     if (novel.lengthTier) novelLengthTier = parseNovelLengthTier(novel.lengthTier);
+    const genreFromPrompt = inferNovelGenreTagFromStoredPrompt(novelPrompt);
+    novelLengthTier = resolveNovelLengthTier({
+      genreTagId: genreFromPrompt?.id,
+      lengthTierPick: novelLengthTier,
+    });
     novelMeta = await loadNovelGenerationMeta(actualNovelId);
   } else if (input.content?.trim()) {
     novelContent = input.content.trim();
@@ -165,10 +191,16 @@ export async function runComicGeneration(
     }
   }
 
-  const pageCount = resolveComicPageCount({
+  const fullContentLength = novelContent.length;
+  const scoped = sliceNovelByChapterScope(novelContent, input.chapterScope ?? null);
+  novelContent = scoped.content;
+  const chapterScopeLabel = scoped.scopeLabel;
+
+  const pageCount = resolvePageCountForChapterScope({
+    fullContentLength,
+    scopedContentLength: novelContent.length,
     lengthTier: novelLengthTier,
     pageCount: input.pageCount,
-    contentLength: novelContent.length,
   });
   const storyGenre = inferStoryGenre({
     title: novelTitle,
@@ -176,11 +208,22 @@ export async function runComicGeneration(
     prompt: novelPrompt,
     contentSnippet: novelContent.slice(0, 1200),
   });
+  const layoutId = resolveComicLayoutId({ lengthTier: novelLengthTier });
+  const panelsPerPage = panelsPerPageForLayout(layoutId);
+  const stylePreset = resolveComicStylePreset({
+    preset: input.stylePreset,
+    genre: storyGenre,
+    lengthTier: novelLengthTier,
+  });
+  const readMode: ComicReadMode = input.readMode === "full" ? "full" : "segment";
 
   send({
     step: "start",
-    message: `开始改编漫画，共 ${pageCount} 页（每页 ${PANELS_PER_PAGE} 格）…`,
+    message: `开始改编漫画（${chapterScopeLabel} · ${readMode === "full" ? "全书精读" : "段落精读"}），共 ${pageCount} 页…`,
     pageCount,
+    stylePreset,
+    readMode,
+    chapterScopeLabel,
   });
 
   const cascade = getNovelStyleTextModelCascade();
@@ -191,13 +234,16 @@ export async function runComicGeneration(
     send({ step: "model_start", model });
     try {
       gen = await generateComicPages({
-        cascade,
         novelTitle,
         novelPrompt,
         novelSummary,
         novelContent,
         pageCount,
         storyGenre,
+        stylePreset,
+        readMode,
+        layoutId,
+        characterRoster: input.characterRoster ?? null,
         lengthTier: novelLengthTier,
         novelMeta,
         model,
@@ -216,7 +262,7 @@ export async function runComicGeneration(
 
   const pages = gen.pages;
   const panelCount = pages.reduce((n, p) => n + p.panels.length, 0);
-  if (pages.length < 1 || panelCount < PANELS_PER_PAGE) {
+  if (pages.length < 1 || panelCount < panelsPerPage) {
     throw new Error("漫画分镜提取失败（模型未返回有效分镜）");
   }
 
@@ -224,10 +270,16 @@ export async function runComicGeneration(
     formatVersion: gen.director ? 3 : 2,
     pageCount: pages.length,
     pages,
+    stylePreset,
+    layoutId,
+    readMode,
+    chapterScopeLabel,
+    ...(gen.characterRoster ? { characterRoster: gen.characterRoster } : {}),
+    ...(gen.plotDigest ? { plotDigest: gen.plotDigest } : {}),
     ...(gen.director ? { director: gen.director, pipeline: gen.pipeline } : {}),
   };
 
-  const skipInlinePanels = panelCount > PANELS_PER_PAGE;
+  const skipInlinePanels = panelCount > panelsPerPage;
   let rendered = 0;
   let imageSource = "none";
 

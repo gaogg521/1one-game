@@ -3,6 +3,7 @@ import { generateImage } from "./image-generation";
 import { persistNovelCoverFile, persistNovelCoverBuffer } from "./novel-cover-persist";
 import {
   inferStoryGenre,
+  inferCoverGenre,
   resolveNovelCoverGenre,
   COVER_GENRE_STYLES,
   type CoverGenre,

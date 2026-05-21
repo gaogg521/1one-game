@@ -4,7 +4,11 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ComicPictureBookPageGrid } from "@/components/comic/ComicPictureBookPageGrid";
+import { ComicPanelOverlay } from "@/components/comic/ComicPanelOverlay";
 import { parseComicImageUrls, type ComicPage } from "@/lib/comic-format";
+import { type ComicLayoutId } from "@/lib/comic-layout";
+import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import { formatImageGenElapsed } from "@/lib/format-duration";
 import { consumeSSE } from "@/lib/read-sse";
 
@@ -55,7 +59,15 @@ function ShareButton({ comicId }: { comicId: string }) {
   );
 }
 
-function ComicPageGrid({ page, rendering }: { page: ComicPage; rendering?: boolean }) {
+function ComicPageGrid({
+  page,
+  rendering,
+  stylePreset,
+}: {
+  page: ComicPage;
+  rendering?: boolean;
+  stylePreset?: ComicStylePresetId;
+}) {
   const panels = page.panels.slice(0, 4);
   while (panels.length < 4) {
     panels.push({ caption: "", prompt: "" });
@@ -89,19 +101,7 @@ function ComicPageGrid({ page, rendering }: { page: ComicPage; rendering?: boole
                 ) : null}
               </div>
             )}
-            {panel.caption ? (
-              <div
-                className={`pointer-events-none absolute inset-x-0 bottom-0 px-2 pb-2 pt-8 ${
-                  hasImage
-                    ? "bg-gradient-to-t from-black/90 via-black/55 to-transparent"
-                    : "bg-black/70"
-                }`}
-              >
-                <p className="text-sm font-semibold leading-snug text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                  {panel.caption}
-                </p>
-              </div>
-            ) : null}
+            <ComicPanelOverlay panel={panel} stylePreset={stylePreset} hasImage={hasImage} />
           </div>
         );
       })}
@@ -115,6 +115,25 @@ export default function ComicDetailPage() {
   const autoRenderStarted = useRef(false);
   const [comic, setComic] = useState<Comic | null>(null);
   const [pages, setPages] = useState<ComicPage[]>([]);
+  const [stylePreset, setStylePreset] = useState<ComicStylePresetId | undefined>();
+  const [layoutId, setLayoutId] = useState<ComicLayoutId>("grid_4");
+  const [chapterScopeLabel, setChapterScopeLabel] = useState<string | undefined>();
+  const [readMode, setReadMode] = useState<string | undefined>();
+  const applyComicDoc = useCallback((doc: ReturnType<typeof parseComicImageUrls>) => {
+    setPages(doc.pages);
+    if (doc.stylePreset) setStylePreset(doc.stylePreset);
+    if (doc.layoutId) {
+      setLayoutId(doc.layoutId);
+    } else if (doc.stylePreset === "children_picture_book") {
+      setLayoutId("picture_book_5");
+    } else if (doc.pages[0]?.panels.length === 5) {
+      setLayoutId("picture_book_5");
+    } else {
+      setLayoutId("grid_4");
+    }
+    if (doc.chapterScopeLabel) setChapterScopeLabel(doc.chapterScopeLabel);
+    if (doc.readMode) setReadMode(doc.readMode);
+  }, []);
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -139,7 +158,7 @@ export default function ComicDetailPage() {
     if (!res.ok) throw new Error(data.error || `加载失败（HTTP ${res.status}）`);
     if (!data.comic) throw new Error("漫画不存在");
     setComic(data.comic);
-    setPages(parseComicImageUrls(data.comic.imageUrls).pages);
+    applyComicDoc(parseComicImageUrls(data.comic.imageUrls));
   }, [id]);
 
   useEffect(() => {
@@ -214,7 +233,7 @@ export default function ComicDetailPage() {
         const t = ev.type as string | undefined;
         if (t === "status" && typeof ev.message === "string") {
           if (typeof ev.imageUrls === "string") {
-            setPages(parseComicImageUrls(ev.imageUrls as string).pages);
+            applyComicDoc(parseComicImageUrls(ev.imageUrls as string));
           }
           setRenderProgress((p) =>
             p
@@ -265,7 +284,7 @@ export default function ComicDetailPage() {
           const elapsedMs = typeof ev.elapsedMs === "number" ? ev.elapsedMs : undefined;
           const durationMs = typeof ev.durationMs === "number" ? ev.durationMs : undefined;
           if (typeof ev.imageUrls === "string") {
-            setPages(parseComicImageUrls(ev.imageUrls as string).pages);
+            applyComicDoc(parseComicImageUrls(ev.imageUrls as string));
           }
           const elapsedLabel =
             elapsedMs != null ? formatImageGenElapsed(elapsedMs) : undefined;
@@ -287,7 +306,7 @@ export default function ComicDetailPage() {
           const doneMsg = typeof ev.message === "string" ? ev.message : "配图完成";
           if (ev.comic && typeof ev.comic === "object" && "imageUrls" in ev.comic) {
             const urls = (ev.comic as { imageUrls?: string }).imageUrls;
-            if (urls) setPages(parseComicImageUrls(urls).pages);
+            if (urls) applyComicDoc(parseComicImageUrls(urls));
           }
           setRenderProgress({
             total,
@@ -387,10 +406,13 @@ export default function ComicDetailPage() {
                 <Link href={`/novel/${comic.novel.id}`} className="underline hover:text-[var(--gc-accent)]">
                   {novelLabel}
                 </Link>
-                》· {total} 页（每页 4 格）· {new Date(comic.createdAt).toLocaleDateString()}
+                》· {total} 页（每页 4 格）
+                {chapterScopeLabel ? ` · ${chapterScopeLabel}` : ""}
+                {readMode === "full" ? " · 全书精读" : ""}
+                · {new Date(comic.createdAt).toLocaleDateString()}
               </p>
               <p className="mt-1 text-[10px] leading-relaxed text-[var(--gc-text-faint)]">
-                对白/旁白在每格底部黑条显示（不画进图内）；缺图格会先展示分镜文字。
+                对白为气泡、旁白为页脚解说（不画进图内）；缺图格会先展示分镜文字。重新生成可选用创作页画风预设。
               </p>
             </div>
             <ShareButton comicId={comic.id} />
@@ -520,7 +542,16 @@ export default function ComicDetailPage() {
                 </button>
               </div>
 
-              {page && <ComicPageGrid page={page} rendering={rendering} />}
+              {page &&
+                (layoutId === "picture_book_5" ? (
+                  <ComicPictureBookPageGrid
+                    page={page}
+                    rendering={rendering}
+                    stylePreset={stylePreset}
+                  />
+                ) : (
+                  <ComicPageGrid page={page} rendering={rendering} stylePreset={stylePreset} />
+                ))}
 
               {total > 1 && (
                 <div className="mt-6 flex flex-wrap justify-center gap-2">

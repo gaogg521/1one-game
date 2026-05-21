@@ -22,7 +22,7 @@ function inferTone(prompt: string, pack: GenrePack): ParsedIntent["tone"] {
   if (/轻松|治愈|休闲|慢|cozy|casual/i.test(p)) return "casual";
   if (/史诗|宏大|热血|战争|决战|epic/i.test(p) || pack.defaultTone === "epic") return "epic";
   if (pack.defaultTone === "cozy") return "cozy";
-  return pack.defaultTone === "epic" ? "epic" : "neutral";
+  return "neutral";
 }
 
 function inferDifficulty(prompt: string, tone: ParsedIntent["tone"]): ParsedIntent["difficulty"] {

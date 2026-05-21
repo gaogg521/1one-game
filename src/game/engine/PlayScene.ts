@@ -552,6 +552,7 @@ export class PlayScene extends Phaser.Scene {
     juiceFloater(this, x, y - 14, "+1", this.cohesive.hud.body);
     juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 120 });
     playBleep("pickup");
+    this.soundscape?.triggerKillStinger();
   }
 
   private fxDamage() {
@@ -849,6 +850,8 @@ export class PlayScene extends Phaser.Scene {
       // Dynamic music: increase tension as act progresses
       const tension = this.intensity * (0.5 + 0.5 * (idx / Math.max(1, acts.length - 1)));
       this.soundscape?.setTension(tension);
+      const sections = ["intro", "build", "drop", "climax"] as const;
+      this.soundscape?.setSection(sections[idx] ?? "intro");
     }
   }
 

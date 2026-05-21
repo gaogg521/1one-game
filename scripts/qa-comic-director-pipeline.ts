@@ -15,6 +15,7 @@ const director = fallbackComicDirectorPack({
   novelTitle: "测试",
   pageCount: 4,
   genre: "urban",
+  stylePreset: "chinese_campus",
   novelMeta: null,
 });
 

@@ -2,7 +2,8 @@ import { parseNovelChapters, serializeNovelChapters } from "@/lib/novel-chapters
 import { llmNovelText } from "@/lib/llm";
 import { LONG_NOVEL_PRODUCT } from "@/lib/novel-long-config";
 import type { NovelLengthTier } from "@/lib/novel-length";
-import { formatNovelBibleForPrompt, type NovelBible } from "@/lib/novel-long-bible";
+import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
+import type { NovelBible } from "@/lib/novel-long-pipeline-types";
 import type { NovelStreamEmitter } from "@/lib/novel-long-generate";
 
 const POLISH_SYSTEM = `你是中文网文润色编辑。对单章正文做轻量润色。

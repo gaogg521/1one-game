@@ -7,7 +7,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
-import { ComicGenerateButton } from "@/components/comic/ComicGenerateButton";
+import { ComicGeneratePanel } from "@/components/comic/ComicGeneratePanel";
 import { NovelContinueButton } from "@/components/novel/NovelContinueButton";
 import { NovelSynopsisBlurb } from "@/components/novel/NovelSynopsisBlurb";
 import { parseNovelChapters } from "@/lib/novel-chapters";
@@ -73,6 +73,7 @@ export default function NovelDetailPage() {
   const [novel, setNovel] = useState<Novel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [comicSetupOpen, setComicSetupOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
@@ -261,23 +262,18 @@ export default function NovelDetailPage() {
                       查看漫画版
                     </Link>
                   ) : (
-                    <ComicGenerateButton
-                      novelId={novel.id}
-                      lengthTier={novel.lengthTier ?? undefined}
-                      label="生成漫画"
-                      onError={(msg) =>
-                        setError(
-                          msg.includes("无权")
-                            ? "当前账号与创建该小说时不一致，无法生成漫画。请用创作时的浏览器登录态，或在「我的小说」中打开自己的作品。"
-                            : msg,
-                        )
-                      }
-                      className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
+                    <button
+                      type="button"
+                      onClick={() => setComicSetupOpen((v) => !v)}
+                      className="rounded-lg border px-3 py-2 text-xs font-medium transition"
                       style={{
                         borderColor: `${readPalette.tocActive}55`,
                         color: readPalette.tocActive,
+                        backgroundColor: comicSetupOpen ? `${readPalette.tocActive}18` : undefined,
                       }}
-                    />
+                    >
+                      {comicSetupOpen ? "收起漫画选项" : "生成漫画"}
+                    </button>
                   )}
                   {novel.isOwner && novel.canContinue && (
                     <NovelContinueButton
@@ -338,6 +334,25 @@ export default function NovelDetailPage() {
             <p className="mx-auto max-w-6xl px-4 pb-2 text-sm text-red-500 lg:px-6">{error}</p>
           )}
         </header>
+
+        {!editing && comicSetupOpen && novel.comics.length === 0 ? (
+          <div className="mx-auto max-w-2xl px-4 pb-4 lg:px-6">
+            <ComicGeneratePanel
+              novelId={novel.id}
+              novelContent={novel.content}
+              novelPrompt={novel.prompt}
+              lengthTier={novel.lengthTier ?? undefined}
+              label="开始生成漫画"
+              onError={(msg) =>
+                setError(
+                  msg.includes("无权")
+                    ? "当前账号与创建该小说时不一致，无法生成漫画。请用创作时的浏览器登录态，或在「我的小说」中打开自己的作品。"
+                    : msg,
+                )
+              }
+            />
+          </div>
+        ) : null}
 
         {editing ? (
           <NovelEditor

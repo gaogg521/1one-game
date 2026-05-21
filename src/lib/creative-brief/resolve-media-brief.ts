@@ -18,6 +18,7 @@ export type ResolveMediaBriefOptions = {
   /** 小说类型标签 id（transmigration / wuxia …） */
   novelGenreId?: string;
   title?: string;
+  childrenTargetAge?: number;
 };
 
 export type MediaBriefResult = {
@@ -62,6 +63,7 @@ export async function resolveMediaCreativeBrief(
     genreId: options?.novelGenreId,
     skipLlm: options?.skipLlm,
     userRevision: options?.userRevision,
+    childrenTargetAge: options?.childrenTargetAge,
   });
 
   return {

@@ -51,9 +51,20 @@ export const comicShotTypeSchema = z.enum([
 
 export type ComicShotType = z.infer<typeof comicShotTypeSchema>;
 
+export const comicPanelTextTypeSchema = z.enum([
+  "dialogue",
+  "narration",
+  "inner",
+  "scene_note",
+  "time_place",
+]);
+
 export const comicStoryboardPanelSchema = z.object({
   scene: z.number().int().positive(),
   caption: z.string().min(1),
+  textType: comicPanelTextTypeSchema.optional(),
+  speaker: z.string().optional(),
+  sourceSegmentIndex: z.number().int().min(0).optional(),
   sceneDescriptionEn: z.string().min(12),
   characterIds: z.array(z.string()).min(0).max(4),
   locationId: z.string().min(1),
@@ -137,6 +148,12 @@ export function buildComicStoryboardJsonSchema(chunkPages: number) {
     additionalProperties: false,
     properties: {
       scene: { type: "integer" },
+      sourceSegmentIndex: { type: "integer" },
+      textType: {
+        type: "string",
+        enum: ["dialogue", "narration", "inner", "scene_note", "time_place"],
+      },
+      speaker: { type: "string" },
       caption: { type: "string" },
       sceneDescriptionEn: { type: "string" },
       characterIds: { type: "array", items: { type: "string" } },
@@ -146,7 +163,15 @@ export function buildComicStoryboardJsonSchema(chunkPages: number) {
         enum: ["wide", "medium", "close", "over_shoulder", "extreme_close"],
       },
     },
-    required: ["scene", "caption", "sceneDescriptionEn", "characterIds", "locationId", "shotType"],
+    required: [
+      "scene",
+      "textType",
+      "caption",
+      "sceneDescriptionEn",
+      "characterIds",
+      "locationId",
+      "shotType",
+    ],
   };
   return {
     name: "comic_storyboard_chunk",

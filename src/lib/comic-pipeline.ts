@@ -5,9 +5,10 @@ import {
   buildComicSystemPrompt,
   defaultPanelPrompt,
   normalizeComicPagesForGeneration,
-  PANELS_PER_PAGE,
+  panelsPerPageForLayout,
   shouldUseLongComicPipeline,
 } from "@/lib/comic-generate-config";
+import { type ComicLayoutId } from "@/lib/comic-layout";
 import { fetchComicDirectorPack } from "@/lib/comic-director";
 import type { ComicDirectorPack } from "@/lib/comic-director-types";
 import {
@@ -22,6 +23,25 @@ import { llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import {
+  formatSegmentsForStoryboardPrompt,
+  segmentsForPageChunk,
+  splitNovelIntoSegments,
+} from "@/lib/comic-storyboard-segments";
+import type { ComicStylePresetId } from "@/lib/comic-style-presets";
+import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
+import {
+  fetchComicCharacterRoster,
+  rosterFromDirectorPack,
+  rosterFromNovelMeta,
+} from "@/lib/comic-character-roster";
+import { enrichPagesFromSegmentDialogues } from "@/lib/comic-dialogue-extract";
+import {
+  buildComicPrereadPack,
+  formatPlotDigestForPrompt,
+  type ComicPlotDigest,
+} from "@/lib/comic-preread";
+import type { ComicReadMode } from "@/lib/comic-format";
 
 export type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 
@@ -32,16 +52,22 @@ export type ComicPagesGenerateResult = {
   provider: string;
   model: string;
   consistencyIssues: ComicConsistencyIssue[];
+  readMode: ComicReadMode;
+  layoutId: ComicLayoutId;
+  characterRoster?: ComicCharacterRoster;
+  plotDigest?: ComicPlotDigest;
 };
 
-/** 按页码进度截取正文，并附上 Brief/简介，避免多批分镜都只读开头。 */
+/** 按段落绑定本批页码对应的小说节选（精读模式），并附 Brief/简介。 */
 function buildLightStoryboardSource(opts: {
   novelContent: string;
   novelPrompt: string;
   novelSummary: string;
   chunkStart: number;
+  chunkEnd: number;
   pageCount: number;
   maxChars: number;
+  plotDigest?: ComicPlotDigest | null;
 }): string {
   const headerParts: string[] = [];
   const prompt = opts.novelPrompt.trim();
@@ -52,17 +78,17 @@ function buildLightStoryboardSource(opts: {
   if (summary.length >= 2) {
     headerParts.push(`故事简介：\n${summary.slice(0, 1200)}`);
   }
-  const header = headerParts.join("\n\n");
-  const bodyBudget = Math.max(2500, opts.maxChars - header.length - 80);
-  const progress = (opts.chunkStart - 1) / Math.max(1, opts.pageCount);
-  const start = Math.floor(progress * opts.novelContent.length);
-  let body = opts.novelContent.slice(start, start + bodyBudget);
-  if (start > 0) {
-    const nl = body.indexOf("\n");
-    if (nl > 0 && nl < 240) body = body.slice(nl + 1);
+  if (opts.plotDigest) {
+    headerParts.push(formatPlotDigestForPrompt(opts.plotDigest));
   }
-  if (!header) return body;
-  return `${header}\n\n小说正文（本段节选）：\n${body}`;
+  const header = headerParts.join("\n\n");
+  const segments = splitNovelIntoSegments(opts.novelContent);
+  const chunkSegs = segmentsForPageChunk(segments, opts.chunkStart, opts.chunkEnd, opts.pageCount);
+  let body = formatSegmentsForStoryboardPrompt(chunkSegs);
+  const budget = Math.max(2500, opts.maxChars - header.length - 120);
+  if (body.length > budget) body = `${body.slice(0, budget)}\n…（后续段落于下一批分镜继续）`;
+  if (!header) return `【本批必须改编的原文段落 — 逐段出格，禁止脱离段落脑补】\n\n${body}`;
+  return `${header}\n\n【本批必须改编的原文段落 — 逐段出格，禁止脱离段落脑补】\n\n${body}`;
 }
 
 async function generateComicPagesLight(params: {
@@ -73,10 +99,28 @@ async function generateComicPagesLight(params: {
   novelSummary: string;
   pageCount: number;
   storyGenre: CoverGenre;
+  stylePreset: ComicStylePresetId;
+  layoutId: ComicLayoutId;
+  plotDigest?: ComicPlotDigest | null;
+  characterRoster?: ComicCharacterRoster | null;
   emit?: ComicStreamEmitter;
 }): Promise<{ pages: ComicPage[]; provider: string; model: string }> {
-  const { model, novelTitle, novelContent, novelPrompt, novelSummary, pageCount, storyGenre, emit } =
-    params;
+  const {
+    model,
+    novelTitle,
+    novelContent,
+    novelPrompt,
+    novelSummary,
+    pageCount,
+    storyGenre,
+    stylePreset,
+    layoutId,
+    plotDigest,
+    characterRoster,
+    emit,
+  } = params;
+  const panelsPerPage = panelsPerPageForLayout(layoutId);
+  const allSegments = splitNovelIntoSegments(novelContent);
   const send = emit ?? (() => {});
   const CHUNK_SIZE = PRODUCT.comic.storyboardChunkPages;
   let pages: ComicPage[] = [];
@@ -88,7 +132,7 @@ async function generateComicPagesLight(params: {
     const chunkStart = chunkIdx * CHUNK_SIZE + 1;
     const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, pageCount);
     const chunkPages = chunkEnd - chunkStart + 1;
-    const chunkPanels = chunkPages * PANELS_PER_PAGE;
+    const chunkPanels = chunkPages * panelsPerPage;
 
     send({
       step: "light_chunk_start",
@@ -99,22 +143,36 @@ async function generateComicPagesLight(params: {
       message: `轻量分镜 第 ${chunkIdx + 1}/${chunkCount} 批（第 ${chunkStart}–${chunkEnd} 页）…`,
     });
 
-    const comicSystem = buildComicSystemPrompt(chunkPages, storyGenre);
-    const comicSchema = buildComicJsonSchema(chunkPages);
+    const comicSystem = buildComicSystemPrompt(chunkPages, storyGenre, stylePreset, {
+      roster: characterRoster,
+      plotDigest,
+      layoutId,
+    });
+    const comicSchema = buildComicJsonSchema(chunkPages, layoutId);
     const storySource = buildLightStoryboardSource({
       novelContent,
       novelPrompt,
       novelSummary,
       chunkStart,
+      chunkEnd,
       pageCount,
       maxChars: PRODUCT.comic.lightPathContentMaxChars,
+      plotDigest,
     });
 
     let chunkResult: ComicPage[] = [];
     const result = await llmJson({
       model,
       system: comicSystem,
-      user: `请为以下小说改编漫画，输出第 ${chunkStart}～${chunkEnd} 页（共 ${chunkPages} 页，每页 4 格，共 ${chunkPanels} 格）。\n全书共 ${pageCount} 页，请按比例推进剧情（第 ${chunkStart} 页对应故事进度约 ${Math.round(((chunkStart - 1) / pageCount) * 100)}%）。格与格之间连贯；caption 用中文对白/旁白（网页叠字，勿要求画进图里），prompt 用英文纯画面描述。\n\n小说标题：${novelTitle}\n\n${storySource}\n\n请输出 JSON，根对象包含长度为 ${chunkPages} 的 "pages" 数组。`,
+      user: `请为以下小说改编漫画，输出第 ${chunkStart}～${chunkEnd} 页（共 ${chunkPages} 页，每页 4 格，共 ${chunkPanels} 格）。
+全书共 ${pageCount} 页。本批仅改编下方【段落#】内容：约 1 段 1～2 格，sourceSegmentIndex 填段落号减 1。
+区分 textType（对白/旁白/内心/场景/时间）；shotType 搭配远景/中景/特写；禁止脑补段落外剧情。
+
+小说标题：${novelTitle}
+
+${storySource}
+
+请输出 JSON，根对象包含长度为 ${chunkPages} 的 "pages" 数组。`,
       jsonSchema: comicSchema,
       temperature: 0.8,
       mode: "json_schema",
@@ -123,7 +181,13 @@ async function generateComicPagesLight(params: {
     if (result.ok && result.raw && typeof result.raw === "object" && "pages" in result.raw) {
       const rawPages = (result.raw as { pages: ComicPage[] }).pages;
       if (Array.isArray(rawPages) && rawPages.length > 0) {
-        chunkResult = normalizeComicPagesForGeneration(rawPages, chunkPages, storyGenre);
+        chunkResult = normalizeComicPagesForGeneration(
+          rawPages,
+          chunkPages,
+          storyGenre,
+          stylePreset,
+          layoutId,
+        );
         providerUsed = result.provider;
         modelUsed = result.model;
       }
@@ -133,10 +197,10 @@ async function generateComicPagesLight(params: {
       for (let i = chunkStart; i <= chunkEnd; i++) {
         chunkResult.push({
           page: i,
-          panels: Array.from({ length: PANELS_PER_PAGE }, (_, j) => ({
-            scene: (i - 1) * PANELS_PER_PAGE + j + 1,
+          panels: Array.from({ length: panelsPerPage }, (_, j) => ({
+            scene: (i - 1) * panelsPerPage + j + 1,
             caption: "……",
-            prompt: defaultPanelPrompt(storyGenre),
+            prompt: defaultPanelPrompt(storyGenre, stylePreset),
           })),
         });
       }
@@ -156,7 +220,12 @@ async function generateComicPagesLight(params: {
     });
   }
 
-  return { pages, provider: providerUsed, model: modelUsed };
+  let finalPages = pages;
+  if (allSegments.length > 0) {
+    finalPages = enrichPagesFromSegmentDialogues(finalPages, allSegments);
+  }
+
+  return { pages: finalPages, provider: providerUsed, model: modelUsed };
 }
 
 async function generateComicPagesLong(params: {
@@ -167,10 +236,11 @@ async function generateComicPagesLong(params: {
   novelContent: string;
   pageCount: number;
   storyGenre: CoverGenre;
+  stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
   emit?: ComicStreamEmitter;
 }): Promise<{ pages: ComicPage[]; director: ComicDirectorPack; provider: string; model: string }> {
-  const { model, emit } = params;
+  const { model, emit, stylePreset } = params;
   const send = emit ?? (() => {});
 
   send({ step: "director_start", message: "正在生成漫画导演包（角色/场景/页节拍）…" });
@@ -183,6 +253,7 @@ async function generateComicPagesLong(params: {
     novelContent: params.novelContent,
     pageCount: params.pageCount,
     genre: params.storyGenre,
+    stylePreset,
     novelMeta: params.novelMeta,
   });
 
@@ -216,6 +287,7 @@ async function generateComicPagesLong(params: {
       chunkEnd,
       totalPages: params.pageCount,
       genre: params.storyGenre,
+      stylePreset,
     });
 
     for (let i = 0; i < chunkResult.length; i++) {
@@ -236,7 +308,60 @@ async function generateComicPagesLong(params: {
   pages = applyShotPlanToPages(pages, director, params.storyGenre);
   send({ step: "shot_plan_done", message: "镜头规划完成" });
 
+  const segments = splitNovelIntoSegments(params.novelContent);
+  if (segments.length > 0) {
+    pages = enrichPagesFromSegmentDialogues(pages, segments);
+  }
+
   return { pages, director, provider: "", model };
+}
+
+async function resolveComicRosterAndDigest(opts: {
+  model: string;
+  readMode: ComicReadMode;
+  novelTitle: string;
+  novelSummary: string;
+  novelContent: string;
+  novelMeta: NovelGenerationMeta | null;
+  userRoster?: ComicCharacterRoster | null;
+  emit?: ComicStreamEmitter;
+}): Promise<{ roster: ComicCharacterRoster | null; plotDigest: ComicPlotDigest | null }> {
+  const send = opts.emit ?? (() => {});
+  let plotDigest: ComicPlotDigest | null = null;
+  let roster = opts.userRoster?.characters.length ? opts.userRoster : null;
+
+  if (opts.readMode === "full") {
+    send({ step: "preread_start", message: "全书精读：正在通读剧情并锁定人设…" });
+    const pack = await buildComicPrereadPack({
+      model: opts.model,
+      novelTitle: opts.novelTitle,
+      novelSummary: opts.novelSummary,
+      novelContent: opts.novelContent,
+      novelMeta: opts.novelMeta,
+      userRoster: roster,
+    });
+    if (pack) {
+      plotDigest = pack.plotDigest;
+      roster = pack.characterRoster;
+      send({ step: "preread_done", message: "精读完成，开始分镜…" });
+    }
+  }
+
+  if (!roster) {
+    roster = rosterFromNovelMeta(opts.novelMeta);
+  }
+  if (!roster?.characters.length) {
+    send({ step: "roster_start", message: "正在提取主要角色人设…" });
+    roster = await fetchComicCharacterRoster({
+      model: opts.model,
+      novelTitle: opts.novelTitle,
+      novelSummary: opts.novelSummary,
+      contentExcerpt: opts.novelContent.slice(0, 14_000),
+    });
+    if (roster) send({ step: "roster_done", message: `已锁定 ${roster.characters.length} 位角色` });
+  }
+
+  return { roster, plotDigest };
 }
 
 /** 生成漫画分镜（短篇轻量 / 长篇导演流水线）。 */
@@ -248,12 +373,29 @@ export async function generateComicPages(opts: {
   novelContent: string;
   pageCount: number;
   storyGenre: CoverGenre;
+  stylePreset: ComicStylePresetId;
+  layoutId: ComicLayoutId;
+  readMode?: ComicReadMode;
+  characterRoster?: ComicCharacterRoster | null;
   lengthTier: NovelLengthTier;
   novelMeta: NovelGenerationMeta | null;
   emit?: ComicStreamEmitter;
 }): Promise<ComicPagesGenerateResult> {
+  const readMode = opts.readMode ?? "segment";
+  const layoutId = opts.layoutId;
   const useLong = shouldUseLongComicPipeline(opts.pageCount, opts.lengthTier);
   const send = opts.emit ?? (() => {});
+
+  const { roster, plotDigest } = await resolveComicRosterAndDigest({
+    model: opts.model,
+    readMode,
+    novelTitle: opts.novelTitle,
+    novelSummary: opts.novelSummary,
+    novelContent: opts.novelContent,
+    novelMeta: opts.novelMeta,
+    userRoster: opts.characterRoster,
+    emit: send,
+  });
 
   send({
     step: "pipeline_mode",
@@ -270,6 +412,7 @@ export async function generateComicPages(opts: {
       novelContent: opts.novelContent,
       pageCount: opts.pageCount,
       storyGenre: opts.storyGenre,
+      stylePreset: opts.stylePreset,
       novelMeta: opts.novelMeta,
       emit: opts.emit,
     });
@@ -285,6 +428,8 @@ export async function generateComicPages(opts: {
       });
     }
 
+    const longRoster = director ? rosterFromDirectorPack(director) : roster;
+
     return {
       pages,
       pipeline: "long_director",
@@ -292,6 +437,10 @@ export async function generateComicPages(opts: {
       provider: "",
       model,
       consistencyIssues: report.issues,
+      readMode,
+      layoutId,
+      ...(longRoster ? { characterRoster: longRoster } : {}),
+      ...(plotDigest ? { plotDigest } : {}),
     };
   }
 
@@ -303,6 +452,10 @@ export async function generateComicPages(opts: {
     novelSummary: opts.novelSummary,
     pageCount: opts.pageCount,
     storyGenre: opts.storyGenre,
+    stylePreset: opts.stylePreset,
+    layoutId,
+    plotDigest,
+    characterRoster: roster,
     emit: opts.emit,
   });
 
@@ -313,5 +466,9 @@ export async function generateComicPages(opts: {
     provider,
     model,
     consistencyIssues: [],
+    readMode,
+    layoutId,
+    ...(roster ? { characterRoster: roster } : {}),
+    ...(plotDigest ? { plotDigest } : {}),
   };
 }

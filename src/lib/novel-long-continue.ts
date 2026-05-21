@@ -6,8 +6,8 @@ import {
   fetchNovelChapterPlan,
   getRemainingChapterPlan,
   splitChapterPlanIntoSegments,
-  type ChapterPlanItem,
 } from "@/lib/novel-long-chapter-plan";
+import type { ChapterPlanItem } from "@/lib/novel-long-pipeline-types";
 import { clampContinueChapterCount } from "@/lib/novel-continue-options";
 import { LONG_NOVEL_PRODUCT, planLongNovelSegments } from "@/lib/novel-long-config";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";

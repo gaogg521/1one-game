@@ -4,13 +4,17 @@ import type { CoverGenre } from "@/lib/cover-genre";
 import { getComicPanelStyleLock } from "@/lib/cover-genre";
 import type { ComicDirectorPack, ComicShotType } from "@/lib/comic-director-types";
 
-const SHOT_FRAMING: Record<ComicShotType, string> = {
+export const SHOT_FRAMING: Record<ComicShotType, string> = {
   wide: "wide establishing shot, full environment visible",
   medium: "medium shot, waist-up, clear body language",
   close: "close-up shot, face and shoulders, emotional expression",
   over_shoulder: "over-the-shoulder shot, depth between characters",
   extreme_close: "extreme close-up on eyes or key detail",
 };
+
+export function shotFramingHint(shotType?: ComicShotType): string {
+  return SHOT_FRAMING[shotType ?? "medium"];
+}
 
 export type PlannedComicPanel = ComicPanel & {
   characterIds?: string[];

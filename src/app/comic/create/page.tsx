@@ -18,7 +18,11 @@ import {
   type NovelBriefUserRevision,
   type NovelCreativeBrief,
 } from "@/lib/literary-brief";
-import { NOVEL_LENGTH_TIERS, type NovelLengthTier } from "@/lib/novel-length";
+import { NOVEL_LENGTH_TIERS_FOR_UI, type NovelLengthTier } from "@/lib/novel-length";
+import {
+  ComicGenerateOptions,
+  defaultComicGenerateOptions,
+} from "@/components/comic/ComicGenerateOptions";
 
 export default function ComicCreatePage() {
   const router = useRouter();
@@ -30,6 +34,7 @@ export default function ComicCreatePage() {
   const [briefRevision, setBriefRevision] = useState<NovelBriefUserRevision | null>(null);
   const [briefPreviewBusy, setBriefPreviewBusy] = useState(false);
   const [lengthTier, setLengthTier] = useState<NovelLengthTier>("medium");
+  const [genOpts, setGenOpts] = useState(defaultComicGenerateOptions);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
@@ -63,6 +68,10 @@ export default function ComicCreatePage() {
           creativePrompt: creativePrompt.trim() || undefined,
           title: title.trim() || undefined,
           lengthTier,
+          stylePreset: genOpts.stylePreset,
+          readMode: genOpts.readMode,
+          chapterScope: genOpts.chapterScope,
+          ...(genOpts.characterRoster ? { characterRoster: genOpts.characterRoster } : {}),
           ...(creativeBrief ? { creativeBrief } : {}),
           ...(briefRevision ? { briefRevision } : {}),
         },
@@ -180,7 +189,7 @@ export default function ComicCreatePage() {
                 篇幅（决定漫画页数）
               </label>
               <div className="grid gap-2 sm:grid-cols-3">
-                {NOVEL_LENGTH_TIERS.map((tier) => (
+                {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
                   <button
                     key={tier.id}
                     type="button"
@@ -197,6 +206,12 @@ export default function ComicCreatePage() {
                 ))}
               </div>
             </div>
+
+            <ComicGenerateOptions
+              novelContent={content}
+              value={genOpts}
+              onChange={setGenOpts}
+            />
 
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">

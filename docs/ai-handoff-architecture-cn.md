@@ -195,6 +195,22 @@ flowchart LR
 
 ---
 
+## 6.1 小说 → 漫画（分镜质量）
+
+| 能力 | 代码 |
+|------|------|
+| 画风预设（日系/Q版/韩系/国风武侠/中式校园） | `src/lib/comic-style-presets.ts` |
+| 段落绑定 + 对白提取 | `src/lib/comic-storyboard-segments.ts`、`src/lib/comic-dialogue-extract.ts` |
+| 全书精读 + 人设卡 | `src/lib/comic-preread.ts`、`src/lib/comic-character-roster.ts` |
+| 按章改编 | `src/lib/comic-chapter-scope.ts` |
+| 分镜 prompt / schema | `src/lib/comic-generate-config.ts`（`COMIC_MASTER_QUALITY_BLOCK`） |
+| 阅读页气泡/旁白 | `src/components/comic/ComicPanelOverlay.tsx` |
+| 生成选项 UI | `src/components/comic/ComicGenerateOptions.tsx` |
+
+API：`POST /api/comic/generate/stream` 支持 `stylePreset`、`readMode`（`segment`/`full`）、`chapterScope`、`characterRoster`。
+
+---
+
 ## 7. 协作约束（给 AI）
 
 - 改 **GameSpec 形状**时同步：**Zod、`coerceGameSpec`、`generate-spec` 的 SYSTEM/JSON_SCHEMA（若适用）**、必要时 **lint / 冒烟 / E2E**。  

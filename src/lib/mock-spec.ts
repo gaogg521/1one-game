@@ -227,14 +227,14 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
       spawnIntervalMs,
       winScore:
         templateId === "towerDefense"
-          ? pick([6, 8, 10, 12], seed, 6)
+          ? pick([10, 12, 14, 16], seed, 6)
           : templateId === "platformer"
-            ? pick([30, 36, 42, 48], seed, 6)
+            ? pick([42, 50, 56, 64], seed, 6)
             : templateId === "collector"
-              ? pick([24, 30, 36, 42], seed, 6)
+              ? pick([36, 44, 50, 56], seed, 6)
               : templateId === "shooter"
-                ? pick([35, 45, 55, 65], seed, 6)
-                : pick([35, 45, 55], seed, 6),
+                ? pick([50, 60, 72, 85], seed, 6)
+                : pick([50, 60, 70, 75], seed, 6),
       lives:
         templateId === "survivor"
           ? pick([3, 4, 5], seed, 7)

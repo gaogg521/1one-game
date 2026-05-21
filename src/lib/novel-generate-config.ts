@@ -1,16 +1,26 @@
 import { PRODUCT } from "@/lib/product-config";
 import {
+  buildChildrenNovelUserMessage,
+  getChildrenNovelSystemPrompt,
+} from "@/lib/children-novel-creative";
+import { childrenAgeLabel, parseChildrenTargetAge } from "@/lib/children-age-length";
+import {
   novelLengthConfig,
   novelMaxChars,
   parseNovelLengthTier,
+  type NovelLengthOptions,
   type NovelLengthTier,
 } from "@/lib/novel-length";
 
 /** @deprecated 使用 getNovelSystemPrompt(tier) */
 export const NOVEL_SYSTEM_PROMPT = getNovelSystemPrompt("medium");
 
-export function getNovelSystemPrompt(tier: NovelLengthTier): string {
-  const cfg = novelLengthConfig(tier);
+export function getNovelSystemPrompt(tier: NovelLengthTier, opts?: NovelLengthOptions): string {
+  const cfg = novelLengthConfig(tier, opts);
+  if (tier === "children") {
+    const age = parseChildrenTargetAge(opts?.childrenTargetAge);
+    return getChildrenNovelSystemPrompt(age);
+  }
   return `你是一位擅长中文网络小说的 AI 作家。用户会给出一句话创意，你需要扩展为一篇**结构完整的${cfg.label}小说**。
 
 要求：
@@ -26,26 +36,29 @@ export function getNovelSystemPrompt(tier: NovelLengthTier): string {
 /** 单次小说 LLM 调用超时（流式/非流式、网关 x-openclaw-timeout-ms 对齐）。 */
 export function novelLlmTimeoutMs(tier?: NovelLengthTier): number {
   const t = tier ?? "medium";
+  if (t === "children") return PRODUCT.novel.llmTimeoutMs.short;
   return PRODUCT.novel.llmTimeoutMs[t];
 }
 
-export function novelLlmMaxOutputTokens(tier?: NovelLengthTier): number {
+export function novelLlmMaxOutputTokens(tier?: NovelLengthTier, opts?: NovelLengthOptions): number {
   const t = tier ?? "medium";
   const base = PRODUCT.novel.maxOutputTokens;
-  const cap = novelMaxChars(t);
+  const cap = novelMaxChars(t, opts);
   const estimated = Math.ceil(cap * 1.35) + 512;
-  if (t === "short") return Math.min(base, Math.max(2_048, estimated));
+  if (t === "short" || t === "children") return Math.min(base, Math.max(2_048, estimated));
   if (t === "medium") return Math.min(base, Math.max(8_192, estimated));
   return base;
 }
 
 export { novelMaxChars };
 
-export function novelMinAcceptChars(tier?: NovelLengthTier): number {
+export function novelMinAcceptChars(tier?: NovelLengthTier, opts?: NovelLengthOptions): number {
   const t = tier ?? "medium";
-  const cfg = novelLengthConfig(t);
-  const floor = PRODUCT.novel.minAcceptCharsFloor[t];
-  const ratio = PRODUCT.novel.minAcceptCharsRatio[t];
+  const cfg = novelLengthConfig(t, opts);
+  if (t === "children") return cfg.minChars;
+  const key = t;
+  const floor = PRODUCT.novel.minAcceptCharsFloor[key];
+  const ratio = PRODUCT.novel.minAcceptCharsRatio[key];
   return Math.max(200, Math.max(floor, Math.floor(cfg.minChars * ratio)));
 }
 
@@ -55,12 +68,21 @@ export function buildNovelUserMessage(
   lengthTier?: NovelLengthTier,
   /** 含 Creative Brief 扩写块时使用完整上下文 */
   pipelinePrompt?: string,
+  lengthOpts?: NovelLengthOptions,
 ): string {
   const tier = lengthTier ?? "medium";
-  const cfg = novelLengthConfig(tier);
+  const cfg = novelLengthConfig(tier, lengthOpts);
   const t = title?.trim();
   const creativeBlock = (pipelinePrompt ?? prompt).trim();
+  if (tier === "children") {
+    return buildChildrenNovelUserMessage(
+      creativeBlock,
+      t,
+      parseChildrenTargetAge(lengthOpts?.childrenTargetAge),
+    );
+  }
   return `请根据以下创意写完整${cfg.label}小说正文（目标 ${cfg.minChars}–${cfg.maxChars} 字，多章、每章带标题）：\n\n${creativeBlock}\n\n${t ? `建议标题：${t}` : ""}`;
 }
 
-export { parseNovelLengthTier, type NovelLengthTier };
+export { parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
+export { resolveNovelLengthTier } from "@/lib/novel-length";

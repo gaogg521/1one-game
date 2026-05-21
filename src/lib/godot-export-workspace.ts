@@ -104,7 +104,7 @@ export async function prepareGodotWorkspace(params: {
     if (!params.forceRefresh) {
       try {
         const raw = await fs.readFile(metaPath, "utf8");
-        const meta = JSON.parse(raw) as { specHash?: string };
+        const meta = JSON.parse(raw) as { specHash?: string; referenceSummary?: unknown };
         if (meta.specHash === specHash) {
           await fs.access(path.join(workRoot, "project.godot"));
           const refSummary =

@@ -12,21 +12,58 @@ import {
   type CoverGenre,
 } from "@/lib/cover-genre";
 import type { ComicDirectorPack } from "@/lib/comic-director-types";
-import { buildFinalPanelImagePrompt, type PlannedComicPanel } from "@/lib/comic-shot-plan";
+import { normalizePanelTextFields } from "@/lib/comic-panel-text";
+import {
+  getComicStylePreset,
+  type ComicStylePresetId,
+} from "@/lib/comic-style-presets";
+import { formatCharacterRosterForPrompt, type ComicCharacterRoster } from "@/lib/comic-character-roster";
+import { formatPlotDigestForPrompt, type ComicPlotDigest } from "@/lib/comic-preread";
+import { buildFinalPanelImagePrompt, shotFramingHint, type PlannedComicPanel } from "@/lib/comic-shot-plan";
+import {
+  getComicLayout,
+  panelsPerPageForLayout,
+  resolveComicLayoutId,
+  type ComicLayoutId,
+} from "@/lib/comic-layout";
 
+/** @deprecated 请用 panelsPerPageForLayout(layoutId)；默认四宫格 */
 export const PANELS_PER_PAGE = 4;
 export const COMIC_MAX_PAGES = 32;
 
-/** 按小说篇幅默认漫画页数（每页 4 宫格） */
+/** 按小说篇幅默认漫画页数 */
 export const COMIC_DEFAULT_PAGES: Record<NovelLengthTier, number> = {
   short: 2,
+  children: 2,
   medium: 8,
   long: 16,
 };
 
-export function defaultPanelPrompt(genre: CoverGenre = "general"): string {
-  return `Comic panel, ${getComicPanelStyleLock(genre)}, detailed illustration suitable for manga grid`;
+export { panelsPerPageForLayout, resolveComicLayoutId, type ComicLayoutId };
+
+export function defaultPanelPrompt(
+  genre: CoverGenre = "general",
+  stylePreset?: ComicStylePresetId,
+): string {
+  const style = stylePreset
+    ? getComicStylePreset(stylePreset).promptEn
+    : getComicPanelStyleLock(genre);
+  return `Comic panel, ${style}, detailed illustration suitable for manga grid`;
 }
+
+/** 小说转漫画质量总则（分镜 LLM system 注入） */
+export const COMIC_MASTER_QUALITY_BLOCK = `【改编总则 — 必须遵守】
+1. 严格按原文小说剧情制作连载漫画：逐段对应分镜，禁止私自篡改、脑补无关画面。
+2. 每一格必须还原该段落的动作、神态、场景氛围、人物站位；区分打斗/对话/独处/回忆，情绪贴合原文。
+3. 全程固定所有人物外貌、发型、服饰、身高与标志性特征，整本人设统一。
+4. 规范漫画分镜：合理搭配远景( wide )交代场景、中景( medium )互动、特写( close )表情、必要时过肩( over_shoulder )。
+5. 中文叠字体系（画进网页，不画进图里）：
+   - textType=dialogue：人物台词，caption 只写台词正文，speaker 写说话人名
+   - textType=narration：页面叙事旁白（老式小人书解说）
+   - textType=inner：内心独白，caption 用（……）包裹
+   - textType=scene_note：场景/道具/环境注解
+   - textType=time_place：时间地点标注
+6. prompt 仅英文描述可见画面，禁止 dialogue / speech bubble / 可读文字 / 网红厚涂美颜 / 夸张二次元浓妆特效。`;
 
 /** 文生图统一约束：中文对白由页面 caption 叠字，禁止模型在画面内生成任何可读文字。 */
 export const COMIC_IMAGE_NO_TEXT_SUFFIX =
@@ -36,6 +73,7 @@ export type PanelImagePromptOpts = {
   sceneIndex?: number;
   totalScenes?: number;
   story?: ComicStoryContext;
+  stylePreset?: ComicStylePresetId;
 };
 
 /** 将分镜格转为文生图 prompt（英文画面描述 + 题材画风锁 + 禁止图内文字）。 */
@@ -73,18 +111,24 @@ export function buildPanelImagePrompt(
     });
   }
 
-  const styleLock = getComicPanelStyleLock(genre);
+  const styleLock = opts?.stylePreset
+    ? getComicStylePreset(opts.stylePreset).promptEn
+    : getComicPanelStyleLock(genre);
+  const shotHint = panel.shotType ? shotFramingHint(panel.shotType as import("@/lib/comic-director-types").ComicShotType) : "";
   const raw = panel.prompt?.trim();
   const caption = panel.caption?.trim() ?? "";
   let base = raw;
   if (!base || (genre === "urban" && raw && panelPromptLooksFantasy(raw))) {
     base = caption && !panelPromptLooksFantasy(caption)
       ? `Manga comic panel, ${styleLock}, scene for story beat (dialogue not in image): ${caption.slice(0, 80)}`
-      : defaultPanelPrompt(genre);
+      : defaultPanelPrompt(genre, opts?.stylePreset);
   } else if (!/modern urban|contemporary|都市|realistic/i.test(base) && genre === "urban") {
     base = `${styleLock}. ${base}`;
-  } else if (genre !== "general" && !new RegExp(styleLock.slice(0, 24), "i").test(base)) {
+  } else if (!new RegExp(styleLock.slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(base)) {
     base = `${styleLock}. ${base}`;
+  }
+  if (shotHint && !base.toLowerCase().includes(shotHint.slice(0, 12).toLowerCase())) {
+    base = `${shotHint}. ${base}`;
   }
   if (/no text|without text|no lettering|no speech bubble|illustration only/i.test(base)) {
     return `${base}. ${COMIC_IMAGE_NO_TEXT_SUFFIX}`;
@@ -97,8 +141,11 @@ export function normalizeComicPagesForGeneration(
   rawPages: ComicPage[],
   targetPageCount: number,
   genre: CoverGenre = "general",
+  stylePreset?: ComicStylePresetId,
+  layoutId: ComicLayoutId = "grid_4",
 ): ComicPage[] {
-  const fallbackPrompt = defaultPanelPrompt(genre);
+  const panelsPerPage = panelsPerPageForLayout(layoutId);
+  const fallbackPrompt = defaultPanelPrompt(genre, stylePreset);
   const safe = rawPages.filter((p) => p && typeof p === "object");
   if (targetPageCount < 1 || safe.length < 1) return [];
 
@@ -107,19 +154,41 @@ export function normalizeComicPagesForGeneration(
     const src = safe[Math.min(i, safe.length - 1)]!;
     let panels = [...(src.panels ?? [])]
       .filter((pan) => pan && typeof pan === "object")
-      .slice(0, PANELS_PER_PAGE)
-      .map((pan, j) => ({
-        scene: i * PANELS_PER_PAGE + j + 1,
-        caption: String(pan.caption ?? "").trim().slice(0, 120) || "……",
-        prompt: String(pan.prompt ?? "").trim() || fallbackPrompt,
-      }));
+      .slice(0, panelsPerPage)
+      .map((pan, j) => {
+        const text = normalizePanelTextFields(pan);
+        const sceneDescriptionEn = String(pan.sceneDescriptionEn ?? "").trim() || undefined;
+        const characterIds = Array.isArray(pan.characterIds)
+          ? pan.characterIds.filter((id) => typeof id === "string" && id.trim())
+          : undefined;
+        const locationId =
+          typeof pan.locationId === "string" && pan.locationId.trim()
+            ? pan.locationId.trim()
+            : undefined;
+        return {
+          scene: i * panelsPerPage + j + 1,
+          caption: text.caption,
+          prompt: String(pan.prompt ?? "").trim() || fallbackPrompt,
+          textType: text.textType,
+          ...(text.speaker ? { speaker: text.speaker } : {}),
+          shotType: text.shotType,
+          ...(text.sourceSegmentIndex !== undefined
+            ? { sourceSegmentIndex: text.sourceSegmentIndex }
+            : {}),
+          ...(characterIds?.length ? { characterIds } : {}),
+          ...(locationId ? { locationId } : {}),
+          ...(sceneDescriptionEn ? { sceneDescriptionEn } : {}),
+        };
+      });
 
-    while (panels.length < PANELS_PER_PAGE) {
+    while (panels.length < panelsPerPage) {
       const j = panels.length;
       panels.push({
-        scene: i * PANELS_PER_PAGE + j + 1,
+        scene: i * panelsPerPage + j + 1,
         caption: panels[j - 1]?.caption ? `${panels[j - 1]!.caption}（续）` : "……",
         prompt: panels[j - 1]?.prompt ?? fallbackPrompt,
+        textType: "narration",
+        shotType: "medium",
       });
     }
 
@@ -133,6 +202,7 @@ export function shouldUseLongComicPipeline(
   pageCount: number,
   lengthTier?: NovelLengthTier | null,
 ): boolean {
+  if (lengthTier === "children" || lengthTier === "short") return false;
   if (lengthTier === "long") return true;
   return pageCount >= PRODUCT.comic.directorPipelineMinPages;
 }
@@ -168,40 +238,76 @@ const COMIC_GENRE_GUIDE: Record<CoverGenre, string> = {
   general: "题材：与正文一致；若正文是现代都市则禁止画成古代或仙侠。",
 };
 
-export function buildComicSystemPrompt(pageCount: number, genre: CoverGenre = "general"): string {
-  const totalPanels = pageCount * PANELS_PER_PAGE;
+export function buildComicSystemPrompt(
+  pageCount: number,
+  genre: CoverGenre = "general",
+  stylePreset: ComicStylePresetId = "japanese_clean",
+  extras?: {
+    roster?: ComicCharacterRoster | null;
+    plotDigest?: ComicPlotDigest | null;
+    layoutId?: ComicLayoutId;
+  },
+): string {
+  const layoutId = extras?.layoutId ?? "grid_4";
+  const layout = getComicLayout(layoutId);
+  const panelsPerPage = layout.panelsPerPage;
+  const totalPanels = pageCount * panelsPerPage;
   const genreGuide = COMIC_GENRE_GUIDE[genre] ?? COMIC_GENRE_GUIDE.general;
-  return `你是一位擅长漫画分镜的 AI 艺术家。用户会提供小说或故事文本，你需要将其改编为漫画分镜脚本。
+  const preset = getComicStylePreset(stylePreset);
+  const rosterBlock = extras?.roster?.characters.length
+    ? `\n【锁定人设 — 全片不得变脸】\n${formatCharacterRosterForPrompt(extras.roster)}\n`
+    : "";
+  const digestBlock = extras?.plotDigest
+    ? `\n${formatPlotDigestForPrompt(extras.plotDigest)}\n`
+    : "";
+  return `你是一位擅长连载漫画分镜的 AI 艺术家。用户会提供**按段落编号**的小说节选，你必须逐段改编，禁止断章取义只抓关键词。
+
+${COMIC_MASTER_QUALITY_BLOCK}
+${digestBlock}${rosterBlock}
 
 ${genreGuide}
 
-目标：**尽量输出 ${pageCount} 页**，每页 **尽量 4 格**（理想共 ${totalPanels} 格），按阅读顺序从左到右、从上到下。若篇幅所限，至少给出 **1 页、每页至少 1 格**的有效分镜，我们会自动补足格子数。
+**全片画风（贯穿每一格 prompt）**：${preset.label} — ${preset.promptEn}
+
+目标：**尽量输出 ${pageCount} 页**，每页 **尽量 ${panelsPerPage} 格**（理想共 ${totalPanels} 格）。${layout.layoutGuideZh} 若篇幅所限，至少 **1 页、每页至少 1 格**。
 
 要求：
-1. 只输出 JSON 对象，不要 markdown 代码块
-2. 根对象包含 "pages" 数组，长度在 **1 到 ${pageCount}** 之间
-3. 每个 page 对象包含：
-   - "page": 页码（建议 1 起递增）
-   - "panels": **1～4** 个格的数组（尽量凑满 4 个）
-4. 每个 panel 包含：
-   - "scene": 全局格序号（从 1 递增）
-   - "caption": **中文**旁白或对白（宜 ≤40 字），**仅用于网页叠字显示，不要要求画进图里**
-   - "prompt": **英文**图像提示词（约 60–120 词），只描述**可见画面**：风格、角色外貌、动作、环境、光照；**禁止** dialogue、speech bubble text、subtitles、招牌上的可读文字
-5. 改编**中文**小说时：剧情与 caption 用中文；prompt 用英文描述画面，不要把中文台词写进 prompt 让模型画在图上
-6. 剧情覆盖起承转合，页与页之间叙事连贯；同一角色外貌服装保持一致
-7. 风格统一：国漫条漫或日系写实择一贯穿，且全片符合上述题材`;
+1. 只输出 JSON，不要 markdown
+2. 根对象 "pages" 长度 **1～${pageCount}**
+3. 每页 "panels" **1～${panelsPerPage}** 格
+4. 每格字段：
+   - scene：全书格序号（从 1 递增）
+   - sourceSegmentIndex：对应提供的 [段落#N] 的 N-1（整数，尽量填写）
+   - textType：dialogue | narration | inner | scene_note | time_place
+   - speaker：对白时说话人名（其它类型可省略）
+   - caption：中文叠字（≤48 字）
+   - shotType：wide | medium | close | over_shoulder | extreme_close
+   - prompt：英文 60–120 词，${preset.promptEn}，描述动作神态环境，**禁止**图内文字与气泡
+5. 约 **1 个段落对应 1～2 格**；优先还原该段动作、对话、情绪，不脑补原文没有的情节
+6. 开篇先用 narration 或 scene_note 交代场景，对话格用 dialogue + speaker`;
 }
 
-export function buildComicJsonSchema(pageCount: number) {
+export function buildComicJsonSchema(pageCount: number, layoutId: ComicLayoutId = "grid_4") {
+  const maxPanels = panelsPerPageForLayout(layoutId);
   const panelSchema = {
     type: "object",
     additionalProperties: false,
     properties: {
       scene: { type: "integer" },
+      sourceSegmentIndex: { type: "integer" },
+      textType: {
+        type: "string",
+        enum: ["dialogue", "narration", "inner", "scene_note", "time_place"],
+      },
+      speaker: { type: "string" },
       caption: { type: "string" },
+      shotType: {
+        type: "string",
+        enum: ["wide", "medium", "close", "over_shoulder", "extreme_close"],
+      },
       prompt: { type: "string" },
     },
-    required: ["scene", "caption", "prompt"],
+    required: ["scene", "textType", "caption", "shotType", "prompt"],
   };
 
   const pageSchema = {
@@ -212,7 +318,7 @@ export function buildComicJsonSchema(pageCount: number) {
       panels: {
         type: "array",
         minItems: 1,
-        maxItems: PANELS_PER_PAGE,
+        maxItems: maxPanels,
         items: panelSchema,
       },
     },

@@ -8,19 +8,328 @@ export type GameSoundscapeOptions = {
   blocky?: boolean;
 };
 
+export type MusicSection = "intro" | "build" | "drop" | "climax" | "victory" | "defeat";
+
 function profileBaseGain(profile: MusicProfile, blocky: boolean): number {
-  if (blocky) return 0.078;
-  if (profile === "minimal") return 0.034;
-  if (profile === "organic") return 0.064;
-  if (profile === "neon") return 0.068;
-  return 0.066;
+  if (blocky) return 0.072;
+  if (profile === "minimal") return 0.028;
+  if (profile === "organic") return 0.058;
+  if (profile === "neon") return 0.062;
+  return 0.060;
+}
+
+/** 五声音阶乘数（相对根音） */
+const PENTATONIC_MAJOR = [1, 1.125, 1.25, 1.5, 1.667, 2, 2.25];
+const PENTATONIC_MINOR = [1, 1.2, 1.25, 1.5, 1.8, 2, 2.4];
+const CYBER_SCALE = [1, 1.125, 1.26, 1.5, 1.68, 2, 2.25];
+const MINIMAL_INTERVALS = [1, 1.5, 2];
+
+function getScaleForProfile(profile: MusicProfile): number[] {
+  if (profile === "neon") return CYBER_SCALE;
+  if (profile === "minimal") return MINIMAL_INTERVALS;
+  if (profile === "organic") return PENTATONIC_MAJOR;
+  return PENTATONIC_MINOR;
+}
+
+function bpmForProfile(profile: MusicProfile): number {
+  if (profile === "neon") return 124;
+  if (profile === "pulse") return 108;
+  if (profile === "organic") return 88;
+  if (profile === "minimal") return 72;
+  return 96;
+}
+
+/** 程序化鼓点音序器 */
+class DrumSequencer {
+  private cleanups: SoundscapeCleanup[] = [];
+  private stepInterval: ReturnType<typeof setInterval> | null = null;
+  private step = 0;
+  private readonly bpm: number;
+  private readonly masterGain: GainNode;
+  private active = false;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    private readonly destination: AudioNode,
+    profile: MusicProfile,
+  ) {
+    this.bpm = bpmForProfile(profile);
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 0;
+    this.masterGain.connect(destination);
+  }
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    const stepMs = (60 / this.bpm / 4) * 1000; // 16分音符
+    this.stepInterval = setInterval(() => this.tick(), stepMs);
+  }
+
+  stop() {
+    this.active = false;
+    if (this.stepInterval) {
+      clearInterval(this.stepInterval);
+      this.stepInterval = null;
+    }
+    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+  }
+
+  /** 设置鼓点强度 0-1；0=静音，1=完整鼓组 */
+  setIntensity(intensity: number) {
+    const now = this.ctx.currentTime;
+    const target = Math.max(0, Math.min(1, intensity)) * 0.35;
+    this.masterGain.gain.setTargetAtTime(target, now, 0.3);
+  }
+
+  private tick() {
+    if (!this.active) return;
+    const s = this.step;
+    const beat = s % 16;
+
+    // Kick: 第0、4、10拍（变奏）
+    if (beat === 0 || beat === 4 || beat === 10) {
+      this.playKick();
+    }
+    // Snare: 第4、12拍
+    if (beat === 4 || beat === 12) {
+      this.playSnare();
+    }
+    // Hi-hat: 偶数拍，第14拍开镲
+    if (beat % 2 === 0) {
+      this.playHiHat(beat === 14 || beat === 6 ? "open" : "closed");
+    }
+    // 额外打击乐: climax 时第2、6、10、14拍加入 rimshot
+    if (this.masterGain.gain.value > 0.22 && (beat === 2 || beat === 6 || beat === 10 || beat === 14)) {
+      this.playRim();
+    }
+
+    this.step = s + 1;
+  }
+
+  private playKick() {
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+    gain.gain.setValueAtTime(0.55, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+    osc.start(t);
+    osc.stop(t + 0.2);
+
+    this.cleanups.push(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  private playSnare() {
+    const t = this.ctx.currentTime;
+    // Noise burst
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.15);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      const env = 1 - i / bufferSize;
+      data[i] = (Math.random() * 2 - 1) * env * env;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const ng = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 1200;
+
+    noise.connect(filter);
+    filter.connect(ng);
+    ng.connect(this.masterGain);
+
+    ng.gain.setValueAtTime(0.42, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    noise.start(t);
+    noise.stop(t + 0.16);
+
+    // Body tone
+    const osc = this.ctx.createOscillator();
+    const og = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(160, t + 0.08);
+    og.gain.setValueAtTime(0.18, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.connect(og);
+    og.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.12);
+
+    this.cleanups.push(() => {
+      try { noise.disconnect(); filter.disconnect(); ng.disconnect(); osc.disconnect(); og.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  private playHiHat(type: "open" | "closed") {
+    const t = this.ctx.currentTime;
+    const bufferSize = Math.floor(this.ctx.sampleRate * (type === "open" ? 0.3 : 0.06));
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 7500;
+    const ng = this.ctx.createGain();
+
+    noise.connect(filter);
+    filter.connect(ng);
+    ng.connect(this.masterGain);
+
+    const dur = type === "open" ? 0.22 : 0.04;
+    ng.gain.setValueAtTime(type === "open" ? 0.28 : 0.18, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    noise.start(t);
+    noise.stop(t + dur + 0.02);
+
+    this.cleanups.push(() => {
+      try { noise.disconnect(); filter.disconnect(); ng.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  private playRim() {
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(3200, t);
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.04);
+
+    this.cleanups.push(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  dispose() {
+    this.stop();
+    for (const c of this.cleanups) c();
+    this.cleanups.length = 0;
+    try { this.masterGain.disconnect(); } catch { /* ignore */ }
+  }
+}
+
+/** 旋律琶音器：五声音阶，按 section 切换模式 */
+class MelodicArpeggiator {
+  private cleanups: SoundscapeCleanup[] = [];
+  private stepInterval: ReturnType<typeof setInterval> | null = null;
+  private step = 0;
+  private readonly scale: number[];
+  private readonly rootHz: number;
+  private readonly bpm: number;
+  private readonly masterGain: GainNode;
+  private active = false;
+  private pattern: number[] = [0, 2, 4, 2, 1, 3, 5, 3]; // 默认琶音模式
+
+  constructor(
+    private readonly ctx: AudioContext,
+    private readonly destination: AudioNode,
+    profile: MusicProfile,
+    rootHz: number,
+  ) {
+    this.scale = getScaleForProfile(profile);
+    this.rootHz = rootHz;
+    this.bpm = bpmForProfile(profile);
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 0;
+    this.masterGain.connect(destination);
+  }
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    const stepMs = (60 / this.bpm / 2) * 1000; // 8分音符
+    this.stepInterval = setInterval(() => this.tick(), stepMs);
+  }
+
+  stop() {
+    this.active = false;
+    if (this.stepInterval) {
+      clearInterval(this.stepInterval);
+      this.stepInterval = null;
+    }
+    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2);
+  }
+
+  /** 设置琶音模式 */
+  setPattern(pattern: number[]) {
+    this.pattern = pattern.slice();
+    this.step = 0;
+  }
+
+  /** 设置旋律强度 0-1 */
+  setIntensity(intensity: number) {
+    const now = this.ctx.currentTime;
+    const target = Math.max(0, Math.min(1, intensity)) * 0.28;
+    this.masterGain.gain.setTargetAtTime(target, now, 0.4);
+  }
+
+  private tick() {
+    if (!this.active) return;
+    const idx = this.pattern[this.step % this.pattern.length] ?? 0;
+    const octave = Math.floor(this.step / this.pattern.length) % 2;
+    const mul = this.scale[idx % this.scale.length]! * (octave === 0 ? 1 : 2);
+    const freq = this.rootHz * mul;
+    this.playNote(freq);
+    this.step += 1;
+  }
+
+  private playNote(freq: number) {
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.14, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+
+    // 轻微 detune 增加厚度
+    osc.detune.setValueAtTime((Math.random() - 0.5) * 8, t);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.32);
+
+    this.cleanups.push(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  dispose() {
+    this.stop();
+    for (const c of this.cleanups) c();
+    this.cleanups.length = 0;
+    try { this.masterGain.disconnect(); } catch { /* ignore */ }
+  }
 }
 
 /**
- * 与主题一致的轻量程序化铺底（无外部音频素材）。
- * - 与用户蜂鸣共用 AudioContext；
- * - 尊重 prefers-reduced-motion（不播放铺底）；
- * - 支持动态紧张度 setTension() 与事件 triggerEvent() 响应游戏状态。
+ * 与主题一致的程序化音乐系统（无外部音频素材）。
+ * - 分层架构：铺底（drone）+ 鼓点（drums）+ 旋律（melody）
+ * - 按章节/阶段动态叠加层次
+ * - 击杀/事件时触发音乐 stinger
+ * - 尊重 prefers-reduced-motion（不播放铺底）
  */
 export class GameSoundscape {
   private cleanups: SoundscapeCleanup[] = [];
@@ -33,10 +342,15 @@ export class GameSoundscape {
   private lfoGain: GainNode | null = null;
   private lfoOsc: OscillatorNode | null = null;
 
+  // Drum and melody layers
+  private drumSequencer: DrumSequencer | null = null;
+  private melodicArp: MelodicArpeggiator | null = null;
+
   // Current dynamic state
   private currentTension: number;
   private tensionTarget: number;
   private tensionRampId: ReturnType<typeof setInterval> | null = null;
+  private currentSection: MusicSection = "intro";
 
   constructor(
     private readonly profile: MusicProfile,
@@ -87,7 +401,104 @@ export class GameSoundscape {
     const lfoTarget = lfoFreq + t * 0.32;
     this.lfoOsc.frequency.linearRampToValueAtTime(lfoTarget, now + rampTime);
 
+    // Drum layer: tension 越高鼓点越强
+    this.drumSequencer?.setIntensity(t);
+    // Melody layer: tension > 0.4 时旋律出现，> 0.7 时旋律更密集
+    this.melodicArp?.setIntensity(t > 0.4 ? (t - 0.4) / 0.6 : 0);
+
     this.currentTension = t;
+  }
+
+  /**
+   * 按章节切换音乐层次（intro → build → drop → climax → victory/defeat）
+   */
+  setSection(section: MusicSection) {
+    if (!this.started) return;
+    this.currentSection = section;
+
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+
+    // 更新琶音模式
+    if (this.melodicArp) {
+      const patterns: Record<MusicSection, number[]> = {
+        intro: [0, 2, 4, 2],
+        build: [0, 2, 4, 5, 4, 2],
+        drop: [0, 3, 5, 3, 1, 4, 6, 4],
+        climax: [0, 2, 3, 5, 4, 6, 5, 3, 1, 2],
+        victory: [0, 2, 4, 5, 4, 2, 0, 1, 2],
+        defeat: [0, 1, 0, 1],
+      };
+      this.melodicArp.setPattern(patterns[section] ?? patterns.intro);
+    }
+
+    // 根据章节调整鼓点和铺底
+    switch (section) {
+      case "intro":
+        this.drumSequencer?.setIntensity(0);
+        this.setTension(0.25);
+        break;
+      case "build":
+        this.drumSequencer?.setIntensity(0.45);
+        this.setTension(0.5);
+        break;
+      case "drop":
+        this.drumSequencer?.setIntensity(0.75);
+        this.setTension(0.72);
+        break;
+      case "climax":
+        this.drumSequencer?.setIntensity(1);
+        this.setTension(0.92);
+        break;
+      case "victory":
+        this.drumSequencer?.setIntensity(0.35);
+        this.triggerEvent("victory");
+        break;
+      case "defeat":
+        this.drumSequencer?.setIntensity(0);
+        this.triggerEvent("danger");
+        break;
+    }
+  }
+
+  /** 击杀/收集时短暂的音乐 stinger */
+  triggerKillStinger() {
+    if (!this.started) return;
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const scale = getScaleForProfile(this.profile);
+    // 随机选一个高音符做 stinger
+    const idx = Math.floor(Math.random() * 3) + 3; // 选较高音
+    const freq = this.rootHz * (scale[idx] ?? 2);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = this.profile === "neon" ? "sawtooth" : "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.08);
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.16);
+
+    this.cleanups.push(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+    });
+  }
+
+  /** 波次/关卡开始时升级音乐 */
+  triggerWaveStart(waveIndex: number, totalWaves: number) {
+    if (!this.started || totalWaves <= 0) return;
+    const ratio = waveIndex / totalWaves;
+    if (ratio < 0.25) this.setSection("intro");
+    else if (ratio < 0.5) this.setSection("build");
+    else if (ratio < 0.75) this.setSection("drop");
+    else this.setSection("climax");
   }
 
   /**
@@ -112,11 +523,17 @@ export class GameSoundscape {
       this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
       this.masterGain.gain.linearRampToValueAtTime(0.1, now + 0.4);
       this.lfoOsc.frequency.setValueAtTime(0.45, now);
+      // Boss 时鼓点变密集
+      this.drumSequencer?.setIntensity(1);
+      // 琶音加速
+      this.melodicArp?.setIntensity(0.85);
     } else if (type === "danger") {
       // Slow, heavy, low
       this.lfoOsc.frequency.linearRampToValueAtTime(0.06, now + 1.5);
       this.filterNode.frequency.linearRampToValueAtTime(800, now + 1.5);
       this.masterGain.gain.linearRampToValueAtTime(0.035, now + 1.5);
+      this.drumSequencer?.setIntensity(0.3);
+      this.melodicArp?.setIntensity(0);
     } else if (type === "victory") {
       // Bright fast sweep
       this.filterNode.frequency.cancelScheduledValues(now);
@@ -125,6 +542,8 @@ export class GameSoundscape {
       this.filterNode.frequency.linearRampToValueAtTime(3500, now + 1.2);
       this.masterGain.gain.linearRampToValueAtTime(0.08, now + 0.3);
       this.lfoOsc.frequency.linearRampToValueAtTime(0.5, now + 0.3);
+      this.drumSequencer?.setIntensity(0.25);
+      this.melodicArp?.setIntensity(0.6);
     } else if (type === "restore") {
       this.setTension(this.currentTension);
     }
@@ -155,6 +574,15 @@ export class GameSoundscape {
     filter.frequency.setValueAtTime(this.profile === "neon" ? 3200 + lvl * 800 : 2200 + lvl * 600, ctx.currentTime);
     filter.connect(master);
     this.filterNode = filter;
+
+    // 初始化鼓点和旋律层（连接到 filter 前）
+    this.drumSequencer = new DrumSequencer(ctx, filter, this.profile);
+    this.drumSequencer.start();
+    this.drumSequencer.setIntensity(0); // 开场静音
+
+    this.melodicArp = new MelodicArpeggiator(ctx, filter, this.profile, this.rootHz);
+    this.melodicArp.start();
+    this.melodicArp.setIntensity(0); // 开场静音
 
     const now = ctx.currentTime;
     const root = this.rootHz;
@@ -311,6 +739,11 @@ export class GameSoundscape {
       window.clearInterval(this.arpSteps);
       this.arpSteps = null;
     }
+    // Dispose drum and melody layers first
+    this.drumSequencer?.dispose();
+    this.drumSequencer = null;
+    this.melodicArp?.dispose();
+    this.melodicArp = null;
     for (let i = this.cleanups.length - 1; i >= 0; i -= 1) {
       this.cleanups[i]!();
     }

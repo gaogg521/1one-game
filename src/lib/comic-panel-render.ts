@@ -171,12 +171,14 @@ export async function renderComicPanels(
   });
 
   const director = opts?.director ?? doc.director;
+  const stylePreset = doc.stylePreset;
   const prompts = flat.map((f) =>
     buildPanelImagePrompt(f.panel, storyGenre, {
       sceneIndex: f.index,
       totalScenes,
       story: opts?.storyContext,
       director,
+      stylePreset,
     }),
   );
 

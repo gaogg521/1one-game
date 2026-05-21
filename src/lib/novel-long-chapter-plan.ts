@@ -6,7 +6,8 @@ import {
   type LongNovelSegmentPlan,
 } from "@/lib/novel-long-config";
 import { novelLengthConfig, type NovelLengthTier } from "@/lib/novel-length";
-import { formatNovelBibleForPrompt, type NovelBible } from "@/lib/novel-long-bible";
+import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
+import type { NovelBible } from "@/lib/novel-long-pipeline-types";
 import {
   buildNovelChapterPlanJsonSchema,
   type ChapterPlanItem,

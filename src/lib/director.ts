@@ -99,10 +99,10 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
   const wantCoin = wantEvents || /金币|奖励|掉落|宝箱|loot|gold/.test(p);
   const wantGoal = wantEvents || /目标|限时|守点|护送|冲刺|任务|objective/.test(p);
 
-  // 更高概率产出事件：默认至少 1 个；想要“成品感”时常见 2-3 个
-  const baseRoll = wantEvents ? 0.78 : 0.56;
-  const extraRoll = wantEvents ? 0.62 : 0.38;
-  const thirdRoll = wantEvents ? 0.44 : 0.22;
+  // 更高概率产出事件：默认至少 1 个；想要“成品感”时常见 3 个
+  const baseRoll = wantEvents ? 0.88 : 0.72;
+  const extraRoll = wantEvents ? 0.75 : 0.55;
+  const thirdRoll = wantEvents ? 0.58 : 0.35;
 
   // coinRain：塔防里变成“额外金币/奖励波”，其他模板是“高收益窗口”
   if (wantCoin && rnd(seed, 701) < baseRoll) {

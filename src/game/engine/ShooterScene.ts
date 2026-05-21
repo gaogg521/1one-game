@@ -500,9 +500,12 @@ export class ShooterScene extends Phaser.Scene {
     if (label && idx !== this.actIndex) {
       this.actIndex = idx;
       this.banner.show({ title: `${label}`, message: `第 ${this.wave} 波次`, ms: 2000 });
+      const sections = ["intro", "build", "drop", "climax"] as const;
+      this.soundscape?.setSection(sections[idx] ?? "intro");
     } else {
       this.banner.show({ title: `第 ${this.wave} 波`, message: isBossWave ? "首领来袭！" : isEliteWave ? "精英编队" : "编队入侵", ms: 1600 });
     }
+    this.soundscape?.triggerWaveStart(Math.max(0, this.wave - 1), Math.max(4, Math.ceil(this.winScore / 10)));
 
     if (isBossWave) {
       this.spawnBoss();
@@ -621,6 +624,7 @@ export class ShooterScene extends Phaser.Scene {
       this.totalKills += 1;
       this.score += (isBoss ? 10 : 1) * this.scoreMult;
       playBleep(isBoss ? "win" : "explode");
+      this.soundscape?.triggerKillStinger();
       this.refreshHud();
       if (this.totalKills >= this.winScore) {
         this.finish({ score: this.score, won: true });
@@ -936,5 +940,7 @@ export class ShooterScene extends Phaser.Scene {
 
     this.tickDirectorEvents();
     this.refreshHud();
+    const estTotalWaves = Math.max(4, Math.ceil(this.winScore / 12));
+    this.soundscape?.triggerWaveStart(Math.max(0, this.wave - 1), estTotalWaves);
   }
 }

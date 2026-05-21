@@ -10,7 +10,12 @@ export type BriefPreviewResult =
 export async function fetchCreativeBriefPreview(
   prompt: string,
   medium: BriefMedium,
-  options?: { skipLlm?: boolean; novelGenreId?: string; title?: string },
+  options?: {
+    skipLlm?: boolean;
+    novelGenreId?: string;
+    title?: string;
+    childrenTargetAge?: number;
+  },
 ): Promise<BriefPreviewResult> {
   if (medium === "game") {
     return { ok: false, error: "游戏扩写请使用创作台" };
@@ -30,6 +35,7 @@ export async function fetchCreativeBriefPreview(
       skipLlm: options?.skipLlm,
       novelGenreId: options?.novelGenreId,
       title: options?.title,
+      childrenTargetAge: options?.childrenTargetAge,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {

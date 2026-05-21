@@ -41,6 +41,10 @@ export async function POST(req: Request) {
     title?: string;
     pageCount?: number;
     lengthTier?: string;
+    stylePreset?: string;
+    readMode?: string;
+    chapterScope?: { fromChapter: number; toChapter: number; label?: string };
+    characterRoster?: unknown;
   };
 
   const encoder = new TextEncoder();
@@ -66,6 +70,16 @@ export async function POST(req: Request) {
             title: body.title,
             pageCount: body.pageCount,
             lengthTier: body.lengthTier,
+            stylePreset: body.stylePreset,
+            readMode: body.readMode === "full" ? "full" : "segment",
+            chapterScope: body.chapterScope
+              ? {
+                  fromChapter: body.chapterScope.fromChapter,
+                  toChapter: body.chapterScope.toChapter,
+                  label: body.chapterScope.label ?? "",
+                }
+              : null,
+            characterRoster: body.characterRoster as import("@/lib/comic-character-roster").ComicCharacterRoster | null,
           },
           send,
         );

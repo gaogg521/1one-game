@@ -5,6 +5,9 @@ import {
   formatNovelBriefOneLineSummary,
   mergeNovelBriefRevision,
 } from "@/lib/literary-brief/format-novel-brief";
+import { parseChildrenTargetAge } from "@/lib/children-age-length";
+import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
+import { llmExpandChildrenBrief } from "@/lib/literary-brief/llm-expand-children-brief";
 import { llmExpandNovelBrief } from "@/lib/literary-brief/llm-expand-novel";
 import { getNovelBriefPack } from "@/lib/literary-brief/novel-packs";
 import {
@@ -77,7 +80,14 @@ export async function expandNovelCreativeBrief(
   if (params.userRevision) brief = mergeNovelBriefRevision(brief, params.userRevision);
 
   if (!params.skipLlm) {
-    brief = await llmExpandNovelBrief(brief);
+    if (isChildrenGenreTag(params.genreId)) {
+      brief = await llmExpandChildrenBrief(
+        brief,
+        parseChildrenTargetAge(params.childrenTargetAge),
+      );
+    } else {
+      brief = await llmExpandNovelBrief(brief);
+    }
   }
 
   const augmentedPrompt = buildNovelPipelinePrompt(userPrompt, brief, params.userRevision);

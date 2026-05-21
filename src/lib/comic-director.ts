@@ -2,6 +2,8 @@ import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmJson } from "@/lib/llm";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getComicPanelStyleLock } from "@/lib/cover-genre";
+import { getComicStylePreset, type ComicStylePresetId } from "@/lib/comic-style-presets";
+import { COMIC_MASTER_QUALITY_BLOCK } from "@/lib/comic-generate-config";
 import { PRODUCT } from "@/lib/product-config";
 import {
   buildComicDirectorJsonSchema,
@@ -12,13 +14,16 @@ import {
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 
-const DIRECTOR_SYSTEM = `你是长篇漫画改编的「导演」。根据小说与设定，输出 JSON 导演包（ComicDirectorPack），锁定全片视觉一致性。
+const DIRECTOR_SYSTEM = `你是长篇漫画改编的「导演」。通读小说节选后输出 JSON 导演包（ComicDirectorPack），锁定全片视觉一致性。
+
+${COMIC_MASTER_QUALITY_BLOCK}
+
 要求：
-- characters：每人固定 id（char_1…）、appearanceEn/outfitEn 英文可视描述，后续分镜不得改脸型服装
+- characters：每人固定 id（char_1…）、appearanceEn/outfitEn 英文可视描述，整本不得改脸型服装
 - locations：场景 id（loc_1…）与 descriptionEn
-- pageBeats：恰好覆盖全书每一页的节拍（page 从 1 递增），keyEvents 写该页应发生的情节
-- visualStyleEn：全片画风英文（与题材一致）
-- taboos：禁止出现的视觉元素`;
+- pageBeats：恰好覆盖全书每一页，keyEvents 写该页应发生的**原文情节**（禁止脑补）
+- visualStyleEn：全片画风英文（必须与用户指定画风一致）
+- taboos：禁止网红厚涂、夸张二次元浓妆、图内可读文字`;
 
 function sampleNovelExcerpts(content: string, maxChars: number): string {
   const chapters = parseNovelChapters(content);
@@ -45,9 +50,11 @@ export function buildComicDirectorUserMessage(opts: {
   contentExcerpt: string;
   pageCount: number;
   genre: CoverGenre;
+  stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
 }): string {
-  const styleHint = getComicPanelStyleLock(opts.genre);
+  const preset = getComicStylePreset(opts.stylePreset);
+  const styleHint = `${preset.label}: ${preset.promptEn}`;
   const metaBlock = opts.novelMeta
     ? `\n【小说设定圣经（须遵守）】\n${formatNovelBibleForPrompt(opts.novelMeta.bible)}\n【章规划要点】\n${opts.novelMeta.chapterPlan.chapters
         .slice(0, 20)
@@ -72,9 +79,10 @@ export function fallbackComicDirectorPack(opts: {
   novelTitle: string;
   pageCount: number;
   genre: CoverGenre;
+  stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
 }): ComicDirectorPack {
-  const style = getComicPanelStyleLock(opts.genre);
+  const style = getComicStylePreset(opts.stylePreset).promptEn;
   const bible = opts.novelMeta?.bible;
   const chars =
     bible?.characters.slice(0, 4).map((c, i) => ({
@@ -136,6 +144,7 @@ export async function fetchComicDirectorPack(params: {
   novelContent: string;
   pageCount: number;
   genre: CoverGenre;
+  stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
 }): Promise<ComicDirectorPack> {
   const excerpt = sampleNovelExcerpts(
@@ -152,6 +161,7 @@ export async function fetchComicDirectorPack(params: {
       contentExcerpt: excerpt,
       pageCount: params.pageCount,
       genre: params.genre,
+      stylePreset: params.stylePreset,
       novelMeta: params.novelMeta,
     }),
     jsonSchema: buildComicDirectorJsonSchema(params.pageCount),
@@ -183,6 +193,7 @@ export async function fetchComicDirectorPack(params: {
     novelTitle: params.novelTitle,
     pageCount: params.pageCount,
     genre: params.genre,
+    stylePreset: params.stylePreset,
     novelMeta: params.novelMeta,
   });
 }

@@ -56,6 +56,10 @@ export async function POST(req: Request) {
     typeof body === "object" && body !== null && "title" in body
       ? String((body as { title?: unknown }).title ?? "").trim() || undefined
       : undefined;
+  const childrenTargetAge =
+    typeof body === "object" && body !== null && "childrenTargetAge" in body
+      ? Number((body as { childrenTargetAge?: unknown }).childrenTargetAge)
+      : undefined;
 
   try {
     if (medium === "novel" || medium === "comic") {
@@ -70,6 +74,7 @@ export async function POST(req: Request) {
         title,
         genreId: novelGenreId,
         skipLlm,
+        childrenTargetAge: Number.isFinite(childrenTargetAge) ? childrenTargetAge : undefined,
       });
       const checked = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
       if (!checked.success) {
