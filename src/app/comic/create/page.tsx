@@ -133,8 +133,10 @@ export default function ComicCreatePage() {
         setError(r.error);
         return;
       }
-      setCreativeBrief(r.brief);
-      setCreativeBriefSummary(r.oneLineSummary);
+      if (r.kind === "novel") {
+        setCreativeBrief(r.brief);
+        setCreativeBriefSummary(r.oneLineSummary);
+      }
     } finally {
       setBriefPreviewBusy(false);
     }

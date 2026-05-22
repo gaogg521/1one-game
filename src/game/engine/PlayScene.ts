@@ -16,6 +16,9 @@ type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
 
 export class PlayScene extends Phaser.Scene {
+  public backgroundUrl: string | null = null;
+  public projectId: string | null = null;
+
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
@@ -149,11 +152,42 @@ export class PlayScene extends Phaser.Scene {
   /** survivor：喘息窗口（低压段） */
   private breathingRoomUntil = 0;
 
+  // ── Boss 系统 ──
+  private bossActive = false;
+  private bossSprite: Phaser.Physics.Arcade.Image | null = null;
+  private bossHp = 0;
+  private bossMaxHp = 0;
+  private bossPhase = 0;
+  private bossHealthBar: Phaser.GameObjects.Graphics | null = null;
+  private bossHealthBarBg: Phaser.GameObjects.Graphics | null = null;
+  private bossAttackUntil = 0;
+  private bossAttackTimer: Phaser.Time.TimerEvent | null = null;
+  private bossRageUntil = 0;
+  private bossInvulnUntil = 0;
+  private bossOrbs!: Phaser.Physics.Arcade.Group;
+  /** 敌兵类型：0=normal 1=fast 2=heavy */
+  private hazardType = 0;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlayScene");
     this.spec = spec;
     this.onEnd = onEnd;
     this.soundscape = soundscape ?? null;
+  }
+
+  preload() {
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
+    // 尝试加载文生图 sprite（不存在时静默回退几何体）
+    if (this.projectId) {
+      const base = `/game-sprites/${this.projectId}`;
+      this.load.image("texPlayer", `${base}/player.png`);
+      this.load.image("texHazard", `${base}/hazard.png`);
+      this.load.image("texGem", `${base}/gem.png`);
+      this.load.image("texPower", `${base}/power.png`);
+      this.load.image("texBoss", `${base}/boss.png`);
+    }
   }
 
   create() {
@@ -172,6 +206,11 @@ export class PlayScene extends Phaser.Scene {
       addMinecraftBackdrop(this);
     } else {
       this.addStarfield();
+    }
+
+    // 文生图背景（异步生成，不存在时静默回退）
+    if (this.backgroundUrl && this.textures.exists("bgTex")) {
+      this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(0.12);
     }
 
     this.add
@@ -332,6 +371,52 @@ export class PlayScene extends Phaser.Scene {
       g.generateTexture("texPower", 26, 26); g.destroy();
     }
 
+    // Boss: larger menacing version, red-tinted
+    if (!this.textures.exists("texBoss")) {
+      const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+      const hd = shiftCol(hc, -40);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      const w = 64, h2 = 64;
+      g.fillStyle(0x000000, 0.35); g.fillEllipse(w / 2, h2 - 4, w - 8, 14);
+      // Horns
+      g.fillStyle(0x330000, 0.7);
+      g.fillTriangle(12, 0, 0, 28, 24, 20);
+      g.fillTriangle(w - 12, 0, w, 28, w - 24, 20);
+      // Body
+      g.lineStyle(3, hd, 1); g.strokeRoundedRect(10, 16, w - 20, h2 - 26, 12);
+      g.fillStyle(hc, 1); g.fillRoundedRect(10, 16, w - 20, h2 - 26, 12);
+      // Glowing eyes
+      g.fillStyle(0xff3333, 1); g.fillCircle(18, 30, 6); g.fillCircle(w - 18, 30, 6);
+      g.fillStyle(0xffff00, 0.85); g.fillCircle(18, 30, 2.5); g.fillCircle(w - 18, 30, 2.5);
+      // Scar
+      g.lineStyle(2, 0x440000, 0.7);
+      g.lineBetween(28, 20, 36, 28);
+      g.generateTexture("texBoss", w, h2); g.destroy();
+    }
+
+    // Enemy variety: fast zigzag hazard (small, angular)
+    if (!this.textures.exists("texHazardFast")) {
+      const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(hc, 0.85);
+      g.fillTriangle(12, 0, 24, 22, 0, 22);
+      g.fillStyle(0xff3333, 0.7); g.fillCircle(12, 12, 3);
+      g.generateTexture("texHazardFast", 24, 24); g.destroy();
+    }
+
+    // Enemy variety: heavy tank hazard (big, slow)
+    if (!this.textures.exists("texHazardHeavy")) {
+      const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
+      const hd = shiftCol(hc, -60);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x000000, 0.2); g.fillEllipse(19, 35, 32, 10);
+      g.lineStyle(3, hd, 1); g.strokeRoundedRect(2, 4, 34, 30, 8);
+      g.fillStyle(hc, 0.9); g.fillRoundedRect(2, 4, 34, 30, 8);
+      g.fillStyle(0x440000, 0.5); g.fillRoundedRect(5, 8, 28, 12, 4);
+      g.fillStyle(0xff3333, 0.7); g.fillCircle(10, 16, 3.5); g.fillCircle(28, 16, 3.5);
+      g.generateTexture("texHazardHeavy", 38, 38); g.destroy();
+    }
+
     const startX = width / 2;
     const startY =
       this.spec.templateId === "collector" ? height / 2 : height - this.pad;
@@ -344,6 +429,7 @@ export class PlayScene extends Phaser.Scene {
     this.hazards = this.physics.add.group();
     this.collectibles = this.physics.add.group();
     this.powerups = this.physics.add.group();
+    this.bossOrbs = this.physics.add.group();
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -361,6 +447,15 @@ export class PlayScene extends Phaser.Scene {
       if (this.finished) return;
       if (this.spec.templateId === "survivor" && this.time.now < this.invulnUntil) return;
       const hazard = h as Phaser.Physics.Arcade.Image;
+      // 重型敌人需要多次击杀
+      const hp: number = hazard.getData("hp") ?? 1;
+      if (hp > 1 && this.shieldCharges < 1) {
+        hazard.setData("hp", hp - 1);
+        juiceFlash(this, { r: 255, g: 100, b: 80 }, { durationMs: 70 });
+        hazard.setTint(0xff8888);
+        this.time.delayedCall(120, () => { if (hazard.active) hazard.clearTint(); });
+        return;
+      }
       hazard.destroy();
       if (this.shieldCharges > 0) {
         this.shieldCharges -= 1;
@@ -447,6 +542,22 @@ export class PlayScene extends Phaser.Scene {
       delay: Math.max(240, Math.floor(interval * (1 - this.intensity * 0.18))),
       loop: true,
       callback: () => this.spawnWave(),
+    });
+
+    // Boss orb hits player: damages boss if shield active
+    this.physics.add.overlap(this.player, this.bossOrbs, (_p, orb) => {
+      if (this.finished || !this.bossActive) return;
+      const o = orb as Phaser.Physics.Arcade.Image;
+      o.destroy();
+      if (this.shieldCharges > 0) {
+        this.shieldCharges -= 1;
+        this.fxShield();
+        this.damageBoss();
+        this.refreshHud();
+      } else {
+        this.fxDamage();
+        this.hitHazard();
+      }
     });
 
     this.powerupTimer = this.time.addEvent({
@@ -750,18 +861,7 @@ export class PlayScene extends Phaser.Scene {
 
     if (ev.type === "miniBoss") {
       this.miniBossUntil = this.eventUntil;
-      this.soundscape?.triggerEvent("boss");
-      juiceShake(this, { durationMs: 380, intensity: 0.018 });
-      const x = Phaser.Math.Between(90, this.scale.width - 90);
-      const h = this.hazards.create(x, -60, "texHazard");
-      h.setDepth(6);
-      h.setScale(1.7);
-      h.setAlpha(0.92);
-      h.setVelocity(Phaser.Math.Between(-60, 60), Math.floor(this.spec.gameplay.hazardSpeed * (1.35 + strength * 0.25)));
-      const body = h.body as Phaser.Physics.Arcade.Body;
-      body.setCollideWorldBounds(true);
-      body.setBounce(1, 1);
-      body.setAngularVelocity(Phaser.Math.Between(-220, 220));
+      this.spawnBoss(strength);
       return;
     }
 
@@ -856,11 +956,24 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private spawnHazard(x: number, y: number) {
-    const h = this.hazards.create(x, y, "texHazard");
-    h.setDepth(4);
+    // 敌兵多样性：normal / fast / heavy
+    const roll = Phaser.Math.Between(0, 100);
     const mods = this.getActModifiers();
-    const zigzag = mods.includes("zigzag");
     const finale = mods.includes("finale");
+    let texKey = "texHazard";
+    let scale = 1;
+    let speedMod = 1;
+
+    if (finale && roll < 30) {
+      texKey = "texHazardHeavy"; scale = 1.15; speedMod = 0.7;
+    } else if (this.intensity > 0.5 && roll < 25) {
+      texKey = "texHazardFast"; scale = 0.75; speedMod = 1.45;
+    }
+
+    const h = this.hazards.create(x, y, texKey);
+    h.setDepth(4);
+    h.setScale(scale);
+    const zigzag = mods.includes("zigzag");
     const collectorMode = this.spec.templateId === "collector";
 
     h.setVelocity(
@@ -875,7 +988,7 @@ export class PlayScene extends Phaser.Scene {
         ? finale
           ? Phaser.Math.Between(-140, 140)
           : Phaser.Math.Between(-90, 90)
-        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * (finale ? 0.34 : 0.22))),
+        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * (finale ? 0.34 : 0.22)) * speedMod),
     );
     const body = h.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
@@ -885,6 +998,10 @@ export class PlayScene extends Phaser.Scene {
     } else if (finale) {
       h.setScale(1.12);
       h.setAlpha(0.96);
+    }
+    // 重型敌人更多血量（需多次击杀）
+    if (texKey === "texHazardHeavy") {
+      h.setData("hp", 2);
     }
   }
 
@@ -1153,6 +1270,7 @@ export class PlayScene extends Phaser.Scene {
 
   update() {
     if (this.finished) return;
+    this.updateBoss();
     if (this.spec.templateId === "survivor") {
       this.maybeStartSurvivorLastStandByProgress();
       this.tickSurvivorLastStandEnd();
@@ -1387,4 +1505,226 @@ export class PlayScene extends Phaser.Scene {
       this.finish({ score: this.score, won: true });
     }
   }
+
+  // ═══════════════ Boss 系统 ═══════════════
+
+  private spawnBoss(strength: number) {
+    if (this.bossActive) return;
+    this.bossActive = true;
+    const { width } = this.scale;
+    this.bossMaxHp = 3 + Math.floor(strength * 3);
+    this.bossHp = this.bossMaxHp;
+    this.bossPhase = 0;
+
+    this.soundscape?.triggerEvent("boss");
+    juiceShake(this, { durationMs: 500, intensity: 0.025 });
+    this.startDangerVignette();
+
+    const x = Phaser.Math.Between(120, width - 120);
+    this.bossSprite = this.physics.add.image(x, -80, "texBoss");
+    this.bossSprite.setDepth(6);
+    this.bossSprite.setScale(2.2);
+    this.bossSprite.setAlpha(0.95);
+    this.bossSprite.setVelocity(0, 60);
+    (this.bossSprite.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    (this.bossSprite.body as Phaser.Physics.Arcade.Body).setBounce(0.6, 0.6);
+    this.bossSprite.setData("type", "boss");
+
+    // Health bar
+    this.bossHealthBarBg = this.add.graphics().setDepth(7);
+    this.bossHealthBar = this.add.graphics().setDepth(8);
+
+    this.banner.show({ title: "⚠ BOSS 降临", message: `精英首领 · 击败它以获得大量分数`, ms: 2000 });
+
+    // Boss attack cycle: every 2-3 seconds
+    this.bossAttackTimer = this.time.addEvent({
+      delay: 2000 + Math.random() * 1000,
+      callback: () => this.bossAttack(),
+      loop: true,
+    });
+
+    playBleep("pickup");
+  }
+
+  private bossAttack() {
+    if (!this.bossActive || !this.bossSprite || this.finished) return;
+    const boss = this.bossSprite;
+    const p = this.player;
+    const now = this.time.now;
+
+    if (this.bossHp <= 0) return;
+
+    // Phase-based behavior
+    if (this.bossPhase === 0) {
+      // Phase 1: Shoot aimed projectile toward player
+      const angle = Phaser.Math.Angle.Between(boss.x, boss.y, p.x, p.y);
+      const orb = this.bossOrbs.create(boss.x, boss.y, "texGem");
+      orb.setDepth(5);
+      orb.setScale(0.6);
+      orb.setTint(0xff4444);
+      orb.setVelocity(Math.cos(angle) * 280, Math.sin(angle) * 280);
+      this.time.delayedCall(4000, () => { if (orb.active) orb.destroy(); });
+    } else if (this.bossPhase === 1) {
+      // Phase 2: Burst fire - multiple orbs
+      for (let i = 0; i < 3; i++) {
+        const angle = Phaser.Math.Angle.Between(boss.x, boss.y, p.x, p.y) + (i - 1) * 0.35;
+        const orb = this.bossOrbs.create(boss.x, boss.y, "texGem");
+        orb.setDepth(5);
+        orb.setScale(0.5);
+        orb.setTint(0xff6644);
+        orb.setVelocity(Math.cos(angle) * 320, Math.sin(angle) * 320);
+        this.time.delayedCall(3500, () => { if (orb.active) orb.destroy(); });
+      }
+    } else {
+      // Phase 3: Rage - spawn minions + charge at player
+      for (let i = 0; i < 2; i++) {
+        this.spawnHazard(Phaser.Math.Between(40, this.scale.width - 40), -20);
+      }
+      // Charge toward player
+      const angle = Phaser.Math.Angle.Between(boss.x, boss.y, p.x, p.y);
+      boss.setVelocity(Math.cos(angle) * 200, Math.sin(angle) * 200);
+      this.time.delayedCall(800, () => {
+        if (boss.active) {
+          boss.setVelocity(Phaser.Math.Between(-60, 60), 60);
+        }
+      });
+    }
+
+    // Speed up attack timer as boss weakens
+    if (this.bossAttackTimer) {
+      this.bossAttackTimer.remove();
+    }
+    const delay = this.bossPhase === 2 ? 1200 + Math.random() * 600 : 2000 + Math.random() * 1000;
+    this.bossAttackTimer = this.time.addEvent({
+      delay,
+      callback: () => this.bossAttack(),
+      loop: false,
+    });
+  }
+
+  private damageBoss() {
+    if (!this.bossActive || !this.bossSprite || this.time.now < this.bossInvulnUntil) return;
+    this.bossHp -= 1;
+    this.bossInvulnUntil = this.time.now + 400;
+
+    if (this.bossHp <= 0) {
+      this.killBoss();
+      return;
+    }
+
+    // Phase check
+    const ratio = this.bossHp / this.bossMaxHp;
+    const newPhase = ratio > 0.6 ? 0 : ratio > 0.3 ? 1 : 2;
+    if (newPhase !== this.bossPhase) {
+      this.bossPhase = newPhase;
+      juiceShake(this, { durationMs: 350, intensity: 0.02 });
+      juiceFlash(this, { r: 255, g: 80, b: 80 }, { durationMs: 150 });
+      (this.bossSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      const label = newPhase === 1 ? "BOSS 发怒！" : "BOSS 狂暴！！";
+      this.banner.show({ title: label, message: "攻击更猛烈了！", ms: 1400 });
+      this.soundscape?.triggerEvent("danger");
+      // Rage aura: pulse red
+      this.bossSprite.setTint(newPhase === 1 ? 0xff8888 : 0xff3333);
+      this.bossSprite.setScale(newPhase === 2 ? 2.5 : 2.3);
+    }
+
+    // Damage feedback
+    juiceFlash(this, { r: 255, g: 200, b: 50 }, { durationMs: 80 });
+    juiceShake(this, { durationMs: 100, intensity: 0.008 });
+    this.bossSprite.setTint(0xffffff);
+    this.time.delayedCall(80, () => {
+      if (this.bossSprite?.active) {
+        this.bossSprite.clearTint();
+        if (this.bossPhase === 1) this.bossSprite.setTint(0xff8888);
+        if (this.bossPhase === 2) this.bossSprite.setTint(0xff3333);
+      }
+    });
+
+    // Score for damaging boss
+    this.score += 3;
+    const floater = this.add.text(this.bossSprite.x, this.bossSprite.y - 30, "-1 ❤", {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "16px",
+      color: "#ff4444",
+    }).setOrigin(0.5).setDepth(35);
+    this.tweens.add({
+      targets: floater, y: floater.y - 30, alpha: 0, duration: 600, ease: "Quad.Out",
+      onComplete: () => floater.destroy(),
+    });
+
+    this.refreshHud();
+  }
+
+  private killBoss() {
+    if (!this.bossActive || !this.bossSprite) return;
+    this.bossActive = false;
+    const bx = this.bossSprite.x, by = this.bossSprite.y;
+
+    // Death explosion
+    juiceShake(this, { durationMs: 600, intensity: 0.035 });
+    juiceFlash(this, { r: 255, g: 150, b: 50 }, { durationMs: 300 });
+    juiceBurst(this, bx, by, "#ff6600", 24);
+    playBleep("pickup");
+
+    this.bossSprite.destroy();
+    this.bossSprite = null;
+
+    if (this.bossHealthBar) { this.bossHealthBar.destroy(); this.bossHealthBar = null; }
+    if (this.bossHealthBarBg) { this.bossHealthBarBg.destroy(); this.bossHealthBarBg = null; }
+    if (this.bossAttackTimer) { this.bossAttackTimer.remove(); this.bossAttackTimer = null; }
+
+    // Stop danger vignette
+    if (this.dangerVignette) {
+      this.tweens.killTweensOf(this.dangerVignette);
+      this.dangerVignette.setAlpha(0);
+    }
+
+    // Big score reward
+    const bonus = 15 + this.bossMaxHp * 5;
+    this.score += bonus;
+    const floater = this.add.text(bx, by - 50, `BOSS 击破 +${bonus}`, {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "20px",
+      color: "#ffcc00",
+      fontStyle: "bold",
+    }).setOrigin(0.5).setDepth(35);
+    this.tweens.add({
+      targets: floater, y: floater.y - 40, alpha: 0, duration: 1200, ease: "Quad.Out",
+      onComplete: () => floater.destroy(),
+    });
+
+    this.banner.show({ title: "BOSS 击破！", message: `获得 +${bonus} 分`, ms: 2200 });
+    this.refreshHud();
+
+    // Clean up remaining boss orbs
+    this.bossOrbs.clear(true, true);
+
+    if (this.score >= this.winScore) {
+      this.time.delayedCall(600, () => this.finish({ score: this.score, won: true }));
+    }
+  }
+
+  private drawBossHealthBar() {
+    if (!this.bossActive || !this.bossSprite || !this.bossHealthBar || !this.bossHealthBarBg) return;
+    const boss = this.bossSprite;
+    const barW = 80, barH = 8;
+    const x = boss.x - barW / 2, y = boss.y - 50;
+    const ratio = Math.max(0, this.bossHp / this.bossMaxHp);
+    const color = ratio > 0.5 ? 0x44ff44 : ratio > 0.25 ? 0xffaa00 : 0xff3333;
+
+    this.bossHealthBarBg.clear();
+    this.bossHealthBarBg.fillStyle(0x000000, 0.5);
+    this.bossHealthBarBg.fillRoundedRect(x - 1, y - 1, barW + 2, barH + 2, 3);
+
+    this.bossHealthBar.clear();
+    this.bossHealthBar.fillStyle(color, 0.9);
+    this.bossHealthBar.fillRoundedRect(x, y, barW * ratio, barH, 3);
+  }
+
+  private updateBoss() {
+    if (!this.bossActive) return;
+    this.drawBossHealthBar();
+  }
+
+  // ═══════════════ Boss 系统 END ═══════════════
 }

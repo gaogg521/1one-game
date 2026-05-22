@@ -2,6 +2,14 @@ import { promptHasCreativeBriefBlock } from "@/lib/creative-brief/brief-markers"
 import type { BriefMedium } from "@/lib/creative-brief/types";
 import { PRODUCT } from "@/lib/product-config";
 import {
+  expandChildrenCreativeBrief,
+  parseChildrenCreativeBrief,
+  buildChildrenPipelinePrompt,
+  formatChildrenBriefOneLineSummary,
+  type ChildrenBriefUserRevision,
+  type ChildrenCreativeBrief,
+} from "@/lib/literary-brief";
+import {
   expandNovelCreativeBrief,
   parseNovelCreativeBrief,
   buildNovelPipelinePrompt,
@@ -9,23 +17,31 @@ import {
   type NovelBriefUserRevision,
   type NovelCreativeBrief,
 } from "@/lib/literary-brief";
+import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
 
 export type ResolveMediaBriefOptions = {
   skipLlm?: boolean;
   referenceSnippet?: string;
-  userRevision?: NovelBriefUserRevision | null;
-  preExpanded?: NovelCreativeBrief | null;
-  /** 小说类型标签 id（transmigration / wuxia …） */
+  userRevision?: NovelBriefUserRevision | ChildrenBriefUserRevision | null;
+  preExpanded?: NovelCreativeBrief | ChildrenCreativeBrief | null;
   novelGenreId?: string;
   title?: string;
   childrenTargetAge?: number;
 };
 
-export type MediaBriefResult = {
-  brief: NovelCreativeBrief;
-  augmentedPrompt: string;
-  oneLineSummary: string;
-};
+export type MediaBriefResult =
+  | {
+      kind: "novel";
+      brief: NovelCreativeBrief;
+      augmentedPrompt: string;
+      oneLineSummary: string;
+    }
+  | {
+      kind: "children";
+      brief: ChildrenCreativeBrief;
+      augmentedPrompt: string;
+      oneLineSummary: string;
+    };
 
 function briefExpandEnabled(medium: BriefMedium): boolean {
   if (medium === "novel") return PRODUCT.novel.creativeBriefExpand;
@@ -33,7 +49,7 @@ function briefExpandEnabled(medium: BriefMedium): boolean {
   return false;
 }
 
-/** 小说 / 漫画：文学创意构思扩写（不使用游戏题材包） */
+/** 小说 / 漫画：文学创意构思扩写 */
 export async function resolveMediaCreativeBrief(
   prompt: string,
   medium: BriefMedium,
@@ -45,13 +61,54 @@ export async function resolveMediaCreativeBrief(
   if (trimmed.length < 2) return null;
   if (!briefExpandEnabled(medium)) return null;
 
-  const pre = options?.preExpanded;
-  if (pre) {
-    const brief = parseNovelCreativeBrief(pre) ?? pre;
+  const isChildren = isChildrenGenreTag(options?.novelGenreId);
+
+  if (isChildren) {
+    const pre =
+      options?.preExpanded != null
+        ? parseChildrenCreativeBrief(options.preExpanded) ?? undefined
+        : undefined;
+    if (pre) {
+      const rev = options?.userRevision as ChildrenBriefUserRevision | null | undefined;
+      return {
+        kind: "children",
+        brief: pre,
+        augmentedPrompt: buildChildrenPipelinePrompt(trimmed, pre, rev),
+        oneLineSummary: formatChildrenBriefOneLineSummary(pre),
+      };
+    }
+    if (promptHasCreativeBriefBlock(trimmed, medium)) return null;
+
+    const result = await expandChildrenCreativeBrief({
+      prompt: trimmed,
+      title: options?.title,
+      childrenTargetAge: options?.childrenTargetAge,
+      skipLlm: options?.skipLlm,
+      userRevision: options?.userRevision as ChildrenBriefUserRevision | null | undefined,
+    });
     return {
-      brief,
-      augmentedPrompt: buildNovelPipelinePrompt(trimmed, brief, options?.userRevision),
-      oneLineSummary: formatNovelBriefOneLineSummary(brief),
+      kind: "children",
+      brief: result.brief,
+      augmentedPrompt: result.augmentedPrompt,
+      oneLineSummary: result.oneLineSummary,
+    };
+  }
+
+  const preNovel =
+    options?.preExpanded != null
+      ? parseNovelCreativeBrief(options.preExpanded) ??
+        (parseChildrenCreativeBrief(options.preExpanded)
+          ? null
+          : (options.preExpanded as NovelCreativeBrief))
+      : undefined;
+
+  if (preNovel) {
+    const rev = options?.userRevision as NovelBriefUserRevision | null | undefined;
+    return {
+      kind: "novel",
+      brief: preNovel,
+      augmentedPrompt: buildNovelPipelinePrompt(trimmed, preNovel, rev),
+      oneLineSummary: formatNovelBriefOneLineSummary(preNovel),
     };
   }
 
@@ -62,18 +119,17 @@ export async function resolveMediaCreativeBrief(
     title: options?.title,
     genreId: options?.novelGenreId,
     skipLlm: options?.skipLlm,
-    userRevision: options?.userRevision,
-    childrenTargetAge: options?.childrenTargetAge,
+    userRevision: options?.userRevision as NovelBriefUserRevision | null | undefined,
   });
 
   return {
+    kind: "novel",
     brief: result.brief,
     augmentedPrompt: result.augmentedPrompt,
     oneLineSummary: result.oneLineSummary,
   };
 }
 
-/** 漫画：从全文或独立创意字段提取用于扩写的一句话 */
 export function extractComicCreativePitch(content: string, creativePrompt?: string): string {
   const explicit = creativePrompt?.trim();
   if (explicit && explicit.length >= 2) return explicit.slice(0, 2000);

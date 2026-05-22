@@ -11,10 +11,10 @@ type Props = {
   disabled?: boolean;
 };
 
-/** 儿童短篇：按目标读者年龄选择正文字数上限 */
+/** 儿童短篇：五档读者年龄（字数与知识点侧重不同） */
 export function ChildrenAgePicker({ value, onChange, disabled }: Props) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {CHILDREN_AGE_LENGTH_OPTIONS.map((opt) => {
         const selected = value === opt.age;
         return (
@@ -30,7 +30,10 @@ export function ChildrenAgePicker({ value, onChange, disabled }: Props) {
             }`}
           >
             <span className="block text-sm font-semibold">{opt.label}</span>
-            <span className="mt-0.5 block text-[11px] text-[var(--gc-muted)]">约 {opt.maxChars} 字</span>
+            <span className="mt-0.5 block text-[11px] text-[var(--gc-muted)]">{opt.stage}</span>
+            <span className="mt-0.5 block text-[10px] text-[var(--gc-text-faint)]">
+              正文 {opt.charRangeLabel}
+            </span>
           </button>
         );
       })}

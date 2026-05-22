@@ -11,7 +11,9 @@ import { NOVEL_CONTINUE_CHAPTER_PRESETS } from "@/lib/novel-continue-options";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
 import { PRODUCT } from "@/lib/product-config";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
-import { loadNovelCreativeBrief } from "@/lib/novel-creative-brief-db";
+import { loadCreativeBriefForNovel } from "@/lib/novel-creative-brief-db";
+import { isChildrenNovelTier } from "@/lib/novel-length";
+import type { NovelLengthTier } from "@/lib/novel-length";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -31,7 +33,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
   const pipelineMeta = await loadNovelGenerationMeta(id);
-  const creativeBrief = isOwner ? await loadNovelCreativeBrief(id) : null;
+  const creativeBrief = isOwner ? await loadCreativeBriefForNovel(id) : null;
+  const briefKind =
+    creativeBrief && isChildrenNovelTier(row.lengthTier as NovelLengthTier)
+      ? ("children" as const)
+      : creativeBrief
+        ? ("novel" as const)
+        : null;
   const continuation = assessNovelContinuation({
     lengthTier: row.lengthTier,
     content: row.content,
@@ -65,7 +73,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
       polishDefault: PRODUCT.novel.longSegmented.polishAfterSegment,
       comics: row.comics,
     },
-    ...(creativeBrief ? { creativeBrief } : {}),
+    ...(creativeBrief ? { creativeBrief, briefKind } : {}),
   });
 }
 

@@ -12,6 +12,10 @@ const GamePlayerInner = dynamic(() => import("@/components/GamePlayerInner"), {
   ),
 });
 
-export function GamePlayer(props: { spec: GameSpec; coverCapture?: { projectId: string } | null }) {
+export function GamePlayer(props: {
+  spec: GameSpec;
+  coverCapture?: { projectId: string } | null;
+  projectId?: string;
+}) {
   return <GamePlayerInner {...props} />;
 }

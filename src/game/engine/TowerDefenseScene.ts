@@ -266,6 +266,9 @@ type TowerSlot = {
 };
 
 export class TowerDefenseScene extends Phaser.Scene {
+  public backgroundUrl: string | null = null;
+  public projectId: string | null = null;
+
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
@@ -533,6 +536,16 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   preload() {
     /* 参考图改在 create() 中异步灌入 textures，避免 load.image 对部分 data URL 无效 */
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
+    if (this.projectId) {
+      const base = `/game-sprites/${this.projectId}`;
+      this.load.image("texPlayer", `${base}/player.png`);
+      this.load.image("texHazard", `${base}/hazard.png`);
+      this.load.image("texGem", `${base}/gem.png`);
+      this.load.image("texBoss", `${base}/boss.png`);
+    }
   }
 
   create() {
@@ -651,6 +664,12 @@ export class TowerDefenseScene extends Phaser.Scene {
       for (const pt of points) { gRoad.fillStyle(0x7c5233, 0.45); gRoad.fillCircle(pt.x, pt.y, 19); }
     } else {
       this.drawGridMap(points, w, h);
+    }
+
+    // 文生图背景
+    if (!bgKey && this.backgroundUrl && this.textures.exists("bgTex")) {
+      const amb = this.add.image(w / 2, h / 2, "bgTex").setDepth(-17).setAlpha(0.12);
+      amb.setScale(Math.max(w / amb.width, h / amb.height));
     }
 
     /* ─── 起点 / 终点标记 ─── */

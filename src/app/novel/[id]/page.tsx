@@ -5,12 +5,17 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import {
+  ChildrenNovelReader,
+  isChildrenFormattedNovelContent,
+} from "@/components/novel/ChildrenNovelReader";
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
 import { ComicGeneratePanel } from "@/components/comic/ComicGeneratePanel";
 import { NovelContinueButton } from "@/components/novel/NovelContinueButton";
 import { NovelSynopsisBlurb } from "@/components/novel/NovelSynopsisBlurb";
 import { parseNovelChapters } from "@/lib/novel-chapters";
+import { isChildrenNovelTier, parseNovelLengthTier } from "@/lib/novel-length";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 import {
   NOVEL_READER_THEMES,
@@ -111,8 +116,11 @@ export default function NovelDetailPage() {
     if (!novel) return null;
     const displayTitle = normalizeNovelTitle(novel.title, novel.prompt);
     const blurb = displayNovelSummary(novel.summary, displayTitle, novel.prompt, novel.content);
-    const chapters = parseNovelChapters(novel.content);
-    return { displayTitle, blurb, chapters };
+    const isChildrenReader =
+      isChildrenNovelTier(parseNovelLengthTier(novel.lengthTier)) ||
+      isChildrenFormattedNovelContent(novel.content);
+    const chapters = isChildrenReader ? [] : parseNovelChapters(novel.content);
+    return { displayTitle, blurb, chapters, isChildrenReader };
   }, [novel]);
 
   async function handleRegenerateCover() {
@@ -161,7 +169,7 @@ export default function NovelDetailPage() {
 
   if (!novel || !displayMeta) return null;
 
-  const { displayTitle, blurb, chapters } = displayMeta;
+  const { displayTitle, blurb, chapters, isChildrenReader } = displayMeta;
   const stripTitles = [novel.title, displayTitle].filter(Boolean);
   const headerTitle = editing ? novel.title : displayTitle;
   const readPalette = NOVEL_READER_THEMES[readerTheme];
@@ -225,8 +233,9 @@ export default function NovelDetailPage() {
                 className={`mt-1 text-xs ${editing ? "text-[var(--gc-muted)]" : ""}`}
                 style={!editing ? { color: readPalette.muted } : undefined}
               >
-                {editing ? "编辑模式" : new Date(novel.createdAt).toLocaleDateString("zh-CN")} · 共{" "}
-                {chapters.length} 章
+                {editing ? "编辑模式" : new Date(novel.createdAt).toLocaleDateString("zh-CN")}
+                {!editing && !isChildrenReader ? ` · 共 ${chapters.length} 章` : null}
+                {!editing && isChildrenReader ? " · 儿童短篇" : null}
               </p>
               {!editing && blurb && (
                 <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
@@ -374,6 +383,13 @@ export default function NovelDetailPage() {
               setError("");
             }}
             onCancel={() => setEditing(false)}
+          />
+        ) : isChildrenReader ? (
+          <ChildrenNovelReader
+            content={novel.content}
+            stripTitles={stripTitles}
+            theme={readerTheme}
+            onThemeChange={setReaderTheme}
           />
         ) : (
           <NovelReader

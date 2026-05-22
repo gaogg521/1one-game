@@ -86,6 +86,8 @@ export async function renderComicPanels(
     skipStyleRefs?: boolean;
     /** 长篇导演包（优先 doc.director） */
     director?: ComicDirectorPack | null;
+    /** Character Sheet First：角色参考图 URL 列表，用于分镜配图风格锚定 */
+    characterSheetUrls?: string[];
   },
 ): Promise<RenderComicPanelsResult> {
   const storyGenre = opts?.storyGenre ?? "general";
@@ -122,6 +124,11 @@ export async function renderComicPanels(
     storyGenre,
     skipStyleRefs,
   });
+  // 合并角色参考图（Character Sheet First）
+  const charSheets = opts?.characterSheetUrls?.filter(Boolean) ?? [];
+  for (const url of charSheets) {
+    if (!styleRefUrls.includes(url)) styleRefUrls.push(url);
+  }
   const useStyleRefs = styleRefUrls.length > 0;
   const needsGeminiForRefs = comicPanelRenderNeedsGemini(styleRefUrls);
   const hasPanelAnchor = countPanelsWithImages(doc).withImage > 0;

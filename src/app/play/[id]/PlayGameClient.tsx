@@ -372,7 +372,7 @@ export function PlayGameClient({ id }: { id: string }) {
             <GameRuntimeTabs
               spec={spec}
               projectId={id}
-              phaser={<GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} />}
+              phaser={<GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} />}
             />
             {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 

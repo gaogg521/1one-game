@@ -41,6 +41,9 @@ function shiftHex(c: number, d: number): number {
 }
 
 export class PlatformerScene extends Phaser.Scene {
+  public backgroundUrl: string | null = null;
+  public projectId: string | null = null;
+
   private readonly spec: GameSpec;
 
   private readonly onEnd: (r: EndPayload) => void;
@@ -162,6 +165,19 @@ export class PlatformerScene extends Phaser.Scene {
     this.soundscape = soundscape ?? null;
   }
 
+  preload() {
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
+    if (this.projectId) {
+      const base = `/game-sprites/${this.projectId}`;
+      this.load.image("texPlayer", `${base}/player.png`);
+      this.load.image("texGem", `${base}/gem.png`);
+      this.load.image("texPower", `${base}/power.png`);
+      this.load.image("texBoss", `${base}/boss.png`);
+    }
+  }
+
   create() {
     const viewW = this.scale.width;
     const viewH = this.scale.height;
@@ -182,6 +198,11 @@ export class PlatformerScene extends Phaser.Scene {
       addMinecraftPlatformerBackdrop(this, this.worldW);
     } else {
       this.addStarfield();
+    }
+
+    // 文生图背景
+    if (this.backgroundUrl && this.textures.exists("bgTex")) {
+      this.add.image(this.worldW / 2, viewH / 2, "bgTex").setDepth(-10).setAlpha(0.1);
     }
 
     this.add

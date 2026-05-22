@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import { listChapterScopeOptions } from "@/lib/comic-chapter-scope";
 import {
@@ -84,16 +84,37 @@ export function ComicGenerateOptions({
   }, [isChildren]);
 
   const chapters = useMemo(
-    () => (novelContent?.trim() ? listChapterScopeOptions(novelContent) : []),
-    [novelContent],
+    () =>
+      novelContent?.trim() ? listChapterScopeOptions(novelContent, { isChildren }) : [],
+    [novelContent, isChildren],
   );
   const [chapterPick, setChapterPick] = useState<"all" | string>("all");
+  const childrenScopeDefaultedRef = useRef<string | null>(null);
   const [showRoster, setShowRoster] = useState(false);
   const [rosterDraft, setRosterDraft] = useState<ComicCharacterRoster>(() =>
     value.characterRoster?.characters.length
       ? value.characterRoster
       : { ...emptyComicCharacterRoster(), characters: [defaultEntry(0), defaultEntry(1)] },
   );
+
+  const childrenScopeKey = `${novelId ?? "paste"}:${(novelContent ?? "").slice(0, 120)}`;
+
+  useEffect(() => {
+    if (!isChildren || chapters.length === 0) return;
+    if (childrenScopeDefaultedRef.current === childrenScopeKey) return;
+    const story = chapters.find((ch) => ch.title.startsWith("儿童故事"));
+    if (!story) return;
+    childrenScopeDefaultedRef.current = childrenScopeKey;
+    setChapterPick(String(story.num));
+    patch({
+      chapterScope: {
+        fromChapter: story.num,
+        toChapter: story.num,
+        label: story.title,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 每篇儿童文仅默认一次
+  }, [isChildren, childrenScopeKey, chapters]);
 
   useEffect(() => {
     if (!novelId) return;
@@ -117,11 +138,12 @@ export function ComicGenerateOptions({
     }
     const num = parseInt(pick, 10);
     if (!Number.isFinite(num)) return;
+    const picked = chapters.find((ch) => ch.num === num);
     patch({
       chapterScope: {
         fromChapter: num,
         toChapter: num,
-        label: `第${num}章`,
+        label: picked?.title ?? (isChildren ? `模块${num}` : `第${num}章`),
       },
     });
   }
@@ -195,19 +217,26 @@ export function ComicGenerateOptions({
 
       {chapters.length > 1 ? (
         <div>
-          <label className="mb-1 block text-xs text-[var(--gc-muted)]">改编范围</label>
+          <label className="mb-1 block text-xs text-[var(--gc-muted)]">
+            {isChildren ? "改编模块" : "改编范围"}
+          </label>
           <select
             value={chapterPick}
             onChange={(e) => applyChapterPick(e.target.value as "all" | string)}
             className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] px-3 py-2 text-sm text-[var(--gc-text)]"
           >
-            <option value="all">全书</option>
+            <option value="all">{isChildren ? "全书（解读+故事+结尾）" : "全书"}</option>
             {chapters.map((ch) => (
               <option key={ch.num} value={String(ch.num)}>
-                第{ch.num}章 · {ch.title}
+                {isChildren ? ch.title : `第${ch.num}章 · ${ch.title}`}
               </option>
             ))}
           </select>
+          {isChildren ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--gc-text-faint)]">
+              画漫画分镜默认已选「儿童故事」正文；创意解读仅供阅读，一般不必改编进格子里。
+            </p>
+          ) : null}
         </div>
       ) : null}
 

@@ -174,7 +174,7 @@ ${storySource}
 
 请输出 JSON，根对象包含长度为 ${chunkPages} 的 "pages" 数组。`,
       jsonSchema: comicSchema,
-      temperature: 0.8,
+      temperature: 0.7,
       mode: "json_schema",
       timeoutMs: Math.min(PRODUCT.comic.storyboardTimeoutMs, 30_000 + chunkPages * 10_000),
     });

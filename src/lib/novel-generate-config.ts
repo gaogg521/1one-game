@@ -1,6 +1,7 @@
 import { PRODUCT } from "@/lib/product-config";
 import {
   buildChildrenNovelUserMessage,
+  CHILDREN_NOVEL_LLM_TEMPERATURE,
   getChildrenNovelSystemPrompt,
 } from "@/lib/children-novel-creative";
 import { childrenAgeLabel, parseChildrenTargetAge } from "@/lib/children-age-length";
@@ -19,7 +20,7 @@ export function getNovelSystemPrompt(tier: NovelLengthTier, opts?: NovelLengthOp
   const cfg = novelLengthConfig(tier, opts);
   if (tier === "children") {
     const age = parseChildrenTargetAge(opts?.childrenTargetAge);
-    return getChildrenNovelSystemPrompt(age);
+    return getChildrenNovelSystemPrompt(age, opts?.childrenUserPrompt);
   }
   return `你是一位擅长中文网络小说的 AI 作家。用户会给出一句话创意，你需要扩展为一篇**结构完整的${cfg.label}小说**。
 
@@ -38,6 +39,12 @@ export function novelLlmTimeoutMs(tier?: NovelLengthTier): number {
   const t = tier ?? "medium";
   if (t === "children") return PRODUCT.novel.llmTimeoutMs.short;
   return PRODUCT.novel.llmTimeoutMs[t];
+}
+
+/** 儿童短篇略低温度，利于连贯叙事、减少乱跳 */
+export function novelLlmTemperature(tier?: NovelLengthTier): number {
+  if (tier === "children") return CHILDREN_NOVEL_LLM_TEMPERATURE;
+  return 0.85;
 }
 
 export function novelLlmMaxOutputTokens(tier?: NovelLengthTier, opts?: NovelLengthOptions): number {

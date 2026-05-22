@@ -19,26 +19,36 @@ import {
 } from "@/lib/comic-generate-config";
 import { formatComicStorageTitle } from "@/lib/comic-display";
 import { renderComicPanels, serializeComicPanels } from "@/lib/comic-panel-render";
+import { generateCharacterSheets } from "@/lib/comic-character-sheet-gen";
 import {
   extractNovelTitleFromContent,
   normalizeNovelTitle,
   validateNovelTitleInput,
 } from "@/lib/novel-display";
-import { parseNovelLengthTier, resolveNovelLengthTier } from "@/lib/novel-length";
+import {
+  isChildrenNovelTier,
+  parseNovelLengthTier,
+  resolveNovelLengthTier,
+} from "@/lib/novel-length";
 import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
+import { loadChildrenNovelMeta } from "@/lib/children-novel-meta-db";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import {
   extractComicCreativePitch,
   resolveMediaCreativeBrief,
 } from "@/lib/creative-brief/resolve-media-brief";
-import { parseNovelCreativeBrief, type NovelBriefUserRevision, type NovelCreativeBrief } from "@/lib/literary-brief";
 import {
-  saveComicCreativeBriefJson,
-  serializeComicCreativeBrief,
-} from "@/lib/comic-creative-brief-db";
+  parseChildrenCreativeBrief,
+  parseNovelCreativeBrief,
+  type ChildrenCreativeBrief,
+  type NovelBriefUserRevision,
+  type NovelCreativeBrief,
+} from "@/lib/literary-brief";
+import { saveComicCreativeBriefJson } from "@/lib/comic-creative-brief-db";
 import {
   saveNovelCreativeBriefJson,
+  serializeChildrenCreativeBrief,
   serializeNovelCreativeBrief,
 } from "@/lib/novel-creative-brief-db";
 import { prisma } from "@/lib/prisma";
@@ -51,7 +61,7 @@ export type ComicGenerateRunInput = {
   /** 一句话漫画创意（全文粘贴时可单独填写；不填则从短文或首段提取） */
   creativePrompt?: string;
   /** 客户端已预览的 Brief，避免重复 LLM 扩写 */
-  creativeBrief?: NovelCreativeBrief;
+  creativeBrief?: NovelCreativeBrief | ChildrenCreativeBrief;
   briefRevision?: NovelBriefUserRevision;
   title?: string;
   pageCount?: number;
@@ -173,15 +183,26 @@ export async function runComicGeneration(
     novelContent,
     input.creativePrompt ?? (novelPrompt.trim().length >= 2 ? novelPrompt : undefined),
   );
-  let comicBriefToPersist: NovelCreativeBrief | null = null;
+  let comicBriefJson: string | null = null;
   if (PRODUCT.comic.creativeBriefExpand && creativePitch.length >= 2) {
-    const preParsed = input.creativeBrief ? parseNovelCreativeBrief(input.creativeBrief) : null;
+    const childrenMeta = isChildrenNovelTier(novelLengthTier)
+      ? await loadChildrenNovelMeta(actualNovelId)
+      : null;
+    const preParsed = input.creativeBrief
+      ? parseChildrenCreativeBrief(input.creativeBrief) ??
+        parseNovelCreativeBrief(input.creativeBrief)
+      : null;
     const briefResult = await resolveMediaCreativeBrief(creativePitch, "comic", {
       preExpanded: preParsed ?? undefined,
       userRevision: input.briefRevision ?? undefined,
+      novelGenreId: isChildrenNovelTier(novelLengthTier) ? "children" : undefined,
+      childrenTargetAge: childrenMeta?.targetAge,
     });
     if (briefResult) {
-      comicBriefToPersist = briefResult.brief;
+      comicBriefJson =
+        briefResult.kind === "children"
+          ? serializeChildrenCreativeBrief(briefResult.brief)
+          : serializeNovelCreativeBrief(briefResult.brief);
       send({
         step: "brief",
         summary: briefResult.oneLineSummary,
@@ -192,7 +213,8 @@ export async function runComicGeneration(
   }
 
   const fullContentLength = novelContent.length;
-  const scoped = sliceNovelByChapterScope(novelContent, input.chapterScope ?? null);
+  const comicScopeOpts = { isChildren: isChildrenNovelTier(novelLengthTier) };
+  const scoped = sliceNovelByChapterScope(novelContent, input.chapterScope ?? null, comicScopeOpts);
   novelContent = scoped.content;
   const chapterScopeLabel = scoped.scopeLabel;
 
@@ -283,6 +305,26 @@ export async function runComicGeneration(
   let rendered = 0;
   let imageSource = "none";
 
+  // Character Sheet First：生成角色参考图，后续分镜配图锚定角色一致性
+  let charSheetUrls: string[] = [];
+  if (!skipInlinePanels && gen.director?.characters?.length) {
+    send({ step: "char_sheets_start", message: `正在生成 ${gen.director.characters.length} 位角色参考图…` });
+    const subjects = gen.director.characters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      visualDesc: [c.appearanceEn, c.outfitEn, c.hairEn].filter(Boolean).join(", "),
+    }));
+    const sheets = await generateCharacterSheets({
+      subjects,
+      stylePreset,
+      comicKey: actualNovelId,
+    });
+    charSheetUrls = sheets.filter((s) => s.url).map((s) => s.url!);
+    if (charSheetUrls.length > 0) {
+      send({ step: "char_sheets_done", message: `已生成 ${charSheetUrls.length} 张角色参考图`, charSheetUrls });
+    }
+  }
+
   if (!skipInlinePanels) {
     send({ step: "panels_render_start", message: `正在生成 ${panelCount} 格配图…`, panelCount });
     const renderResult = await renderComicPanels(comicDoc, {
@@ -292,8 +334,9 @@ export async function runComicGeneration(
         title: novelTitle,
         summary: novelSummary || novelContent.slice(0, 400).replace(/\n/g, " "),
       },
-      skipStyleRefs: true,
+      skipStyleRefs: charSheetUrls.length === 0,
       director: gen.director,
+      characterSheetUrls: charSheetUrls,
       onProgress: (ev) => {
         if (ev.type === "panel_start") {
           send({
@@ -342,10 +385,9 @@ export async function runComicGeneration(
     },
   });
 
-  if (comicBriefToPersist) {
-    const json = serializeComicCreativeBrief(comicBriefToPersist);
-    await saveComicCreativeBriefJson(comic.id, json);
-    await saveNovelCreativeBriefJson(actualNovelId, serializeNovelCreativeBrief(comicBriefToPersist));
+  if (comicBriefJson) {
+    await saveComicCreativeBriefJson(comic.id, comicBriefJson);
+    await saveNovelCreativeBriefJson(actualNovelId, comicBriefJson);
   }
 
   send({ step: "cover_start", message: "封面将在后台生成…" });

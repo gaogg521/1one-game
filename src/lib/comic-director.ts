@@ -1,3 +1,7 @@
+import {
+  isChildrenFormattedNovelContent,
+  parseChildrenComicSections,
+} from "@/lib/children-comic-sections";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmJson } from "@/lib/llm";
 import type { CoverGenre } from "@/lib/cover-genre";
@@ -26,6 +30,13 @@ ${COMIC_MASTER_QUALITY_BLOCK}
 - taboos：禁止网红厚涂、夸张二次元浓妆、图内可读文字`;
 
 function sampleNovelExcerpts(content: string, maxChars: number): string {
+  if (isChildrenFormattedNovelContent(content)) {
+    const sections = parseChildrenComicSections(content);
+    if (sections.length === 0) return content.slice(0, maxChars);
+    const picks = sections.map((s) => `【${s.title}】\n${s.body.slice(0, 800)}`);
+    return picks.join("\n\n---\n\n").slice(0, maxChars);
+  }
+
   const chapters = parseNovelChapters(content);
   if (chapters.length === 0) return content.slice(0, maxChars);
 

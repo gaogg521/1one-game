@@ -5,10 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChildrenAgePicker } from "@/components/novel/ChildrenAgePicker";
+import { ChildrenCreativeBriefPanel } from "@/components/novel/ChildrenCreativeBriefPanel";
 import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPanel";
 import { NovelGenreTagPicker } from "@/components/novel/NovelGenreTagPicker";
+import { CHILDREN_ADDON_NOTES_PLACEHOLDER } from "@/lib/children-novel-creative";
 import {
-  childrenMaxCharsForAge,
+  childrenAgeLabel,
+  childrenCharRangeLabel,
+  childrenFeaturesLabel,
+  childrenStageLabel,
+  getChildrenAgeTier,
   DEFAULT_CHILDREN_TARGET_AGE,
   type ChildrenTargetAge,
 } from "@/lib/children-age-length";
@@ -34,7 +40,13 @@ import {
   validateNovelTitleInput,
 } from "@/lib/novel-display";
 import { fetchCreativeBriefPreview } from "@/lib/creative-brief/preview-client";
-import { type NovelBriefUserRevision, type NovelCreativeBrief } from "@/lib/literary-brief";
+import {
+  type ChildrenBriefUserRevision,
+  type ChildrenCreativeBrief,
+  type NovelBriefUserRevision,
+  type NovelCreativeBrief,
+} from "@/lib/literary-brief";
+import { buildChildrenBriefSeed } from "@/lib/literary-brief/children-brief-types";
 import {
   buildNovelBriefSeed,
   buildNovelStoredPrompt,
@@ -65,9 +77,13 @@ export default function NovelCreatePage() {
   );
   const [longPolish, setLongPolish] = useState<boolean>(PRODUCT.novel.longSegmented.polishAfterSegment);
 
-  const [creativeBrief, setCreativeBrief] = useState<NovelCreativeBrief | null>(null);
+  const [childrenCreativeBrief, setChildrenCreativeBrief] =
+    useState<ChildrenCreativeBrief | null>(null);
+  const [novelCreativeBrief, setNovelCreativeBrief] = useState<NovelCreativeBrief | null>(null);
   const [creativeBriefSummary, setCreativeBriefSummary] = useState<string | null>(null);
-  const [briefRevision, setBriefRevision] = useState<NovelBriefUserRevision | null>(null);
+  const [childrenBriefRevision, setChildrenBriefRevision] =
+    useState<ChildrenBriefUserRevision | null>(null);
+  const [novelBriefRevision, setNovelBriefRevision] = useState<NovelBriefUserRevision | null>(null);
   const [briefConfirmed, setBriefConfirmed] = useState(false);
   const [briefPreviewBusy, setBriefPreviewBusy] = useState(false);
 
@@ -101,12 +117,19 @@ export default function NovelCreatePage() {
     lengthTierPick: lengthTier,
   });
   const childrenLengthOpts = isChildrenGenre ? { childrenTargetAge } : undefined;
-  const childrenMaxChars = childrenMaxCharsForAge(childrenTargetAge);
+  const childrenTier = getChildrenAgeTier(childrenTargetAge);
 
   function handleGenreChange(id: NovelGenreTagId) {
     setGenreId(id);
-    if (isChildrenGenreTag(id)) setLengthTier("children");
-    else if (lengthTier === "children") setLengthTier("short");
+    if (isChildrenGenreTag(id)) {
+      setLengthTier("children");
+      setNovelCreativeBrief(null);
+      setNovelBriefRevision(null);
+    } else {
+      if (lengthTier === "children") setLengthTier("short");
+      setChildrenCreativeBrief(null);
+      setChildrenBriefRevision(null);
+    }
   }
 
   useEffect(() => {
@@ -120,12 +143,9 @@ export default function NovelCreatePage() {
     setBriefPreviewBusy(true);
     setBriefConfirmed(false);
     try {
-      const seed = buildNovelBriefSeed(
-        title,
-        genre,
-        addonNotes,
-        isChildrenGenre ? childrenTargetAge : undefined,
-      );
+      const seed = isChildrenGenre
+        ? buildChildrenBriefSeed(title, addonNotes || title, childrenTargetAge)
+        : buildNovelBriefSeed(title, genre, addonNotes, undefined);
       const r = await fetchCreativeBriefPreview(seed, "novel", {
         novelGenreId: genre.id,
         title: title.trim(),
@@ -135,7 +155,13 @@ export default function NovelCreatePage() {
         setError(r.error);
         return;
       }
-      setCreativeBrief(r.brief);
+      if (r.kind === "children") {
+        setChildrenCreativeBrief(r.brief);
+        setNovelCreativeBrief(null);
+      } else {
+        setNovelCreativeBrief(r.brief);
+        setChildrenCreativeBrief(null);
+      }
       setCreativeBriefSummary(r.oneLineSummary);
     } finally {
       setBriefPreviewBusy(false);
@@ -143,10 +169,20 @@ export default function NovelCreatePage() {
   }, [title, genre, addonNotes, isChildrenGenre, childrenTargetAge]);
 
   useEffect(() => {
-    if (step === 2 && title.trim() && genre && !creativeBrief && !briefPreviewBusy) {
+    const hasBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
+    if (step === 2 && title.trim() && genre && !hasBrief && !briefPreviewBusy) {
       void expandBrief();
     }
-  }, [step, title, genre, creativeBrief, briefPreviewBusy, expandBrief]);
+  }, [
+    step,
+    title,
+    genre,
+    isChildrenGenre,
+    childrenCreativeBrief,
+    novelCreativeBrief,
+    briefPreviewBusy,
+    expandBrief,
+  ]);
 
   function goNext() {
     setError("");
@@ -161,14 +197,18 @@ export default function NovelCreatePage() {
         return;
       }
       setTitle(tv.value);
-      setCreativeBrief(null);
+      setChildrenCreativeBrief(null);
+      setNovelCreativeBrief(null);
+      setChildrenBriefRevision(null);
+      setNovelBriefRevision(null);
       setCreativeBriefSummary(null);
       setBriefConfirmed(false);
       setStep(2);
       return;
     }
     if (step === 2) {
-      if (!creativeBrief) {
+      const hasBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
+      if (!hasBrief) {
         setError("请等待 AI 完成构思扩写，或点击重新生成");
         return;
       }
@@ -284,7 +324,8 @@ export default function NovelCreatePage() {
 
   async function handleStartWriting(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !genre || !creativeBrief || loading) return;
+    const activeBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
+    if (!title.trim() || !genre || !activeBrief || loading) return;
 
     const storedPrompt = buildNovelStoredPrompt(title, genre);
     setLoading(true);
@@ -305,8 +346,14 @@ export default function NovelCreatePage() {
           novelGenreTag: genreId,
           ...(isChildrenGenre ? { childrenTargetAge } : {}),
           ...(effectiveLengthTier === "long" ? { polish: longPolish } : {}),
-          creativeBrief,
-          ...(briefRevision ? { briefRevision } : {}),
+          creativeBrief: activeBrief,
+          ...(isChildrenGenre
+            ? childrenBriefRevision
+              ? { briefRevision: childrenBriefRevision }
+              : {}
+            : novelBriefRevision
+              ? { briefRevision: novelBriefRevision }
+              : {}),
         }),
       });
 
@@ -452,7 +499,7 @@ export default function NovelCreatePage() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-[var(--gc-text)]">创作小说</h1>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">
-              定书名与类型 → AI 扩写构思 → 流式写作 → 生成封面并分享发布。
+              定书名与类型 → AI 解读并扩写构思 → 流式写作（含典故解读+童趣故事）→ 生成封面并分享发布。
             </p>
           </div>
 
@@ -524,7 +571,7 @@ export default function NovelCreatePage() {
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-[var(--gc-text-faint)]">
-                    选择标签后，AI 将按该类型的网文惯例扩写构思
+                    选择类型后，AI 将按该类型惯例扩写构思
                   </p>
                 )}
               </div>
@@ -535,8 +582,8 @@ export default function NovelCreatePage() {
                     读者年龄（决定正文字数）
                   </label>
                   <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
-                    3岁以下约 200 字，4–10 岁每增一岁约多 100 字（上限 900 字）。AI 会从书名与补充想法提取主题、原创角色与情节，禁止模板角色；漫画为 Q
-                    版小人书五格。
+                    专为家长：五档读者（0-3 / 3-6 / 6-8 / 9 / 10 岁），正文 90–900 字，知识点与解读深度随龄递增。支持日常话、成语、国学典故；漫画为
+                    Q 版小人书五格。
                   </p>
                   <ChildrenAgePicker
                     value={childrenTargetAge}
@@ -544,7 +591,8 @@ export default function NovelCreatePage() {
                     disabled={loading}
                   />
                   <p className="mt-2 text-[10px] text-[var(--gc-muted)]">
-                    预计 {novelGenerationEtaHint("children")} · 本次目标约 {childrenMaxChars} 字
+                    预计 {novelGenerationEtaHint("children")} · 正文 {childrenTier.charRangeLabel}（优先约{" "}
+                    {childrenTier.targetChars} 字）
                   </p>
                 </div>
               ) : (
@@ -603,7 +651,7 @@ export default function NovelCreatePage() {
                   {isChildrenGenre ? (
                     <span className="text-[var(--gc-muted)]">
                       {" "}
-                      · 约 {childrenMaxChars} 字
+                      · 正文 {childrenCharRangeLabel(childrenTargetAge)}
                     </span>
                   ) : (
                     <span className="text-[var(--gc-muted)]">
@@ -622,20 +670,38 @@ export default function NovelCreatePage() {
                   value={addonNotes}
                   onChange={(e) => setAddonNotes(e.target.value)}
                   rows={2}
-                  placeholder="例如：主角要腹黑、前期慢热、结局 HE…"
+                  placeholder={
+                    isChildrenGenre
+                      ? CHILDREN_ADDON_NOTES_PLACEHOLDER
+                      : "例如：主角要腹黑、前期慢热、结局 HE…"
+                  }
                   className="w-full resize-none rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-sm text-[var(--gc-text)]"
                 />
               </div>
-              {(creativeBrief || creativeBriefSummary) ? (
-              <NovelCreativeBriefPanel
-                brief={creativeBrief}
-                  summary={creativeBriefSummary}
-                  onRevisionChange={setBriefRevision}
-                  onRegenerateWithRevision={() => void expandBrief()}
-                  regenerateDisabled={briefPreviewBusy || loading}
-                />
+              {(childrenCreativeBrief || novelCreativeBrief || creativeBriefSummary) ? (
+                isChildrenGenre ? (
+                  <ChildrenCreativeBriefPanel
+                    brief={childrenCreativeBrief}
+                    summary={creativeBriefSummary}
+                    onRevisionChange={setChildrenBriefRevision}
+                    onRegenerateWithRevision={() => void expandBrief()}
+                    regenerateDisabled={briefPreviewBusy || loading}
+                  />
+                ) : (
+                  <NovelCreativeBriefPanel
+                    brief={novelCreativeBrief}
+                    summary={creativeBriefSummary}
+                    onRevisionChange={setNovelBriefRevision}
+                    onRegenerateWithRevision={() => void expandBrief()}
+                    regenerateDisabled={briefPreviewBusy || loading}
+                  />
+                )
               ) : briefPreviewBusy ? (
-                <p className="text-sm text-[var(--gc-accent)]">AI 正在扩写世界观、人物与章节奏…</p>
+                <p className="text-sm text-[var(--gc-accent)]">
+                  {isChildrenGenre
+                    ? "AI 正在整理儿童故事构思（解读 + 三句话情节）…"
+                    : "AI 正在扩写世界观、人物与章节奏…"}
+                </p>
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={goBack} className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-muted)]">
@@ -652,7 +718,9 @@ export default function NovelCreatePage() {
                 <button
                   type="button"
                   onClick={goNext}
-                  disabled={!creativeBrief || briefPreviewBusy}
+                  disabled={
+                    !(isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief) || briefPreviewBusy
+                  }
                   className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
                 >
                   确认构思，进入写作
@@ -671,22 +739,28 @@ export default function NovelCreatePage() {
                 ) : null}
                 {briefConfirmed ? (
                   <p className="mt-2 text-[10px] text-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]">
-                    构思已确认，请选择篇幅后开始写作
+                    {isChildrenGenre
+                      ? "构思已确认，读者年龄已在第 1 步选定，可直接开始生成正文"
+                      : "构思已确认，请选择篇幅后开始写作"}
                   </p>
                 ) : null}
               </div>
 
               {isChildrenGenre ? (
-                <div>
-                  <p className="mb-2 text-xs text-[var(--gc-muted)]">
-                    儿童短篇 · 读者 {childrenTargetAge === 2 ? "3岁以下" : `${childrenTargetAge}岁`}，正文约{" "}
-                    {childrenMaxChars} 字（±50），含【故事标题】【正文】【家长共读】三块成稿。
+                <div className="rounded-xl border border-[color:var(--gc-accent)]/30 bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
+                  <p>
+                    <span className="font-medium text-[var(--gc-accent)]">
+                      {childrenAgeLabel(childrenTargetAge)} · {childrenStageLabel(childrenTargetAge)}
+                    </span>
+                    <span className="text-[var(--gc-muted)]">
+                      {" "}
+                      · 正文 {childrenCharRangeLabel(childrenTargetAge)}
+                    </span>
                   </p>
-                  <ChildrenAgePicker
-                    value={childrenTargetAge}
-                    onChange={setChildrenTargetAge}
-                    disabled={loading}
-                  />
+                  <p className="mt-1 text-[10px] text-[var(--gc-text-faint)]">{childrenFeaturesLabel(childrenTargetAge)}</p>
+                  <p className="mt-1 text-[var(--gc-muted)]">
+                    成稿：{childrenTier.interpretMark} → {childrenTier.bodyMark} → {childrenTier.closingMark}。若要改档位，请点「修改构思」再点「上一步」回到第 1 步。
+                  </p>
                 </div>
               ) : (
                 <div>
@@ -750,7 +824,9 @@ export default function NovelCreatePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || !creativeBrief}
+                  disabled={
+                    loading || !(isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief)
+                  }
                   className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
                 >
                   {loading ? "正在写作…" : "开始生成正文"}

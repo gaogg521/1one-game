@@ -1,12 +1,18 @@
 import type { BriefMedium } from "@/lib/creative-brief/types";
-import type { NovelBriefUserRevision, NovelCreativeBrief } from "@/lib/literary-brief";
-import { NOVEL_CREATIVE_BRIEF_SCHEMA } from "@/lib/literary-brief";
+import {
+  CHILDREN_CREATIVE_BRIEF_SCHEMA,
+  NOVEL_CREATIVE_BRIEF_SCHEMA,
+  type ChildrenCreativeBrief,
+  type NovelCreativeBrief,
+} from "@/lib/literary-brief";
+import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
 
 export type BriefPreviewResult =
-  | { ok: true; brief: NovelCreativeBrief; oneLineSummary: string }
+  | { ok: true; kind: "children"; brief: ChildrenCreativeBrief; oneLineSummary: string }
+  | { ok: true; kind: "novel"; brief: NovelCreativeBrief; oneLineSummary: string }
   | { ok: false; error: string };
 
-/** 创作页：生成前预览文学创意构思（小说 / 漫画，非游戏） */
+/** 创作页：生成前预览文学创意构思（小说 / 漫画） */
 export async function fetchCreativeBriefPreview(
   prompt: string,
   medium: BriefMedium,
@@ -41,17 +47,33 @@ export async function fetchCreativeBriefPreview(
   const data = (await res.json().catch(() => ({}))) as {
     error?: string;
     brief?: unknown;
+    briefKind?: "children" | "novel";
     oneLineSummary?: string;
   };
   if (!res.ok) {
     return { ok: false, error: data.error ?? "扩写预览失败" };
   }
+
+  if (data.briefKind === "children" || isChildrenGenreTag(options?.novelGenreId)) {
+    const parsed = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(data.brief);
+    if (!parsed.success) {
+      return { ok: false, error: "儿童构思扩写结果无效" };
+    }
+    return {
+      ok: true,
+      kind: "children",
+      brief: parsed.data,
+      oneLineSummary: data.oneLineSummary ?? parsed.data.storyBeats[0] ?? "",
+    };
+  }
+
   const parsed = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(data.brief);
   if (!parsed.success) {
     return { ok: false, error: "扩写结果无效" };
   }
   return {
     ok: true,
+    kind: "novel",
     brief: parsed.data,
     oneLineSummary: data.oneLineSummary ?? parsed.data.logline,
   };

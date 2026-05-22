@@ -1,4 +1,9 @@
 import type { CoverGenre } from "@/lib/cover-genre";
+import {
+  childrenAgeLabel,
+  childrenCharRangeLabel,
+  parseChildrenTargetAge,
+} from "@/lib/children-age-length";
 
 /** 网文主类型（创作台标签，用户单选） */
 export type NovelGenreTagId =
@@ -89,7 +94,7 @@ export const NOVEL_GENRE_TAGS: NovelGenreTag[] = [
   {
     id: "children",
     label: "儿童短篇",
-    desc: "睡前童话、亲子共读；按年龄段约 200–900 字，可生成 Q 版小人书五格漫画",
+    desc: "童真童趣、寓教于乐、浅语暖心",
     coverGenre: "general",
   },
 ];
@@ -117,13 +122,13 @@ export function buildNovelBriefSeed(
   if (genre.id === "children") {
     const ageLine =
       childrenTargetAge !== undefined
-        ? `目标读者年龄：${childrenTargetAge === 2 ? "3岁以下" : `${childrenTargetAge}岁`}`
+        ? `目标读者：${childrenAgeLabel(parseChildrenTargetAge(childrenTargetAge))} · 正文 ${childrenCharRangeLabel(parseChildrenTargetAge(childrenTargetAge))}`
         : "";
     return [
       `书名：${t}`,
       `类型：${genre.label}（${genre.desc}）`,
       ageLine,
-      `家长一句话创意（请从中提取主题、原创角色类型、小困境与情节方向，勿用模板角色）：${extra || t}`,
+      `家长输入（日常话/成语/典故/古文短句均可；请按读者档位解读并改编，勿用模板角色）：${extra || t}`,
     ]
       .filter(Boolean)
       .join("\n");

@@ -80,7 +80,7 @@ export const PRODUCT = {
     panelGenConcurrency: 4,
     batchPanelCount: 4,
     /** 页数 ≥ 此值或小说为 long 时走导演→分镜→镜头→生图流水线 */
-    directorPipelineMinPages: 9,
+    directorPipelineMinPages: 6,
     storyboardChunkPages: 4,
     directorTimeoutMs: 900_000,
     storyboardTimeoutMs: 180_000,

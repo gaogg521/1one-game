@@ -1,3 +1,9 @@
+import {
+  defaultChildrenComicChapterScope,
+  isChildrenFormattedNovelContent,
+  listChildrenComicScopeOptions,
+  sliceChildrenComicByScope,
+} from "@/lib/children-comic-sections";
 import { parseNovelChapters, type NovelChapter } from "@/lib/novel-chapters";
 import { resolveComicPageCount } from "@/lib/comic-generate-config";
 import type { NovelLengthTier } from "@/lib/novel-length";
@@ -8,14 +14,42 @@ export type ComicChapterScope = {
   label: string;
 };
 
-export function listChapterScopeOptions(content: string): Array<{ num: number; title: string }> {
+export type ComicScopeListOptions = {
+  /** 儿童短篇：按「创意解读 / 儿童故事」模块，不按网文章节 */
+  isChildren?: boolean;
+};
+
+export function listChapterScopeOptions(
+  content: string,
+  opts?: ComicScopeListOptions,
+): Array<{ num: number; title: string }> {
+  const isChildren = opts?.isChildren ?? isChildrenFormattedNovelContent(content);
+  if (isChildren) return listChildrenComicScopeOptions(content);
   return parseNovelChapters(content).map((ch) => ({ num: ch.num, title: ch.title }));
+}
+
+/** 儿童漫画：未选范围时默认仅「儿童故事」模块（用于分镜） */
+export function resolveComicChapterScopeForGenerate(
+  content: string,
+  scope: ComicChapterScope | null | undefined,
+  opts?: ComicScopeListOptions,
+): ComicChapterScope | null {
+  const isChildren = opts?.isChildren ?? isChildrenFormattedNovelContent(content);
+  if (!isChildren || scope) return scope ?? null;
+  return defaultChildrenComicChapterScope(content);
 }
 
 export function sliceNovelByChapterScope(
   content: string,
   scope?: ComicChapterScope | null,
+  opts?: ComicScopeListOptions,
 ): { content: string; chapters: NovelChapter[]; scopeLabel: string } {
+  const isChildren = opts?.isChildren ?? isChildrenFormattedNovelContent(content);
+  if (isChildren) {
+    const effective = resolveComicChapterScopeForGenerate(content, scope, opts);
+    return sliceChildrenComicByScope(content, effective);
+  }
+
   const chapters = parseNovelChapters(content);
   if (!scope || chapters.length <= 1) {
     return { content, chapters, scopeLabel: "全书" };

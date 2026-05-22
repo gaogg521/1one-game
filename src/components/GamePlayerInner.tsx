@@ -11,9 +11,11 @@ import type Phaser from "phaser";
 export default function GamePlayerInner({
   spec,
   coverCapture,
+  projectId,
 }: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
+  projectId?: string;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -98,7 +100,12 @@ export default function GamePlayerInner({
     if (!el) return;
     setResult(null);
     const refPayloads = readReferenceImagePayloadsFromSession();
-    const handle = createPhaserGame(el, spec, (r) => setResult(r), { referencePayloads: refPayloads });
+    const bgUrl = projectId ? `/game-bg/${projectId}.png` : null;
+    const handle = createPhaserGame(el, spec, (r) => setResult(r), {
+      referencePayloads: refPayloads,
+      backgroundUrl: bgUrl,
+      projectId: projectId ?? undefined,
+    });
     gameRef.current = handle.game;
     bootAudioRef.current = handle.bootAudio;
     el.focus({ preventScroll: true });

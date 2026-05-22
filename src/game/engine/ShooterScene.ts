@@ -31,6 +31,9 @@ function isSpaceShooterSpec(spec: GameSpec): boolean {
 
 /** 俯视角射击场景：玩家在底部消灭从上方降落的敌舰，敌人会反击。 */
 export class ShooterScene extends Phaser.Scene {
+  public backgroundUrl: string | null = null;
+  public projectId: string | null = null;
+
   private readonly spec: GameSpec;
   private readonly onEnd: (r: EndPayload) => void;
   private readonly soundscape: GameSoundscape | null;
@@ -112,6 +115,20 @@ export class ShooterScene extends Phaser.Scene {
     this.onEnd = onEnd;
     this.runtimePayloads = runtimePayloads;
     this.soundscape = soundscape ?? null;
+  }
+
+  preload() {
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
+    if (this.projectId) {
+      const base = `/game-sprites/${this.projectId}`;
+      this.load.image("texPlayer", `${base}/player.png`);
+      this.load.image("texHazard", `${base}/hazard.png`);
+      this.load.image("texGem", `${base}/gem.png`);
+      this.load.image("texPower", `${base}/power.png`);
+      this.load.image("texBoss", `${base}/boss.png`);
+    }
   }
 
   create() {
@@ -202,6 +219,11 @@ export class ShooterScene extends Phaser.Scene {
     this.cohesive = ui;
 
     this.addStarfield();
+
+    // 文生图背景
+    if (this.backgroundUrl && this.textures.exists("bgTex")) {
+      this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(0.1);
+    }
 
     // Title + subtitle（章节标签单独一行，避免与标题 y 重叠发糊）
     styleHudText(

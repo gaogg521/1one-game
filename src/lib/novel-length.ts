@@ -1,5 +1,6 @@
 import {
   childrenChapterHintForAge,
+  childrenCharRangeLabel,
   childrenMaxCharsForAge,
   childrenMinAcceptCharsForAge,
   childrenAgeLabel,
@@ -11,7 +12,11 @@ import {
 } from "@/lib/children-age-length";
 import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
 
-export type NovelLengthOptions = { childrenTargetAge?: ChildrenTargetAge | number | null };
+export type NovelLengthOptions = {
+  childrenTargetAge?: ChildrenTargetAge | number | null;
+  /** 家长原始输入，用于儿童典故忠实约束 */
+  childrenUserPrompt?: string;
+};
 
 export { parseChildrenTargetAge, type ChildrenTargetAge } from "@/lib/children-age-length";
 export {
@@ -53,7 +58,7 @@ function childrenLengthRow(opts?: NovelLengthOptions): LengthTierRow {
   const minChars = childrenMinAcceptCharsForAge(age);
   return {
     ...CHILDREN_LENGTH_ROW,
-    desc: `${childrenAgeLabel(age)} · 约 ${maxChars} 字`,
+    desc: `${childrenAgeLabel(age)} · ${childrenCharRangeLabel(age)}`,
     minChars,
     maxChars,
   };
@@ -73,6 +78,7 @@ export function resolveNovelLengthTier(opts: {
 }): NovelLengthTier {
   if (isChildrenGenreTag(opts.genreTagId)) return "children";
   const pick = parseNovelLengthTier(opts.lengthTierPick);
+  // 非儿童类型时 children 无意义，回退为 short（下游按 short 字数限制处理）
   return pick === "children" ? "short" : pick;
 }
 

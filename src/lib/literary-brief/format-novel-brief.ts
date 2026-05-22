@@ -1,53 +1,4 @@
-import { CHILDREN_THEME_HINTS } from "@/lib/children-novel-creative";
 import type { NovelBriefUserRevision, NovelCreativeBrief } from "@/lib/literary-brief/novel-types";
-
-function formatChildrenBriefForPipeline(brief: NovelCreativeBrief): string {
-  const lines: string[] = [
-    "【AI 深度扩写 · 儿童故事创意构思】",
-    brief.title ? `书名：${brief.title}` : "",
-    `类型：${brief.genreLabel}`,
-    `家长原话：${brief.userPrompt.trim()}`,
-    "",
-    "【从创意提取 · 须严格遵守】",
-    `- 故事方向：${brief.logline}`,
-    `- 小问题/困境：${brief.coreConflict}`,
-    `- 主角（原创）：${brief.protagonist}`,
-    `- 主角目标：${brief.protagonistGoal}`,
-    "",
-    "【可能主题参考（择贴合者）】",
-    CHILDREN_THEME_HINTS.join("、"),
-    "",
-    "【配角/伙伴】",
-    ...brief.characters.map((c) => `- ${c}`),
-    "",
-    "【情节三步】",
-    ...brief.plotBeats.map((b, i) => `${i + 1}. ${b}`),
-    "",
-    "【关键画面】",
-    ...brief.keyScenes.map((s) => `- ${s}`),
-    "",
-    "【场景基调】",
-    brief.setting,
-    brief.world,
-    "",
-    `【基调】${brief.tone}`,
-    "",
-    "【叙事提示】",
-    ...brief.narrativeHints.map((s) => `- ${s}`),
-    "",
-    "【文风】",
-    ...brief.writingStyle.map((s) => `- ${s}`),
-    "",
-    "【硬约束】",
-    "- 成稿须原创角色与场景，禁止模板角色（如小兔豆豆）",
-    "- 结构：小问题 → 尝试解决 → 温暖闭环结局",
-    "- 输出格式见写作阶段说明：故事标题≤12字、正文、家长共读≤20字",
-  ];
-  if (brief.negatives.length) {
-    lines.push("", "【禁忌】", ...brief.negatives.map((n) => `- ${n}`));
-  }
-  return lines.filter(Boolean).join("\n").slice(0, 3800);
-}
 
 export function formatNovelBriefOneLineSummary(brief: NovelCreativeBrief): string {
   const scene = brief.keyScenes[0] ?? brief.setting;
@@ -55,8 +6,6 @@ export function formatNovelBriefOneLineSummary(brief: NovelCreativeBrief): strin
 }
 
 export function formatNovelBriefForPipeline(brief: NovelCreativeBrief): string {
-  if (brief.genreId === "children") return formatChildrenBriefForPipeline(brief);
-
   const lines: string[] = [
     "【AI 深度扩写 · 小说创意构思】",
     brief.title ? `书名：${brief.title}` : "",

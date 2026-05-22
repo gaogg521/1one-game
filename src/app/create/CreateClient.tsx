@@ -912,6 +912,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         return;
       }
       setProjectId(nextProjectId);
+      // 后台异步生成游戏背景图（不阻塞跳转）
+      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, { method: "POST" });
       router.push(`/play/${nextProjectId}`);
     } catch {
       setError("网络异常");

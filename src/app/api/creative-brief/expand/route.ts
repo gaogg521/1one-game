@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { expandCreativeBrief } from "@/lib/creative-brief/expand-brief";
 import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import type { GameSpec } from "@/lib/game-spec";
-import { expandNovelCreativeBrief, NOVEL_CREATIVE_BRIEF_SCHEMA } from "@/lib/literary-brief";
+import {
+  expandChildrenCreativeBrief,
+  expandNovelCreativeBrief,
+  CHILDREN_CREATIVE_BRIEF_SCHEMA,
+  NOVEL_CREATIVE_BRIEF_SCHEMA,
+  isChildrenBriefExpandRequest,
+} from "@/lib/literary-brief";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
@@ -69,18 +75,37 @@ export async function POST(req: Request) {
       if (medium === "comic" && !PRODUCT.comic.creativeBriefExpand) {
         return NextResponse.json({ error: "漫画构思扩写未启用" }, { status: 503 });
       }
+      if (isChildrenBriefExpandRequest(novelGenreId)) {
+        const result = await expandChildrenCreativeBrief({
+          prompt,
+          title,
+          skipLlm,
+          childrenTargetAge: Number.isFinite(childrenTargetAge) ? childrenTargetAge : undefined,
+        });
+        const checked = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
+        if (!checked.success) {
+          return NextResponse.json({ error: "儿童构思扩写结果无效" }, { status: 500 });
+        }
+        return NextResponse.json({
+          briefKind: "children",
+          brief: checked.data,
+          oneLineSummary: result.oneLineSummary,
+          augmentedPrompt: result.augmentedPrompt,
+        });
+      }
+
       const result = await expandNovelCreativeBrief({
         prompt,
         title,
         genreId: novelGenreId,
         skipLlm,
-        childrenTargetAge: Number.isFinite(childrenTargetAge) ? childrenTargetAge : undefined,
       });
       const checked = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
       if (!checked.success) {
         return NextResponse.json({ error: "扩写结果无效" }, { status: 500 });
       }
       return NextResponse.json({
+        briefKind: "novel",
         brief: checked.data,
         oneLineSummary: result.oneLineSummary,
         augmentedPrompt: result.augmentedPrompt,

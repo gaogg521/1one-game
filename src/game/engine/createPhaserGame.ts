@@ -16,6 +16,10 @@ import {
 export type CreatePhaserGameOptions = {
   /** 创作台解析后写入 sessionStorage 的参考图 data URL（仅会话） */
   referencePayloads?: RuntimeReferencePayload[];
+  /** 游戏背景图 URL（文生图异步生成，不存在时回退纯色背景） */
+  backgroundUrl?: string | null;
+  /** 项目 ID，用于加载文生图 sprite（不存在时回退几何体） */
+  projectId?: string;
 };
 
 export type PhaserGameHandle = {
@@ -52,6 +56,8 @@ export function createPhaserGame(
         : specPlay.templateId === "shooter"
           ? new ShooterScene(specPlay, onEnd, ref, soundscape)
           : new PlayScene(specPlay, onEnd, soundscape);
+  scene.backgroundUrl = opts?.backgroundUrl ?? null;
+  scene.projectId = opts?.projectId ?? null;
 
   const dpr =
     typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;

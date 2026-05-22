@@ -33,8 +33,8 @@ export const COMIC_MAX_PAGES = 32;
 
 /** 按小说篇幅默认漫画页数 */
 export const COMIC_DEFAULT_PAGES: Record<NovelLengthTier, number> = {
-  short: 2,
-  children: 2,
+  short: 4,
+  children: 4,
   medium: 8,
   long: 16,
 };
@@ -45,10 +45,9 @@ export function defaultPanelPrompt(
   genre: CoverGenre = "general",
   stylePreset?: ComicStylePresetId,
 ): string {
-  const style = stylePreset
-    ? getComicStylePreset(stylePreset).promptEn
-    : getComicPanelStyleLock(genre);
-  return `Comic panel, ${style}, detailed illustration suitable for manga grid`;
+  const preset = stylePreset ? getComicStylePreset(stylePreset) : null;
+  const style = preset?.promptEn ?? getComicPanelStyleLock(genre);
+  return `${style}, highly detailed manga panel, dramatic composition with clear focal point, expressive character pose, rich environmental detail, cinematic lighting`;
 }
 
 /** 小说转漫画质量总则（分镜 LLM system 注入） */
@@ -63,7 +62,14 @@ export const COMIC_MASTER_QUALITY_BLOCK = `【改编总则 — 必须遵守】
    - textType=inner：内心独白，caption 用（……）包裹
    - textType=scene_note：场景/道具/环境注解
    - textType=time_place：时间地点标注
-6. prompt 仅英文描述可见画面，禁止 dialogue / speech bubble / 可读文字 / 网红厚涂美颜 / 夸张二次元浓妆特效。`;
+6. prompt 仅英文描述可见画面，禁止 dialogue / speech bubble / 可读文字 / 网红厚涂美颜 / 夸张二次元浓妆特效。
+7. **prompt 质量要求（极重要）**：每一格 prompt 必须是 **80–150 词的完整英文画面描述**，不可偷懒写成"角色在房间里"这类空泛短语。必须包含：
+   - 具体场景环境（室内/室外、天气、光源方向、材质）
+   - 人物外貌+服饰+动作+表情（若有人设锁定则严格按人设描述）
+   - shotType 对应的构图（wide=全景交代空间关系，medium=中景两人互动，close=表情特写）
+   - 画面氛围关键词（lighting, mood, color temperature）
+   - 禁止在 prompt 中写对话内容或文字气泡
+8. **漫画感（重要）**：动作场面可加入 speed lines（速度线）、motion blur、impact frames；紧张场面可用 dramatic shadows、dutch angle；抒情场面用 soft focus、浅景深。prompt 中应体现这些漫画技法关键词。`;
 
 /** 文生图统一约束：中文对白由页面 caption 叠字，禁止模型在画面内生成任何可读文字。 */
 export const COMIC_IMAGE_NO_TEXT_SUFFIX =
@@ -202,9 +208,10 @@ export function shouldUseLongComicPipeline(
   pageCount: number,
   lengthTier?: NovelLengthTier | null,
 ): boolean {
-  if (lengthTier === "children" || lengthTier === "short") return false;
   if (lengthTier === "long") return true;
-  return pageCount >= PRODUCT.comic.directorPipelineMinPages;
+  // 4 页以上短篇也走导演流水线以保证人物一致性与分镜质量
+  if (pageCount >= 4) return true;
+  return false;
 }
 
 export function resolveComicPageCount(opts: {
@@ -282,9 +289,10 @@ ${genreGuide}
    - speaker：对白时说话人名（其它类型可省略）
    - caption：中文叠字（≤48 字）
    - shotType：wide | medium | close | over_shoulder | extreme_close
-   - prompt：英文 60–120 词，${preset.promptEn}，描述动作神态环境，**禁止**图内文字与气泡
+   - prompt：英文 **80–150 词**，${preset.promptEn}，详细描述场景/人物/动作/光影/氛围，**必须包含具体环境细节与镜头构图感**。禁止图内文字与气泡。动作场加 speed lines/motion blur，紧张场加 dramatic shadows，抒情场加 soft focus
 5. 约 **1 个段落对应 1～2 格**；优先还原该段动作、对话、情绪，不脑补原文没有的情节
-6. 开篇先用 narration 或 scene_note 交代场景，对话格用 dialogue + speaker`;
+6. 开篇先用 narration 或 scene_note 交代场景，对话格用 dialogue + speaker
+7. prompt 质量红线：每格 prompt 必须 ≥60 词英文，包含人物外貌、场景环境、动作、光影氛围至少四项；空泛短语（如 "A character in a room"）会被文生图模型退回重写`;
 }
 
 export function buildComicJsonSchema(pageCount: number, layoutId: ComicLayoutId = "grid_4") {

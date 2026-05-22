@@ -1,4 +1,16 @@
-import { childrenMaxCharsForAge, parseChildrenTargetAge, type ChildrenTargetAge } from "@/lib/children-age-length";
+import { stripChildrenChapterMarkers } from "@/lib/children-body-normalize";
+import {
+  childrenCoreSubjectFromUserPrompt,
+  isChildrenTitleOffTopic,
+  resolveChildrenInputKind,
+} from "@/lib/children-source-fidelity";
+import {
+  childrenMaxCharsForAge,
+  childrenMinCharsForAge,
+  parseChildrenTargetAge,
+  type ChildrenTargetAge,
+} from "@/lib/children-age-length";
+import { formatChildrenPublishedContent } from "@/lib/children-novel-creative";
 import {
   childrenNovelDbTitle,
   parseChildrenStoryOutput,
@@ -6,18 +18,59 @@ import {
 } from "@/lib/children-story-output";
 import { truncateNovelToMaxChars } from "@/lib/novel-chapters";
 
+function resolveChildrenStoryTitle(
+  parsedTitle: string,
+  userPrompt?: string,
+  fallbackTitle?: string,
+): string {
+  const parsed = parsedTitle?.trim();
+  const core = userPrompt ? childrenCoreSubjectFromUserPrompt(userPrompt) : "";
+  const kind = userPrompt ? resolveChildrenInputKind(userPrompt) : "daily_phrase";
+
+  if (userPrompt && isChildrenTitleOffTopic(userPrompt, parsed || "未命名", kind)) {
+    return core.slice(0, 12) || fallbackTitle || "未命名";
+  }
+  if (parsed && parsed !== "未命名") return parsed;
+  if (core.length >= 2) return core.slice(0, 12);
+  return fallbackTitle || "未命名";
+}
+
 export function finalizeChildrenNovelContent(
   raw: string,
-  opts: { targetAge: ChildrenTargetAge; fallbackTitle?: string },
-): ParsedChildrenStoryOutput & { dbTitle: string } {
-  const max = childrenMaxCharsForAge(parseChildrenTargetAge(opts.targetAge));
-  const parsed = parseChildrenStoryOutput(raw);
-  const body = truncateNovelToMaxChars(parsed.body, max + 50);
-  const storyTitle = parsed.storyTitle || opts.fallbackTitle || "未命名";
+  opts: { targetAge: ChildrenTargetAge; fallbackTitle?: string; userPrompt?: string },
+): ParsedChildrenStoryOutput & { dbTitle: string; publishedContent: string } {
+  const age = parseChildrenTargetAge(opts.targetAge);
+  const max = childrenMaxCharsForAge(age);
+  const parsed = parseChildrenStoryOutput(raw, age);
+  let body = stripChildrenChapterMarkers(parsed.body.trim());
+  if (body.length > max + 20) {
+    body = truncateNovelToMaxChars(body, max + 20);
+  }
+  const storyTitle = resolveChildrenStoryTitle(
+    parsed.storyTitle,
+    opts.userPrompt,
+    opts.fallbackTitle,
+  );
+  const interpretation = parsed.interpretation;
+  const parentReadingTip = parsed.parentReadingTip;
   return {
-    storyTitle,
+    interpretation,
+    storyTitle: storyTitle,
     body,
-    parentReadingTip: parsed.parentReadingTip,
+    parentReadingTip,
     dbTitle: childrenNovelDbTitle(storyTitle, opts.fallbackTitle),
+    publishedContent: formatChildrenPublishedContent(
+      interpretation,
+      body,
+      parentReadingTip,
+      age,
+    ),
   };
+}
+
+/** 供验收：正文是否落在档位区间内（允许略超上限 20 字） */
+export function childrenBodyWithinTier(body: string, age: ChildrenTargetAge): boolean {
+  const len = body.trim().length;
+  const max = childrenMaxCharsForAge(age) + 20;
+  return len >= childrenMinCharsForAge(age) && len <= max;
 }

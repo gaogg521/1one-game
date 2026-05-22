@@ -9,6 +9,8 @@ export type ChildrenNovelMeta = {
   kind: "children";
   targetAge: ChildrenTargetAge;
   maxChars: number;
+  /** 成稿【创意/典故深度解读】 */
+  sourceInterpretation?: string;
   /** 成稿【家长共读】一句（≤20 字） */
   parentReadingTip?: string;
   /** 成稿【故事标题】（≤12 字） */
@@ -34,6 +36,9 @@ export function parseChildrenNovelMeta(raw: string | null | undefined): Children
           typeof o.maxChars === "number" && o.maxChars > 0
             ? Math.floor(o.maxChars)
             : childrenMaxCharsForAge(targetAge),
+        ...(typeof o.sourceInterpretation === "string" && o.sourceInterpretation.trim()
+          ? { sourceInterpretation: o.sourceInterpretation.trim().slice(0, 220) }
+          : {}),
         ...(typeof o.parentReadingTip === "string" && o.parentReadingTip.trim()
           ? { parentReadingTip: o.parentReadingTip.trim() }
           : {}),
