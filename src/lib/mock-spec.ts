@@ -76,7 +76,7 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
 
   let templateId: GameSpec["templateId"] = "avoider";
   if (
-    /塔防|保卫萝卜|防御塔|箭塔|炮塔|放置塔|波次防守|tower\s*defen[cs]e|\btd\b|tower\s*defence/i.test(p)
+    /塔防|保卫萝卜|防御塔|箭塔|炮塔|放置塔|波次防守|植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙|tower\s*defen[cs]e|\btd\b|tower\s*defence/i.test(p)
   ) {
     templateId = "towerDefense";
   } else if (

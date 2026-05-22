@@ -38,9 +38,13 @@ function inferTemplate(
   templateHint: "auto" | GameSpec["templateId"],
 ): ParsedIntent["templateHint"] {
   if (templateHint !== "auto") return templateHint;
+
+  // 显式游戏名作优先于 genre-pack 默认模板（防止"植物大战僵尸"被 horror-survival 的 survivor 覆盖）
+  const p = prompt.toLowerCase();
+  if (/植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙/i.test(p)) return "towerDefense";
+
   if (pack.defaultTemplate !== "auto") return pack.defaultTemplate;
 
-  const p = prompt.toLowerCase();
   if (/塔防|保卫|波次|箭塔|炮塔|tower|td\b/i.test(p)) return "towerDefense";
   if (/射击|飞船|敌机|弹幕|战机|shooter/i.test(p)) return "shooter";
   if (/平台|跳跃|闯关|platformer/i.test(p)) return "platformer";

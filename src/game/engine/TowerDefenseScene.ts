@@ -1282,6 +1282,8 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   /** 卡通角色风格炮塔贴图：圆形身体+眼睛+类型专属装饰，保卫萝卜风格 */
   private ensureTowerTextureForId(towerId: string, fillHex: string): string {
+    // AI sprite fallback: if user-uploaded or AI-generated player sprite exists, use it for all towers
+    if (this.textures.exists("texPlayer")) return "texPlayer";
     const key = `texTower_${towerId}`;
     if (this.textures.exists(key)) return key;
     const gr = this.make.graphics({ x: 0, y: 0 });
@@ -1540,6 +1542,10 @@ export class TowerDefenseScene extends Phaser.Scene {
       const pick = this.userMonsterTexKeys[this.userMonsterCycle % this.userMonsterTexKeys.length]!;
       this.userMonsterCycle += 1;
       if (this.textures.exists(pick)) tex = pick;
+    } else if (enemyId === "tank" && this.textures.exists("texBoss")) {
+      tex = "texBoss"; // AI boss sprite for heavy enemies
+    } else if (this.textures.exists("texHazard")) {
+      tex = "texHazard"; // AI hazard sprite for standard enemies
     } else if (!this.textures.exists(texDefault)) {
       ensureTdEnemyTextures(
         this,

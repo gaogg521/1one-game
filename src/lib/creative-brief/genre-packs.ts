@@ -99,7 +99,7 @@ export const GENRE_PACKS: GenrePack[] = [
   {
     id: "tower-defense",
     label: "塔防防线",
-    match: [/塔防|保卫|波次|箭塔|炮塔|防线|萝卜|tower\s*defense|\btd\b/i],
+    match: [/塔防|保卫|波次|箭塔|炮塔|防线|萝卜|植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙|tower\s*defense|\btd\b/i],
     defaultTemplate: "towerDefense",
     defaultTone: "neutral",
     logline: (u) => `沿固定路线抵御 ${u.slice(0, 24) || "敌军"} 的多波进攻，建造与升级防御塔守住基地。`,
