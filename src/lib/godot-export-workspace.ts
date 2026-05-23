@@ -4,8 +4,10 @@ import path from "node:path";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import {
+  readAiSpritesAsReferencePayloads,
   summarizeGodotReferenceManifest,
   writeGodotReferenceAssets,
+  adjustAiSpritePurposesForTemplate,
   type GodotReferenceBuildSummary,
 } from "@/lib/godot-export-refs";
 import { prepareSpecForGodotExport } from "@/lib/godot-export-spec";
@@ -22,7 +24,7 @@ import {
 import { ensureGodotUiFont } from "@/lib/godot-ui-font";
 
 /** 母版 GDScript 变更时递增，使旧 Web 构建缓存失效 */
-const GODOT_RUNTIME_BUILD_REV = "20260520-ref-ingest-cache";
+const GODOT_RUNTIME_BUILD_REV = "20260523-tower-skin-fallback";
 
 export type PreparedGodotWorkspace = {
   exportId: string;
@@ -95,8 +97,23 @@ export async function prepareGodotWorkspace(params: {
   const exportId = godotExportCacheKey(spec, params.projectId, refDigest);
 
   return withGodotPrepareLock(exportId, async () => {
+    // 读取 AI sprites 状态并纳入 specHash，确保精灵生成后缓存能失效
+    const aiSpriteStateParts: string[] = [];
+    if (params.projectId) {
+      const spriteDir = path.join(repoRoot(), "public", "game-sprites", params.projectId);
+      for (const kind of ["player", "hazard", "gem", "power", "boss"]) {
+        try {
+          const stats = await fs.stat(path.join(spriteDir, `${kind}.png`));
+          aiSpriteStateParts.push(`${kind}:${stats.size}`);
+        } catch {
+          aiSpriteStateParts.push(`${kind}:none`);
+        }
+      }
+    }
+    const aiSpriteState = aiSpriteStateParts.join(",");
+
     const specHash = createHash("sha256")
-      .update(safeJsonStringify({ spec, rev: GODOT_RUNTIME_BUILD_REV, refDigest }))
+      .update(safeJsonStringify({ spec, rev: GODOT_RUNTIME_BUILD_REV, refDigest, aiSpriteState }))
       .digest("hex");
     const workRoot = path.join(repoRoot(), "workspaces", "godot-exports", exportId);
     const metaPath = path.join(workRoot, ".1one-spec-hash.json");
@@ -128,7 +145,12 @@ export async function prepareGodotWorkspace(params: {
     await fs.writeFile(bridgePath, patchGameSpecBridgeGdSource(bridgeSrc, spec), "utf8");
     await fs.mkdir(path.dirname(specJsonPath), { recursive: true });
     await fs.writeFile(specJsonPath, JSON.stringify(spec, null, 2), "utf8");
-    const manifest = await writeGodotReferenceAssets(workRoot, params.referencePayloads);
+    const aiSprites = params.projectId
+      ? await readAiSpritesAsReferencePayloads(params.projectId, process.cwd())
+      : [];
+    const adjustedSprites = adjustAiSpritePurposesForTemplate(aiSprites, spec.templateId);
+    const allPayloads = [...(params.referencePayloads ?? []), ...adjustedSprites];
+    const manifest = await writeGodotReferenceAssets(workRoot, allPayloads);
     const referenceSummary = summarizeGodotReferenceManifest(manifest);
     await assertShooterRuntimeSafe(workRoot);
     await fs.writeFile(

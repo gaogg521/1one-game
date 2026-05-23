@@ -170,6 +170,28 @@ function splitReferenceImageCaptions(section: string): string[] {
     .filter((s) => s.startsWith("【参考图"));
 }
 
+async function checkSpriteFile(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForSprites(projectId: string, timeoutMs = 300_000, intervalMs = 5000): Promise<boolean> {
+  const kinds = ["player", "hazard", "gem", "power", "boss"];
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const results = await Promise.all(
+      kinds.map((k) => checkSpriteFile(`/game-sprites/${projectId}/${k}.png`)),
+    );
+    if (results.every(Boolean)) return true;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
 export default function CreateClient(props: { initialPrompt?: string; replayFromProjectId?: string }) {
   const router = useRouter();
   const replayId = props.replayFromProjectId?.trim();
@@ -177,7 +199,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [prompt, setPrompt] = useState(() =>
     replayId ? "" : (props.initialPrompt ?? "").slice(0, 4000),
   );
-  const [busy, setBusy] = useState<"idle" | "gen" | "gen_variants" | "save">("idle");
+  const [busy, setBusy] = useState<"idle" | "gen" | "gen_variants" | "save" | "sprites">("idle");
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<GameSpec | null>(null);
   const [genSource, setGenSource] = useState<string | null>(null);
@@ -912,12 +934,20 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         return;
       }
       setProjectId(nextProjectId);
-      // 后台异步生成游戏背景图（不阻塞跳转）
-      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, { method: "POST" });
-      router.push(`/play/${nextProjectId}`);
+      // 后台异步触发精灵/背景生成
+      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, { method: "POST", keepalive: true });
+
+      // 等待精灵生成完成再跳转（确保用户第一次看到游戏就有贴图）
+      setBusy("sprites");
+      const ready = await waitForSprites(nextProjectId);
+      if (ready) {
+        router.push(`/play/${nextProjectId}`);
+      } else {
+        setError("精灵生成超时，项目已保存。请稍后刷新试玩页。");
+        setBusy("idle");
+      }
     } catch {
       setError("网络异常");
-    } finally {
       setBusy("idle");
     }
   }, [creativeBrief, projectId, prompt, router, spec]);
@@ -935,7 +965,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
   const len = prompt.length;
   const busyLabel =
-    busy === "gen" ? "生成中…" : busy === "gen_variants" ? "并行生成多套方案…" : busy === "save" ? "保存中…" : null;
+    busy === "gen" ? "生成中…" : busy === "gen_variants" ? "并行生成多套方案…" : busy === "save" ? "保存中…" : busy === "sprites" ? "生成游戏贴图中…" : null;
 
   const stepMeta = STEP_META[streamStep ?? ""] ?? (busy === "gen" ? STEP_META.running : null);
   const stepProgress = stepMeta?.progress ?? 0;
@@ -1443,6 +1473,15 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             {busyLabel ? (
               <p className="text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)]">{busyLabel}</p>
             ) : null}
+
+            {busy === "sprites" && (
+              <div className="flex items-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_30%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,var(--gc-surface-glass))] px-4 py-3">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[color:color-mix(in_srgb,var(--gc-accent)_60%,transparent)] border-t-transparent" />
+                <span className="text-sm text-[var(--gc-text)]">
+                  正在生成专属游戏贴图（豌豆射手、僵尸、背景等），约需 2-3 分钟，完成后自动跳转试玩页…
+                </span>
+              </div>
+            )}
 
 
             {busy !== "gen" && ingestBusy ? (

@@ -123,6 +123,8 @@ export default function StudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<WorkType | "all">("all");
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     if (!rows) return null;
@@ -296,6 +298,68 @@ export default function StudioPage() {
     if (data.comic?.id) router.push(`/comic/${data.comic.id}`);
   }
 
+  function toggleSelect(type: WorkType, id: string) {
+    const key = `${type}-${id}`;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (!filtered) return;
+    const next = new Set<string>();
+    filtered.forEach((r) => next.add(`${r.type}-${r.id}`));
+    setSelectedIds(next);
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function handleBatchDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定要批量删除已选择的 ${selectedIds.size} 个作品吗？此操作不可逆！`)) return;
+
+    const items = Array.from(selectedIds).map((key) => {
+      const [type, id] = key.split("-");
+      return { id, type: type as WorkType };
+    });
+
+    try {
+      const res = await fetch("/api/studio/batch-delete", superAdminFetchInit({
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      }));
+
+      const data = (await readApiJson(res)) as {
+        ok?: boolean;
+        deletedCount?: number;
+        errors?: string[];
+      };
+
+      if (res.ok && data?.ok) {
+        const deletedSet = new Set(Array.from(selectedIds));
+        setRows((prev) => (prev ? prev.filter((r) => !deletedSet.has(`${r.type}-${r.id}`)) : prev));
+        setSelectedIds(new Set());
+        setIsBatchMode(false);
+        if (data.errors && data.errors.length > 0) {
+          alert(`删除完毕，部分未能成功：\n${data.errors.join("\n")}`);
+        }
+      } else {
+        alert("批量删除失败，请重试");
+      }
+    } catch (e) {
+      alert(`发生错误: ${e instanceof Error ? e.message : "未知错误"}`);
+    }
+  }
+
   const filterButtons: { key: WorkType | "all"; label: string }[] = [
     { key: "all", label: "全部" },
     { key: "project", label: "游戏" },
@@ -314,12 +378,26 @@ export default function StudioPage() {
               管理你的游戏、小说和动漫作品。按类型筛选，快速找到需要的内容。
             </p>
           </div>
-          <Link
-            href="/create"
-            className="gc-theme-cta rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg hover:brightness-110"
-          >
-            新建作品
-          </Link>
+          <div className="flex gap-3">
+            {rows && rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBatchMode(!isBatchMode);
+                  setSelectedIds(new Set());
+                }}
+                className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-5 py-2.5 text-sm font-semibold hover:bg-[var(--gc-surface-glass)]"
+              >
+                {isBatchMode ? "取消管理" : "批量管理"}
+              </button>
+            )}
+            <Link
+              href="/create"
+              className="gc-theme-cta rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg hover:brightness-110"
+            >
+              新建作品
+            </Link>
+          </div>
         </div>
 
         {error ? (
@@ -359,6 +437,35 @@ export default function StudioPage() {
           </div>
         ) : null}
 
+        {isBatchMode && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 shadow-sm">
+            <div className="flex items-center gap-3 text-sm">
+              <span>已选择 <strong className="text-[color:var(--gc-accent)]">{selectedIds.size}</strong> 项</span>
+              <button
+                type="button"
+                onClick={selectedIds.size === filtered?.length ? clearSelection : selectAll}
+                className="text-xs font-semibold text-[color:var(--gc-accent)] hover:underline cursor-pointer"
+              >
+                {selectedIds.size === filtered?.length ? "取消全选" : "全选当前"}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={handleBatchDelete}
+                className={`rounded-full px-5 py-2 text-xs font-semibold text-white transition ${
+                  selectedIds.size === 0
+                    ? "bg-red-500/30 text-white/50 cursor-not-allowed border border-transparent"
+                    : "bg-red-500 hover:bg-red-600 active:scale-95 shadow-md cursor-pointer border border-transparent"
+                }`}
+              >
+                批量删除
+              </button>
+            </div>
+          </div>
+        )}
+
         {rows === null ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {[1, 2, 3, 4].map((i) => (
@@ -381,107 +488,152 @@ export default function StudioPage() {
           </div>
         ) : (
           <ul className="grid gap-5 sm:grid-cols-2">
-            {filtered?.map((r) => (
-              <li
-                key={`${r.type}-${r.id}`}
-                className="gc-card flex flex-col gap-3 overflow-hidden p-0 transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
-              >
-                <Link
-                  href={getWorkLink(r.type, r.id)}
-                  className="relative block aspect-video w-full overflow-hidden bg-[var(--gc-bg-elevated)]"
-                >
-                  <CoverThumb
-                    coverPath={r.coverPath}
-                    alt={`《${r.title}》封面`}
-                    className="h-full min-h-[140px] w-full object-cover transition duration-300 hover:scale-[1.03]"
-                    placeholder={
-                      <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
-                        <span className="text-3xl opacity-50" aria-hidden>
-                          {getWorkIcon(r.type)}
-                        </span>
-                        <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
-                          {r.type === "project" ? "试玩后自动生成封面" : "封面生成中…"}
-                        </span>
-                      </div>
+            {filtered?.map((r) => {
+              const isSelected = selectedIds.has(`${r.type}-${r.id}`);
+              return (
+                <li
+                  key={`${r.type}-${r.id}`}
+                  onClick={(e) => {
+                    if (isBatchMode) {
+                      e.preventDefault();
+                      toggleSelect(r.type, r.id);
                     }
-                  />
-                  <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                    {getWorkTypeLabel(r.type)}
-                  </span>
-                </Link>
-                <div className="flex flex-col gap-2 px-5 pb-1 pt-0">
+                  }}
+                  className={`gc-card flex flex-col gap-3 overflow-hidden p-0 transition cursor-pointer relative ${
+                    isBatchMode && isSelected
+                      ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] shadow-lg scale-[1.01]"
+                      : isBatchMode
+                        ? "border-[color:var(--gc-border)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_30%,transparent)]"
+                        : "hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
+                  }`}
+                >
                   <Link
                     href={getWorkLink(r.type, r.id)}
-                    className="truncate text-lg font-semibold text-[var(--gc-text)] hover:text-[color:var(--gc-accent)]"
+                    onClick={(e) => {
+                      if (isBatchMode) e.preventDefault();
+                    }}
+                    className="relative block aspect-video w-full overflow-hidden bg-[var(--gc-bg-elevated)]"
                   >
-                    {r.title}
+                    {isBatchMode && (
+                      <div className="absolute left-3 top-3 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/60 shadow backdrop-blur-md">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          className="h-3.5 w-3.5 accent-[var(--gc-accent)] cursor-pointer"
+                        />
+                      </div>
+                    )}
+                    <CoverThumb
+                      coverPath={r.coverPath}
+                      alt={`《${r.title}》封面`}
+                      className="h-full min-h-[140px] w-full object-cover transition duration-300 hover:scale-[1.03]"
+                      placeholder={
+                        <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
+                          <span className="text-3xl opacity-50" aria-hidden>
+                            {getWorkIcon(r.type)}
+                          </span>
+                          <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
+                            {r.type === "project" ? "试玩后自动生成封面" : "封面生成中…"}
+                          </span>
+                        </div>
+                      }
+                    />
+                    <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                      {getWorkTypeLabel(r.type)}
+                    </span>
                   </Link>
-                  <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">{r.prompt}</p>
-                  {r.shareCode ? (
-                    <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
-                      短链 /s/{r.shareCode}
+                  <div className="flex flex-col gap-2 px-5 pb-5 pt-0">
+                    <Link
+                      href={getWorkLink(r.type, r.id)}
+                      onClick={(e) => {
+                        if (isBatchMode) e.preventDefault();
+                      }}
+                      className="truncate text-lg font-semibold text-[var(--gc-text)] hover:text-[color:var(--gc-accent)]"
+                    >
+                      {r.title}
+                    </Link>
+                    <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">{r.prompt}</p>
+                    {r.shareCode ? (
+                      <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
+                        短链 /s/{r.shareCode}
+                      </p>
+                    ) : null}
+                    <p className="text-[11px] uppercase tracking-wider text-[var(--gc-text-faint)]">
+                      更新 {formatWhen(r.updatedAt)}
                     </p>
-                  ) : null}
-                  <p className="text-[11px] uppercase tracking-wider text-[var(--gc-text-faint)]">
-                    更新 {formatWhen(r.updatedAt)}
-                  </p>
-                  <div className="flex items-center gap-3 text-[11px] text-[var(--gc-text-faint)]">
-                    {r.playCount > 0 && <span>▶ {r.playCount} 次试玩</span>}
-                    {r.likeCount > 0 && <span>♥ {r.likeCount} 点赞</span>}
+                    <div className="flex items-center gap-3 text-[11px] text-[var(--gc-text-faint)]">
+                      {r.playCount > 0 && <span>▶ {r.playCount} 次试玩</span>}
+                      {r.likeCount > 0 && <span>♥ {r.likeCount} 点赞</span>}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-2 border-t border-[color:var(--gc-border)] px-5 pb-5 pt-3">
-                  <Link
-                    href={getWorkLink(r.type, r.id)}
-                    className="rounded-full bg-[var(--gc-surface-glass-strong)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text)] hover:bg-[color:color-mix(in_srgb,var(--gc-text)_14%,transparent)]"
-                  >
-                    打开
-                  </Link>
-                  {r.type === "project" && (
-                    <>
+                  {!isBatchMode && (
+                    <div className="flex flex-wrap gap-2 border-t border-[color:var(--gc-border)] px-5 pb-5 pt-3">
                       <Link
-                        href={`/create?from=${encodeURIComponent(r.id)}`}
-                        className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
+                        href={getWorkLink(r.type, r.id)}
+                        className="rounded-full bg-[var(--gc-surface-glass-strong)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text)] hover:bg-[color:color-mix(in_srgb,var(--gc-text)_14%,transparent)]"
                       >
-                        再生成
+                        打开
                       </Link>
+                      {r.type === "project" && (
+                        <>
+                          <Link
+                            href={`/create?from=${encodeURIComponent(r.id)}`}
+                            className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
+                          >
+                            再生成
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void duplicateProject(r.id);
+                            }}
+                            className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                          >
+                            复制副本
+                          </button>
+                        </>
+                      )}
+                      {r.type === "novel" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void duplicateNovel(r.id);
+                          }}
+                          className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                        >
+                          复制副本
+                        </button>
+                      )}
+                      {r.type === "comic" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void duplicateComic(r.id);
+                          }}
+                          className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                        >
+                          复制副本
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => void duplicateProject(r.id)}
-                        className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void remove(r.id, r.type);
+                        }}
+                        className="ml-auto rounded-full px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:text-red-400"
                       >
-                        复制副本
+                        删除
                       </button>
-                    </>
+                    </div>
                   )}
-                  {r.type === "novel" && (
-                    <button
-                      type="button"
-                      onClick={() => void duplicateNovel(r.id)}
-                      className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
-                    >
-                      复制副本
-                    </button>
-                  )}
-                  {r.type === "comic" && (
-                    <button
-                      type="button"
-                      onClick={() => void duplicateComic(r.id)}
-                      className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
-                    >
-                      复制副本
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void remove(r.id, r.type)}
-                    className="ml-auto rounded-full px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:text-red-400"
-                  >
-                    删除
-                  </button>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </main>

@@ -448,3 +448,48 @@ Completed:
 Changed Files:
 
 - （见 `iterations/2026-05-16.md` 全自动迭代）
+
+---
+
+## 2026-05-23 — Godot 塔防精灵贴图修复 + 知识库整理
+
+Completed:
+
+- 修复 Godot 塔防中塔（植物/豌豆射手）显示默认几何造型的问题
+  - 根因：`player.png` purpose "主角 守护者" 被分到 protagonist，towerSkins 为空
+  - 修复 1：`writeGodotReferenceAssets` 双向 fallback（protagonist ↔ towerSkins 共享纹理）
+  - 修复 2：新增 `adjustAiSpritePurposesForTemplate`，`towerDefense` 模板下 player.png 改为 "防御塔 植物 豌豆射手"
+  - 修复 3：`GODOT_RUNTIME_BUILD_REV` 递增使旧缓存失效
+- 修复 Node.js 僵尸进程：`run-dev.mjs` 移除 `shell:true`，改为直接 spawn
+- 修复 `game_audio.gd`：`DisplayServer.is_headless()` 不存在 → `get_name() == "headless"`
+- 修复 `game_audio.gd`：`var scale` 冲突 → `arp_scale`
+- 前端 saveAndPlay 等待精灵生成完成后再跳转
+- 知识库整理：更新 CURRENT_STATUS.md、DECISIONS.md、SESSION_LOG.md
+
+Changed Files:
+
+- `src/lib/godot-export-refs.ts`
+- `src/lib/godot-export-workspace.ts`
+- `godot-templates/ai-mother-universal/scripts/autoload/game_audio.gd`
+- `scripts/run-dev.mjs`
+- `src/app/create/CreateClient.tsx`
+- `src/lib/godot-export.ts`
+- `PROJECT_MEMORY/*`
+
+Test Results:
+
+- `npx tsc --noEmit`：**通过**（会话内）
+- E2E / 全量 QA：**未重跑**
+
+Issues Fixed:
+
+- Godot 塔防塔无 AI 精灵贴图（显示默认几何造型）
+- Node.js 僵尸进程崩溃（1414 个进程占满内存）
+- Godot Web 导出 500 错误（GDScript `is_headless` 不存在、`scale` 变量冲突）
+
+Next:
+
+- 用户验证 Godot 塔防贴图是否正常显示
+- 如需：微调 UI（金币/怪物/地图参数调节）
+- 如需：排查 Phaser 侧贴图尺寸问题
+

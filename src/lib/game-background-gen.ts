@@ -22,14 +22,22 @@ function buildBackgroundPrompt(spec: GameSpec): string {
   const mood = subtitle || title;
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
 
-  const templateStyle =
-    spec.templateId === "platformer"
-      ? "side-scrolling platformer game background, layered parallax scenery"
-      : spec.templateId === "towerDefense"
-        ? "top-down tactical game background, gridded terrain with path"
-        : spec.templateId === "shooter"
-          ? "top-down space shooter background, starfield with nebulae"
-          : "abstract geometric game background, clean flat design";
+  // 风格检测：与 game-sprite-gen.ts 保持一致
+  const allText = `${title} ${mood} ${spec.labels?.player || ""} ${spec.labels?.hazard || ""}`.toLowerCase();
+  const isPvZ = /植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant|温室|防线|射手|阳光|塔防|腐化|变异|植/.test(allText);
+
+  let templateStyle: string;
+  if (spec.templateId === "platformer") {
+    templateStyle = "side-scrolling platformer game background, layered parallax scenery";
+  } else if (spec.templateId === "towerDefense") {
+    templateStyle = isPvZ
+      ? " Plants vs Zombies style garden lawn background, green grassy yard with curved dirt paths, wooden fence, small flower beds, daytime bright and cheerful"
+      : "top-down tactical game background, gridded terrain with path";
+  } else if (spec.templateId === "shooter") {
+    templateStyle = "top-down space shooter background, starfield with nebulae";
+  } else {
+    templateStyle = "abstract geometric game background, clean flat design";
+  }
 
   return [
     `2D game background scene, ${templateStyle}`,
@@ -66,12 +74,17 @@ export async function generateGameBackground(
 
     // 下载图片到 public/game-bg/
     ensureDir();
-    const res = await fetch(result.url);
-    if (!res.ok) {
-      console.warn(`[game-bg] 下载背景失败 HTTP ${res.status}`);
-      return null;
+    let buffer: Buffer;
+    if (result.localPath && fs.existsSync(result.localPath)) {
+      buffer = fs.readFileSync(result.localPath);
+    } else {
+      const res = await fetch(result.url);
+      if (!res.ok) {
+        console.warn(`[game-bg] 下载背景失败 HTTP ${res.status}`);
+        return null;
+      }
+      buffer = Buffer.from(await res.arrayBuffer());
     }
-    const buffer = Buffer.from(await res.arrayBuffer());
     const destPath = path.join(BG_DIR, `${projectId}.png`);
     fs.writeFileSync(destPath, buffer);
     console.info(`[game-bg] 背景已保存 ${destPath}`);

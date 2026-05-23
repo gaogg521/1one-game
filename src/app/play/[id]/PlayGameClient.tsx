@@ -71,6 +71,8 @@ export function PlayGameClient({ id }: { id: string }) {
           if (PRODUCT.godot.enabled && isGodotExportSupported(data.spec)) {
             prefetchGodotExport(data.spec, { projectId: id });
           }
+          // 保险：若精灵/背景尚未生成，后台静默触发一次（服务端有缓存，重复无害）
+          void fetch(`/api/projects/${id}/background`, { method: "POST", keepalive: true });
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
@@ -423,7 +425,7 @@ export function PlayGameClient({ id }: { id: string }) {
                     setPatchError(null);
                     setSaveMsg(null);
                   }}
-                  placeholder="用一句话修改游戏，例如：把敌人速度加快一倍，改成宇宙主题…"
+                  placeholder="用一句话修改游戏：例如『初始金币加到200』『让僵尸走慢点』『背景换成深绿草地』…"
                   disabled={patchBusy}
                   className="min-w-0 flex-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm text-[var(--gc-text)] placeholder:text-[var(--gc-muted)] focus:outline-none focus:ring-1 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] disabled:opacity-50"
                 />

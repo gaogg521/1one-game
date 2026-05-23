@@ -1,6 +1,60 @@
 # DECISIONS
 
-更新时间：**2026-05-17**
+更新时间：**2026-05-23**
+
+## 2026-05-23 — AI 精灵分类策略
+
+**背景**：AI 生成的 5 张精灵（player/hazard/boss/gem/power）通过 purpose 正则分类到 Godot 参考图系统（background/protagonist/monsters/towerSkins）。塔防场景下 player.png 应作为塔皮肤，但"主角 守护者"匹配 protagonist 正则。
+
+**决策**：
+1. **兜底策略**：`writeGodotReferenceAssets` 中增加双向 fallback，若一方为空而另一方有值则自动共享。此策略对所有模板通用，无副作用。
+2. **精确策略**：新增 `adjustAiSpritePurposesForTemplate` 辅助函数，按 `spec.templateId` 调整 purpose。目前仅 `towerDefense` 需要特殊处理（player.png → "防御塔 植物 豌豆射手"）。
+
+**原因**：
+- 兜底策略简单安全，覆盖未来未知模板
+- 精确策略在源头修正分类，避免依赖 fallback
+- 两者共存，兜底作为精确策略的保险
+
+**影响文件**：
+- `src/lib/godot-export-refs.ts`
+- `src/lib/godot-export-workspace.ts`
+
+---
+
+## 2026-05-23 — AI 精灵分类策略
+
+**背景**：AI 生成的 5 张精灵（player/hazard/boss/gem/power）通过 purpose 正则分类到 Godot 参考图系统（background/protagonist/monsters/towerSkins）。塔防场景下 player.png 应作为塔皮肤，但"主角 守护者"匹配 protagonist 正则，导致塔防运行时 towerSkins 为空、塔显示默认几何造型。
+
+**决策**：
+1. **兜底策略**：`writeGodotReferenceAssets` 中增加双向 fallback，若 `towerSkins` 为空但 `protagonist` 有值则自动共享纹理，反向亦然。此策略对所有模板通用，无副作用（射击/平台等模板不读取 towerSkins）。
+2. **精确策略**：新增 `adjustAiSpritePurposesForTemplate` 辅助函数，按 `spec.templateId` 调整 purpose。目前仅 `towerDefense` 需要特殊处理（player.png purpose 改为"防御塔 植物 豌豆射手"）。
+
+**原因**：
+- 兜底策略简单安全，覆盖未来未知模板
+- 精确策略在源头修正分类，避免依赖 fallback
+- 两者共存，兜底作为精确策略的保险
+
+**影响文件**：
+- `src/lib/godot-export-refs.ts`
+- `src/lib/godot-export-workspace.ts`
+
+---
+
+## 2026-05-23 — AI 精灵分类策略（Godot 参考图系统）
+
+**背景**：AI 生成的 5 张精灵（player/hazard/boss/gem/power）通过 `purpose` 字段的正则表达式分类到 Godot 参考图系统的四个类别：background / protagonist / monsters / towerSkins。塔防模板下 `player.png` 应作为塔皮肤，但硬编码 purpose "主角 守护者" 匹配 protagonist 正则，导致塔没有自定义贴图。
+
+**决策**：
+1. **兜底策略**：`writeGodotReferenceAssets` 中增加双向 fallback——若 `towerSkins` 为空但 `protagonist` 有值则自动共享纹理，反之亦然。此策略对所有模板通用，无副作用。
+2. **精确策略**：新增 `adjustAiSpritePurposesForTemplate` 辅助函数，按 `spec.templateId` 调整 purpose。目前仅 `towerDefense` 需要特殊处理（player.png purpose 改为 "防御塔 植物 豌豆射手"），使其被 `classifyReferencePayloads` 正确分到 towerSkin。
+
+**原因**：兜底策略简单安全，覆盖未来未知模板；精确策略在源头修正分类，避免依赖 fallback。两者共存，兜底作为精确策略的保险。
+
+**影响文件**：
+- `src/lib/godot-export-refs.ts`
+- `src/lib/godot-export-workspace.ts`
+
+---
 
 ## 2026-05-17 — 产品配置内聚
 

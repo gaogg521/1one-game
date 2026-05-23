@@ -106,14 +106,21 @@ export async function exportGameSpecToGodotWeb(params: {
           referenceSummary?: GodotReferenceBuildSummary;
         };
         if (meta.specHash === specHash) {
-          return {
-            ok: true,
-            buildUrl: `/godot-builds/${exportId}/index.html`,
-            exportId,
-            cached: true,
-            templateId: spec.templateId,
-            referenceSummary: meta.referenceSummary ?? referenceSummary,
-          };
+          const cacheRef = meta.referenceSummary?.imageCount ?? 0;
+          const currRef = referenceSummary.imageCount ?? 0;
+          if (cacheRef !== currRef) {
+            console.info(`[godot-export] 参考资产数量变化 ${cacheRef}→${currRef}，重建 ${exportId}`);
+            await fs.rm(publicOut, { recursive: true, force: true });
+          } else {
+            return {
+              ok: true,
+              buildUrl: `/godot-builds/${exportId}/index.html`,
+              exportId,
+              cached: true,
+              templateId: spec.templateId,
+              referenceSummary: meta.referenceSummary ?? referenceSummary,
+            };
+          }
         }
       }
     } catch {

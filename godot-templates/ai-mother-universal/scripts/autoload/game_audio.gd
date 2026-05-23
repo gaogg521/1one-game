@@ -13,9 +13,9 @@ var _arp_idx := 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	if DisplayServer.is_headless():
-		return
 	_muted = DisplayServer.get_name() == "headless"
+	if _muted:
+		return
 	_ambient = AudioStreamPlayer.new()
 	_ambient.bus = &"Master"
 	_ambient.volume_db = -14.0
@@ -73,9 +73,9 @@ func _start_ambient() -> void:
 func _arp_ping() -> void:
 	if not _booted:
 		return
-	var scale := [1.0, 1.25, 1.5, 1.25][_arp_idx % 4]
+	var arp_scale := [1.0, 1.25, 1.5, 1.25][_arp_idx % 4]
 	_arp_idx += 1
-	GameBleeps.play(self, GameBleeps.Kind.PICKUP, 0.55 * scale)
+	GameBleeps.play(self, GameBleeps.Kind.PICKUP, 0.55 * arp_scale)
 
 
 func _infer_root_hz() -> float:

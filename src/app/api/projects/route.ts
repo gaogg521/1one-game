@@ -8,6 +8,8 @@ import {
   serializeCreativeBrief,
 } from "@/lib/project-creative-brief-parse";
 import { saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
+import { generateGameSprites } from "@/lib/game-sprite-gen";
+import { generateGameBackground } from "@/lib/game-background-gen";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 
@@ -86,6 +88,9 @@ export async function POST(req: Request) {
     if (briefJson && !project.creativeBriefJson) {
       await saveCreativeBriefJson(project.id, briefJson);
     }
+    // 后台静默触发精灵/背景生成（不阻塞响应；服务端已有缓存检查，重复无害）
+    void generateGameSprites(project.id, spec).catch(() => {});
+    void generateGameBackground(project.id, spec).catch(() => {});
     return NextResponse.json({
       project: { id: project.id, title: project.title, shareCode: project.shareCode },
     });

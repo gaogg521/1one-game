@@ -11,6 +11,10 @@ import {
   loadReferencePayloadsFromIngestCache,
   mergeReferencePayloads,
 } from "@/lib/reference-ingest-server-cache";
+import { generateGameSprites } from "@/lib/game-sprite-gen";
+import { generateGameBackground } from "@/lib/game-background-gen";
+import fs from "node:fs";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -76,6 +80,23 @@ export async function POST(req: Request) {
     );
   }
   const spec = toPlainJson(coerced.spec);
+
+  // 若带 projectId 且精灵尚未生成，后台静默触发（不阻塞导出）
+  if (parsed.data.projectId) {
+    const spriteDir = path.join(process.cwd(), "public", "game-sprites", parsed.data.projectId);
+    const hasSprites = fs.existsSync(path.join(spriteDir, "player.png"));
+    if (!hasSprites) {
+      console.info(`[godot-export] 项目 ${parsed.data.projectId} 精灵未生成，后台触发…`);
+      void Promise.all([
+        generateGameSprites(parsed.data.projectId, coerced.spec),
+        generateGameBackground(parsed.data.projectId, coerced.spec),
+      ]).then(() => {
+        console.info(`[godot-export] 项目 ${parsed.data.projectId} 精灵/背景生成完成`);
+      }).catch((e) => {
+        console.warn(`[godot-export] 项目 ${parsed.data.projectId} 精灵生成异常:`, e instanceof Error ? e.message : String(e));
+      });
+    }
+  }
 
   if (!isGodotExportSupported(spec)) {
     return NextResponse.json(

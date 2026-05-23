@@ -70,11 +70,11 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
       <summary className="cursor-pointer list-none font-semibold text-[var(--gc-text-soft)] outline-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--gc-accent)]" />
-          快速调试（速率 / 经济与导演强度 / 配色）
+          ⚡ 实时微调面板 — 金币、怪物、配色、速率
         </span>
       </summary>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--gc-text-faint)]">
-        修改会立即驱动左侧试玩重载。数值已按 GameSpec 合法范围夹取；保存作品时以当前调试结果为准。
+        修改会立即驱动左侧试玩重载。调整金币、怪物强度、颜色、速度等参数；保存作品时以当前调试结果为准。
       </p>
 
       <div className="mt-4 space-y-5">
@@ -178,10 +178,10 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
                 <input
                   type="number"
                   min={40}
-                  max={400}
+                  max={999}
                   value={Math.round(gp.startingCoins ?? 120)}
                   onChange={(e) =>
-                    patchGameplay({ startingCoins: clamp(Number(e.target.value) || 120, 40, 400) })
+                    patchGameplay({ startingCoins: clamp(Number(e.target.value) || 120, 40, 999) })
                   }
                   className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-[var(--gc-text)]"
                 />
