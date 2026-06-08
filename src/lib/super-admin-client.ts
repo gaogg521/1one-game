@@ -1,5 +1,10 @@
 const STORAGE_KEY = "gc_super_admin_key";
 
+/** 与 .env 中 NEXT_PUBLIC_DEV_SUPER_ADMIN=1 对齐，仅用于 UI 提示（鉴权在服务端）。 */
+export function isDevSuperAdminClientEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DEV_SUPER_ADMIN === "1";
+}
+
 /** 浏览器端保存的超级管理员密钥（session + local 双写，便于跨页） */
 export function getSuperAdminKey(): string | null {
   if (typeof window === "undefined") return null;

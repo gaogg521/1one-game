@@ -82,7 +82,7 @@ function ComicCard({ c, onDeleted }: { c: Comic; onDeleted?: (id: string) => voi
           type="button"
           title={c.canDelete && !c.isOwner ? "管理员删除" : "删除"}
           onClick={(e) => void handleDelete(e)}
-          className="absolute right-3 top-3 z-10 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-medium text-red-200 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 hover:bg-red-950/80"
+          className="absolute right-3 top-3 z-10 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-medium text-red-200 opacity-90 backdrop-blur-sm transition hover:bg-red-950/80 group-hover:opacity-100"
         >
           {c.canDelete && !c.isOwner ? "管理删除" : "删除"}
         </button>
