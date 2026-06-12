@@ -11,6 +11,7 @@ import {
   type GodotReferenceBuildSummary,
 } from "@/lib/godot-export-refs";
 import { prepareSpecForGodotExport } from "@/lib/godot-export-spec";
+import { specJsonForGodotExport } from "@/lib/game-templates/runtime";
 import { referencePayloadsDigest } from "@/lib/reference-payloads-digest";
 import { safeJsonStringify } from "@/lib/safe-json";
 import { withGodotPrepareLock } from "@/lib/godot-export-lock";
@@ -24,7 +25,7 @@ import {
 import { ensureGodotUiFont } from "@/lib/godot-ui-font";
 
 /** 母版 GDScript 变更时递增，使旧 Web 构建缓存失效 */
-const GODOT_RUNTIME_BUILD_REV = "20260523-tower-skin-fallback";
+const GODOT_RUNTIME_BUILD_REV = "20260612-chess-3d-theme";
 
 export type PreparedGodotWorkspace = {
   exportId: string;
@@ -144,7 +145,7 @@ export async function prepareGodotWorkspace(params: {
     const bridgeSrc = await fs.readFile(bridgePath, "utf8");
     await fs.writeFile(bridgePath, patchGameSpecBridgeGdSource(bridgeSrc, spec), "utf8");
     await fs.mkdir(path.dirname(specJsonPath), { recursive: true });
-    await fs.writeFile(specJsonPath, JSON.stringify(spec, null, 2), "utf8");
+    await fs.writeFile(specJsonPath, JSON.stringify(specJsonForGodotExport(spec), null, 2), "utf8");
     const aiSprites = params.projectId
       ? await readAiSpritesAsReferencePayloads(params.projectId, process.cwd())
       : [];

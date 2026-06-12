@@ -53,6 +53,14 @@ import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal"
 import { parseQuotaExceeded } from "@/lib/commerce/quota-error";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import {
+  extractReferenceMaterialSection,
+  findReferenceMaterialIndex,
+  mergeReferenceBlockIntoPrompt,
+  splitReferenceImageCaptions,
+} from "@/lib/i18n/ingest-markers";
 
 const STEP_PROGRESS: Record<string, number> = {
   received: 0.08,
@@ -134,30 +142,6 @@ function EmText({ s }: { s: string }) {
       )}
     </>
   );
-}
-
-/** 合并 ingest 正文到创意描述末尾（单次解析一块） */
-function mergeReferenceBlockIntoPrompt(head: string, block: string): string {
-  const t = head.trim();
-  const piece = t ? `\n\n---\n【参考素材】\n${block}` : `【参考素材】\n${block}`;
-  return `${t}${piece}`.slice(0, 4000);
-}
-
-/** 从合并后的描述中取「参考素材」正文，用于拆分参考图caption */
-function extractReferenceMaterialSection(merged: string): string {
-  const needle = "【参考素材】";
-  const i = merged.indexOf(needle);
-  if (i < 0) return "";
-  return merged.slice(i + needle.length).trim();
-}
-
-/** 服务端 ingest 对每个「参考图」一段描述；拆分后单列便于用户核对模型如何读图 */
-function splitReferenceImageCaptions(section: string): string[] {
-  if (!section.trim()) return [];
-  return section
-    .split(/(?=【参考图 图\d+)/g)
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith("【参考图"));
 }
 
 async function checkSpriteFile(url: string): Promise<boolean> {
@@ -355,9 +339,13 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setReplayTitle(null);
       setReplayRefinements([]);
       try {
-        const res = await fetch(`/api/projects/${encodeURIComponent(replayId)}`);
+        const res = await fetch(`/api/projects/${encodeURIComponent(replayId)}`, {
+          headers: mergeLocaleHeaders(locale),
+        });
         const data = (await res.json()) as {
           error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
           project?: { id?: string; title?: string; prompt?: string };
           spec?: GameSpec;
           creativeBrief?: CreativeBrief;
@@ -394,7 +382,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     return () => {
       cancelled = true;
     };
-  }, [replayId]);
+  }, [locale, replayId]);
 
   useEffect(() => {
     studioLogEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -442,16 +430,22 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       fd.set("vision", visionOn ? "1" : "0");
 
       try {
-        const res = await fetch("/api/ingest", { method: "POST", body: fd });
+        const res = await fetch("/api/ingest", {
+          method: "POST",
+          headers: mergeLocaleHeaders(locale),
+          body: fd,
+        });
         const data = (await res.json()) as {
           text?: string;
           warnings?: string[];
           error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
           referenceAssets?: ReferenceImageHandle[];
           referenceAssetStorageMode?: string;
         };
         if (!res.ok) {
-          return { ok: false, error: data.error ?? t("errors.ingestFailed") };
+          return { ok: false, error: resolveClientApiError(locale, data, "ingestFailed") };
         }
         const ordered = buildIngestFileOrder(fileRef.current?.files ?? null, pastedImages);
         let payloads: RuntimeReferencePayload[] = [];
@@ -497,14 +491,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         if (!block) {
           return { ok: false, error: t("errors.noMergeText") };
         }
-        const mergedPrompt = mergeReferenceBlockIntoPrompt(baselinePrompt, block);
+        const mergedPrompt = mergeReferenceBlockIntoPrompt(locale, baselinePrompt, block);
         setPrompt(mergedPrompt);
         return { ok: true, mergedPrompt };
       } catch {
         return { ok: false, error: t("errors.ingestRequestFailed") };
       }
     },
-    [clearClipboardImageQueue, ingestUrl, pastedImages, t, visionOn],
+    [clearClipboardImageQueue, ingestUrl, locale, pastedImages, t, visionOn],
   );
 
   /** 默认：SSE 流式进度 + 单次生成 */
@@ -579,8 +573,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             title: t("log.effectivePrompt"),
             bullets: [summarizePromptForStudio(effectivePrompt)],
           });
-          const refSec = extractReferenceMaterialSection(effectivePrompt);
-          const captions = splitReferenceImageCaptions(refSec);
+          const refSec = extractReferenceMaterialSection(locale, effectivePrompt);
+          const captions = splitReferenceImageCaptions(locale, refSec);
           if (captions.length > 0) {
             appendStudioLog({
               kind: "intent",
@@ -604,14 +598,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       let sendPrompt = effectivePrompt;
       if (creativeBrief && briefRevision) {
         sendPrompt = buildPromptWithBriefRevision(prompt.trim(), creativeBrief, briefRevision);
-        const refMarker = effectivePrompt.indexOf("【参考素材】");
+        const refMarker = findReferenceMaterialIndex(locale, effectivePrompt);
         if (refMarker >= 0) {
           sendPrompt = `${sendPrompt.slice(0, 3600)}\n\n${effectivePrompt.slice(refMarker)}`.slice(0, 4000);
         }
       }
       const res = await fetch("/api/generate/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           prompt: sendPrompt,
           searchEnhance,
@@ -622,19 +616,24 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+        };
         const quota = parseQuotaExceeded(err, res.status);
         if (quota) {
           showQuotaExceeded(quota);
           setStreamMsg(null);
           return;
         }
+        const errMsg = resolveClientApiError(locale, err, "generateFailed");
         appendStudioLog({
           kind: "error",
           title: t("log.requestFailed"),
-          bullets: [err.error ?? `HTTP ${res.status}`],
+          bullets: [errMsg],
         });
-        setError(err.error ?? t("errors.generateFailed"));
+        setError(errMsg);
         setStreamMsg(null);
         return;
       }
@@ -800,10 +799,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     effectivePromptForGeneration,
     enhancePass,
     ingestUrl,
+    locale,
     pastedImages,
     performReferenceIngest,
     prompt,
     searchEnhance,
+    showQuotaExceeded,
     t,
     templateHint,
   ]);
@@ -845,7 +846,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       const assetManifestPayload = summarizeAssetManifestForGenerateApi();
       const res = await fetch("/api/generate/variants", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           prompt: effectivePrompt,
           count: 3,
@@ -858,6 +859,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       const data = (await res.json()) as {
         variants?: VariantRow[];
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
       };
       if (!res.ok) {
         const quota = parseQuotaExceeded(data, res.status);
@@ -865,12 +868,13 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           showQuotaExceeded(quota);
           return;
         }
+        const errMsg = resolveClientApiError(locale, data, "variantsFailed");
         appendStudioLog({
           kind: "error",
           title: t("log.variantsRejected"),
-          bullets: [data.error ?? `HTTP ${res.status}`],
+          bullets: [errMsg],
         });
-        setError(data.error ?? t("errors.variantsFailed"));
+        setError(errMsg);
         return;
       }
       const rows = data.variants ?? [];
@@ -903,10 +907,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     applyVariant,
     effectivePromptForGeneration,
     enhancePass,
+    locale,
     pastedImages,
     performReferenceIngest,
     prompt,
     searchEnhance,
+    showQuotaExceeded,
     t,
     templateHint,
   ]);
@@ -955,16 +961,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       const isUpdate = Boolean(projectId);
       const res = await fetch(isUpdate ? `/api/projects/${projectId}` : "/api/projects", {
         method: isUpdate ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           prompt,
           spec: specToSave,
           ...(creativeBrief ? { creativeBrief } : {}),
         }),
       });
-      const data = (await res.json()) as { project?: { id: string }; error?: string };
+      const data = (await res.json()) as {
+        project?: { id: string };
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
       if (!res.ok) {
-        setError(data.error ?? t("errors.saveFailed"));
+        setError(resolveClientApiError(locale, data, "saveFailed"));
         return;
       }
       if (!isUpdate && !data.project?.id) {
@@ -978,7 +989,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       }
       setProjectId(nextProjectId);
       // 后台异步触发精灵/背景生成
-      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, { method: "POST", keepalive: true });
+      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, {
+        method: "POST",
+        keepalive: true,
+        headers: mergeLocaleHeaders(locale),
+      });
 
       // 等待精灵生成完成再跳转（确保用户第一次看到游戏就有贴图）
       setBusy("sprites");
@@ -1366,7 +1381,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                           </span>
                           <PasteThumb file={row.file} />
                           <span className="truncate text-[11px] text-[var(--gc-text-faint)]" title={row.file.name}>
-                            {row.file.name || "image"}
+                            {row.file.name || t("refUnnamedImage")}
                           </span>
                         </div>
                         <label className="flex min-w-0 flex-1 flex-col gap-0.5">

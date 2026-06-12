@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "แพลตฟอร์มเกม 1ONE",
+    "appName": "Operone",
     "brandTagline": "สร้างและแชร์เกมบนเบราว์เซอร์ด้วยพลัง AI",
     "language": "ภาษา",
     "theme": "ธีม",
@@ -62,16 +62,24 @@
     "loggedInAs": "เข้าสู่ระบบเป็น {name}",
     "user": "ผู้ใช้",
     "loginFailed": "เข้าสู่ระบบไม่สำเร็จ: {error}",
-    "loginTitle": "เข้าสู่ระบบ 1ONE",
+    "loginTitle": "เข้าสู่ระบบ Operone",
     "loginDesc": "หลังเข้าสู่ระบบ คุณสามารถซิงก์เวิร์กสเปซข้ามอุปกรณ์ได้ ลิงก์แชร์พร้อมรหัสเชิญช่วยติดตามการแนะนำต่อได้ และคุณยังสร้างแบบไม่ระบุตัวตนได้ด้วยคุกกี้ของเบราว์เซอร์",
     "enterStudio": "เข้าเวิร์กสเปซ",
     "providerLogin": "เข้าสู่ระบบด้วย {provider}",
     "providerConfiguring": "(กำลังตั้งค่า)",
     "providerSoon": "(เร็ว ๆ นี้)",
-    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin ต้องมีข้อมูลแอปใน .env ก่อนเปิดใช้งาน ใช้ Development Login ระหว่างพัฒนาในเครื่องได้"
+    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin ต้องมีข้อมูลแอปใน .env ก่อนเปิดใช้งาน ใช้ Development Login ระหว่างพัฒนาในเครื่องได้",
+    "providers": {
+      "wechat": "WeChat",
+      "qq": "QQ",
+      "feishu": "Feishu",
+      "line": "LINE",
+      "douyin": "Douyin",
+      "dev": "เข้าสู่ระบบสำหรับพัฒนา"
+    }
   },
   "home": {
-    "badge": "1ONE · ห้องทดลองสร้างสรรค์ AI",
+    "badge": "Operone · ห้องทดลองสร้างสรรค์ AI",
     "workspaceCta": "เวิร์กสเปซผู้สร้าง",
     "firstExperience": "ประสบการณ์แรก",
     "wowMoment": "ไปถึงช่วงเวลาว้าวใน 3 ขั้นตอน",
@@ -243,7 +251,11 @@
     "worthPolish": "{count} ถูกใจ · ควรขัดเกลาเพิ่ม",
     "draftOrPublish": "ร่าง / ยังไม่เผยแพร่",
     "goRemix": "ไปรีมิกซ์",
-    "createWork": "งานใหม่"
+    "createWork": "งานใหม่",
+    "workSummary": {
+      "novelGenre": "{title} · {genre}",
+      "comicGenre": "{title} · {genre}"
+    }
   },
   "quota": {
     "title": "โควตาการสร้างไม่เพียงพอ",
@@ -282,6 +294,7 @@
     "comicDiscoverDesc": "เรียกดูการ์ตูน storyboard แล้ว remix เพื่อเริ่มสร้าง",
     "deleteConfirmNovel": "ลบ \"{title}\" หรือไม่? การ์ตูนที่เกี่ยวข้องจะถูกลบและกู้คืนไม่ได้",
     "deleteConfirmComic": "ลบการ์ตูน \"{title}\" หรือไม่? ไม่สามารถย้อนกลับได้",
+    "deleteConfirmGame": "ลบเกม \"{title}\" หรือไม่? ไม่สามารถย้อนกลับได้",
     "deleteFailed": "ลบไม่สำเร็จ",
     "deleteFailedSession": "ลบไม่สำเร็จ กรุณาใช้เซสชันเบราว์เซอร์เดิมตอนที่สร้างงาน",
     "noPreview": "ยังไม่มีตัวอย่าง",
@@ -328,10 +341,10 @@
     "savedPublished": "เผยแพร่ผลงานแล้ว และผู้อื่นสามารถค้นพบได้"
   },
   "metadata": {
-    "siteTitle": "แพลตฟอร์มเกม 1ONE - การสร้างด้วย AI",
-    "siteTemplate": "%s · แพลตฟอร์มเกม 1ONE",
-    "siteDescription": "แพลตฟอร์มเกม 1ONE: ใช้ AI สร้างเกมที่เล่นได้ นิยายที่อ่านได้ และคอมิกที่ดูได้ แล้วบันทึก ขัดเกลา และแชร์ต่อได้",
-    "siteOgTitle": "แพลตฟอร์มเกม 1ONE",
+    "siteTitle": "Operone - การสร้างด้วย AI",
+    "siteTemplate": "%s · Operone",
+    "siteDescription": "Operone: ใช้ AI สร้างเกมที่เล่นได้ นิยายที่อ่านได้ และคอมิกที่ดูได้ แล้วบันทึก ขัดเกลา และแชร์ต่อได้",
+    "siteOgTitle": "Operone",
     "siteOgDescription": "แพลตฟอร์มพลัง AI สำหรับสร้างเกม นิยาย และคอมิก",
     "createTitle": "สร้าง",
     "studioTitle": "สตูดิโอ",
@@ -364,7 +377,7 @@
   "share": {
     "shareTo": "แชร์ไปยัง",
     "shareTitle": "แชร์ \"{title}\"",
-    "defaultWorkTitle": "ผลงาน 1ONE",
+    "defaultWorkTitle": "ผลงาน Operone",
     "defaultDesc": "มาดูสิ่งที่ฉันสร้างด้วย AI",
     "linkCopied": "คัดลอกลิงก์แล้ว วางใน WeChat / QQ / Feishu ได้",
     "wechatNativeHint": "แตะ ··· มุมขวาบนเพื่อแชร์ให้เพื่อนหรือ Moments",
@@ -440,6 +453,7 @@
     "expandPack": "โครงประเภท",
     "expandModel": "โครง + โมเดล",
     "titlePrefix": "ชื่อเรื่อง:",
+    "loglineLabel": "Logline",
     "worldLabel": "การสร้างโลก",
     "addonLabel": "หมายเหตุ",
     "addonPlaceholder": "เช่น บุคคลที่สาม โรแมนติกมากขึ้น จบเปิด…",
@@ -545,31 +559,46 @@
       "label": "0–3 ปี",
       "stage": "วัยทารก",
       "charRangeLabel": "90–110 ตัวอักษร",
-      "features": "ประโยคสั้น ภาพเรียบง่าย ฟังก่อนนอน"
+      "features": "ประโยคสั้น ภาพเรียบง่าย ฟังก่อนนอน",
+      "interpretMark": "[อ่านสร้างสรรค์สั้นๆ]",
+      "bodyMark": "[เรื่องสั้นเหมาะวัย]",
+      "closingMark": "[ประโยคปิดท้ายอบอุ่น]"
     },
     "kindergarten_3_6": {
       "label": "3–6 ปี",
       "stage": "อนุบาล",
       "charRangeLabel": "100–250 ตัวอักษร",
-      "features": "โทนสนุก ตัวละครง่าย บทเรียนเบาๆ"
+      "features": "โทนสนุก ตัวละครง่าย บทเรียนเบาๆ",
+      "interpretMark": "[อ่านสร้างสรรค์]",
+      "bodyMark": "[เรื่องเด็ก]",
+      "closingMark": "[บทเรียนเบาๆ]"
     },
     "primary_6_8": {
       "label": "6–8 ปี",
       "stage": "ป.1–2",
       "charRangeLabel": "300–500 ตัวอักษร",
-      "features": "โครงเรื่องครบ คำศัพท์เหมาะวัย"
+      "features": "โครงเรื่องครบ คำศัพท์เหมาะวัย",
+      "interpretMark": "[อ่านเนื้อหา]",
+      "bodyMark": "[เรื่องเติบโต]",
+      "closingMark": "[ข้อคิด]"
     },
     "grade_9": {
       "label": "9 ปี",
       "stage": "ป.3",
       "charRangeLabel": "500–700 ตัวอักษร",
-      "features": "ความสัมพันธ์ลึกขึ้น สำนวนและ典故"
+      "features": "ความสัมพันธ์ลึกขึ้น สำนวนและ典故",
+      "interpretMark": "[อ่านคติพจน์ & สร้างสรรค์]",
+      "bodyMark": "[เรื่องเต็ม]",
+      "closingMark": "[ข้อคิดเชิงความรู้]"
     },
     "grade_10": {
       "label": "10 ปี",
       "stage": "ป.4",
       "charRangeLabel": "700–900 ตัวอักษร",
-      "features": "โครงเรื่องเต็ม มีความลึก"
+      "features": "โครงเรื่องเต็ม มีความลึก",
+      "interpretMark": "[อ่านสร้างสรรค์เชิงลึก]",
+      "bodyMark": "[เรื่องเด่น]",
+      "closingMark": "[สรุปเชิงการอ่าน]"
     }
   },
   "readerThemes": {
@@ -911,6 +940,7 @@
     "expandPack": "Genre scaffold",
     "expandModel": "Scaffold + model",
     "originalPrompt": "Original prompt:",
+    "loglineLabel": "Logline",
     "worldLabel": "Worldbuilding",
     "addonLabel": "Notes (optional)",
     "saveRevision": "Save revision",
@@ -988,16 +1018,109 @@
     "prompt": "Prompt",
     "expand": "(expand)",
     "creating": "Creating…",
-    "play": "Play",
-    "tune": "Tune",
+    "play": "เล่น",
+    "clone": "โคลน",
+    "cloning": "กำลังโคลน…",
+    "cloneFailed": "โคลนไม่สำเร็จ กรุณาลองใหม่",
+    "bootstrapping": "กำลังโหลดตัวอย่าง…",
     "generateFailed": "Generation failed",
     "saveFailed": "Save failed",
     "networkError": "Network error",
-    "title": "Sample gallery",
-    "descPrefix": "Browse inspiration cards horizontally, inspired by",
-    "descMid": "layout: swap vertical covers for play screenshots via",
-    "descSuffix": "in data; SVG posters with gradient fallback on load failure.",
-    "swipeHint": "Swipe sideways"
+    "title": "แกลเลอรีตัวอย่าง",
+    "desc": "เกมตัวอย่างยอดนิยม เล่นได้ทันที กดเพื่อเก็บรายการโปรด แล้วกดโคลนเพื่อคัดลอกไปสตูดิโอและปรับแต่งเป็นของคุณ",
+    "swipeHint": "ปัดไปด้านข้าง",
+    "shelves": {
+      "featured": {
+        "title": "ตัวเลือกของผู้เล่น",
+        "description": "เกมยอดนิยมจากชุมชน — แตะเพื่อเล่นทันที"
+      },
+      "trending": {
+        "title": "กำลังมาแรง",
+        "description": "Merge กลยุทธ์ ปริศนา และอาร์เคดที่กำลังฮิต"
+      }
+    },
+    "items": {
+      "fantasy-mmo-classic": {
+        "title": "แฟนตาซีชิบิ · ผจญภัยคลาสสิก",
+        "subtitle": "บรรยากาศคลาสสิก · สกิลและเหตุการณ์พลิกผัน",
+        "prompt": "สร้างมินิเกมผจญภัยแฟนตาซีชิบิ: ฮีโร่เป็นนักผจญภัย ศัตรูเป็นสัตว์ประหลาด เงิน Zeny; มีสกิล (Shift) ไอเทม และระบบเหตุการณ์ (ฝนทอง / ศัตรูชั้นนำ / เปลี่ยนเป้าหมาย) HUD ชัดเจน ควรรู้สึกว่าเป็นเกมสำเร็จรูป (ห้ามคัดลอกพล็อตหรือตัวละคร IP ที่มีอยู่)",
+        "coverAlt": "แฟนตาซีชิบิคลาสสิก: ตัวอย่างเหตุการณ์และสกิล",
+        "creator": "Operone Lab",
+        "tags": [
+          "แฟนตาซีชิบิ",
+          "คลาสสิก",
+          "เหตุการณ์",
+          "สกิล",
+          "สำเร็จรูป"
+        ]
+      },
+      "events-showcase": {
+        "title": "สาธิตเหตุการณ์: พลิก 3 ช่วง",
+        "subtitle": "ระบบเหตุการณ์ · ฝนทอง / ศัตรูชั้นนำ / เปลี่ยนเป้าหมาย",
+        "prompt": "สร้างมินิเกมอาร์เคดขับเคลื่อนด้วยเหตุการณ์: ฝนทอง การโจมตีศัตรูชั้นนำ และการเปลี่ยนเป้าหมายต้องรู้สึกได้ชัด 3 ช่วง; HUD เป็นมิตร สกิลและไอเทมอ่านง่าย เลือกสไตล์ flat นุ่มหรือกระดาษสีน้ำ ไม่ใช้ไซเบอร์นีออนเป็นค่าเริ่มต้น",
+        "coverAlt": "สาธิตเหตุการณ์: ฝนทอง ศัตรูชั้นนำ เปลี่ยนเป้าหมาย",
+        "creator": "Operone Lab",
+        "tags": [
+          "เหตุการณ์",
+          "ฝนทอง",
+          "ชั้นนำ",
+          "พลิกผัน",
+          "สำเร็จรูป"
+        ]
+      },
+      "td-carrot": {
+        "title": "ปกป้องแครอท",
+        "subtitle": "ทาวเวอร์ดีเฟนส์น่ารัก · หลายหอ · หลายคลื่น",
+        "prompt": "สร้างทาวเวอร์ดีเฟนส์น่ารักสไตล์ปกป้องแครอท: หอแมวปกป้องแครอท ศัตรูเป็นหนูซน เน้นคลื่น อัปเกรด และเศรษฐกิจเหรียญ",
+        "coverAlt": "ปกป้องแครอท: TD น่ารัก คลื่นและอัปเกรด",
+        "creator": "Operone Lab",
+        "tags": [
+          "ทาวเวอร์ดีเฟนส์",
+          "น่ารัก",
+          "คลื่น",
+          "อัปเกรด"
+        ]
+      },
+      "td-kingdom": {
+        "title": "แนวชายแดนอาณาจักร",
+        "subtitle": "TD มหากาพย์ · ศัตรูเกราะ · ชะลอ",
+        "prompt": "สร้าง TD มหากาพย์สไตล์ Kingdom Rush: หอธนู หอระเบิด หอน้ำแข็ง; ศัตรูมีเกราะและมือสังหาร; คลื่นยากขึ้น",
+        "coverAlt": "แนวชายแดนอาณาจักร: TD มหากาพย์และป้องกันเมือง",
+        "creator": "Operone Lab",
+        "tags": [
+          "ทาวเวอร์ดีเฟนส์",
+          "มหากาพย์",
+          "ฮาร์ดคอร์",
+          "กลยุทธ์"
+        ]
+      },
+      "td-cyber": {
+        "title": "(ตัวอย่างสไตล์) แนวข้อมูล",
+        "subtitle": "เลือกได้ · TD นีออน/ไซเบอร์ · คอนทราสต์สูง",
+        "prompt": "ทาวเวอร์ดีเฟนส์นีออนไซเบอร์พังก์: หอปืนพัลส์และโปรโตคอลชะลอ; ศัตรูโปรแกรมบุกและโดรนเกราะ; สีอุ่น-เย็นตัดกันชัด",
+        "coverAlt": "แนวข้อมูล: ระบุบรรยากาศนีออน/ไซเบอร์ใน brief",
+        "creator": "Operone Lab",
+        "tags": [
+          "ทาวเวอร์ดีเฟนส์",
+          "ไซเบอร์",
+          "นีออน",
+          "คอนทราสต์สูง"
+        ]
+      },
+      "plat-ruins": {
+        "title": "วิ่งในโบราณสถาน",
+        "subtitle": "แพลตฟอร์ม · หลายชั้น · กับดักและเก็บของ",
+        "prompt": "วิ่งข้าง: ซากหินและมอสวาดมือ กระโดดหลายชั้น เก็บไฟ pine torch หลบหนามและสะพานขาด จังหวะเร็ว โทนธรรมชาติ matte",
+        "coverAlt": "วิ่งในโบราณสถาน: กระโดดและเก็บของ",
+        "creator": "Operone Lab",
+        "tags": [
+          "แพลตฟอร์ม",
+          "วิ่ง",
+          "เก็บของ",
+          "วาดมือ"
+        ]
+      }
+    }
   },
   "studioErrors": {
     "gamesListFailed": "Failed to load games (HTTP {status})",
@@ -1157,6 +1280,7 @@
     "modeNew": "หลังจากสร้างแล้ว คุณสามารถบันทึกเป็นโปรเจกต์ใหม่ได้",
     "currentModeLabel": "โหมดปัจจุบัน:",
     "tryExamples": "ลองดู",
+    "refUnnamedImage": "รูปภาพ",
     "chooseDirectionFirst": "กรุณาเลือกทิศทางการสร้างร่วมก่อน",
     "streaming": "กำลังสร้างแบบสตรีม…",
     "planIntent": "1. ทำความเข้าใจทิศทาง",
@@ -1705,7 +1829,11 @@
     "savedToVersion": "Saved to project version",
     "saveNetworkError": "Network error while saving",
     "patchNetworkError": "Network error — please retry",
-    "like": "Like",
+    "like": "ถูกใจ",
+    "favorite": "เก็บรายการโปรด",
+    "favorited": "เก็บแล้ว",
+    "cloneToMine": "โคลนเป็นของฉัน",
+    "samplePlayHint": "เกมจากแกลเลอรีตัวอย่าง: เล่นแล้วเก็บรายการโปรดได้ หรือโคลนไปสตูดิโอเพื่อปรับแต่ง",
     "copiedFullLink": "Full link copied",
     "copyLink": "Copy link",
     "copiedShortLink": "Short link copied",
@@ -1732,6 +1860,41 @@
     "saving": "Saving…",
     "applyAndSave": "Apply & save",
     "recentRefineTitle": "Recent refinements (newest last)"
+  },
+  "genrePacks": {
+    "space-epic": {
+      "label": "มหากาพย์ไซไฟ"
+    },
+    "tower-defense": {
+      "label": "แนวป้องกันหอคอย"
+    },
+    "platformer-adventure": {
+      "label": "ผจญภัยแพลตฟอร์ม"
+    },
+    "wuxia-jianghu": {
+      "label": "วูเซียเจียงหู"
+    },
+    "horror-survival": {
+      "label": "สยองขวัญเอาชีวิตรอด"
+    },
+    "anime-action": {
+      "label": "แอ็กชันอนิเมะ"
+    },
+    "folklore-festival": {
+      "label": "เทศกาลพื้นบ้าน"
+    },
+    "sports-arcade": {
+      "label": "อาร์เคดกีฬา"
+    },
+    "puzzle-logic": {
+      "label": "ปริศนาเชิงตรรกะ"
+    },
+    "cozy-collect": {
+      "label": "สะสมสบายๆ"
+    },
+    "general-arcade": {
+      "label": "อาร์เคดทั่วไป"
+    }
   },
   "commercePlans": {
     "free": {
@@ -1959,6 +2122,19 @@
     "textTruncated": "…(truncated)",
     "purposeUnlabeled": "Usage not set"
   },
+  "ingestMarkers": {
+    "materialHeader": "[วัสดุอ้างอิง]",
+    "imageLinePrefix": "[ภาพอ้างอิ #",
+    "imageCaptionHead": "[ภาพอ้างอิ #{ordinal} (วัตถุประสงค์: {role})]",
+    "imageCaptionMissingKey": "[ภาพอ้างอิ #{ordinal} (วัตถุประสงค์: {role})] {name} (ไม่มี OPENAI_API_KEY จึงไม่ได้วิเคราะห์)",
+    "imageCaptionVisionOff": "[ภาพอ้างอิ #{ordinal} (วัตถุประสงค์: {role})] {name} (ปิดการตีความภาพ)",
+    "webWithTitle": "[หน้าเว็บ] {title}\n",
+    "webUrlOnly": "[หน้าเว็บ] {url}\n",
+    "pdfHead": "[PDF {name}]",
+    "docxHead": "[DOCX {name}]",
+    "textHead": "[ข้อความ {name}]",
+    "imageNumberLegend": "[คำอธิบายเลขภาพอ้างอิ] ด้านล่าง \"ภาพ 1\" \"ภาพ 2\" … เรียงตามไฟล์ที่อัปโหลดเฉพาะรูป (สอดคล้อง \"ภาพอ้างอิ #N\" PDF/ข้อความไม่นับ) ใช้วัตถุประสงค์แต่ละภาพกับ title/subtitle สี theme และ label สำหรับเทมเพลตทาวเวอร์ดีเฟนส์เบราว์เซอร์อาจใช้พิกเซลอ้างอิเป็น sprite ตามวัตถุประสงค์ PNG/WebP/GIF คง alpha; บทบาท sprite จัดกึ่งกลางในช่องสี่เหลี่ยม; เซิร์ฟเวอร์ไม่ตัดภาพซับซ้อนอัตโนมัติ\n"
+  },
   "novelDisplay": {
     "untitledNovel": "Untitled novel",
     "untitledShort": "Untitled"
@@ -2037,5 +2213,211 @@
   "novelSynopsis": {
     "arcTail": "{count} chapters including “{arc}” and more.",
     "aiFallback": "{title}: an AI-generated original serial story."
+  },
+  "gameEvents": {
+    "acts": {
+      "opening": "Opening",
+      "accel": "Rising action",
+      "variation": "Twist",
+      "finale": "Finale"
+    },
+    "coinRain": "Coin rain",
+    "coinRainTd": "Bonus wave",
+    "goalShift": "Goal shift",
+    "goalShiftTd": "Hold the line",
+    "miniBoss": "Elite assault",
+    "miniBossTd": "Elite wave",
+    "comboBonus": "Combo bonus",
+    "timeAttack": "Time attack",
+    "breathingRoom": "Breathing room",
+    "finalBarrage": {
+      "title": "Final barrage",
+      "message": "Dense threats incoming — survive to finish"
+    },
+    "specialEvent": "Special event",
+    "msg": {
+      "coinRain": "Collectibles spawn faster — score multiplier up",
+      "coinRainTd": "Extra coins flood in — upgrade towers quickly",
+      "coinRainPlat": "Timed sprint — chain jumps for bonus rewards",
+      "goalShift": "Timed objective — follow the HUD hint for a bonus",
+      "goalShiftTd": "Don't let enemies leak before the timer ends",
+      "goalShiftPlat": "Timed sprint — collect targets for extra rewards",
+      "miniBoss": "Threat level rises — tougher foes for a while",
+      "miniBossTd": "Armored elites — bring DPS and slows",
+      "coinRainFallback": "Rewards spawn faster for a short window",
+      "goalShiftFallback": "Follow the timed objective for a bonus",
+      "miniBossFallback": "Danger spikes — stronger threats for a while",
+      "coinRainShort": "Quick bonus window — grab extra rewards",
+      "goalShiftShort": "Short timed goal — finish for a bonus"
+    },
+    "playArcade": {
+      "collector": {
+        "coinRain": "More pickups on the field — reposition for combos",
+        "goalShift": "Collect as much as you can before time runs out",
+        "miniBoss": "Elites mix in — clear threats before greed"
+      },
+      "survivor": {
+        "coinRain": "Hold your line — use the window to push score",
+        "goalShift": "Fill the meter before the timer ends",
+        "miniBoss": "Density spikes — save skills for this wave"
+      },
+      "avoider": {
+        "coinRain": "Gaps tighten — keep your lateral rhythm",
+        "goalShift": "Stack risky dodges and positioning points",
+        "miniBoss": "Elites disrupt lanes — focus on evasion"
+      }
+    },
+    "goldenPickup": {
+      "title": "Golden pickup",
+      "message": "High-value targets appear briefly — grab them first"
+    },
+    "breathingRoomMsg": "Threat density drops briefly — recover and restock",
+    "play": {
+      "rewardWindow": "Reward window",
+      "timedGoal": "Timed goal",
+      "pressurePhase": "Pressure phase"
+    },
+    "shooter": {
+      "waveN": "Wave {n}",
+      "bossWave": "Boss incoming!",
+      "eliteSquad": "Elite squad",
+      "invasion": "Invasion wave",
+      "eventEnd": "Event ended",
+      "doubleScore": "Double score!",
+      "bossReinforce": "Boss reinforcements!"
+    },
+    "playScene": {
+      "bossTitle": "⚠ BOSS incoming",
+      "bossMessage": "Elite boss · defeat it for a huge score boost"
+    },
+    "platformer": {
+      "finalSprint": "Final sprint — elites blocking the path"
+    },
+    "hud": {
+      "score": "Score {score}",
+      "lives": "Lives {lives}",
+      "ready": "Ready",
+      "cooldown": "Cooldown {sec}s",
+      "actChapter": "Act · {label}",
+      "actAdvance": "Act advance",
+      "goalShift": "Timed goal · {have}/{need}",
+      "finalWave": "Final wave {sec}s",
+      "dodgeStreak": "Dodge streak {streak}",
+      "progressCollect": "Collect {prog}/{total}",
+      "progressAvoid": "Avoidance {prog}/{total}",
+      "progressDefault": "Progress {prog}/{total}",
+      "shooterWave": "Wave {wave}",
+      "shooterKills": "Kills {prog}/{total}",
+      "tdWave": "Wave {current}/{total}",
+      "tdKills": "Kills {kills} · Towers {built}",
+      "tdBase": "Base {hp}{extra}",
+      "tdBaseShield": "Base {hp} · Shield{goalTag}",
+      "tdNextWave": "Next wave in {sec}s — keep building and upgrading.",
+      "tdWin": "Defense held! All waves cleared.",
+      "tdLose": "Base breached · tweak stats or tower placement and retry.",
+      "platformerCollect": "Collect {score}/{total}",
+      "platformerTarget": "Target {have}/{need}",
+      "waveLabel": "Wave {current} / {total}",
+      "waveStartFirst": "Battle begins! Spend coins on towers and upgrades",
+      "waveStartLast": "Final wave! Hold the line to win 🏆",
+      "waveStartMid": "New wave incoming! Hold your ground",
+      "tdControls": "Tap tower slots to build/upgrade \"{tower}\" · Shift for skill · stop \"{foe}\" from reaching base",
+      "finishWin": {
+        "collector": "Collection complete! Resources secured — share or play again.",
+        "survivor": "You survived the final pressure — share or play again.",
+        "avoider": "You cleared the final barrage — share or play again."
+      },
+      "finishLose": {
+        "collector": "Almost had those resources — try again or tweak your brief.",
+        "survivor": "Couldn't survive the last wave — try again or tweak your brief.",
+        "avoider": "Dodge run failed — try again or tweak your brief."
+      },
+      "tdGoalTag": " · hold {left}s",
+      "controlsPlayCollector": "WASD / arrows · collect \"{collectible}\" · dodge \"{hazard}\"",
+      "controlsPlayAvoider": "← → / A D · dodge \"{hazard}\"",
+      "controlsShiftSuffix": " · Shift skill",
+      "controlsPlatformer": "← → / A D move · Space / W / ↑ jump · Shift skill · collect \"{coll}\"",
+      "controlsShooter": "← → / A D move · auto-fire at \"{hazard}\" · Shift skill",
+      "shooterFinishWin": "Victory! Play again or share from the page buttons.",
+      "shooterFinishLose": "Keep trying · play again or tweak your brief.",
+      "platformerFinishWin": "Cleared! Big stage conquered · save or share your link.",
+      "platformerFinishLose": "Keep trying · play again or strengthen your brief.",
+      "shooterSkillLine": "{skill} · {status}",
+      "shooterShiftReady": "Shift ready",
+      "shooterShiftCooldown": "Shift {sec}s",
+      "floaterCombo": "Combo ×{combo}",
+      "floaterGolden": "Golden +{bonus}",
+      "floaterRisk": "Risk +{bonus}",
+      "floaterNearMiss": "Near miss +{add}",
+      "floaterNearMissChain": "Near miss +{add} (×{chain})",
+      "floaterBossKill": "BOSS down +{bonus}",
+      "shooterSkill": {
+        "shield": "Shield",
+        "slow": "Slow field",
+        "wing": "Wingman",
+        "standby": "Standby"
+      },
+      "stage": {
+        "collector": {
+          "finale": "Final collection surge — risk and reward spike together",
+          "bonusField": "Bonus field — high-value pickups, grab them first",
+          "doubleSpawn": "Field heats up — more pickups and threats",
+          "default": "Keep moving and widen your collection lead"
+        },
+        "survivor": {
+          "finale": "Final survival wave — hold through peak pressure",
+          "doubleSpawn": "Pressure rises — more threats at once",
+          "default": "Keep surviving — stabilize health and rhythm"
+        },
+        "avoider": {
+          "finale": "Final dodge segment — dense threats incoming",
+          "doubleSpawn": "Double wave — chain your dodges",
+          "default": "Stay in rhythm for the next dodge segment"
+        },
+        "platformer": {
+          "precision": "Precision segment — smaller margins, watch your landings",
+          "gaps": "Gap segment — prepare for long jumps",
+          "spikes": "Trap segment — hazards cluster on platforms",
+          "default": "Entering the next section"
+        }
+      }
+    },
+    "banner": {
+      "goalComplete": "Timed goal complete",
+      "goalCompleteMsg": "Bonus +{bonus} pts",
+      "goalFailed": "Timed goal failed",
+      "goalFailedMsg": "Keep going — the next phase hits harder",
+      "finalBarrage": "Barrage cleared",
+      "finalBarrageMsg": "Final barrage ended · bonus +{bonus}",
+      "goldenWindowEnd": "Golden window ended",
+      "goldenWindowEndMsg": "Keep collecting and stay in rhythm",
+      "breathingEnd": "Breathing room ended",
+      "breathingEndMsg": "Pressure rises — watch your positioning",
+      "eventEnd": "Event ended",
+      "eventEndPlay": "Get ready for the next challenge",
+      "eventEndPlatformer": "Moving to the next chapter",
+      "eventEndTd": "Entering the next wave rhythm",
+      "platformerGoalSuccess": "Goal reached!",
+      "platformerGoalSuccessMsg": "Bonus +{bonus} pts · shield + dash",
+      "platformerGoalMiss": "Goal missed",
+      "platformerGoalMissMsg": "No worries — the next section is even wilder",
+      "tdHoldSuccess": "Hold point success!",
+      "tdHoldSuccessMsg": "Bonus +{bonus} coins · base shield",
+      "tdHoldFail": "Hold point failed",
+      "tdHoldFailMsg": "Next section hits harder — reinforce your defense",
+      "survivorGrit": "Hold the line",
+      "survivorGritMsg": "Dodge streak {streak} · grit +{grit}",
+      "lastStand": "Final wave",
+      "lastStandMsg": "{reason} · hold for {sec}s",
+      "lastStandEnd": "You made it",
+      "lastStandEndMsg": "Final wave cleared · morale +{bonus}",
+      "lastStandReason": "Final sprint",
+      "eliteAssault": "Attacks intensify!",
+      "bossDefeated": "BOSS defeated!",
+      "bossDefeatedMsg": "Earned +{bonus} pts",
+      "bossPhase1": "BOSS enraged!",
+      "bossPhase2": "BOSS fury!!",
+      "finalChapter": "Final chapter"
+    }
   }
 }

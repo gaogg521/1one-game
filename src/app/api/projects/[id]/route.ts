@@ -7,6 +7,7 @@ import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
+import { SAMPLE_GALLERY_OWNER } from "@/lib/sample-gallery";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { parseRefinementLog } from "@/lib/refinement-log";
@@ -66,6 +67,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         coverPath: row.coverPath,
         likeCount,
         isOwner: Boolean(isOwner),
+        isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
       },
       spec,
       ...(creativeBrief ? { creativeBrief } : {}),

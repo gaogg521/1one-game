@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 
 const RelPointSchema = z.object({
   /** 0..1，按画布宽高归一化 */
@@ -72,6 +73,67 @@ const TowerDefenseBlueprintSchema = z.object({
     .max(30),
   /** 漏怪对基地造成伤害（可选） */
   leakDamage: z.number().min(1).max(40).optional(),
+});
+
+const CoasterPathPointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+});
+
+const CoasterBlueprintSchema = z.object({
+  path: z.array(CoasterPathPointSchema).min(8).max(128),
+  targetTimeSec: z.number().min(20).max(180).optional(),
+  cameraDistance: z.number().min(4).max(16).optional(),
+});
+
+const PuzzleBlueprintSchema = z.object({
+  mode: z.enum(["match3", "spotDifference", "memoryMatch", "jigsaw"]),
+  cols: z.number().min(2).max(12),
+  rows: z.number().min(2).max(12),
+  targetScore: z.number().min(1).max(999),
+  moveLimit: z.number().min(1).max(999),
+});
+
+const FarmingBlueprintSchema = z.object({
+  cols: z.number().min(3).max(8),
+  rows: z.number().min(3).max(8),
+  startingCoins: z.number().min(10).max(500),
+  harvestGoal: z.number().min(3).max(50),
+  crops: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(24),
+        name: z.string().min(1).max(24),
+        growSec: z.number().min(2).max(30),
+        seedCost: z.number().min(1).max(100),
+        sellPrice: z.number().min(2).max(200),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      }),
+    )
+    .min(1)
+    .max(6),
+});
+
+const StrategyNodeSchema = z.object({
+  id: z.string().min(1).max(24),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  owner: z.enum(["player", "ai", "neutral"]),
+  troops: z.number().min(1).max(200),
+  links: z.array(z.string().min(1).max(24)).min(1).max(8),
+});
+
+const StrategyBlueprintSchema = z.object({
+  winNodes: z.number().min(2).max(10),
+  nodes: z.array(StrategyNodeSchema).min(3).max(12),
+});
+
+const AgenticModuleSchema = z.object({
+  version: z.literal(1),
+  /** 受限 TS/JS 模块源码（由 Agentic Gameplay Agent 生成） */
+  source: z.string().min(8).max(48_000),
+  entry: z.string().min(1).max(32).default("createGame"),
 });
 
 export const DirectorSchema = z.object({
@@ -150,7 +212,7 @@ export const SystemsSchema = z.object({
 
 export const GameSpecSchema = z.object({
   version: z.literal(1),
-  templateId: z.enum(["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"]),
+  templateId: z.enum(GAME_TEMPLATE_IDS),
   title: z.string().min(1).max(80),
   theme: z.object({
     backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -189,6 +251,16 @@ export const GameSpecSchema = z.object({
   }),
   /** towerDefense 复杂蓝图（可选；缺省则由引擎侧生成默认关卡） */
   towerDefense: TowerDefenseBlueprintSchema.optional(),
+  /** coaster：3D 空中轨道（缺省则由引擎侧生成默认轨道） */
+  coaster: CoasterBlueprintSchema.optional(),
+  /** puzzle：消除/找不同/记忆/拼图模式 */
+  puzzle: PuzzleBlueprintSchema.optional(),
+  /** farming：网格种植经济 */
+  farming: FarmingBlueprintSchema.optional(),
+  /** strategy：区域征服派兵 */
+  strategy: StrategyBlueprintSchema.optional(),
+  /** Phase 3：Agentic 生成的受限游戏模块（优先于 template 场景） */
+  agenticModule: AgenticModuleSchema.optional(),
   /** 通用导演蓝图（可选；缺省则由引擎侧使用默认曲线） */
   director: DirectorSchema.optional(),
   /** 通用系统层（可选；缺省则由引擎侧补齐） */

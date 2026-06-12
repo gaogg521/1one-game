@@ -14,7 +14,18 @@ import { describeReferenceImage } from "@/lib/vision-reference";
 import { localizedApiErrorText, localizedJsonError } from "@/lib/api/localized-error";
 import { apiKeyedErrorText, isApiKeyedError } from "@/lib/api/api-keyed-error";
 import { ingestWarningMessage } from "@/lib/i18n/progress-message";
-import { tMessage } from "@/lib/i18n/messages";
+import {
+  getIngestPurposeFallback,
+  ingestDocxChunk,
+  ingestImageCaption,
+  ingestImageCaptionStub,
+  ingestImageLinePrefix,
+  ingestImageNumberLegend,
+  ingestPdfChunk,
+  ingestTextChunk,
+  ingestWebChunk,
+} from "@/lib/i18n/ingest-markers";
+import { locales } from "@/i18n/routing";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const runtime = "nodejs";
@@ -75,8 +86,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (typeof urlField === "string" && urlField.trim()) {
       try {
         const { title, text } = await fetchUrlPlainText(urlField.trim());
-        const head = title ? `【网页】${title}\n` : `【网页】${urlField.trim()}\n`;
-        chunks.push(truncateDocText(`${head}${text}`));
+        chunks.push(truncateDocText(ingestWebChunk(uiLocale, title, urlField.trim(), text)));
       } catch (e) {
         const reason = isApiKeyedError(e)
           ? apiKeyedErrorText(uiLocale, e)
@@ -89,7 +99,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     let imageOrdinal = 0;
 
-    const purposeFallback = tMessage(uiLocale, "ingestWarnings.purposeUnlabeled");
+    const purposeFallback = getIngestPurposeFallback(uiLocale);
     const roleLabel = (fileIndex: number | undefined): string => {
       if (fileIndex === undefined || fileIndex < 0) return purposeFallback;
       const r = (imageRoles[fileIndex] ?? "").trim();
@@ -158,14 +168,14 @@ export async function POST(req: Request): Promise<NextResponse> {
         if (!process.env.OPENAI_API_KEY?.trim()) {
           warn("noOpenAiKey", { name });
           chunks.push(
-            `【参考图 图${imageOrdinal}（用户用途：${roleLabel(fileIndex)}）】${name}（缺少 OPENAI_API_KEY，未解析）`,
+            ingestImageCaptionStub(uiLocale, "missingKey", imageOrdinal, roleLabel(fileIndex), name),
           );
           return;
         }
         if (!visionOn) {
           warn("visionOff", { name });
           chunks.push(
-            `【参考图 图${imageOrdinal}（用户用途：${roleLabel(fileIndex)}）】${name}（未开启视觉解读）`,
+            ingestImageCaptionStub(uiLocale, "visionOff", imageOrdinal, roleLabel(fileIndex), name),
           );
           return;
         }
@@ -177,7 +187,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           imageOrdinal: ord,
           uiLocale,
         });
-        chunks.push(`【参考图 图${ord}（用户用途：${roleLabel(fileIndex)}）】\n${cap}`);
+        chunks.push(ingestImageCaption(uiLocale, ord, roleLabel(fileIndex), cap));
         return;
       }
 
@@ -187,7 +197,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           return;
         }
         const t = await extractPdfText(buf);
-        chunks.push(`【PDF ${name}】\n${t}`);
+        chunks.push(ingestPdfChunk(uiLocale, name, t));
         return;
       }
 
@@ -200,12 +210,12 @@ export async function POST(req: Request): Promise<NextResponse> {
           return;
         }
         const t = await extractDocxText(buf);
-        chunks.push(`【DOCX ${name}】\n${t}`);
+        chunks.push(ingestDocxChunk(uiLocale, name, t));
         return;
       }
 
       if (mt === "text/plain" || mt === "text/markdown" || lower.endsWith(".txt") || lower.endsWith(".md")) {
-        chunks.push(`【文本 ${name}】\n${extractUtf8Text(buf)}`);
+        chunks.push(ingestTextChunk(uiLocale, name, extractUtf8Text(buf)));
         return;
       }
 
@@ -225,13 +235,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
     }
 
-    const firstRef = chunks.findIndex((c) => c.startsWith("【参考图 图"));
+    const firstRef = chunks.findIndex((c) =>
+      locales.some((loc) => c.startsWith(ingestImageLinePrefix(loc))),
+    );
     if (firstRef >= 0) {
-      chunks.splice(
-        firstRef,
-        0,
-        "【参考图编号说明】下文「图1」「图2」…按本次提交的文件列表顺序，仅对「图片」递增编号（与「参考图 图N」一致；PDF/纯文本不参与计数）。生成规格时请把每张图的「用户用途」落实到 title/subtitle、theme 配色、labels（player/hazard/collectible）：主色与环境氛围须与每张参考图的**文字摘录**和用户用途一致。**塔防守卫等模板：**创作台解析成功后，浏览器同一会话下试玩会使用参考图**像素贴片**（按用途分拣：背景地图类→全屏底图、怪物类→行军敌兵、主角/萝卜/水晶等到路径终点）；因此 JSON 里 theme、hazard/player 色相与称谓不要走向与参考图描述相冲突的默认「霓虹/赛博」（除非创意或参考明确要该风格）。**浏览器侧修饰（与视觉模型解读配合）：**PNG/WebP/GIF 会话像素会**保留透明通道**（不再铺白底压成 JPEG）；对用户标注为「怪/敌/主角/塔」等贴片类用途的图，会**自动居中收入固定边长的方形精灵格**（透明留白）以与塔防行军贴片更一致；服务端**不**做 AI 自动抠图——若图为复杂实拍底仍需人工出透明 PNG 或后期在 DCC 里抠图。\n",
-      );
+      chunks.splice(firstRef, 0, ingestImageNumberLegend(uiLocale));
     }
 
     let text = chunks.join("\n\n").trim();

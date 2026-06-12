@@ -10,6 +10,9 @@ import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
+import { listDiscoverTemplateIds } from "@/lib/game-templates/registry";
 
 type DiscoverProject = {
   id: string;
@@ -21,12 +24,15 @@ type DiscoverProject = {
   shareCode: string | null;
   templateId: string | null;
   createdAt: string;
+  isOwner?: boolean;
+  canDelete?: boolean;
 };
 
-const ALL_TEMPLATES = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"];
+const ALL_TEMPLATES = listDiscoverTemplateIds();
 
-function GameCard({ p, locale }: { p: DiscoverProject; locale: AppLocale }) {
+function GameCard({ p, locale, onDeleted }: { p: DiscoverProject; locale: AppLocale; onDeleted?: (id: string) => void }) {
   const t = useTranslations();
+  const tl = useTranslations("lists");
   const label = p.templateId ? (t.has(`discover.templateLabels.${p.templateId}`) ? t(`discover.templateLabels.${p.templateId}`) : p.templateId) : null;
   const [liked, setLiked] = useState(() => {
     if (typeof localStorage === "undefined") return false;
@@ -41,15 +47,45 @@ function GameCard({ p, locale }: { p: DiscoverProject; locale: AppLocale }) {
     setLiked(true);
     setLikes((n) => n + 1);
     localStorage.setItem(`liked:${p.id}`, "1");
-    void fetch(`/api/projects/${p.id}/like`, { method: "POST" });
+    void fetch(`/api/projects/${p.id}/like`, { method: "POST", headers: mergeLocaleHeaders(locale) });
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(tl("deleteConfirmGame", { title: p.title }))) return;
+    const res = await fetch(
+      `/api/projects/${p.id}`,
+      superAdminFetchInit({ method: "DELETE", headers: mergeLocaleHeaders(locale) }),
+    );
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
+      alert(resolveClientApiError(locale, data, "deleteFailedSession"));
+      return;
+    }
+    onDeleted?.(p.id);
   }
 
   return (
     <Link
       href={withLocalePath(`/play/${p.id}`, locale)}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-lg"
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-lg"
     >
       <div className="relative aspect-[920/560] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+        {p.isOwner || p.canDelete ? (
+          <button
+            type="button"
+            title={p.canDelete && !p.isOwner ? tl("adminDelete") : t("studio.delete")}
+            onClick={(e) => void handleDelete(e)}
+            className="absolute right-2 top-2 z-10 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-medium text-red-200 opacity-90 backdrop-blur-sm transition hover:bg-red-950/80 group-hover:opacity-100"
+          >
+            {p.canDelete && !p.isOwner ? tl("adminDelete") : t("studio.delete")}
+          </button>
+        ) : null}
         {p.coverPath ? (
           <img
             src={p.coverPath}
@@ -122,7 +158,7 @@ export default function DiscoverPage() {
     if (filter) params.set("template", filter);
     if (sort !== "playCount") params.set("sort", sort);
     const url = `/api/discover${params.size > 0 ? `?${params.toString()}` : ""}`;
-    fetch(url, { signal: ac.signal, headers: mergeLocaleHeaders(locale) })
+    fetch(url, superAdminFetchInit({ signal: ac.signal, headers: mergeLocaleHeaders(locale) }))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -257,7 +293,12 @@ export default function DiscoverPage() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {projects.map((p) => (
-              <GameCard key={p.id} p={p} locale={locale} />
+              <GameCard
+                key={p.id}
+                p={p}
+                locale={locale}
+                onDeleted={(id) => setProjects((prev) => prev.filter((x) => x.id !== id))}
+              />
             ))}
           </div>
         )}

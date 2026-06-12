@@ -1,5 +1,5 @@
 /** 产品与对外展示名称 */
-export const BRAND_NAME = "1ONE游戏平台";
+export const BRAND_NAME = "Operone";
 
 export const BRAND_TAGLINE = "AI 驱动的浏览器小游戏创作与分享";
 

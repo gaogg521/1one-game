@@ -42,7 +42,7 @@ const patch = {
     share: {
       shareTo: "分享到",
       shareTitle: "分享「{title}」",
-      defaultWorkTitle: "1ONE 作品",
+      defaultWorkTitle: "Operone 作品",
       defaultDesc: "来看看我用 AI 创作的内容",
       linkCopied: "链接已复制，可粘贴到微信 / QQ / 飞书等",
       wechatNativeHint: "请点击右上角「…」分享给朋友或朋友圈",
@@ -201,7 +201,7 @@ const patch = {
     share: {
       shareTo: "分享到",
       shareTitle: "分享「{title}」",
-      defaultWorkTitle: "1ONE 作品",
+      defaultWorkTitle: "Operone 作品",
       defaultDesc: "來看看我用 AI 創作的內容",
       linkCopied: "連結已複製，可貼到微信 / QQ / 飛書等",
       wechatNativeHint: "請點擊右上角「…」分享給朋友或朋友圈",
@@ -360,7 +360,7 @@ const patch = {
     share: {
       shareTo: "Share to",
       shareTitle: "Share \"{title}\"",
-      defaultWorkTitle: "1ONE work",
+      defaultWorkTitle: "Operone work",
       defaultDesc: "Check out what I created with AI",
       linkCopied: "Link copied. Paste it into WeChat, QQ, Feishu, etc.",
       wechatNativeHint: "Tap ··· in the top-right to share with friends or Moments",
@@ -519,7 +519,7 @@ const patch = {
     share: {
       shareTo: "Kongsi ke",
       shareTitle: "Kongsi \"{title}\"",
-      defaultWorkTitle: "Karya 1ONE",
+      defaultWorkTitle: "Karya Operone",
       defaultDesc: "Lihat kandungan yang saya cipta dengan AI",
       linkCopied: "Pautan disalin. Tampal ke WeChat, QQ, Feishu, dll.",
       wechatNativeHint: "Ketik ··· di penjuru kanan atas untuk kongsi",
@@ -678,7 +678,7 @@ const patch = {
     share: {
       shareTo: "แชร์ไปยัง",
       shareTitle: "แชร์ \"{title}\"",
-      defaultWorkTitle: "ผลงาน 1ONE",
+      defaultWorkTitle: "ผลงาน Operone",
       defaultDesc: "มาดูสิ่งที่ฉันสร้างด้วย AI",
       linkCopied: "คัดลอกลิงก์แล้ว วางใน WeChat / QQ / Feishu ได้",
       wechatNativeHint: "แตะ ··· มุมขวาบนเพื่อแชร์ให้เพื่อนหรือ Moments",

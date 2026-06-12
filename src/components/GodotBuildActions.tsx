@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildGodotExportRequestPayload } from "@/lib/godot-export-request.client";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
+import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 type Target = "windows" | "project" | "android";
 
@@ -20,6 +23,7 @@ type RowState = "idle" | "loading" | "ready" | "error";
 
 export function GodotBuildActions({ spec, projectId, referencePayloads, referenceHandles }: Props) {
   const t = useTranslations("godotExport");
+  const locale = useLocale() as AppLocale;
   const [rows, setRows] = useState<Record<Target, { state: RowState; error?: string }>>({
     windows: { state: "idle" },
     project: { state: "idle" },
@@ -32,7 +36,7 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
       try {
         const res = await fetch("/api/godot/export", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
           body: JSON.stringify(
             buildGodotExportRequestPayload({
               spec,
@@ -46,11 +50,13 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
         const data = (await res.json()) as {
           downloadUrl?: string;
           error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
         };
         if (!res.ok || !data.downloadUrl) {
           setRows((r) => ({
             ...r,
-            [target]: { state: "error", error: data.error ?? t("exportFailed") },
+            [target]: { state: "error", error: resolveClientApiError(locale, data, "exportFailed") },
           }));
           return;
         }
@@ -63,7 +69,7 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
         }));
       }
     },
-    [referenceHandles, referencePayloads, projectId, spec, t],
+    [locale, referenceHandles, referencePayloads, projectId, spec, t],
   );
 
   const btn =

@@ -3,6 +3,7 @@
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { apiErrorMessage, clientErrorMessage } from "@/lib/i18n/progress-message";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 export type ComicGenerateStreamEvent = {
   step?: string;
@@ -41,13 +42,15 @@ export async function consumeComicGenerateStream(
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
       code?: string;
       needed?: number;
       available?: number;
     };
     return {
       ok: false,
-      error: data.error || clientErrorMessage(uiLocale, "requestFailed", { status: res.status }),
+      error: resolveClientApiError(uiLocale, data, "requestFailed"),
       code: data.code,
       needed: data.needed,
       available: data.available,

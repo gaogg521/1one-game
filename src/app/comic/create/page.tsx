@@ -20,7 +20,8 @@ import {
   type NovelBriefUserRevision,
   type NovelCreativeBrief,
 } from "@/lib/literary-brief";
-import { NOVEL_LENGTH_TIERS_FOR_UI, type NovelLengthTier } from "@/lib/novel-length";
+import { NovelLengthTierPicker } from "@/components/novel/NovelLengthTierPicker";
+import type { NovelLengthTier } from "@/lib/novel-length";
 import {
   ComicGenerateOptions,
   defaultComicGenerateOptions,
@@ -257,23 +258,7 @@ export default function ComicCreatePage() {
               <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
                 {t("lengthLabel")}
               </label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
-                  <button
-                    key={tier.id}
-                    type="button"
-                    onClick={() => setLengthTier(tier.id)}
-                    className={`rounded-xl border px-4 py-3 text-left transition ${
-                      lengthTier === tier.id
-                        ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
-                        : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] hover:border-[color:var(--gc-accent)]/30"
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold text-[var(--gc-text)]">{tier.label}</span>
-                    <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
-                  </button>
-                ))}
-              </div>
+              <NovelLengthTierPicker value={lengthTier} onChange={setLengthTier} />
             </div>
 
             <ComicGenerateOptions

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { GameSpec } from "@/lib/game-spec";
+import { isGodotExportSupportedForTemplate } from "@/lib/game-templates/runtime";
 import { PRODUCT } from "@/lib/product-config";
 
 /** 将 #RRGGBB 转为 Godot Color("...") 字面量 */
@@ -125,5 +126,5 @@ export function godotExportCacheKey(
 
 export function isGodotExportSupported(spec: GameSpec): boolean {
   if (!PRODUCT.godot.enabled) return false;
-  return (PRODUCT.godot.supportedTemplates as readonly string[]).includes(spec.templateId);
+  return isGodotExportSupportedForTemplate(spec.templateId);
 }

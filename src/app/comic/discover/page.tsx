@@ -11,6 +11,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { SuperAdminPanel } from "@/components/SuperAdminPanel";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 interface Comic {
   id: string;
@@ -74,8 +75,12 @@ function ComicCard({ c, onDeleted }: { c: Comic; onDeleted?: (id: string) => voi
       superAdminFetchInit({ method: "DELETE", headers: mergeLocaleHeaders(locale) }),
     );
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(data.error ?? t("lists.deleteFailed"));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
+      alert(resolveClientApiError(locale, data, "deleteFailed"));
       return;
     }
     onDeleted?.(c.id);

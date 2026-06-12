@@ -6,6 +6,7 @@ import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { generateGameSpecWithMeta } from "@/lib/generate-spec";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { createRunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
@@ -52,11 +53,13 @@ export async function POST(req: Request) {
 
   const orch = createRunTraceRecorder();
   const startedAt = Date.now();
+  const uiLocale = resolveRequestLocaleSync(req);
   try {
     const { spec, source, web, debug } = await generateGameSpecWithMeta(parsed.prompt, {
       searchEnhance: parsed.searchEnhance,
       templateHint: parsed.templateHint,
       enhancePass: parsed.enhancePass,
+      uiLocale,
       orchestration: orch,
       ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
     });

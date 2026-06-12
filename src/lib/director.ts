@@ -1,4 +1,7 @@
+import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
+import { gameActLabel, gameEventMessage, gameEventTitle } from "@/lib/i18n/game-event-labels";
+import { tMessage } from "@/lib/i18n/messages";
 
 function hashString(s: string): number {
   let h = 2166136261;
@@ -22,7 +25,13 @@ export type Director = NonNullable<GameSpec["director"]>;
 
 type DirectorEvent = NonNullable<Director["events"]>[number];
 
-export function buildDirector(params: { prompt: string; spec: GameSpec }): Director {
+export function buildDirector(params: {
+  prompt: string;
+  spec: GameSpec;
+  locale?: AppLocale;
+}): Director {
+  const locale = params.locale ?? "zh-Hans";
+  const tr = (key: string, p?: Record<string, string | number>) => tMessage(locale, `gameEvents.${key}`, p);
   const seed = hashString(`${params.prompt}\n${params.spec.title}\n${params.spec.templateId}`);
   const p = params.prompt.toLowerCase();
   const hard = /硬核|高难|地狱|弹幕|挑战|boss|rush|hardcore/.test(p);
@@ -44,14 +53,7 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
   const actCount = 4;
   for (let i = 0; i < actCount; i += 1) {
     const at = i === 0 ? 0 : i === actCount - 1 ? 1 : clamp(i / (actCount - 1) + (rnd(seed, i + 10) - 0.5) * 0.06, 0, 1);
-    const label =
-      i === 0
-        ? "开场"
-        : i === actCount - 1
-          ? "终局"
-          : i === 1
-            ? "加速"
-            : "变奏";
+    const label = gameActLabel(locale, i, actCount);
     const mods: string[] = [];
 
     if (params.spec.templateId === "towerDefense") {
@@ -111,8 +113,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       type: "coinRain",
       strength: evStrength(713, template === "towerDefense" ? 0.04 : 0),
       durationMs: template === "towerDefense" ? 5200 : 4200,
-      title: template === "towerDefense" ? "奖励波" : "金币雨",
-      message: template === "towerDefense" ? "短时间内额外金币涌入，抓紧升级塔位" : "短时间内收集更密集，得分倍率提升",
+      title: gameEventTitle(locale, "coinRain", template),
+      message: gameEventMessage(locale, "coinRain", template) ?? tr("msg.coinRainFallback"),
     });
   }
 
@@ -123,13 +125,10 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       type: "goalShift",
       strength: evStrength(724, template === "platformer" ? 0.02 : 0),
       durationMs: template === "towerDefense" ? 5200 : 4800,
-      title: template === "towerDefense" ? "守点目标" : "目标变化",
+      title: gameEventTitle(locale, "goalShift", template),
       message:
-        template === "towerDefense"
-          ? "在倒计时结束前尽量别让敌人漏进基地"
-          : template === "platformer"
-            ? "限时冲刺：快速连跳收集目标，达成会有额外奖励"
-            : "限时目标：按提示完成可获得额外奖励",
+        gameEventMessage(locale, "goalShift", template) ??
+        (template === "platformer" ? tr("msg.goalShiftPlat") : tr("msg.goalShiftFallback")),
     });
   }
 
@@ -140,8 +139,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       type: "miniBoss",
       strength: evStrength(744, 0.1),
       durationMs: template === "towerDefense" ? 5600 : 5200,
-      title: template === "towerDefense" ? "精英波" : "精英来袭",
-      message: template === "towerDefense" ? "更厚装甲与更强冲击，注意补足火力与减速" : "危险升级：更强的威胁会持续一段时间",
+      title: gameEventTitle(locale, "miniBoss", template),
+      message: gameEventMessage(locale, "miniBoss", template) ?? tr("msg.miniBossFallback"),
     });
   }
 
@@ -152,8 +151,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       type: "coinRain",
       strength: evStrength(801),
       durationMs: template === "towerDefense" ? 5200 : 4200,
-      title: template === "towerDefense" ? "奖励波" : "金币雨",
-      message: template === "towerDefense" ? "额外金币到手，抓紧补塔" : "短时间内奖励更丰厚",
+      title: gameEventTitle(locale, "coinRain", template),
+      message: gameEventMessage(locale, "coinRain", template) ?? tr("msg.coinRainShort"),
     });
   }
 
@@ -166,8 +165,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
         type: "goalShift",
         strength: evStrength(836),
         durationMs: template === "towerDefense" ? 5200 : 4800,
-        title: template === "towerDefense" ? "守点目标" : "目标变化",
-        message: template === "towerDefense" ? "守住这一段，稳住经济与阵型" : "短时间目标：完成可获得额外奖励",
+        title: gameEventTitle(locale, "goalShift", template),
+        message: gameEventMessage(locale, "goalShift", template) ?? tr("msg.goalShiftShort"),
       });
     }
   }
@@ -182,33 +181,18 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
       { title: string; message: string; durationMs: number }
     > = {
       coinRain: {
-        title: "奖励窗口",
-        message:
-          template === "collector"
-            ? "收集物更密集，走位与技能换节奏"
-            : template === "survivor"
-              ? "稳住血量，趁窗口拉开分数"
-              : "空隙变窄，保持横向节奏蹭险避",
+        title: tr("play.rewardWindow"),
+        message: tr(`playArcade.${template}.coinRain`),
         durationMs: 4400,
       },
       goalShift: {
-        title: "限时目标",
-        message:
-          template === "collector"
-            ? "限时内多捡资源；未完成也会进入下一段"
-            : template === "survivor"
-              ? "限时内把进度打满，抗压换回报"
-              : "限时内叠险避与落点分",
+        title: tr("play.timedGoal"),
+        message: tr(`playArcade.${template}.goalShift`),
         durationMs: 5000,
       },
       miniBoss: {
-        title: "高压段",
-        message:
-          template === "collector"
-            ? "精英混入场地，清威胁再贪收集"
-            : template === "survivor"
-              ? "密度陡升，技能留给这一波"
-              : "精英干扰走位，专注回避",
+        title: tr("play.pressurePhase"),
+        message: tr(`playArcade.${template}.miniBoss`),
         durationMs: 5400,
       },
     };
@@ -236,8 +220,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
         type: "finalBarrage",
         strength: evStrength(941, 0.12),
         durationMs: Math.floor(7000 + intensity * 3000),
-        title: "终局弹幕",
-        message: "密集威胁压下，撑过这段即可完成",
+        title: tr("finalBarrage.title"),
+        message: tr("finalBarrage.message"),
       });
     }
 
@@ -248,8 +232,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
         type: "goldenPickup",
         strength: evStrength(951, 0.05),
         durationMs: 5200,
-        title: "黄金收集物",
-        message: "限时出现高价值物件，优先拾取可大幅拉开分数",
+        title: tr("goldenPickup.title"),
+        message: tr("goldenPickup.message"),
       });
     }
 
@@ -260,8 +244,8 @@ export function buildDirector(params: { prompt: string; spec: GameSpec }): Direc
         type: "breathingRoom",
         strength: evStrength(961, -0.15),
         durationMs: 4000,
-        title: "喘息窗口",
-        message: "威胁密度短暂降低，趁机补充道具与血量",
+        title: tr("breathingRoom"),
+        message: tr("breathingRoomMsg"),
       });
     }
   }

@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "1ONE Game Platform",
+    "appName": "Operone",
     "brandTagline": "AI-powered browser game creation and sharing",
     "language": "Language",
     "theme": "Theme",
@@ -62,16 +62,24 @@
     "loggedInAs": "Signed in as {name}",
     "user": "User",
     "loginFailed": "Sign-in failed: {error}",
-    "loginTitle": "Sign in to 1ONE",
+    "loginTitle": "Sign in to Operone",
     "loginDesc": "After signing in, you can sync your workspace across devices. Share links with invite codes for referral attribution. You can also create anonymously using browser cookies.",
     "enterStudio": "Enter Workspace",
     "providerLogin": "Sign in with {provider}",
     "providerConfiguring": "(Configuring)",
     "providerSoon": "(Coming soon)",
-    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin require app credentials in .env before they can be enabled. Use Development Login in local development."
+    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin require app credentials in .env before they can be enabled. Use Development Login in local development.",
+    "providers": {
+      "wechat": "WeChat",
+      "qq": "QQ",
+      "feishu": "Feishu",
+      "line": "LINE",
+      "douyin": "Douyin",
+      "dev": "Development login"
+    }
   },
   "home": {
-    "badge": "1ONE · AI Creation Lab",
+    "badge": "Operone · AI Creation Lab",
     "workspaceCta": "Creator Workspace",
     "firstExperience": "First Experience",
     "wowMoment": "Reach the wow moment in three steps",
@@ -222,6 +230,10 @@
       "comic": "Comic",
       "default": "Work"
     },
+    "workSummary": {
+      "novelGenre": "{title} · {genre}",
+      "comicGenre": "{title} · {genre}"
+    },
     "updatedAt": "Updated {time}",
     "playCount": "{count} plays",
     "likeCount": "{count} likes",
@@ -282,6 +294,7 @@
     "comicDiscoverDesc": "Browse storyboard comics and remix to start creating",
     "deleteConfirmNovel": "Delete \"{title}\"? Related comics will also be deleted and cannot be recovered.",
     "deleteConfirmComic": "Delete comic \"{title}\"? This cannot be undone.",
+    "deleteConfirmGame": "Delete game \"{title}\"? This cannot be undone.",
     "deleteFailed": "Delete failed",
     "deleteFailedSession": "Delete failed. Please use the same browser session as when you created this work.",
     "noPreview": "No preview yet",
@@ -328,10 +341,10 @@
     "savedPublished": "Your work has been published and can now be discovered by others."
   },
   "metadata": {
-    "siteTitle": "1ONE Game Platform - AI Creation",
-    "siteTemplate": "%s · 1ONE Game Platform",
-    "siteDescription": "1ONE Game Platform: generate playable games, readable novels, and visual comics with AI, then save, refine, and share them.",
-    "siteOgTitle": "1ONE Game Platform",
+    "siteTitle": "Operone - AI Creation",
+    "siteTemplate": "%s · Operone",
+    "siteDescription": "Operone: generate playable games, readable novels, and visual comics with AI, then save, refine, and share them.",
+    "siteOgTitle": "Operone",
     "siteOgDescription": "An AI-powered platform for creating games, novels, and comics.",
     "createTitle": "Create",
     "studioTitle": "Workspace",
@@ -364,7 +377,7 @@
   "share": {
     "shareTo": "Share to",
     "shareTitle": "Share \"{title}\"",
-    "defaultWorkTitle": "1ONE work",
+    "defaultWorkTitle": "Operone work",
     "defaultDesc": "Check out what I created with AI",
     "linkCopied": "Link copied. Paste it into WeChat, QQ, Feishu, etc.",
     "wechatNativeHint": "Tap ··· in the top-right to share with friends or Moments",
@@ -440,6 +453,7 @@
     "expandPack": "Genre scaffold",
     "expandModel": "Scaffold + model",
     "titlePrefix": "Title:",
+    "loglineLabel": "Logline",
     "worldLabel": "Worldbuilding",
     "addonLabel": "Notes",
     "addonPlaceholder": "e.g. third person, heavier romance, open ending…",
@@ -545,31 +559,46 @@
       "label": "0–3 years",
       "stage": "Toddler",
       "charRangeLabel": "90–110 chars",
-      "features": "Short rhythmic lines, simple visuals, bedtime listening"
+      "features": "Short rhythmic lines, simple visuals, bedtime listening",
+      "interpretMark": "[Brief creative read]",
+      "bodyMark": "[Age-fit short story]",
+      "closingMark": "[Warm closing line]"
     },
     "kindergarten_3_6": {
       "label": "3–6 years",
       "stage": "Preschool",
       "charRangeLabel": "100–250 chars",
-      "features": "Playful tone, simple characters, gentle lessons"
+      "features": "Playful tone, simple characters, gentle lessons",
+      "interpretMark": "[Creative read]",
+      "bodyMark": "[Children's story]",
+      "closingMark": "[Gentle lesson]"
     },
     "primary_6_8": {
       "label": "6–8 years",
       "stage": "Grades 1–2",
       "charRangeLabel": "300–500 chars",
-      "features": "Complete plot, age-appropriate vocabulary"
+      "features": "Complete plot, age-appropriate vocabulary",
+      "interpretMark": "[Content read]",
+      "bodyMark": "[Growth story]",
+      "closingMark": "[Takeaway]"
     },
     "grade_9": {
       "label": "9 years",
       "stage": "Grade 3",
       "charRangeLabel": "500–700 chars",
-      "features": "Richer relationships, idioms and references"
+      "features": "Richer relationships, idioms and references",
+      "interpretMark": "[Classic & creative read]",
+      "bodyMark": "[Full story]",
+      "closingMark": "[Insight]"
     },
     "grade_10": {
       "label": "10 years",
       "stage": "Grade 4",
       "charRangeLabel": "700–900 chars",
-      "features": "Full plot depth, literacy-aligned themes"
+      "features": "Full plot depth, literacy-aligned themes",
+      "interpretMark": "[Deep creative read]",
+      "bodyMark": "[Featured story]",
+      "closingMark": "[Literacy takeaway]"
     }
   },
   "readerThemes": {
@@ -911,6 +940,7 @@
     "expandPack": "Genre scaffold",
     "expandModel": "Scaffold + model",
     "originalPrompt": "Original prompt:",
+    "loglineLabel": "Logline",
     "worldLabel": "Worldbuilding",
     "addonLabel": "Notes (optional)",
     "saveRevision": "Save revision",
@@ -989,15 +1019,27 @@
     "expand": "(expand)",
     "creating": "Creating…",
     "play": "Play",
-    "tune": "Tune",
+    "clone": "Clone",
+    "cloning": "Cloning…",
+    "cloneFailed": "Clone failed. Please try again.",
+    "bootstrapping": "Loading samples…",
     "generateFailed": "Generation failed",
     "saveFailed": "Save failed",
     "networkError": "Network error",
     "title": "Sample gallery",
-    "descPrefix": "Browse inspiration cards horizontally, inspired by",
-    "descMid": "layout: swap vertical covers for play screenshots via",
-    "descSuffix": "in data; SVG posters with gradient fallback on load failure.",
-    "swipeHint": "Swipe sideways"
+    "desc": "Curated sample games you can play instantly. Favorite what you like, then Clone to copy into your workspace and customize as your own.",
+    "swipeHint": "Swipe sideways",
+    "shelves": {
+      "featured": {
+        "title": "Players' Choice",
+        "description": "Community favorites — tap to play instantly"
+      },
+      "trending": {
+        "title": "Trending",
+        "description": "Rising hits across merge, strategy, puzzle and arcade"
+      }
+    },
+    "items": {}
   },
   "studioErrors": {
     "gamesListFailed": "Failed to load games (HTTP {status})",
@@ -1157,6 +1199,7 @@
     "modeNew": "After generation, you can save it as a new project.",
     "currentModeLabel": "Current mode:",
     "tryExamples": "Try one",
+    "refUnnamedImage": "image",
     "chooseDirectionFirst": "Please choose a co-creation direction first.",
     "streaming": "Streaming generation…",
     "planIntent": "1. Clarify Direction",
@@ -1706,6 +1749,10 @@
     "saveNetworkError": "Network error while saving",
     "patchNetworkError": "Network error — please retry",
     "like": "Like",
+    "favorite": "Favorite",
+    "favorited": "Favorited",
+    "cloneToMine": "Clone to mine",
+    "samplePlayHint": "Sample gallery game: favorite after playing, or clone to your workspace to customize.",
     "copiedFullLink": "Full link copied",
     "copyLink": "Copy link",
     "copiedShortLink": "Short link copied",
@@ -1732,6 +1779,247 @@
     "saving": "Saving…",
     "applyAndSave": "Apply & save",
     "recentRefineTitle": "Recent refinements (newest last)"
+  },
+  "gameEvents": {
+    "acts": {
+      "opening": "Opening",
+      "accel": "Rising action",
+      "variation": "Twist",
+      "finale": "Finale"
+    },
+    "coinRain": "Coin rain",
+    "coinRainTd": "Bonus wave",
+    "goalShift": "Goal shift",
+    "goalShiftTd": "Hold the line",
+    "miniBoss": "Elite assault",
+    "miniBossTd": "Elite wave",
+    "comboBonus": "Combo bonus",
+    "timeAttack": "Time attack",
+    "breathingRoom": "Breathing room",
+    "finalBarrage": {
+      "title": "Final barrage",
+      "message": "Dense threats incoming — survive to finish"
+    },
+    "specialEvent": "Special event",
+    "msg": {
+      "coinRain": "Collectibles spawn faster — score multiplier up",
+      "coinRainTd": "Extra coins flood in — upgrade towers quickly",
+      "coinRainPlat": "Timed sprint — chain jumps for bonus rewards",
+      "goalShift": "Timed objective — follow the HUD hint for a bonus",
+      "goalShiftTd": "Don't let enemies leak before the timer ends",
+      "goalShiftPlat": "Timed sprint — collect targets for extra rewards",
+      "miniBoss": "Threat level rises — tougher foes for a while",
+      "miniBossTd": "Armored elites — bring DPS and slows",
+      "coinRainFallback": "Rewards spawn faster for a short window",
+      "goalShiftFallback": "Follow the timed objective for a bonus",
+      "miniBossFallback": "Danger spikes — stronger threats for a while",
+      "coinRainShort": "Quick bonus window — grab extra rewards",
+      "goalShiftShort": "Short timed goal — finish for a bonus"
+    },
+    "playArcade": {
+      "collector": {
+        "coinRain": "More pickups on the field — reposition for combos",
+        "goalShift": "Collect as much as you can before time runs out",
+        "miniBoss": "Elites mix in — clear threats before greed"
+      },
+      "survivor": {
+        "coinRain": "Hold your line — use the window to push score",
+        "goalShift": "Fill the meter before the timer ends",
+        "miniBoss": "Density spikes — save skills for this wave"
+      },
+      "avoider": {
+        "coinRain": "Gaps tighten — keep your lateral rhythm",
+        "goalShift": "Stack risky dodges and positioning points",
+        "miniBoss": "Elites disrupt lanes — focus on evasion"
+      }
+    },
+    "goldenPickup": {
+      "title": "Golden pickup",
+      "message": "High-value targets appear briefly — grab them first"
+    },
+    "breathingRoomMsg": "Threat density drops briefly — recover and restock",
+    "play": {
+      "rewardWindow": "Reward window",
+      "timedGoal": "Timed goal",
+      "pressurePhase": "Pressure phase"
+    },
+    "shooter": {
+      "waveN": "Wave {n}",
+      "bossWave": "Boss incoming!",
+      "eliteSquad": "Elite squad",
+      "invasion": "Invasion wave",
+      "eventEnd": "Event ended",
+      "doubleScore": "Double score!",
+      "bossReinforce": "Boss reinforcements!"
+    },
+    "playScene": {
+      "bossTitle": "⚠ BOSS incoming",
+      "bossMessage": "Elite boss · defeat it for a huge score boost"
+    },
+    "platformer": {
+      "finalSprint": "Final sprint — elites blocking the path"
+    },
+    "hud": {
+      "score": "Score {score}",
+      "lives": "Lives {lives}",
+      "ready": "Ready",
+      "cooldown": "Cooldown {sec}s",
+      "actChapter": "Act · {label}",
+      "actAdvance": "Act advance",
+      "goalShift": "Timed goal · {have}/{need}",
+      "finalWave": "Final wave {sec}s",
+      "dodgeStreak": "Dodge streak {streak}",
+      "progressCollect": "Collect {prog}/{total}",
+      "progressAvoid": "Avoidance {prog}/{total}",
+      "progressDefault": "Progress {prog}/{total}",
+      "shooterWave": "Wave {wave}",
+      "shooterKills": "Kills {prog}/{total}",
+      "tdWave": "Wave {current}/{total}",
+      "tdKills": "Kills {kills} · Towers {built}",
+      "tdBase": "Base {hp}{extra}",
+      "tdBaseShield": "Base {hp} · Shield{goalTag}",
+      "tdNextWave": "Next wave in {sec}s — keep building and upgrading.",
+      "tdWin": "Defense held! All waves cleared.",
+      "tdLose": "Base breached · tweak stats or tower placement and retry.",
+      "platformerCollect": "Collect {score}/{total}",
+      "platformerTarget": "Target {have}/{need}",
+      "waveLabel": "Wave {current} / {total}",
+      "waveStartFirst": "Battle begins! Spend coins on towers and upgrades",
+      "waveStartLast": "Final wave! Hold the line to win 🏆",
+      "waveStartMid": "New wave incoming! Hold your ground",
+      "tdControls": "Tap tower slots to build/upgrade \"{tower}\" · Shift for skill · stop \"{foe}\" from reaching base",
+      "finishWin": {
+        "collector": "Collection complete! Resources secured — share or play again.",
+        "survivor": "You survived the final pressure — share or play again.",
+        "avoider": "You cleared the final barrage — share or play again."
+      },
+      "finishLose": {
+        "collector": "Almost had those resources — try again or tweak your brief.",
+        "survivor": "Couldn't survive the last wave — try again or tweak your brief.",
+        "avoider": "Dodge run failed — try again or tweak your brief."
+      },
+      "tdGoalTag": " · hold {left}s",
+      "controlsPlayCollector": "WASD / arrows · collect \"{collectible}\" · dodge \"{hazard}\"",
+      "controlsPlayAvoider": "← → / A D · dodge \"{hazard}\"",
+      "controlsShiftSuffix": " · Shift skill",
+      "controlsPlatformer": "← → / A D move · Space / W / ↑ jump · Shift skill · collect \"{coll}\"",
+      "controlsShooter": "← → / A D move · auto-fire at \"{hazard}\" · Shift skill",
+      "shooterFinishWin": "Victory! Play again or share from the page buttons.",
+      "shooterFinishLose": "Keep trying · play again or tweak your brief.",
+      "platformerFinishWin": "Cleared! Big stage conquered · save or share your link.",
+      "platformerFinishLose": "Keep trying · play again or strengthen your brief.",
+      "shooterSkillLine": "{skill} · {status}",
+      "shooterShiftReady": "Shift ready",
+      "shooterShiftCooldown": "Shift {sec}s",
+      "floaterCombo": "Combo ×{combo}",
+      "floaterGolden": "Golden +{bonus}",
+      "floaterRisk": "Risk +{bonus}",
+      "floaterNearMiss": "Near miss +{add}",
+      "floaterNearMissChain": "Near miss +{add} (×{chain})",
+      "floaterBossKill": "BOSS down +{bonus}",
+      "shooterSkill": {
+        "shield": "Shield",
+        "slow": "Slow field",
+        "wing": "Wingman",
+        "standby": "Standby"
+      },
+      "stage": {
+        "collector": {
+          "finale": "Final collection surge — risk and reward spike together",
+          "bonusField": "Bonus field — high-value pickups, grab them first",
+          "doubleSpawn": "Field heats up — more pickups and threats",
+          "default": "Keep moving and widen your collection lead"
+        },
+        "survivor": {
+          "finale": "Final survival wave — hold through peak pressure",
+          "doubleSpawn": "Pressure rises — more threats at once",
+          "default": "Keep surviving — stabilize health and rhythm"
+        },
+        "avoider": {
+          "finale": "Final dodge segment — dense threats incoming",
+          "doubleSpawn": "Double wave — chain your dodges",
+          "default": "Stay in rhythm for the next dodge segment"
+        },
+        "platformer": {
+          "precision": "Precision segment — smaller margins, watch your landings",
+          "gaps": "Gap segment — prepare for long jumps",
+          "spikes": "Trap segment — hazards cluster on platforms",
+          "default": "Entering the next section"
+        }
+      }
+    },
+    "banner": {
+      "goalComplete": "Timed goal complete",
+      "goalCompleteMsg": "Bonus +{bonus} pts",
+      "goalFailed": "Timed goal failed",
+      "goalFailedMsg": "Keep going — the next phase hits harder",
+      "finalBarrage": "Barrage cleared",
+      "finalBarrageMsg": "Final barrage ended · bonus +{bonus}",
+      "goldenWindowEnd": "Golden window ended",
+      "goldenWindowEndMsg": "Keep collecting and stay in rhythm",
+      "breathingEnd": "Breathing room ended",
+      "breathingEndMsg": "Pressure rises — watch your positioning",
+      "eventEnd": "Event ended",
+      "eventEndPlay": "Get ready for the next challenge",
+      "eventEndPlatformer": "Moving to the next chapter",
+      "eventEndTd": "Entering the next wave rhythm",
+      "platformerGoalSuccess": "Goal reached!",
+      "platformerGoalSuccessMsg": "Bonus +{bonus} pts · shield + dash",
+      "platformerGoalMiss": "Goal missed",
+      "platformerGoalMissMsg": "No worries — the next section is even wilder",
+      "tdHoldSuccess": "Hold point success!",
+      "tdHoldSuccessMsg": "Bonus +{bonus} coins · base shield",
+      "tdHoldFail": "Hold point failed",
+      "tdHoldFailMsg": "Next section hits harder — reinforce your defense",
+      "survivorGrit": "Hold the line",
+      "survivorGritMsg": "Dodge streak {streak} · grit +{grit}",
+      "lastStand": "Final wave",
+      "lastStandMsg": "{reason} · hold for {sec}s",
+      "lastStandEnd": "You made it",
+      "lastStandEndMsg": "Final wave cleared · morale +{bonus}",
+      "lastStandReason": "Final sprint",
+      "eliteAssault": "Attacks intensify!",
+      "bossDefeated": "BOSS defeated!",
+      "bossDefeatedMsg": "Earned +{bonus} pts",
+      "bossPhase1": "BOSS enraged!",
+      "bossPhase2": "BOSS fury!!",
+      "finalChapter": "Final chapter"
+    }
+  },
+  "genrePacks": {
+    "space-epic": {
+      "label": "Space opera epic"
+    },
+    "tower-defense": {
+      "label": "Tower defense line"
+    },
+    "platformer-adventure": {
+      "label": "Platform adventure"
+    },
+    "wuxia-jianghu": {
+      "label": "Wuxia jianghu"
+    },
+    "horror-survival": {
+      "label": "Horror survival"
+    },
+    "anime-action": {
+      "label": "Anime action"
+    },
+    "folklore-festival": {
+      "label": "Folk festival"
+    },
+    "sports-arcade": {
+      "label": "Sports arcade"
+    },
+    "puzzle-logic": {
+      "label": "Puzzle logic"
+    },
+    "cozy-collect": {
+      "label": "Cozy collectathon"
+    },
+    "general-arcade": {
+      "label": "General arcade"
+    }
   },
   "commercePlans": {
     "free": {
@@ -1958,6 +2246,19 @@
     "unknownError": "Unknown error",
     "textTruncated": "…(truncated)",
     "purposeUnlabeled": "Usage not set"
+  },
+  "ingestMarkers": {
+    "materialHeader": "[Reference material]",
+    "imageLinePrefix": "[Ref image #",
+    "imageCaptionHead": "[Ref image #{ordinal} (purpose: {role})]",
+    "imageCaptionMissingKey": "[Ref image #{ordinal} (purpose: {role})] {name} (OPENAI_API_KEY missing, not parsed)",
+    "imageCaptionVisionOff": "[Ref image #{ordinal} (purpose: {role})] {name} (vision interpretation off)",
+    "webWithTitle": "[Web page] {title}\n",
+    "webUrlOnly": "[Web page] {url}\n",
+    "pdfHead": "[PDF {name}]",
+    "docxHead": "[DOCX {name}]",
+    "textHead": "[Text {name}]",
+    "imageNumberLegend": "[Ref image numbering] Below, \"Image 1\", \"Image 2\", … follow the upload order for images only (aligned with \"Ref image #N\"; PDF/plain text are not counted). When generating the spec, apply each image's stated purpose to title/subtitle, theme colors, and labels (player/hazard/collectible): palette and mood must match each image excerpt and purpose. For tower-defense templates, after a successful parse the browser play session in the same tab uses reference pixels as sprites (background maps → fullscreen backdrop, monsters → marching foes, hero/carrot/crystal → path goals); JSON theme/hazard/player hues and names must not default to neon/cyber unless the brief or references call for it. Browser-side tweaks (with vision captions): PNG/WebP/GIF keep alpha; sprite-like roles are auto-centered in square cells; the server does not auto-mat complex photos—use transparent PNGs or DCC tools when needed.\n"
   },
   "novelDisplay": {
     "untitledNovel": "Untitled novel",

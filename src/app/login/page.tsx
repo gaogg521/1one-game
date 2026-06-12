@@ -7,6 +7,7 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { localizedOAuthProviderLabel } from "@/lib/i18n/oauth-localized";
 
 type Provider = { id: string; label: string; enabled: boolean; configured: boolean };
 
@@ -67,7 +68,9 @@ export default function LoginPage() {
                     : "cursor-not-allowed border-[color:var(--gc-border)] text-[var(--gc-text-faint)] opacity-60"
                 }`}
               >
-                {t("account.providerLogin", { provider: p.label })}
+                {t("account.providerLogin", {
+                  provider: localizedOAuthProviderLabel(locale, p.id, p.label),
+                })}
                 {!p.enabled && p.configured ? t("account.providerConfiguring") : !p.enabled ? t("account.providerSoon") : ""}
               </a>
             ))}

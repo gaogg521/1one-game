@@ -16,7 +16,7 @@ import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
 // ─── Shared helpers ────────────────────────────────────────────────────────
 
-const TEMPLATE_ENUM = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"] as const;
+import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 
 function pickModel(): string {
   const models = getProviderModelCascade();
@@ -43,7 +43,7 @@ const WORLD_SCHEMA = {
     type: "object",
     additionalProperties: false,
     properties: {
-      templateId: { type: "string", enum: [...TEMPLATE_ENUM] },
+      templateId: { type: "string", enum: [...GAME_TEMPLATE_IDS] },
       title: { type: "string" },
       labels: {
         type: "object",
@@ -105,7 +105,7 @@ const GAMEPLAY_SCHEMA = {
     type: "object",
     additionalProperties: false,
     properties: {
-      templateId: { type: "string", enum: [...TEMPLATE_ENUM] },
+      templateId: { type: "string", enum: [...GAME_TEMPLATE_IDS] },
       gameplay: {
         type: "object",
         additionalProperties: false,
@@ -241,7 +241,7 @@ function mergeAgentOutputs(
   art: Awaited<ReturnType<typeof callArtAgent>>,
 ): Partial<GameSpec> {
   const templateId = (world?.templateId ?? gameplay?.templateId ?? "avoider") as GameSpec["templateId"];
-  const validTemplates: GameSpec["templateId"][] = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"];
+  const validTemplates: GameSpec["templateId"][] = [...GAME_TEMPLATE_IDS];
   const safeTemplateId: GameSpec["templateId"] = validTemplates.includes(templateId as GameSpec["templateId"])
     ? (templateId as GameSpec["templateId"])
     : "avoider";

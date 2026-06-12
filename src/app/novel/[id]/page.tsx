@@ -33,6 +33,7 @@ import {
 import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 interface Novel {
   id: string;
@@ -82,7 +83,10 @@ export default function NovelDetailPage() {
       .catch(() => setError(t("loadFailed")))
       .finally(() => setLoading(false));
 
-    void fetch(`/api/novel/${encodeURIComponent(id as string)}/play`, { method: "POST" });
+    void fetch(`/api/novel/${encodeURIComponent(id as string)}/play`, {
+      method: "POST",
+      headers: mergeLocaleHeaders(locale),
+    });
   }, [id, locale, t]);
 
   useEffect(() => {
@@ -103,7 +107,7 @@ export default function NovelDetailPage() {
     if (!novel?.id || novel.coverPath || coverRequested.current || editing) return;
     coverRequested.current = true;
     setCoverLoading(true);
-    void fetch(`/api/novel/${novel.id}/cover`, { method: "POST" })
+    void fetch(`/api/novel/${novel.id}/cover`, { method: "POST", headers: mergeLocaleHeaders(locale) })
       .then((r) => r.json())
       .then((data: { coverPath?: string; novel?: { coverPath?: string } }) => {
         const path = data.coverPath ?? data.novel?.coverPath;
@@ -132,9 +136,14 @@ export default function NovelDetailPage() {
         method: "POST",
         headers: mergeLocaleHeaders(locale),
       });
-      const data = (await res.json()) as { coverPath?: string; error?: string };
+      const data = (await res.json()) as {
+        coverPath?: string;
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
       if (!res.ok) {
-        setError(data.error || t("coverFailed"));
+        setError(resolveClientApiError(locale, data, "coverGenFailed"));
         return;
       }
       if (data.coverPath) {

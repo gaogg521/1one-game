@@ -12,7 +12,8 @@ import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-st
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
-import { localizedApiErrorPayload, localizedJsonError } from "@/lib/api/localized-error";
+import { attachAgenticModuleIfEnabled } from "@/lib/agentic/generate-game-module";
+import { PRODUCT } from "@/lib/product-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -89,6 +90,10 @@ export async function POST(req: Request, ctx: RouteContext) {
         if (typeof patched.mergedPrompt === "string" && patched.mergedPrompt.trim()) {
           mergedPrompt = patched.mergedPrompt.trim().slice(0, 4000);
         }
+      }
+
+      if (PRODUCT.game.agenticModuleEnabled) {
+        nextSpec = await attachAgenticModuleIfEnabled(mergedPrompt, nextSpec, true);
       }
 
       const logJson = appendRefinementLog(prevLog, {

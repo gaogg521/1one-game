@@ -3,8 +3,10 @@
  * 发版时在代码中调整；**.env 仅保留密钥、网关地址、部署开关**（见 `.env.example`）。
  */
 
+import { godotExportTemplateIds } from "@/lib/game-templates/registry";
+
 export type ImageGenSizeOption = "1024x1024" | "1024x1536" | "1536x1024";
-export type OrchestrationQualityTier = "fast" | "standard" | "rich";
+export type OrchestrationQualityTier = "fast" | "standard" | "rich" | "astrocade";
 export type ReferenceAssetStorageMode = "session" | "cloud";
 
 export const PRODUCT = {
@@ -98,15 +100,8 @@ export const PRODUCT = {
 
   godot: {
     enabled: true,
-    /** 全模板走 ai-mother-universal 专业运行时 */
-    supportedTemplates: [
-      "avoider",
-      "collector",
-      "survivor",
-      "platformer",
-      "towerDefense",
-      "shooter",
-    ] as const,
+    /** 全模板走 ai-mother-universal；列表由 game-templates/registry 驱动 */
+    supportedTemplates: godotExportTemplateIds(),
     /** 新用户默认运行时（可被 localStorage 覆盖） */
     defaultRuntime: "phaser" as "phaser" | "godot",
     importTimeoutMs: 90_000,
@@ -128,10 +123,17 @@ export const PRODUCT = {
     /** Brief 二次润色是否调用 LLM（关则仅用题材知识包） */
     creativeBriefLlm: true,
     briefExpandTimeoutMs: 22_000,
+    /** Astrocade 级：默认开启 Agentic（AGENTIC_GAME_MODULE=0 关闭） */
+    agenticModuleEnabled:
+      process.env.AGENTIC_GAME_MODULE === "0" || process.env.AGENTIC_GAME_MODULE === "false"
+        ? false
+        : true,
   },
 
   orchestration: {
-    qualityTier: "standard" as OrchestrationQualityTier,
+    qualityTier:
+      (process.env.ORCHESTRATION_QUALITY_TIER as "fast" | "standard" | "rich" | "astrocade" | undefined) ??
+      "astrocade",
   },
 
   api: {

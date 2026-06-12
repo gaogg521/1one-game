@@ -4,6 +4,24 @@ import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import type { AppLocale } from "@/i18n/routing";
+import { gameEventTitle } from "@/lib/i18n/game-event-labels";
+import {
+  bannerEventEnd,
+  bannerTdHoldFail,
+  bannerTdHoldSuccess,
+  hudCooldown,
+  hudReady,
+  hudTdBase,
+  hudTdKills,
+  hudTdLose,
+  hudTdNextWave,
+  hudTdWave,
+  hudTdWin,
+  hudTdGoalTag,
+  tdControlsHint,
+  tdWaveStartBanner,
+} from "@/lib/i18n/game-hud-labels";
 import {
   buildCohesivePresentation,
   hexToPhaserUint,
@@ -268,6 +286,7 @@ type TowerSlot = {
 export class TowerDefenseScene extends Phaser.Scene {
   public backgroundUrl: string | null = null;
   public projectId: string | null = null;
+  public uiLocale: AppLocale = "zh-Hans";
 
   private readonly spec: GameSpec;
 
@@ -943,7 +962,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .text(
         w / 2,
         h - 18,
-        `点击塔位建造/升级「${towerLabel}」· Shift 释放法术 · 阻挡「${foeLabel}」抵达基地`,
+        tdControlsHint(this.uiLocale, towerLabel, foeLabel),
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
@@ -1102,15 +1121,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     playBleep("pickup");
     this.refreshHud();
 
-    const isFirst = index === 0;
-    const isLast = index === this.waveDefs.length - 1;
-    const waveLabel = `第 ${index + 1} / ${this.waveDefs.length} 波`;
-    const msg = isFirst
-      ? "战斗开始！善用金币建塔和升级"
-      : isLast
-        ? "最终波次！守住防线即可获胜 🏆"
-        : `新一波敌军袭来！坚守阵地`;
-    this.banner.show({ title: waveLabel, message: msg, ms: 1800 });
+    const waveBanner = tdWaveStartBanner(this.uiLocale, index, this.waveDefs.length);
+    this.banner.show({ ...waveBanner, ms: 1800 });
 
     // Screen flash on wave start
     juiceFlash(this, { r: 255, g: 200, b: 80 }, { durationMs: 80 });
@@ -1595,15 +1607,17 @@ export class TowerDefenseScene extends Phaser.Scene {
     const shieldOn = this.time.now < this.baseShieldUntil;
     const goalOn = this.time.now < this.goalShiftUntil;
     const left = goalOn ? Math.max(0, Math.ceil((this.goalShiftUntil - this.time.now) / 1000)) : 0;
-    const goalTag = goalOn ? ` · 守点 ${left}s` : "";
-    this.baseText.setText(shieldOn ? `基地 ${this.baseHp} · 护盾${goalTag}` : `基地 ${this.baseHp}${goalTag}`);
+    const goalTag = goalOn ? hudTdGoalTag(this.uiLocale, left) : "";
+    this.baseText.setText(hudTdBase(this.uiLocale, this.baseHp, shieldOn, goalTag));
     const total = this.waveDefs.length;
-    this.waveText.setText(`波次 ${Math.min(this.wave + 1, total)} / ${total}`);
+    this.waveText.setText(hudTdWave(this.uiLocale, Math.min(this.wave + 1, total), total));
     const built = this.slots.filter((s) => s.level > 0).length;
-    this.scoreText.setText(`消灭 ${this.kills} · 塔位 ${built}`);
+    this.scoreText.setText(hudTdKills(this.uiLocale, this.kills, built));
 
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
-    this.skillCdText.setText(cdLeft <= 0 ? "就绪" : `冷却 ${(cdLeft / 1000).toFixed(1)}s`);
+    this.skillCdText.setText(
+      cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1)),
+    );
   }
 
   private kills = 0;
@@ -2055,7 +2069,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
     this.finished = true;
     this.spawning = false;
-    this.hintText.setText(payload.won ? "防线守住！塔防波次通关。" : "基地被突破 · 调整数值或塔位后再战。");
+    this.hintText.setText(payload.won ? hudTdWin(this.uiLocale) : hudTdLose(this.uiLocale));
     if (payload.won) {
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
@@ -2165,7 +2179,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         this.interWaveLock = false;
         const next = this.wave + 1;
         const lead = this.waveDefs[next]?.leadInMs ?? 1200;
-        this.hintText.setText(`准备下一波…（${Math.round(lead / 100) / 10}s） 继续建造与升级。`);
+        this.hintText.setText(hudTdNextWave(this.uiLocale, String(Math.round(lead / 100) / 10)));
         this.time.delayedCall(lead, () => this.startWave(next));
       });
     }
@@ -2203,12 +2217,12 @@ export class TowerDefenseScene extends Phaser.Scene {
           const bonus = Math.max(20, Math.floor(28 + this.eventStrength * 52));
           this.coins += bonus;
           this.baseShieldUntil = Math.max(this.baseShieldUntil, this.time.now + 2200);
-          this.banner.show({ title: "守点成功！", message: `奖励 +${bonus} 金币 · 基地护盾`, ms: 1800 });
+          this.banner.show({ ...bannerTdHoldSuccess(this.uiLocale, bonus), ms: 1800 });
         } else {
-          this.banner.show({ title: "守点失败", message: "下一段会更刺激，继续加固防线", ms: 1600 });
+          this.banner.show({ ...bannerTdHoldFail(this.uiLocale), ms: 1600 });
         }
       } else {
-        this.banner.show({ title: "事件结束", message: "进入下一段波次节奏", ms: 1400 });
+        this.banner.show({ ...bannerEventEnd(this.uiLocale, "td"), ms: 1400 });
       }
 
       this.eventType = null;
@@ -2236,7 +2250,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     const now = this.time.now;
     const strength = ev.strength ?? 0.6;
     const durationMs = ev.durationMs ?? 4200;
-    const title = ev.title ?? (ev.type === "coinRain" ? "金币雨" : ev.type === "miniBoss" ? "精英波" : "目标变化");
+    const title = gameEventTitle(this.uiLocale, ev.type, this.spec.templateId);
     const message = ev.message ?? "";
 
     this.eventType = ev.type;

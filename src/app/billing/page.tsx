@@ -7,6 +7,9 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { localizedPlanName } from "@/lib/i18n/commerce-localized";
 
 type Plan = {
   id: string;
@@ -32,13 +35,15 @@ export default function BillingPage() {
 
   useEffect(() => {
     void Promise.all([
-      fetch("/api/commerce/plans").then((r) => r.json()),
-      fetch("/api/commerce/quota").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/commerce/plans", { headers: mergeLocaleHeaders(locale) }).then((r) => r.json()),
+      fetch("/api/commerce/quota", { headers: mergeLocaleHeaders(locale) }).then((r) =>
+        r.ok ? r.json() : null,
+      ),
     ]).then(([p, q]) => {
       setPlans((p as { plans?: Plan[] }).plans ?? []);
       setQuota(q as QuotaInfo | null);
     });
-  }, []);
+  }, [locale]);
 
   async function buy(planId: string) {
     setBusy(planId);
@@ -46,27 +51,31 @@ export default function BillingPage() {
     try {
       const res = await fetch("/api/commerce/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({ planId, provider: "dev" }),
       });
       const data = (await res.json()) as {
         order?: { orderId: string };
         devPay?: { simulateUrl: string };
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
       };
       if (!res.ok) {
-        setMsg(data.error ?? t("billing.orderFailed"));
+        setMsg(resolveClientApiError(locale, data, "createOrderFailed"));
         return;
       }
       if (data.devPay?.simulateUrl && data.order?.orderId) {
         const sim = await fetch(data.devPay.simulateUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
           body: JSON.stringify({ orderId: data.order.orderId }),
         });
         if (sim.ok) {
           setMsg(t("billing.devPaySuccess"));
-          const q = await fetch("/api/commerce/quota").then((r) => r.json());
+          const q = await fetch("/api/commerce/quota", { headers: mergeLocaleHeaders(locale) }).then(
+            (r) => r.json(),
+          );
           setQuota(q as QuotaInfo);
         } else {
           setMsg(t("billing.devPayFailed"));
@@ -95,7 +104,8 @@ export default function BillingPage() {
         {quota ? (
           <div className="mt-6 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4">
             <p className="text-sm text-[var(--gc-text)]">
-              {t("billing.currentPlan")} <strong>{quota.plan.name}</strong>
+              {t("billing.currentPlan")}{" "}
+              <strong>{localizedPlanName(locale, quota.plan.id, quota.plan.name)}</strong>
             </p>
             <p className="mt-1 text-2xl font-semibold text-[var(--gc-accent)]">
               {quota.balance} {t("billing.pointsUnit")}

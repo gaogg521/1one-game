@@ -1,5 +1,5 @@
 /**
- * 1ONE 产品信息架构：双层策略（惊艳入口 + 创作者工作台）共享文案与路由。
+ * Operone 产品信息架构：双层策略（惊艳入口 + 创作者工作台）共享文案与路由。
  */
 
 import type { AppLocale } from "@/i18n/routing";

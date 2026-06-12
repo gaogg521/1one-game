@@ -23,6 +23,8 @@ export function localizedApiErrorPayload(
 ): ApiGenerateErrorPayload {
   return {
     error: localizedApiErrorText(req, key, extra?.params),
+    errorKey: key,
+    ...(extra?.params ? { errorParams: extra.params } : {}),
     ...(extra?.code ? { code: extra.code } : {}),
     ...(extra?.requestId ? { requestId: extra.requestId } : {}),
   };

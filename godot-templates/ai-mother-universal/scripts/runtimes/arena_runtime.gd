@@ -30,7 +30,7 @@ var _golden_window := false
 func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	RuntimeReferenceRegistry.ensure_loaded()
-	_tid = GameSpecData.template_id()
+	_tid = GameSpecData.arena_mode()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
 	_lives = GameSpecData.gameplay_i("lives", 3)

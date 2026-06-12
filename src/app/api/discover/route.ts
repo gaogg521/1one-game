@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getOwnerKey } from "@/lib/owner";
+import { isSuperAdmin } from "@/lib/super-admin";
 
-const VALID_TEMPLATES = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"] as const;
+import { isGameTemplateId, listDiscoverTemplateIds } from "@/lib/game-templates/registry";
+
+const VALID_TEMPLATES = listDiscoverTemplateIds();
 type TemplateId = (typeof VALID_TEMPLATES)[number];
 
 function extractTemplateId(specJson: string): TemplateId | null {
   try {
     const m = specJson.match(/"templateId"\s*:\s*"([^"]+)"/);
     const v = m?.[1] as TemplateId | undefined;
-    return v && VALID_TEMPLATES.includes(v) ? v : null;
+    return v && isGameTemplateId(v) ? v : null;
   } catch {
     return null;
   }
@@ -17,6 +21,8 @@ function extractTemplateId(specJson: string): TemplateId | null {
 const VALID_SORTS = new Set(["playCount", "likeCount", "createdAt", "hot", "featured"]);
 
 export async function GET(req: Request) {
+  const ownerKey = await getOwnerKey();
+  const superAdmin = isSuperAdmin(req, ownerKey);
   const { searchParams } = new URL(req.url);
   const templateFilter = searchParams.get("template");
   const sortParam = searchParams.get("sort") ?? "playCount";
@@ -32,8 +38,8 @@ export async function GET(req: Request) {
   if (sort === "hot") {
     // 综合热度需要计算列，仍使用 $queryRaw，但 ORDER BY 和 LIMIT 均为硬编码/校验后的值
     projects = await prisma.$queryRaw<
-      { id: string; title: string; prompt: string; coverPath: string | null; playCount: number; likeCount: number; shareCode: string | null; specJson: string; createdAt: Date }[]
-    >`SELECT id, title, prompt, coverPath, playCount, likeCount, shareCode, specJson, createdAt FROM "Project" WHERE visibility = 'public' ORDER BY (playCount + likeCount * 3) DESC LIMIT ${limitParam}`;
+      { id: string; title: string; prompt: string; coverPath: string | null; playCount: number; likeCount: number; shareCode: string | null; specJson: string; createdAt: Date; ownerKey: string | null }[]
+    >`SELECT id, title, prompt, coverPath, playCount, likeCount, shareCode, specJson, createdAt, ownerKey FROM "Project" WHERE visibility = 'public' ORDER BY (playCount + likeCount * 3) DESC LIMIT ${limitParam}`;
   } else {
     const orderBy =
       sort === "featured"
@@ -57,6 +63,7 @@ export async function GET(req: Request) {
       take: limitParam,
       select: {
         id: true,
+        ownerKey: true,
         title: true,
         prompt: true,
         coverPath: true,
@@ -71,18 +78,23 @@ export async function GET(req: Request) {
   }
 
   const items = projects
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      prompt: p.prompt,
-      coverPath: p.coverPath ?? null,
-      playCount: p.playCount,
-      likeCount: p.likeCount ?? 0,
-      shareCode: p.shareCode ?? null,
-      createdAt: p.createdAt,
-      featured: "featured" in p ? Boolean((p as { featured?: boolean }).featured) : false,
-      templateId: extractTemplateId(p.specJson),
-    }))
+    .map((p) => {
+      const owned = Boolean(ownerKey && p.ownerKey === ownerKey);
+      return {
+        id: p.id,
+        title: p.title,
+        prompt: p.prompt,
+        coverPath: p.coverPath ?? null,
+        playCount: p.playCount,
+        likeCount: p.likeCount ?? 0,
+        shareCode: p.shareCode ?? null,
+        createdAt: p.createdAt,
+        featured: "featured" in p ? Boolean((p as { featured?: boolean }).featured) : false,
+        templateId: extractTemplateId(p.specJson),
+        isOwner: owned,
+        canDelete: owned || superAdmin,
+      };
+    })
     .filter((p) => !templateFilter || p.templateId === templateFilter);
 
   const last = items[items.length - 1];

@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="AI Mother Platformer"
-config/description="1ONE GameSpec → Godot PoC mother template"
+config/description="Operone GameSpec → Godot PoC mother template"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/icon="res://icon.svg"

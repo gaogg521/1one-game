@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="AI Mother Universal"
-config/description="1ONE GameSpec 全品类专业运行时"
+config/description="Operone GameSpec 全品类专业运行时"
 run/main_scene="res://scenes/main.tscn"
 
 [autoload]

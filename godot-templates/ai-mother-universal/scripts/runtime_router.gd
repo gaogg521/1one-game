@@ -8,6 +8,13 @@ const RUNTIMES := {
 	"survivor": preload("res://scenes/runtimes/arena.tscn"),
 	"shooter": preload("res://scenes/runtimes/shooter.tscn"),
 	"towerDefense": preload("res://scenes/runtimes/tower_defense.tscn"),
+	"coaster": preload("res://scenes/runtimes/coaster.tscn"),
+	"puzzle": preload("res://scenes/runtimes/puzzle.tscn"),
+	"farming": preload("res://scenes/runtimes/farming.tscn"),
+	"physics": preload("res://scenes/runtimes/physics.tscn"),
+	"chess": preload("res://scenes/runtimes/chess.tscn"),
+	"customization": preload("res://scenes/runtimes/customization.tscn"),
+	"strategy": preload("res://scenes/runtimes/strategy.tscn"),
 }
 
 @onready var _mount: Node2D = $RuntimeMount
@@ -19,7 +26,7 @@ func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	_background.color = GameSpecData.theme_color("backgroundColor", Color("#1a2220"))
 	RuntimeReferenceBackdrop.apply(_ref_backdrop, _background)
-	var tid := GameSpecData.template_id()
+	var tid := GameSpecData.godot_runtime_key()
 	var packed: PackedScene = RUNTIMES.get(tid, RUNTIMES["avoider"])
 	var inst := packed.instantiate()
 	_mount.add_child(inst)

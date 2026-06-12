@@ -1,17 +1,25 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SAMPLE_SHELVES, type Sample, samplesByShelf, shelfConfig } from "@/lib/samples";
-import type { GameSpec } from "@/lib/game-spec";
-import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import {
+  getLocalizedSamplesByShelf,
+  getLocalizedShelfMeta,
+} from "@/lib/i18n/samples-localized";
+import { sampleProjectId } from "@/lib/sample-gallery";
+import { SAMPLE_SHELVES, type Sample } from "@/lib/samples";
 import { prefetchSamplesGodotExports } from "@/lib/samples-godot-prefetch.client";
 
-type BusyMap = Record<string, "idle" | "creating" | "error">;
+type BusyMap = Record<string, "idle" | "cloning" | "error">;
 
 function PlayGlyph({ className }: { className?: string }) {
   return (
@@ -25,27 +33,32 @@ function SampleCard({
   s,
   featured,
   busy,
-  onPlay,
-  onEdit,
+  ready,
+  locale,
+  onClone,
   ts,
 }: {
   s: Sample;
   featured: boolean;
   busy: boolean;
-  onPlay: (id: string, prompt: string) => void | Promise<void>;
-  onEdit: (prompt: string) => void;
+  ready: boolean;
+  locale: AppLocale;
+  onClone: (sampleId: string) => void | Promise<void>;
   ts: ReturnType<typeof useTranslations<"samples">>;
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const aspect = featured ? "aspect-[3/4] sm:aspect-[10/13]" : "aspect-[4/5]";
+  const projectId = sampleProjectId(s.id);
+  const playHref = withLocalePath(`/play/${projectId}`, locale);
 
   return (
     <article
       className={`group/card flex flex-col ${featured ? "gap-3" : "gap-2.5"}`}
       style={{ minWidth: 0 }}
     >
-      <div
-        className={`relative overflow-hidden rounded-2xl border border-[color:var(--gc-border)] shadow-[0_20px_50px_-28px_rgba(0,0,0,0.55)] transition duration-300 group-hover/card:-translate-y-0.5 group-hover/card:shadow-[0_28px_60px_-24px_color-mix(in_srgb,var(--gc-accent)_22%,transparent)] ${aspect}`}
+      <Link
+        href={playHref}
+        className={`relative block overflow-hidden rounded-2xl border border-[color:var(--gc-border)] shadow-[0_20px_50px_-28px_rgba(0,0,0,0.55)] transition duration-300 group-hover/card:-translate-y-0.5 group-hover/card:shadow-[0_28px_60px_-24px_color-mix(in_srgb,var(--gc-accent)_22%,transparent)] ${aspect}`}
       >
         <div className="absolute inset-0" style={{ background: s.coverGradient }} />
         {!coverFailed ? (
@@ -83,22 +96,35 @@ function SampleCard({
           {s.plays}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 pt-10 sm:p-4 sm:pt-12">
-          <div className="flex items-end gap-2">
-            <span className="select-none text-2xl leading-none drop-shadow-md sm:text-3xl" aria-hidden>
-              {s.emoji}
-            </span>
-            <h2
-              className={`min-w-0 flex-1 font-semibold leading-tight tracking-tight text-white drop-shadow-sm ${featured ? "text-[15px] sm:text-base" : "text-[13px] sm:text-sm"}`}
-            >
-              {s.title}
-            </h2>
+        {!s.photoCover ? (
+          <div className="absolute bottom-0 left-0 right-0 p-3 pt-10 sm:p-4 sm:pt-12">
+            <div className="flex items-end gap-2">
+              <span className="select-none text-2xl leading-none drop-shadow-md sm:text-3xl" aria-hidden>
+                {s.emoji}
+              </span>
+              <h2
+                className={`min-w-0 flex-1 font-semibold leading-tight tracking-tight text-white drop-shadow-sm ${featured ? "text-[15px] sm:text-base" : "text-[13px] sm:text-sm"}`}
+              >
+                {s.title}
+              </h2>
+            </div>
+            <p className={`mt-1 line-clamp-2 text-white/85 ${featured ? "text-[11px] sm:text-xs" : "text-[10px] sm:text-[11px]"}`}>
+              {s.subtitle}
+            </p>
           </div>
-          <p className={`mt-1 line-clamp-2 text-white/85 ${featured ? "text-[11px] sm:text-xs" : "text-[10px] sm:text-[11px]"}`}>
+        ) : null}
+      </Link>
+
+      {s.photoCover ? (
+        <div className="px-0.5">
+          <Link href={playHref} className="line-clamp-2 font-semibold leading-snug tracking-tight text-[var(--gc-text)] hover:text-[var(--gc-accent)]">
+            {s.title}
+          </Link>
+          <p className={`mt-0.5 line-clamp-1 text-[var(--gc-muted)] ${featured ? "text-[11px] sm:text-xs" : "text-[10px]"}`}>
             {s.subtitle}
           </p>
         </div>
-      </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1.5 px-0.5">
         {s.tags.slice(0, featured ? 5 : 3).map((t) => (
@@ -122,20 +148,19 @@ function SampleCard({
       </details>
 
       <div className="mt-auto flex flex-wrap gap-2 px-0.5">
+        <Link
+          href={playHref}
+          className={`gc-theme-cta rounded-full px-4 py-2 text-xs font-semibold shadow-md hover:brightness-110 sm:px-5 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+        >
+          {ts("play")}
+        </Link>
         <button
           type="button"
-          onClick={() => void onPlay(s.id, s.prompt)}
-          disabled={busy}
-          className="gc-theme-cta rounded-full px-4 py-2 text-xs font-semibold shadow-md hover:brightness-110 disabled:opacity-50 sm:px-5 sm:text-sm"
+          disabled={busy || !ready}
+          onClick={() => void onClone(s.id)}
+          className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] disabled:opacity-50 sm:text-sm"
         >
-          {busy ? ts("creating") : ts("play")}
-        </button>
-        <button
-          type="button"
-          onClick={() => onEdit(s.prompt)}
-          className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:text-sm"
-        >
-          {ts("tune")}
+          {busy ? ts("cloning") : ts("clone")}
         </button>
       </div>
 
@@ -144,7 +169,7 @@ function SampleCard({
           className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--gc-surface-glass-strong)] text-[10px] font-bold text-[var(--gc-accent)]"
           aria-hidden
         >
-          1
+          {s.creator.slice(0, 1).toUpperCase()}
         </span>
         <span className="truncate">{s.creator}</span>
       </p>
@@ -153,60 +178,67 @@ function SampleCard({
 }
 
 export default function SamplesPage() {
+  const locale = useLocale() as AppLocale;
   const ts = useTranslations("samples");
   const router = useRouter();
   const [busy, setBusy] = useState<BusyMap>({});
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    prefetchSamplesGodotExports();
-  }, []);
+    let stale = false;
+    void fetch("/api/samples/ensure", {
+      method: "POST",
+      headers: mergeLocaleHeaders(locale),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(() => {
+        if (!stale) {
+          setReady(true);
+          prefetchSamplesGodotExports();
+        }
+      })
+      .catch(() => {
+        if (!stale) setError(ts("networkError"));
+      });
+    return () => {
+      stale = true;
+    };
+  }, [locale, ts]);
 
-  const goEdit = useCallback(
-    (prompt: string) => {
-      router.push(`/create?prefill=${encodeURIComponent(prompt)}`);
-    },
-    [router],
-  );
-
-  const wrappedPlay = useCallback(
-    async (id: string, prompt: string) => {
+  const handleClone = useCallback(
+    async (sampleId: string) => {
       setError(null);
-      setBusy((m) => ({ ...m, [id]: "creating" }));
+      setBusy((m) => ({ ...m, [sampleId]: "cloning" }));
+      const projectId = sampleProjectId(sampleId);
       try {
-        const gen = await fetch("/api/generate", {
+        const res = await fetch(`/api/projects/${projectId}/duplicate`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          headers: mergeLocaleHeaders(locale),
         });
-        const genData = (await gen.json()) as { spec?: GameSpec; error?: string };
-        if (!gen.ok || !genData.spec) {
-          setError(genData.error ?? ts("generateFailed"));
-          setBusy((m) => ({ ...m, [id]: "error" }));
+        const data = (await res.json()) as {
+          project?: { id: string };
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+        };
+        if (!res.ok || !data.project?.id) {
+          setError(resolveClientApiError(locale, data, "cloneFailed"));
+          setBusy((m) => ({ ...m, [sampleId]: "error" }));
           return;
         }
-
-        const save = await fetch("/api/projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, spec: genData.spec }),
-        });
-        const saveData = (await save.json()) as { project?: { id: string }; error?: string };
-        if (!save.ok || !saveData.project?.id) {
-          setError(saveData.error ?? ts("saveFailed"));
-          setBusy((m) => ({ ...m, [id]: "error" }));
-          return;
-        }
-        prefetchGodotExport(genData.spec, { projectId: saveData.project.id });
-        router.push(`/play/${saveData.project.id}`);
+        router.push(withLocalePath(`/play/${data.project.id}`, locale));
       } catch {
         setError(ts("networkError"));
-        setBusy((m) => ({ ...m, [id]: "error" }));
+        setBusy((m) => ({ ...m, [sampleId]: "error" }));
       } finally {
-        setBusy((m) => ({ ...m, [id]: "idle" }));
+        setBusy((m) => ({ ...m, [sampleId]: "idle" }));
       }
     },
-    [router],
+    [locale, router, ts],
   );
 
   return (
@@ -219,21 +251,11 @@ export default function SamplesPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--gc-text-faint)]">Gallery</p>
             <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-4xl">{ts("title")}</h1>
             <p className="max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
-              {ts("descPrefix")}{" "}
-              <a
-                href="https://www.astrocade.com/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[var(--gc-accent)] underline-offset-4 hover:underline"
-              >
-                Astrocade
-              </a>{" "}
-              {ts("descMid")}{" "}
-              <code className="rounded bg-[var(--gc-surface-glass)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--gc-text-soft)]">
-                coverImageSrc
-              </code>{" "}
-              {ts("descSuffix")}
+              {ts("desc")}
             </p>
+            {!ready && !error ? (
+              <p className="text-xs text-[var(--gc-text-faint)]">{ts("bootstrapping")}</p>
+            ) : null}
           </header>
 
           {error ? (
@@ -245,8 +267,8 @@ export default function SamplesPage() {
 
         <div className="mt-10 flex flex-col gap-14 sm:mt-12 sm:gap-16">
           {SAMPLE_SHELVES.map((shelf) => {
-            const meta = shelfConfig(shelf);
-            const list = samplesByShelf(shelf);
+            const meta = getLocalizedShelfMeta(shelf, locale);
+            const list = getLocalizedSamplesByShelf(shelf, locale);
             const featured = shelf === "featured";
             return (
               <section key={shelf} className="min-w-0">
@@ -267,9 +289,10 @@ export default function SamplesPage() {
                         <SampleCard
                           s={s}
                           featured={featured}
-                          busy={(busy[s.id] ?? "idle") === "creating"}
-                          onPlay={wrappedPlay}
-                          onEdit={goEdit}
+                          busy={(busy[s.id] ?? "idle") === "cloning"}
+                          ready={ready}
+                          locale={locale}
+                          onClone={handleClone}
                           ts={ts}
                         />
                       </div>

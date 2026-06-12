@@ -1,25 +1,64 @@
+import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
+import { buildCoasterBlueprint } from "@/lib/coaster-blueprint";
+import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
+import { buildStrategyBlueprint } from "@/lib/strategy-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
+import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
 
 /**
  * Phaser / Godot 共用：导出与试玩前补全导演、塔防蓝图、试听与粒子色，
  * 保证双轨从同一份「高质量」GameSpec 起跑。
  */
-export function enrichGameSpecForRuntime(spec: GameSpec, promptHint = ""): GameSpec {
+export function enrichGameSpecForRuntime(
+  spec: GameSpec,
+  promptHint = "",
+  locale: AppLocale = "zh-Hans",
+): GameSpec {
   const hint = promptHint || spec.title;
   let next = withPresentationDefaults(spec);
 
-  if (next.templateId === "towerDefense" && !next.towerDefense) {
+  const rt = resolveTemplateRuntime(next.templateId);
+  if (rt.blueprint === "towerDefense" && !next.towerDefense) {
     next = {
       ...next,
       towerDefense: buildTowerDefenseBlueprint({ prompt: hint, spec: next }),
     };
   }
 
+  if (rt.blueprint === "coaster" && !next.coaster) {
+    next = {
+      ...next,
+      coaster: buildCoasterBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
+  if (rt.blueprint === "puzzle" && !next.puzzle) {
+    next = {
+      ...next,
+      puzzle: buildPuzzleBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
+  if (rt.blueprint === "farming" && !next.farming) {
+    next = {
+      ...next,
+      farming: buildFarmingBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
+  if (rt.blueprint === "strategy" && !next.strategy) {
+    next = {
+      ...next,
+      strategy: buildStrategyBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
   if (!next.director?.events?.length) {
-    const built = buildDirector({ prompt: hint, spec: next });
+    const built = buildDirector({ prompt: hint, spec: next, locale });
     next = {
       ...next,
       director: next.director

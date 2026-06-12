@@ -1,22 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500" viewBox="0 0 400 500" role="img" aria-label="">
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500" viewBox="0 0 400 500" role="img" aria-label="Operone sample — neon tower defense">
   <defs>
-    <linearGradient id="cb" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="45%" stop-color="#312e81"/>
+    <linearGradient id="bg" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="50%" stop-color="#312e81"/>
       <stop offset="100%" stop-color="#22d3ee"/>
     </linearGradient>
+    <filter id="neon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="400" height="500" fill="url(#cb)"/>
-  <g stroke="#22d3ee" stroke-opacity="0.35" fill="none" stroke-width="1">
-    <path d="M0 120 L400 80 M0 200 L400 160 M0 280 L400 240"/>
+  <rect width="400" height="500" fill="url(#bg)"/>
+  <g stroke="#22d3ee" stroke-opacity="0.28" fill="none" stroke-width="1">
+    <path d="M0 110 L400 70 M0 190 L400 150 M0 270 L400 230 M0 350 L400 310"/>
   </g>
-  <g stroke="#a855f7" stroke-opacity="0.4" fill="none" stroke-width="1.5">
-    <path d="M40 500 L200 80 L360 500"/>
+  <g stroke="#a855f7" stroke-opacity="0.45" fill="none" stroke-width="1.5" filter="url(#neon)">
+    <path d="M36 500 L200 72 L364 500"/>
   </g>
-  <polygon points="200,160 255,280 145,280" fill="none" stroke="#67e8f9" stroke-width="3" opacity="0.9"/>
-  <circle cx="200" cy="230" r="36" fill="rgba(34,211,238,0.15)" stroke="#22d3ee" stroke-width="2"/>
-  <rect x="175" y="300" width="50" height="90" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-  <rect x="120" y="360" width="160" height="8" fill="#38bdf8" opacity="0.5"/>
-  <circle cx="95" cy="200" r="6" fill="#f472b6" opacity="0.9"/>
-  <circle cx="310" cy="220" r="5" fill="#f472b6" opacity="0.85"/>
+  <polygon points="200,150 258,278 142,278" fill="rgba(34,211,238,0.12)" stroke="#67e8f9" stroke-width="3" filter="url(#neon)"/>
+  <circle cx="200" cy="218" r="34" fill="rgba(124,58,237,0.2)" stroke="#a78bfa" stroke-width="2"/>
+  <rect x="172" y="292" width="56" height="92" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+  <rect x="108" y="352" width="184" height="6" rx="3" fill="#38bdf8" opacity="0.45"/>
+  <circle cx="88" cy="192" r="5" fill="#f472b6" filter="url(#neon)"/>
+  <circle cx="318" cy="212" r="4" fill="#f472b6" filter="url(#neon)"/>
+  <text x="200" y="472" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-family="system-ui,sans-serif" font-size="11" letter-spacing="3">OPERONE</text>
 </svg>

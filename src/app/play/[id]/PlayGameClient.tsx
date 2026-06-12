@@ -8,6 +8,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { GamePlayer } from "@/components/GamePlayer";
 import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
+import { writeAssetManifestToSession } from "@/lib/assets/asset-manifest-session.client";
 import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
 import { PRODUCT } from "@/lib/product-config";
@@ -20,6 +21,7 @@ import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
@@ -30,6 +32,7 @@ export function PlayGameClient({ id }: { id: string }) {
     title: string;
     prompt: string;
     isOwner: boolean;
+    isSampleGallery: boolean;
     shareCode: string | null;
     likeCount: number;
   } | null>(null);
@@ -63,14 +66,17 @@ export function PlayGameClient({ id }: { id: string }) {
             title: string;
             prompt: string;
             isOwner: boolean;
+            isSampleGallery?: boolean;
             shareCode: string | null;
             likeCount?: number;
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
         };
         if (!res.ok) {
-          if (!cancelled) setError(data.error ?? t("loadFailed"));
+          if (!cancelled) setError(resolveClientApiError(locale, data, "loadFailed"));
           return;
         }
         if (!data.spec || !data.project) {
@@ -87,11 +93,17 @@ export function PlayGameClient({ id }: { id: string }) {
             method: "POST",
             keepalive: true,
             headers: apiHeaders(),
-          });
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((payload) => {
+              if (payload?.assetManifest) writeAssetManifestToSession(payload.assetManifest);
+            })
+            .catch(() => {});
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
             isOwner: data.project.isOwner,
+            isSampleGallery: Boolean(data.project.isSampleGallery),
             shareCode: data.project.shareCode ?? null,
             likeCount: data.project.likeCount ?? 0,
           });
@@ -148,9 +160,11 @@ export function PlayGameClient({ id }: { id: string }) {
       const data = (await res.json()) as {
         project?: { shareCode?: string | null };
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
       };
       if (!res.ok) {
-        alert(data.error ?? t("generateFailed"));
+        alert(resolveClientApiError(locale, data, "generateFailed"));
         return;
       }
       const code = data.project?.shareCode;
@@ -179,9 +193,14 @@ export function PlayGameClient({ id }: { id: string }) {
         method: "POST",
         headers: apiHeaders(),
       });
-      const data = (await res.json()) as { project?: { id: string }; error?: string };
+      const data = (await res.json()) as {
+        project?: { id: string };
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
       if (!res.ok) {
-        alert(data.error ?? t("copyFailed"));
+        alert(resolveClientApiError(locale, data, "copyFailed"));
         return;
       }
       if (data.project?.id) {
@@ -209,9 +228,11 @@ export function PlayGameClient({ id }: { id: string }) {
           prompt?: string;
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
         };
         if (!res.ok || !data.spec) {
-          setPatchError(data.error ?? t("refineFailed"));
+          setPatchError(resolveClientApiError(locale, data, "refineFailed"));
           return;
         }
         setSpec(data.spec);
@@ -230,9 +251,15 @@ export function PlayGameClient({ id }: { id: string }) {
         headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ prompt: patchPrompt.trim(), currentSpec: spec, currentPrompt: meta?.prompt ?? "" }),
       });
-      const data = (await res.json()) as { spec?: GameSpec; prompt?: string; error?: string };
+      const data = (await res.json()) as {
+        spec?: GameSpec;
+        prompt?: string;
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
       if (!res.ok || !data.spec) {
-        setPatchError(data.error ?? t("patchFailed"));
+        setPatchError(resolveClientApiError(locale, data, "patchFailed"));
         return;
       }
       setSpec(data.spec);
@@ -260,10 +287,12 @@ export function PlayGameClient({ id }: { id: string }) {
       });
       const data = (await res.json()) as {
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
         project?: { title?: string; prompt?: string };
       };
       if (!res.ok) {
-        setPatchError(data.error ?? t("saveFailed"));
+        setPatchError(resolveClientApiError(locale, data, "saveFailed"));
         return;
       }
       setMeta((m) =>
@@ -305,6 +334,11 @@ export function PlayGameClient({ id }: { id: string }) {
           </div>
         ) : (
           <>
+            {meta.isSampleGallery ? (
+              <p className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-sm text-[var(--gc-text-soft)]">
+                {t("samplePlayHint")}
+              </p>
+            ) : null}
             <ResultMomentBanner
               mode="game"
               title={meta.title}
@@ -321,7 +355,14 @@ export function PlayGameClient({ id }: { id: string }) {
                         : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] text-[var(--gc-text)] hover:border-red-400/40 hover:text-red-400"
                     }`}
                   >
-                    {liked ? "♥" : "♡"} {likeCount > 0 ? likeCount : t("like")}
+                    {liked ? "♥" : "♡"}{" "}
+                    {likeCount > 0
+                      ? likeCount
+                      : meta.isSampleGallery
+                        ? liked
+                          ? t("favorited")
+                          : t("favorite")
+                        : t("like")}
                   </button>
                   <button
                     type="button"
@@ -354,7 +395,11 @@ export function PlayGameClient({ id }: { id: string }) {
                     onClick={() => void remix()}
                     className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm font-medium text-[var(--gc-text)] disabled:opacity-50"
                   >
-                    {remixBusy ? t("remixing") : "Remix"}
+                    {remixBusy
+                      ? t("remixing")
+                      : meta.isSampleGallery
+                        ? t("cloneToMine")
+                        : "Remix"}
                   </button>
                 </>
               }

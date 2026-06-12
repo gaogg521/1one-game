@@ -14,7 +14,9 @@ import { WorkStatusBadge } from "@/components/work/WorkStatusBadge";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
+import { formatStudioWorkSummary } from "@/lib/i18n/studio-work-summary";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type WorkType = "project" | "novel" | "comic";
@@ -297,9 +299,14 @@ export default function StudioPage() {
       method: "POST",
       headers: mergeLocaleHeaders(locale),
     });
-    const data = (await res.json()) as { project?: { id: string }; error?: string };
+    const data = (await res.json()) as {
+      project?: { id: string };
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+    };
     if (!res.ok) {
-      alert(data.error ?? t("studioErrors.duplicateFailed"));
+      alert(resolveClientApiError(locale, data, "duplicateFailed"));
       return;
     }
     if (data.project?.id) {
@@ -312,9 +319,14 @@ export default function StudioPage() {
       method: "POST",
       headers: mergeLocaleHeaders(locale),
     });
-    const data = (await res.json()) as { novel?: { id: string }; error?: string };
+    const data = (await res.json()) as {
+      novel?: { id: string };
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+    };
     if (!res.ok) {
-      alert(data.error ?? t("studioErrors.duplicateFailed"));
+      alert(resolveClientApiError(locale, data, "duplicateFailed"));
       return;
     }
     if (data.novel?.id) router.push(`/novel/${data.novel.id}`);
@@ -325,9 +337,14 @@ export default function StudioPage() {
       method: "POST",
       headers: mergeLocaleHeaders(locale),
     });
-    const data = (await res.json()) as { comic?: { id: string }; error?: string };
+    const data = (await res.json()) as {
+      comic?: { id: string };
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+    };
     if (!res.ok) {
-      alert(data.error ?? t("studioErrors.duplicateFailed"));
+      alert(resolveClientApiError(locale, data, "duplicateFailed"));
       return;
     }
     if (data.comic?.id) router.push(`/comic/${data.comic.id}`);
@@ -377,6 +394,9 @@ export default function StudioPage() {
         ok?: boolean;
         deletedCount?: number;
         errors?: string[];
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
       };
 
       if (res.ok && data?.ok) {
@@ -388,7 +408,7 @@ export default function StudioPage() {
           alert(t("studioErrors.batchDeletePartial", { errors: data.errors.join("\n") }));
         }
       } else {
-        alert(t("studioErrors.batchDeleteFailed"));
+        alert(resolveClientApiError(locale, data, "batchDeleteFailed"));
       }
     } catch (e) {
       alert(
@@ -601,7 +621,9 @@ export default function StudioPage() {
                       </Link>
                       <WorkStatusBadge status={r.status} />
                     </div>
-                    <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">{r.prompt}</p>
+                    <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">
+                      {formatStudioWorkSummary(r, locale)}
+                    </p>
                     {r.shareCode ? (
                       <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
                         {t("studio.shortLink", { code: r.shareCode })}

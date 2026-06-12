@@ -8,6 +8,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { untitledGameLabel } from "@/lib/i18n/chapter-labels";
 const TowerDefenseBlueprintSchema = GameSpecSchema.shape.towerDefense;
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
+import { isGameTemplateId } from "@/lib/game-templates/registry";
 
 function normalizeHex(input: string): string | null {
   let s = input.trim();
@@ -52,14 +53,7 @@ export function coerceGameSpec(
   }
 
   let templateId: GameSpec["templateId"] = "avoider";
-  if (
-    o.templateId === "avoider" ||
-    o.templateId === "collector" ||
-    o.templateId === "survivor" ||
-    o.templateId === "platformer" ||
-    o.templateId === "towerDefense" ||
-    o.templateId === "shooter"
-  ) {
+  if (typeof o.templateId === "string" && isGameTemplateId(o.templateId)) {
     templateId = o.templateId;
   } else if (o.templateId !== undefined) {
     issues.push("templateId 非法，已回落 avoider");
@@ -239,12 +233,7 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
   const merged: Record<string, unknown> = {
     version: 1,
     templateId:
-      r.templateId === "avoider" ||
-      r.templateId === "collector" ||
-      r.templateId === "survivor" ||
-      r.templateId === "platformer" ||
-      r.templateId === "towerDefense" ||
-      r.templateId === "shooter"
+      typeof r.templateId === "string" && isGameTemplateId(r.templateId)
         ? r.templateId
         : base.templateId,
     title: typeof r.title === "string" && r.title.trim() ? r.title.trim().slice(0, 80) : base.title,

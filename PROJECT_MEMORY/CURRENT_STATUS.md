@@ -1,59 +1,51 @@
 # CURRENT_STATUS
 
-更新时间：**2026-05-23**（Godot 塔防精灵贴图修复 + 知识库整理）
+更新时间：**2026-06-12**（Astrocade 级 Phase 1–4 重构）
 
 ## 项目整体进度
 
-完成度：**主链路可用，可对外演示**  
-当前阶段：游戏 / 小说 / 漫画三模块 + Studio；**业务参数在 `product-config.ts`**，`.env` 仅密钥与网关。
+完成度：**Astrocade 级编排默认开启，专用运行时 + Agentic 双轨可用**  
+当前阶段：默认 `qualityTier=astrocade`、`agenticModuleEnabled=true`；13 语义模板 + 15 样品专用 Phaser/Godot 运行时；用户新生成走 Agentic 沙箱。
+
+## Astrocade 级（2026-06-12）
+
+| 项 | 状态 |
+|----|------|
+| 编排档位 `astrocade` | ✅ 默认 MultiAgent + 深度 Brief |
+| Agentic 模块 | ✅ 生成/refine LLM+repair；POST 同步 template fallback |
+| Agentic QA 闭环 | ✅ validateAgenticRunnable + repair loop + `qa:agentic-repair` |
+| E2E 用户路径 | ✅ `e2e/astrocade-agentic.smoke.spec.ts` POST→AgenticScene→canvas |
+| 专用 Phaser 场景 | ✅ puzzle/farming/physics/chess/customization/coaster/strategy |
+| Godot 专用 runtime | ✅ 同上 + strategy；`GODOT_RUNTIME_BUILD_REV=20260612-astrocade-tier` |
+| 资产 V2 manifest | ✅ background API + Play 页 session 写入 |
+| QA 流水线 | ✅ `npm run qa:astrocade-pipeline` 全绿 |
 
 ## 各模块状态
 
 | 模块 | 状态 | 备注 |
 |------|------|------|
-| 游戏生成 / 试玩 | ✅ | 4 步共创；`refine` API；六模板 E2E **24/24**；PlayScene 目标闭环 |
-| 小说生成 / 阅读 | ✅ | 短篇/中篇/长篇；**长篇分段续写**（大纲 + 多段）；流式网关超时已代码化 |
-| 漫画生成 / 阅读 | ✅ | 分镜 + SSE 配图；8 页分镜手测 ~200s；32 格长测约 40～50min |
-| 文生图 | ✅ | `gpt-image-2` 主路径；≤4 格批量 `n=4` |
-| Studio | ✅ | 三源合并；游戏/小说/漫画 **duplicate** |
-| 发现 / 列表 | ✅ | 点赞、排序、本人作品删除 |
-| Godot Web 导出 | ✅ | 塔防精灵贴图修复完成；缓存失效机制已更新 |
+| 游戏生成 / 试玩 | ✅ | Astrocade 默认 Agentic；样品馆仍用专用场景保 demo 质量 |
+| refine API | ✅ | patch 模式也会 attach agentic |
+| 小说 / 漫画 / Studio | ✅ | 未改 |
 
-## 配置与部署
+## 脚本速查（游戏 QA）
 
-| 项 | 说明 |
-|----|------|
-| 产品常量 | **`src/lib/product-config.ts`**（模型、超时、限流、漫画并发等） |
-| 长篇分段 | **`src/lib/novel-long-config.ts`** |
-| `.env` | 仅 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、可选 `GEMINI_API_KEY` |
-| 测试库 | **`prisma/ci.sqlite`** 已纳入仓库（E2E/手测） |
-| 远程 | https://github.com/gaogg521/1one-game — `main` |
+| 脚本 | 用途 |
+|------|------|
+| `npm run qa:astrocade-pipeline` | 编排档位 + 用户路径 + 模板矩阵 + Agentic + 试玩 |
+| `npm run qa:astrocade-user-path` | 用户生成 Agentic attach + 样品隔离 + 资产 slots |
+| `npm run qa:template-matrix` | 13 模板 + 15 样品 |
+| `npm run qa:gameplay-agent` | 9 样品 Playwright 试玩 |
 
-## 最近修复（2026-05-23）
+## 已知差距（相对 Astrocade 产品）
 
-### Godot 塔防精灵贴图
-- **根因**：`player.png` 被 `classifyReferencePayloads` 分到 protagonist，塔防运行时从 towerSkins 取塔贴图 → 数组为空 → 回退到默认几何造型（绿色圆圈+三角形）
-- **修复**：
-  1. `writeGodotReferenceAssets` 增加双向 fallback（protagonist ↔ towerSkins 共享纹理）——通用兜底，所有模板受益
-  2. 新增 `adjustAiSpritePurposesForTemplate`，`towerDefense` 模板下 player.png purpose 改为"防御塔 植物 豌豆射手"，正确分类为 towerSkin
-  3. `GODOT_RUNTIME_BUILD_REV` 递增为 `"20260523-tower-skin-fallback"`，旧缓存自动失效重建
-
-### 其他修复（前几轮会话）
-- Node.js 僵尸进程：移除 `shell:true`，改为直接 spawn + 信号处理
-- `game_audio.gd`：`DisplayServer.is_headless()` 不存在 → 改为 `get_name() == "headless"`
-- `game_audio.gd`：`var scale` 与 Node 属性冲突 → 重命名为 `arp_scale`
-- 前端等待精灵：saveAndPlay 跳转前 `waitForSprites()` 轮询，确保精灵先生成再进游戏
-
-## 已知问题
-
-1. **微调 UI**（金币、怪物数量、地图等参数调节）——用户有需求，SpecQuickTunePanel 已有基础，待完善
-2. **Phaser 侧精灵贴图尺寸**——截图显示僵尸贴图可能覆盖全屏，需单独排查 Phaser 纹理加载逻辑
-3. **32 格配图**耗时长，进程重启会中断长测
-4. **Prisma generate** 本地偶发 EPERM（需停 dev）
-5. **六模板动效**建议偶尔肉眼扫一眼
-6. **工作室批量删除**未做
+1. **LLM Agentic 玩法质量**仍依赖模型；POST/remix 走 instant fallback，完整 LLM 在 generate/refine  
+2. **封面与试玩资产一致性**——V2 slots + AgenticScene preload 已接  
+3. **Godot 全模板 3D**——coaster 天空已主题化；chess 仍 2D 简化盘  
+4. **实机 LLM 抽检**：生产环境需监控 LLM vs fallback 比例
 
 ## 文档
 
-- 本日总结：`PROJECT_MEMORY/iterations/2026-05-23.md`（待建）
-- 决策记录：`PROJECT_MEMORY/DECISIONS.md` §2026-05-23
+- 决策：`PROJECT_MEMORY/DECISIONS.md`（Astrocade tier）
+- 环境：`.env.example` → `ORCHESTRATION_QUALITY_TIER` / `AGENTIC_GAME_MODULE`
+

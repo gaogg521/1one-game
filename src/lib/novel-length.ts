@@ -39,7 +39,7 @@ type LengthTierRow = {
   maxChars: number;
 };
 
-/** 创作台「篇幅」区可选：短篇 / 中篇 / 长篇 */
+/** 创作台「篇幅」区可选：短篇 / 中篇 / 长篇（label/desc 仅供配置；UI 请用 getNovelLengthTierUiCopy + locale） */
 export const NOVEL_LENGTH_TIERS_FOR_UI: LengthTierRow[] = [
   { id: "short", label: "短篇", desc: "约 300–2,000 字", minChars: 300, maxChars: 2000 },
   { id: "medium", label: "中篇", desc: "约 2,000–10,000 字", minChars: 2000, maxChars: 10000 },

@@ -3,6 +3,21 @@ import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import type { AppLocale } from "@/i18n/routing";
+import { gameEventTitle, shooterWaveBanner } from "@/lib/i18n/game-event-labels";
+import {
+  hudActChapter,
+  hudLives,
+  hudScore,
+  hudShooterKills,
+  hudShooterWave,
+  hudControlsShooter,
+  shooterFinishText,
+  shooterSkillStatus,
+  shooterShiftReady,
+  shooterShiftCooldown,
+} from "@/lib/i18n/game-hud-labels";
+import { tMessage } from "@/lib/i18n/messages";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { classifyReferencePayloads } from "@/lib/reference-classify";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
@@ -33,6 +48,7 @@ function isSpaceShooterSpec(spec: GameSpec): boolean {
 export class ShooterScene extends Phaser.Scene {
   public backgroundUrl: string | null = null;
   public projectId: string | null = null;
+  public uiLocale: AppLocale = "zh-Hans";
 
   private readonly spec: GameSpec;
   private readonly onEnd: (r: EndPayload) => void;
@@ -287,7 +303,7 @@ export class ShooterScene extends Phaser.Scene {
     );
 
     this.hintText = this.add
-      .text(width / 2, height - 20, `← → / A D 移动 · 自动射击「${this.spec.labels.hazard}」· Shift 技能`, {
+      .text(width / 2, height - 20, hudControlsShooter(this.uiLocale, this.spec.labels.hazard), {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -521,11 +537,16 @@ export class ShooterScene extends Phaser.Scene {
     const label = acts[idx]?.label;
     if (label && idx !== this.actIndex) {
       this.actIndex = idx;
-      this.banner.show({ title: `${label}`, message: `第 ${this.wave} 波次`, ms: 2000 });
+      this.banner.show({ title: label, message: hudShooterWave(this.uiLocale, this.wave), ms: 2000 });
       const sections = ["intro", "build", "drop", "climax"] as const;
       this.soundscape?.setSection(sections[idx] ?? "intro");
     } else {
-      this.banner.show({ title: `第 ${this.wave} 波`, message: isBossWave ? "首领来袭！" : isEliteWave ? "精英编队" : "编队入侵", ms: 1600 });
+      const waveBanner = shooterWaveBanner(
+        this.uiLocale,
+        this.wave,
+        isBossWave ? "boss" : isEliteWave ? "elite" : "normal",
+      );
+      this.banner.show({ title: waveBanner.title, message: waveBanner.message, ms: 1600 });
     }
     this.soundscape?.triggerWaveStart(Math.max(0, this.wave - 1), Math.max(4, Math.ceil(this.winScore / 10)));
 
@@ -741,7 +762,10 @@ export class ShooterScene extends Phaser.Scene {
 
     if (this.eventType && now >= this.eventUntil) {
       if (this.eventType === "coinRain") this.scoreMult = 1;
-      this.banner.show({ title: "事件结束", ms: 1200 });
+      this.banner.show({
+        title: tMessage(this.uiLocale, "gameEvents.shooter.eventEnd"),
+        ms: 1200,
+      });
       this.eventType = null;
       this.eventUntil = 0;
     }
@@ -760,7 +784,12 @@ export class ShooterScene extends Phaser.Scene {
   private startEvent(ev: DirectorEvent) {
     const now = this.time.now;
     const durationMs = ev.durationMs ?? 4000;
-    const title = ev.title ?? (ev.type === "coinRain" ? "双倍得分！" : ev.type === "miniBoss" ? "首领增援！" : "特殊事件");
+    const title =
+      ev.type === "coinRain"
+        ? tMessage(this.uiLocale, "gameEvents.shooter.doubleScore")
+        : ev.type === "miniBoss"
+          ? tMessage(this.uiLocale, "gameEvents.shooter.bossReinforce")
+          : gameEventTitle(this.uiLocale, ev.type, this.spec.templateId);
 
     this.eventType = ev.type;
     this.eventUntil = now + durationMs;
@@ -832,20 +861,29 @@ export class ShooterScene extends Phaser.Scene {
   // ─── HUD ───────────────────────────────────────────────────────────────────
 
   private refreshHud() {
-    this.scoreText.setText(`得分 ${this.score}`);
-    this.livesText.setText(`生命 ${this.lives}`);
-    this.waveText.setText(`第 ${this.wave} 波`);
+    this.scoreText.setText(hudScore(this.uiLocale, this.score));
+    this.livesText.setText(hudLives(this.uiLocale, this.lives));
+    this.waveText.setText(hudShooterWave(this.uiLocale, this.wave));
     const prog = Math.min(this.totalKills, this.winScore);
-    this.progressText.setText(`击杀 ${prog}/${this.winScore}`);
-    const skillName = this.spec.systems?.skill?.name ?? "技能";
+    this.progressText.setText(hudShooterKills(this.uiLocale, prog, this.winScore));
+    const skillName = this.spec.systems?.skill?.name ?? tMessage(this.uiLocale, "gameEvents.hud.defaultSkill");
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
-    const status = this.time.now < this.shieldUntil ? "护盾" : this.time.now < this.slowUntil ? "减速场" : this.time.now < this.supportWingUntil ? "僚机援护" : "待命";
-    this.skillText.setText(`${skillName} · ${status}`);
-    this.skillCdText.setText(cdLeft <= 0 ? "Shift 已就绪" : `Shift ${(cdLeft / 1000).toFixed(1)}s`);
+    const status: "shield" | "slow" | "wing" | "standby" =
+      this.time.now < this.shieldUntil
+        ? "shield"
+        : this.time.now < this.slowUntil
+          ? "slow"
+          : this.time.now < this.supportWingUntil
+            ? "wing"
+            : "standby";
+    this.skillText.setText(shooterSkillStatus(this.uiLocale, skillName, status));
+    this.skillCdText.setText(
+      cdLeft <= 0 ? shooterShiftReady(this.uiLocale) : shooterShiftCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1)),
+    );
 
     const acts = this.spec.director?.acts ?? null;
     const label = acts?.[this.actIndex]?.label;
-    this.actText.setText(label ? `章节 · ${label}` : "");
+    this.actText.setText(label ? hudActChapter(this.uiLocale, label) : "");
   }
 
   private startDangerVignette() {
@@ -874,9 +912,7 @@ export class ShooterScene extends Phaser.Scene {
     if (this.fireTimer) this.fireTimer.destroy();
     if (this.enemyFireTimer) this.enemyFireTimer.destroy();
     this.physics.pause();
-    this.hintText.setText(
-      payload.won ? "胜利！可在页面按钮再来一局或分享链接。" : "再接再厉 · 再来一局或调整创意描述。",
-    );
+    this.hintText.setText(shooterFinishText(this.uiLocale, payload.won));
     if (payload.won) {
       playBleep("win");
       this.soundscape?.triggerEvent("victory");

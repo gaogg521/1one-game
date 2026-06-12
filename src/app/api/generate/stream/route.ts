@@ -106,6 +106,7 @@ export async function POST(req: Request) {
           searchEnhance: parsed.searchEnhance,
           templateHint: parsed.templateHint,
           enhancePass: parsed.enhancePass,
+          uiLocale,
           orchestration: orch,
           creativeBriefPreExpanded,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),

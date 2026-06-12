@@ -1,18 +1,13 @@
 import { z } from "zod";
 import type { GameSpec } from "@/lib/game-spec";
+import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
+
+const TEMPLATE_HINT_VALUES = ["auto", ...GAME_TEMPLATE_IDS] as [string, ...string[]];
 
 export const PARSED_INTENT_SCHEMA = z.object({
   genreId: z.string(),
   genreLabel: z.string(),
-  templateHint: z.enum([
-    "auto",
-    "avoider",
-    "collector",
-    "survivor",
-    "platformer",
-    "towerDefense",
-    "shooter",
-  ]),
+  templateHint: z.enum(TEMPLATE_HINT_VALUES),
   tone: z.enum(["epic", "casual", "hardcore", "cozy", "neutral"]),
   difficulty: z.enum(["easy", "normal", "hard"]),
   keywords: z.array(z.string()),

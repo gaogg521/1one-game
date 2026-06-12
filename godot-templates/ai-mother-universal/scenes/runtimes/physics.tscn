@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3 uid="uid://runtime_physics"]
+
+[ext_resource type="Script" path="res://scripts/runtimes/physics_runtime.gd" id="1_physics"]
+
+[node name="Physics" type="Node2D"]
+script = ExtResource("1_physics")
+
+[node name="Floor" type="StaticBody2D" parent="."]
+position = Vector2(400, 536)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+
+[node name="Dummy" type="RigidBody2D" parent="."]
+position = Vector2(400, 280)
+gravity_scale = 1.2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy"]
+
+[node name="Visual" type="ColorRect" parent="Dummy"]
+offset_left = -36.0
+offset_top = -60.0
+offset_right = 36.0
+offset_bottom = 60.0

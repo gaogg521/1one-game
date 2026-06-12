@@ -2,6 +2,9 @@
 
 export type ApiGenerateErrorPayload = {
   error: string;
+  /** 客户端按当前 locale 重新解析（切换语言后仍正确） */
+  errorKey?: string;
+  errorParams?: Record<string, string | number | undefined | null>;
   code?: string;
   requestId?: string;
 };

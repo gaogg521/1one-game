@@ -9,6 +9,7 @@ const serverEnv = {
   PORT: "8888",
   DATABASE_URL: process.env.DATABASE_URL ?? "file:./ci.sqlite",
   E2E_REFINE_STUB: process.env.E2E_REFINE_STUB ?? "1",
+  E2E_AGENTIC_FALLBACK_ONLY: process.env.E2E_AGENTIC_FALLBACK_ONLY ?? "1",
 };
 
 const webServer = useExternalServer

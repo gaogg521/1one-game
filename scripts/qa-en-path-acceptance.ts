@@ -28,8 +28,10 @@ const PAGE_ROUTES = [
 
 /** zh-Hans UI copy that must never appear on /en/ chrome (user DB titles may still contain CJK). */
 const FORBIDDEN_UI_STRINGS = [
-  "1ONE游戏平台",
   "游戏平台",
+  "短篇",
+  "中篇",
+  "长篇",
   "查看全部",
   "社区热门游戏",
   "社区热门小说",
@@ -43,7 +45,7 @@ const FORBIDDEN_UI_STRINGS = [
   "继续朗读",
   "上一章",
   "下一章",
-  "登录 1ONE",
+  "登录 Operone",
   "开发登录",
   "退出登录",
   "游戏发现",

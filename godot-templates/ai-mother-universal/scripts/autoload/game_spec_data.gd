@@ -34,6 +34,33 @@ func template_id() -> String:
 	return str(raw.get("templateId", "platformer"))
 
 
+func godot_runtime_key() -> String:
+	ensure_loaded()
+	var rt = raw.get("_runtime", {})
+	if rt is Dictionary and rt.has("godotKey"):
+		return str(rt.get("godotKey"))
+	return template_id()
+
+
+func arena_mode() -> String:
+	ensure_loaded()
+	var rt = raw.get("_runtime", {})
+	if rt is Dictionary and rt.has("arenaMode"):
+		return str(rt.get("arenaMode"))
+	var tid := template_id()
+	if tid in ["avoider", "collector", "survivor"]:
+		return tid
+	return "avoider"
+
+
+func semantic_template_id() -> String:
+	ensure_loaded()
+	var rt = raw.get("_runtime", {})
+	if rt is Dictionary and rt.has("semanticTemplateId"):
+		return str(rt.get("semanticTemplateId"))
+	return template_id()
+
+
 func title() -> String:
 	ensure_loaded()
 	return str(raw.get("title", "Game"))
@@ -113,6 +140,24 @@ func reference_classified() -> Dictionary:
 	ensure_references_loaded()
 	var c = references_manifest.get("classified", {})
 	return c if c is Dictionary else {}
+
+
+func coaster() -> Dictionary:
+	ensure_loaded()
+	var c = raw.get("coaster", {})
+	return c if c is Dictionary else {}
+
+
+func puzzle() -> Dictionary:
+	ensure_loaded()
+	var p = raw.get("puzzle", {})
+	return p if p is Dictionary else {}
+
+
+func farming() -> Dictionary:
+	ensure_loaded()
+	var f = raw.get("farming", {})
+	return f if f is Dictionary else {}
 
 
 func reference_texture(res_path: String) -> Texture2D:

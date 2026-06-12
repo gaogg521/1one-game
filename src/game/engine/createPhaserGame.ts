@@ -1,12 +1,24 @@
 import Phaser from "phaser";
 import type { GameSpec } from "@/lib/game-spec";
+import type { AppLocale } from "@/i18n/routing";
 import { enrichGameSpecForRuntime } from "@/lib/enrich-game-spec";
 import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft-franchise";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
-import { PlayScene } from "@/game/engine/PlayScene";
+import { CoasterScene } from "@/game/engine/CoasterScene";
 import { PlatformerScene } from "@/game/engine/PlatformerScene";
-import { TowerDefenseScene } from "@/game/engine/TowerDefenseScene";
+import { PlayScene } from "@/game/engine/PlayScene";
 import { ShooterScene } from "@/game/engine/ShooterScene";
+import { TowerDefenseScene } from "@/game/engine/TowerDefenseScene";
+import { PuzzleScene } from "@/game/engine/PuzzleScene";
+import { FarmingScene } from "@/game/engine/FarmingScene";
+import { PhysicsScene } from "@/game/engine/PhysicsScene";
+import { ChessScene } from "@/game/engine/ChessScene";
+import { CustomizationScene } from "@/game/engine/CustomizationScene";
+import { StrategyScene } from "@/game/engine/StrategyScene";
+import { AgenticScene } from "@/game/engine/AgenticScene";
+import { createPhaserSceneForSpec } from "@/lib/game-templates/runtime";
+import { resolveRuntimeAssets } from "@/lib/assets/asset-runtime-resolver";
+import { readAssetManifestFromSession } from "@/lib/assets/asset-manifest-session.client";
 import { GameSoundscape } from "@/game/audio/gameSoundscape";
 import {
   buildCohesivePresentation,
@@ -20,6 +32,8 @@ export type CreatePhaserGameOptions = {
   backgroundUrl?: string | null;
   /** 项目 ID，用于加载文生图 sprite（不存在时回退几何体） */
   projectId?: string;
+  /** UI locale for in-game HUD copy */
+  uiLocale?: AppLocale;
 };
 
 export type PhaserGameHandle = {
@@ -38,8 +52,15 @@ export function createPhaserGame(
     opts?.referencePayloads?.filter((p) => typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:")) ??
     [];
 
-  const specPlay = applyMinecraftThemeOverlay(enrichGameSpecForRuntime(spec));
+  const uiLocale = opts?.uiLocale ?? "zh-Hans";
+  const specPlay = applyMinecraftThemeOverlay(enrichGameSpecForRuntime(spec, "", uiLocale));
   const presentation = buildCohesivePresentation(specPlay);
+  const assets = resolveRuntimeAssets({
+    projectId: opts?.projectId,
+    backgroundUrl: opts?.backgroundUrl,
+    manifest: typeof window !== "undefined" ? readAssetManifestFromSession() : null,
+    themeBackground: specPlay.theme.backgroundColor,
+  });
   const blockyAdventure = isMinecraftLikeSpec(specPlay);
   const soundscape = new GameSoundscape(
     presentation.musicProfile,
@@ -48,16 +69,23 @@ export function createPhaserGame(
     { blocky: blockyAdventure },
   );
 
-  const scene =
-    specPlay.templateId === "towerDefense"
-      ? new TowerDefenseScene(specPlay, onEnd, ref, soundscape)
-      : specPlay.templateId === "platformer"
-        ? new PlatformerScene(specPlay, onEnd, soundscape)
-        : specPlay.templateId === "shooter"
-          ? new ShooterScene(specPlay, onEnd, ref, soundscape)
-          : new PlayScene(specPlay, onEnd, soundscape);
-  scene.backgroundUrl = opts?.backgroundUrl ?? null;
+  const scene = createPhaserSceneForSpec(specPlay, onEnd, ref, soundscape, {
+    PlayScene,
+    PlatformerScene,
+    TowerDefenseScene,
+    ShooterScene,
+    CoasterScene,
+    PuzzleScene,
+    FarmingScene,
+    PhysicsScene,
+    ChessScene,
+    CustomizationScene,
+    StrategyScene,
+    AgenticScene,
+  });
+  scene.backgroundUrl = assets.backgroundUrl ?? opts?.backgroundUrl ?? null;
   scene.projectId = opts?.projectId ?? null;
+  scene.uiLocale = uiLocale;
 
   const dpr =
     typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;

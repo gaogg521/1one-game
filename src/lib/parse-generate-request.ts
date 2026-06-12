@@ -1,6 +1,9 @@
 /** 供 /api/generate、stream、variants 共用的请求体解析与长度校验。 */
 /** 模板提示：与 GameSpec.templateId / 字面量白名单一致（含 auto）。 */
-export type GenerateTemplateHint = "auto" | "platformer" | "towerDefense" | "collector" | "survivor" | "avoider" | "shooter";
+import type { GameTemplateId } from "@/lib/game-templates";
+import { isGameTemplateId } from "@/lib/game-templates/registry";
+
+export type GenerateTemplateHint = "auto" | GameTemplateId;
 
 /** 创作台 session AssetManifest 的脱敏摘要（仅条数/revision）。 */
 export type AssetManifestSummary = {
@@ -10,17 +13,9 @@ export type AssetManifestSummary = {
 };
 
 function normalizeTemplateHint(raw: string): GenerateTemplateHint {
-  switch (raw) {
-    case "platformer":
-    case "towerDefense":
-    case "collector":
-    case "survivor":
-    case "avoider":
-    case "shooter":
-      return raw;
-    default:
-      return "auto";
-  }
+  if (raw === "auto") return "auto";
+  if (isGameTemplateId(raw)) return raw;
+  return "auto";
 }
 
 function parseAssetManifestSummary(body: unknown): AssetManifestSummary | undefined {

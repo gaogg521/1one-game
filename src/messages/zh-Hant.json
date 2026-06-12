@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "1ONE遊戲平台",
+    "appName": "Operone",
     "brandTagline": "AI 驅動的瀏覽器小遊戲創作與分享",
     "language": "語言",
     "theme": "主題",
@@ -62,22 +62,30 @@
     "loggedInAs": "目前登入為 {name}",
     "user": "使用者",
     "loginFailed": "登入失敗：{error}",
-    "loginTitle": "登入 1ONE",
+    "loginTitle": "登入 Operone",
     "loginDesc": "登入後可在多裝置同步工作室；分享連結附帶邀請碼以實現裂變歸因。未登入也可匿名創作（瀏覽器 Cookie 歸屬）。",
     "enterStudio": "進入工作室",
     "providerLogin": "{provider} 登入",
     "providerConfiguring": "（配置中）",
     "providerSoon": "（即將開放）",
-    "oauthHint": "微信 / QQ / 飛書 / LINE / 抖音需先在開放平台建立應用並填入 .env 對應金鑰後啟用。本機開發可使用「開發登入」。"
+    "oauthHint": "微信 / QQ / 飛書 / LINE / 抖音需先在開放平台建立應用並填入 .env 對應金鑰後啟用。本機開發可使用「開發登入」。",
+    "providers": {
+      "wechat": "微信",
+      "qq": "QQ",
+      "feishu": "飛書",
+      "line": "LINE",
+      "douyin": "抖音",
+      "dev": "開發登入"
+    }
   },
   "home": {
-    "badge": "1ONE · AI 創作實驗室",
+    "badge": "Operone · AI 創作實驗室",
     "workspaceCta": "創作者工作台",
     "firstExperience": "首次體驗",
     "wowMoment": "三步到達驚艷時刻",
     "dualProduct": "雙層產品",
     "dualProductDesc": "第一層：驚艷入口（首頁 → 創作 → 結果）。第二層：工作室、發現、Remix 與高級編輯。",
-    "strategy": "Strategy",
+    "strategy": "策略",
     "strategyTitle": "驚艷入口 + 深度工作台",
     "strategyDesc": "新使用者先感受「真的能生成」；深度使用者在同一產品裡繼續打磨、發布與營運。",
     "enterLauncher": "進入統一創作入口 →",
@@ -129,9 +137,9 @@
     "discoverIntakeCta": "去開始創作"
   },
   "featured": {
-    "community": "Community",
-    "stories": "Stories",
-    "manga": "Manga",
+    "community": "社群",
+    "stories": "故事",
+    "manga": "漫畫",
     "hotGames": "社群熱門遊戲",
     "hotNovels": "社群熱門小說",
     "hotComics": "社群熱門漫畫",
@@ -243,7 +251,11 @@
     "worthPolish": "{count} 讚 · 值得繼續打磨",
     "draftOrPublish": "草稿 / 待發布",
     "goRemix": "去發現 Remix",
-    "createWork": "新建作品"
+    "createWork": "新建作品",
+    "workSummary": {
+      "novelGenre": "{title} · {genre}",
+      "comicGenre": "{title} · {genre}"
+    }
   },
   "quota": {
     "title": "生成額度不足",
@@ -282,6 +294,7 @@
     "comicDiscoverDesc": "瀏覽分鏡漫畫，一鍵 Remix 開啟你的創作",
     "deleteConfirmNovel": "確定刪除《{title}》？關聯漫畫也會一併刪除，且無法恢復。",
     "deleteConfirmComic": "確定刪除漫畫《{title}》？無法恢復。",
+    "deleteConfirmGame": "確定刪除遊戲《{title}》？無法恢復。",
     "deleteFailed": "刪除失敗",
     "deleteFailedSession": "刪除失敗，請確認使用創作時的瀏覽器登入狀態",
     "noPreview": "暫無預覽圖",
@@ -328,10 +341,10 @@
     "savedPublished": "作品已發布，可在發現廣場被其他人看到。"
   },
   "metadata": {
-    "siteTitle": "1ONE遊戲平台 - AI 創作",
-    "siteTemplate": "%s · 1ONE遊戲平台",
-    "siteDescription": "1ONE遊戲平台：用 AI 生成可玩的遊戲、可讀的小說、可看的漫畫，並持續保存、打磨與分享。",
-    "siteOgTitle": "1ONE遊戲平台",
+    "siteTitle": "Operone - AI 創作",
+    "siteTemplate": "%s · Operone",
+    "siteDescription": "Operone：用 AI 生成可玩的遊戲、可讀的小說、可看的漫畫，並持續保存、打磨與分享。",
+    "siteOgTitle": "Operone",
     "siteOgDescription": "AI 驅動的遊戲、小說、漫畫創作平台。",
     "createTitle": "創作台",
     "studioTitle": "工作室",
@@ -364,7 +377,7 @@
   "share": {
     "shareTo": "分享到",
     "shareTitle": "分享「{title}」",
-    "defaultWorkTitle": "1ONE 作品",
+    "defaultWorkTitle": "Operone 作品",
     "defaultDesc": "來看看我用 AI 創作的內容",
     "linkCopied": "連結已複製，可貼到微信 / QQ / 飛書等",
     "wechatNativeHint": "請點擊右上角「…」分享給朋友或朋友圈",
@@ -440,6 +453,7 @@
     "expandPack": "類型骨架",
     "expandModel": "骨架+模型",
     "titlePrefix": "書名：",
+    "loglineLabel": "故事梗概",
     "worldLabel": "世界觀",
     "addonLabel": "補充",
     "addonPlaceholder": "例如：第三人稱、感情線更重、結局偏開放式…",
@@ -545,31 +559,46 @@
       "label": "0-3 歲",
       "stage": "嬰幼兒啟蒙",
       "charRangeLabel": "90-110 字",
-      "features": "短句疊詞、極簡畫面、哄睡磨耳朵"
+      "features": "短句疊詞、極簡畫面、哄睡磨耳朵",
+      "interpretMark": "【簡短創意解讀】",
+      "bodyMark": "【適齡小故事】",
+      "closingMark": "【一句暖心小寄語】"
     },
     "kindergarten_3_6": {
       "label": "3-6 歲",
       "stage": "幼兒園",
       "charRangeLabel": "100-250 字",
-      "features": "童趣可愛、角色簡單、淺白道理"
+      "features": "童趣可愛、角色簡單、淺白道理",
+      "interpretMark": "【創意解讀】",
+      "bodyMark": "【兒童故事】",
+      "closingMark": "【啟蒙小道理】"
     },
     "primary_6_8": {
       "label": "6-8 歲",
       "stage": "1-2 年級",
       "charRangeLabel": "300-500 字",
-      "features": "情節完整、適量好詞、低年級閱讀"
+      "features": "情節完整、適量好詞、低年級閱讀",
+      "interpretMark": "【內容解讀】",
+      "bodyMark": "【成長故事】",
+      "closingMark": "【成長感悟】"
     },
     "grade_9": {
       "label": "9 歲",
       "stage": "3 年級",
       "charRangeLabel": "500-700 字",
-      "features": "人物關係、成語典故、獨立閱讀"
+      "features": "人物關係、成語典故、獨立閱讀",
+      "interpretMark": "【典故&創意解讀】",
+      "bodyMark": "【完整故事】",
+      "closingMark": "【學識感悟】"
     },
     "grade_10": {
       "label": "10 歲",
       "stage": "4 年級",
       "charRangeLabel": "700-900 字",
-      "features": "情節飽滿、有深度、貼合課內素養"
+      "features": "情節飽滿、有深度、貼合課內素養",
+      "interpretMark": "【深度創意解讀】",
+      "bodyMark": "【精品兒童故事】",
+      "closingMark": "【素養心得】"
     }
   },
   "readerThemes": {
@@ -911,6 +940,7 @@
     "expandPack": "知識包",
     "expandModel": "知識包+模型",
     "originalPrompt": "原话：",
+    "loglineLabel": "故事梗概",
     "worldLabel": "世界觀",
     "addonLabel": "补充说明（可选）",
     "saveRevision": "保存修訂",
@@ -989,15 +1019,88 @@
     "expand": "（展开）",
     "creating": "創建中…",
     "play": "試玩",
-    "tune": "微調",
+    "clone": "克隆",
+    "cloning": "克隆中…",
+    "cloneFailed": "克隆失敗，請稍後重試",
+    "bootstrapping": "載入樣品…",
     "generateFailed": "生成失敗",
     "saveFailed": "保存失敗",
     "networkError": "網路异常",
     "title": "樣品館",
-    "descPrefix": "横向浏览灵感卡片，参考",
-    "descMid": "式陈列：竖版封面可换为試玩截图，改数据里的",
-    "descSuffix": "即可；当前为 SVG 海报，載入失敗时回退渐变。",
-    "swipeHint": "左右滑动"
+    "desc": "精選熱門玩法樣品，可直接試玩。喜歡就收藏，點「克隆」複製到你的工作室後再修改，變成你自己的遊戲。",
+    "swipeHint": "左右滑動",
+    "shelves": {
+      "featured": {
+        "title": "玩家之選",
+        "description": "社群高播放量精選 — 點開即玩"
+      },
+      "trending": {
+        "title": "熱門趨勢",
+        "description": "合成、策略、益智與街機類熱門樣品"
+      }
+    },
+    "items": {
+      "smash-the-dummy": {
+        "subtitle": "物理發洩 · 連擊評分 · 誇張反饋",
+        "prompt": "做一個解壓向物理小遊戲：場景裡有一個可被打、踢、投擲的 dummy 假人，玩家點擊或拖拽武器砸向它，觸發連擊計數、螢幕震動和誇張粒子；要有多種打擊方式、分數與連擊 HUD，整體節奏爽快、反饋強。"
+      },
+      "rail-in-air": {
+        "subtitle": "空中軌道 · 過山車視角 · 速度衝刺",
+        "prompt": "做一個 3D 空中軌道/過山車競速小遊戲：玩家在立體懸空的軌道上高速前進，可在第一人稱與第三人稱視角切換；軌道有彎道、爬升、俯衝與跳躍段，強調速度感與離心力反饋，帶計時或距離得分 HUD。視覺偏明亮卡通 3D。"
+      },
+      "grow-a-garden": {
+        "subtitle": "種植養成 · 澆水收穫 · 輕度模擬",
+        "prompt": "做一個休閒種植小遊戲：網格地塊上播種、澆水、等待生長並收穫；有金幣經濟、可購買新種子與裝飾，UI 清新可愛，帶簡單教程與進度目標。"
+      },
+      "color-bloom": {
+        "subtitle": "色彩消除 · 連鎖 bloom · 治癒視覺",
+        "prompt": "做一個色彩消除類益智小遊戲：點擊相鄰同色塊形成 bloom 連鎖，清除後上方方塊下落；關卡目標清晰，配色柔和飽和，帶連擊特效與步數/時間限制。"
+      },
+      "whimsy-differences": {
+        "subtitle": "找不同 · 雙圖對比 · 限時挑戰",
+        "prompt": "做一個找不同小遊戲：左右兩幅插畫僅幾處細節不同，玩家點擊差異處圈出；有多關卡、倒計時與提示次數，畫風 whimsical 手繪，差異難度遞進。"
+      },
+      "gun-merge-3d-zombie-apocalypse": {
+        "subtitle": "槍械合成 · 塔防射擊 · 殭屍潮",
+        "prompt": "做一個 3D 俯視射擊+合成遊戲：玩家合併同級槍械升級火力，在場地邊緣佈置或手持射擊，抵禦多波殭屍；有 merge 網格、波次、金幣掉落與基地 HP，氛圍偏末日但 Q 版低多邊形。"
+      },
+      "ultimate-3d-chess": {
+        "subtitle": "3D 棋盤 · 回合策略 · 經典規則",
+        "prompt": "做一個 3D 視角國際象棋小遊戲：標準規則，可點擊棋子顯示合法走法，帶簡單 AI 對手、悔一步與將軍提示；棋盤與棋子用 stylized 3D 或等距視角，操作清晰。"
+      },
+      "elastic-thief-2": {
+        "subtitle": "伸縮潛行 · 物理擺盪 · 偷取目標",
+        "prompt": "做一個潛行物理小遊戲：玩家控制可伸縮/elastic 的角色擺盪或伸長去偷取場景中的目標物品，避開守衛與激光；關卡短平快，強調物理手感與失敗重試。"
+      },
+      "state-conquest": {
+        "subtitle": "區域佔領 · 數值對抗 · 地圖策略",
+        "prompt": "做一個地圖征服策略小遊戲：若干區域節點，玩家與 AI 輪流派兵佔領相鄰區域，佔領全部或達到分數即勝；有兵力數字、動畫反饋與難度遞增。"
+      },
+      "tiny-planet-chopper": {
+        "subtitle": "迷你星球 · 環繞飛行 · 收集斬擊",
+        "prompt": "做一個 tiny planet 環繞飛行小遊戲：小星球表面有樹木/障礙，直升機或 chopper 環繞星球飛行，玩家點擊斬擊收集資源並躲避障礙；單指操作，節奏輕快。（原創星球與載具造型）"
+      },
+      "blade-defender-merge": {
+        "subtitle": "劍刃合成 · 防線塔防 · 波次升級",
+        "prompt": "做一個 merge + 塔防混合遊戲：在格子上合併同級 blade/劍塔提升攻擊力，自動攻擊沿路徑前進的敵人；有多波次、金幣與技能冷卻，視覺偏奇幻 RPG。（原創敵人與劍塔造型）"
+      },
+      "car-color-palette": {
+        "subtitle": "汽車塗色 · 調色盤 · 創意定制",
+        "prompt": "做一個汽車塗色定制小遊戲：展示一輛 stylized 小車，玩家從調色盤選色填充車身、輪轂、背景；可隨機配色、截圖分享感 UI，操作簡單兒童友好。"
+      },
+      "blocky-sniper-hunter": {
+        "subtitle": "方塊狙擊 · 瞄準射擊 · 關卡目標",
+        "prompt": "做一個 blocky 低多邊形狙擊小遊戲：第一人稱或 over-shoulder 瞄準，射擊關卡中的目標物體；有限子彈、部位判定與星級評價，場景像 minecraft 風格方塊世界但為原創地圖。"
+      },
+      "memory-match-mania": {
+        "subtitle": "翻牌配對 · 記憶挑戰 · 連擊計時",
+        "prompt": "做一個翻牌記憶配對小遊戲：網格背面卡牌，點擊翻兩張，相同則消除；有步數/計時、連擊加分與多主題牌面，UI 明亮活潑。（原創牌面圖案）"
+      },
+      "kids-puzzle": {
+        "subtitle": "兒童拼圖 · 拖拽塊 · 簡單關卡",
+        "prompt": "做一個兒童向拼圖小遊戲：大塊拼圖拖拽到輪廓位置，完成即過關；圖案可愛、塊數少、有語音提示位（文字即可）與星星獎勵。（原創卡通圖案，不用版權 IP）"
+      }
+    }
   },
   "studioErrors": {
     "gamesListFailed": "遊戲列表載入失敗（HTTP {status}）",
@@ -1157,6 +1260,7 @@
     "modeNew": "生成后可直接保存为新專案。",
     "currentModeLabel": "目前模式：",
     "tryExamples": "試一試",
+    "refUnnamedImage": "圖片",
     "chooseDirectionFirst": "請先選擇一個共创方向",
     "streaming": "串流生成中…",
     "planIntent": "1. 提煉創作方向",
@@ -1706,6 +1810,10 @@
     "saveNetworkError": "保存时網路异常",
     "patchNetworkError": "網路异常，请稍后重试",
     "like": "點讚",
+    "favorite": "收藏",
+    "favorited": "已收藏",
+    "cloneToMine": "克隆成我的",
+    "samplePlayHint": "這是樣品館遊戲：試玩後可收藏；點「克隆成我的」複製到工作室再改。",
     "copiedFullLink": "已複製完整链接",
     "copyLink": "複製链接",
     "copiedShortLink": "已複製短鏈",
@@ -1732,6 +1840,41 @@
     "saving": "保存中…",
     "applyAndSave": "应用并保存",
     "recentRefineTitle": "最近精煉（最新在后）"
+  },
+  "genrePacks": {
+    "space-epic": {
+      "label": "星際科幻史詩"
+    },
+    "tower-defense": {
+      "label": "塔防防線"
+    },
+    "platformer-adventure": {
+      "label": "平台冒險"
+    },
+    "wuxia-jianghu": {
+      "label": "武俠江湖"
+    },
+    "horror-survival": {
+      "label": "恐怖生存"
+    },
+    "anime-action": {
+      "label": "二次元動作"
+    },
+    "folklore-festival": {
+      "label": "民俗節慶"
+    },
+    "sports-arcade": {
+      "label": "體育街機"
+    },
+    "puzzle-logic": {
+      "label": "解謎邏輯"
+    },
+    "cozy-collect": {
+      "label": "治癒收集"
+    },
+    "general-arcade": {
+      "label": "通用街機"
+    }
   },
   "commercePlans": {
     "free": {
@@ -1959,6 +2102,19 @@
     "textTruncated": "…（總長已截斷）",
     "purposeUnlabeled": "未標註用途"
   },
+  "ingestMarkers": {
+    "materialHeader": "【參考素材】",
+    "imageLinePrefix": "【參考圖 圖",
+    "imageCaptionHead": "【參考圖 圖{ordinal}（用戶用途：{role}）】",
+    "imageCaptionMissingKey": "【參考圖 圖{ordinal}（用戶用途：{role}）】{name}（缺少 OPENAI_API_KEY，未解析）",
+    "imageCaptionVisionOff": "【參考圖 圖{ordinal}（用戶用途：{role}）】{name}（未開啟視覺解讀）",
+    "webWithTitle": "【網頁】{title}\n",
+    "webUrlOnly": "【網頁】{url}\n",
+    "pdfHead": "【PDF {name}】",
+    "docxHead": "【DOCX {name}】",
+    "textHead": "【文本 {name}】",
+    "imageNumberLegend": "【參考圖編號說明】下文「圖1」「圖2」…按本次提交的檔案列表順序，僅對「圖片」遞增編號（與「參考圖 圖N」一致；PDF/純文本不參與計數）。生成規格時請把每張圖的「用戶用途」落實到 title/subtitle、theme 配色、labels（player/hazard/collectible）：主色與環境氛圍須與每張參考圖的**文字摘錄**和用戶用途一致。**塔防守衛等模板：**創作台解析成功後，瀏覽器同一会話下試玩會使用參考圖**像素貼片**（按用途分揀：背景地圖類→全屏底圖、怪物類→行軍敵兵、主角/蘿蔔/水晶等到路徑終點）；因此 JSON 裡 theme、hazard/player 色相與稱謂不要走向與參考圖描述相衝突的默認「霓虹/賽博」（除非創意或參考明確要該風格）。**瀏覽器側修飾（與視覺模型解讀配合）：**PNG/WebP/GIF 會話像素會**保留透明通道**（不再鋪白底壓成 JPEG）；對用戶標註為「怪/敵/主角/塔」等貼片類用途的圖，會**自動居中收入固定邊長的方形精靈格**（透明留白）以與塔防行軍貼片更一致；服務端**不**做 AI 自動抠圖——若圖為複雜實拍底仍需人工出透明 PNG 或後期在 DCC 裡抠圖。\n"
+  },
   "novelDisplay": {
     "untitledNovel": "未命名小说",
     "untitledShort": "未命名"
@@ -2037,5 +2193,211 @@
   "novelSynopsis": {
     "arcTail": "全書 {count} 章，含「{arc}」等情節。",
     "aiFallback": "{title}：一部 AI 生成的原創連載故事。"
+  },
+  "gameEvents": {
+    "acts": {
+      "opening": "开场",
+      "accel": "加速",
+      "variation": "变奏",
+      "finale": "终局"
+    },
+    "coinRain": "金币雨",
+    "coinRainTd": "奖励波",
+    "goalShift": "目标变化",
+    "goalShiftTd": "守点目标",
+    "miniBoss": "精英来袭",
+    "miniBossTd": "精英波",
+    "comboBonus": "连击奖励",
+    "timeAttack": "限时挑战",
+    "breathingRoom": "喘息窗口",
+    "finalBarrage": {
+      "title": "终局弹幕",
+      "message": "密集威胁压下，撑过这段即可完成"
+    },
+    "specialEvent": "特殊事件",
+    "msg": {
+      "coinRain": "短时间内收集更密集，得分倍率提升",
+      "coinRainTd": "短时间内额外金币涌入，抓紧升级塔位",
+      "coinRainPlat": "限时冲刺：快速连跳收集目标，达成会有额外奖励",
+      "goalShift": "限时目标：按提示完成可获得额外奖励",
+      "goalShiftTd": "在倒计时结束前尽量别让敌人漏进基地",
+      "goalShiftPlat": "限时冲刺：快速连跳收集目标，达成会有额外奖励",
+      "miniBoss": "危险升级：更强的威胁会持续一段时间",
+      "miniBossTd": "更厚装甲与更强冲击，注意补足火力与减速",
+      "coinRainFallback": "短时间内奖励更丰厚",
+      "goalShiftFallback": "限时目标：按提示完成可获得额外奖励",
+      "miniBossFallback": "危险升级：更强的威胁会持续一段时间",
+      "coinRainShort": "额外金币到手，抓紧补塔",
+      "goalShiftShort": "短时间目标：完成可获得额外奖励"
+    },
+    "play": {
+      "rewardWindow": "奖励窗口",
+      "timedGoal": "限时目标",
+      "pressurePhase": "高压段"
+    },
+    "playArcade": {
+      "collector": {
+        "coinRain": "收集物更密集，走位与技能换节奏",
+        "goalShift": "限时内多捡资源；未完成也会进入下一段",
+        "miniBoss": "精英混入场地，清威胁再贪收集"
+      },
+      "survivor": {
+        "coinRain": "稳住血量，趁窗口拉开分数",
+        "goalShift": "限时内把进度打满，抗压换回报",
+        "miniBoss": "密度陡升，技能留给这一波"
+      },
+      "avoider": {
+        "coinRain": "空隙变窄，保持横向节奏蹭险避",
+        "goalShift": "限时内叠险避与落点分",
+        "miniBoss": "精英干扰走位，专注回避"
+      }
+    },
+    "goldenPickup": {
+      "title": "黄金收集物",
+      "message": "限时出现高价值物件，优先拾取可大幅拉开分数"
+    },
+    "breathingRoomMsg": "威胁密度短暂降低，趁机补充道具与血量",
+    "shooter": {
+      "waveN": "第 {n} 波",
+      "bossWave": "首领来袭！",
+      "eliteSquad": "精英编队",
+      "invasion": "编队入侵",
+      "eventEnd": "事件结束",
+      "doubleScore": "双倍得分！",
+      "bossReinforce": "首领增援！"
+    },
+    "playScene": {
+      "bossTitle": "⚠ BOSS 降临",
+      "bossMessage": "精英首领 · 击败它以获得大量分数"
+    },
+    "platformer": {
+      "finalSprint": "终局冲刺：精英守卫正在拦截"
+    },
+    "hud": {
+      "score": "得分 {score}",
+      "lives": "生命 {lives}",
+      "ready": "就緒",
+      "cooldown": "冷卻 {sec}s",
+      "actChapter": "章節 · {label}",
+      "actAdvance": "章節推進",
+      "goalShift": "限時目標 · {have}/{need}",
+      "finalWave": "最後一波 {sec}s",
+      "dodgeStreak": "生存連躲 {streak}",
+      "progressCollect": "收集進度 {prog}/{total}",
+      "progressAvoid": "迴避進度 {prog}/{total}",
+      "progressDefault": "進度 {prog}/{total}",
+      "shooterWave": "第 {wave} 波",
+      "shooterKills": "擊殺 {prog}/{total}",
+      "tdWave": "波次 {current}/{total}",
+      "tdKills": "消滅 {kills} · 塔位 {built}",
+      "tdBase": "基地 {hp}{extra}",
+      "tdBaseShield": "基地 {hp} · 護盾{goalTag}",
+      "tdNextWave": "準備下一波…（{sec}s） 繼續建造与升級。",
+      "tdWin": "防線守住！塔防波次通關。",
+      "tdLose": "基地被突破 · 調整數值或塔位後再戰。",
+      "platformerCollect": "收集 {score}/{total}",
+      "platformerTarget": "目標 {have}/{need}",
+      "waveLabel": "第 {current} / {total} 波",
+      "waveStartFirst": "戰鬥開始！善用金幣建塔和升級",
+      "waveStartLast": "最終波次！守住防线即可獲勝 🏆",
+      "waveStartMid": "新一波敵軍襲來！堅守陣地",
+      "tdControls": "點擊塔位建造/升級「{tower}」· Shift 釋放法術 · 阻擋「{foe}」抵達基地",
+      "finishWin": {
+        "collector": "收集完成！本輪資源回收成功，可繼續分享或再來一局。",
+        "survivor": "生存成功！你撐過了最後壓力段，可繼續分享或再來一局。",
+        "avoider": "回避成功！你已經穿過終局彈幕，可繼續分享或再來一局。"
+      },
+      "finishLose": {
+        "collector": "差一點就能帶走這批資源，再試一次或調整創意描述。",
+        "survivor": "沒扛住最後一波，再來一局或調整創意描述。",
+        "avoider": "這輪回避失敗了，再來一局或調整創意描述。"
+      },
+      "tdGoalTag": " · 守點 {left}s",
+      "controlsPlayCollector": "WASD / 方向键 · 收集「{collectible}」· 躲开「{hazard}」",
+      "controlsPlayAvoider": "← → / A D · 躲开「{hazard}」",
+      "controlsShiftSuffix": " · Shift 技能",
+      "controlsPlatformer": "← → / A D 移动 · Space / W / ↑ 跳跃 · Shift 技能 · 收集「{coll}」",
+      "controlsShooter": "← → / A D 移动 · 自动射击「{hazard}」· Shift 技能",
+      "shooterFinishWin": "胜利！可在页面按钮再來一局或分享链接。",
+      "shooterFinishLose": "再接再厉 · 再來一局或調整創意描述。",
+      "platformerFinishWin": "通關！大型关卡已征服 · 可保存分享链接。",
+      "platformerFinishLose": "再接再厉 · 再來一局或加强創意描述。",
+      "shooterSkillLine": "{skill} · {status}",
+      "shooterShiftReady": "Shift 已就緒",
+      "shooterShiftCooldown": "Shift {sec}s",
+      "floaterCombo": "连收 ×{combo}",
+      "floaterGolden": "黃金 +{bonus}",
+      "floaterRisk": "险境 +{bonus}",
+      "floaterNearMiss": "险避 +{add}",
+      "floaterNearMissChain": "险避 +{add}（×{chain}）",
+      "floaterBossKill": "BOSS 擊破 +{bonus}",
+      "shooterSkill": {
+        "shield": "護盾",
+        "slow": "减速场",
+        "wing": "僚机援护",
+        "standby": "待命"
+      },
+      "stage": {
+        "collector": {
+          "finale": "終局收集潮：危险和獎勵同时暴涨",
+          "bonusField": "獎勵场：高价值物件出现，优先拾取",
+          "doubleSpawn": "物场升温：收集物与威胁同时增多",
+          "default": "保持走位，扩大收集优势"
+        },
+        "survivor": {
+          "finale": "終局生存波：扛住最後高压",
+          "doubleSpawn": "壓力抬升：同时来袭的威胁变多",
+          "default": "繼續生存，稳住血量和節奏"
+        },
+        "avoider": {
+          "finale": "終局回避段：密集威胁正在压下",
+          "doubleSpawn": "双重来袭：注意連續回避",
+          "default": "保持節奏，準備下一段躲避"
+        },
+        "platformer": {
+          "precision": "精准段落：容错变小，注意落点",
+          "gaps": "断层段落：準備連續长跳",
+          "spikes": "陷阱段落：平台上危险更密集",
+          "default": "進入下一段关卡"
+        }
+      }
+    },
+    "banner": {
+      "goalComplete": "限時目標完成",
+      "goalCompleteMsg": "額外獎勵 +{bonus} 分",
+      "goalFailed": "限時目標失敗",
+      "goalFailedMsg": "繼續撐住，下一段節奏會更猛",
+      "finalBarrage": "彈幕穿越",
+      "finalBarrageMsg": "終局彈幕結束 · 獎勵 +{bonus}",
+      "goldenWindowEnd": "黃金窗口結束",
+      "goldenWindowEndMsg": "繼續收集，保持節奏",
+      "breathingEnd": "喘息結束",
+      "breathingEndMsg": "壓力回升，注意走位",
+      "eventEnd": "事件結束",
+      "eventEndPlay": "準備迎接下一段挑戰",
+      "eventEndPlatformer": "進入下一章節",
+      "eventEndTd": "進入下一段波次節奏",
+      "platformerGoalSuccess": "目標達成！",
+      "platformerGoalSuccessMsg": "獎勵 +{bonus} 分 · 護盾+衝刺",
+      "platformerGoalMiss": "目標未達成",
+      "platformerGoalMissMsg": "沒關係，下一段更刺激",
+      "tdHoldSuccess": "守點成功！",
+      "tdHoldSuccessMsg": "獎勵 +{bonus} 金幣 · 基地護盾",
+      "tdHoldFail": "守點失敗",
+      "tdHoldFailMsg": "下一段会更刺激，繼續加固防线",
+      "survivorGrit": "苟住節奏",
+      "survivorGritMsg": "連續躲避 {streak} · 堅韌 +{grit}",
+      "lastStand": "最後一波",
+      "lastStandMsg": "{reason} · 撐住 {sec}s",
+      "lastStandEnd": "扛過來了",
+      "lastStandEndMsg": "最後一波結束 · 士氣 +{bonus}",
+      "lastStandReason": "終點衝刺",
+      "eliteAssault": "攻擊更猛烈了！",
+      "bossDefeated": "BOSS 擊破！",
+      "bossDefeatedMsg": "獲得 +{bonus} 分",
+      "bossPhase1": "BOSS 发怒！",
+      "bossPhase2": "BOSS 狂暴！！",
+      "finalChapter": "終局章節"
+    }
   }
 }

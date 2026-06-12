@@ -12,6 +12,7 @@ import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 import { SuperAdminPanel } from "@/components/SuperAdminPanel";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 interface Novel {
   id: string;
@@ -57,8 +58,12 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
       superAdminFetchInit({ method: "DELETE", headers: mergeLocaleHeaders(locale) }),
     );
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(data.error ?? t("lists.deleteFailedSession"));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
+      alert(resolveClientApiError(locale, data, "deleteFailedSession"));
       return;
     }
     onDeleted?.(n.id);

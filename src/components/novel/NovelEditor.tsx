@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { NOVEL_TITLE_MAX_LEN, validateNovelTitleInput } from "@/lib/novel-display";
 
@@ -61,7 +63,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
     try {
       const res = await fetch(`/api/novel/${novelId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           title: tv.value,
           chapters: chapters.map((ch, i) => ({
@@ -74,9 +76,11 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
       const data = (await res.json()) as {
         novel?: { title?: string; content?: string; summary?: string | null };
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
       };
       if (!res.ok) {
-        setError(data.error || t("saveFailed"));
+        setError(resolveClientApiError(locale, data, "saveFailed"));
         return;
       }
       onSaved({

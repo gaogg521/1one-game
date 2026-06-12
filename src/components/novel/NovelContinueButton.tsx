@@ -2,10 +2,13 @@
 
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { NOVEL_CONTINUE_CHAPTER_PRESETS } from "@/lib/novel-continue-options";
 import { novelMaxChars, parseNovelLengthTier } from "@/lib/novel-length";
 import { PRODUCT } from "@/lib/product-config";
+import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 type Props = {
   novelId: string;
@@ -33,7 +36,7 @@ export function NovelContinueButton({
   style,
 }: Props) {
   const t = useTranslations("novelContinue");
-  const tc = useTranslations("common");
+  const locale = useLocale() as AppLocale;
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
   const [maxChapters, setMaxChapters] = useState<number>(
@@ -59,13 +62,23 @@ export function NovelContinueButton({
     try {
       const res = await fetch(`/api/novel/${encodeURIComponent(novelId)}/continue/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        onError(data.error || tc("requestFailed", { status: String(res.status) }));
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+        };
+        onError(
+          resolveClientApiError(
+            locale,
+            { ...data, errorParams: data.errorParams ?? { status: String(res.status) } },
+            "requestFailed",
+          ),
+        );
         setLoading(false);
         return;
       }

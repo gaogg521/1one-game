@@ -4,6 +4,7 @@ import { getOwnerKey } from "@/lib/owner";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { generateGameSprites } from "@/lib/game-sprite-gen";
+import { buildRuntimeAssetManifest } from "@/lib/assets/asset-runtime-resolver";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
@@ -34,9 +35,16 @@ export async function POST(
       generateGameSprites(id, spec, uiLocale),
     ]);
 
+    const spritePayload = sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url }));
+
     return NextResponse.json({
       backgroundUrl: bgUrl,
-      spriteUrls: sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url })),
+      spriteUrls: spritePayload,
+      assetManifest: buildRuntimeAssetManifest({
+        projectId: id,
+        backgroundUrl: bgUrl,
+        spriteUrls: spritePayload,
+      }),
     });
   } catch {
     return localizedJsonError(req, "backgroundGenFailed", 500);

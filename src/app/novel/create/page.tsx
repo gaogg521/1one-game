@@ -10,7 +10,7 @@ import { ChildrenAgePicker } from "@/components/novel/ChildrenAgePicker";
 import { ChildrenCreativeBriefPanel } from "@/components/novel/ChildrenCreativeBriefPanel";
 import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPanel";
 import { NovelGenreTagPicker } from "@/components/novel/NovelGenreTagPicker";
-import { CHILDREN_ADDON_NOTES_PLACEHOLDER } from "@/lib/children-novel-creative";
+import { NovelLengthTierPicker } from "@/components/novel/NovelLengthTierPicker";
 import {
   getChildrenAgeTier,
   DEFAULT_CHILDREN_TARGET_AGE,
@@ -21,8 +21,10 @@ import {
   localizedChildrenCharRangeLabel,
   localizedChildrenFeaturesLabel,
   localizedChildrenStageLabel,
+  localizedChildrenStructureMarks,
 } from "@/lib/i18n/localized-data";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import {
   type DraftState,
   loadDraft,
@@ -30,7 +32,6 @@ import {
   markDraftGenerating,
 } from "@/lib/draft-storage";
 import {
-  NOVEL_LENGTH_TIERS_FOR_UI,
   novelGenerationEtaHint,
   novelLengthConfig,
   novelMaxChars,
@@ -95,6 +96,7 @@ export default function NovelCreatePage() {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("novelCreatePage");
   const tn = useTranslations("novelCreate");
+  const tb = useTranslations("novelBrief");
   const tc = useTranslations("common");
   const stepLabels = t.raw("steps") as string[];
   const steps = STEP_KEYS.map((n, index) => ({ n, label: stepLabels[index] ?? "" }));
@@ -159,6 +161,7 @@ export default function NovelCreatePage() {
   const coverRequested = useRef(false);
 
   const genre = genreId ? getNovelGenreTag(genreId) : null;
+  const localizedGenre = genre ? getLocalizedNovelGenreTag(genre, locale) : null;
   const isChildrenGenre = isChildrenGenreTag(genreId);
   const effectiveLengthTier = resolveNovelLengthTier({
     genreTagId: genreId,
@@ -166,6 +169,7 @@ export default function NovelCreatePage() {
   });
   const childrenLengthOpts = isChildrenGenre ? { childrenTargetAge } : undefined;
   const childrenTier = getChildrenAgeTier(childrenTargetAge);
+  const childrenMarks = localizedChildrenStructureMarks(childrenTargetAge, locale);
 
   function handleGenreChange(id: NovelGenreTagId) {
     setGenreId(id);
@@ -181,10 +185,10 @@ export default function NovelCreatePage() {
   }
 
   useEffect(() => {
-    void fetch("/api/novel/generating-drafts")
+    void fetch("/api/novel/generating-drafts", { headers: mergeLocaleHeaders(locale) })
       .then((r) => r.json())
       .then((data: { drafts?: typeof generatingDrafts }) => setGeneratingDrafts(data.drafts ?? []));
-  }, []);
+  }, [locale]);
 
   const prefillApplied = useRef(false);
   useEffect(() => {
@@ -304,6 +308,7 @@ export default function NovelCreatePage() {
     try {
       res = await fetch(`/api/novel/${novelId}/cover${force ? "?force=1" : ""}`, {
         method: "POST",
+        headers: mergeLocaleHeaders(locale),
         signal: controller.signal,
       });
     } catch (e) {
@@ -314,15 +319,21 @@ export default function NovelCreatePage() {
     } finally {
       window.clearTimeout(timer);
     }
-    const data = (await res.json()) as { coverPath?: string; error?: string; novel?: { coverPath?: string } };
-    if (!res.ok) throw new Error(data.error || t("coverFailed"));
+    const data = (await res.json()) as {
+      coverPath?: string;
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+      novel?: { coverPath?: string };
+    };
+    if (!res.ok) throw new Error(resolveClientApiError(locale, data, "coverGenFailed"));
     const path = data.coverPath ?? data.novel?.coverPath ?? null;
     if (path) {
       setPublishedNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
       setCoverImageKey((k) => k + 1);
     }
     return path;
-  }, [t("coverFailed"), t("coverTimeout")]);
+  }, [locale, t]);
 
   useEffect(() => {
     if (step !== 4 || !publishedNovelId) return;
@@ -332,7 +343,9 @@ export default function NovelCreatePage() {
       const id = publishedNovelId;
       if (!id) return;
       try {
-        const res = await fetch(`/api/novel/${encodeURIComponent(id)}`);
+        const res = await fetch(`/api/novel/${encodeURIComponent(id)}`, {
+          headers: mergeLocaleHeaders(locale),
+        });
         const data = (await res.json()) as {
           novel?: {
             id: string;
@@ -368,7 +381,7 @@ export default function NovelCreatePage() {
     return () => {
       cancelled = true;
     };
-  }, [step, publishedNovelId, requestCover]);
+  }, [step, publishedNovelId, requestCover, locale, t]);
 
   async function handleRegenerateCover() {
     if (!publishedNovelId || coverRegenerating) return;
@@ -389,7 +402,7 @@ export default function NovelCreatePage() {
     try {
       const res = await fetch(`/api/novel/${publishedNovelId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({ ensureShareCode: true }),
       });
       if (!res.ok) return;
@@ -421,14 +434,19 @@ export default function NovelCreatePage() {
       });
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+          code?: string;
+        };
         const quota = parseQuotaExceeded(data, res.status);
         if (quota) {
           showQuotaExceeded(quota);
           setLoading(false);
           return;
         }
-        setError(data.error || tc("requestFailed", { status: String(res.status) }));
+        setError(resolveClientApiError(locale, data, "novelGenerateFailed"));
         setLoading(false);
         return;
       }
@@ -742,7 +760,7 @@ export default function NovelCreatePage() {
                   />
                   <p className="mt-2 text-[10px] text-[var(--gc-muted)]">
                     {t("etaPrefix")} {novelGenerationEtaHint("children", locale)} · {tn("childrenBodyMeta", {
-                      range: childrenTier.charRangeLabel,
+                      range: localizedChildrenCharRangeLabel(childrenTargetAge, locale),
                       target: childrenTier.targetChars,
                     })}
                   </p>
@@ -755,40 +773,12 @@ export default function NovelCreatePage() {
                   <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
                     {t("lengthDesc")}
                   </p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => setLengthTier(tier.id)}
-                        className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                          lengthTier === tier.id
-                            ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
-                            : "border-[color:var(--gc-border)] bg-[var(--gc-bg)]/50 hover:border-[color:var(--gc-accent)]/30"
-                        }`}
-                      >
-                        <span className="block text-sm font-semibold">
-                          {tier.id === "short"
-                            ? tn("lengthShort")
-                            : tier.id === "medium"
-                              ? tn("lengthMedium")
-                              : tn("lengthLong")}
-                        </span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-[var(--gc-muted)]">
-                          {tier.id === "short"
-                            ? tn("lengthShortDesc")
-                            : tier.id === "medium"
-                              ? tn("lengthMediumDesc")
-                              : tn("lengthLongDesc")}
-                        </span>
-                        {lengthTier === tier.id ? (
-                          <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
-                            {t("etaPrefix")} {novelGenerationEtaHint(tier.id, locale)}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
+                  <NovelLengthTierPicker
+                    value={lengthTier}
+                    onChange={setLengthTier}
+                    showEta
+                    etaPrefix={t("etaPrefix")}
+                  />
                 </div>
               )}
 
@@ -807,7 +797,7 @@ export default function NovelCreatePage() {
           {step === 2 && genre ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm text-[var(--gc-text-soft)]">
-                《{title}》· <span className="text-[var(--gc-accent)]">{genre.label}</span>
+                《{title}》· <span className="text-[var(--gc-accent)]">{localizedGenre?.label}</span>
                 <span className="text-[var(--gc-muted)]">
                   {" "}
                   {isChildrenGenre ? (
@@ -839,7 +829,7 @@ export default function NovelCreatePage() {
                   rows={2}
                   placeholder={
                     isChildrenGenre
-                      ? CHILDREN_ADDON_NOTES_PLACEHOLDER
+                      ? tb("childrenAddonPlaceholder")
                       : t("addonPlaceholder")
                   }
                   className="w-full resize-none rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-sm text-[var(--gc-text)]"
@@ -900,7 +890,7 @@ export default function NovelCreatePage() {
           {step === 3 && genre ? (
             <form onSubmit={handleStartWriting} className="flex flex-col gap-4">
               <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 text-sm">
-                <p className="font-medium text-[var(--gc-text)]">《{title}》· {genre.label}</p>
+                <p className="font-medium text-[var(--gc-text)]">《{title}》· {localizedGenre?.label}</p>
                 {creativeBriefSummary ? (
                   <p className="mt-2 text-xs leading-relaxed text-[var(--gc-muted)]">{creativeBriefSummary}</p>
                 ) : null}
@@ -930,9 +920,9 @@ export default function NovelCreatePage() {
                   </p>
                   <p className="mt-1 text-[var(--gc-muted)]">
                     {tn("structureMarks", {
-                      interpret: childrenTier.interpretMark,
-                      body: childrenTier.bodyMark,
-                      closing: childrenTier.closingMark,
+                      interpret: childrenMarks.interpret,
+                      body: childrenMarks.body,
+                      closing: childrenMarks.closing,
                     })}
                   </p>
                 </div>
@@ -941,29 +931,13 @@ export default function NovelCreatePage() {
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
                     {t("lengthSync")}
                   </label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => setLengthTier(tier.id)}
-                        disabled={loading}
-                        className={`rounded-xl border px-4 py-3 text-left transition disabled:opacity-50 ${
-                          lengthTier === tier.id
-                            ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)]"
-                            : "border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"
-                        }`}
-                      >
-                        <span className="block text-sm font-semibold">{tier.label}</span>
-                        <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
-                        {lengthTier === tier.id && !loading ? (
-                          <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
-                            {t("etaPrefix")} {novelGenerationEtaHint(tier.id, locale)}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
+                  <NovelLengthTierPicker
+                    value={lengthTier}
+                    onChange={setLengthTier}
+                    disabled={loading}
+                    showEta
+                    etaPrefix={t("etaPrefix")}
+                  />
                 </div>
               )}
 
@@ -1080,7 +1054,7 @@ export default function NovelCreatePage() {
                       》
                     </h2>
                     {genre ? (
-                      <p className="mt-1 text-xs text-[var(--gc-accent)]">{genre.label}</p>
+                      <p className="mt-1 text-xs text-[var(--gc-accent)]">{localizedGenre?.label}</p>
                     ) : null}
                     {publishedNovel ? (
                       <p className="mt-3 text-sm leading-relaxed text-[var(--gc-text-soft)]">

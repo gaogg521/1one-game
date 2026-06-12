@@ -5,13 +5,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { withLocalePath } from "@/i18n/navigation";
+import { localizedPlanName } from "@/lib/i18n/commerce-localized";
 import type { AppLocale } from "@/i18n/routing";
 
 type SessionUser = {
   displayName: string | null;
   role: string;
   referralCode: string;
-  quota?: { balance: number; plan: { name: string } };
+  quota?: { balance: number; plan: { id: string; name: string } };
 };
 
 export function AccountMenu({
@@ -139,7 +140,7 @@ export function AccountMenu({
             <p className="px-3 py-1 text-[10px] text-[var(--gc-text-faint)]">
               {t("account.quotaLine", {
                 balance: user.quota.balance,
-                plan: user.quota.plan.name,
+                plan: localizedPlanName(locale, user.quota.plan.id, user.quota.plan.name),
               })}
             </p>
           ) : null}

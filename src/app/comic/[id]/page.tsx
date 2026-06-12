@@ -18,6 +18,7 @@ import { consumeSSE } from "@/lib/read-sse";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 interface Comic {
   id: string;
@@ -86,8 +87,21 @@ export default function ComicDetailPage() {
     if (!ct.includes("application/json")) {
       throw new Error(tr("loadFailedHttp", { status: String(res.status) }));
     }
-    const data = (await res.json()) as { comic?: Comic; error?: string };
-    if (!res.ok) throw new Error(data.error || tr("loadFailedHttp", { status: String(res.status) }));
+    const data = (await res.json()) as {
+      comic?: Comic;
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+    };
+    if (!res.ok) {
+      throw new Error(
+        resolveClientApiError(
+          locale,
+          { ...data, errorParams: data.errorParams ?? { status: String(res.status) } },
+          "loadFailedHttp",
+        ),
+      );
+    }
     if (!data.comic) throw new Error(tr("notFound"));
     setComic(data.comic);
     applyComicDoc(parseComicImageUrls(data.comic.imageUrls));
@@ -160,8 +174,18 @@ export default function ComicDetailPage() {
         ),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error || tr("renderFailed", { status: String(res.status) }));
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+        };
+        setError(
+          resolveClientApiError(
+            locale,
+            { ...data, errorParams: data.errorParams ?? { status: String(res.status) } },
+            "comicPanelRenderFailed",
+          ),
+        );
         return;
       }
 

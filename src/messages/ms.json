@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Platform Permainan 1ONE",
+    "appName": "Operone",
     "brandTagline": "Penciptaan dan perkongsian permainan pelayar berkuasa AI",
     "language": "Bahasa",
     "theme": "Tema",
@@ -62,16 +62,24 @@
     "loggedInAs": "Log masuk sebagai {name}",
     "user": "Pengguna",
     "loginFailed": "Log masuk gagal: {error}",
-    "loginTitle": "Log masuk ke 1ONE",
+    "loginTitle": "Log masuk ke Operone",
     "loginDesc": "Selepas log masuk, anda boleh menyelaraskan ruang kerja merentas peranti. Pautan perkongsian dengan kod jemputan membantu penjejakan rujukan. Anda juga boleh mencipta secara anonim menggunakan kuki pelayar.",
     "enterStudio": "Masuk ke Ruang Kerja",
     "providerLogin": "Log masuk dengan {provider}",
     "providerConfiguring": "(Sedang dikonfigurasi)",
     "providerSoon": "(Akan datang)",
-    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin memerlukan kelayakan aplikasi dalam .env sebelum diaktifkan. Gunakan Log Masuk Pembangunan untuk pembangunan tempatan."
+    "oauthHint": "WeChat / QQ / Feishu / LINE / Douyin memerlukan kelayakan aplikasi dalam .env sebelum diaktifkan. Gunakan Log Masuk Pembangunan untuk pembangunan tempatan.",
+    "providers": {
+      "wechat": "WeChat",
+      "qq": "QQ",
+      "feishu": "Feishu",
+      "line": "LINE",
+      "douyin": "Douyin",
+      "dev": "Log masuk pembangunan"
+    }
   },
   "home": {
-    "badge": "1ONE · Makmal Ciptaan AI",
+    "badge": "Operone · Makmal Ciptaan AI",
     "workspaceCta": "Ruang Kerja Pencipta",
     "firstExperience": "Pengalaman Pertama",
     "wowMoment": "Capai saat wow dalam tiga langkah",
@@ -243,7 +251,11 @@
     "worthPolish": "{count} suka · patut diperhalusi",
     "draftOrPublish": "Draf / belum diterbitkan",
     "goRemix": "Pergi Remix",
-    "createWork": "Karya Baharu"
+    "createWork": "Karya Baharu",
+    "workSummary": {
+      "novelGenre": "{title} · {genre}",
+      "comicGenre": "{title} · {genre}"
+    }
   },
   "quota": {
     "title": "Kuota penjanaan tidak mencukupi",
@@ -282,6 +294,7 @@
     "comicDiscoverDesc": "Layari komik storyboard dan remix untuk mula mencipta",
     "deleteConfirmNovel": "Padam \"{title}\"? Komik berkaitan turut dipadam dan tidak boleh dipulihkan.",
     "deleteConfirmComic": "Padam komik \"{title}\"? Tindakan ini tidak boleh dibuat asal.",
+    "deleteConfirmGame": "Padam permainan \"{title}\"? Tindakan ini tidak boleh dibuat asal.",
     "deleteFailed": "Gagal memadam",
     "deleteFailedSession": "Gagal memadam. Sila gunakan sesi pelayar yang sama semasa penciptaan.",
     "noPreview": "Tiada pratonton lagi",
@@ -328,10 +341,10 @@
     "savedPublished": "Karya anda telah diterbitkan dan kini boleh ditemui oleh orang lain."
   },
   "metadata": {
-    "siteTitle": "Platform Game 1ONE - Ciptaan AI",
-    "siteTemplate": "%s · Platform Game 1ONE",
-    "siteDescription": "Platform Game 1ONE: jana permainan yang boleh dimainkan, novel yang boleh dibaca, dan komik visual dengan AI, kemudian simpan, perkemas dan kongsi.",
-    "siteOgTitle": "Platform Game 1ONE",
+    "siteTitle": "Operone - Ciptaan AI",
+    "siteTemplate": "%s · Operone",
+    "siteDescription": "Operone: jana permainan yang boleh dimainkan, novel yang boleh dibaca, dan komik visual dengan AI, kemudian simpan, perkemas dan kongsi.",
+    "siteOgTitle": "Operone",
     "siteOgDescription": "Platform berkuasa AI untuk mencipta permainan, novel dan komik.",
     "createTitle": "Cipta",
     "studioTitle": "Studio",
@@ -364,7 +377,7 @@
   "share": {
     "shareTo": "Kongsi ke",
     "shareTitle": "Kongsi \"{title}\"",
-    "defaultWorkTitle": "Karya 1ONE",
+    "defaultWorkTitle": "Karya Operone",
     "defaultDesc": "Lihat kandungan yang saya cipta dengan AI",
     "linkCopied": "Pautan disalin. Tampal ke WeChat, QQ, Feishu, dll.",
     "wechatNativeHint": "Ketik ··· di penjuru kanan atas untuk kongsi",
@@ -440,6 +453,7 @@
     "expandPack": "Rangka genre",
     "expandModel": "Rangka + model",
     "titlePrefix": "Tajuk:",
+    "loglineLabel": "Logline",
     "worldLabel": "Pembinaan dunia",
     "addonLabel": "Nota",
     "addonPlaceholder": "cth. orang ketiga, romantik lebih berat, akhir terbuka…",
@@ -545,31 +559,46 @@
       "label": "0–3 years",
       "stage": "Toddler",
       "charRangeLabel": "90–110 chars",
-      "features": "Short rhythmic lines, simple visuals, bedtime listening"
+      "features": "Short rhythmic lines, simple visuals, bedtime listening",
+      "interpretMark": "[Bacaan kreatif ringkas]",
+      "bodyMark": "[Cerita pendek sesuai umur]",
+      "closingMark": "[Penutup mesra]"
     },
     "kindergarten_3_6": {
       "label": "3–6 years",
       "stage": "Preschool",
       "charRangeLabel": "100–250 chars",
-      "features": "Playful tone, simple characters, gentle lessons"
+      "features": "Playful tone, simple characters, gentle lessons",
+      "interpretMark": "[Bacaan kreatif]",
+      "bodyMark": "[Cerita kanak-kanak]",
+      "closingMark": "[Pengajaran lembut]"
     },
     "primary_6_8": {
       "label": "6–8 years",
       "stage": "Grades 1–2",
       "charRangeLabel": "300–500 chars",
-      "features": "Complete plot, age-appropriate vocabulary"
+      "features": "Complete plot, age-appropriate vocabulary",
+      "interpretMark": "[Bacaan kandungan]",
+      "bodyMark": "[Cerita pertumbuhan]",
+      "closingMark": "[Intipati]"
     },
     "grade_9": {
       "label": "9 years",
       "stage": "Grade 3",
       "charRangeLabel": "500–700 chars",
-      "features": "Richer relationships, idioms and references"
+      "features": "Richer relationships, idioms and references",
+      "interpretMark": "[Bacaan klasik & kreatif]",
+      "bodyMark": "[Cerita penuh]",
+      "closingMark": "[Wawasan]"
     },
     "grade_10": {
       "label": "10 years",
       "stage": "Grade 4",
       "charRangeLabel": "700–900 chars",
-      "features": "Full plot depth, literacy-aligned themes"
+      "features": "Full plot depth, literacy-aligned themes",
+      "interpretMark": "[Bacaan kreatif mendalam]",
+      "bodyMark": "[Cerita pilihan]",
+      "closingMark": "[Refleksi literasi]"
     }
   },
   "readerThemes": {
@@ -911,6 +940,7 @@
     "expandPack": "Genre scaffold",
     "expandModel": "Scaffold + model",
     "originalPrompt": "Original prompt:",
+    "loglineLabel": "Logline",
     "worldLabel": "Worldbuilding",
     "addonLabel": "Notes (optional)",
     "saveRevision": "Save revision",
@@ -988,16 +1018,109 @@
     "prompt": "Prompt",
     "expand": "(expand)",
     "creating": "Creating…",
-    "play": "Play",
-    "tune": "Tune",
+    "play": "Main",
+    "clone": "Klon",
+    "cloning": "Mengklon…",
+    "cloneFailed": "Klon gagal. Sila cuba lagi.",
+    "bootstrapping": "Memuatkan sampel…",
     "generateFailed": "Generation failed",
     "saveFailed": "Save failed",
     "networkError": "Network error",
-    "title": "Sample gallery",
-    "descPrefix": "Browse inspiration cards horizontally, inspired by",
-    "descMid": "layout: swap vertical covers for play screenshots via",
-    "descSuffix": "in data; SVG posters with gradient fallback on load failure.",
-    "swipeHint": "Swipe sideways"
+    "title": "Galeri sampel",
+    "desc": "Sampel permainan popular — main terus. Kegemar selepas main, atau Klon ke studio anda untuk ubah suai.",
+    "swipeHint": "Leret ke sisi",
+    "shelves": {
+      "featured": {
+        "title": "Pilihan pemain",
+        "description": "Kegemaran komuniti — ketik untuk main terus"
+      },
+      "trending": {
+        "title": "Sedang trending",
+        "description": "Merge, strategi, teka-teki dan arked yang sedang naik"
+      }
+    },
+    "items": {
+      "fantasy-mmo-classic": {
+        "title": "Fantasi Chibi · Pengembaraan Klasik",
+        "subtitle": "Suasana klasik · kemahiran & peristiwa",
+        "prompt": "Bina mini permainan pengembaraan fantasi chibi: wira pengembara, musuh raksasa, mata wang Zeny; kemahiran (Shift), item dan sistem peristiwa (hujan syiling / serangan elit / perubahan matlamat). HUD jelas, rasa siap produk. (Jangan salin plot atau watak IP sedia ada.)",
+        "coverAlt": "Fantasi chibi klasik: pratonton peristiwa dan kemahiran",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Fantasi chibi",
+          "Klasik",
+          "Peristiwa",
+          "Kemahiran",
+          "Siap produk"
+        ]
+      },
+      "events-showcase": {
+        "title": "Demo Peristiwa: Tiga Pusingan",
+        "subtitle": "Sistem peristiwa · hujan syiling / elit / matlamat",
+        "prompt": "Bina mini permainan arked berasaskan peristiwa: hujan syiling, serangan elit dan perubahan matlamat jelas dalam tiga fasa; HUD mesra, kemahiran dan item mudah dibaca. Gaya flat lembut atau kertas cat air — bukan neon cyber sebagai lalai.",
+        "coverAlt": "Demo peristiwa: hujan syiling, elit, perubahan matlamat",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Peristiwa",
+          "Hujan syiling",
+          "Elit",
+          "Pusingan",
+          "Siap produk"
+        ]
+      },
+      "td-carrot": {
+        "title": "Pertahanan Lobak",
+        "subtitle": "TD comel · pelbagai menara · gelombang",
+        "prompt": "Bina TD comel gaya pertahan lobak: menara kucing jaga lobak, musuh tikus usik; tekankan gelombang, naik taraf dan ekonomi syiling.",
+        "coverAlt": "Pertahanan Lobak: TD comel, gelombang dan naik taraf",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Pertahan menara",
+          "Comel",
+          "Gelombang",
+          "Naik taraf"
+        ]
+      },
+      "td-kingdom": {
+        "title": "Garis Sempadan Kerajaan",
+        "subtitle": "TD epik · musuh berperisai · kawalan perlahan",
+        "prompt": "Bina TD epik gaya Kingdom Rush: menara anak panah, bom dan frost; musuh berperisai dan pembunuh upahan; gelombang lebih keras.",
+        "coverAlt": "Garis Sempadan Kerajaan: TD epik dan pertahan bandar",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Pertahan menara",
+          "Epik",
+          "Keras",
+          "Strategi"
+        ]
+      },
+      "td-cyber": {
+        "title": "(Demo gaya) Garisan Data",
+        "subtitle": "Pilihan · TD neon/siber · kontras tinggi",
+        "prompt": "TD neon cyberpunk: menara meriam denyut dan protokol perlahan; musuh program invasi dan dron berperisai; kontras warna hangat/sejuk kuat.",
+        "coverAlt": "Garisan Data: nyatakan suasana neon/siber dalam brief",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Pertahan menara",
+          "Siber",
+          "Neon",
+          "Kontras tinggi"
+        ]
+      },
+      "plat-ruins": {
+        "title": "Platformer Runtuhan",
+        "subtitle": "Platformer · berlapis · perangkap & kutipan",
+        "prompt": "Larian sisi: runtuhan batu dan lumut lukisan tangan, lompat berlapis, kutip api pine torch, elak paku dan jambatan retak; rentak padat, palet matte semula jadi.",
+        "coverAlt": "Platformer runtuhan: lompat dan kutipan",
+        "creator": "Makmal Operone",
+        "tags": [
+          "Platformer",
+          "Larian",
+          "Kutipan",
+          "Lukisan tangan"
+        ]
+      }
+    }
   },
   "studioErrors": {
     "gamesListFailed": "Failed to load games (HTTP {status})",
@@ -1157,6 +1280,7 @@
     "modeNew": "Selepas penjanaan, anda boleh simpan sebagai projek baharu.",
     "currentModeLabel": "Mod semasa:",
     "tryExamples": "Cuba satu",
+    "refUnnamedImage": "imej",
     "chooseDirectionFirst": "Sila pilih arah penciptaan bersama dahulu.",
     "streaming": "Sedang menjana secara penstriman…",
     "planIntent": "1. Jelaskan Arah",
@@ -1705,7 +1829,11 @@
     "savedToVersion": "Saved to project version",
     "saveNetworkError": "Network error while saving",
     "patchNetworkError": "Network error — please retry",
-    "like": "Like",
+    "like": "Suka",
+    "favorite": "Kegemaran",
+    "favorited": "Digemari",
+    "cloneToMine": "Klon jadi milik saya",
+    "samplePlayHint": "Permainan galeri sampel: kegemar selepas main, atau klon ke studio anda untuk ubah suai.",
     "copiedFullLink": "Full link copied",
     "copyLink": "Copy link",
     "copiedShortLink": "Short link copied",
@@ -1732,6 +1860,41 @@
     "saving": "Saving…",
     "applyAndSave": "Apply & save",
     "recentRefineTitle": "Recent refinements (newest last)"
+  },
+  "genrePacks": {
+    "space-epic": {
+      "label": "Epik fiksyen angkasa"
+    },
+    "tower-defense": {
+      "label": "Garis pertahan menara"
+    },
+    "platformer-adventure": {
+      "label": "Pengembaraan platform"
+    },
+    "wuxia-jianghu": {
+      "label": "Wuxia jianghu"
+    },
+    "horror-survival": {
+      "label": "Horor survival"
+    },
+    "anime-action": {
+      "label": "Aksi anime"
+    },
+    "folklore-festival": {
+      "label": "Perayaan rakyat"
+    },
+    "sports-arcade": {
+      "label": "Arked sukan"
+    },
+    "puzzle-logic": {
+      "label": "Teka-teki logik"
+    },
+    "cozy-collect": {
+      "label": "Kutipan cozy"
+    },
+    "general-arcade": {
+      "label": "Arked umum"
+    }
   },
   "commercePlans": {
     "free": {
@@ -1959,6 +2122,19 @@
     "textTruncated": "…(truncated)",
     "purposeUnlabeled": "Usage not set"
   },
+  "ingestMarkers": {
+    "materialHeader": "[Bahan rujukan]",
+    "imageLinePrefix": "[Imej ruj #",
+    "imageCaptionHead": "[Imej ruj #{ordinal} (tujuan: {role})]",
+    "imageCaptionMissingKey": "[Imej ruj #{ordinal} (tujuan: {role})] {name} (OPENAI_API_KEY tiada, tidak ditafsir)",
+    "imageCaptionVisionOff": "[Imej ruj #{ordinal} (tujuan: {role})] {name} (tafsiran visual dimatikan)",
+    "webWithTitle": "[Halaman web] {title}\n",
+    "webUrlOnly": "[Halaman web] {url}\n",
+    "pdfHead": "[PDF {name}]",
+    "docxHead": "[DOCX {name}]",
+    "textHead": "[Teks {name}]",
+    "imageNumberLegend": "[Penomboran imej ruj] Di bawah, \"Imej 1\", \"Imej 2\", … ikut susunan muat naik untuk imej sahaja (selari dengan \"Imej ruj #N\"; PDF/teks biasa tidak dikira). Semasa menjana spesifikasi, gunakan tujuan setiap imej pada title/subtitle, warna theme, dan label (player/hazard/collectible). Untuk templat pertahan menara, sesi pelayar yang sama boleh memaparkan piksel rujukan sebagai sprite mengikut tujuan. PNG/WebP/GIF kekal alpha; peran sprite dipusatkan dalam petak segi; pelayan tidak memotong foto kompleks secara automatik.\n"
+  },
   "novelDisplay": {
     "untitledNovel": "Untitled novel",
     "untitledShort": "Untitled"
@@ -2037,5 +2213,211 @@
   "novelSynopsis": {
     "arcTail": "{count} chapters including “{arc}” and more.",
     "aiFallback": "{title}: an AI-generated original serial story."
+  },
+  "gameEvents": {
+    "acts": {
+      "opening": "Opening",
+      "accel": "Rising action",
+      "variation": "Twist",
+      "finale": "Finale"
+    },
+    "coinRain": "Coin rain",
+    "coinRainTd": "Bonus wave",
+    "goalShift": "Goal shift",
+    "goalShiftTd": "Hold the line",
+    "miniBoss": "Elite assault",
+    "miniBossTd": "Elite wave",
+    "comboBonus": "Combo bonus",
+    "timeAttack": "Time attack",
+    "breathingRoom": "Breathing room",
+    "finalBarrage": {
+      "title": "Final barrage",
+      "message": "Dense threats incoming — survive to finish"
+    },
+    "specialEvent": "Special event",
+    "msg": {
+      "coinRain": "Collectibles spawn faster — score multiplier up",
+      "coinRainTd": "Extra coins flood in — upgrade towers quickly",
+      "coinRainPlat": "Timed sprint — chain jumps for bonus rewards",
+      "goalShift": "Timed objective — follow the HUD hint for a bonus",
+      "goalShiftTd": "Don't let enemies leak before the timer ends",
+      "goalShiftPlat": "Timed sprint — collect targets for extra rewards",
+      "miniBoss": "Threat level rises — tougher foes for a while",
+      "miniBossTd": "Armored elites — bring DPS and slows",
+      "coinRainFallback": "Rewards spawn faster for a short window",
+      "goalShiftFallback": "Follow the timed objective for a bonus",
+      "miniBossFallback": "Danger spikes — stronger threats for a while",
+      "coinRainShort": "Quick bonus window — grab extra rewards",
+      "goalShiftShort": "Short timed goal — finish for a bonus"
+    },
+    "playArcade": {
+      "collector": {
+        "coinRain": "More pickups on the field — reposition for combos",
+        "goalShift": "Collect as much as you can before time runs out",
+        "miniBoss": "Elites mix in — clear threats before greed"
+      },
+      "survivor": {
+        "coinRain": "Hold your line — use the window to push score",
+        "goalShift": "Fill the meter before the timer ends",
+        "miniBoss": "Density spikes — save skills for this wave"
+      },
+      "avoider": {
+        "coinRain": "Gaps tighten — keep your lateral rhythm",
+        "goalShift": "Stack risky dodges and positioning points",
+        "miniBoss": "Elites disrupt lanes — focus on evasion"
+      }
+    },
+    "goldenPickup": {
+      "title": "Golden pickup",
+      "message": "High-value targets appear briefly — grab them first"
+    },
+    "breathingRoomMsg": "Threat density drops briefly — recover and restock",
+    "play": {
+      "rewardWindow": "Reward window",
+      "timedGoal": "Timed goal",
+      "pressurePhase": "Pressure phase"
+    },
+    "shooter": {
+      "waveN": "Wave {n}",
+      "bossWave": "Boss incoming!",
+      "eliteSquad": "Elite squad",
+      "invasion": "Invasion wave",
+      "eventEnd": "Event ended",
+      "doubleScore": "Double score!",
+      "bossReinforce": "Boss reinforcements!"
+    },
+    "playScene": {
+      "bossTitle": "⚠ BOSS incoming",
+      "bossMessage": "Elite boss · defeat it for a huge score boost"
+    },
+    "platformer": {
+      "finalSprint": "Final sprint — elites blocking the path"
+    },
+    "hud": {
+      "score": "Score {score}",
+      "lives": "Lives {lives}",
+      "ready": "Ready",
+      "cooldown": "Cooldown {sec}s",
+      "actChapter": "Act · {label}",
+      "actAdvance": "Act advance",
+      "goalShift": "Timed goal · {have}/{need}",
+      "finalWave": "Final wave {sec}s",
+      "dodgeStreak": "Dodge streak {streak}",
+      "progressCollect": "Collect {prog}/{total}",
+      "progressAvoid": "Avoidance {prog}/{total}",
+      "progressDefault": "Progress {prog}/{total}",
+      "shooterWave": "Wave {wave}",
+      "shooterKills": "Kills {prog}/{total}",
+      "tdWave": "Wave {current}/{total}",
+      "tdKills": "Kills {kills} · Towers {built}",
+      "tdBase": "Base {hp}{extra}",
+      "tdBaseShield": "Base {hp} · Shield{goalTag}",
+      "tdNextWave": "Next wave in {sec}s — keep building and upgrading.",
+      "tdWin": "Defense held! All waves cleared.",
+      "tdLose": "Base breached · tweak stats or tower placement and retry.",
+      "platformerCollect": "Collect {score}/{total}",
+      "platformerTarget": "Target {have}/{need}",
+      "waveLabel": "Wave {current} / {total}",
+      "waveStartFirst": "Battle begins! Spend coins on towers and upgrades",
+      "waveStartLast": "Final wave! Hold the line to win 🏆",
+      "waveStartMid": "New wave incoming! Hold your ground",
+      "tdControls": "Tap tower slots to build/upgrade \"{tower}\" · Shift for skill · stop \"{foe}\" from reaching base",
+      "finishWin": {
+        "collector": "Collection complete! Resources secured — share or play again.",
+        "survivor": "You survived the final pressure — share or play again.",
+        "avoider": "You cleared the final barrage — share or play again."
+      },
+      "finishLose": {
+        "collector": "Almost had those resources — try again or tweak your brief.",
+        "survivor": "Couldn't survive the last wave — try again or tweak your brief.",
+        "avoider": "Dodge run failed — try again or tweak your brief."
+      },
+      "tdGoalTag": " · hold {left}s",
+      "controlsPlayCollector": "WASD / arrows · collect \"{collectible}\" · dodge \"{hazard}\"",
+      "controlsPlayAvoider": "← → / A D · dodge \"{hazard}\"",
+      "controlsShiftSuffix": " · Shift skill",
+      "controlsPlatformer": "← → / A D move · Space / W / ↑ jump · Shift skill · collect \"{coll}\"",
+      "controlsShooter": "← → / A D move · auto-fire at \"{hazard}\" · Shift skill",
+      "shooterFinishWin": "Victory! Play again or share from the page buttons.",
+      "shooterFinishLose": "Keep trying · play again or tweak your brief.",
+      "platformerFinishWin": "Cleared! Big stage conquered · save or share your link.",
+      "platformerFinishLose": "Keep trying · play again or strengthen your brief.",
+      "shooterSkillLine": "{skill} · {status}",
+      "shooterShiftReady": "Shift ready",
+      "shooterShiftCooldown": "Shift {sec}s",
+      "floaterCombo": "Combo ×{combo}",
+      "floaterGolden": "Golden +{bonus}",
+      "floaterRisk": "Risk +{bonus}",
+      "floaterNearMiss": "Near miss +{add}",
+      "floaterNearMissChain": "Near miss +{add} (×{chain})",
+      "floaterBossKill": "BOSS down +{bonus}",
+      "shooterSkill": {
+        "shield": "Shield",
+        "slow": "Slow field",
+        "wing": "Wingman",
+        "standby": "Standby"
+      },
+      "stage": {
+        "collector": {
+          "finale": "Final collection surge — risk and reward spike together",
+          "bonusField": "Bonus field — high-value pickups, grab them first",
+          "doubleSpawn": "Field heats up — more pickups and threats",
+          "default": "Keep moving and widen your collection lead"
+        },
+        "survivor": {
+          "finale": "Final survival wave — hold through peak pressure",
+          "doubleSpawn": "Pressure rises — more threats at once",
+          "default": "Keep surviving — stabilize health and rhythm"
+        },
+        "avoider": {
+          "finale": "Final dodge segment — dense threats incoming",
+          "doubleSpawn": "Double wave — chain your dodges",
+          "default": "Stay in rhythm for the next dodge segment"
+        },
+        "platformer": {
+          "precision": "Precision segment — smaller margins, watch your landings",
+          "gaps": "Gap segment — prepare for long jumps",
+          "spikes": "Trap segment — hazards cluster on platforms",
+          "default": "Entering the next section"
+        }
+      }
+    },
+    "banner": {
+      "goalComplete": "Timed goal complete",
+      "goalCompleteMsg": "Bonus +{bonus} pts",
+      "goalFailed": "Timed goal failed",
+      "goalFailedMsg": "Keep going — the next phase hits harder",
+      "finalBarrage": "Barrage cleared",
+      "finalBarrageMsg": "Final barrage ended · bonus +{bonus}",
+      "goldenWindowEnd": "Golden window ended",
+      "goldenWindowEndMsg": "Keep collecting and stay in rhythm",
+      "breathingEnd": "Breathing room ended",
+      "breathingEndMsg": "Pressure rises — watch your positioning",
+      "eventEnd": "Event ended",
+      "eventEndPlay": "Get ready for the next challenge",
+      "eventEndPlatformer": "Moving to the next chapter",
+      "eventEndTd": "Entering the next wave rhythm",
+      "platformerGoalSuccess": "Goal reached!",
+      "platformerGoalSuccessMsg": "Bonus +{bonus} pts · shield + dash",
+      "platformerGoalMiss": "Goal missed",
+      "platformerGoalMissMsg": "No worries — the next section is even wilder",
+      "tdHoldSuccess": "Hold point success!",
+      "tdHoldSuccessMsg": "Bonus +{bonus} coins · base shield",
+      "tdHoldFail": "Hold point failed",
+      "tdHoldFailMsg": "Next section hits harder — reinforce your defense",
+      "survivorGrit": "Hold the line",
+      "survivorGritMsg": "Dodge streak {streak} · grit +{grit}",
+      "lastStand": "Final wave",
+      "lastStandMsg": "{reason} · hold for {sec}s",
+      "lastStandEnd": "You made it",
+      "lastStandEndMsg": "Final wave cleared · morale +{bonus}",
+      "lastStandReason": "Final sprint",
+      "eliteAssault": "Attacks intensify!",
+      "bossDefeated": "BOSS defeated!",
+      "bossDefeatedMsg": "Earned +{bonus} pts",
+      "bossPhase1": "BOSS enraged!",
+      "bossPhase2": "BOSS fury!!",
+      "finalChapter": "Final chapter"
+    }
   }
 }

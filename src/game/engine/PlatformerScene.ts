@@ -9,6 +9,24 @@ import {
 } from "@/game/engine/minecraft-visuals";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
+import type { AppLocale } from "@/i18n/routing";
+import { gameEventTitle, platformerFinalSprint } from "@/lib/i18n/game-event-labels";
+import {
+  bannerActStage,
+  bannerEventEnd,
+  bannerPlatformerGoalMiss,
+  bannerPlatformerGoalSuccess,
+  hudActChapter,
+  hudCooldown,
+  hudLives,
+  hudPlatformerCollect,
+  hudPlatformerTarget,
+  hudReady,
+  hudScore,
+  hudControlsPlatformer,
+  platformerFinishText,
+  platformerStageMessage,
+} from "@/lib/i18n/game-hud-labels";
 import {
   buildCohesivePresentation,
   phaserUintToCssHex,
@@ -43,6 +61,7 @@ function shiftHex(c: number, d: number): number {
 export class PlatformerScene extends Phaser.Scene {
   public backgroundUrl: string | null = null;
   public projectId: string | null = null;
+  public uiLocale: AppLocale = "zh-Hans";
 
   private readonly spec: GameSpec;
 
@@ -267,7 +286,7 @@ export class PlatformerScene extends Phaser.Scene {
 
     const collLabel = this.spec.labels.collectible ?? "能量核";
     this.hintText = this.add
-      .text(viewW / 2, viewH - 20, `← → / A D 移动 · Space / W / ↑ 跳跃 · Shift 技能 · 收集「${collLabel}」`, {
+      .text(viewW / 2, viewH - 20, hudControlsPlatformer(this.uiLocale, collLabel), {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -402,7 +421,7 @@ export class PlatformerScene extends Phaser.Scene {
           this.score += bonus;
           this.shieldCharges = Math.max(this.shieldCharges, 1);
           this.dashUntil = Math.max(this.dashUntil, this.time.now + 900);
-          this.banner.show({ title: "目标达成！", message: `奖励 +${bonus} 分 · 护盾+冲刺`, ms: 1800 });
+          this.banner.show({ ...bannerPlatformerGoalSuccess(this.uiLocale, bonus), ms: 1800 });
         }
       }
       this.refreshHud();
@@ -731,20 +750,24 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private refreshHud() {
-    this.scoreText.setText(`得分 ${this.score}`);
+    this.scoreText.setText(hudScore(this.uiLocale, this.score));
     if (this.time.now < this.goalShiftUntil) {
-      this.progressText.setText(`目标 ${this.goalShiftHave}/${this.goalShiftNeed}`);
+      this.progressText.setText(hudPlatformerTarget(this.uiLocale, this.goalShiftHave, this.goalShiftNeed));
     } else {
-      this.progressText.setText(`收集 ${Math.min(this.score, this.winScore)}/${this.winScore}`);
+      this.progressText.setText(
+        hudPlatformerCollect(this.uiLocale, Math.min(this.score, this.winScore), this.winScore),
+      );
     }
-    if (this.livesText) this.livesText.setText(`生命 ${this.lives}`);
+    if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
 
     const acts = this.spec.director?.acts ?? null;
     const label = acts?.[this.actIndex]?.label;
-    this.actText.setText(label ? `章节 · ${label}` : "");
+    this.actText.setText(label ? hudActChapter(this.uiLocale, label) : "");
 
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
-    this.skillCdText.setText(cdLeft <= 0 ? "就绪" : `冷却 ${(cdLeft / 1000).toFixed(1)}s`);
+    this.skillCdText.setText(
+      cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1)),
+    );
     this.drawShieldRing();
   }
 
@@ -759,7 +782,7 @@ export class PlatformerScene extends Phaser.Scene {
     }
     this.fxDamage();
     this.lives -= 1;
-    if (this.livesText) this.livesText.setText(`生命 ${this.lives}`);
+    if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
     this.invulnUntil = this.time.now + 900;
     this.player.setVelocityY(-this.jumpVel * 0.55);
     this.player.setAlpha(0.35);
@@ -812,9 +835,7 @@ export class PlatformerScene extends Phaser.Scene {
     }
     this.finished = true;
     this.physics.pause();
-    this.hintText.setText(
-      payload.won ? "通关！大型关卡已征服 · 可保存分享链接。" : "再接再厉 · 再来一局或加强创意描述。",
-    );
+    this.hintText.setText(platformerFinishText(this.uiLocale, payload.won));
     if (payload.won) {
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
@@ -946,9 +967,9 @@ export class PlatformerScene extends Phaser.Scene {
       }
 
       if (ended === "goalShift" && !this.goalShiftSucceeded) {
-        this.banner.show({ title: "目标未达成", message: "没关系，下一段更刺激", ms: 1600 });
+        this.banner.show({ ...bannerPlatformerGoalMiss(this.uiLocale), ms: 1600 });
       } else {
-        this.banner.show({ title: "事件结束", message: "进入下一章节", ms: 1400 });
+        this.banner.show({ ...bannerEventEnd(this.uiLocale, "platformer"), ms: 1400 });
       }
 
       this.eventType = null;
@@ -975,7 +996,7 @@ export class PlatformerScene extends Phaser.Scene {
     const now = this.time.now;
     const strength = ev.strength ?? 0.6;
     const durationMs = ev.durationMs ?? 3500;
-    const title = ev.title ?? (ev.type === "coinRain" ? "金币雨" : ev.type === "miniBoss" ? "精英来袭" : "目标变化");
+    const title = gameEventTitle(this.uiLocale, ev.type, this.spec.templateId);
     const message = ev.message ?? "";
 
     this.eventType = ev.type;
@@ -1033,16 +1054,17 @@ export class PlatformerScene extends Phaser.Scene {
       }
       const sections = ["intro", "build", "drop", "climax"] as const;
       this.soundscape?.setSection(sections[idx] ?? "intro");
-      const stageMessage = mods.includes("precision")
-        ? "精准段落：容错变小，注意落点"
+      const mod = mods.includes("precision")
+        ? "precision"
         : mods.includes("gaps")
-          ? "断层段落：准备连续长跳"
+          ? "gaps"
           : mods.includes("spikes")
-            ? "陷阱段落：平台上危险更密集"
+            ? "spikes"
             : mods.includes("finale")
-              ? "终局冲刺：精英守卫正在拦截"
-              : "进入下一段关卡";
-      this.banner.show({ title: `章节 · ${acts[idx]?.label ?? "推进"}`, message: stageMessage, ms: 1400 });
+              ? "finale"
+              : "default";
+      const stageMessage = platformerStageMessage(this.uiLocale, mod);
+      this.banner.show({ ...bannerActStage(this.uiLocale, acts[idx]?.label, stageMessage), ms: 1400 });
       juiceFlash(this, { r: 140, g: 120, b: 255 }, { durationMs: 90 });
       this.refreshHud();
     }

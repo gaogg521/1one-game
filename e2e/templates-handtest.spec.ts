@@ -15,6 +15,10 @@ const TEMPLATES: Array<{
   { id: "platformer", prompt: "横版闯关跳跃收集钥匙过关" },
   { id: "towerDefense", prompt: "塔防卫萝卜波次守住基地" },
   { id: "shooter", prompt: "飞船射击消灭敌机" },
+  { id: "coaster", prompt: "空中轨道过山车竞速" },
+  { id: "puzzle", prompt: "色彩消除益智 match3" },
+  { id: "farming", prompt: "种植花园浇水收获" },
+  { id: "physics", prompt: "打击 dummy 假人解压" },
 ];
 
 async function ownerSession(page: Page) {

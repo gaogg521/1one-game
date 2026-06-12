@@ -6,6 +6,7 @@ import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { generateGameSpecVariantBatch } from "@/lib/generate-spec";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
@@ -57,11 +58,13 @@ export async function POST(req: Request) {
   }
 
   const startedAt = Date.now();
+  const uiLocale = resolveRequestLocaleSync(req);
   try {
     const variants = await generateGameSpecVariantBatch(parsed.prompt, count === 2 ? 2 : 3, {
       searchEnhance: parsed.searchEnhance,
       templateHint: parsed.templateHint,
       enhancePass: parsed.enhancePass,
+      uiLocale,
     });
     emitGenerateServeLog({
       phase: "variants",

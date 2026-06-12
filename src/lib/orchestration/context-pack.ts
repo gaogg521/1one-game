@@ -3,8 +3,9 @@
  */
 
 import { PRODUCT } from "@/lib/product-config";
+import type { GameTemplateId } from "@/lib/game-templates";
 
-export type OrchestrationQualityTier = "fast" | "standard" | "rich";
+export type OrchestrationQualityTier = "fast" | "standard" | "rich" | "astrocade";
 
 export type ContextPack = {
   /** ISO 语义区域，默认与用户输入一致可由路由覆盖 */
@@ -25,7 +26,7 @@ export function inferHasReferenceSnippet(prompt: string): boolean {
 
 export type BuildContextPackInput = {
   prompt: string;
-  templateHint: "auto" | "platformer" | "towerDefense" | "collector" | "survivor" | "avoider" | "shooter";
+  templateHint: "auto" | GameTemplateId;
   searchEnhance: boolean;
   enhancePass: boolean;
   /** 可由 Accept-Language 等注入；无时按启发式 zh/en */

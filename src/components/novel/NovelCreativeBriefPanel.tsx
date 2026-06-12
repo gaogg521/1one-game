@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
 import type { NovelBriefUserRevision, NovelCreativeBrief } from "@/lib/literary-brief/novel-types";
+import { getLocalizedNovelGenreTag, getNovelGenreTag } from "@/lib/novel-genre-tags";
 
 type Props = {
   brief: NovelCreativeBrief | null;
@@ -38,6 +40,7 @@ export function NovelCreativeBriefPanel({
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
+  const locale = useLocale() as AppLocale;
   const t = useTranslations("novelBrief");
   const [editing, setEditing] = useState(false);
   const [logline, setLogline] = useState("");
@@ -51,6 +54,11 @@ export function NovelCreativeBriefPanel({
   }, [brief]);
 
   if (!brief && !summary) return null;
+
+  const genreTag = brief ? getNovelGenreTag(brief.genreId) : null;
+  const genreDisplay = genreTag
+    ? getLocalizedNovelGenreTag(genreTag, locale).label
+    : brief?.genreLabel;
 
   const applyRevision = () => {
     const rev: NovelBriefUserRevision = {
@@ -72,7 +80,7 @@ export function NovelCreativeBriefPanel({
         {t("novelSummary")}
         {brief ? (
           <span className="ml-2 text-[10px] font-normal text-[var(--gc-text-faint)]">
-            {brief.genreLabel} · {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
+            {genreDisplay} · {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
           </span>
         ) : null}
       </summary>
@@ -90,7 +98,7 @@ export function NovelCreativeBriefPanel({
 
             {editing ? (
               <div className="space-y-2 rounded-lg border border-[color:var(--gc-border)] p-3">
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">Logline</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("loglineLabel")}</label>
                 <textarea
                   value={logline}
                   onChange={(e) => setLogline(e.target.value)}

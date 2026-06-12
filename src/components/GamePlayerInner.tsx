@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { GameSpec } from "@/lib/game-spec";
 import { captureCanvasAsJpegDataUrl } from "@/lib/capture-game-thumb";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
@@ -18,6 +20,7 @@ export default function GamePlayerInner({
   coverCapture?: { projectId: string } | null;
   projectId?: string;
 }) {
+  const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -74,7 +77,7 @@ export default function GamePlayerInner({
         try {
           const res = await fetch(`/api/projects/${pid}`, {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
             body: JSON.stringify({ coverJpegBase64: dataUrl }),
           });
           if (res.ok) {
@@ -95,7 +98,7 @@ export default function GamePlayerInner({
       window.clearTimeout(t1);
       window.clearTimeout(t2);
     };
-  }, [spec, session, coverCapture?.projectId]);
+  }, [spec, session, coverCapture?.projectId, locale]);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -107,6 +110,7 @@ export default function GamePlayerInner({
       referencePayloads: refPayloads,
       backgroundUrl: bgUrl,
       projectId: projectId ?? undefined,
+      uiLocale: locale,
     });
     gameRef.current = handle.game;
     bootAudioRef.current = handle.bootAudio;

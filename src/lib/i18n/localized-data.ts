@@ -27,6 +27,9 @@ type ChildrenAgeEntry = {
   stage: string;
   charRangeLabel: string;
   features: string;
+  interpretMark?: string;
+  bodyMark?: string;
+  closingMark?: string;
 };
 
 export function getLocalizedChildrenAgeTier(
@@ -44,6 +47,22 @@ export function getLocalizedChildrenAgeTier(
     stage: tier.stage,
     charRangeLabel: tier.charRangeLabel,
     features: tier.features,
+    interpretMark: tier.interpretMark,
+    bodyMark: tier.bodyMark,
+    closingMark: tier.closingMark,
+  };
+}
+
+export function localizedChildrenStructureMarks(
+  age: ChildrenTargetAge,
+  locale: AppLocale,
+): { interpret: string; body: string; closing: string } {
+  const tier = getChildrenAgeTier(age);
+  const entry = getLocalizedChildrenAgeTier(age, locale);
+  return {
+    interpret: entry.interpretMark ?? tier.interpretMark,
+    body: entry.bodyMark ?? tier.bodyMark,
+    closing: entry.closingMark ?? tier.closingMark,
   };
 }
 
@@ -67,4 +86,32 @@ export function localizedReaderThemeLabel(themeId: string, locale: AppLocale): s
   const messages = getMessages(locale);
   const label = (messages as { readerThemes?: Record<string, string> }).readerThemes?.[themeId];
   return label ?? themeId;
+}
+
+type NovelLengthTierUiId = "short" | "medium" | "long";
+
+/** 创作页篇幅档位文案（短篇 / 中篇 / 长篇），与 novelCreate i18n 键对齐。 */
+export function getNovelLengthTierUiCopy(
+  tierId: NovelLengthTierUiId,
+  locale: AppLocale,
+): { label: string; desc: string } {
+  const messages = getMessages(locale);
+  const nc = (messages as { novelCreate?: Record<string, string> }).novelCreate ?? {};
+  switch (tierId) {
+    case "short":
+      return {
+        label: nc.lengthShort ?? "Short",
+        desc: nc.lengthShortDesc ?? "",
+      };
+    case "medium":
+      return {
+        label: nc.lengthMedium ?? "Medium",
+        desc: nc.lengthMediumDesc ?? "",
+      };
+    case "long":
+      return {
+        label: nc.lengthLong ?? "Long",
+        desc: nc.lengthLongDesc ?? "",
+      };
+  }
 }

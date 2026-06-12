@@ -22,7 +22,9 @@ interface GameWork {
   templateId: string | null;
 }
 
-const TEMPLATE_IDS = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"] as const;
+import { listDiscoverTemplateIds } from "@/lib/game-templates/registry";
+
+const TEMPLATE_IDS = listDiscoverTemplateIds();
 
 function GameCard({
   game,
@@ -79,7 +81,7 @@ export default function GamesPage() {
   const [sort, setSort] = useState<"playCount" | "likeCount" | "createdAt">("playCount");
 
   const templateLabel = (id: string) =>
-    TEMPLATE_IDS.includes(id as (typeof TEMPLATE_IDS)[number])
+    TEMPLATE_IDS.includes(id)
       ? td(`templateLabels.${id}`)
       : id;
 

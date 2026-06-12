@@ -3,6 +3,7 @@
  */
 
 import type { AppLocale } from "@/i18n/routing";
+import { inferTemplateFromPrompt, type GameTemplateId } from "@/lib/game-templates";
 import { tMessage } from "@/lib/i18n/messages";
 
 export type StudioGenerateFlags = {
@@ -12,7 +13,7 @@ export type StudioGenerateFlags = {
 };
 
 export type CoCreationIntent = {
-  templateId: "auto" | "platformer" | "towerDefense" | "collector" | "survivor" | "avoider" | "shooter";
+  templateId: "auto" | GameTemplateId;
   premise: string;
   fantasy: string;
   gameplayCore: string;
@@ -122,13 +123,7 @@ function detectTemplateId(
   templateHint: CoCreationIntent["templateId"],
 ): CoCreationIntent["templateId"] {
   if (templateHint !== "auto") return templateHint;
-  const p = prompt.toLowerCase();
-  if (/塔防|保卫萝卜|波次防守|防御塔|箭塔|炮塔|放置塔|\b(td|tower defense|tower\s*defen[cs]e)\b/i.test(p)) return "towerDefense";
-  if (/射击|飞船|敌机|弹幕|战机|太空战|清屏|shooter|shoot|bullet hell/i.test(p)) return "shooter";
-  if (/平台|跳台|横版闯关|\b(platformer|platform)\b|马里奥|恶魔城/i.test(prompt) || /\b(platform|jump)\b/.test(p)) return "platformer";
-  if (/收集|捡|金币|宝石|吃掉|拾起|豆子/i.test(prompt) || /\b(collect|coin|gem|pick\s*up)\b/i.test(p)) return "collector";
-  if (/生存|多条命|血条|尽量久|\b(surviv|survival|\bhp\b|life)/i.test(p)) return "survivor";
-  return "avoider";
+  return inferTemplateFromPrompt(prompt);
 }
 
 function inferFantasy(prompt: string, locale: AppLocale): string {

@@ -10,6 +10,8 @@ import {
 import { saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { generateGameSprites } from "@/lib/game-sprite-gen";
 import { generateGameBackground } from "@/lib/game-background-gen";
+import { buildFallbackAgenticModule, shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
+import { PRODUCT } from "@/lib/product-config";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
@@ -75,7 +77,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const spec = prepareGameSpecForPersist(specRaw, trimmed);
+    let spec = prepareGameSpecForPersist(specRaw, trimmed);
+    if (PRODUCT.game.agenticModuleEnabled && !shouldUseAgenticRuntime(spec)) {
+      spec = { ...spec, agenticModule: buildFallbackAgenticModule(spec.title, spec) };
+    }
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const project = await createProjectRecord({

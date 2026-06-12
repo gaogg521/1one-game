@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { localizedGenrePackLabel } from "@/lib/i18n/genre-pack-label";
+import type { AppLocale } from "@/i18n/routing";
 import type { BriefUserRevision } from "@/lib/creative-brief/format-revision";
 import type { BriefMedium, CreativeBrief } from "@/lib/creative-brief/types";
 
@@ -41,6 +43,7 @@ export function CreativeBriefPanel({
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
+  const locale = useLocale() as AppLocale;
   const t = useTranslations("creativeBrief");
   const [editing, setEditing] = useState(false);
   const [logline, setLogline] = useState("");
@@ -77,7 +80,8 @@ export function CreativeBriefPanel({
         {t("summary")}
         {brief ? (
           <span className="ml-2 text-[10px] font-normal text-[var(--gc-text-faint)]">
-            {brief.packLabel} · {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
+            {localizedGenrePackLabel(locale, brief.packId, brief.packLabel)} ·{" "}
+            {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
           </span>
         ) : null}
       </summary>
@@ -94,7 +98,7 @@ export function CreativeBriefPanel({
 
             {editing ? (
               <div className="space-y-2 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]/40 p-3">
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">Logline</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("loglineLabel")}</label>
                 <textarea
                   value={logline}
                   onChange={(e) => setLogline(e.target.value)}

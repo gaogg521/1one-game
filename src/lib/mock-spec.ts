@@ -1,8 +1,13 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
+import { buildCoasterBlueprint } from "@/lib/coaster-blueprint";
+import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
+import { inferTemplateFromPrompt, type GameTemplateId } from "@/lib/game-templates";
+import { getTemplateDefinition, resolveTemplateRuntime } from "@/lib/game-templates/registry";
 import {
   applyMinecraftThemeOverlay,
   detectMinecraftIntent,
@@ -56,10 +61,23 @@ function guessLabels(prompt: string): {
   };
 }
 
-/** 无 API Key 时的离线推断：关键词 + 轻量抽取，保证可玩且标题更像「游戏名」。 */
-export function mockSpecFromPrompt(prompt: string): GameSpec {
+/** 无 API Key 时的离线推断：registry 关键词 + 轻量抽取。 */
+export type MockSpecOptions = {
+  templateId?: GameTemplateId;
+  title?: string;
+  subtitle?: string;
+  sampleId?: string;
+};
+
+export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): GameSpec {
   const p = prompt.toLowerCase();
   const seed = hashPrompt(prompt);
+
+  const templateId =
+    opts.templateId ??
+    inferTemplateFromPrompt(prompt, { sampleId: opts.sampleId });
+  const rt = resolveTemplateRuntime(templateId);
+  const def = getTemplateDefinition(templateId);
 
   const isRooc =
     /爱如初见|rooc|roocasia|gnjoy|仙境传说|ragnarok|ro\b/.test(prompt) ||
@@ -74,28 +92,13 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     /赛博|霓虹|全息|数据线|故障/.test(prompt);
   const city = /城市|夜市|街道|高楼|无人机|通勤/.test(prompt);
 
-  let templateId: GameSpec["templateId"] = "avoider";
-  if (
-    /塔防|保卫萝卜|防御塔|箭塔|炮塔|放置塔|波次防守|防线守卫|塔位|建造防御|放置防守|防守阵地|阵地|抵御入侵| Kingdom Rush|王国保卫战|皇家守卫军|猴子塔防|bloons td|星际塔防|植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙|tower\s*defen[cs]e|\btd\b|tower\s*defence/i.test(p)
-  ) {
-    templateId = "towerDefense";
-  } else if (
-    isMc && /奔跑|跑酷|冲刺|闯关|跳跃|platformer/.test(prompt)
-  ) {
-    templateId = "platformer";
-  } else if (
-    /平台跳跃|跳台|横版闯关|横版过关|多层平台|超级玛丽|超级马里奥|马里奥|mario|索尼克|sonic|恶魔城|castlevania|银河恶魔城|metroidvania|空洞骑士|hollow knight|奥日|ori|蔚蓝|celeste|几何冲刺|geometry dash|platformer|\bplatform\b|关卡|闯关|跑酷闯关|跳跃闯关|连续跳跃|二段跳/.test(p)
-  ) {
-    templateId = "platformer";
-  } else if (/生存|血条|生命|多条命|尽量久|扣血|撑多久|活下去|生存挑战|割草|吸血鬼幸存者|vampire survivors|黎明前20分钟|20 minutes till dawn|surviv|hp|life|heart|生存模式|持久战|无尽模式/.test(p)) {
-    templateId = "survivor";
-  } else if (/射击|飞船|太空战|弹幕|战机|消灭敌机|宇宙战|打飞机|飞机大战|雷电|竖版射击|太空射击|俯视角射击|坦克大战|合金弹头|1942|太空侵略者|space invaders|消灭病毒|raiden|shooter|\bshoot|stg|竖版飞机|invaders/.test(p)) {
-    templateId = "shooter";
-  } else if (/收集|捡|金币|宝石|吃豆|拾取|包裹|晶体|珍珠|蘑菇|能量|吃豆人|pac-man|贪食蛇|snake|收集金币|捡东西|拾取物品|大吃小|吞食|collect|coin|gem|gather|接东西/.test(p)) {
-    templateId = "collector";
-  } else if (/躲|落下|砸|闪|跑酷|坠落|避开|躲避|躲开|神庙逃亡|temple run|地铁跑酷|subway surfers|别踩白块|是男人就下100层|下100层|躲避球|接东西|fall|drop|dodge|avoid|闪避/.test(p)) {
-    templateId = "avoider";
-  }
+  const isTd = rt.phaser === "towerDefense";
+  const isPlatformer = rt.phaser === "platformer";
+  const isShooter = rt.phaser === "shooter";
+  const isCoaster = rt.phaser === "coaster";
+  const arenaMode = rt.arenaMode ?? "avoider";
+  const isSurvivor = arenaMode === "survivor";
+  const isCollector = arenaMode === "collector";
 
   const palettesOrganic = [
     {
@@ -159,38 +162,38 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
     ? { player: "史蒂夫", hazard: "苦力怕", collectible: "绿宝石" }
     : guessLabels(prompt);
 
-  const title = isRooc
-    ? "爱如初见 · 冒险经典"
-    : isMc
-      ? extractTitle(prompt, seed).includes("方块")
-        ? extractTitle(prompt, seed)
-        : `方块世界 · ${extractTitle(prompt, seed)}`
-      : extractTitle(prompt, seed);
+  const title = opts.title
+    ? opts.title
+    : isRooc
+      ? "爱如初见 · 冒险经典"
+      : isMc
+        ? extractTitle(prompt, seed).includes("方块")
+          ? extractTitle(prompt, seed)
+          : `方块世界 · ${extractTitle(prompt, seed)}`
+        : extractTitle(prompt, seed);
 
-  const speedScale = templateId === "survivor" ? 1.12 : 1;
+  const speedScale = isSurvivor ? 1.12 : 1;
   const hazardSpeed = Math.round(
-    (templateId === "towerDefense"
+    (isTd
       ? pick([150, 175, 200, 225], seed, 3)
-      : templateId === "shooter"
+      : isShooter
         ? pick([100, 130, 160, 190], seed, 3)
         : pick([220, 260, 300, 340], seed, 3)) * speedScale,
   );
-  const spawnIntervalMs =
-    templateId === "towerDefense"
-      ? pick([340, 420, 500, 580], seed, 4)
-      : templateId === "shooter"
-        ? pick([900, 1200, 1500, 1800], seed, 4)
-        : pick([520, 640, 760, 880], seed, 4);
-  const playerSpeed =
-    templateId === "platformer"
-      ? pick([240, 280, 320, 360], seed, 5)
-      : templateId === "towerDefense"
-        ? pick([270, 300, 330, 360], seed, 5)
-        : templateId === "shooter"
-          ? pick([260, 300, 340, 380], seed, 5)
-          : pick([260, 300, 340, 380], seed, 5);
+  const spawnIntervalMs = isTd
+    ? pick([340, 420, 500, 580], seed, 4)
+    : isShooter
+      ? pick([900, 1200, 1500, 1800], seed, 4)
+      : pick([520, 640, 760, 880], seed, 4);
+  const playerSpeed = isPlatformer
+    ? pick([240, 280, 320, 360], seed, 5)
+    : isTd
+      ? pick([270, 300, 330, 360], seed, 5)
+      : isShooter
+        ? pick([260, 300, 340, 380], seed, 5)
+        : pick([260, 300, 340, 380], seed, 5);
   const jumpStrength =
-    templateId === "shooter"
+    isShooter
       ? pick([500, 540, 580, 620], seed, 51)
       : pick([380, 410, 440, 470], seed, 51);
   const gravity = pick([880, 930, 980, 1040], seed, 52);
@@ -225,30 +228,25 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
       playerSpeed,
       hazardSpeed,
       spawnIntervalMs,
-      winScore:
-        templateId === "towerDefense"
+      winScore: isCoaster
+        ? 100
+        : isTd
           ? pick([10, 12, 14, 16], seed, 6)
-          : templateId === "platformer"
+          : isPlatformer
             ? pick([42, 50, 56, 64], seed, 6)
-            : templateId === "collector"
+            : isCollector
               ? pick([36, 44, 50, 56], seed, 6)
-              : templateId === "shooter"
+              : isShooter
                 ? pick([50, 60, 72, 85], seed, 6)
                 : pick([50, 60, 70, 75], seed, 6),
       lives:
-        templateId === "survivor"
+        isSurvivor || isCollector || isPlatformer || isShooter
           ? pick([3, 4, 5], seed, 7)
-          : templateId === "collector"
-            ? pick([3, 4, 5], seed, 7)
-            : templateId === "platformer"
-              ? pick([3, 4, 5], seed, 7)
-              : templateId === "shooter"
-                ? pick([3, 4, 5], seed, 7)
-                : 1,
+          : 1,
       arenaPadding: 36,
-      ...(templateId === "platformer" ? { jumpStrength, gravity } : {}),
-      ...(templateId === "shooter" ? { jumpStrength } : {}),
-      ...(templateId === "towerDefense"
+      ...(isPlatformer ? { jumpStrength, gravity } : {}),
+      ...(isShooter ? { jumpStrength } : {}),
+      ...(isTd
         ? {
             baseHealth: pick([36, 42, 48, 56], seed, 63),
             startingCoins: pick([95, 115, 135, 155], seed, 64),
@@ -256,39 +254,49 @@ export function mockSpecFromPrompt(prompt: string): GameSpec {
         : {}),
     },
     labels: {
-      player: templateId === "towerDefense" ? "防御塔" : templateId === "shooter" ? (space ? "战机" : "飞船") : playerLabel,
-      hazard: templateId === "towerDefense" ? "敌军" : templateId === "shooter" ? (space ? "敌舰" : "入侵者") : hazardLabel,
-      collectible: templateId === "towerDefense" ? "金币" : collLabel,
-      subtitle: templateId === "towerDefense"
-        ? "波次防守 · 构筑火力网"
-        : templateId === "shooter"
-          ? (space ? "星际截击 · 波次升级与火力窗口" : "空中射击 · 敌群波次迎击")
-          : templateId === "platformer"
-            ? (forest ? "多段地形 · 收集推进与精英阻截" : "关卡推进 · 平台跳跃与阶段目标")
-            : templateId === "collector"
-              ? "收集冲刺 · 限时目标与局势变化"
-              : templateId === "survivor"
-                ? "越撑越险 · 事件升级与生存压力"
-          : isMc
-            ? "方块草地 · 网易我的世界风奔跑闯关"
-            : isRooc
-          ? "Q版奇幻 · 职业技能 · 探索与成长"
-          : space
-            ? "在星尘间穿行"
-            : ocean
-              ? "逐浪前进"
-              : forest
-                ? "林间穿行"
-                : city && neonExplicit
-                  ? "灯海穿行"
-                  : city
-                    ? "街口穿行"
-                    : "一句话生成的小游戏",
+      player: isTd ? "防御塔" : isShooter ? (space ? "战机" : "飞船") : playerLabel,
+      hazard: isTd ? "敌军" : isShooter ? (space ? "敌舰" : "入侵者") : hazardLabel,
+      collectible: isTd ? "金币" : collLabel,
+      subtitle:
+        opts.subtitle ??
+        def.defaultSubtitle ??
+        (isMc
+          ? "方块草地 · 网易我的世界风奔跑闯关"
+          : isRooc
+            ? "Q版奇幻 · 职业技能 · 探索与成长"
+            : space
+              ? "在星尘间穿行"
+              : ocean
+                ? "逐浪前进"
+                : forest
+                  ? "林间穿行"
+                  : city && neonExplicit
+                    ? "灯海穿行"
+                    : city
+                      ? "街口穿行"
+                      : "一句话生成的小游戏"),
     },
   };
 
-  if (spec.templateId === "towerDefense" && !spec.towerDefense) {
+  if (rt.blueprint === "towerDefense" && !spec.towerDefense) {
     spec.towerDefense = buildTowerDefenseBlueprint({ prompt, spec });
+  }
+  if (rt.blueprint === "coaster") {
+    spec.theme = {
+      backgroundColor: "#38bdf8",
+      playerColor: "#ef4444",
+      hazardColor: "#854d0e",
+      collectibleColor: "#fde047",
+      particleTint: "#ffffff",
+    };
+    spec.coaster = buildCoasterBlueprint({ prompt, spec });
+    spec.presentation = { musicProfile: "pulse" };
+  }
+  if (rt.blueprint === "puzzle" && !spec.puzzle) {
+    spec.puzzle = buildPuzzleBlueprint({ prompt, spec, sampleId: opts.sampleId });
+  }
+  if (rt.blueprint === "farming" && !spec.farming) {
+    spec.farming = buildFarmingBlueprint({ prompt, spec });
   }
   if (!spec.director) {
     spec.director = buildDirector({ prompt, spec });
