@@ -5,43 +5,44 @@ import {
   getVolcTtsConfig,
   volcVoiceLabel,
   resolveVolcVoiceType,
-  VOLC_TTS_VOICES,
+  VOLC_TTS_VOICE_IDS,
   VOLC_TTS_DEFAULT_VOICE,
 } from "@/lib/volc-tts";
+import { localizedJsonError } from "@/lib/api/localized-error";
+import { isApiKeyedError } from "@/lib/api/api-keyed-error";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(req: Request) {
+  const uiLocale = resolveRequestLocaleSync(req);
   const cfg = getVolcTtsConfig();
   const defaultVoiceType = cfg?.voiceType ?? VOLC_TTS_DEFAULT_VOICE;
   return NextResponse.json({
     available: isVolcTtsConfigured(),
     provider: cfg ? "volc" : null,
     voiceType: defaultVoiceType,
-    voiceLabel: cfg ? volcVoiceLabel(defaultVoiceType) : null,
+    voiceLabel: cfg ? volcVoiceLabel(defaultVoiceType, uiLocale) : null,
     defaultVoiceType,
-    voices: VOLC_TTS_VOICES.map((v) => ({ id: v.id, label: v.label })),
+    voices: VOLC_TTS_VOICE_IDS.map((id) => ({ id, label: volcVoiceLabel(id, uiLocale) })),
   });
 }
 
 export async function POST(req: Request) {
   if (!isVolcTtsConfigured()) {
-    return NextResponse.json(
-      { error: "未配置火山引擎 TTS，请在 .env 设置 VOLC_TTS_APP_ID 与 VOLC_TTS_ACCESS_TOKEN" },
-      { status: 503 },
-    );
+    return localizedJsonError(req, "ttsNotConfigured", 503);
   }
 
   let body: { text?: string; speedRatio?: number; voiceType?: string };
   try {
     body = (await req.json()) as { text?: string; speedRatio?: number; voiceType?: string };
   } catch {
-    return NextResponse.json({ error: "无效 JSON" }, { status: 400 });
+    return localizedJsonError(req, "invalidJson", 400);
   }
 
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) {
-    return NextResponse.json({ error: "缺少 text" }, { status: 400 });
+    return localizedJsonError(req, "missingText", 400);
   }
 
   const voiceType = resolveVolcVoiceType(body.voiceType);
@@ -57,8 +58,10 @@ export async function POST(req: Request) {
         "Cache-Control": "no-store",
       },
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "语音合成失败";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch (e) {
+    if (isApiKeyedError(e)) {
+      return localizedJsonError(req, e.errorKey, 502, { params: e.params });
+    }
+    return localizedJsonError(req, "ttsFailed", 502);
   }
 }

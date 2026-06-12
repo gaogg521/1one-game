@@ -1,4 +1,6 @@
 import type { BriefMedium, CreativeBrief } from "@/lib/creative-brief/types";
+import type { AppLocale } from "@/i18n/routing";
+import { creativeBriefBulletMessage } from "@/lib/i18n/progress-message";
 
 /** 将 Creative Brief 格式化为 GameSpec 生成器可读的约束块 */
 export function formatCreativeBriefForGameSpec(brief: CreativeBrief): string {
@@ -59,29 +61,49 @@ export function formatBriefOneLineSummary(brief: CreativeBrief): string {
   return `${brief.logline} · ${scene}`.slice(0, 420);
 }
 
-const HINT_LABEL: Record<BriefMedium, string> = {
-  game: "玩法提示",
-  novel: "叙事结构",
-  comic: "分镜节奏",
+const HINT_LABEL_KEY: Record<BriefMedium, string> = {
+  game: "hintLabelGame",
+  novel: "hintLabelNovel",
+  comic: "hintLabelComic",
 };
 
-const UNIT_LABEL: Record<BriefMedium, string> = {
-  game: "单位",
-  novel: "角色",
-  comic: "角色造型",
+const UNIT_LABEL_KEY: Record<BriefMedium, string> = {
+  game: "unitLabelGame",
+  novel: "unitLabelNovel",
+  comic: "unitLabelComic",
 };
 
-export function buildStudioBriefBullets(brief: CreativeBrief, medium: BriefMedium = "game"): string[] {
-  const bullets = [
-    `**Logline**：${brief.logline}`,
-    `**题材包**：${brief.packLabel}${medium === "game" ? ` → 倾向模板 \`${brief.intent.templateHint}\`` : ""}`,
-    `**世界观**：${brief.world}`,
-    `**场景**：${brief.scenes.slice(0, 3).join("；")}`,
-    `**${UNIT_LABEL[medium]}**：${brief.units.slice(0, 4).join("、")}`,
-    `**画风**：${brief.artStyle.slice(0, 4).join("、")}`,
-    `**氛围**：${brief.mood.join("、")}`,
-    `**${HINT_LABEL[medium]}**：${brief.gameplayHints.slice(0, 3).join("；")}`,
-    `**扩写来源**：${brief.expandSource === "pack" ? "题材知识包" : brief.expandSource === "pack+llm" ? "知识包 + 大模型润色" : "大模型扩写"}`,
+export function buildStudioBriefBullets(
+  brief: CreativeBrief,
+  medium: BriefMedium = "game",
+  locale: AppLocale = "zh-Hans",
+): string[] {
+  const tr = (key: string, params?: Record<string, string | number | undefined | null>) =>
+    creativeBriefBulletMessage(locale, key, params);
+  const unitLabel = tr(UNIT_LABEL_KEY[medium]);
+  const hintLabel = tr(HINT_LABEL_KEY[medium]);
+  const listSep = locale === "zh-Hans" || locale === "zh-Hant" ? "、" : ", ";
+  const clauseSep = locale === "zh-Hans" || locale === "zh-Hant" ? "；" : "; ";
+  const templateSuffix =
+    medium === "game"
+      ? tr("packTemplateSuffix", { templateId: brief.intent.templateHint })
+      : "";
+  const expandKey =
+    brief.expandSource === "pack"
+      ? "expandPack"
+      : brief.expandSource === "pack+llm"
+        ? "expandPackLlm"
+        : "expandLlm";
+
+  return [
+    tr("logline", { logline: brief.logline }),
+    tr("pack", { packLabel: brief.packLabel, templateSuffix }),
+    tr("world", { world: brief.world }),
+    tr("scenes", { scenes: brief.scenes.slice(0, 3).join(clauseSep) }),
+    tr("units", { unitLabel, units: brief.units.slice(0, 4).join(listSep) }),
+    tr("artStyle", { style: brief.artStyle.slice(0, 4).join(listSep) }),
+    tr("mood", { mood: brief.mood.join(listSep) }),
+    tr("hints", { hintLabel, hints: brief.gameplayHints.slice(0, 3).join(clauseSep) }),
+    tr(expandKey),
   ];
-  return bullets;
 }

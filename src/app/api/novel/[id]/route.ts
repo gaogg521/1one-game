@@ -6,32 +6,42 @@ import { newShareCode } from "@/lib/share-code";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
+import { defaultChapterTitle } from "@/lib/i18n/chapter-labels";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { buildNovelSynopsisHeuristic } from "@/lib/novel-synopsis";
 import { NOVEL_CONTINUE_CHAPTER_PRESETS } from "@/lib/novel-continue-options";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
 import { PRODUCT } from "@/lib/product-config";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { loadCreativeBriefForNovel } from "@/lib/novel-creative-brief-db";
+import { buildChapterAdaptationProgress } from "@/lib/comic-chapter-adaptation";
+import { isChildrenFormattedNovelContent } from "@/lib/children-comic-sections";
 import { isChildrenNovelTier } from "@/lib/novel-length";
 import type { NovelLengthTier } from "@/lib/novel-length";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
+import { localizedJsonError } from "@/lib/api/localized-error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: RouteContext) {
+export async function GET(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
 
   const row = await prisma.novel.findUnique({
     where: { id },
-    include: { comics: { select: { id: true, title: true, createdAt: true } } },
+    include: {
+      comics: {
+        select: { id: true, title: true, createdAt: true, imageUrls: true, status: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
   if (!row) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
-  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
+  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
   const pipelineMeta = await loadNovelGenerationMeta(id);
   const creativeBrief = isOwner ? await loadCreativeBriefForNovel(id) : null;
   const briefKind =
@@ -40,10 +50,12 @@ export async function GET(_req: Request, ctx: RouteContext) {
       : creativeBrief
         ? ("novel" as const)
         : null;
+  const uiLocale = resolveRequestLocaleSync(req);
   const continuation = assessNovelContinuation({
     lengthTier: row.lengthTier,
     content: row.content,
     meta: pipelineMeta,
+    uiLocale,
   });
   return NextResponse.json({
     novel: {
@@ -71,7 +83,27 @@ export async function GET(_req: Request, ctx: RouteContext) {
       continueChapterPresets: NOVEL_CONTINUE_CHAPTER_PRESETS,
       continueDefaultMaxChapters: PRODUCT.novel.longSegmented.continueDefaultMaxChapters,
       polishDefault: PRODUCT.novel.longSegmented.polishAfterSegment,
-      comics: row.comics,
+      comics: row.comics.map((c) => ({
+        id: c.id,
+        title: c.title,
+        createdAt: c.createdAt,
+        status: c.status,
+      })),
+      ...(isOwner
+        ? {
+            chapterAdaptation: buildChapterAdaptationProgress(
+              row.content,
+              row.comics.filter((c) => c.status !== "draft_storyboard"),
+              {
+                isChildren: isChildrenFormattedNovelContent(row.content),
+                uiLocale: resolveRequestLocaleSync(req),
+              },
+            ),
+            draftStoryboardComics: row.comics
+              .filter((c) => c.status === "draft_storyboard")
+              .map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt })),
+          }
+        : {}),
     },
     ...(creativeBrief ? { creativeBrief, briefKind } : {}),
   });
@@ -80,20 +112,20 @@ export async function GET(_req: Request, ctx: RouteContext) {
 export async function PATCH(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const { id } = await ctx.params;
   const row = await prisma.novel.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const payload = body as {
@@ -104,11 +136,12 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   };
 
   const data: { title?: string; content?: string; summary?: string; shareCode?: string } = {};
+  const uiLocale = resolveRequestLocaleSync(req);
 
   if (payload.title !== undefined) {
     const v = validateNovelTitleInput(String(payload.title));
     if (!v.ok) {
-      return NextResponse.json({ error: v.error }, { status: 400 });
+      return localizedJsonError(req, v.errorKey, 400, { params: { max: 15 } });
     }
     data.title = v.value;
   }
@@ -116,24 +149,24 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (Array.isArray(payload.chapters) && payload.chapters.length > 0) {
     const normalized = payload.chapters.map((ch, i) => ({
       num: typeof ch.num === "number" && ch.num > 0 ? ch.num : i + 1,
-      title: String(ch.title ?? "").trim() || `第${i + 1}章`,
+      title: String(ch.title ?? "").trim() || defaultChapterTitle(uiLocale, i + 1),
       body: String(ch.body ?? "").trim(),
     }));
     if (normalized.some((ch) => !ch.body)) {
-      return NextResponse.json({ error: "章节正文不能为空" }, { status: 400 });
+      return localizedJsonError(req, "chapterEmpty", 400);
     }
     const content = serializeNovelChapters(normalized);
     data.content = content;
     const titleForSummary = data.title ?? row.title;
-    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary);
+    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary, uiLocale);
   } else if (payload.content !== undefined) {
     const content = String(payload.content).trim();
     if (content.length < 10) {
-      return NextResponse.json({ error: "正文过短" }, { status: 400 });
+      return localizedJsonError(req, "contentTooShort", 400);
     }
     data.content = content;
     const titleForSummary = data.title ?? row.title;
-    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary);
+    data.summary = buildNovelSynopsisHeuristic(content, row.prompt, titleForSummary, uiLocale);
   }
 
   const ensureShareCode = Boolean(payload.ensureShareCode);
@@ -176,15 +209,15 @@ export async function DELETE(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
   if (!ownerKey && !isSuperAdmin(req)) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const row = await prisma.novel.findUnique({ where: { id } });
   if (!row) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
   if (!canDeleteOwnedResource(row.ownerKey, ownerKey, req)) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   await prisma.novel.delete({ where: { id } });

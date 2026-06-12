@@ -1,3 +1,4 @@
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { sanitizeChildrenBriefForTier } from "@/lib/children-brief-sanitize";
 import { parseChildrenTargetAge } from "@/lib/children-age-length";
 import {
@@ -44,7 +45,7 @@ export async function expandChildrenCreativeBrief(
   brief = sanitizeChildrenBriefForTier(brief, age);
   const checked = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(brief);
   if (!checked.success) {
-    throw new Error("儿童构思无效");
+    throw new ApiKeyedError("expandChildrenInvalid");
   }
   brief = checked.data;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import { captureCanvasAsJpegDataUrl } from "@/lib/capture-game-thumb";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
@@ -17,6 +18,7 @@ export default function GamePlayerInner({
   coverCapture?: { projectId: string } | null;
   projectId?: string;
 }) {
+  const t = useTranslations("gamePlayer");
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -168,12 +170,12 @@ export default function GamePlayerInner({
           ref={hostRef}
           tabIndex={0}
           role="application"
-          aria-label="游戏画面"
+          aria-label={t("gameAria")}
           className="aspect-[920/560] w-full max-h-[min(70vh,620px)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)]"
         />
         {audioHint && !result ? (
           <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1 text-[10px] text-[var(--gc-muted)] backdrop-blur-sm">
-            点击画面或按任意键开启背景音乐
+            {t("audioHint")}
           </p>
         ) : null}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end gap-2 p-3">
@@ -182,14 +184,14 @@ export default function GamePlayerInner({
             onClick={fullscreen}
             className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
           >
-            全屏
+            {t("fullscreen")}
           </button>
           <button
             type="button"
             onClick={restart}
             className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
           >
-            重开
+            {t("restart")}
           </button>
         </div>
 
@@ -197,10 +199,11 @@ export default function GamePlayerInner({
           <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/70 px-6 text-center backdrop-blur-md">
             <div className="space-y-1">
               <p className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">
-                {result.won ? "胜利" : "游戏结束"}
+                {result.won ? t("victory") : t("gameOver")}
               </p>
               <p className="text-sm text-[var(--gc-muted)]">
-                得分 <span className="tabular-nums text-[var(--gc-text)]">{result.score}</span>
+                {t("score")}{" "}
+                <span className="tabular-nums text-[var(--gc-text)]">{result.score}</span>
               </p>
             </div>
             <button
@@ -208,14 +211,14 @@ export default function GamePlayerInner({
               onClick={restart}
               className="gc-theme-cta rounded-full px-8 py-2.5 text-sm font-semibold shadow-lg"
             >
-              再来一局
+              {t("playAgain")}
             </button>
           </div>
         ) : null}
       </div>
 
       {result ? (
-        <p className="text-center text-xs text-[var(--gc-muted)] md:hidden">提示：横屏或全屏可获得更大视野。</p>
+        <p className="text-center text-xs text-[var(--gc-muted)] md:hidden">{t("landscapeHint")}</p>
       ) : null}
     </div>
   );

@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import type { NovelChapter } from "@/lib/novel-chapters";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import type { AppLocale } from "@/i18n/routing";
 import {
   buildNovelTtsQueue,
   isBrowserTtsSupported,
@@ -50,6 +53,8 @@ export function useNovelListen(
     syncChapterId?: string;
   },
 ) {
+  const t = useTranslations("novelListen");
+  const locale = useLocale() as AppLocale;
   const [provider, setProvider] = useState<NovelListenProvider>("none");
   const [volcStatus, setVolcStatus] = useState<VolcStatus | null>(null);
   const [volcVoices, setVolcVoices] = useState<TtsVoiceOption[]>([]);
@@ -90,7 +95,7 @@ export function useNovelListen(
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/novel/tts");
+        const res = await fetch("/api/novel/tts", { headers: mergeLocaleHeaders(locale) });
         const data = (await res.json()) as VolcStatus & {
           available?: boolean;
           voices?: TtsVoiceOption[];
@@ -125,7 +130,7 @@ export function useNovelListen(
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (provider !== "browser") return;
@@ -184,7 +189,7 @@ export function useNovelListen(
   const fetchVolcAudio = useCallback(async (text: string): Promise<Blob> => {
     const res = await fetch("/api/novel/tts", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
       body: JSON.stringify({
         text,
         speedRatio: rateRef.current,
@@ -193,10 +198,10 @@ export function useNovelListen(
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error || `语音合成失败（${res.status}）`);
+      throw new Error(data.error || t("ttsRequestFailed", { status: res.status }));
     }
     return res.blob();
-  }, []);
+  }, [locale, t]);
 
   const prefetchVolc = useCallback(
     (pos: number) => {
@@ -252,7 +257,7 @@ export function useNovelListen(
         audio.playbackRate = rateRef.current;
         audioRef.current = audio;
         audio.onended = () => resolve();
-        audio.onerror = () => reject(new Error("音频播放失败"));
+        audio.onerror = () => reject(new Error(t("audioPlayFailed")));
         void audio.play().catch(reject);
       }),
     [releaseAudio],
@@ -275,7 +280,9 @@ export function useNovelListen(
 
       try {
         setState("loading");
-        setStatusMessage(`正在合成语音 ${pos + 1}/${queueRef.current.length}…`);
+        setStatusMessage(
+          t("synthesizingProgress", { current: pos + 1, total: queueRef.current.length }),
+        );
         setError(null);
 
         let blob = prefetchRef.current.get(pos);
@@ -293,14 +300,14 @@ export function useNovelListen(
 
         if (!stoppedRef.current) await speakVolcAt(pos + 1);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "朗读失败";
+        const msg = err instanceof Error ? err.message : t("readFailed");
         setError(msg);
         setState("idle");
         stoppedRef.current = true;
         releaseAudio();
       }
     },
-    [focusChapter, prefetchVolc, fetchVolcAudio, playVolcBlob, releaseAudio],
+    [focusChapter, prefetchVolc, fetchVolcAudio, playVolcBlob, releaseAudio, t],
   );
 
   const stop = useCallback(() => {
@@ -325,7 +332,7 @@ export function useNovelListen(
       releaseAudio();
       prefetchRef.current.clear();
       stoppedRef.current = false;
-      queueRef.current = buildNovelTtsQueue(chapters, start);
+      queueRef.current = buildNovelTtsQueue(chapters, start, locale);
       queuePosRef.current = 0;
 
       if (queueRef.current.length === 0) {
@@ -341,7 +348,7 @@ export function useNovelListen(
         speakBrowserAt(0);
       }
     },
-    [supported, chapters, chapterIndex, provider, releaseAudio, speakVolcAt, speakBrowserAt],
+    [supported, chapters, chapterIndex, provider, releaseAudio, speakVolcAt, speakBrowserAt, locale],
   );
 
   const pause = useCallback(() => {
@@ -406,7 +413,7 @@ export function useNovelListen(
       }
       if (state !== "idle") {
         stop();
-        setStatusMessage("已切换音色，请重新播放");
+        setStatusMessage(t("voiceSwitched"));
       }
     },
     [volcVoices, state, stop],
@@ -426,7 +433,7 @@ export function useNovelListen(
       if (state !== "idle") {
         stop();
         window.speechSynthesis.cancel();
-        setStatusMessage("已切换音色，请重新播放");
+        setStatusMessage(t("voiceSwitched"));
       }
     },
     [browserVoices, state, stop],
@@ -450,12 +457,12 @@ export function useNovelListen(
 
   const providerLabel =
     provider === "volc" ?
-      selectedVoiceLabel ? `豆包 · ${selectedVoiceLabel}`
-      : volcStatus?.voiceLabel ? `豆包 · ${volcStatus.voiceLabel}`
-      : "豆包语音"
+      selectedVoiceLabel ? t("providerDoubaoNamed", { name: selectedVoiceLabel })
+      : volcStatus?.voiceLabel ? t("providerDoubaoNamed", { name: volcStatus.voiceLabel })
+      : t("providerDoubao")
     : provider === "browser" ?
-      selectedVoiceLabel ? `系统 · ${selectedVoiceLabel}`
-      : "系统朗读"
+      selectedVoiceLabel ? t("providerSystemNamed", { name: selectedVoiceLabel })
+      : t("providerSystem")
     : "";
 
   return {

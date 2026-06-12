@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
+import { localizedReaderThemeLabel } from "@/lib/i18n/localized-data";
 import { parseNovelChapters, type NovelChapter } from "@/lib/novel-chapters";
 import { stripLeadingTitleFromBody } from "@/lib/novel-display";
 import { splitNovelParagraphs } from "@/lib/novel-paragraphs";
@@ -18,14 +21,16 @@ interface NovelReaderProps {
 }
 
 export function NovelReader({ content, stripTitles = [], theme: themeProp, onThemeChange }: NovelReaderProps) {
+  const locale = useLocale() as AppLocale;
+  const tr = useTranslations("novelReader");
   const chapters = useMemo(() => {
-    const parsed = parseNovelChapters(content);
+    const parsed = parseNovelChapters(content, locale);
     if (stripTitles.length === 0) return parsed;
     return parsed.map((ch) => ({
       ...ch,
       body: stripLeadingTitleFromBody(ch.body, stripTitles),
     }));
-  }, [content, stripTitles]);
+  }, [content, stripTitles, locale]);
 
   const [internalTheme, setInternalTheme] = useState<NovelReaderThemeId>("paper");
   const controlled = themeProp !== undefined && onThemeChange !== undefined;
@@ -87,9 +92,9 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
           className="rounded-md px-3 py-1.5 text-sm font-medium"
           style={{ border: `1px solid ${t.border}`, color: t.text }}
         >
-          目录 · {chapters.length}
+          {tr("tocMobile", { count: chapters.length })}
         </button>
-        <ThemePicker theme={theme} onChange={setTheme} t={t} compact />
+        <ThemePicker theme={theme} onChange={setTheme} t={t} locale={locale} compact />
       </div>
 
       {tocOpen && (
@@ -104,7 +109,7 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-3 text-xs font-medium" style={{ color: t.muted }}>
-              章节目录
+              {tr("tocTitle")}
             </p>
             <ChapterList
               chapters={chapters}
@@ -112,6 +117,7 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
               tocActive={t.tocActive}
               muted={t.muted}
               onSelect={scrollToChapter}
+              formatChapter={(ch) => tr("chapterHeading", { num: ch.num, title: ch.title })}
             />
           </nav>
         </div>
@@ -128,7 +134,7 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
             style={{ borderColor: t.border, backgroundColor: t.panel, maxHeight: "calc(100vh - 6rem)" }}
           >
             <p className="mb-2 px-1 text-xs font-medium" style={{ color: t.muted }}>
-              目录 · {chapters.length} 章
+              {tr("tocDesktop", { count: chapters.length })}
             </p>
             <div className="max-h-[50vh] overflow-y-auto pr-1">
               <ChapterList
@@ -137,18 +143,19 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
                 tocActive={t.tocActive}
                 muted={t.muted}
                 onSelect={scrollToChapter}
+                formatChapter={(ch) => tr("chapterHeading", { num: ch.num, title: ch.title })}
               />
             </div>
             <div className="mt-4 border-t pt-3" style={{ borderColor: t.border }}>
               <p className="mb-2 px-1 text-xs" style={{ color: t.muted }}>
-                阅读背景
+                {tr("readingBg")}
               </p>
-              <ThemePicker theme={theme} onChange={setTheme} t={t} />
+              <ThemePicker theme={theme} onChange={setTheme} t={t} locale={locale} />
             </div>
             {listen.supported && chapters.length > 0 ?
               <div className="mt-4 border-t pt-3" style={{ borderColor: t.border }}>
                 <p className="mb-2 px-1 text-xs" style={{ color: t.muted }}>
-                  听书
+                  {tr("listen")}
                 </p>
                 <button
                   type="button"
@@ -160,11 +167,11 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
                     backgroundColor: listen.state !== "idle" ? `${t.tocActive}14` : "transparent",
                   }}
                 >
-                  {listen.state === "playing" ?
-                    "暂停朗读"
-                  : listen.state === "paused" ?
-                    "继续朗读"
-                  : "从当前章开始听"}
+                  {listen.state === "playing"
+                    ? tr("pauseListen")
+                    : listen.state === "paused"
+                      ? tr("resumeListen")
+                      : tr("startListen")}
                 </button>
               </div>
             : null}
@@ -193,7 +200,7 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
                     className="mb-8 text-center text-lg font-semibold tracking-wide sm:text-xl"
                     style={{ color: t.text }}
                   >
-                    第{ch.num}章 {ch.title}
+                    {tr("chapterHeading", { num: ch.num, title: ch.title })}
                   </h2>
                   <div className="space-y-6 text-[18px] leading-[2] tracking-[0.02em] sm:text-[19px]">
                     {(() => {
@@ -221,11 +228,13 @@ function ThemePicker({
   theme,
   onChange,
   t,
+  locale,
   compact,
 }: {
   theme: NovelReaderThemeId;
   onChange: (k: NovelReaderThemeId) => void;
   t: NovelReaderPalette;
+  locale: AppLocale;
   compact?: boolean;
 }) {
   return (
@@ -242,7 +251,7 @@ function ThemePicker({
             fontWeight: theme === k ? 600 : 400,
           }}
         >
-          {NOVEL_READER_THEMES[k].label}
+          {localizedReaderThemeLabel(k, locale)}
         </button>
       ))}
     </div>
@@ -255,12 +264,14 @@ function ChapterList({
   tocActive,
   muted,
   onSelect,
+  formatChapter,
 }: {
   chapters: NovelChapter[];
   activeId: string;
   tocActive: string;
   muted: string;
   onSelect: (ch: NovelChapter) => void;
+  formatChapter: (ch: NovelChapter) => string;
 }) {
   return (
     <ul className="flex flex-col gap-0.5">
@@ -278,9 +289,7 @@ function ChapterList({
                 backgroundColor: active ? `${tocActive}14` : "transparent",
               }}
             >
-              <span className="line-clamp-2">
-                第{ch.num}章 {ch.title}
-              </span>
+              <span className="line-clamp-2">{formatChapter(ch)}</span>
             </button>
           </li>
         );

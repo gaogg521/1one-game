@@ -27,6 +27,8 @@ export type ResolveMediaBriefOptions = {
   novelGenreId?: string;
   title?: string;
   childrenTargetAge?: number;
+  /** 用户原话语言，避免从 brief seed 误判 */
+  inputLocale?: import("@/lib/creative-brief/detect-input-locale").BriefInputLocale;
 };
 
 export type MediaBriefResult =
@@ -118,6 +120,7 @@ export async function resolveMediaCreativeBrief(
     prompt: trimmed,
     title: options?.title,
     genreId: options?.novelGenreId,
+    inputLocale: options?.inputLocale,
     skipLlm: options?.skipLlm,
     userRevision: options?.userRevision as NovelBriefUserRevision | null | undefined,
   });

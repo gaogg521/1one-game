@@ -1,5 +1,12 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
+import {
+  localizedChildrenAgeLabel,
+  localizedChildrenCharRangeLabel,
+  localizedChildrenStageLabel,
+} from "@/lib/i18n/localized-data";
 import {
   CHILDREN_AGE_LENGTH_OPTIONS,
   type ChildrenTargetAge,
@@ -13,6 +20,8 @@ type Props = {
 
 /** 儿童短篇：五档读者年龄（字数与知识点侧重不同） */
 export function ChildrenAgePicker({ value, onChange, disabled }: Props) {
+  const t = useTranslations("novelCreate");
+  const locale = useLocale() as AppLocale;
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {CHILDREN_AGE_LENGTH_OPTIONS.map((opt) => {
@@ -29,10 +38,12 @@ export function ChildrenAgePicker({ value, onChange, disabled }: Props) {
                 : "border-[color:var(--gc-border)] bg-[var(--gc-bg)]/50 hover:border-[color:var(--gc-accent)]/30"
             }`}
           >
-            <span className="block text-sm font-semibold">{opt.label}</span>
-            <span className="mt-0.5 block text-[11px] text-[var(--gc-muted)]">{opt.stage}</span>
+            <span className="block text-sm font-semibold">{localizedChildrenAgeLabel(opt.age, locale)}</span>
+            <span className="mt-0.5 block text-[11px] text-[var(--gc-muted)]">
+              {localizedChildrenStageLabel(opt.age, locale)}
+            </span>
             <span className="mt-0.5 block text-[10px] text-[var(--gc-text-faint)]">
-              正文 {opt.charRangeLabel}
+              {t("bodyText")} {localizedChildrenCharRangeLabel(opt.age, locale)}
             </span>
           </button>
         );

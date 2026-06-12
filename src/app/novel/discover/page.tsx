@@ -2,10 +2,16 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
+import { DiscoverIntakeBanner } from "@/components/DiscoverIntakeBanner";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 import { SuperAdminPanel } from "@/components/SuperAdminPanel";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 
 interface Novel {
   id: string;
@@ -21,8 +27,10 @@ interface Novel {
 }
 
 function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => void }) {
-  const title = normalizeNovelTitle(n.title, n.prompt);
-  const blurb = displayNovelSummary(n.summary, title, n.prompt);
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const title = normalizeNovelTitle(n.title, n.prompt, undefined, locale);
+  const blurb = displayNovelSummary(n.summary, title, n.prompt, undefined, locale);
   const [liked, setLiked] = useState(() => {
     if (typeof localStorage === "undefined") return false;
     return !!localStorage.getItem(`liked:novel:${n.id}`);
@@ -36,18 +44,21 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
     setLiked(true);
     setLikes((c) => c + 1);
     localStorage.setItem(`liked:novel:${n.id}`, "1");
-    void fetch(`/api/novel/${n.id}/like`, { method: "POST" });
+    void fetch(`/api/novel/${n.id}/like`, { method: "POST", headers: mergeLocaleHeaders(locale) });
   }
 
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const title = normalizeNovelTitle(n.title, n.prompt);
-    if (!confirm(`确定删除《${title}》？关联漫画也会一并删除，且无法恢复。`)) return;
-    const res = await fetch(`/api/novel/${n.id}`, superAdminFetchInit({ method: "DELETE" }));
+    const title = normalizeNovelTitle(n.title, n.prompt, undefined, locale);
+    if (!confirm(t("lists.deleteConfirmNovel", { title }))) return;
+    const res = await fetch(
+      `/api/novel/${n.id}`,
+      superAdminFetchInit({ method: "DELETE", headers: mergeLocaleHeaders(locale) }),
+    );
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(data.error ?? "删除失败，请确认使用创作时的浏览器登录态");
+      alert(data.error ?? t("lists.deleteFailedSession"));
       return;
     }
     onDeleted?.(n.id);
@@ -55,18 +66,18 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
 
   return (
     <Link
-      href={`/novel/${n.id}`}
+      href={withLocalePath(`/novel/${n.id}`, locale)}
       className="group relative flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
         {n.isOwner || n.canDelete ? (
           <button
             type="button"
-            title={n.canDelete && !n.isOwner ? "管理员删除" : "删除"}
+            title={n.canDelete && !n.isOwner ? t("lists.adminDelete") : t("studio.delete")}
             onClick={(e) => void handleDelete(e)}
             className="absolute right-2 top-2 z-10 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-medium text-red-200 opacity-90 backdrop-blur-sm transition hover:bg-red-950/80 group-hover:opacity-100"
           >
-            {n.canDelete && !n.isOwner ? "管理删除" : "删除"}
+            {n.canDelete && !n.isOwner ? t("lists.adminDelete") : t("studio.delete")}
           </button>
         ) : null}
         {n.coverPath ? (
@@ -79,7 +90,7 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--gc-muted)] opacity-60">
             <span className="text-2xl">📖</span>
-            <span className="text-[10px]">封面生成中…</span>
+            <span className="text-[10px]">{t("studio.coverGenerating")}</span>
           </div>
         )}
       </div>
@@ -109,6 +120,8 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
 }
 
 export default function NovelDiscoverPage() {
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
   const [novels, setNovels] = useState<Novel[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -123,7 +136,10 @@ export default function NovelDiscoverPage() {
     const timer = setTimeout(() => ac.abort(), 45_000);
     startTransition(() => setLoading(true));
     setLoadError(null);
-    fetch(`/api/novel?page=${page}&limit=${limit}`, superAdminFetchInit({ signal: ac.signal }))
+    fetch(
+      `/api/novel?page=${page}&limit=${limit}`,
+      superAdminFetchInit({ signal: ac.signal, headers: mergeLocaleHeaders(locale) }),
+    )
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -138,11 +154,7 @@ export default function NovelDiscoverPage() {
         setNovels([]);
         setTotal(0);
         const aborted = e instanceof DOMException && e.name === "AbortError";
-        setLoadError(
-          aborted
-            ? "加载超时：服务响应过慢，请稍后重试；若刚启动 dev 请等几秒再刷新"
-            : "加载失败：请确认 npm run dev 已启动并访问 http://localhost:8888",
-        );
+        setLoadError(aborted ? t("common.loadingTimeout") : t("common.loadingFailed"));
       })
       .finally(() => {
         clearTimeout(timer);
@@ -153,23 +165,28 @@ export default function NovelDiscoverPage() {
       ac.abort();
       clearTimeout(timer);
     };
-  }, [page, limit]);
+  }, [page, limit, locale]);
 
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="flex min-h-screen">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
-      <main className="flex-1 px-6 py-10 lg:px-10">
+      <AppMain>
+      <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-[var(--gc-text)]">小说广场</h1>
-              <p className="mt-1 text-sm text-[var(--gc-muted)]">发现 AI 生成的长篇小说</p>
+              <h1 className="text-2xl font-bold text-[var(--gc-text)]">{t("lists.novelsTitle")}</h1>
+              <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("lists.novelDiscoverDesc")}</p>
             </div>
-            <Link href="/novel/create" className="gc-theme-cta rounded-xl px-4 py-2 text-sm font-semibold">
-              + 创作小说
+            <Link href={withLocalePath("/start", locale)} className="gc-theme-cta rounded-xl px-4 py-2 text-sm font-semibold">
+              {t("common.startCreating")}
             </Link>
+          </div>
+
+          <div className="mb-6">
+            <DiscoverIntakeBanner />
           </div>
 
           {loadError ? (
@@ -180,16 +197,16 @@ export default function NovelDiscoverPage() {
                 className="mt-3 rounded-lg border border-[color:var(--gc-border)] px-4 py-2 text-[var(--gc-text)]"
                 onClick={() => window.location.reload()}
               >
-                重新加载
+                {t("common.reload")}
               </button>
             </div>
           ) : loading ? (
-            <p className="text-[var(--gc-muted)]">加载中…</p>
+            <p className="text-[var(--gc-muted)]">{t("common.loading")}</p>
           ) : novels.length === 0 ? (
             <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-8 text-center">
-              <p className="text-[var(--gc-muted)]">还没有小说，去创作一篇吧</p>
-              <Link href="/novel/create" className="mt-3 inline-block text-sm text-[var(--gc-accent)]">
-                开始创作 →
+              <p className="text-[var(--gc-muted)]">{t("lists.noNovels")}</p>
+              <Link href={withLocalePath("/novel/create", locale)} className="mt-3 inline-block text-sm text-[var(--gc-accent)]">
+                {t("common.startCreateArrow")}
               </Link>
             </div>
           ) : (
@@ -215,10 +232,10 @@ export default function NovelDiscoverPage() {
                     disabled={page <= 1}
                     className="rounded-lg border border-[color:var(--gc-border)] px-3 py-1.5 text-sm text-[var(--gc-text)] transition hover:border-[color:var(--gc-accent)]/40 disabled:opacity-40"
                   >
-                    上一页
+                    {t("common.prevPage")}
                   </button>
                   <span className="text-sm text-[var(--gc-muted)]">
-                    第 {page} 页 / 共 {totalPages} 页
+                    {t("common.pageOf", { page, totalPages })}
                   </span>
                   <button
                     type="button"
@@ -226,7 +243,7 @@ export default function NovelDiscoverPage() {
                     disabled={page >= totalPages}
                     className="rounded-lg border border-[color:var(--gc-border)] px-3 py-1.5 text-sm text-[var(--gc-text)] transition hover:border-[color:var(--gc-accent)]/40 disabled:opacity-40"
                   >
-                    下一页
+                    {t("common.nextPage")}
                   </button>
                 </div>
               )}
@@ -236,6 +253,7 @@ export default function NovelDiscoverPage() {
           )}
         </div>
       </main>
-    </div>
+      </AppMain>
+    </AppPageShell>
   );
 }

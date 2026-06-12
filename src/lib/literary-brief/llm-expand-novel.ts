@@ -97,7 +97,18 @@ export async function llmExpandNovelBrief(
   if (!models.length) return base;
 
   const locale = base.inputLocale ?? detectBriefInputLocale(base.userPrompt);
-  const lang = locale === "zh" ? "简体中文" : locale === "ja" ? "日本語" : "English";
+  const lang =
+    locale === "zh"
+      ? "简体中文"
+      : locale === "zh-Hant"
+        ? "繁體中文"
+      : locale === "ja"
+        ? "日本語"
+        : locale === "ms"
+          ? "Bahasa Melayu"
+          : locale === "th"
+            ? "ภาษาไทย"
+            : "English";
   const timeoutMs = Math.max(4_000, Math.min(28_000, PRODUCT.novel.briefExpandTimeoutMs));
   const refBlock = referenceSnippet?.trim()
     ? `\n【参考摘录】\n${referenceSnippet.trim().slice(0, 1200)}\n`

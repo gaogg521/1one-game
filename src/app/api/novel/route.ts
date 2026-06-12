@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ novels: [], total: 0, page, limit });
   }
 
-  const where = mine && ownerKey ? { ownerKey } : {};
+  const where = mine && ownerKey ? { ownerKey } : { visibility: "public" };
 
   const orderBy =
     sort === "likeCount"

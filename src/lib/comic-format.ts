@@ -2,6 +2,7 @@ import type { ComicDirectorPack, ComicShotType } from "@/lib/comic-director-type
 import type { ComicPanelTextType } from "@/lib/comic-panel-text";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import type { ComicPlotDigest } from "@/lib/comic-preread";
+import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import type { ComicLayoutId } from "@/lib/comic-layout";
 import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 
@@ -42,8 +43,18 @@ export interface ComicDocument {
   layoutId?: ComicLayoutId;
   readMode?: ComicReadMode;
   chapterScopeLabel?: string;
+  /** 机器可读：按章连载改编范围 */
+  chapterScope?: ComicChapterScope;
   characterRoster?: ComicCharacterRoster;
   plotDigest?: ComicPlotDigest;
+  /** Character Sheet First：角色参考图 URL，跨格配图风格锚定 */
+  characterSheetUrls?: string[];
+  /** 分镜生成断点（draft_storyboard 时用于续跑） */
+  generationProgress?: {
+    chunkIndex: number;
+    chunkCount: number;
+    phase: "storyboard" | "panels";
+  };
 }
 
 /** 兼容旧版：imageUrls 为 panel 数组 */
@@ -78,8 +89,11 @@ export function parseComicImageUrls(raw: string): ComicDocument {
       layoutId?: ComicLayoutId;
       readMode?: ComicReadMode;
       chapterScopeLabel?: string;
+      chapterScope?: ComicChapterScope;
       characterRoster?: ComicCharacterRoster;
       plotDigest?: ComicPlotDigest;
+      characterSheetUrls?: string[];
+      generationProgress?: ComicDocument["generationProgress"];
     };
     const pages = Array.isArray(doc.pages) ? doc.pages : [];
     return {
@@ -95,8 +109,11 @@ export function parseComicImageUrls(raw: string): ComicDocument {
       ...(doc.layoutId ? { layoutId: doc.layoutId } : {}),
       ...(doc.readMode ? { readMode: doc.readMode } : {}),
       ...(doc.chapterScopeLabel ? { chapterScopeLabel: doc.chapterScopeLabel } : {}),
+      ...(doc.chapterScope ? { chapterScope: doc.chapterScope } : {}),
       ...(doc.characterRoster ? { characterRoster: doc.characterRoster } : {}),
       ...(doc.plotDigest ? { plotDigest: doc.plotDigest } : {}),
+      ...(doc.characterSheetUrls?.length ? { characterSheetUrls: doc.characterSheetUrls } : {}),
+      ...(doc.generationProgress ? { generationProgress: doc.generationProgress } : {}),
     };
   }
 
@@ -114,8 +131,11 @@ export function serializeComicDocument(doc: ComicDocument): string {
     ...(doc.layoutId ? { layoutId: doc.layoutId } : {}),
     ...(doc.readMode ? { readMode: doc.readMode } : {}),
     ...(doc.chapterScopeLabel ? { chapterScopeLabel: doc.chapterScopeLabel } : {}),
+    ...(doc.chapterScope ? { chapterScope: doc.chapterScope } : {}),
     ...(doc.characterRoster ? { characterRoster: doc.characterRoster } : {}),
     ...(doc.plotDigest ? { plotDigest: doc.plotDigest } : {}),
+    ...(doc.characterSheetUrls?.length ? { characterSheetUrls: doc.characterSheetUrls } : {}),
+    ...(doc.generationProgress ? { generationProgress: doc.generationProgress } : {}),
   });
 }
 

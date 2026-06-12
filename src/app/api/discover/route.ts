@@ -14,7 +14,7 @@ function extractTemplateId(specJson: string): TemplateId | null {
   }
 }
 
-const VALID_SORTS = new Set(["playCount", "likeCount", "createdAt", "hot"]);
+const VALID_SORTS = new Set(["playCount", "likeCount", "createdAt", "hot", "featured"]);
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -22,6 +22,8 @@ export async function GET(req: Request) {
   const sortParam = searchParams.get("sort") ?? "playCount";
   const limitRaw = parseInt(searchParams.get("limit") ?? "48", 10);
   const limitParam = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 48, 1), 96);
+  const cursor = searchParams.get("cursor")?.trim();
+  const featuredOnly = searchParams.get("featured") === "1";
 
   const sort = VALID_SORTS.has(sortParam) ? sortParam : "playCount";
 
@@ -31,16 +33,26 @@ export async function GET(req: Request) {
     // 综合热度需要计算列，仍使用 $queryRaw，但 ORDER BY 和 LIMIT 均为硬编码/校验后的值
     projects = await prisma.$queryRaw<
       { id: string; title: string; prompt: string; coverPath: string | null; playCount: number; likeCount: number; shareCode: string | null; specJson: string; createdAt: Date }[]
-    >`SELECT id, title, prompt, coverPath, playCount, likeCount, shareCode, specJson, createdAt FROM "Project" ORDER BY (playCount + likeCount * 3) DESC LIMIT ${limitParam}`;
+    >`SELECT id, title, prompt, coverPath, playCount, likeCount, shareCode, specJson, createdAt FROM "Project" WHERE visibility = 'public' ORDER BY (playCount + likeCount * 3) DESC LIMIT ${limitParam}`;
   } else {
-    // 使用 Prisma 类型安全查询
     const orderBy =
-      sort === "likeCount"
-        ? { likeCount: "desc" as const }
-        : sort === "createdAt"
-          ? { createdAt: "desc" as const }
-          : { playCount: "desc" as const };
+      sort === "featured"
+        ? [{ featured: "desc" as const }, { playCount: "desc" as const }]
+        : sort === "likeCount"
+          ? [{ likeCount: "desc" as const }]
+          : sort === "createdAt"
+            ? [{ createdAt: "desc" as const }]
+            : [{ playCount: "desc" as const }];
+
+    const cursorDate = cursor ? new Date(cursor) : null;
+    const cursorValid = cursorDate && !Number.isNaN(cursorDate.getTime());
+
     projects = await prisma.project.findMany({
+      where: {
+        visibility: "public",
+        ...(featuredOnly ? { featured: true } : {}),
+        ...(cursorValid ? { createdAt: { lt: cursorDate } } : {}),
+      },
       orderBy,
       take: limitParam,
       select: {
@@ -53,6 +65,7 @@ export async function GET(req: Request) {
         shareCode: true,
         specJson: true,
         createdAt: true,
+        featured: true,
       },
     });
   }
@@ -67,9 +80,16 @@ export async function GET(req: Request) {
       likeCount: p.likeCount ?? 0,
       shareCode: p.shareCode ?? null,
       createdAt: p.createdAt,
+      featured: "featured" in p ? Boolean((p as { featured?: boolean }).featured) : false,
       templateId: extractTemplateId(p.specJson),
     }))
     .filter((p) => !templateFilter || p.templateId === templateFilter);
 
-  return NextResponse.json({ projects: items });
+  const last = items[items.length - 1];
+  const nextCursor =
+    items.length >= limitParam && last?.createdAt
+      ? new Date(last.createdAt).toISOString()
+      : null;
+
+  return NextResponse.json({ projects: items, nextCursor });
 }

@@ -1,11 +1,16 @@
+import type { AppLocale } from "@/i18n/routing";
+import { clientErrorMessage } from "@/lib/i18n/progress-message";
+
 /** 浏览器端解析 text/event-stream（按行 data: JSON）。 */
 export async function consumeSSE(
   response: Response,
   onData: (obj: Record<string, unknown>) => void,
+  opts?: { locale?: AppLocale },
 ): Promise<void> {
+  const locale = opts?.locale ?? "zh-Hans";
   const reader = response.body?.getReader();
   if (!reader) {
-    throw new Error("响应无正文");
+    throw new Error(clientErrorMessage(locale, "sseNoBody"));
   }
   const decoder = new TextDecoder();
   let buffer = "";

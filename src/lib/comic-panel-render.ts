@@ -13,7 +13,7 @@ import type { CoverGenre } from "@/lib/cover-genre";
 import {
   collectComicStyleReferenceUrls,
   comicPanelRenderNeedsGemini,
-  COMIC_STYLE_GEMINI_REQUIRED_MSG,
+  comicStyleGeminiRequiredMessage,
 } from "@/lib/comic-style-reference";
 import {
   parseComicImageUrls,
@@ -22,8 +22,19 @@ import {
   type ComicPanel,
 } from "@/lib/comic-format";
 import { formatImageGenElapsed } from "@/lib/format-duration";
+import { getComicPanelGenConcurrency } from "@/lib/model-config";
+import type { AppLocale } from "@/i18n/routing";
+import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 
 export { formatImageGenElapsed } from "@/lib/format-duration";
+
+const DEFAULT_COMIC_PANEL_IMAGE_TIMEOUT_MS = 12 * 60 * 1000;
+
+function resolveComicPanelImageTimeoutMs(): number {
+  const raw = Number.parseInt(process.env.COMIC_PANEL_IMAGE_TIMEOUT_MS ?? process.env.IMAGE_GEN_TIMEOUT_MS ?? "", 10);
+  if (Number.isFinite(raw) && raw >= 30_000) return Math.min(raw, 30 * 60 * 1000);
+  return DEFAULT_COMIC_PANEL_IMAGE_TIMEOUT_MS;
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -88,8 +99,12 @@ export async function renderComicPanels(
     director?: ComicDirectorPack | null;
     /** Character Sheet First：角色参考图 URL 列表，用于分镜配图风格锚定 */
     characterSheetUrls?: string[];
+    uiLocale?: AppLocale;
   },
 ): Promise<RenderComicPanelsResult> {
+  const locale = opts?.uiLocale ?? "zh-Hans";
+  const pm = (key: string, params?: Record<string, string | number | undefined | null>) =>
+    comicPanelProgressMessage(locale, key, params);
   const storyGenre = opts?.storyGenre ?? "general";
   const skipStyleRefs =
     opts?.skipStyleRefs === true ||
@@ -115,7 +130,7 @@ export async function renderComicPanels(
       rendered: 0,
       total: 0,
       withImage: countPanelsWithImages(doc).withImage,
-      message: "无需补图",
+      message: pm("noPanelsNeeded"),
     });
     return { doc, rendered: 0, total: 0, imageSource: "none", errors: [] };
   }
@@ -136,37 +151,42 @@ export async function renderComicPanels(
   const useOpenAIBatch = false;
 
   if (hasPanelAnchor && needsGeminiForRefs && !availability.hasGemini) {
+    const geminiMsg = comicStyleGeminiRequiredMessage(locale);
     opts?.onProgress?.({
       type: "done",
       rendered: 0,
       total: flat.length,
       withImage: countPanelsWithImages(doc).withImage,
-      message: COMIC_STYLE_GEMINI_REQUIRED_MSG,
+      message: geminiMsg,
     });
     return {
       doc,
       rendered: 0,
       total: flat.length,
       imageSource: "none",
-      errors: [COMIC_STYLE_GEMINI_REQUIRED_MSG],
-      imageGenHint: COMIC_STYLE_GEMINI_REQUIRED_MSG,
+      errors: [geminiMsg],
+      imageGenHint: geminiMsg,
     };
   }
 
   const styleConsistencyNote =
-    !availability.hasGemini && flat.length > 1
-      ? "未配置 GEMINI_API_KEY，将用 OpenAI 逐格生成（画风一致性较弱，建议补配 Gemini）"
-      : null;
+    !availability.hasGemini && flat.length > 1 ? pm("geminiWeakOpenAI") : null;
 
+  const panelConcurrency = getComicPanelGenConcurrency();
+  const extraRef =
+    styleRefUrls.length > 1 ? pm("extraRefFirstPanel") : "";
   opts?.onProgress?.({
     type: "start",
     total: flat.length,
     message: availability.ok
       ? [
           useStyleRefs
-            ? `${availability.message} · 已锚定首张分镜${styleRefUrls.length > 1 ? "+封面" : ""}，逐格串行续画`
+            ? pm("startAnchoredSheets", { detail: availability.message, extraRef })
             : flat.length > 1
-              ? `${availability.message} · 逐格串行（首格定调后后续格锚定画风）`
+              ? pm("startParallel", {
+                  detail: availability.message,
+                  concurrency: panelConcurrency,
+                })
               : availability.message,
           styleConsistencyNote,
         ]
@@ -174,7 +194,7 @@ export async function renderComicPanels(
           .join(" · ")
       : availability.message,
     model: availability.openaiModel,
-    concurrency: 1,
+    concurrency: panelConcurrency,
   });
 
   const director = opts?.director ?? doc.director;
@@ -203,9 +223,9 @@ export async function renderComicPanels(
     const comfyOk = urls.filter(Boolean).length;
     if (comfyOk > 0) imageSource = "comfy";
     if (comfyOk === 0) {
-      errors.push("ComfyUI 未返回图片，将尝试云端文生图");
+      errors.push(pm("comfyNoImages"));
     } else if (comfyOk < flat.length) {
-      errors.push(`ComfyUI 仅成功 ${comfyOk}/${flat.length} 格，缺图将改用云端文生图补全`);
+      errors.push(pm("comfyPartial", { ok: comfyOk, total: flat.length }));
     }
   }
 
@@ -245,15 +265,20 @@ export async function renderComicPanels(
           index: flat[0]!.index,
           total: flat.length,
           elapsedMs,
-          message: `正在一次生成 ${flat.length} 张配图（已用时 ${formatImageGenElapsed(elapsedMs)}）…`,
+          message: pm("batchGenerating", {
+            count: flat.length,
+            elapsed: formatImageGenElapsed(elapsedMs, locale),
+          }),
         });
       }, 5_000);
 
       let batch;
       try {
+        const timeoutMs = resolveComicPanelImageTimeoutMs();
         batch = await generateImagesBatchDetailed(prompts, {
           size: "1024x1024",
           quality: "standard",
+          timeoutMs,
         });
       } finally {
         clearInterval(heartbeat);
@@ -271,8 +296,8 @@ export async function renderComicPanels(
         const elapsedMs = batch.durationMs;
 
         if (!detail.ok || !detail.url) {
-          const err = detail.error || "未知错误";
-          errors.push(`第 ${label} 格：${err}`);
+          const err = detail.error || pm("unknownError");
+          errors.push(pm("panelError", { index: label, error: err }));
           opts?.onProgress?.({
             type: "panel_done",
             index: label,
@@ -307,11 +332,11 @@ export async function renderComicPanels(
       }
     } else {
       console.info(
-        `[comic-panels] 开始文生图 ${flat.length} 格 · 逐格串行（画风一致）· ${availability.message}`,
+        `[comic-panels] 开始文生图 ${flat.length} 格 · 首格锚定 + 最多 ${panelConcurrency} 路并行 · ${availability.message}`,
       );
 
-      for (let i = 0; i < flat.length; i++) {
-        if (urls[i]) continue;
+      async function renderCloudPanelAt(i: number): Promise<void> {
+        if (urls[i]) return;
         const prompt = prompts[i]!;
         const label = flat[i]!.index;
         const caption = flat[i]!.panel.caption;
@@ -331,24 +356,30 @@ export async function renderComicPanels(
             index: label,
             total: flat.length,
             elapsedMs,
-            message: `第 ${label}/${flat.length} 格：已用时 ${formatImageGenElapsed(elapsedMs)}，文生图生成中…`,
+            message: pm("panelGenerating", {
+              index: label,
+              total: flat.length,
+              elapsed: formatImageGenElapsed(elapsedMs, locale),
+            }),
           });
         }, 5_000);
 
-      const panelStyleRefs = collectComicStyleReferenceUrls(doc, opts?.coverPath, {
-        storyGenre,
-        skipStyleRefs,
-      });
-      const useRefs =
-        panelStyleRefs.length > 0 && availability.hasGemini ? panelStyleRefs : undefined;
-      let detail;
-      try {
-        detail = await generateImageDetailed(prompt, {
-          size: "1024x1024",
-          quality: "standard",
-          styleReferenceUrls: useRefs,
-          styleGenre: storyGenre,
+        const panelStyleRefs = collectComicStyleReferenceUrls(doc, opts?.coverPath, {
+          storyGenre,
+          skipStyleRefs,
         });
+        const useRefs =
+          panelStyleRefs.length > 0 && availability.hasGemini ? panelStyleRefs : undefined;
+        let detail;
+        try {
+          const timeoutMs = resolveComicPanelImageTimeoutMs();
+          detail = await generateImageDetailed(prompt, {
+            size: "1024x1024",
+            quality: "standard",
+            styleReferenceUrls: useRefs,
+            styleGenre: storyGenre,
+            timeoutMs,
+          });
         } finally {
           clearInterval(heartbeat);
         }
@@ -357,8 +388,8 @@ export async function renderComicPanels(
         const apiMs = detail.durationMs;
 
         if (!detail.ok || !detail.url) {
-          const err = detail.error || "未知错误";
-          errors.push(`第 ${label} 格：${err}`);
+          const err = detail.error || pm("unknownError");
+          errors.push(pm("panelError", { index: label, error: err }));
           console.warn(
             `[comic-panels] 第 ${label} 格失败 · 总 ${formatImageGenElapsed(elapsedMs)}`,
             err,
@@ -374,7 +405,7 @@ export async function renderComicPanels(
             elapsedMs,
             durationMs: apiMs,
           });
-          continue;
+          return;
         }
         console.info(
           `[comic-panels] 第 ${label} 格成功 · ${detail.provider}/${detail.model} · 总 ${formatImageGenElapsed(elapsedMs)}` +
@@ -395,6 +426,15 @@ export async function renderComicPanels(
         });
         if (detail.provider) imageSource = detail.provider;
       }
+
+      const pending = flat.map((_, idx) => idx).filter((idx) => !urls[idx]);
+      if (pending.length > 0) {
+        await renderCloudPanelAt(pending[0]!);
+        const rest = pending.slice(1);
+        if (rest.length > 0) {
+          await mapWithConcurrency(rest, panelConcurrency, (idx) => renderCloudPanelAt(idx));
+        }
+      }
     }
   }
 
@@ -409,10 +449,10 @@ export async function renderComicPanels(
   const after = countPanelsWithImages(doc);
   const doneMessage =
     after.withImage === 0
-      ? errors[0] ?? "配图未生成"
+      ? errors[0] ?? pm("noneGenerated")
       : after.withImage < after.total
-        ? `已生成 ${rendered}/${flat.length} 格`
-        : "配图全部完成";
+        ? pm("partialRendered", { rendered, total: flat.length })
+        : pm("allComplete");
 
   opts?.onProgress?.({
     type: "done",

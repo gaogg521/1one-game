@@ -6,8 +6,29 @@ import fs from "fs";
 import path from "path";
 import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import { getComicStylePreset } from "@/lib/comic-style-presets";
-import { generateImageDetailed } from "@/lib/image-generation";
-import { getImageGenAvailability } from "@/lib/image-generation";
+import { generateImageDetailed, getImageGenAvailability } from "@/lib/image-generation";
+import { getComicPanelGenConcurrency } from "@/lib/model-config";
+import { PRODUCT } from "@/lib/product-config";
+import type { AppLocale } from "@/i18n/routing";
+import { assetGenMessage } from "@/lib/i18n/progress-message";
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i]!, i);
+    }
+  }
+  const workers = Math.min(concurrency, Math.max(1, items.length));
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
 
 /** 角色参考图生成所需的最小信息 */
 export type CharSheetSubject = {
@@ -50,7 +71,11 @@ export async function generateCharacterSheets(params: {
   stylePreset: ComicStylePresetId;
   comicKey: string;
   maxCharacters?: number;
+  uiLocale?: AppLocale;
 }): Promise<CharSheetResult[]> {
+  const locale = params.uiLocale ?? "zh-Hans";
+  const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
+    assetGenMessage(locale, key, p);
   const availability = getImageGenAvailability();
   if (!availability.ok) {
     return params.subjects.map((c) => ({
@@ -62,18 +87,19 @@ export async function generateCharacterSheets(params: {
   }
 
   const chars = params.subjects.slice(0, params.maxCharacters ?? 6);
-  const results: CharSheetResult[] = [];
+  const concurrency = Math.min(
+    getComicPanelGenConcurrency(),
+    PRODUCT.comic.charSheetConcurrency ?? 4,
+  );
 
   ensureDir();
 
-  for (const char of chars) {
+  return mapWithConcurrency(chars, concurrency, async (char) => {
     const sheetPath = path.join(SHEET_DIR, `${params.comicKey}-${char.id}.png`);
     const publicUrl = `/comic-char-sheets/${params.comicKey}-${char.id}.png`;
-    // 已有缓存则跳过
     if (fs.existsSync(sheetPath)) {
       console.info(`[char-sheet] 复用缓存 ${char.id}`);
-      results.push({ characterId: char.id, name: char.name, url: publicUrl });
-      continue;
+      return { characterId: char.id, name: char.name, url: publicUrl };
     }
 
     const prompt = buildCharSheetPrompt(char.name, char.visualDesc, params.stylePreset);
@@ -86,34 +112,35 @@ export async function generateCharacterSheets(params: {
       });
 
       if (!result.ok || !result.url) {
-        results.push({
+        return {
           characterId: char.id,
           name: char.name,
           url: null,
-          error: result.error ?? "生成失败",
-        });
-        continue;
+          error: result.error ?? ag("generateFailed"),
+        };
       }
 
       const res = await fetch(result.url);
       if (!res.ok) {
-        results.push({ characterId: char.id, name: char.name, url: null, error: `下载失败 HTTP ${res.status}` });
-        continue;
+        return {
+          characterId: char.id,
+          name: char.name,
+          url: null,
+          error: ag("downloadFailedHttp", { status: res.status }),
+        };
       }
 
       const buf = Buffer.from(await res.arrayBuffer());
       fs.writeFileSync(sheetPath, buf);
       console.info(`[char-sheet] ${char.id} 已保存 ${sheetPath}`);
-      results.push({ characterId: char.id, name: char.name, url: publicUrl });
+      return { characterId: char.id, name: char.name, url: publicUrl };
     } catch (e) {
-      results.push({
+      return {
         characterId: char.id,
         name: char.name,
         url: null,
         error: e instanceof Error ? e.message : String(e),
-      });
+      };
     }
-  }
-
-  return results;
+  });
 }

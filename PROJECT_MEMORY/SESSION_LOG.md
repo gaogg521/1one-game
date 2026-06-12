@@ -1,3 +1,31 @@
+## 2026-06-08 — UI 真实浏览器复查与侧栏账号菜单修复
+
+Completed:
+
+- 对 `http://localhost:8888/admin` 做真实浏览器复查：桌面与 390px 移动视口均能打开后台。
+- 发现并修复桌面侧栏底部账号按钮贴近视口底边，导致鼠标点击命中异常、下拉菜单看似不展开/易与 CTA 区域重叠的问题。
+- 将账号菜单改为 body-level Portal 浮层，补 `aria-haspopup` / `aria-expanded` / `role="menu"`，支持外部点击与 Esc 关闭。
+- 将桌面侧栏拆为固定品牌区、独立滚动导航区、固定底部账号/CTA 区，避免底部操作被滚动容器裁剪。
+
+Changed Files:
+
+- `src/components/auth/AccountMenu.tsx`
+- `src/components/SiteHeader.tsx`
+- `PROJECT_MEMORY/SESSION_LOG.md`
+
+Test Results:
+
+- `npx eslint src/components/SiteHeader.tsx src/components/auth/AccountMenu.tsx`：**通过**
+- 真实浏览器 `/admin` 桌面：账号按钮从贴底位置恢复到可点击区域，鼠标点击后 `expanded=true` 且菜单项出现。
+- 真实浏览器 `/admin` 390px：横向溢出检测 `overflow=false`，移动端账号菜单点击后可展开。
+- `npm run build`：**通过**；仍有既有 Turbopack 动态文件追踪 warning（Godot/workspaces/blob-store 路径相关），非本次 UI 改动引入。
+
+Next:
+
+- 若用户继续反馈具体页面截图，优先用真实浏览器复现，不再仅以构建/E2E 通过作为 UI 完成依据。
+
+---
+
 # SESSION_LOG
 
 > 新条目置顶。

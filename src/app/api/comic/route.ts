@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOwnerKey } from "@/lib/owner";
 import { queryComicList } from "@/lib/comic-list-query";
 import { isSuperAdmin } from "@/lib/super-admin";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 
 const VALID_SORTS = new Set(["likeCount", "createdAt"]);
 
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ comics: [], total: 0, page, limit });
     }
 
-    const where = mine && ownerKey ? { ownerKey } : {};
+    const where = mine && ownerKey ? { ownerKey } : { visibility: "public" as const };
     const orderBy = sort === "likeCount" ? ({ likeCount: "desc" } as const) : ({ createdAt: "desc" } as const);
 
     const { comics, total } = await queryComicList({ where, orderBy, skip, take: limit });
@@ -39,8 +40,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ comics: comicsPublic, total, page, limit });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "漫画列表加载失败";
     console.error("[GET /api/comic]", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(localizedApiErrorPayload(req, "comicListFailed"), { status: 500 });
   }
 }

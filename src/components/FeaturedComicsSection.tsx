@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 
 interface FeaturedComic {
   id: string;
@@ -13,6 +16,9 @@ interface FeaturedComic {
 }
 
 export function FeaturedComicsSection() {
+  const t = useTranslations("featured");
+  const tc = useTranslations("common");
+  const locale = useLocale() as AppLocale;
   const [comics, setComics] = useState<FeaturedComic[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -55,14 +61,14 @@ export function FeaturedComicsSection() {
     <section className="border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
       <div className="flex items-end justify-between">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">Manga</p>
-          <h2 className="mt-2 text-xl font-medium tracking-tight text-[var(--gc-text)] sm:text-2xl">社区热门漫画</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("manga")}</p>
+          <h2 className="mt-2 text-xl font-medium tracking-tight text-[var(--gc-text)] sm:text-2xl">{t("hotComics")}</h2>
         </div>
         <Link
-          href="/comic/discover"
+          href={withLocalePath("/comic/discover", locale)}
           className="text-xs font-medium text-[var(--gc-muted)] underline-offset-4 hover:text-[var(--gc-text)] hover:underline"
         >
-          查看全部 →
+          {tc("viewAllArrow")}
         </Link>
       </div>
 
@@ -76,7 +82,7 @@ export function FeaturedComicsSection() {
               return (
                 <Link
                   key={c.id}
-                  href={`/comic/${c.id}`}
+                  href={withLocalePath(`/comic/${c.id}`, locale)}
                   className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">

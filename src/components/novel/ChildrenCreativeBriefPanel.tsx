@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
-  CHILDREN_NARRATIVE_MODE_LABELS,
   resolveChildrenInputKind,
   resolveChildrenNarrativeMode,
 } from "@/lib/children-source-fidelity";
@@ -40,6 +40,7 @@ export function ChildrenCreativeBriefPanel({
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
+  const t = useTranslations("novelBrief");
   const [editing, setEditing] = useState(false);
   const [storyLine, setStoryLine] = useState("");
   const [addonNotes, setAddonNotes] = useState("");
@@ -67,10 +68,10 @@ export function ChildrenCreativeBriefPanel({
       open={Boolean(brief)}
     >
       <summary className="cursor-pointer list-none text-sm font-medium text-[var(--gc-text-soft)] outline-none [&::-webkit-details-marker]:hidden">
-        故事构思（可展开 / 可修订）
+        {t("childrenSummary")}
         {brief ? (
           <span className="ml-2 text-[10px] font-normal text-[var(--gc-text-faint)]">
-            儿童短篇 · 轻量
+            {t("childrenTag")}
           </span>
         ) : null}
       </summary>
@@ -82,27 +83,28 @@ export function ChildrenCreativeBriefPanel({
           <>
             {brief.title ? (
               <p className="text-xs text-[var(--gc-muted)]">
-                <span className="text-[var(--gc-text-faint)]">书名：</span>《{brief.title}》
+                <span className="text-[var(--gc-text-faint)]">{t("titlePrefix")}</span>《{brief.title}》
               </p>
             ) : null}
             <p className="text-xs text-[var(--gc-muted)]">
-              <span className="text-[var(--gc-text-faint)]">叙事：</span>
-              {
-                CHILDREN_NARRATIVE_MODE_LABELS[
-                  resolveChildrenNarrativeMode(
-                    brief.userPrompt,
-                    resolveChildrenInputKind(brief.userPrompt, brief.inputKind),
-                    brief.targetAge,
-                    brief.narrativeMode,
-                  )
-                ]
-              }
+              <span className="text-[var(--gc-text-faint)]">{t("narrative")}</span>
+              {(() => {
+                const mode = resolveChildrenNarrativeMode(
+                  brief.userPrompt,
+                  resolveChildrenInputKind(brief.userPrompt, brief.inputKind),
+                  brief.targetAge,
+                  brief.narrativeMode,
+                );
+                return mode === "retelling"
+                  ? t("narrativeModeRetelling")
+                  : t("narrativeModeListenerExtension");
+              })()}
             </p>
 
             {editing ? (
               <div className="space-y-2 rounded-lg border border-[color:var(--gc-border)] p-3">
                 <label className="block text-[10px] font-medium text-[var(--gc-muted)]">
-                  三句话故事（可改）
+                  {t("storyLineLabel")}
                 </label>
                 <textarea
                   value={storyLine}
@@ -110,12 +112,12 @@ export function ChildrenCreativeBriefPanel({
                   rows={3}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs"
                 />
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">补充</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("addonLabel")}</label>
                 <textarea
                   value={addonNotes}
                   onChange={(e) => setAddonNotes(e.target.value)}
                   rows={2}
-                  placeholder="例如：更软糯、加一句问大人…"
+                  placeholder={t("childrenAddonPlaceholder")}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs"
                 />
                 <div className="flex gap-2">
@@ -124,40 +126,40 @@ export function ChildrenCreativeBriefPanel({
                     onClick={applyRevision}
                     className="rounded-lg bg-[var(--gc-accent)]/20 px-3 py-1.5 text-xs"
                   >
-                    保存修订
+                    {t("saveRevision")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
                     className="rounded-lg border px-3 py-1.5 text-xs text-[var(--gc-muted)]"
                   >
-                    取消
+                    {t("cancel")}
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                <Block title="创意解读">
+                <Block title={t("creativeRead")}>
                   <p>{brief.interpretation}</p>
                 </Block>
-                <Block title="角色">
+                <Block title={t("roles")}>
                   <p>{brief.cast}</p>
                 </Block>
-                <Block title="三句话故事">
+                <Block title={t("threeBeats")}>
                   <ol className="list-decimal space-y-0.5 pl-4">
                     {brief.storyBeats.map((b) => (
                       <li key={b}>{b}</li>
                     ))}
                   </ol>
                 </Block>
-                <Block title="场景">
+                <Block title={t("scenes")}>
                   <p>{brief.scene}</p>
                 </Block>
-                <Block title="结尾寓意">
+                <Block title={t("closing")}>
                   <p>{brief.moral}</p>
                 </Block>
                 {brief.avoid.length > 0 ? (
-                  <Block title="别写">
+                  <Block title={t("avoid")}>
                     <ul className="list-disc space-y-0.5 pl-4">
                       {brief.avoid.slice(0, 5).map((a) => (
                         <li key={a}>{a}</li>
@@ -171,7 +173,7 @@ export function ChildrenCreativeBriefPanel({
                     onClick={() => setEditing(true)}
                     className="text-xs text-[var(--gc-accent)] underline-offset-2 hover:underline"
                   >
-                    修订构思
+                    {t("editBrief")}
                   </button>
                   {onRegenerateWithRevision ? (
                     <button
@@ -180,7 +182,7 @@ export function ChildrenCreativeBriefPanel({
                       onClick={() => onRegenerateWithRevision()}
                       className="text-xs text-[var(--gc-muted)] hover:underline disabled:opacity-40"
                     >
-                      重新生成构思
+                      {t("regenerateBrief")}
                     </button>
                   ) : null}
                 </div>

@@ -1,4 +1,8 @@
-import { parseNovelChapters, truncateNovelToMaxChars } from "@/lib/novel-chapters";
+import type { AppLocale } from "@/i18n/routing";
+import { novelContinuationMessage, novelContinuePhaseMessage } from "@/lib/i18n/chapter-labels";
+import { progressNovelMessage } from "@/lib/i18n/progress-message";
+import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { fitNovelContentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
 import { novelMaxChars, parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
 import { fetchNovelBible, formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 import {
@@ -31,16 +35,28 @@ export function assessNovelContinuation(opts: {
   lengthTier: string | null | undefined;
   content: string;
   meta: NovelGenerationMeta | null;
+  uiLocale?: AppLocale;
 }): NovelContinuationAssessment {
+  const uiLocale = opts.uiLocale ?? "zh-Hans";
   const tier = parseNovelLengthTier(opts.lengthTier);
   const hardMax = novelMaxChars("long");
   const charsRemaining = Math.max(0, hardMax - opts.content.length);
 
   if (tier !== "long") {
-    return { canContinue: false, reason: "仅长篇支持 AI 续写", remainingChapterCount: 0, charsRemaining };
+    return {
+      canContinue: false,
+      reason: novelContinuationMessage(uiLocale, "notLongForm"),
+      remainingChapterCount: 0,
+      charsRemaining,
+    };
   }
   if (charsRemaining < 500) {
-    return { canContinue: false, reason: "已达长篇字数上限", remainingChapterCount: 0, charsRemaining };
+    return {
+      canContinue: false,
+      reason: novelContinuationMessage(uiLocale, "atCharLimit"),
+      remainingChapterCount: 0,
+      charsRemaining,
+    };
   }
 
   if (opts.meta) {
@@ -48,14 +64,14 @@ export function assessNovelContinuation(opts: {
     if (remaining.length > 0) {
       return {
         canContinue: true,
-        reason: `尚有 ${remaining.length} 章未完成，可继续写作`,
+        reason: novelContinuationMessage(uiLocale, "chaptersRemaining", { count: remaining.length }),
         remainingChapterCount: remaining.length,
         charsRemaining,
       };
     }
     return {
       canContinue: true,
-      reason: "原章规划已写完，可续写新章节",
+      reason: novelContinuationMessage(uiLocale, "planComplete"),
       remainingChapterCount: 0,
       charsRemaining,
     };
@@ -63,7 +79,7 @@ export function assessNovelContinuation(opts: {
 
   return {
     canContinue: true,
-    reason: "将根据正文与创意恢复设定后续写",
+    reason: novelContinuationMessage(uiLocale, "resumeFromBody"),
     remainingChapterCount: -1,
     charsRemaining,
   };
@@ -79,12 +95,6 @@ function recentChapterRecap(content: string, maxChars = 600): string {
     .slice(0, maxChars);
 }
 
-function segmentPhaseLabel(index: number, total: number): string {
-  if (index === 0) return "续写开篇";
-  if (index === total - 1) return "续写收束";
-  if (index === total - 2 && total > 2) return "续写高潮";
-  return "续写推进";
-}
 
 /** 长篇续写：基于 generationMetaJson + 已有正文，写剩余或新增章节。 */
 export async function streamLongNovelContinue(params: {
@@ -94,12 +104,14 @@ export async function streamLongNovelContinue(params: {
   existingContent: string;
   meta: NovelGenerationMeta | null;
   lengthTier: NovelLengthTier;
+  uiLocale?: AppLocale;
   emit: NovelStreamEmitter;
   /** 本次最多写几章；null = 写完所有待写章 */
   maxChaptersToWrite?: number | null;
   polish?: boolean;
 }): Promise<LongNovelGenerateResult> {
   const { model, promptTrim, titleTrim, existingContent, lengthTier, emit } = params;
+  const uiLocale = params.uiLocale ?? "zh-Hans";
   const polish = params.polish ?? LONG_NOVEL_PRODUCT.polishAfterSegment;
   const maxChaptersToWrite = params.maxChaptersToWrite;
   let meta = params.meta;
@@ -107,13 +119,16 @@ export async function streamLongNovelContinue(params: {
   const hardMax = novelMaxChars(lengthTier);
   const basePlan = planLongNovelSegments(lengthTier);
 
-  emit({ step: "continue_start", message: "正在准备长篇续写…" });
+  emit({ step: "continue_start", message: progressNovelMessage(uiLocale, "continuePrep") });
 
   if (!meta) {
-    emit({ step: "bible_start", message: "未找到流水线存档，正在恢复设定圣经…" });
+    emit({ step: "bible_start", message: progressNovelMessage(uiLocale, "bibleRecoverStart") });
     const bible = await fetchNovelBible(model, promptTrim, titleTrim, basePlan, lengthTier);
-    emit({ step: "bible_ready", message: `设定恢复完成：《${bible.title}》` });
-    emit({ step: "chapter_plan_start", message: "正在根据已有正文规划后续章节…" });
+    emit({
+      step: "bible_ready",
+      message: progressNovelMessage(uiLocale, "bibleRecoverReady", { title: bible.title }),
+    });
+    emit({ step: "chapter_plan_start", message: progressNovelMessage(uiLocale, "chapterPlanContinueStart") });
     const written = parseNovelChapters(content);
     const lastNum = written.length > 0 ? Math.max(...written.map((c) => c.num)) : 0;
     let extendCount = Math.min(
@@ -156,7 +171,7 @@ export async function streamLongNovelContinue(params: {
     }
     emit({
       step: "chapter_plan_ready",
-      message: `后续 ${newChapters.length} 章已规划，开始续写…`,
+      message: progressNovelMessage(uiLocale, "chapterPlanContinueReady", { count: newChapters.length }),
       chapterCount: newChapters.length,
     });
   }
@@ -166,7 +181,7 @@ export async function streamLongNovelContinue(params: {
 
   let remaining = getRemainingChapterPlan(meta.chapterPlan, content);
   if (remaining.length === 0) {
-    emit({ step: "chapter_plan_start", message: "原规划章节已全部写完，正在规划新章节…" });
+    emit({ step: "chapter_plan_start", message: progressNovelMessage(uiLocale, "chapterPlanNewStart") });
     const written = parseNovelChapters(content);
     const lastNum = written.length > 0 ? Math.max(...written.map((c) => c.num)) : 0;
     let extendCount = Math.min(
@@ -192,13 +207,13 @@ export async function streamLongNovelContinue(params: {
     remaining = newChapters;
     emit({
       step: "chapter_plan_ready",
-      message: `已追加 ${newChapters.length} 章规划`,
+      message: progressNovelMessage(uiLocale, "chapterPlanNewReady", { count: newChapters.length }),
       chapterCount: remaining.length,
     });
   }
 
   if (remaining.length === 0) {
-    throw new Error("无可续写章节且无法追加规划");
+    throw new Error(progressNovelMessage(uiLocale, "continueNoChapters"));
   }
 
   const chapterLimit = clampContinueChapterCount(maxChaptersToWrite, remaining.length);
@@ -206,7 +221,7 @@ export async function streamLongNovelContinue(params: {
     remaining = remaining.slice(0, chapterLimit);
     emit({
       step: "continue_limit",
-      message: `本次续写 ${remaining.length} 章（已按你的设置限制）`,
+      message: progressNovelMessage(uiLocale, "continueLimited", { count: remaining.length }),
       maxChapters: remaining.length,
     });
   }
@@ -214,13 +229,17 @@ export async function streamLongNovelContinue(params: {
   const slices = splitChapterPlanIntoSegments(
     { chapters: remaining },
     basePlan,
-    segmentPhaseLabel,
+    (index, total) => novelContinuePhaseMessage(uiLocale, index, total),
     { maxSegmentCap: LONG_NOVEL_PRODUCT.maxSegments },
   );
 
   emit({
     step: "continue_ready",
-    message: `将分 ${slices.length} 批续写 ${remaining.length} 章（剩余篇幅约 ${(hardMax - content.length).toLocaleString()} 字）`,
+    message: progressNovelMessage(uiLocale, "continueBatchPlan", {
+      batches: slices.length,
+      chapters: remaining.length,
+      remaining: (hardMax - content.length).toLocaleString(),
+    }),
     remainingChapters: remaining.map((c) => c.num),
   });
 
@@ -236,10 +255,11 @@ export async function streamLongNovelContinue(params: {
     isContinuation: true,
     polish,
     emit,
+    uiLocale,
     stopWhenLength: hardMax,
   });
 
-  const finalContent = truncateNovelToMaxChars(writeResult.content, hardMax);
+  const finalContent = fitNovelContentToMaxChars(writeResult.content, hardMax);
 
   return {
     content: finalContent,

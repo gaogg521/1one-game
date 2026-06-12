@@ -11,6 +11,9 @@ import {
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
 import { getImageGenAvailability } from "@/lib/image-generation";
+import { localizedJsonError } from "@/lib/api/localized-error";
+import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 /** 漫画分镜配图：每格经网关文生图约 1～6 分钟，4 格顺序生成。 */
 export const maxDuration = 600;
@@ -20,15 +23,19 @@ type RouteContext = { params: Promise<{ id: string }> };
 type PanelsBody = { regenerate?: boolean; page?: number };
 
 export async function POST(req: Request, ctx: RouteContext) {
+  const uiLocale = resolveRequestLocaleSync(req);
+  const pm = (key: string, params?: Record<string, string | number | undefined | null>) =>
+    comicPanelProgressMessage(uiLocale, key, params);
+
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const { id } = await ctx.params;
   const row = await prisma.comic.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   let body: PanelsBody = {};
@@ -43,7 +50,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const doc = parseComicDocument(row.imageUrls);
   if (doc.pages.length === 0) {
-    return NextResponse.json({ error: "暂无分镜数据" }, { status: 400 });
+    return localizedJsonError(req, "noStoryboard", 400);
   }
 
   if (body.regenerate) {
@@ -63,13 +70,13 @@ export async function POST(req: Request, ctx: RouteContext) {
       withImage: before.withImage,
       total: before.total,
       imageSource: "none",
-      message: "配图已齐全",
+      message: pm("panelsComplete"),
     });
   }
 
   const availability = getImageGenAvailability();
   const { title: storyTitle, summary: storySummary, genre: storyGenre } =
-    await resolveComicStoryContext(row);
+    await resolveComicStoryContext(row, uiLocale);
   let coverPath = row.coverPath;
 
   const fullRegenerate =
@@ -96,7 +103,10 @@ export async function POST(req: Request, ctx: RouteContext) {
         coverPath,
         storyGenre,
         storyContext: { title: storyTitle, summary: storySummary },
-        skipStyleRefs: fullRegenerate,
+        skipStyleRefs: fullRegenerate && !doc.characterSheetUrls?.length,
+        director: doc.director,
+        characterSheetUrls: doc.characterSheetUrls,
+        uiLocale,
       });
     const after = countPanelsWithImages(updated);
     const imageUrls = serializeComicPanels(updated);
@@ -110,6 +120,12 @@ export async function POST(req: Request, ctx: RouteContext) {
     });
 
     const errSummary = errors.length > 0 ? errors.slice(0, 4).join("；") : undefined;
+    const errorSuffix =
+      errSummary && (uiLocale === "zh-Hans" || uiLocale === "zh-Hant")
+        ? `（${errSummary}）`
+        : errSummary
+          ? ` (${errSummary})`
+          : "";
 
     return NextResponse.json({
       ok: true,
@@ -125,13 +141,16 @@ export async function POST(req: Request, ctx: RouteContext) {
       message:
         after.withImage === 0
           ? errSummary ||
-            `配图未生成。${availability.message}。请查看终端日志 [comic-panels] / [image-gen]`
+            pm("noneGeneratedWithHint", { hint: availability.message })
           : after.withImage < after.total
-            ? `已生成 ${rendered} 张，仍有 ${after.total - after.withImage} 格待补${errSummary ? `（${errSummary}）` : ""}`
-            : "配图生成完成",
+            ? pm("partialWithRemaining", {
+                rendered,
+                remaining: after.total - after.withImage,
+                errors: errorSuffix,
+              })
+            : pm("generateComplete"),
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "配图生成失败";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch {
+    return localizedJsonError(req, "comicPanelRenderFailed", 502);
   }
 }

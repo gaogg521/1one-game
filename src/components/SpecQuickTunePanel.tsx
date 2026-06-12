@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import type { MusicProfile } from "@/lib/cohesive-presentation";
 
@@ -17,12 +18,13 @@ function normalizeHex6(h: string): string {
 type Props = { spec: GameSpec; onChange: (next: GameSpec) => void };
 
 export function SpecQuickTunePanel({ spec, onChange }: Props) {
+  const t = useTranslations("specTune");
   const theme = spec.theme;
   const gp = spec.gameplay;
 
   const defaultDirector = (): NonNullable<GameSpec["director"]> => ({
     intensity: 0.62,
-    acts: [{ at: 0, label: "调试", modifiers: [] }],
+    acts: [{ at: 0, label: t("debugAct"), modifiers: [] }],
   });
 
   const patchDirectorIntensity = (v: number) => {
@@ -70,24 +72,22 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
       <summary className="cursor-pointer list-none font-semibold text-[var(--gc-text-soft)] outline-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--gc-accent)]" />
-          ⚡ 实时微调面板 — 金币、怪物、配色、速率
+          {t("summary")}
         </span>
       </summary>
-      <p className="mt-2 text-[11px] leading-relaxed text-[var(--gc-text-faint)]">
-        修改会立即驱动左侧试玩重载。调整金币、怪物强度、颜色、速度等参数；保存作品时以当前调试结果为准。
-      </p>
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--gc-text-faint)]">{t("desc")}</p>
 
       <div className="mt-4 space-y-5">
         <div>
-          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">配色</p>
+          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">{t("colors")}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {(
               [
-                ["背景", "backgroundColor"],
-                ["主角/塔主色", "playerColor"],
-                ["威胁/敌军", "hazardColor"],
-                ["收集/货币", "collectibleColor"],
-                ["粒子 Tint", "particleTint"],
+                [t("colorBg"), "backgroundColor"],
+                [t("colorPlayer"), "playerColor"],
+                [t("colorHazard"), "hazardColor"],
+                [t("colorCollectible"), "collectibleColor"],
+                [t("colorParticle"), "particleTint"],
               ] as const
             ).map(([label, key]) => (
               <label key={key} className="flex items-center gap-2 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]/50 px-2 py-1.5">
@@ -105,10 +105,8 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
         </div>
 
         <div>
-          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">铺底音乐气质（presentation）</p>
-          <p className="mb-2 text-[10px] text-[var(--gc-text-faint)]">
-            与主题色同源推断；改写后环境与蜂鸣会与试玩外壳一起重载对齐。
-          </p>
+          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">{t("musicProfile")}</p>
+          <p className="mb-2 text-[10px] text-[var(--gc-text-faint)]">{t("musicHint")}</p>
           <select
             className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-[var(--gc-text)]"
             value={spec.presentation?.musicProfile ?? "pulse"}
@@ -122,17 +120,17 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               })
             }
           >
-            <option value="organic">organic · 舒缓自然</option>
-            <option value="pulse">pulse · 轻律动</option>
-            <option value="minimal">minimal · 极轻</option>
-            <option value="neon">neon · 锐利电子</option>
+            <option value="organic">{t("musicOrganic")}</option>
+            <option value="pulse">{t("musicPulse")}</option>
+            <option value="minimal">{t("musicMinimal")}</option>
+            <option value="neon">{t("musicNeon")}</option>
           </select>
         </div>
 
         <div>
-          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">标题与氛围</p>
+          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">{t("titleMood")}</p>
           <label className="block space-y-1">
-            <span className="text-[10px] text-[var(--gc-text-faint)]">作品标题</span>
+            <span className="text-[10px] text-[var(--gc-text-faint)]">{t("workTitle")}</span>
             <input
               type="text"
               maxLength={80}
@@ -142,7 +140,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
             />
           </label>
           <label className="mt-2 block space-y-1">
-            <span className="text-[10px] text-[var(--gc-text-faint)]">副标题 / 氛围（labels.subtitle）</span>
+            <span className="text-[10px] text-[var(--gc-text-faint)]">{t("subtitle")}</span>
             <input
               type="text"
               maxLength={120}
@@ -158,7 +156,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
             <>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  基地生命（Gameplay.baseHealth）
+                  {t("baseHealth")}
                 </span>
                 <input
                   type="number"
@@ -173,7 +171,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  开局金币（Gameplay.startingCoins）
+                  {t("startingCoins")}
                 </span>
                 <input
                   type="number"
@@ -188,7 +186,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  敌军移速倍率（Gameplay.hazardSpeed，影响行军快慢）
+                  {t("hazardSpeed")}
                 </span>
                 <input
                   type="range"
@@ -203,7 +201,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1 sm:col-span-2">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  全局刷怪间隔基底（Gameplay.spawnIntervalMs，越小越密；回退波次会参考它）
+                  {t("spawnInterval")}
                 </span>
                 <input
                   type="range"
@@ -219,7 +217,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  塔射速偏好（Gameplay.playerSpeed，数值越高冷却越短）
+                  {t("towerFireRate")}
                 </span>
                 <input
                   type="range"
@@ -234,7 +232,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  导演紧张度（director.intensity，0~1）
+                  {t("directorIntensity")}
                 </span>
                 <input
                   type="range"
@@ -250,7 +248,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
           ) : (
             <>
               <label className="block space-y-1">
-                <span className="text-[10px] text-[var(--gc-text-faint)]">生命 / 容错（Gameplay.lives）</span>
+                <span className="text-[10px] text-[var(--gc-text-faint)]">{t("lives")}</span>
                 <input
                   type="number"
                   min={1}
@@ -261,7 +259,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-[10px] text-[var(--gc-text-faint)]">胜利目标分/收集（winScore）</span>
+                <span className="text-[10px] text-[var(--gc-text-faint)]">{t("winScore")}</span>
                 <input
                   type="number"
                   min={5}
@@ -280,7 +278,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
         {td ? (
           <div className="space-y-3">
             <p className="font-medium text-[var(--gc-text-soft)]">
-              敌军血量（BOSS 常为当前编队中 HP 最高者，约 {maxEnemyHp}）
+              {t("enemyHp", { max: maxEnemyHp })}
             </p>
             <ul className="space-y-2">
               {td.enemies.map((e, idx) => (
@@ -289,7 +287,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
                     <span className="min-w-[7rem] text-[11px] text-[var(--gc-text-soft)]">
                       {e.name}
                       {e.hp >= maxEnemyHp && maxEnemyHp > 0 ? (
-                        <span className="ml-1 text-[10px] text-amber-200/85">首领向</span>
+                        <span className="ml-1 text-[10px] text-amber-200/85">{t("bossTag")}</span>
                       ) : null}
                     </span>
                     <span className="text-[10px] text-[var(--gc-text-faint)]">HP</span>
@@ -316,7 +314,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  首发箭塔 · 单次伤害（towers[0].damage）
+                  {t("towerDamage")}
                 </span>
                 <input
                   type="range"
@@ -329,7 +327,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               </label>
               <label className="block space-y-1">
                 <span className="text-[10px] text-[var(--gc-text-faint)]">
-                  首发箭塔 · 射击间隔 ms（越低越快）
+                  {t("towerCooldown")}
                 </span>
                 <input
                   type="range"
@@ -345,7 +343,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block space-y-1">
-              <span className="text-[10px] text-[var(--gc-text-faint)]">主角移速（playerSpeed）</span>
+              <span className="text-[10px] text-[var(--gc-text-faint)]">{t("playerSpeed")}</span>
               <input
                 type="range"
                 min={120}
@@ -358,7 +356,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] text-[var(--gc-text-faint)]">威胁移速（hazardSpeed）</span>
+              <span className="text-[10px] text-[var(--gc-text-faint)]">{t("threatSpeed")}</span>
               <input
                 type="range"
                 min={80}
@@ -374,10 +372,10 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
         )}
 
         <div>
-          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">称谓（简短）</p>
+          <p className="mb-2 font-medium text-[var(--gc-text-soft)]">{t("labels")}</p>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="space-y-1">
-              <span className="text-[10px] text-[var(--gc-text-faint)]">主角/塔</span>
+              <span className="text-[10px] text-[var(--gc-text-faint)]">{t("labelPlayer")}</span>
               <input
                 type="text"
                 maxLength={32}
@@ -387,7 +385,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] text-[var(--gc-text-faint)]">威胁物</span>
+              <span className="text-[10px] text-[var(--gc-text-faint)]">{t("labelHazard")}</span>
               <input
                 type="text"
                 maxLength={32}
@@ -397,7 +395,7 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] text-[var(--gc-text-faint)]">收集物/货币</span>
+              <span className="text-[10px] text-[var(--gc-text-faint)]">{t("labelCollectible")}</span>
               <input
                 type="text"
                 maxLength={32}

@@ -1,5 +1,9 @@
 /** 客户端：消费 POST /api/comic/generate/stream 的 SSE。 */
 
+import type { AppLocale } from "@/i18n/routing";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { apiErrorMessage, clientErrorMessage } from "@/lib/i18n/progress-message";
+
 export type ComicGenerateStreamEvent = {
   step?: string;
   message?: string;
@@ -21,26 +25,38 @@ export type ComicGenerateStreamEvent = {
 
 export type ComicGenerateStreamResult =
   | { ok: true; comicId: string; needsPanelRender: boolean; events: ComicGenerateStreamEvent[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: string; needed?: number; available?: number };
 
 export async function consumeComicGenerateStream(
   body: Record<string, unknown>,
   onEvent?: (ev: ComicGenerateStreamEvent) => void,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<ComicGenerateStreamResult> {
   const res = await fetch("/api/comic/generate/stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: mergeLocaleHeaders(uiLocale, { "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    return { ok: false, error: data.error || `请求失败（${res.status}）` };
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: string;
+      needed?: number;
+      available?: number;
+    };
+    return {
+      ok: false,
+      error: data.error || clientErrorMessage(uiLocale, "requestFailed", { status: res.status }),
+      code: data.code,
+      needed: data.needed,
+      available: data.available,
+    };
   }
 
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("text/event-stream") || !res.body) {
-    return { ok: false, error: "服务器未返回流式响应" };
+    return { ok: false, error: clientErrorMessage(uiLocale, "streamNotSse") };
   }
 
   const reader = res.body.getReader();
@@ -75,7 +91,7 @@ export async function consumeComicGenerateStream(
           needsPanelRender = Boolean(ev.needsPanelRender);
         }
         if (ev.step === "error") {
-          streamError = ev.message ?? "生成失败";
+          streamError = ev.message ?? apiErrorMessage(uiLocale, "generateFailed");
         }
       }
     }
@@ -84,5 +100,8 @@ export async function consumeComicGenerateStream(
   if (comicId) {
     return { ok: true, comicId, needsPanelRender, events: [] as ComicGenerateStreamEvent[] };
   }
-  return { ok: false, error: streamError || "漫画生成未完成" };
+  return {
+    ok: false,
+    error: streamError || clientErrorMessage(uiLocale, "comicGenerateIncomplete"),
+  };
 }

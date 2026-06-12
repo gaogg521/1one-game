@@ -37,6 +37,11 @@ npm run qa:refinement-log | Out-Host
 npm run qa:novel-comic-smoke | Out-Host
 $env:DATABASE_URL = "file:./prisma/ci.sqlite"
 npm run qa:studio-duplicate | Out-Host
+npm run qa:multilingual-locale | Out-Host
+npm run qa:novel-locale | Out-Host
+npm run qa:seed-en-fixtures | Out-Host
+npm run qa:en-path | Out-Host
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $env:PW_EXTERNAL = "1"
 Write-Host "[full-qa] playwright e2e"

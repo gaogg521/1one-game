@@ -1,16 +1,19 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import type { NovelReaderPalette } from "@/lib/novel-reader-theme";
 import type { useNovelListen } from "@/hooks/use-novel-listen";
 
 type ListenApi = ReturnType<typeof useNovelListen>;
 
 export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette: NovelReaderPalette }) {
+  const t = useTranslations("novelListen");
+
   if (!listen.supported) {
     return (
       <p className="mx-auto max-w-[42rem] px-5 pb-6 text-center text-xs" style={{ color: palette.muted }}>
-        听书不可用：请配置火山引擎 TTS（.env）或使用支持朗读的浏览器。
+        {t("unsupported")}
       </p>
     );
   }
@@ -41,8 +44,8 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
   const active = state !== "idle";
   const chapterLabel =
     currentChapter ?
-      `第${currentChapter.num}章 ${currentChapter.title}`
-    : "听书";
+      t("chapterHeading", { num: currentChapter.num, title: currentChapter.title })
+    : t("listen");
 
   return (
     <div
@@ -60,18 +63,18 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
         <div className="flex min-w-0 items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: palette.text }}>
             {loading ?
-              statusMessage || "正在合成语音…"
+              statusMessage || t("synthesizing")
             : active ?
               playing ?
-                "朗读中"
-              : "已暂停"
-            : "听书"}{" "}
+                t("reading")
+              : t("paused")
+            : t("listen")}{" "}
             · {chapterLabel}
             {providerLabel ? ` · ${providerLabel}` : ""}
           </p>
           {voiceOptions.length > 1 ?
             <label className="flex shrink-0 items-center">
-              <span className="sr-only">朗读音色</span>
+              <span className="sr-only">{t("voiceAria")}</span>
               <select
                 value={selectedVoiceId}
                 onChange={(e) => {
@@ -86,7 +89,7 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
                   color: palette.text,
                   backgroundColor: `color-mix(in srgb, ${palette.panel} 80%, transparent)`,
                 }}
-                title="选择朗读音色"
+                title={t("voiceTitle")}
               >
                 {voiceOptions.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -104,19 +107,14 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
               border: `1px solid ${palette.border}`,
               color: palette.muted,
             }}
-            title="切换语速"
+            title={t("rateTitle")}
           >
             {rateLabel}
           </button>
         </div>
 
         <div className="flex items-center justify-center gap-2">
-          <IconButton
-            label="上一章"
-            disabled={!canPrev}
-            onClick={prevChapter}
-            palette={palette}
-          >
+          <IconButton label={t("prevChapter")} disabled={!canPrev} onClick={prevChapter} palette={palette}>
             ‹
           </IconButton>
 
@@ -126,12 +124,12 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
             disabled={loading}
             className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: palette.tocActive }}
-            aria-label={playing ? "暂停朗读" : state === "paused" ? "继续朗读" : "开始朗读"}
+            aria-label={playing ? t("pause") : state === "paused" ? t("resume") : t("start")}
           >
             {loading ? "…" : playing ? "❚❚" : "▶"}
           </button>
 
-          <IconButton label="下一章" disabled={!canNext} onClick={nextChapter} palette={palette}>
+          <IconButton label={t("nextChapter")} disabled={!canNext} onClick={nextChapter} palette={palette}>
             ›
           </IconButton>
 
@@ -142,7 +140,7 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
               className="ml-1 rounded-lg px-3 py-2 text-xs font-medium"
               style={{ color: palette.muted, border: `1px solid ${palette.border}` }}
             >
-              停止
+              {t("stop")}
             </button>
           : null}
         </div>

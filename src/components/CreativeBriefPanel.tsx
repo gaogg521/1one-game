@@ -1,32 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { BriefUserRevision } from "@/lib/creative-brief/format-revision";
 import type { BriefMedium, CreativeBrief } from "@/lib/creative-brief/types";
-
-const MEDIUM_COPY: Record<
-  BriefMedium,
-  { hints: string; unitSection: string; templateLine: boolean; addonPlaceholder: string }
-> = {
-  game: {
-    hints: "玩法落地",
-    unitSection: "单位",
-    templateLine: true,
-    addonPlaceholder: "例如：更偏弹幕射击、Boss 要更大、色调再冷一点…",
-  },
-  novel: {
-    hints: "叙事结构",
-    unitSection: "角色",
-    templateLine: false,
-    addonPlaceholder: "例如：第三人称、感情线更重、结局偏开放式…",
-  },
-  comic: {
-    hints: "分镜节奏",
-    unitSection: "角色造型",
-    templateLine: false,
-    addonPlaceholder: "例如：电影感分镜、对白少一点、每页一个大转折…",
-  },
-};
 
 type Props = {
   brief: CreativeBrief | null;
@@ -64,6 +41,7 @@ export function CreativeBriefPanel({
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
+  const t = useTranslations("creativeBrief");
   const [editing, setEditing] = useState(false);
   const [logline, setLogline] = useState("");
   const [world, setWorld] = useState("");
@@ -77,7 +55,7 @@ export function CreativeBriefPanel({
 
   if (!brief && !summary) return null;
 
-  const copy = MEDIUM_COPY[medium];
+  const templateLine = medium === "game";
 
   const applyRevision = () => {
     const rev: BriefUserRevision = {
@@ -96,10 +74,10 @@ export function CreativeBriefPanel({
       open={Boolean(brief)}
     >
       <summary className="cursor-pointer list-none text-sm font-medium text-[var(--gc-text-soft)] outline-none [&::-webkit-details-marker]:hidden">
-        AI 深度理解（可展开 / 可修订）
+        {t("summary")}
         {brief ? (
           <span className="ml-2 text-[10px] font-normal text-[var(--gc-text-faint)]">
-            {brief.packLabel} · {brief.expandSource === "pack" ? "知识包" : "知识包+模型"}
+            {brief.packLabel} · {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
           </span>
         ) : null}
       </summary>
@@ -110,7 +88,7 @@ export function CreativeBriefPanel({
         {brief ? (
           <>
             <p className="text-xs text-[var(--gc-muted)]">
-              <span className="text-[var(--gc-text-faint)]">原话：</span>
+              <span className="text-[var(--gc-text-faint)]">{t("originalPrompt")}</span>
               {brief.userPrompt}
             </p>
 
@@ -123,19 +101,19 @@ export function CreativeBriefPanel({
                   rows={2}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs text-[var(--gc-text)]"
                 />
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">世界观</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("worldLabel")}</label>
                 <textarea
                   value={world}
                   onChange={(e) => setWorld(e.target.value)}
                   rows={2}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs text-[var(--gc-text)]"
                 />
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">补充说明（可选）</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("addonLabel")}</label>
                 <textarea
                   value={addonNotes}
                   onChange={(e) => setAddonNotes(e.target.value)}
                   rows={2}
-                  placeholder={copy.addonPlaceholder}
+                  placeholder={t(`medium.${medium}.addonPlaceholder`)}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs text-[var(--gc-text)] placeholder:text-[var(--gc-text-faint)]"
                 />
                 <div className="flex flex-wrap gap-2">
@@ -144,37 +122,38 @@ export function CreativeBriefPanel({
                     onClick={applyRevision}
                     className="rounded-lg bg-[color:color-mix(in_srgb,var(--gc-accent)_25%,transparent)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text)] hover:brightness-110"
                   >
-                    保存修订
+                    {t("saveRevision")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
                     className="rounded-lg border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)]"
                   >
-                    取消
+                    {t("cancel")}
                   </button>
                 </div>
               </div>
             ) : (
               <>
                 <p className="text-xs font-medium text-[var(--gc-text)]">{logline || brief.logline}</p>
-                <Section title="世界观" items={[world || brief.world]} />
-                <Section title="场景" items={brief.scenes} />
-                <Section title="势力" items={brief.factions} />
-                <Section title={copy.unitSection} items={brief.units} />
-                <Section title="武器与特效" items={[...brief.weapons, ...brief.vfx]} />
-                <Section title="画风" items={brief.artStyle} />
-                <Section title="氛围" items={brief.mood} />
-                <Section title={copy.hints} items={brief.gameplayHints} />
-                <Section title="负面约束" items={brief.negatives} />
-                {copy.templateLine ? (
+                <Section title={t("worldLabel")} items={[world || brief.world]} />
+                <Section title={t("scenes")} items={brief.scenes} />
+                <Section title={t("factions")} items={brief.factions} />
+                <Section title={t(`medium.${medium}.unitSection`)} items={brief.units} />
+                <Section title={t("weaponsVfx")} items={[...brief.weapons, ...brief.vfx]} />
+                <Section title={t("artStyle")} items={brief.artStyle} />
+                <Section title={t("mood")} items={brief.mood} />
+                <Section title={t(`medium.${medium}.hints`)} items={brief.gameplayHints} />
+                <Section title={t("negatives")} items={brief.negatives} />
+                {templateLine ? (
                   <p className="text-[10px] text-[var(--gc-text-faint)]">
-                    倾向模板：<code className="text-[var(--gc-muted)]">{brief.intent.templateHint}</code> · 调性{" "}
-                    {brief.intent.tone} · 难度 {brief.intent.difficulty}
+                    {t("templateHint")}
+                    <code className="text-[var(--gc-muted)]">{brief.intent.templateHint}</code> · {t("tone")}{" "}
+                    {brief.intent.tone} · {t("difficulty")} {brief.intent.difficulty}
                   </p>
                 ) : (
                   <p className="text-[10px] text-[var(--gc-text-faint)]">
-                    调性 {brief.intent.tone} · 节奏 {brief.intent.difficulty}
+                    {t("tone")} {brief.intent.tone} · {t("pace")} {brief.intent.difficulty}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -183,7 +162,7 @@ export function CreativeBriefPanel({
                     onClick={() => setEditing(true)}
                     className="text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline-offset-2 hover:underline"
                   >
-                    修订扩写理解
+                    {t("editBrief")}
                   </button>
                   {onRegenerateWithRevision ? (
                     <button
@@ -192,7 +171,7 @@ export function CreativeBriefPanel({
                       onClick={() => onRegenerateWithRevision()}
                       className="text-xs font-medium text-[var(--gc-muted)] underline-offset-2 hover:text-[var(--gc-text)] hover:underline disabled:opacity-40"
                     >
-                      按当前理解重新生成
+                      {t("regenerateBrief")}
                     </button>
                   ) : null}
                 </div>

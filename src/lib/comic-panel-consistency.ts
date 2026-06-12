@@ -1,5 +1,8 @@
+import type { AppLocale } from "@/i18n/routing";
+import { comicConsistencyMessage } from "@/lib/i18n/progress-message";
 import type { ComicPage } from "@/lib/comic-format";
 import type { ComicDirectorPack } from "@/lib/comic-director-types";
+import { isPlaceholderComicPanel } from "@/lib/comic-panel-prompt-urban";
 import type { PlannedComicPanel } from "@/lib/comic-shot-plan";
 
 export type ComicConsistencyIssue = {
@@ -18,11 +21,14 @@ export type ComicConsistencyReport = {
 export function checkComicPanelsConsistency(
   pages: ComicPage[],
   director: ComicDirectorPack,
+  uiLocale: AppLocale = "zh-Hans",
 ): ComicConsistencyReport {
   const issues: ComicConsistencyIssue[] = [];
   const charIds = new Set(director.characters.map((c) => c.id));
   const locIds = new Set(director.locations.map((l) => l.id));
   const mainNames = director.characters.map((c) => c.name).filter((n) => n.length >= 2);
+  const msg = (key: string, params?: Record<string, string | number>) =>
+    comicConsistencyMessage(uiLocale, key, params);
 
   for (const page of pages) {
     for (const panel of page.panels) {
@@ -33,7 +39,7 @@ export function checkComicPanelsConsistency(
         if (!charIds.has(cid)) {
           issues.push({
             code: "unknown_character_id",
-            message: `第 ${scene} 格引用了未知角色 id：${cid}`,
+            message: msg("unknownCharacterId", { scene, id: cid }),
             scene,
             severity: "warn",
           });
@@ -43,7 +49,7 @@ export function checkComicPanelsConsistency(
       if (p.locationId && !locIds.has(p.locationId)) {
         issues.push({
           code: "unknown_location_id",
-          message: `第 ${scene} 格引用了未知场景 id：${p.locationId}`,
+          message: msg("unknownLocationId", { scene, id: p.locationId }),
           scene,
           severity: "warn",
         });
@@ -55,7 +61,7 @@ export function checkComicPanelsConsistency(
         if (t.length >= 4 && blob.includes(t)) {
           issues.push({
             code: "taboo_keyword_in_panel",
-            message: `第 ${scene} 格文案含禁忌词「${taboo}」`,
+            message: msg("tabooKeywordInPanel", { scene, taboo }),
             scene,
             severity: "warn",
           });
@@ -71,14 +77,51 @@ export function checkComicPanelsConsistency(
     if (!(firstPanel.characterIds ?? []).includes(lead.id)) {
       issues.push({
         code: "lead_missing_opening",
-        message: `开篇格建议出现主角 ${lead.name}（${lead.id}）`,
+        message: msg("leadMissingOpening", { name: lead.name, id: lead.id }),
         severity: "warn",
       });
     }
   }
 
+  for (const page of pages) {
+    for (const panel of page.panels) {
+      const scene = (panel as PlannedComicPanel).scene ?? 0;
+      if (!panel.caption?.trim()) {
+        issues.push({
+          code: "missing_caption",
+          message: msg("missingCaption", { scene }),
+          scene,
+          severity: "warn",
+        });
+      }
+    }
+  }
+
   const hasError = issues.some((i) => i.severity === "error");
   return { ok: !hasError, issues };
+}
+
+/** 补全缺字分镜：漫画必须有 caption（对白/旁白等），配图不含可读文字。 */
+export function ensureComicPanelsHaveReadableText(pages: ComicPage[]): number {
+  let fixed = 0;
+  for (const page of pages) {
+    for (const panel of page.panels) {
+      if (panel.caption?.trim()) continue;
+      const p = panel as PlannedComicPanel;
+      const sceneDesc = p.sceneDescriptionEn?.trim();
+      const promptLooksGeneric =
+        !panel.prompt?.trim() ||
+        /^Japanese |^Comic panel|^Manga comic/i.test(panel.prompt.trim());
+      const fallback = sceneDesc?.slice(0, 48) || (!promptLooksGeneric ? panel.prompt?.trim().slice(0, 48) : "");
+      if (!fallback || isPlaceholderComicPanel({ caption: fallback, prompt: panel.prompt })) {
+        continue;
+      }
+      panel.caption = fallback;
+      if (!panel.textType) panel.textType = "narration";
+      fixed += 1;
+    }
+  }
+  return fixed;
 }
 
 export function formatComicConsistencyIssues(issues: ComicConsistencyIssue[]): string {

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
@@ -17,13 +19,15 @@ import {
   resolveNovelLengthTier,
 } from "@/lib/novel-generate-config";
 import { extractNovelTitleFromContent, validateNovelTitleInput } from "@/lib/novel-display";
+import { localizedJsonError } from "@/lib/api/localized-error";
 import { generateNovelSynopsis } from "@/lib/novel-synopsis";
-import { truncateNovelToMaxChars } from "@/lib/novel-chapters";
 import {
   generateLongNovelBody,
   planLongNovelSegments,
   usesSegmentedLongGeneration,
 } from "@/lib/novel-long-generate";
+import { generatePlannedNovelBody } from "@/lib/novel-planned-generate";
+import { fitNovelContentToMaxChars } from "@/lib/novel-chapters";
 import { persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { getChildrenAgeTier, parseChildrenTargetAge } from "@/lib/children-age-length";
 import { finalizeChildrenNovelContent } from "@/lib/children-novel-postprocess";
@@ -34,11 +38,13 @@ import {
   type NovelLengthOptions,
 } from "@/lib/novel-length";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
 import { resolveMediaCreativeBrief } from "@/lib/creative-brief/resolve-media-brief";
+import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import {
   parseChildrenCreativeBrief,
   parseNovelCreativeBrief,
@@ -53,18 +59,25 @@ import {
   serializeNovelCreativeBrief,
 } from "@/lib/novel-creative-brief-db";
 import { buildNovelBriefSeed, getNovelGenreTag, isChildrenGenreTag } from "@/lib/novel-genre-tags";
+import { assessNovelCompleteness } from "@/lib/novel-completeness";
+import { extendNovelToEnding } from "@/lib/novel-completion-pass";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const maxDuration = 3600;
 
 export async function POST(req: Request) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
+  const uiLocale = resolveRequestLocaleSync(req);
   const rl = generateRateLimits();
   const ownerKey = (await getOwnerKey()) ?? "anon";
   const throttleKey = await getThrottleKey("novel_gen", ownerKey);
   if (!rateLimit(throttleKey, rl.postMax, rl.windowMs)) {
     return NextResponse.json(
-      { error: "生成次数过多，请稍后再试", code: codes.RATE_LIMITED, requestId },
+      localizedApiErrorPayload(req, "generateRateLimited", {
+        code: codes.RATE_LIMITED,
+        requestId,
+      }),
       { status: 429, headers: ridHeaders(requestId) },
     );
   }
@@ -81,6 +94,7 @@ export async function POST(req: Request) {
     creativeBrief: creativeBriefRaw,
     briefRevision: briefRevisionRaw,
     novelGenreTag,
+    genreId,
     childrenTargetAge: childrenTargetAgeRaw,
   } = json.body as {
     prompt?: string;
@@ -89,15 +103,27 @@ export async function POST(req: Request) {
     creativeBrief?: unknown;
     briefRevision?: NovelBriefUserRevision | ChildrenBriefUserRevision;
     novelGenreTag?: string;
+    genreId?: string;
     childrenTargetAge?: number;
   };
+  const normalizedGenreTag = (novelGenreTag ?? genreId)?.trim() || undefined;
   const lengthTier = resolveNovelLengthTier({
-    genreTagId: novelGenreTag,
+    genreTagId: normalizedGenreTag,
     lengthTierPick: lengthTierRaw,
   });
+  const quotaBlock = await gateGenerationQuota("novel", {
+    long: usesSegmentedLongGeneration(lengthTier),
+  });
+  if (quotaBlock) {
+    const body = await quotaBlock.json();
+    return NextResponse.json(body, { status: 402, headers: ridHeaders(requestId) });
+  }
   if (!prompt || typeof prompt !== "string" || prompt.trim().length < 2) {
     return NextResponse.json(
-      { error: "请提供小说创意描述（至少 2 个字符）", code: codes.BAD_REQUEST, requestId },
+      localizedApiErrorPayload(req, "needNovelPrompt", {
+        code: codes.BAD_REQUEST,
+        requestId,
+      }),
       { status: 400, headers: ridHeaders(requestId) },
     );
   }
@@ -113,10 +139,11 @@ export async function POST(req: Request) {
   if (title?.trim()) {
     const tv = validateNovelTitleInput(title.trim());
     if (!tv.ok) {
-      return NextResponse.json(
-        { error: tv.error, code: codes.BAD_REQUEST, requestId },
-        { status: 400, headers: ridHeaders(requestId) },
-      );
+      return localizedJsonError(req, tv.errorKey, 400, {
+        code: codes.BAD_REQUEST,
+        requestId,
+        params: { max: 15 },
+      });
     }
   }
 
@@ -134,7 +161,7 @@ export async function POST(req: Request) {
     const maxTokens = novelLlmMaxOutputTokens(lengthTier, lengthOpts);
     let pipelinePrompt = prompt.trim();
     let briefJsonToPersist: string | null = null;
-    const genreTag = getNovelGenreTag(novelGenreTag);
+    const genreTag = getNovelGenreTag(normalizedGenreTag);
     const titleTrim = title?.trim();
     if (PRODUCT.novel.creativeBriefExpand) {
       const preExpanded =
@@ -142,6 +169,7 @@ export async function POST(req: Request) {
         parseNovelCreativeBrief(creativeBriefRaw) ??
         undefined;
       const isChild = isChildrenGenreTag(genreTag?.id) || isChildrenNovelTier(lengthTier);
+      const inputLocale = detectBriefInputLocale(prompt.trim());
       const seed =
         titleTrim && genreTag && isChild
           ? buildChildrenBriefSeed(
@@ -150,7 +178,7 @@ export async function POST(req: Request) {
               parseChildrenTargetAge(lengthOpts?.childrenTargetAge),
             )
           : titleTrim && genreTag
-            ? buildNovelBriefSeed(titleTrim, genreTag)
+            ? buildNovelBriefSeed(titleTrim, genreTag, "", undefined, inputLocale)
             : prompt.trim();
       const briefResult = await resolveMediaCreativeBrief(seed, "novel", {
         preExpanded,
@@ -158,6 +186,7 @@ export async function POST(req: Request) {
         novelGenreId: genreTag?.id,
         title: titleTrim,
         childrenTargetAge: lengthOpts?.childrenTargetAge ?? undefined,
+        inputLocale,
       });
       if (briefResult) {
         pipelinePrompt = briefResult.augmentedPrompt;
@@ -185,6 +214,7 @@ export async function POST(req: Request) {
             titleTrim: title?.trim(),
             plan: longPlan,
             lengthTier,
+            uiLocale,
           });
           if (longResult.content.length >= longPlan.minAcceptChars) {
             content = longResult.content;
@@ -196,11 +226,30 @@ export async function POST(req: Request) {
         } catch {
           continue;
         }
+      } else if (lengthTier === "short" || lengthTier === "medium") {
+        try {
+          const planned = await generatePlannedNovelBody({
+            model,
+            promptTrim: pipelinePrompt,
+            titleTrim: title?.trim(),
+            lengthTier,
+            lengthOpts,
+          });
+          if (planned.content.length >= minChars) {
+            content = planned.content;
+            pipelineMeta = planned.pipelineMeta;
+            modelUsed = model;
+            providerUsed = getActiveProvider();
+            break;
+          }
+        } catch {
+          continue;
+        }
       } else {
         const result = await llmNovelText(
           {
             model,
-            system: getNovelSystemPrompt(lengthTier, lengthOpts),
+            system: getNovelSystemPrompt(lengthTier, lengthOpts, prompt.trim()),
             user: userMsg,
             temperature: novelLlmTemperature(lengthTier),
             maxTokens,
@@ -219,14 +268,17 @@ export async function POST(req: Request) {
 
     if (!content || content.length < minChars) {
       return NextResponse.json(
-        { error: "小说生成失败，模型未返回足够内容", code: codes.LLM_FAILED, requestId },
+        localizedApiErrorPayload(req, "novelGenerateFailed", {
+          code: codes.LLM_FAILED,
+          requestId,
+        }),
         { status: 502, headers: ridHeaders(requestId) },
       );
     }
 
     const maxCharsLimit = novelMaxChars(lengthTier, lengthOpts);
-    let finalContent = truncateNovelToMaxChars(content, maxCharsLimit);
-    let finalTitle = extractNovelTitleFromContent(finalContent, title?.trim(), prompt.trim());
+    let finalContent = fitNovelContentToMaxChars(content, maxCharsLimit);
+    let finalTitle = extractNovelTitleFromContent(finalContent, title?.trim(), prompt.trim(), uiLocale);
     let parentReadingTip: string | undefined;
     let childrenSynopsisBody: string | undefined;
     let childrenInterpretation: string | undefined;
@@ -236,6 +288,7 @@ export async function POST(req: Request) {
         targetAge: parseChildrenTargetAge(lengthOpts.childrenTargetAge),
         fallbackTitle: title?.trim(),
         userPrompt: promptTrim,
+        uiLocale,
       });
       finalTitle = finalized.dbTitle;
       finalContent = finalized.publishedContent;
@@ -244,12 +297,50 @@ export async function POST(req: Request) {
       childrenInterpretation = finalized.interpretation || undefined;
     }
 
+    let completeness = assessNovelCompleteness(
+      finalContent,
+      lengthTier,
+      lengthOpts,
+      promptTrim,
+      pipelineMeta?.chapterPlan,
+      uiLocale,
+    );
+    if (!completeness.ok && !isChildrenNovelTier(lengthTier)) {
+      finalContent = await extendNovelToEnding({
+        model: modelUsed || cascade[0]!,
+        title: finalTitle,
+        prompt: promptTrim,
+        content: finalContent,
+        lengthTier,
+        lengthOpts,
+      });
+      completeness = assessNovelCompleteness(
+        finalContent,
+        lengthTier,
+        lengthOpts,
+        promptTrim,
+        pipelineMeta?.chapterPlan,
+        uiLocale,
+      );
+    }
+    if (!completeness.ok) {
+      return NextResponse.json(
+        localizedApiErrorPayload(req, "novelIncomplete", {
+          code: codes.LLM_FAILED,
+          requestId,
+          params: { reason: completeness.reason },
+        }),
+        { status: 502, headers: ridHeaders(requestId) },
+      );
+    }
+
     const summary = await generateNovelSynopsis({
       model: modelUsed || cascade[0]!,
       title: finalTitle,
       prompt: prompt.trim(),
       content: childrenSynopsisBody ?? finalContent,
       lengthTier,
+      uiLocale,
     });
 
     const novel = await prisma.novel.create({
@@ -263,6 +354,7 @@ export async function POST(req: Request) {
             ? `${summary ?? ""}\n\n${getChildrenAgeTier(parseChildrenTargetAge(lengthOpts.childrenTargetAge)).closingMark}\n${parentReadingTip}`.trim()
             : summary,
         status: "ready",
+        visibility: defaultWorkVisibility(),
       },
     });
     await persistNovelLengthTier(novel.id, lengthTier);

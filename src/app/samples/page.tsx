@@ -2,7 +2,9 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SAMPLE_SHELVES, type Sample, samplesByShelf, shelfConfig } from "@/lib/samples";
 import type { GameSpec } from "@/lib/game-spec";
@@ -25,12 +27,14 @@ function SampleCard({
   busy,
   onPlay,
   onEdit,
+  ts,
 }: {
   s: Sample;
   featured: boolean;
   busy: boolean;
   onPlay: (id: string, prompt: string) => void | Promise<void>;
   onEdit: (prompt: string) => void;
+  ts: ReturnType<typeof useTranslations<"samples">>;
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const aspect = featured ? "aspect-[3/4] sm:aspect-[10/13]" : "aspect-[4/5]";
@@ -65,7 +69,7 @@ function SampleCard({
 
         {s.badge === "hot" ? (
           <span className="absolute left-3 top-3 rounded-md bg-gradient-to-r from-rose-600 to-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-md">
-            热门
+            {ts("hot")}
           </span>
         ) : null}
         {s.badge === "new" ? (
@@ -109,8 +113,8 @@ function SampleCard({
 
       <details className="group/prompt px-0.5">
         <summary className="cursor-pointer list-none text-[11px] font-medium text-[var(--gc-muted)] marker:content-none [&::-webkit-details-marker]:hidden hover:text-[var(--gc-accent)]">
-          <span className="underline-offset-2 group-open/prompt:underline">提示词</span>
-          <span className="ml-1 text-[var(--gc-text-faint)]">（展开）</span>
+          <span className="underline-offset-2 group-open/prompt:underline">{ts("prompt")}</span>
+          <span className="ml-1 text-[var(--gc-text-faint)]">{ts("expand")}</span>
         </summary>
         <p className="mt-1.5 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-2.5 text-[11px] leading-relaxed text-[var(--gc-muted)]">
           {s.prompt}
@@ -124,14 +128,14 @@ function SampleCard({
           disabled={busy}
           className="gc-theme-cta rounded-full px-4 py-2 text-xs font-semibold shadow-md hover:brightness-110 disabled:opacity-50 sm:px-5 sm:text-sm"
         >
-          {busy ? "创建中…" : "试玩"}
+          {busy ? ts("creating") : ts("play")}
         </button>
         <button
           type="button"
           onClick={() => onEdit(s.prompt)}
           className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:text-sm"
         >
-          微调
+          {ts("tune")}
         </button>
       </div>
 
@@ -149,6 +153,7 @@ function SampleCard({
 }
 
 export default function SamplesPage() {
+  const ts = useTranslations("samples");
   const router = useRouter();
   const [busy, setBusy] = useState<BusyMap>({});
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +181,7 @@ export default function SamplesPage() {
         });
         const genData = (await gen.json()) as { spec?: GameSpec; error?: string };
         if (!gen.ok || !genData.spec) {
-          setError(genData.error ?? "生成失败");
+          setError(genData.error ?? ts("generateFailed"));
           setBusy((m) => ({ ...m, [id]: "error" }));
           return;
         }
@@ -188,14 +193,14 @@ export default function SamplesPage() {
         });
         const saveData = (await save.json()) as { project?: { id: string }; error?: string };
         if (!save.ok || !saveData.project?.id) {
-          setError(saveData.error ?? "保存失败");
+          setError(saveData.error ?? ts("saveFailed"));
           setBusy((m) => ({ ...m, [id]: "error" }));
           return;
         }
         prefetchGodotExport(genData.spec, { projectId: saveData.project.id });
         router.push(`/play/${saveData.project.id}`);
       } catch {
-        setError("网络异常");
+        setError(ts("networkError"));
         setBusy((m) => ({ ...m, [id]: "error" }));
       } finally {
         setBusy((m) => ({ ...m, [id]: "idle" }));
@@ -205,15 +210,16 @@ export default function SamplesPage() {
   );
 
   return (
-    <div className="flex min-h-full flex-1 flex-col text-[var(--gc-text)] lg:flex-row">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
+      <AppMain>
       <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden pb-16 pt-8 lg:pt-10">
         <div className="px-4 sm:px-6 lg:px-10 xl:px-12">
           <header className="max-w-3xl space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--gc-text-faint)]">Gallery</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-4xl">样品馆</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-4xl">{ts("title")}</h1>
             <p className="max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
-              横向浏览灵感卡片，参考{" "}
+              {ts("descPrefix")}{" "}
               <a
                 href="https://www.astrocade.com/"
                 target="_blank"
@@ -222,11 +228,11 @@ export default function SamplesPage() {
               >
                 Astrocade
               </a>{" "}
-              式陈列：竖版封面可换为试玩截图，改数据里的{" "}
+              {ts("descMid")}{" "}
               <code className="rounded bg-[var(--gc-surface-glass)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--gc-text-soft)]">
                 coverImageSrc
               </code>{" "}
-              即可；当前为 SVG 海报，加载失败时回退渐变。
+              {ts("descSuffix")}
             </p>
           </header>
 
@@ -249,7 +255,7 @@ export default function SamplesPage() {
                     <h2 className="text-lg font-semibold tracking-tight text-[var(--gc-text)] sm:text-xl">{meta.title}</h2>
                     <p className="mt-0.5 text-sm text-[var(--gc-muted)]">{meta.description}</p>
                   </div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)]">左右滑动</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)]">{ts("swipeHint")}</p>
                 </div>
 
                 <div className="relative">
@@ -264,6 +270,7 @@ export default function SamplesPage() {
                           busy={(busy[s.id] ?? "idle") === "creating"}
                           onPlay={wrappedPlay}
                           onEdit={goEdit}
+                          ts={ts}
                         />
                       </div>
                     ))}
@@ -278,6 +285,7 @@ export default function SamplesPage() {
           })}
         </div>
       </main>
-    </div>
+      </AppMain>
+    </AppPageShell>
   );
 }

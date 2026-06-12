@@ -7,10 +7,12 @@ import { displayComicTitle } from "@/lib/comic-display";
 import { countPanelsWithImages, parseComicDocument } from "@/lib/comic-panel-render";
 import { normalizeNovelTitle } from "@/lib/novel-display";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
+import { localizedJsonError } from "@/lib/api/localized-error";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: RouteContext) {
+export async function GET(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
 
@@ -19,19 +21,21 @@ export async function GET(_req: Request, ctx: RouteContext) {
     include: { novel: { select: { id: true, title: true } } },
   });
   if (!row) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
-  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, _req);
+  const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
   const doc = parseComicDocument(row.imageUrls);
   const panelStats = countPanelsWithImages(doc);
+
+  const uiLocale = resolveRequestLocaleSync(req);
 
   return NextResponse.json({
     comic: {
       id: row.id,
       title: row.title,
-      displayTitle: displayComicTitle(row.title, row.novel.title, row.prompt),
+      displayTitle: displayComicTitle(row.title, row.novel.title, row.prompt, uiLocale),
       prompt: row.prompt,
       imageUrls: row.imageUrls,
       createdAt: row.createdAt,
@@ -45,7 +49,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
       panelsTotal: panelStats.total,
       novel: {
         ...row.novel,
-        displayTitle: normalizeNovelTitle(row.novel.title, row.prompt),
+        displayTitle: normalizeNovelTitle(row.novel.title, row.prompt, undefined, uiLocale),
       },
     },
   });
@@ -54,20 +58,20 @@ export async function GET(_req: Request, ctx: RouteContext) {
 export async function PATCH(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const { id } = await ctx.params;
   const row = await prisma.comic.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const ensureShareCode =
@@ -108,15 +112,15 @@ export async function DELETE(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
   if (!ownerKey && !isSuperAdmin(req)) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const row = await prisma.comic.findUnique({ where: { id } });
   if (!row) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
   if (!canDeleteOwnedResource(row.ownerKey, ownerKey, req)) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   await prisma.comic.delete({ where: { id } });

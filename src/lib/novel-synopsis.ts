@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { isGenericNovelChapterTitle, novelSynopsisMessage } from "@/lib/i18n/chapter-labels";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { looksLikeOutlineOrPrompt } from "@/lib/novel-display";
 import { llmNovelText } from "@/lib/llm";
@@ -8,19 +10,21 @@ export function buildNovelSynopsisHeuristic(
   content: string,
   prompt: string,
   title: string,
+  uiLocale: AppLocale = "zh-Hans",
 ): string {
   const cleanPrompt = prompt.trim().replace(/\s+/g, " ");
+  const listSep = uiLocale.startsWith("zh") ? "、" : ", ";
 
   if (
     cleanPrompt.length >= 16 &&
     cleanPrompt.length <= 220 &&
     !looksLikeOutlineOrPrompt(cleanPrompt) &&
-    /[。！？]/.test(cleanPrompt)
+    /[。！？.!?]/.test(cleanPrompt)
   ) {
     return cleanPrompt;
   }
 
-  const chapters = parseNovelChapters(content.trim());
+  const chapters = parseNovelChapters(content.trim(), uiLocale);
   const ch1 = chapters[0]?.body ?? content;
   const paras = ch1
     .split(/\n\n+/)
@@ -38,20 +42,12 @@ export function buildNovelSynopsisHeuristic(
   const arcTitles = chapters
     .slice(0, 8)
     .map((c) => c.title.trim())
-    .filter(
-      (t) =>
-        t &&
-        t !== "开篇" &&
-        t !== "正文" &&
-        !/^第\s*\d+\s*章/.test(t) &&
-        t.length >= 2 &&
-        t.length <= 14,
-    );
+    .filter((t) => t && !isGenericNovelChapterTitle(t) && t.length >= 2 && t.length <= 14);
 
   if (hook.length >= 20) {
     if (arcTitles.length >= 2 && chapters.length > 1) {
-      const arc = arcTitles.slice(0, 3).join("、");
-      const tail = `全书 ${chapters.length} 章，含「${arc}」等情节。`;
+      const arc = arcTitles.slice(0, 3).join(listSep);
+      const tail = novelSynopsisMessage(uiLocale, "arcTail", { count: chapters.length, arc });
       const merged = `${hook.replace(/…$/, "")} ${tail}`;
       return merged.length > 200 ? merged.slice(0, 198) + "…" : merged;
     }
@@ -63,7 +59,7 @@ export function buildNovelSynopsisHeuristic(
     return `${title}：${p}`;
   }
 
-  return `${title}：一部 AI 生成的原创连载故事。`;
+  return novelSynopsisMessage(uiLocale, "aiFallback", { title });
 }
 
 /** 生成入库用简介：优先 LLM 梗概，失败则启发式。 */
@@ -73,7 +69,9 @@ export async function generateNovelSynopsis(params: {
   prompt: string;
   content: string;
   lengthTier?: NovelLengthTier;
+  uiLocale?: AppLocale;
 }): Promise<string> {
+  const uiLocale = params.uiLocale ?? "zh-Hans";
   const excerpt = params.content.trim().slice(0, 4000);
   try {
     const result = await llmNovelText(
@@ -97,5 +95,5 @@ export async function generateNovelSynopsis(params: {
   } catch {
     /* fallback */
   }
-  return buildNovelSynopsisHeuristic(params.content, params.prompt, params.title);
+  return buildNovelSynopsisHeuristic(params.content, params.prompt, params.title, uiLocale);
 }

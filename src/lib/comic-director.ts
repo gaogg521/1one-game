@@ -5,9 +5,10 @@ import {
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmJson } from "@/lib/llm";
 import type { CoverGenre } from "@/lib/cover-genre";
-import { getComicPanelStyleLock } from "@/lib/cover-genre";
 import { getComicStylePreset, type ComicStylePresetId } from "@/lib/comic-style-presets";
-import { COMIC_MASTER_QUALITY_BLOCK } from "@/lib/comic-generate-config";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { buildDirectorSystemPrompt } from "@/lib/comic-locale-prompts";
+import { panelsPerPageForLayout, type ComicLayoutId } from "@/lib/comic-layout";
 import { PRODUCT } from "@/lib/product-config";
 import {
   buildComicDirectorJsonSchema,
@@ -18,18 +19,7 @@ import {
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 
-const DIRECTOR_SYSTEM = `你是长篇漫画改编的「导演」。通读小说节选后输出 JSON 导演包（ComicDirectorPack），锁定全片视觉一致性。
-
-${COMIC_MASTER_QUALITY_BLOCK}
-
-要求：
-- characters：每人固定 id（char_1…）、appearanceEn/outfitEn 英文可视描述，整本不得改脸型服装
-- locations：场景 id（loc_1…）与 descriptionEn
-- pageBeats：恰好覆盖全书每一页，keyEvents 写该页应发生的**原文情节**（禁止脑补）
-- visualStyleEn：全片画风英文（必须与用户指定画风一致）
-- taboos：禁止网红厚涂、夸张二次元浓妆、图内可读文字`;
-
-function sampleNovelExcerpts(content: string, maxChars: number): string {
+function sampleNovelExcerpts(content: string, maxChars: number, outputLocale: BriefInputLocale = "zh"): string {
   if (isChildrenFormattedNovelContent(content)) {
     const sections = parseChildrenComicSections(content);
     if (sections.length === 0) return content.slice(0, maxChars);
@@ -48,7 +38,10 @@ function sampleNovelExcerpts(content: string, maxChars: number): string {
 
   for (const i of indices) {
     const ch = chapters[i]!;
-    const block = `第${ch.num}章《${ch.title}》\n${ch.body.slice(0, 800)}`;
+    const block =
+      outputLocale === "zh" || outputLocale === "zh-Hant"
+        ? `第${ch.num}章《${ch.title}》\n${ch.body.slice(0, 800)}`
+        : `Chapter ${ch.num}: ${ch.title}\n${ch.body.slice(0, 800)}`;
     picks.push(block);
   }
   return picks.join("\n\n---\n\n").slice(0, maxChars);
@@ -63,27 +56,50 @@ export function buildComicDirectorUserMessage(opts: {
   genre: CoverGenre;
   stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
+  layoutId?: ComicLayoutId;
+  outputLocale?: BriefInputLocale;
 }): string {
+  const outputLocale = opts.outputLocale ?? "zh";
   const preset = getComicStylePreset(opts.stylePreset);
   const styleHint = `${preset.label}: ${preset.promptEn}`;
   const metaBlock = opts.novelMeta
     ? `\n【小说设定圣经（须遵守）】\n${formatNovelBibleForPrompt(opts.novelMeta.bible)}\n【章规划要点】\n${opts.novelMeta.chapterPlan.chapters
         .slice(0, 20)
-        .map((c) => `第${c.num}章 ${c.title}：${c.summary}`)
+        .map((c) =>
+          outputLocale === "zh" || outputLocale === "zh-Hant"
+            ? `第${c.num}章 ${c.title}：${c.summary}`
+            : `Chapter ${c.num} ${c.title}: ${c.summary}`,
+        )
         .join("\n")}`
     : "";
 
-  return `书名：${opts.novelTitle}
+  const layoutId = opts.layoutId ?? "grid_8";
+  const panelsPerPage = panelsPerPageForLayout(layoutId);
+  if (outputLocale === "zh" || outputLocale === "zh-Hant") {
+    return `书名：${opts.novelTitle}
 创意：${opts.novelPrompt.slice(0, 500)}
 简介：${opts.novelSummary.slice(0, 400)}
 
-全书漫画共 ${opts.pageCount} 页（每页 4 格）。题材画风参考：${styleHint}
+全书漫画共 ${opts.pageCount} 页（每页 ${panelsPerPage} 格，优先抽取关键情节，不做平均切段）。题材画风参考：${styleHint}
 ${metaBlock}
 
 【正文节选（多章采样）】
 ${opts.contentExcerpt}
 
 请输出 director JSON，pageBeats 长度恰为 ${opts.pageCount} 页。`;
+  }
+
+  return `Title: ${opts.novelTitle}
+Brief: ${opts.novelPrompt.slice(0, 500)}
+Summary: ${opts.novelSummary.slice(0, 400)}
+
+Comic length: ${opts.pageCount} pages (${panelsPerPage} panels each; key beats, not linear chunking). Style: ${styleHint}
+${metaBlock}
+
+[Novel excerpt — multi-chapter sample]
+${opts.contentExcerpt}
+
+Output director JSON with exactly ${opts.pageCount} pageBeats entries.`;
 }
 
 export function fallbackComicDirectorPack(opts: {
@@ -157,14 +173,18 @@ export async function fetchComicDirectorPack(params: {
   genre: CoverGenre;
   stylePreset: ComicStylePresetId;
   novelMeta: NovelGenerationMeta | null;
+  layoutId?: ComicLayoutId;
+  outputLocale?: BriefInputLocale;
 }): Promise<ComicDirectorPack> {
+  const outputLocale = params.outputLocale ?? "zh";
   const excerpt = sampleNovelExcerpts(
     params.novelContent,
     PRODUCT.comic.directorContentMaxChars,
+    outputLocale,
   );
   const result = await llmJson({
     model: params.model,
-    system: DIRECTOR_SYSTEM,
+    system: buildDirectorSystemPrompt(outputLocale),
     user: buildComicDirectorUserMessage({
       novelTitle: params.novelTitle,
       novelPrompt: params.novelPrompt,
@@ -174,6 +194,8 @@ export async function fetchComicDirectorPack(params: {
       genre: params.genre,
       stylePreset: params.stylePreset,
       novelMeta: params.novelMeta,
+      layoutId: params.layoutId,
+      outputLocale,
     }),
     jsonSchema: buildComicDirectorJsonSchema(params.pageCount),
     temperature: 0.55,

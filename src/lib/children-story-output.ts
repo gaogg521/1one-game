@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { childrenUnnamedLabel } from "@/lib/i18n/chapter-labels";
 import {
   allChildrenBodyMarks,
   allChildrenClosingMarks,
@@ -19,9 +21,9 @@ export type ParsedChildrenStoryOutput = {
 
 const CHILDREN_STORY_TITLE_MAX = 12;
 
-export function clampChildrenStoryTitle(raw: string): string {
+export function clampChildrenStoryTitle(raw: string, uiLocale: AppLocale = "zh-Hans"): string {
   const t = raw.trim().replace(/\s+/g, "");
-  if (!t) return "未命名";
+  if (!t) return childrenUnnamedLabel(uiLocale);
   return t.length <= CHILDREN_STORY_TITLE_MAX ? t : t.slice(0, CHILDREN_STORY_TITLE_MAX);
 }
 
@@ -54,27 +56,36 @@ function sliceSection(text: string, mark: string, endIdx: number): string {
   return text.slice(start + mark.length, endIdx).trim();
 }
 
-function extractTitleFromBody(body: string): { storyTitle: string; body: string } {
+function extractTitleFromBody(
+  body: string,
+  uiLocale: AppLocale,
+): { storyTitle: string; body: string } {
   const lines = body.split("\n").map((l) => l.trim());
   const first = lines[0] ?? "";
   if (first && first.length <= CHILDREN_STORY_TITLE_MAX + 2 && !first.includes("。") && !first.includes("，")) {
     const rest = lines.slice(1).join("\n").trim();
     return {
-      storyTitle: clampChildrenStoryTitle(first),
+      storyTitle: clampChildrenStoryTitle(first, uiLocale),
       body: rest || body,
     };
   }
-  return { storyTitle: "未命名", body };
+  return { storyTitle: childrenUnnamedLabel(uiLocale), body };
 }
 
 /** 解析儿童成稿（分龄标记 + 旧版标记兼容） */
 export function parseChildrenStoryOutput(
   raw: string,
   targetAge?: ChildrenTargetAge,
+  uiLocale: AppLocale = "zh-Hans",
 ): ParsedChildrenStoryOutput {
   const text = raw.trim();
   if (!text) {
-    return { interpretation: "", storyTitle: "未命名", body: "", parentReadingTip: "" };
+    return {
+      interpretation: "",
+      storyTitle: childrenUnnamedLabel(uiLocale),
+      body: "",
+      parentReadingTip: "",
+    };
   }
 
   const age = targetAge !== undefined ? parseChildrenTargetAge(targetAge) : undefined;
@@ -113,7 +124,7 @@ export function parseChildrenStoryOutput(
     }
     return {
       interpretation: clampChildrenInterpretation(interpretation, interpretMax),
-      storyTitle: clampChildrenStoryTitle(storyTitle),
+      storyTitle: clampChildrenStoryTitle(storyTitle, uiLocale),
       body: body || text,
       parentReadingTip: clampParentReadingTip(parentReadingTip, closingMax),
     };
@@ -126,7 +137,7 @@ export function parseChildrenStoryOutput(
     if (closingHit && closingHit.index > bodyHit.index) {
       parentReadingTip = sliceSection(text, closingHit.mark, text.length);
     }
-    const { storyTitle, body: bodyRest } = extractTitleFromBody(body);
+    const { storyTitle, body: bodyRest } = extractTitleFromBody(body, uiLocale);
     return {
       interpretation: clampChildrenInterpretation(interpretation, interpretMax),
       storyTitle,
@@ -138,7 +149,8 @@ export function parseChildrenStoryOutput(
   const lines = text.split("\n");
   const first = lines[0]?.trim() ?? "";
   const storyTitle = clampChildrenStoryTitle(
-    first.length <= CHILDREN_STORY_TITLE_MAX + 2 ? first : "未命名",
+    first.length <= CHILDREN_STORY_TITLE_MAX + 2 ? first : childrenUnnamedLabel(uiLocale),
+    uiLocale,
   );
   return {
     interpretation: clampChildrenInterpretation(interpretation, interpretMax),
@@ -148,7 +160,12 @@ export function parseChildrenStoryOutput(
   };
 }
 
-export function childrenNovelDbTitle(parsedTitle: string, fallbackTitle?: string): string {
-  const t = clampChildrenStoryTitle(parsedTitle || fallbackTitle || "未命名");
-  return clampNovelTitle(t, NOVEL_TITLE_MAX_LEN);
+export function childrenNovelDbTitle(
+  parsedTitle: string,
+  fallbackTitle?: string,
+  uiLocale: AppLocale = "zh-Hans",
+): string {
+  const fallback = parsedTitle || fallbackTitle || childrenUnnamedLabel(uiLocale);
+  const t = clampChildrenStoryTitle(fallback, uiLocale);
+  return clampNovelTitle(t, NOVEL_TITLE_MAX_LEN, uiLocale);
 }

@@ -1,3 +1,6 @@
+import type { AppLocale } from "@/i18n/routing";
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
+import { untitledShortLabel } from "@/lib/i18n/chapter-labels";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
@@ -34,7 +37,7 @@ async function loadCoverFontBase64(): Promise<string> {
   }
 
   const res = await fetch(FONT_CDN, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`封面字体下载失败: ${res.status}`);
+  if (!res.ok) throw new ApiKeyedError("coverFontDownloadFailed", { status: res.status });
   cachedFontB64 = Buffer.from(await res.arrayBuffer()).toString("base64");
   return cachedFontB64;
 }
@@ -47,9 +50,9 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function splitTitleLines(title: string, maxCharsPerLine = 5): string[] {
+function splitTitleLines(title: string, uiLocale: AppLocale, maxCharsPerLine = 5): string[] {
   const clean = title.trim().replace(/\s+/g, "");
-  if (!clean) return ["未命名"];
+  if (!clean) return [untitledShortLabel(uiLocale)];
   if (clean.length <= maxCharsPerLine) return [clean];
   const lines: string[] = [];
   for (let i = 0; i < clean.length; i += maxCharsPerLine) {
@@ -58,9 +61,9 @@ function splitTitleLines(title: string, maxCharsPerLine = 5): string[] {
   return lines.slice(0, 4);
 }
 
-function buildOverlaySvg(title: string, genre: CoverGenre, fontB64: string): string {
+function buildOverlaySvg(title: string, genre: CoverGenre, fontB64: string, uiLocale: AppLocale): string {
   const style = COVER_GENRE_STYLES[genre];
-  const lines = splitTitleLines(title);
+  const lines = splitTitleLines(title, uiLocale);
   const fontSize = lines.length >= 3 ? 44 : lines.length === 2 ? 52 : 58;
   const lineHeight = fontSize + 10;
   const baseY = COVER_H - 72;
@@ -115,10 +118,11 @@ function buildOverlaySvg(title: string, genre: CoverGenre, fontB64: string): str
 /** 将 AI 背景图与小说标题合成为网文风格封面（3:4 竖版，含书名）。 */
 export async function compositeNovelCover(
   background: Buffer,
-  opts: { title: string; genre: CoverGenre },
+  opts: { title: string; genre: CoverGenre; uiLocale?: AppLocale },
 ): Promise<Buffer> {
   const fontB64 = await loadCoverFontBase64();
-  const svg = Buffer.from(buildOverlaySvg(opts.title, opts.genre, fontB64));
+  const uiLocale = opts.uiLocale ?? "zh-Hans";
+  const svg = Buffer.from(buildOverlaySvg(opts.title, opts.genre, fontB64, uiLocale));
 
   const bg = await sharp(background)
     .resize(COVER_W, COVER_H, { fit: "cover", position: "centre" })

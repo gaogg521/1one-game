@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { untitledShortLabel } from "@/lib/i18n/chapter-labels";
 import { inferStoryGenre, type CoverGenre } from "@/lib/cover-genre";
 import type { ComicStoryContext } from "@/lib/comic-panel-prompt-urban";
 import { prisma } from "@/lib/prisma";
@@ -33,9 +35,10 @@ export async function resolveComicStoryGenre(comic: ComicRow): Promise<CoverGenr
 /** 配图时注入小说标题/摘要（占位分镜时重建都市画面描述） */
 export async function resolveComicStoryContext(
   comic: ComicRow,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<ComicStoryContext & { genre: CoverGenre }> {
   const novel = await loadNovelForComic(comic);
-  const title = comic.title || novel?.title || "未命名";
+  const title = comic.title || novel?.title || untitledShortLabel(uiLocale);
   const summary =
     novel?.summary?.trim() ||
     novel?.content?.replace(/\n/g, " ").trim().slice(0, 400) ||

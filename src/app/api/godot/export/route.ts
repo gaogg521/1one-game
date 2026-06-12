@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readLimitedJson } from "@/lib/api/read-json-body";
+import { localizedApiErrorPayload, godotFailurePayload } from "@/lib/api/localized-error";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 import { exportGameSpecToGodotWeb } from "@/lib/godot-export";
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       {
-        error: "请求体无效",
+        ...localizedApiErrorPayload(req, "invalidBody"),
         code: "bad_request",
         details: parsed.error.issues.map((i) => i.message).slice(0, 5),
         requestId,
@@ -75,7 +76,10 @@ export async function POST(req: Request) {
   const coerced = coerceGameSpec(parsed.data.spec);
   if (!coerced.ok) {
     return NextResponse.json(
-      { error: coerced.issues.join("; ") || "GameSpec 无效", requestId },
+      {
+        ...localizedApiErrorPayload(req, "godotSpecInvalid", { requestId }),
+        details: coerced.issues.slice(0, 5),
+      },
       { status: 400, headers: ridHeaders(requestId) },
     );
   }
@@ -100,11 +104,10 @@ export async function POST(req: Request) {
 
   if (!isGodotExportSupported(spec)) {
     return NextResponse.json(
-      {
-        error: `模板 ${spec.templateId} 暂不支持 Godot Web 导出`,
-        code: "unsupported",
+      localizedApiErrorPayload(req, "godotTemplateUnsupported", {
         requestId,
-      },
+        params: { templateId: spec.templateId },
+      }),
       { status: 400, headers: ridHeaders(requestId) },
     );
   }
@@ -126,10 +129,10 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       const status = result.code === "unsupported" ? 400 : result.code === "godot_missing" ? 503 : 500;
-      return NextResponse.json(
-        { error: result.error, code: result.code, requestId },
-        { status, headers: ridHeaders(requestId) },
-      );
+      return NextResponse.json(godotFailurePayload(req, result, requestId), {
+        status,
+        headers: ridHeaders(requestId),
+      });
     }
 
     return NextResponse.json(
@@ -160,10 +163,10 @@ export async function POST(req: Request) {
           : result.code === "platform_unavailable"
             ? 503
             : 500;
-    return NextResponse.json(
-      { error: result.error, code: result.code, requestId },
-      { status, headers: ridHeaders(requestId) },
-    );
+    return NextResponse.json(godotFailurePayload(req, result, requestId), {
+      status,
+      headers: ridHeaders(requestId),
+    });
   }
 
   return NextResponse.json(
@@ -178,11 +181,11 @@ export async function POST(req: Request) {
   );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const friendly = msg.includes("Maximum call stack")
-      ? "游戏数据过大或结构异常，请去掉部分参考图后重试"
-      : msg.slice(0, 500);
+    const key = msg.includes("Maximum call stack") ? "godotDataTooLarge" : undefined;
     return NextResponse.json(
-      { error: friendly, code: "export_failed", requestId },
+      key
+        ? localizedApiErrorPayload(req, key, { requestId })
+        : localizedApiErrorPayload(req, "godotBuildFailed", { requestId }),
       { status: 500, headers: ridHeaders(requestId) },
     );
   }

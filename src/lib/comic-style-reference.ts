@@ -101,5 +101,13 @@ export function comicPanelRenderNeedsGemini(styleRefUrls: string[]): boolean {
   return styleRefUrls.length > 0;
 }
 
+import type { AppLocale } from "@/i18n/routing";
+import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
+
+/** @deprecated use comicStyleGeminiRequiredMessage(locale) */
 export const COMIC_STYLE_GEMINI_REQUIRED_MSG =
   "漫画分镜配图为保持画风一致，须配置 GEMINI_API_KEY（首张分镜图+封面作为参考图，仅 Gemini 多模态支持）。";
+
+export function comicStyleGeminiRequiredMessage(locale: AppLocale = "zh-Hans"): string {
+  return comicPanelProgressMessage(locale, "geminiRequired");
+}

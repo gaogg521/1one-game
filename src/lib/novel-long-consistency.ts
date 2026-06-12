@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { novelConsistencyMessage } from "@/lib/i18n/progress-message";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import type { ChapterPlanItem, NovelBible } from "@/lib/novel-long-pipeline-types";
 
@@ -18,15 +20,20 @@ export function checkSegmentConsistency(opts: {
   expectedChapters: ChapterPlanItem[];
   segmentText: string;
   previousContent: string;
+  uiLocale?: AppLocale;
 }): ConsistencyReport {
   const issues: ConsistencyIssue[] = [];
   const { bible, expectedChapters, segmentText, previousContent } = opts;
+  const uiLocale = opts.uiLocale ?? "zh-Hans";
+  const msg = (key: string, params?: Record<string, string | number>) =>
+    novelConsistencyMessage(uiLocale, key, params);
+  const listSep = uiLocale.startsWith("zh") ? "、" : ", ";
 
   const parsed = parseNovelChapters(segmentText);
   if (parsed.length === 0) {
     issues.push({
       code: "no_chapter_markers",
-      message: "本段未解析到「=== 第X章 标题 ===」章节标记",
+      message: msg("noChapterMarkers"),
       severity: "error",
     });
     return { ok: false, issues };
@@ -39,7 +46,7 @@ export function checkSegmentConsistency(opts: {
   if (dup.length > 0) {
     issues.push({
       code: "duplicate_chapter_num",
-      message: `重复章节号：${[...new Set(dup)].join("、")}`,
+      message: msg("duplicateChapterNum", { nums: [...new Set(dup)].join(listSep) }),
       severity: "error",
     });
   }
@@ -49,14 +56,14 @@ export function checkSegmentConsistency(opts: {
     if (!expectedNums.has(ch.num)) {
       issues.push({
         code: "unexpected_chapter",
-        message: `出现计划外章节第${ch.num}章`,
+        message: msg("unexpectedChapter", { num: ch.num }),
         severity: "warn",
       });
     }
     if (ch.num <= prevMax) {
       issues.push({
         code: "chapter_rewind",
-        message: `第${ch.num}章号不应 ≤ 已写最大章号 ${prevMax}`,
+        message: msg("chapterRewind", { num: ch.num, prevMax }),
         severity: "error",
       });
     }
@@ -66,7 +73,7 @@ export function checkSegmentConsistency(opts: {
     if (!parsed.some((c) => c.num === exp.num)) {
       issues.push({
         code: "missing_planned_chapter",
-        message: `缺少计划章节第${exp.num}章《${exp.title}》`,
+        message: msg("missingPlannedChapter", { num: exp.num, title: exp.title }),
         severity: "warn",
       });
     }
@@ -80,7 +87,7 @@ export function checkSegmentConsistency(opts: {
     if (previousContent.includes(name) && !body.includes(name)) {
       issues.push({
         code: "character_absent_in_segment",
-        message: `本段未出现主要角色「${name}」（前文已登场）`,
+        message: msg("characterAbsentInSegment", { name }),
         severity: "warn",
       });
     }

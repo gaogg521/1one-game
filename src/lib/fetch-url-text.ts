@@ -2,6 +2,8 @@
  * 抓取公开网页正文（简易 HTML 去标签），仅供创意辅助；请勿用于内网或未授权地址。
  */
 
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
+
 const MAX_BYTES = 900_000;
 const MAX_CHARS = 24_000;
 const TIMEOUT_MS = 14_000;
@@ -38,13 +40,13 @@ export async function fetchUrlPlainText(rawUrl: string): Promise<{ title?: strin
   try {
     url = new URL(rawUrl.trim());
   } catch {
-    throw new Error("链接格式无效");
+    throw new ApiKeyedError("urlInvalid");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("仅支持 http/https 链接");
+    throw new ApiKeyedError("urlHttpOnly");
   }
   if (isBlockedHost(url.hostname)) {
-    throw new Error("出于安全考虑，该地址不允许抓取");
+    throw new ApiKeyedError("urlBlocked");
   }
 
   const ac = new AbortController();
@@ -61,12 +63,12 @@ export async function fetchUrlPlainText(rawUrl: string): Promise<{ title?: strin
       },
     });
     if (!res.ok) {
-      throw new Error(`抓取失败 HTTP ${res.status}`);
+      throw new ApiKeyedError("urlFetchFailed", { status: res.status });
     }
     const ctype = res.headers.get("content-type") ?? "";
     const buf = await res.arrayBuffer();
     if (buf.byteLength > MAX_BYTES) {
-      throw new Error("页面体积过大");
+      throw new ApiKeyedError("urlPageTooLarge");
     }
 
     if (ctype.includes("text/plain")) {

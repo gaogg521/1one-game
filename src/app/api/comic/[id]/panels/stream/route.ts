@@ -1,6 +1,5 @@
 import { generateComicCover } from "@/lib/cover-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
-import { COVER_GENRE_STYLES } from "@/lib/cover-genre";
 import { resolveComicStoryContext } from "@/lib/comic-story-genre";
 import { getOwnerKey } from "@/lib/owner";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +10,11 @@ import {
   renderComicPanels,
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
+import { apiErrorTextForLocale, localizedStreamError } from "@/lib/api/localized-error";
+import { coverGenreLabel } from "@/lib/i18n/cover-genre-label";
+import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const maxDuration = 600;
 
@@ -28,21 +32,22 @@ type PanelStreamBody = {
 };
 
 export async function POST(req: Request, ctx: RouteContext) {
+  const uiLocale = resolveRequestLocaleSync(req);
+  const pm = (key: string, params?: Record<string, string | number | undefined | null>) =>
+    comicPanelProgressMessage(uiLocale, key, params);
+
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return new Response(JSON.stringify({ error: "未授权" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return localizedStreamError(req, "unauthorized", 401);
   }
 
   const { id } = await ctx.params;
+
+  const quotaBlock = await gateGenerationQuota("comicPanels", { refId: id });
+  if (quotaBlock) return quotaBlock;
   const row = await prisma.comic.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return new Response(JSON.stringify({ error: "未找到" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return localizedStreamError(req, "notFound", 404);
   }
 
   let body: PanelStreamBody = {};
@@ -57,16 +62,13 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const doc = parseComicDocument(row.imageUrls);
   if (doc.pages.length === 0) {
-    return new Response(JSON.stringify({ error: "暂无分镜数据" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return localizedStreamError(req, "noStoryboard", 400);
   }
 
   const availability = getImageGenAvailability();
   const encoder = new TextEncoder();
   const { title: storyTitle, summary: storySummary, genre: storyGenre } =
-    await resolveComicStoryContext(row);
+    await resolveComicStoryContext(row, uiLocale);
   let coverPath = row.coverPath;
 
   const stream = new ReadableStream({
@@ -85,8 +87,8 @@ export async function POST(req: Request, ctx: RouteContext) {
             where: { id: row.novelId },
             select: { summary: true, content: true },
           });
-          const genreLabel = COVER_GENRE_STYLES[storyGenre]?.label ?? "题材";
-          send({ type: "status", message: `正在按${genreLabel}风格重生成漫画封面…` });
+          const genreLabel = coverGenreLabel(uiLocale, storyGenre);
+          send({ type: "status", message: pm("regenCover", { genre: genreLabel }) });
           const newCover = await generateComicCover(
             id,
             row.title,
@@ -113,16 +115,16 @@ export async function POST(req: Request, ctx: RouteContext) {
             message:
               cleared > 0
                 ? scope === "all"
-                  ? `已清空 ${cleared} 格配图，开始重新生成…`
-                  : `已清空第 ${scope.pageNumber} 页 ${cleared} 格配图，开始重新生成…`
-                : "所选范围暂无配图，将按缺图补全…",
+                  ? pm("clearedAll", { count: cleared })
+                  : pm("clearedPage", { page: scope.pageNumber, count: cleared })
+                : pm("scopeNoImages"),
             imageUrls: clearedUrls,
           });
         } else {
           send({
             type: "status",
             message: availability.ok
-              ? `已连接文生图：${availability.message}，逐格串行生成（缺图自动补全）…`
+              ? pm("connectedSerial", { detail: availability.message })
               : availability.message,
           });
         }
@@ -132,7 +134,10 @@ export async function POST(req: Request, ctx: RouteContext) {
           coverPath,
           storyGenre,
           storyContext: { title: storyTitle, summary: storySummary },
-          skipStyleRefs: fullRegenerate,
+          skipStyleRefs: fullRegenerate && !doc.characterSheetUrls?.length,
+          director: doc.director,
+          characterSheetUrls: doc.characterSheetUrls,
+          uiLocale,
           onProgress: (ev) => {
             send(ev as unknown as Record<string, unknown>);
             if (ev.type === "panel_done") {
@@ -171,14 +176,16 @@ export async function POST(req: Request, ctx: RouteContext) {
           errors: result.errors.length ? result.errors : undefined,
           message:
             after.withImage === 0
-              ? result.errors.join("；") || "配图未生成"
+              ? result.errors.join("；") || pm("noneGenerated")
               : after.withImage < after.total
-                ? `完成：${after.withImage}/${after.total} 格已有配图`
-                : "配图全部完成",
+                ? pm("partialDone", { withImage: after.withImage, total: after.total })
+                : pm("allComplete"),
         });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "配图生成失败";
-        send({ type: "error", error: message });
+      } catch {
+        send({
+          type: "error",
+          error: apiErrorTextForLocale(uiLocale, "comicPanelRenderFailed"),
+        });
       } finally {
         controller.close();
       }

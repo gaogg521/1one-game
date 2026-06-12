@@ -9,8 +9,10 @@ import { parseRefineBody } from "@/lib/refinement-request";
 import { appendRefinementLog, parseRefinementLog } from "@/lib/refinement-log";
 import { fetchRefinementLogJson, saveRefinementLogJson } from "@/lib/project-refinement-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { localizedApiErrorPayload, localizedJsonError } from "@/lib/api/localized-error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,13 +22,19 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
+  }
+
+  const quotaBlock = await gateGenerationQuota("refine");
+  if (quotaBlock) {
+    const body = await quotaBlock.json();
+    return NextResponse.json(body, { status: 402 });
   }
 
   const rl = generateRateLimits();
   const throttleKey = await getThrottleKey("proj_refine", ownerKey);
   if (!rateLimit(throttleKey, rl.refineMax, rl.windowMs)) {
-    return NextResponse.json({ error: "精炼次数过多，请稍后再试" }, { status: 429 });
+    return localizedJsonError(req, "refineRateLimited", 429);
   }
 
   const { id } = await ctx.params;
@@ -34,17 +42,17 @@ export async function POST(req: Request, ctx: RouteContext) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const parsed = parseRefineBody(body);
   if (!parsed.ok) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return NextResponse.json(localizedApiErrorPayload(req, parsed.errorKey), { status: 400 });
   }
 
   const row = await prisma.project.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   const prevLog = await fetchRefinementLogJson(id);
@@ -75,7 +83,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           currentPrompt: row.prompt,
         });
         if (!patched.ok) {
-          return NextResponse.json({ error: patched.error }, { status: patched.status });
+          return NextResponse.json(localizedApiErrorPayload(req, patched.errorKey), { status: patched.status });
         }
         nextSpec = patched.spec;
         if (typeof patched.mergedPrompt === "string" && patched.mergedPrompt.trim()) {
@@ -138,8 +146,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       refinementHistory: history,
       generationSource: meta.source,
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "精炼失败";
-    return NextResponse.json({ error: msg.slice(0, 240) }, { status: 500 });
+  } catch {
+    return NextResponse.json(localizedApiErrorPayload(req, "refineFailed"), { status: 500 });
   }
 }

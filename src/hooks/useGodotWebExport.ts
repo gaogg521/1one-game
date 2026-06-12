@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { apiErrorMessage } from "@/lib/i18n/progress-message";
+import { tMessage } from "@/lib/i18n/messages";
 import { buildGodotExportRequestPayload } from "@/lib/godot-export-request.client";
 import { safeJsonStringify } from "@/lib/safe-json";
 import { getPrefetchedGodotBuild, prefetchGodotExport } from "@/lib/godot-prefetch.client";
@@ -17,11 +21,16 @@ function specSignature(spec: GameSpec, projectId?: string, refDigest = "0"): str
   return `${projectId ?? ""}:${spec.templateId}:${spec.title}:${refDigest}`;
 }
 
+function isStackOverflowMessage(msg: string): boolean {
+  return msg.includes("Maximum call stack");
+}
+
 export function useGodotWebExport(
   spec: GameSpec | null,
   projectId?: string,
   referencePayloads?: RuntimeReferencePayload[],
   referenceHandles?: ReferenceImageHandle[],
+  uiLocale: AppLocale = "zh-Hans",
 ) {
   const [state, setState] = useState<GodotExportState>("idle");
   const [buildUrl, setBuildUrl] = useState<string | null>(null);
@@ -99,7 +108,11 @@ export function useGodotWebExport(
         });
       } catch (e) {
         setState("error");
-        setError(e instanceof Error ? e.message : "GameSpec 无法序列化");
+        setError(
+          e instanceof Error && isStackOverflowMessage(e.message)
+            ? apiErrorMessage(uiLocale, "godotDataTooLarge")
+            : apiErrorMessage(uiLocale, "gameSpecSerializeFailed"),
+        );
         return;
       }
 
@@ -110,16 +123,16 @@ export function useGodotWebExport(
         setState("error");
         const msg = e instanceof Error ? e.message : String(e);
         setError(
-          msg.includes("Maximum call stack")
-            ? "游戏数据过大或结构异常，请去掉部分参考图后重试"
-            : "GameSpec 无法序列化",
+          isStackOverflowMessage(msg)
+            ? apiErrorMessage(uiLocale, "godotDataTooLarge")
+            : apiErrorMessage(uiLocale, "gameSpecSerializeFailed"),
         );
         return;
       }
 
       const res = await fetch("/api/godot/export", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(uiLocale, { "Content-Type": "application/json" }),
         body: payload,
       });
       const data = (await res.json()) as {
@@ -130,33 +143,27 @@ export function useGodotWebExport(
       };
       if (!res.ok) {
         setState("error");
-        const err = data.error ?? "Godot 在线版构建失败";
-        setError(
-          err.includes("Maximum call stack")
-            ? "游戏数据过大或结构异常，请去掉部分参考图后重试"
-            : err,
-        );
+        const err = data.error ?? apiErrorMessage(uiLocale, "godotBuildFailed");
+        setError(isStackOverflowMessage(err) ? apiErrorMessage(uiLocale, "godotDataTooLarge") : err);
         return;
       }
       if (!data.buildUrl) {
         setState("error");
-        setError("未返回构建地址");
+        setError(apiErrorMessage(uiLocale, "godotNoBuildUrl"));
         return;
       }
       setReferenceSummary(data.referenceSummary ?? null);
       applyReady(data.buildUrl, !!data.cached, signature);
     } catch (e) {
       setState("error");
-      const msg = e instanceof Error ? e.message : "网络异常";
+      const msg = e instanceof Error ? e.message : tMessage(uiLocale, "godotExport.networkError");
       setError(
-        msg.includes("Maximum call stack")
-          ? "游戏数据过大或结构异常，请去掉部分参考图后重试"
-          : msg,
+        isStackOverflowMessage(msg) ? apiErrorMessage(uiLocale, "godotDataTooLarge") : msg,
       );
     } finally {
       inflightRef.current = false;
     }
-  }, [applyReady, projectId]);
+  }, [applyReady, projectId, uiLocale]);
 
   useEffect(() => {
     if (!spec || !sig) {

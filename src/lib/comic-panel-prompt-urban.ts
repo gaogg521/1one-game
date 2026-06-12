@@ -26,6 +26,17 @@ export function panelPromptLooksFantasy(prompt: string): boolean {
   return FANTASY_PROMPT_RE.test(prompt);
 }
 
+const HISTORICAL_CONTEXT_RE =
+  /崇祯|明末|大明|皇帝|陛下|宫城|宫门|殿上|朝堂|锦衣卫|内阁|古代|王朝|宫廷|hanfu|historical|imperial|palace|dynasty|robe/i;
+
+export function panelLooksHistoricalOrPeriod(panel: {
+  caption?: string;
+  prompt?: string;
+}): boolean {
+  const blob = `${panel.caption ?? ""} ${panel.prompt ?? ""}`;
+  return HISTORICAL_CONTEXT_RE.test(blob);
+}
+
 /** 按全局格序号在都市爽文节奏里选场景（豪门/逆袭类） */
 const URBAN_SCENE_BEATS = [
   "protagonist in plain casual clothes on crowded modern Chinese city street, subway entrance, skyscrapers, smartphones, realistic manhua",

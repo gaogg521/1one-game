@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { persistNovelCoverPath } from "@/lib/cover-path-db";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -20,7 +22,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   const row = await prisma.novel.findUnique({ where: { id } });
   if (!row) {
     return NextResponse.json(
-      { error: "小说不存在", code: codes.BAD_REQUEST, requestId },
+      localizedApiErrorPayload(req, "novelNotFound", {
+        code: codes.BAD_REQUEST,
+        requestId,
+      }),
       { status: 404, headers: ridHeaders(requestId) },
     );
   }
@@ -30,6 +35,12 @@ export async function POST(req: Request, ctx: RouteContext) {
       { ok: true, coverPath: row.coverPath, novel: { id: row.id, coverPath: row.coverPath } },
       { headers: ridHeaders(requestId) },
     );
+  }
+
+  const quotaBlock = await gateGenerationQuota("cover", { refId: id });
+  if (quotaBlock) {
+    const body = await quotaBlock.json();
+    return NextResponse.json(body, { status: 402, headers: ridHeaders(requestId) });
   }
 
   if (force && row.coverPath) {
@@ -61,7 +72,10 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   if (!coverPath) {
     return NextResponse.json(
-      { error: "封面生成失败，请检查 OPENAI_API_KEY / GEMINI_API_KEY 是否已配置", code: codes.LLM_FAILED, requestId },
+      localizedApiErrorPayload(req, "coverGenFailed", {
+        code: codes.LLM_FAILED,
+        requestId,
+      }),
       { status: 502, headers: ridHeaders(requestId) },
     );
   }

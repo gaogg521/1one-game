@@ -10,6 +10,7 @@ import {
 } from "./cover-genre";
 import { normalizeNovelTitle } from "./novel-display";
 import { compositeNovelCover } from "./cover-composite";
+import type { AppLocale } from "@/i18n/routing";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -24,6 +25,7 @@ export interface CoverGenOptions {
   type: "novel" | "comic" | "game";
   /** 游戏 key art：由 Creative Brief 生成的英文 prompt（优先于 storyHint） */
   gameKeyArtPrompt?: string;
+  uiLocale?: AppLocale;
 }
 
 async function readImageBuffer(imageUrl: string): Promise<Buffer | null> {
@@ -130,8 +132,9 @@ export async function generateCover(opts: CoverGenOptions): Promise<string | nul
     const bgBuf = await readImageBuffer(result.url);
     if (!bgBuf) return result.url;
 
-    const displayTitle = normalizeNovelTitle(opts.title, opts.storyHint);
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre });
+    const uiLocale = opts.uiLocale ?? "zh-Hans";
+    const displayTitle = normalizeNovelTitle(opts.title, opts.storyHint, undefined, uiLocale);
+    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre, uiLocale });
     const tmpName = `composed-${Date.now()}.jpg`;
     const tmpRel = `/covers/${tmpName}`;
     const tmpAbs = path.join(process.cwd(), "public", "covers", tmpName);
@@ -152,6 +155,7 @@ export async function generateNovelCover(
   summary?: string,
   storyHint?: string,
   genre?: CoverGenre,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<string | null> {
   const g =
     genre ??
@@ -177,11 +181,11 @@ export async function generateNovelCover(
     });
     if (!result?.url) return null;
 
-    const displayTitle = normalizeNovelTitle(title, storyHint);
+    const displayTitle = normalizeNovelTitle(title, storyHint, undefined, uiLocale);
     const bgBuf = await readImageBuffer(result.url);
     if (!bgBuf) return null;
 
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre: g });
+    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre: g, uiLocale });
     const coverPath = await persistNovelCoverBuffer(novelId, composed);
     if (!coverPath) return null;
 
@@ -201,8 +205,9 @@ export async function ensureNovelCoverAfterCreate(
   storyHint: string,
   timeoutMs = 600_000,
   genre?: CoverGenre,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<string | null> {
-  const task = generateNovelCover(novelId, title, summary, storyHint, genre);
+  const task = generateNovelCover(novelId, title, summary, storyHint, genre, uiLocale);
   const timeout = new Promise<null>((resolve) => {
     setTimeout(() => resolve(null), timeoutMs);
   });
@@ -219,8 +224,9 @@ export async function composeAndPersistNovelCoverFromBackground(
   backgroundUrl: string,
   summary?: string,
   storyHint?: string,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<string | null> {
-  const displayTitle = normalizeNovelTitle(title, storyHint);
+  const displayTitle = normalizeNovelTitle(title, storyHint, undefined, uiLocale);
   const genre = inferStoryGenre({
     title: displayTitle,
     summary,
@@ -232,7 +238,7 @@ export async function composeAndPersistNovelCoverFromBackground(
   if (!bgBuf) return null;
 
   try {
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre });
+    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre, uiLocale });
     const coverPath = await persistNovelCoverBuffer(novelId, composed);
     if (!coverPath) return null;
 

@@ -52,7 +52,7 @@ export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
 
 export type PatchGameSpecResult =
   | { ok: true; spec: GameSpec; mergedPrompt?: string }
-  | { ok: false; error: string; status: number };
+  | { ok: false; errorKey: string; status: number };
 
 /**
  * 调用 LLM 对规格打补丁（与 HTTP 路由解耦，供 refine 等多入口复用）。
@@ -64,17 +64,17 @@ export async function patchGameSpecWithLlm(params: {
 }): Promise<PatchGameSpecResult> {
   const prompt = params.instruction.trim();
   if (!prompt) {
-    return { ok: false, error: "修改指令不能为空", status: 400 };
+    return { ok: false, errorKey: "patchInstructionEmpty", status: 400 };
   }
 
   const coerced = coerceGameSpec(params.currentSpec);
   if (!coerced.ok) {
-    return { ok: false, error: "当前规格无效，无法修改", status: 400 };
+    return { ok: false, errorKey: "patchSpecInvalid", status: 400 };
   }
 
   const models = getProviderModelCascade();
   if (!models.length) {
-    return { ok: false, error: "未配置可用模型", status: 503 };
+    return { ok: false, errorKey: "patchNoModel", status: 503 };
   }
 
   const currentPrompt = (params.currentPrompt ?? "").trim();
@@ -104,5 +104,5 @@ export async function patchGameSpecWithLlm(params: {
     }
   }
 
-  return { ok: false, error: "修改失败，请稍后重试", status: 503 };
+  return { ok: false, errorKey: "patchFailed", status: 503 };
 }

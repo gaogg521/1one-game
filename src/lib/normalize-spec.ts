@@ -4,6 +4,8 @@ import {
   SystemsSchema,
   type GameSpec,
 } from "@/lib/game-spec";
+import type { AppLocale } from "@/i18n/routing";
+import { untitledGameLabel } from "@/lib/i18n/chapter-labels";
 const TowerDefenseBlueprintSchema = GameSpecSchema.shape.towerDefense;
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 
@@ -34,7 +36,10 @@ function num(v: unknown, min: number, max: number, fallback: number): number {
 }
 
 /** 将宽松 JSON 尽量收敛到合法 GameSpec（修复颜色格式、字符串数值、缺字段等）。 */
-export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { ok: false; issues: string[] } {
+export function coerceGameSpec(
+  raw: unknown,
+  uiLocale: AppLocale = "zh-Hans",
+): { ok: true; spec: GameSpec } | { ok: false; issues: string[] } {
   if (!raw || typeof raw !== "object") {
     return { ok: false, issues: ["根节点不是对象"] };
   }
@@ -61,7 +66,7 @@ export function coerceGameSpec(raw: unknown): { ok: true; spec: GameSpec } | { o
   }
 
   const titleRaw = typeof o.title === "string" ? o.title.trim().slice(0, 80) : "";
-  const title = titleRaw.length > 0 ? titleRaw : "未命名小游戏";
+  const title = titleRaw.length > 0 ? titleRaw : untitledGameLabel(uiLocale);
   if (!titleRaw) issues.push("title 为空，已使用默认标题");
 
   const themeIn = o.theme && typeof o.theme === "object" ? (o.theme as Record<string, unknown>) : {};

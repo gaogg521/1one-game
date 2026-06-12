@@ -4,9 +4,11 @@ import { getOwnerKey } from "@/lib/owner";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { generateGameSprites } from "@/lib/game-sprite-gen";
+import { localizedJsonError } from "@/lib/api/localized-error";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -18,25 +20,25 @@ export async function POST(
       select: { specJson: true, ownerKey: true },
     });
     if (!project) {
-      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
+      return localizedJsonError(req, "notFound", 404);
     }
     if (ownerKey && project.ownerKey !== ownerKey) {
-      return NextResponse.json({ error: "无权操作" }, { status: 403 });
+      return localizedJsonError(req, "forbidden", 403);
     }
 
     const spec = JSON.parse(project.specJson) as GameSpec;
     // 并行生成背景图 + 实体精灵
+    const uiLocale = resolveRequestLocaleSync(req);
     const [bgUrl, sprites] = await Promise.all([
       generateGameBackground(id, spec),
-      generateGameSprites(id, spec),
+      generateGameSprites(id, spec, uiLocale),
     ]);
 
     return NextResponse.json({
       backgroundUrl: bgUrl,
       spriteUrls: sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url })),
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "背景/精灵生成失败";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch {
+    return localizedJsonError(req, "backgroundGenFailed", 500);
   }
 }

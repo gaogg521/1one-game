@@ -2,14 +2,11 @@
 
 import dynamic from "next/dynamic";
 import type { GameSpec } from "@/lib/game-spec";
+import { GamePlayerLoading } from "@/components/GamePlayerLoading";
 
 const GamePlayerInner = dynamic(() => import("@/components/GamePlayerInner"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-[560px] w-full items-center justify-center rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] text-sm text-[var(--gc-muted)]">
-      正在加载引擎…
-    </div>
-  ),
+  loading: () => <GamePlayerLoading />,
 });
 
 export function GamePlayer(props: {

@@ -1,11 +1,13 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { expandCreativeBrief } from "@/lib/creative-brief";
 import { buildStudioBriefBullets } from "@/lib/creative-brief/format-prompt";
-import { buildServerPrepLines } from "@/lib/create-studio-narrative";
+import { buildGenerateRecapLines, buildServerPrepLines, streamMessage } from "@/lib/create-studio-narrative";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { generateGameSpecWithMeta } from "@/lib/generate-spec";
 import { createRunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
@@ -13,20 +15,32 @@ import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 
 /** SSE：推送生成阶段，最后一帧携带完整 spec（便于创作台展示进度）。 */
 export async function POST(req: Request) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
+  const uiLocale = resolveRequestLocaleSync(req);
   const rl = generateRateLimits();
   const ownerKey = (await getOwnerKey()) ?? "anon";
   const throttleKey = await getThrottleKey("gen_stream", ownerKey);
   if (!rateLimit(throttleKey, rl.streamMax, rl.windowMs)) {
-    return new Response(JSON.stringify({ error: "生成次数过多，请稍后再试", code: codes.RATE_LIMITED, requestId }), {
+    return new Response(
+      JSON.stringify(
+        localizedApiErrorPayload(req, "generateRateLimited", {
+          code: codes.RATE_LIMITED,
+          requestId,
+        }),
+      ),
+      {
       status: 429,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
   }
+
+  const quotaBlock = await gateGenerationQuota("game");
+  if (quotaBlock) return quotaBlock;
 
   const json = await readLimitedJson(req, requestId);
   if (!json.ok) {
@@ -38,7 +52,14 @@ export async function POST(req: Request) {
 
   const parsed = parseGeneratePayload(json.body);
   if (!parsed.ok) {
-    return new Response(JSON.stringify({ error: parsed.error, code: codes.BAD_REQUEST, requestId }), {
+    return new Response(
+      JSON.stringify(
+        localizedApiErrorPayload(req, parsed.errorKey, {
+          code: codes.BAD_REQUEST,
+          requestId,
+        }),
+      ),
+      {
       status: parsed.status,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
@@ -53,7 +74,7 @@ export async function POST(req: Request) {
 
       const startedAt = Date.now();
       try {
-        send({ step: "start", message: "已接收创意，准备生成…" });
+        send({ step: "start", message: streamMessage(uiLocale, "start") });
         const orch = createRunTraceRecorder();
 
         let creativeBriefPreExpanded: Awaited<ReturnType<typeof expandCreativeBrief>> | undefined;
@@ -68,7 +89,7 @@ export async function POST(req: Request) {
           send({
             step: "brief",
             summary: creativeBriefPreExpanded.oneLineSummary,
-            lines: buildStudioBriefBullets(creativeBriefPreExpanded.brief),
+            lines: buildStudioBriefBullets(creativeBriefPreExpanded.brief, "game", uiLocale),
             brief: creativeBriefPreExpanded.brief,
           });
         }
@@ -79,7 +100,7 @@ export async function POST(req: Request) {
             searchEnhance: parsed.searchEnhance,
             templateHint: parsed.templateHint,
             enhancePass: parsed.enhancePass,
-          }),
+          }, uiLocale),
         });
         const result = await generateGameSpecWithMeta(parsed.prompt, {
           searchEnhance: parsed.searchEnhance,
@@ -90,31 +111,12 @@ export async function POST(req: Request) {
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
         const spec = result.spec;
-        const recapLines: string[] = [];
-        recapLines.push(`**选定模板**：${spec.templateId}`);
-        recapLines.push(`**成品标题**：${spec.title}`);
-        if (spec.labels?.subtitle?.trim()) {
-          recapLines.push(`**氛围副标题**：${spec.labels.subtitle.trim()}`);
-        }
-        if (spec.templateId === "towerDefense") {
-          const bh = Math.round(spec.gameplay.baseHealth ?? 0);
-          const sc = Math.round(spec.gameplay.startingCoins ?? 0);
-          const ws = Math.round(spec.gameplay.winScore ?? 0);
-          recapLines.push(`**塔防概览**：基地生命约 **${bh}** · 开局金币 **${sc}** · 总波次数 **${ws}**（可到右侧快速调试微调）。`);
-          const ne = spec.towerDefense?.enemies?.length ?? 0;
-          if (ne > 0) recapLines.push(`**敌军种类**：蓝图内登记 **${ne}** 种敌人模型。`);
-        } else {
-          recapLines.push(
-            `**通用玩法数值**：主角移速 ${Math.round(spec.gameplay.playerSpeed)} · 威胁移速 ${Math.round(spec.gameplay.hazardSpeed)} · 取胜目标(winScore) ${Math.round(spec.gameplay.winScore ?? 0)}。`,
-          );
-        }
-        if (result.web?.used) {
-          recapLines.push("**联网检索**：已并入摘要片段；来源列表可在生成完成后于页内查看（若有）。");
-        } else if (parsed.searchEnhance) {
-          recapLines.push(
-            `**联网检索**：本轮未得到有效摘要（密钥/配额/无命中等皆可），已退回纯文本管线。${result.web?.warning ? ` 提示：${result.web.warning}` : ""}`,
-          );
-        }
+        const recapLines = buildGenerateRecapLines(
+          uiLocale,
+          spec,
+          result.web ?? undefined,
+          parsed.searchEnhance,
+        );
         send({ step: "recap", lines: recapLines });
         emitGenerateServeLog({
           phase: "generate_stream_done",
@@ -132,7 +134,7 @@ export async function POST(req: Request) {
           source: result.source,
           web: result.web,
           debug: result.debug,
-          message: "完成",
+          message: streamMessage(uiLocale, "done"),
         });
       } catch {
         emitGenerateServeLog({
@@ -142,7 +144,7 @@ export async function POST(req: Request) {
           byteLength: json.byteLength,
           promptChars: parsed.prompt.length,
         });
-        send({ step: "error", message: "生成过程异常", ok: false });
+        send({ step: "error", message: streamMessage(uiLocale, "error"), ok: false });
       } finally {
         controller.close();
       }

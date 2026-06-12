@@ -2,6 +2,11 @@
  * 将小说正文拆为段落，并按页批次绑定分镜，减少「只抓关键词、不读上下文」。
  */
 
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import {
+  formatDialogueHintLabel,
+  formatSegmentFallback,
+} from "@/lib/comic-locale-prompts";
 import { formatDialogueHintsForSegment } from "@/lib/comic-dialogue-extract";
 
 export type NovelStorySegment = {
@@ -10,10 +15,48 @@ export type NovelStorySegment = {
   charStart: number;
 };
 
+function splitLatinParagraphs(normalized: string, minLen: number): NovelStorySegment[] {
+  const segments: NovelStorySegment[] = [];
+  const rawBlocks = normalized.split(/\n\s*\n+/);
+  let cursor = 0;
+
+  for (const block of rawBlocks) {
+    const trimmed = block.trim();
+    if (trimmed.length < minLen) continue;
+    const start = normalized.indexOf(trimmed, cursor);
+    const charStart = start >= 0 ? start : cursor;
+    segments.push({ index: segments.length, text: trimmed.slice(0, 1200), charStart });
+    cursor = charStart + trimmed.length;
+  }
+
+  if (segments.length > 0) return segments;
+
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= minLen);
+  let pos = 0;
+  for (const s of sentences) {
+    segments.push({ index: segments.length, text: s.slice(0, 1200), charStart: pos });
+    pos += s.length;
+  }
+  return segments;
+}
+
 /** 按空行 / 句号分段，过滤过短碎片 */
-export function splitNovelIntoSegments(content: string, minLen = 24): NovelStorySegment[] {
+export function splitNovelIntoSegments(
+  content: string,
+  minLen = 24,
+  outputLocale: BriefInputLocale = "zh",
+): NovelStorySegment[] {
   const normalized = content.replace(/\r\n/g, "\n").trim();
   if (!normalized) return [];
+
+  const useLatinSplit = ["en", "ms", "th"].includes(outputLocale);
+  if (useLatinSplit) {
+    const latinMin = outputLocale === "en" ? Math.min(minLen, 20) : minLen;
+    return splitLatinParagraphs(normalized, latinMin);
+  }
 
   const rawBlocks = normalized.split(/\n\s*\n+/);
   const segments: NovelStorySegment[] = [];
@@ -30,7 +73,9 @@ export function splitNovelIntoSegments(content: string, minLen = 24): NovelStory
 
   if (segments.length > 0) return segments;
 
-  const sentences = normalized.split(/(?<=[。！？!?])\s*/).filter((s) => s.trim().length >= minLen);
+  const sentences = normalized
+    .split(/(?<=[。！？!?])\s+/)
+    .filter((s) => s.trim().length >= minLen);
   let pos = 0;
   for (const s of sentences) {
     const t = s.trim();
@@ -55,13 +100,17 @@ export function segmentsForPageChunk(
   return segments.slice(from, Math.min(to, segments.length));
 }
 
-export function formatSegmentsForStoryboardPrompt(segs: NovelStorySegment[]): string {
-  if (segs.length === 0) return "（正文过短，请结合标题与简介改编）";
+export function formatSegmentsForStoryboardPrompt(
+  segs: NovelStorySegment[],
+  outputLocale: BriefInputLocale = "zh",
+): string {
+  if (segs.length === 0) return formatSegmentFallback(outputLocale);
+  const dlgLabel = formatDialogueHintLabel(outputLocale);
   return segs
     .map((s) => {
       const dlg = formatDialogueHintsForSegment(s);
       return dlg
-        ? `[段落#${s.index + 1}]\n${s.text}\n【本段对白提取 — 请用 dialogue+speaker 填入分镜】\n${dlg}`
+        ? `[段落#${s.index + 1}]\n${s.text}\n${dlgLabel}\n${dlg}`
         : `[段落#${s.index + 1}]\n${s.text}`;
     })
     .join("\n\n");

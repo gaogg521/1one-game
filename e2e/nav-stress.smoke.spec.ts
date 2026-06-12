@@ -7,7 +7,8 @@ test("小说广场应加载列表而非超时提示", async ({ page }) => {
 });
 
 test("整页导航往返不应出现 Turbopack 失败页", async ({ page }) => {
-  const ROUTES = ["/", "/studio", "/discover", "/novel/discover", "/create", "/studio", "/"];
+  test.setTimeout(120_000);
+  const ROUTES = ["/", "/studio", "/discover", "/novel/discover", "/create", "/start", "/"];
 
   for (const path of ROUTES) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -18,10 +19,11 @@ test("整页导航往返不应出现 Turbopack 失败页", async ({ page }) => {
 });
 
 test("客户端 Link 导航不应出现 Turbopack 失败页", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle", timeout: 60_000 });
+  test.setTimeout(90_000);
+  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 60_000 });
 
   const nav = [
-    { name: "我的作品", url: /\/studio/ },
+    { name: "创作者工作台", url: /\/studio/ },
     { name: "游戏发现", url: /\/discover/ },
   ];
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
@@ -24,15 +25,17 @@ export function GodotOfflineDownloads({
   referenceHandles,
   onlineReady,
 }: Props) {
+  const t = useTranslations("godotExport");
+
   if (!onlineReady) return null;
 
   return (
     <details className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3">
       <summary className="cursor-pointer text-sm font-medium text-[var(--gc-text-soft)]">
-        玩法满意？导出离线包（Windows / 工程 / Android）
+        {t("offlineSummary")}
       </summary>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--gc-muted)]">
-        在线试玩无需下载。只有想装到 PC、用 Godot 编辑器改、或打手机包时再点下面按钮。
+        {t("offlineDesc")}
       </p>
       <div className="mt-3">
         <GodotBuildActions

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
 import { readReferenceHandlesFromSession } from "@/lib/assets/reference-image-storage.client";
@@ -44,6 +46,8 @@ export function GameRuntimeTabs({
   refEpoch = 0,
   allowRuntimeSwitch = true,
 }: Props) {
+  const t = useTranslations("gameRuntime");
+  const locale = useLocale() as AppLocale;
   const godotGloballyOn = PRODUCT.godot.enabled && allowRuntimeSwitch;
   const specSupportsGodot = isGodotExportSupported(spec);
 
@@ -82,6 +86,7 @@ export function GameRuntimeTabs({
     projectId,
     referencePayloads,
     referenceHandles,
+    locale,
   );
 
   const showPhaser = runtime === "phaser" || !godotGloballyOn || !specSupportsGodot;
@@ -91,28 +96,31 @@ export function GameRuntimeTabs({
   const refBuildHint = formatGodotReferenceBuildHint(godot.referenceSummary, queuedRefCount, {
     loading: showGodot && godot.state === "loading",
     cached: godot.cached,
+    uiLocale: locale,
   });
 
   return (
     <div className="space-y-3">
       {godotGloballyOn && specSupportsGodot ? (
         <p className="text-[11px] leading-relaxed text-[var(--gc-muted)]">
-          先点 <strong className="text-[var(--gc-text-soft)]">Godot（在线）</strong> 在浏览器里试完整版；Phaser 用于秒开预览。玩得满意再在 Godot 标签里展开导出。
+          {t.rich("hint", {
+            godot: (chunks) => <strong className="text-[var(--gc-text-soft)]">{chunks}</strong>,
+          })}
         </p>
       ) : null}
 
       {godotGloballyOn ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-[var(--gc-muted)]">试玩引擎</span>
+          <span className="text-xs text-[var(--gc-muted)]">{t("engineLabel")}</span>
           {specSupportsGodot ? (
             <button
               type="button"
               data-testid="runtime-tab-godot"
               className={tabClass(runtime === "godot")}
               onClick={() => pickRuntime("godot")}
-              title="浏览器内在线试玩 Godot 完整运行时"
+              title={t("godotTitle")}
             >
-              Godot（在线）
+              {t("godotOnline")}
             </button>
           ) : null}
           <button
@@ -121,13 +129,13 @@ export function GameRuntimeTabs({
             className={tabClass(runtime === "phaser")}
             onClick={() => pickRuntime("phaser")}
           >
-            Phaser（秒开预览）
+            {t("phaserPreview")}
           </button>
           {showGodot && godot.state === "loading" ? (
-            <span className="text-xs text-[var(--gc-accent)]">{refBuildHint ?? "正在构建在线版…"}</span>
+            <span className="text-xs text-[var(--gc-accent)]">{refBuildHint ?? t("building")}</span>
           ) : null}
           {godot.cached && godot.state === "ready" ? (
-            <span className="text-xs text-[var(--gc-text-faint)]">在线版已缓存 · 同规格无需重复构建</span>
+            <span className="text-xs text-[var(--gc-text-faint)]">{t("cached")}</span>
           ) : null}
         </div>
       ) : null}
@@ -151,19 +159,19 @@ export function GameRuntimeTabs({
         <div className="space-y-3">
           {godot.state === "loading" ? (
             <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[color:var(--gc-border)] px-4 text-center text-sm text-[var(--gc-muted)]">
-              <span>{refBuildHint ?? "正在构建 Godot 在线试玩（约 10～30 秒）…"}</span>
-              <span className="text-[11px] text-[var(--gc-text-faint)]">完成后即可在页面内直接玩</span>
+              <span>{refBuildHint ?? t("buildingGodot")}</span>
+              <span className="text-[11px] text-[var(--gc-text-faint)]">{t("readyHint")}</span>
             </div>
           ) : null}
           {godot.state === "error" ? (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-300">
-              {godot.error ?? "在线版构建失败"}
+              {godot.error ?? t("buildFailed")}
               <button
                 type="button"
                 onClick={() => void godot.retry()}
                 className="ml-2 underline underline-offset-2 hover:text-red-200"
               >
-                重试
+                {t("retry")}
               </button>
             </div>
           ) : null}
@@ -186,7 +194,7 @@ export function GameRuntimeTabs({
 
       {showPhaser && specSupportsGodot && godotOnlineReady && runtime === "phaser" ? (
         <p className="text-[11px] text-[var(--gc-text-faint)]">
-          Godot 在线版已在后台就绪，可切换到「Godot（在线）」试玩完整版。
+          {t("godotReady")}
         </p>
       ) : null}
     </div>

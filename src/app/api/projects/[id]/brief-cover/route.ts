@@ -5,8 +5,10 @@ import { parseGameSpec } from "@/lib/game-spec";
 import { getOwnerKey } from "@/lib/owner";
 import { prisma } from "@/lib/prisma";
 import { loadProjectCreativeBrief } from "@/lib/project-creative-brief-db";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { localizedJsonError } from "@/lib/api/localized-error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -14,18 +16,24 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
+  }
+
+  const quotaBlock = await gateGenerationQuota("cover");
+  if (quotaBlock) {
+    const body = await quotaBlock.json();
+    return NextResponse.json(body, { status: 402 });
   }
 
   const throttleKey = await getThrottleKey("brief_cover", ownerKey);
   if (!rateLimit(throttleKey, 8, 60_000)) {
-    return NextResponse.json({ error: "请求过于频繁" }, { status: 429 });
+    return localizedJsonError(req, "rateLimited", 429);
   }
 
   const { id } = await ctx.params;
   const row = await prisma.project.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   let bodyBrief: unknown;
@@ -43,19 +51,19 @@ export async function POST(req: Request, ctx: RouteContext) {
   const brief = parsedBody?.success ? parsedBody.data : await loadProjectCreativeBrief(id);
 
   if (!brief) {
-    return NextResponse.json({ error: "作品无 Creative Brief，请先生成或保存" }, { status: 400 });
+    return localizedJsonError(req, "noBrief", 400);
   }
 
   let spec;
   try {
     spec = parseGameSpec(JSON.parse(row.specJson));
   } catch {
-    return NextResponse.json({ error: "规格无效" }, { status: 400 });
+    return localizedJsonError(req, "specInvalid", 400);
   }
 
   const { coverPath, source } = await generateGameCoverFromBrief(id, brief, spec);
   if (!coverPath) {
-    return NextResponse.json({ error: "封面生成失败（Comfy 未配置或超时）" }, { status: 502 });
+    return localizedJsonError(req, "coverComfyFailed", 502);
   }
 
   return NextResponse.json({ coverPath, source });

@@ -3,8 +3,11 @@ import type { BriefMedium } from "@/lib/creative-brief/types";
 
 const LOCALE_LABEL: Record<BriefInputLocale, string> = {
   zh: "简体中文",
+  "zh-Hant": "繁體中文",
   en: "English",
   ja: "日本語",
+  ms: "Bahasa Melayu",
+  th: "ภาษาไทย",
 };
 
 const MEDIUM_SUFFIX: Record<BriefMedium, string> = {
@@ -30,8 +33,14 @@ function buildBriefLlmSystemPromptBase(locale: BriefInputLocale): string {
     "扩写侧重：世界观、场景、单位/角色、武器/道具/特效意象、画风氛围、落地提示、theme 色倾向（游戏时）、负面约束。\n" +
     (locale === "zh"
       ? "labels 相关提示优先使用中文称谓。"
+      : locale === "zh-Hant"
+        ? "labels 相關提示優先使用繁體中文稱謂，全文不得混用簡體字。"
       : locale === "ja"
         ? "labels 関連は日本語または中国語の短い表現でよい。"
+        : locale === "ms"
+          ? "Labels should primarily use Malay, with concise English hints only when necessary."
+          : locale === "th"
+            ? "ป้ายกำกับควรใช้ภาษาไทยเป็นหลัก และใช้อังกฤษสั้น ๆ ได้เมื่อจำเป็นเท่านั้น"
         : "Labels may use concise English or bilingual hints.")
   );
 }

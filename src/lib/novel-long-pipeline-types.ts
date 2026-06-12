@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { LongNovelSegmentPlan } from "@/lib/novel-long-config";
+import type { NovelLengthTier } from "@/lib/novel-length";
 
 export const NOVEL_PIPELINE_VERSION = 1 as const;
 
@@ -36,12 +38,25 @@ export type NovelBible = z.infer<typeof novelBibleSchema>;
 export type ChapterPlanItem = z.infer<typeof chapterPlanItemSchema>;
 export type NovelChapterPlan = z.infer<typeof novelChapterPlanSchema>;
 
+export type NovelGenerateCheckpointMeta = {
+  completedSegmentIndex: number;
+  partialContent: string;
+  prompt: string;
+  title?: string;
+  lengthTier: NovelLengthTier;
+  polish: boolean;
+  plan: LongNovelSegmentPlan;
+  updatedAt: string;
+};
+
 export type NovelGenerationMeta = {
   version: typeof NOVEL_PIPELINE_VERSION;
   bible: NovelBible;
   chapterPlan: NovelChapterPlan;
   segmentCount: number;
   createdAt: string;
+  /** 长篇 SSE 中断恢复：每批写完落库 */
+  generating?: NovelGenerateCheckpointMeta;
 };
 
 export function buildNovelBibleJsonSchema() {
@@ -136,12 +151,38 @@ export function parseNovelGenerationMeta(raw: string | null | undefined): NovelG
     const bible = parseNovelBible(o.bible);
     const chapterPlan = parseNovelChapterPlan(o.chapterPlan);
     if (!bible || !chapterPlan) return null;
+    const generatingRaw = o.generating;
+    let generating: NovelGenerateCheckpointMeta | undefined;
+    if (generatingRaw && typeof generatingRaw === "object") {
+      const g = generatingRaw as Record<string, unknown>;
+      const plan = g.plan as LongNovelSegmentPlan | undefined;
+      if (
+        typeof g.completedSegmentIndex === "number" &&
+        typeof g.partialContent === "string" &&
+        typeof g.prompt === "string" &&
+        typeof g.lengthTier === "string" &&
+        plan &&
+        typeof plan.totalSegments === "number"
+      ) {
+        generating = {
+          completedSegmentIndex: g.completedSegmentIndex,
+          partialContent: g.partialContent,
+          prompt: g.prompt,
+          title: typeof g.title === "string" ? g.title : undefined,
+          lengthTier: g.lengthTier as NovelLengthTier,
+          polish: g.polish === true,
+          plan,
+          updatedAt: typeof g.updatedAt === "string" ? g.updatedAt : new Date().toISOString(),
+        };
+      }
+    }
     return {
       version: NOVEL_PIPELINE_VERSION,
       bible,
       chapterPlan,
       segmentCount: typeof o.segmentCount === "number" ? o.segmentCount : 0,
       createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),
+      ...(generating ? { generating } : {}),
     };
   } catch {
     return null;

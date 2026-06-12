@@ -48,7 +48,7 @@ export type GeneratePayload =
       /** 编排 trace 记入 client_asset_manifest 节点；多套生成不参与 trace 时仍可打结构化日志 */
       assetManifestSummary?: AssetManifestSummary;
     }
-  | { ok: false; error: string; status: number };
+  | { ok: false; errorKey: string; status: number };
 
 export function parseGeneratePayload(body: unknown): GeneratePayload {
   const prompt =
@@ -71,10 +71,10 @@ export function parseGeneratePayload(body: unknown): GeneratePayload {
   const assetManifestSummary = parseAssetManifestSummary(body);
   const trimmed = prompt.trim();
   if (trimmed.length < 2) {
-    return { ok: false, error: "描述太短，请至少写几个字", status: 400 };
+    return { ok: false, errorKey: "promptTooShort", status: 400 };
   }
   if (trimmed.length > 4000) {
-    return { ok: false, error: "描述过长", status: 400 };
+    return { ok: false, errorKey: "promptTooLong", status: 400 };
   }
   return {
     ok: true,

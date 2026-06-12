@@ -1,7 +1,8 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-storage";
 import { saveReferenceHandlesToSession } from "@/lib/assets/reference-storage";
 import {
@@ -38,6 +39,7 @@ import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
 import { PRODUCT } from "@/lib/product-config";
 import { CreativeBriefPanel } from "@/components/CreativeBriefPanel";
 import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
   buildPromptWithBriefRevision,
@@ -46,19 +48,32 @@ import {
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import { useClipboardImageQueue } from "@/providers/ClipboardImageQueueProvider";
+import { loadDraft, markDraftGenerating } from "@/lib/draft-storage";
+import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal";
+import { parseQuotaExceeded } from "@/lib/commerce/quota-error";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 
-const EXAMPLES = [
-  "田园小径旁建猫舍塔楼，拦住偷萝卜的捣蛋鼠军团",
-  "海底小鱼收集珍珠，避开章鱼墨汁",
-  "水彩风丘陵塔防：木箭塔守萝卜田，小怪沿蜿蜒土路进攻",
-];
-
-const SOURCE_HINT: Record<string, string> = {
-  llm: "大模型直接生成",
-  llm_overlay: "大模型 + 本地字段融合纠错",
-  llm_repair: "大模型二次修复后生成",
-  mock: "已回退本地规则推断（请看下方“生成证据”里的回退原因）",
+const STEP_PROGRESS: Record<string, number> = {
+  received: 0.08,
+  ingest: 0.11,
+  handshake: 0.14,
+  start: 0.16,
+  brief: 0.2,
+  prep: 0.18,
+  running: 0.58,
+  recap: 0.9,
+  done: 1,
+  error: 1,
 };
+
+function formatEta(ms: number, minutesLabel: (m: number) => string): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s <= 8) return `${s}s`;
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  return minutesLabel(m);
+}
 
 type VariantRow = { spec: GameSpec; source: string; label: string };
 type CoCreationIntent = ReturnType<typeof buildCoCreationIntent>;
@@ -100,31 +115,6 @@ function PasteThumb({ file }: { file: File }) {
       className="h-14 w-14 shrink-0 rounded-lg border border-[color:var(--gc-border)] object-cover"
     />
   );
-}
-
-const STEP_META: Record<string, { label: string; progress: number; defaultMsg: string }> = {
-  /** 本地：已记入日志，尚未发起 /api/generate/stream */
-  received: { label: "创意已就位", progress: 0.08, defaultMsg: "提示词摘要已在下方日志中就绪，下一步连接云端流水线…" },
-  /** 本地：解析上传/剪贴板的参考素材，期间尚未进入远端队列 */
-  ingest: { label: "解析参考素材", progress: 0.11, defaultMsg: "把参考图/文件写入会话并合并描述，随后再连接生成服务…" },
-  /** 本地：fetch 建立中或服务端先发 start 帧之前的握手窗口 */
-  handshake: { label: "连接云端", progress: 0.14, defaultMsg: "正在建立会话并把你的创意送达生成服务…" },
-  /** 服务端 SSE：首帧，与后端「已接收创意」一致 */
-  start: { label: "云端接单", progress: 0.16, defaultMsg: "生成服务已收到任务，稍后进入管线…" },
-  brief: { label: "深度扩写", progress: 0.2, defaultMsg: "题材知识包 + 模型正在补齐八维创意 Brief…" },
-  prep: { label: "解读创意", progress: 0.18, defaultMsg: "把你的提示与选项整理成可执行计划…" },
-  running: { label: "深度生成", progress: 0.58, defaultMsg: "大模型起草 + 本地纠错 + 规格校验（可能需几十秒～数分钟）…" },
-  recap: { label: "成品摘要", progress: 0.9, defaultMsg: "提炼模板、标题与关键数值…" },
-  done: { label: "完成", progress: 1, defaultMsg: "完成" },
-  error: { label: "失败", progress: 1, defaultMsg: "生成失败" },
-};
-
-function formatEta(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s <= 8) return `${s}s`;
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  return `${m}分钟`;
 }
 
 /** 简略 **加粗** 渲染（提要行用 Markdown 风格便于扫读） */
@@ -194,10 +184,37 @@ async function waitForSprites(projectId: string, timeoutMs = 300_000, intervalMs
 
 export default function CreateClient(props: { initialPrompt?: string; replayFromProjectId?: string }) {
   const router = useRouter();
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("createFlow");
   const replayId = props.replayFromProjectId?.trim();
 
+  const refStrong = (chunks: ReactNode) => (
+    <strong className="text-[var(--gc-text-soft)]">{chunks}</strong>
+  );
+
+  const examples = [t("examples.0"), t("examples.1"), t("examples.2")];
+
+  const resolveStepMeta = useCallback(
+    (step: string) => {
+      const key = step in STEP_PROGRESS ? step : "running";
+      return {
+        label: t(`steps.${key}.label`),
+        progress: STEP_PROGRESS[key] ?? STEP_PROGRESS.running,
+        defaultMsg: t(`steps.${key}.defaultMsg`),
+      };
+    },
+    [t],
+  );
+
   const [prompt, setPrompt] = useState(() =>
-    replayId ? "" : (props.initialPrompt ?? "").slice(0, 4000),
+    replayId
+      ? ""
+      : (() => {
+          const initial = (props.initialPrompt ?? "").slice(0, 4000);
+          if (initial.trim()) return initial;
+          const draft = loadDraft("game");
+          return draft?.prompt && !draft.generatedId ? draft.prompt : initial;
+        })(),
   );
   const [busy, setBusy] = useState<"idle" | "gen" | "gen_variants" | "save" | "sprites">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +282,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   /** 参考图写入 session 后递增，强制试玩区重挂 Phaser 以加载新贴图 */
   const [refPixelEpoch, setRefPixelEpoch] = useState(0);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
+  const [showStudioDetails, setShowStudioDetails] = useState(false);
 
   /** 生成完成后后台预导出 Godot，切换引擎时尽量命中缓存 */
   useEffect(() => {
@@ -287,8 +306,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     : prompt.trim();
 
   const buildCoCreationPlan = useCallback(() => {
-    const intent = buildCoCreationIntent(prompt, templateHint);
-    const directions = buildCoCreationDirections(intent);
+    const intent = buildCoCreationIntent(prompt, templateHint, locale);
+    const directions = buildCoCreationDirections(intent, locale);
     setCoCreationIntent(intent);
     setCoDirections(directions);
     setSelectedDirectionId(directions[0]?.id ?? null);
@@ -296,13 +315,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setCreationMode("flow");
     appendStudioLog({
       kind: "intent",
-      title: "系统提炼了你的创作意图",
-      bullets: [intent.premise, `目标模板：**${intent.templateId}**`, `核心玩法：${intent.gameplayCore}`, ...intent.strengths],
+      title: t("log.intentExtracted"),
+      bullets: [
+        intent.premise,
+        t("intent.targetTemplate", { templateId: intent.templateId }),
+        t("intent.gameplayCore", { core: intent.gameplayCore }),
+        ...intent.strengths,
+      ],
     });
     if (intent.risks.length) {
-      appendStudioLog({ kind: "sse", title: "当前仍有待补足的点", bullets: intent.risks });
+      appendStudioLog({ kind: "sse", title: t("log.risksRemain"), bullets: intent.risks });
     }
-  }, [appendStudioLog, prompt, templateHint]);
+  }, [appendStudioLog, locale, prompt, t, templateHint]);
 
   const chooseCoCreationDirection = useCallback(
     (directionId: string) => {
@@ -312,11 +336,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setCoCreationStep(3);
       appendStudioLog({
         kind: "sse",
-        title: `已选方向：${row.title}`,
+        title: t("log.directionChosen", { title: row.title }),
         bullets: [row.summary, ...row.bullets],
       });
     },
-    [appendStudioLog, coDirections],
+    [appendStudioLog, coDirections, t],
   );
 
   /** 试玩页 / 工作室带入 ?from=<projectId>：加载已保存的完整描述（含此前合并进的参考摘录），省去重复上传解析 */
@@ -412,7 +436,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         fd.set("url", ingestUrl.trim());
       }
       if (!hasInputs) {
-        return { ok: false, error: "请先选择至少一个素材文件，或在链接框填入 URL" };
+        return { ok: false, error: t("errors.noAssets") };
       }
       fd.set("imageRoles", JSON.stringify(roles));
       fd.set("vision", visionOn ? "1" : "0");
@@ -427,7 +451,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           referenceAssetStorageMode?: string;
         };
         if (!res.ok) {
-          return { ok: false, error: data.error ?? "素材解析失败" };
+          return { ok: false, error: data.error ?? t("errors.ingestFailed") };
         }
         const ordered = buildIngestFileOrder(fileRef.current?.files ?? null, pastedImages);
         let payloads: RuntimeReferencePayload[] = [];
@@ -440,11 +464,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         if (payloads.length > 0) {
           const fit = await autoFitAndWriteReferencePayloadsToSession(payloads);
           const parts: string[] = [];
-          if (fit.qualityReduced) parts.push("已自动进一步降低 JPEG 画质");
-          if (fit.removedCount > 0) parts.push(`已自动去掉末尾 ${fit.removedCount} 张贴图`);
-          if (parts.length) notes.push(parts.join("；") + "，以适配浏览器会话存储。");
+          if (fit.qualityReduced) parts.push(t("ingest.qualityReduced"));
+          if (fit.removedCount > 0) parts.push(t("ingest.removedImages", { count: fit.removedCount }));
+          if (parts.length) notes.push(parts.join("；") + t("ingest.storageSuffix"));
           if (fit.saved.length === 0) {
-            notes.push("参考图经自动处理后仍无法写入会话存储，塔防试玩将不加载本次参考贴图。");
+            notes.push(t("ingest.storageFailed"));
           }
           writeAssetManifestToSession(
             buildAssetManifestFromReferencePayloads(
@@ -471,16 +495,16 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           saveReferenceHandlesToSession(data.referenceAssets);
         }
         if (!block) {
-          return { ok: false, error: "未得到可合并的正文，请检查文件或链接" };
+          return { ok: false, error: t("errors.noMergeText") };
         }
         const mergedPrompt = mergeReferenceBlockIntoPrompt(baselinePrompt, block);
         setPrompt(mergedPrompt);
         return { ok: true, mergedPrompt };
       } catch {
-        return { ok: false, error: "素材解析请求失败" };
+        return { ok: false, error: t("errors.ingestRequestFailed") };
       }
     },
-    [clearClipboardImageQueue, ingestUrl, pastedImages, visionOn],
+    [clearClipboardImageQueue, ingestUrl, pastedImages, t, visionOn],
   );
 
   /** 默认：SSE 流式进度 + 单次生成 */
@@ -490,7 +514,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     const hasQueuedAssetFiles = (fileRef.current?.files?.length ?? 0) > 0 || pastedImages.length > 0;
     const hasIngestUrl = ingestUrl.trim().length > 0;
     setBusy("gen");
-    const intentBrief = summarizePromptForStudio(prompt);
+    const intentBrief = summarizePromptForStudio(prompt, locale);
     setStreamIntentBrief(intentBrief);
     setCreativeBrief(null);
     setCreativeBriefSummary(null);
@@ -499,12 +523,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setStreamStep("ingest");
       setStreamMsg(
         hasQueuedAssetFiles
-          ? "正在解析队列中的参考素材（上传优先于剪贴板）；创意原文节选已写入下方日志…"
-          : "正在抓取参考链接正文并合并到描述…",
+          ? t("stream.ingestQueue")
+          : t("stream.ingestUrl"),
       );
     } else {
       setStreamStep("received");
-      setStreamMsg("创意概要已写入右侧制作过程，下一步将连接云端并完成解析。");
+      setStreamMsg(t("stream.briefWritten"));
     }
     setStreamStartedAt(Date.now());
     setEtaText(null);
@@ -515,25 +539,29 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setStudioLog([]);
     setCreationMode("generated");
     setCoCreationStep(4);
+    markDraftGenerating("game", prompt);
     appendStudioLog({
       kind: "user",
-      title: "你的创意原文（节选）",
-      bullets: [summarizePromptForStudio(prompt)],
+      title: t("log.promptExcerpt"),
+      bullets: [summarizePromptForStudio(prompt, locale)],
     });
     if (currentDirection) {
       appendStudioLog({
         kind: "intent",
-        title: "本轮按以下共创方向生成",
+        title: t("log.directionForGeneration"),
         bullets: [currentDirection.title, currentDirection.summary, ...currentDirection.bullets],
       });
     }
     appendStudioLog({
       kind: "asset",
-      title: "本次排队的参考素材",
-      bullets: describeQueuedAssetSummary({
-        fileImageCount: countImageFilesInList(fileRef.current?.files ?? null),
-        pasted: pastedImages,
-      }),
+      title: t("log.queuedAssets"),
+      bullets: describeQueuedAssetSummary(
+        {
+          fileImageCount: countImageFilesInList(fileRef.current?.files ?? null),
+          pasted: pastedImages,
+        },
+        locale,
+      ),
     });
     try {
       if (hasQueuedAssetFiles || hasIngestUrl) {
@@ -541,14 +569,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         try {
           const ing = await performReferenceIngest(prompt, { includeUrlField: true });
           if (!ing.ok) {
-            appendStudioLog({ kind: "error", title: "参考素材解析失败", bullets: [ing.error] });
+            appendStudioLog({ kind: "error", title: t("log.ingestFailed"), bullets: [ing.error] });
             setError(ing.error);
             return;
           }
           effectivePrompt = ing.mergedPrompt;
           appendStudioLog({
             kind: "user",
-            title: "送入模型的有效描述（素材合并后的节选）",
+            title: t("log.effectivePrompt"),
             bullets: [summarizePromptForStudio(effectivePrompt)],
           });
           const refSec = extractReferenceMaterialSection(effectivePrompt);
@@ -556,8 +584,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           if (captions.length > 0) {
             appendStudioLog({
               kind: "intent",
-              title: "参考图解读（按每张图拆分，来自多模态请求；≠ 模型的完整推理过程）",
-              bullets: captions.map((c) => summarizePromptForStudio(c, 960)),
+              title: t("log.imageCaptions"),
+              bullets: captions.map((c) => summarizePromptForStudio(c, locale, 960)),
             });
           }
         } finally {
@@ -568,8 +596,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setStreamStep("handshake");
       setStreamMsg(
         hasQueuedAssetFiles || hasIngestUrl
-          ? "参考素材已合并至描述；正在连接生成服务并把任务送进队列…"
-          : "正在连接生成服务并把任务送进队列…",
+          ? t("stream.mergedConnecting")
+          : t("stream.connecting"),
       );
 
       const assetManifestPayload = summarizeAssetManifestForGenerateApi();
@@ -595,12 +623,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
+        const quota = parseQuotaExceeded(err, res.status);
+        if (quota) {
+          showQuotaExceeded(quota);
+          setStreamMsg(null);
+          return;
+        }
         appendStudioLog({
           kind: "error",
-          title: "请求未能开始生成",
+          title: t("log.requestFailed"),
           bullets: [err.error ?? `HTTP ${res.status}`],
         });
-        setError(err.error ?? "生成失败");
+        setError(err.error ?? t("errors.generateFailed"));
         setStreamMsg(null);
         return;
       }
@@ -623,33 +657,33 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             if (briefOk.success) setCreativeBrief(briefOk.data);
             appendStudioLog({
               kind: "intent",
-              title: "AI 深度扩写（Creative Brief）",
-              bullets: lines.length ? lines : summary ? [summary] : ["（无扩写行）"],
+              title: t("log.briefExpanded"),
+              bullets: lines.length ? lines : summary ? [summary] : [t("log.noBriefLines")],
             });
             setStreamStep("brief");
-            setStreamMsg("已生成八维创意理解，正在起草可玩规格…");
+            setStreamMsg(t("stream.briefReady"));
           } else if (step === "prep") {
             const lines = Array.isArray(ev.lines)
               ? (ev.lines as unknown[]).filter((x): x is string => typeof x === "string")
               : [];
             appendStudioLog({
               kind: "intent",
-              title: "系统计划（概要，非隐藏思维链）",
-              bullets: lines.length ? lines : ["（无详细说明行）"],
+              title: t("log.systemPlan"),
+              bullets: lines.length ? lines : [t("log.noPlanLines")],
             });
             setStreamStep("running");
-            setStreamMsg("模型与本地管线运行中…");
+            setStreamMsg(t("stream.pipelineRunning"));
           } else if (step === "recap") {
             const lines = Array.isArray(ev.lines)
               ? (ev.lines as unknown[]).filter((x): x is string => typeof x === "string")
               : [];
             appendStudioLog({
               kind: "sse",
-              title: "本轮成品提要",
+              title: t("log.recapTitle"),
               bullets: lines.length ? lines : [],
             });
             setStreamStep("recap");
-            setStreamMsg("拼装试玩所需的 GameSpec …");
+            setStreamMsg(t("stream.assemblingSpec"));
           } else {
             setStreamStep(step);
             if (typeof msg === "string") setStreamMsg(msg);
@@ -662,8 +696,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           const doneSpec = ev.spec as GameSpec;
           appendStudioLog({
             kind: "done",
-            title: "生成完成，已可试玩",
-            bullets: [`模板：**${doneSpec.templateId}**`, `标题：**${doneSpec.title}**`],
+            title: t("log.generationDone"),
+            bullets: [
+              t("done.template", { templateId: doneSpec.templateId }),
+              t("done.title", { title: doneSpec.title }),
+            ],
           });
           setSpec(doneSpec);
           setGenSource(typeof ev.source === "string" ? ev.source : null);
@@ -741,15 +778,15 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         if (step === "error") {
           appendStudioLog({
             kind: "error",
-            title: "生成过程异常",
-            bullets: [typeof msg === "string" ? msg : "未知错误"],
+            title: t("log.generationError"),
+            bullets: [typeof msg === "string" ? msg : t("log.unknownError")],
           });
-          setError(typeof msg === "string" ? msg : "生成失败");
+          setError(typeof msg === "string" ? msg : t("errors.generateFailed"));
         }
-      });
+      }, { locale });
     } catch {
-      appendStudioLog({ kind: "error", title: "网络异常", bullets: ["请检查本地网络或稍后重试。"] });
-      setError("网络异常");
+      appendStudioLog({ kind: "error", title: t("log.networkError"), bullets: [t("log.networkErrorHint")] });
+      setError(t("errors.network"));
     } finally {
       setBusy("idle");
       setStreamMsg(null);
@@ -767,6 +804,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     performReferenceIngest,
     prompt,
     searchEnhance,
+    t,
     templateHint,
   ]);
 
@@ -785,11 +823,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setCoCreationStep(4);
     appendStudioLog({
       kind: "sse",
-      title: "多套并行模式",
-      bullets: [
-        "同时请求 3 份带不同风味后缀的 GameSpec；完成后用右侧「备选方案」切换预览。",
-        summarizePromptForStudio(prompt),
-      ],
+      title: t("log.variantsParallel"),
+      bullets: [t("log.variantsParallelHint"), summarizePromptForStudio(prompt, locale)],
     });
     try {
       if (hasQueuedAssetFiles || hasIngestUrl) {
@@ -797,7 +832,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         try {
           const ing = await performReferenceIngest(prompt, { includeUrlField: true });
           if (!ing.ok) {
-            appendStudioLog({ kind: "error", title: "参考素材解析失败", bullets: [ing.error] });
+            appendStudioLog({ kind: "error", title: t("log.ingestFailed"), bullets: [ing.error] });
             setError(ing.error);
             return;
           }
@@ -825,34 +860,41 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         error?: string;
       };
       if (!res.ok) {
+        const quota = parseQuotaExceeded(data, res.status);
+        if (quota) {
+          showQuotaExceeded(quota);
+          return;
+        }
         appendStudioLog({
           kind: "error",
-          title: "多套生成被拒绝",
+          title: t("log.variantsRejected"),
           bullets: [data.error ?? `HTTP ${res.status}`],
         });
-        setError(data.error ?? "多套生成失败");
+        setError(data.error ?? t("errors.variantsFailed"));
         return;
       }
       const rows = data.variants ?? [];
       if (rows.length === 0) {
         appendStudioLog({
           kind: "error",
-          title: "未返回备选方案",
-          bullets: ["服务端返回空数组，请稍后重试。"],
+          title: t("log.variantsEmpty"),
+          bullets: [t("log.variantsEmptyHint")],
         });
-        setError("未返回备选方案");
+        setError(t("errors.noVariants"));
         return;
       }
       appendStudioLog({
         kind: "done",
-        title: "多套方案就绪",
-        bullets: rows.map((v) => `${v.label} · ${v.spec.templateId} · 《${v.spec.title}》`),
+        title: t("log.variantsReady"),
+        bullets: rows.map((v) =>
+          t("variants.readyLine", { label: v.label, templateId: v.spec.templateId, title: v.spec.title }),
+        ),
       });
       setVariants(rows);
       applyVariant(rows, 0);
     } catch {
-      appendStudioLog({ kind: "error", title: "多套生成异常", bullets: ["网络或服务端异常"] });
-      setError("网络异常");
+      appendStudioLog({ kind: "error", title: t("log.variantsFailed"), bullets: [t("log.variantsFailedHint")] });
+      setError(t("errors.network"));
     } finally {
       setBusy("idle");
     }
@@ -865,6 +907,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     performReferenceIngest,
     prompt,
     searchEnhance,
+    t,
     templateHint,
   ]);
 
@@ -873,17 +916,17 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     if (!streamStartedAt) return;
     const timer = window.setInterval(() => {
       const step = streamStep ?? "running";
-      const meta = STEP_META[step] ?? STEP_META.running;
+      const meta = resolveStepMeta(step);
       const now = Date.now();
       const elapsed = now - streamStartedAt;
       setElapsedSec(Math.max(0, Math.round(elapsed / 1000)));
       const pct = Math.max(0.05, Math.min(0.98, meta.progress));
       const estTotal = Math.min(9 * 60_000, Math.max(10_000, Math.round(elapsed / pct)));
       const remain = Math.max(0, estTotal - elapsed);
-      setEtaText(formatEta(remain));
+      setEtaText(formatEta(remain, (m) => t("etaMinutes", { m })));
     }, 300);
     return () => window.clearInterval(timer);
-  }, [busy, streamStartedAt, streamStep]);
+  }, [busy, resolveStepMeta, streamStartedAt, streamStep, t]);
 
   const ingestReference = useCallback(async () => {
     setError(null);
@@ -906,7 +949,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       try {
         specToSave = prepareGameSpecForPersist(spec, prompt);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "当前规格无效，无法保存");
+        setError(e instanceof Error ? e.message : t("errors.invalidSpec"));
         return;
       }
       const isUpdate = Boolean(projectId);
@@ -921,16 +964,16 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       });
       const data = (await res.json()) as { project?: { id: string }; error?: string };
       if (!res.ok) {
-        setError(data.error ?? "保存失败");
+        setError(data.error ?? t("errors.saveFailed"));
         return;
       }
       if (!isUpdate && !data.project?.id) {
-        setError("未返回作品 id");
+        setError(t("errors.noProjectId"));
         return;
       }
       const nextProjectId = data.project?.id ?? projectId;
       if (!nextProjectId) {
-        setError("未返回作品 id");
+        setError(t("errors.noProjectId"));
         return;
       }
       setProjectId(nextProjectId);
@@ -941,16 +984,16 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       setBusy("sprites");
       const ready = await waitForSprites(nextProjectId);
       if (ready) {
-        router.push(`/play/${nextProjectId}`);
+        router.push(withLocalePath(`/play/${nextProjectId}`, locale));
       } else {
-        setError("精灵生成超时，项目已保存。请稍后刷新试玩页。");
+        setError(t("errors.spriteTimeout"));
         setBusy("idle");
       }
     } catch {
-      setError("网络异常");
+      setError(t("errors.network"));
       setBusy("idle");
     }
-  }, [creativeBrief, projectId, prompt, router, spec]);
+  }, [creativeBrief, locale, projectId, prompt, router, spec, t]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -965,9 +1008,22 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
   const len = prompt.length;
   const busyLabel =
-    busy === "gen" ? "生成中…" : busy === "gen_variants" ? "并行生成多套方案…" : busy === "save" ? "保存中…" : busy === "sprites" ? "生成游戏贴图中…" : null;
+    busy === "gen"
+      ? t("busyGenerating")
+      : busy === "gen_variants"
+        ? t("busyVariants")
+        : busy === "save"
+          ? t("busySaving")
+          : busy === "sprites"
+            ? t("busySprites")
+            : null;
 
-  const stepMeta = STEP_META[streamStep ?? ""] ?? (busy === "gen" ? STEP_META.running : null);
+  const stepMeta =
+    streamStep != null
+      ? resolveStepMeta(streamStep)
+      : busy === "gen"
+        ? resolveStepMeta("running")
+        : null;
   const stepProgress = stepMeta?.progress ?? 0;
   const stepText = stepMeta?.label ?? "";
   const stepMsg = streamMsg || stepMeta?.defaultMsg || "";
@@ -983,13 +1039,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                   className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] border-t-[color:var(--gc-accent)]"
                   aria-hidden
                 />
-                <p className="text-xs font-semibold text-[var(--gc-text-soft)]">阶段：{stepText}</p>
+                <p className="text-xs font-semibold text-[var(--gc-text-soft)]">
+                  {t("stageLabel", { step: stepText })}
+                </p>
               </div>
-              <p className="text-[11px] tabular-nums text-[var(--gc-text-faint)]">ETA {etaText ?? "…"}</p>
+              <p className="text-[11px] tabular-nums text-[var(--gc-text-faint)]">
+                {t("eta", { value: etaText ?? "…" })}
+              </p>
             </div>
             {streamIntentBrief ? (
               <p className="mt-1 text-[11px] leading-snug text-[var(--gc-text-faint)]">
-                当前按此理解你的创意：<span className="text-[var(--gc-muted)]">{streamIntentBrief}</span>
+                {t("currentIntent")}
+                <span className="text-[var(--gc-muted)]">{streamIntentBrief}</span>
               </p>
             ) : null}
             <p className="mt-2 text-xs leading-relaxed text-[var(--gc-muted)]">{stepMsg}</p>
@@ -1002,17 +1063,28 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               </div>
             </div>
             <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--gc-text-faint)]">
-              <span className="tabular-nums">粗略进度 {Math.floor(stepProgress * 100)}%</span>
-              <span className="tabular-nums">已用时 {elapsedSec}s</span>
+              <span className="tabular-nums">
+                {t("roughProgress", { value: String(Math.floor(stepProgress * 100)) })}
+              </span>
+              <span className="tabular-nums">{t("elapsed", { value: String(elapsedSec) })}</span>
             </div>
           </div>
         ) : null}
 
         <div className="rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[var(--gc-bg-elevated)]/85 px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--gc-muted)]">制作过程 · 滚动可见</p>
+          <button
+            type="button"
+            onClick={() => setShowStudioDetails((v) => !v)}
+            className="flex w-full items-center justify-between text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--gc-muted)]"
+          >
+            {t("processTitle")}
+            <span>{showStudioDetails ? t("collapse") : t("expand")}</span>
+          </button>
+          {showStudioDetails ? (
+          <>
           <div className="mt-2 max-h-72 min-h-[4.5rem] space-y-2 overflow-y-auto pr-1 text-[11px] leading-relaxed [scrollbar-width:thin]">
             {studioLog.length === 0 ? (
-              <p className="text-[var(--gc-text-faint)]">开始流式生成后，这里会持续追加提示词摘要、素材与系统提要。</p>
+              <p className="text-[var(--gc-text-faint)]">{t("processEmpty")}</p>
             ) : (
               studioLog.map((entry) => (
                 <div
@@ -1048,24 +1120,25 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <div ref={studioLogEndRef} />
           </div>
           <p className="mt-2 text-[10px] text-[var(--gc-text-faint)]">
-            说明：计划摘要为规则与安全文案，不包含模型隐性推理全文；后端耗时段会停留在「深度生成」。
+            {t("processNote")}
           </p>
+          </>
+          ) : null}
         </div>
       </div>
     ) : null;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col text-[var(--gc-text)] lg:flex-row">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
-      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col gap-10 px-4 py-10 lg:gap-14 lg:px-8 xl:pr-12">
+      <AppMain>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-8 sm:py-10 lg:gap-14 lg:px-8 xl:pr-12">
         <header className="max-w-2xl space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">创作台</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">{t("title")}</h1>
           <p className="text-sm leading-relaxed text-[var(--gc-muted)]">
-            从一句话创意进入 4 步共创：提炼意图、挑方向、生成规格、试玩并保存版本。支持
-            <strong className="text-[var(--gc-text-soft)]">流式过程可视化</strong>与
-            <strong className="text-[var(--gc-text-soft)]">三套并行备选</strong>。
+            {t("desc")}
           </p>
-          <p className="text-xs text-[var(--gc-text-faint)]">快捷键：Ctrl / ⌘ + Enter → 流式生成一套方案</p>
+          <p className="text-xs text-[var(--gc-text-faint)]">{t("shortcut")}</p>
           <GameRuntimePreferenceControl className="mt-2" />
         </header>
 
@@ -1075,7 +1148,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-sm font-medium text-[var(--gc-text-soft)]" htmlFor="prompt">
-                  创意描述
+                  {t("promptLabel")}
                 </label>
                 <span
                   className={`text-xs tabular-nums ${len > 3800 ? "text-amber-400" : "text-[var(--gc-text-faint)]"}`}
@@ -1084,26 +1157,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 </span>
               </div>
               {replayStatus === "loading" ? (
-                <p className="text-xs text-[var(--gc-muted)]">正在从作品库载入上一次保存的完整描述…</p>
+                <p className="text-xs text-[var(--gc-muted)]">{t("replayLoading")}</p>
               ) : null}
               {replayStatus === "error" ? (
                 <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  无法根据链接载入作品描述（可能已删除或非本环境作品）。请到<strong className="text-amber-100">工作室</strong>
-                  里对该作品使用「再生成」，或从历史试玩页入口打开。
+                  {t("replayError")}
                 </p>
               ) : null}
               {replayStatus === "ok" ? (
                 <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs leading-relaxed text-emerald-100/95">
-                  已从<strong className="text-emerald-50">{replayTitle ? `《${replayTitle}》` : "已保存作品"}</strong>
-                  载入描述（包含此前合并进来的参考图文摘录）。可直接点<strong>「生成可玩版本」</strong>
-                  ，一般无需再选文件。<span className="text-emerald-200/85">
-                    若要在试玩里恢复参考图的像素贴片，需在本地浏览器会话重新上传素材（服务端目前只存文本与规格）。
-                  </span>
+                  {t("replayLoaded", { title: replayTitle ? `《${replayTitle}》` : "saved work" })}
                 </p>
               ) : null}
               {replayStatus === "ok" && replayRefinements.length > 0 ? (
                 <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-[11px] text-[var(--gc-muted)]">
-                  <p className="mb-1 font-medium text-[var(--gc-text-soft)]">试玩页精炼记录（摘要）</p>
+                  <p className="mb-1 font-medium text-[var(--gc-text-soft)]">{t("replayHistory")}</p>
                   <ul className="max-h-24 space-y-0.5 overflow-y-auto">
                     {replayRefinements.map((r, i) => (
                       <li key={`${r.at}-${i}`} className="truncate">
@@ -1118,7 +1186,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 rows={8}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="场景 + 目标 + 障碍或收集物 + 可选画风关键词…"
+                placeholder={t("promptPlaceholder")}
                 className="min-h-[180px] w-full resize-y rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
               />
             </div>
@@ -1132,7 +1200,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="mt-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-cta-c)_90%,white)]">
-                  参考素材
+                  {t("ref.title")}
                 </p>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--gc-muted)]">
                   <input
@@ -1141,19 +1209,25 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     onChange={(e) => setVisionOn(e.target.checked)}
                     className="rounded border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]"
                   />
-                  解读参考图（需 API Key）
+                  {t("ref.visionLabel")}
                 </label>
               </div>
 
               {/* 一行摘要 + 悬停展开详情 */}
               <div className="mt-2 flex items-start gap-1.5">
                 <p className="text-[11px] leading-snug text-[var(--gc-muted)]">
-                  PNG/WebP/GIF 保留透明通道；贴片类自动收入精灵格；需填用途
+                  {t("ref.summary")}
                 </p>
                 <span className="group/tip1 relative shrink-0">
                   <span className="cursor-help select-none rounded-full border border-[color:var(--gc-border)] px-1.5 py-0.5 text-[10px] text-[var(--gc-text-faint)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text-soft)]">?</span>
                   <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-0 z-50 w-72 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-3 text-[10px] leading-relaxed text-[var(--gc-muted)] opacity-0 shadow-2xl transition-opacity duration-150 group-hover/tip1:opacity-100">
-                    PNG/WebP/GIF 写入会话时<strong className="text-[var(--gc-text-soft)]">保留透明通道</strong>（不再误铺白底）。剪贴板队列里请为每张图填<strong className="text-[var(--gc-text-soft)]">用途</strong>：标成怪/敌/主角/塔等<strong className="text-[var(--gc-text-soft)]">贴片类</strong>时，会自动<strong className="text-[var(--gc-text-soft)]">居中收入方形精灵格</strong>便于塔防行军；大地图背景不要标成怪/塔以免被裁格。<strong className="text-[var(--gc-text-soft)]">服务端不做 AI 抠图</strong>，复杂实拍请自行出透明底。勾选「解读参考图」后模型会按图补充「落地建议」。
+                    {t.rich("ref.summaryTooltip", {
+                      transparent: refStrong,
+                      purpose: refStrong,
+                      sticker: refStrong,
+                      spriteGrid: refStrong,
+                      noMatting: refStrong,
+                    })}
                   </span>
                 </span>
               </div>
@@ -1161,41 +1235,41 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               {/* 素材用途速查：告知用户每类图上传后的效果 */}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {([
-                  { emoji: "🗺️", label: "背景地图", desc: "全屏底图，用途填「背景」" },
-                  { emoji: "👾", label: "敌人贴图", desc: "塔防行军怪，用途填「怪/敌」" },
-                  { emoji: "🏰", label: "守护目标", desc: "路径终点保护物，用途填「主角/萝卜」" },
-                  { emoji: "🗼", label: "防御塔皮肤", desc: "塔的外观，用途填「塔」" },
-                ] as const).map((t) => (
+                  { emoji: "🗺️", label: t("ref.guideBackgroundLabel"), desc: t("ref.guideBackgroundDesc") },
+                  { emoji: "👾", label: t("ref.guideEnemyLabel"), desc: t("ref.guideEnemyDesc") },
+                  { emoji: "🏰", label: t("ref.guideGoalLabel"), desc: t("ref.guideGoalDesc") },
+                  { emoji: "🗼", label: t("ref.guideTowerLabel"), desc: t("ref.guideTowerDesc") },
+                ] as const).map((guide) => (
                   <span
-                    key={t.label}
-                    title={t.desc}
+                    key={guide.label}
+                    title={guide.desc}
                     className="flex cursor-default items-center gap-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-2 py-0.5 text-[10px] text-[var(--gc-text-faint)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] hover:text-[var(--gc-text-soft)]"
                   >
-                    <span>{t.emoji}</span>
-                    <span>{t.label}</span>
+                    <span>{guide.emoji}</span>
+                    <span>{guide.label}</span>
                   </span>
                 ))}
                 <span className="flex items-center text-[10px] text-[var(--gc-text-faint)] italic ml-0.5">
-                  不上传也可直接生成，平台会自动绘制角色
+                  {t("ref.noUploadHint")}
                 </span>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="flex items-center gap-2 text-xs text-[var(--gc-muted)]">
-                    <span className="text-[11px] text-[var(--gc-text-faint)]">玩法模板</span>
+                    <span className="text-[11px] text-[var(--gc-text-faint)]">{t("ref.templateLabel")}</span>
                     <select
                       value={templateHint}
                       onChange={(e) => setTemplateHint(e.target.value as "auto" | GameSpec["templateId"])}
                       className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1 text-xs text-[var(--gc-text-soft)] outline-none"
                     >
-                      <option value="auto">自动推荐</option>
-                      <option value="platformer">横版闯关</option>
-                      <option value="towerDefense">塔防</option>
-                      <option value="shooter">射击</option>
-                      <option value="collector">收集</option>
-                      <option value="survivor">生存</option>
-                      <option value="avoider">躲避</option>
+                      <option value="auto">{t("ref.templates.auto")}</option>
+                      <option value="platformer">{t("ref.templates.platformer")}</option>
+                      <option value="towerDefense">{t("ref.templates.towerDefense")}</option>
+                      <option value="shooter">{t("ref.templates.shooter")}</option>
+                      <option value="collector">{t("ref.templates.collector")}</option>
+                      <option value="survivor">{t("ref.templates.survivor")}</option>
+                      <option value="avoider">{t("ref.templates.avoider")}</option>
                     </select>
                   </label>
                   <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--gc-muted)]">
@@ -1205,7 +1279,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                       onChange={(e) => setEnhancePass(e.target.checked)}
                       className="rounded border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]"
                     />
-                    二次强化（更成品/更复杂）
+                    {t("ref.enhancePass")}
                   </label>
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--gc-muted)]">
@@ -1215,19 +1289,19 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     onChange={(e) => setSearchEnhance(e.target.checked)}
                     className="rounded border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]"
                   />
-                  联网检索增强（Tavily）
+                  {t("ref.searchEnhance")}
                 </label>
                 <span className="text-[11px] text-[var(--gc-text-faint)]">
-                  默认关闭，开启后会自动检索同类玩法并注入描述
+                  {t("ref.searchEnhanceHint")}
                 </span>
               </div>
               {webMeta?.warning ? (
-                <p className="mt-2 text-xs text-amber-200/90">联网检索提示：{webMeta.warning}</p>
+                <p className="mt-2 text-xs text-amber-200/90">{t("ref.webWarningPrefix")}{webMeta.warning}</p>
               ) : null}
               {webMeta?.sources?.length ? (
                 <details className="mt-2 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2">
                   <summary className="cursor-pointer text-xs font-medium text-[var(--gc-text-soft)]">
-                    本次检索来源（{webMeta.sources.length}）
+                    {t("ref.webSources", { count: webMeta.sources.length })}
                   </summary>
                   <ul className="mt-2 list-inside list-disc text-xs text-[var(--gc-muted)]">
                     {webMeta.sources.map((s) => (
@@ -1247,19 +1321,26 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 </details>
               ) : null}
               <p className="mt-2 text-xs font-medium text-[var(--gc-text-soft)]">
-                点击「生成」时会自动解析队列素材；参考链接框有 URL 时也会一并抓取合并
+                {t("ref.generateHint")}
                 <span className="group/tip2 relative ml-1.5 inline-block align-middle">
                   <span className="cursor-help select-none rounded-full border border-[color:var(--gc-border)] px-1.5 py-0.5 text-[10px] text-[var(--gc-text-faint)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text-soft)]">?</span>
                   <span className="pointer-events-none absolute bottom-[calc(100%+6px)] right-0 z-50 w-80 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-3 text-[10px] leading-relaxed text-[var(--gc-muted)] opacity-0 shadow-2xl transition-opacity duration-150 group-hover/tip2:opacity-100">
-                    点击「生成」时，若队列里有文件/剪贴板图，或链接框填了公开 URL（如 mc.163.com），都会先解析并追加到描述再生成。<br /><br />
-                    支持上传 PDF / DOCX / TXT / MD / 图片，或<strong className="text-[var(--gc-text-soft)]">Ctrl+V / ⌘V 粘贴截图</strong>，或粘贴公开网页链接。写入会话前会<strong className="text-[var(--gc-text-soft)]">自动缩图压缩</strong>；超出存储上限则自动降质或从末尾删图，无需手动处理。塔防试玩会按用途把<strong className="text-[var(--gc-text-soft)]">背景地图类</strong>作底图、<strong className="text-[var(--gc-text-soft)]">怪物类</strong>作敌军贴图。
+                    {t("ref.generateTooltipA")}
+                    <br />
+                    <br />
+                    {t.rich("ref.generateTooltipB", {
+                      paste: refStrong,
+                      compress: refStrong,
+                      bg: refStrong,
+                      enemy: refStrong,
+                    })}
                   </span>
                 </span>
               </p>
               {pastedImages.length > 0 ? (
                 <div className="mt-3 space-y-2 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]">
-                    <span>剪贴板待解析：{pastedImages.length} 张（用途会一并提交）</span>
+                    <span>{t("ref.clipboardPending", { count: pastedImages.length })}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1270,7 +1351,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                       }}
                       className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-2 py-0.5 text-[11px] font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
                     >
-                      清空
+                      {t("ref.clear")}
                     </button>
                   </div>
                   <ol className="list-none space-y-2.5 p-0">
@@ -1281,7 +1362,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                       >
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="w-11 shrink-0 text-center text-[11px] font-semibold tabular-nums text-[var(--gc-text-soft)]">
-                            图{pickerImageCount + idx + 1}
+                            {t("ref.imageLabel", { index: pickerImageCount + idx + 1 })}
                           </span>
                           <PasteThumb file={row.file} />
                           <span className="truncate text-[11px] text-[var(--gc-text-faint)]" title={row.file.name}>
@@ -1289,12 +1370,12 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                           </span>
                         </div>
                         <label className="flex min-w-0 flex-1 flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">用途（可选）</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("ref.purposeLabel")}</span>
                           <input
                             type="text"
                             value={row.purpose}
                             onChange={(e) => setRowPurpose(row.id, e.target.value)}
-                            placeholder="如：背景地图 / 怪物 / 主角 / 塔造型…"
+                            placeholder={t("ref.purposePlaceholder")}
                             className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-xs text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)]"
                           />
                         </label>
@@ -1308,7 +1389,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                   type="url"
                   value={ingestUrl}
                   onChange={(e) => setIngestUrl(e.target.value)}
-                  placeholder="https:// 在线文档或文章链接"
+                  placeholder={t("ref.urlPlaceholder")}
                   className="min-w-0 flex-1 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-3 py-2 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)]"
                 />
                 <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:bg-[var(--gc-surface-glass-strong)]">
@@ -1323,7 +1404,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                       setPickerImageCount(countImageFilesInList(fl ?? null));
                     }}
                   />
-                  选择文件
+                  {t("ref.chooseFiles")}
                 </label>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -1333,7 +1414,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                   disabled={ingestBusy}
                   className="gc-theme-cta rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-40"
                 >
-                  {ingestBusy ? "解析中…" : "解析并追加到描述"}
+                  {ingestBusy ? t("ref.parsing") : t("ref.parseAndAppend")}
                 </button>
               </div>
               {ingestNotes?.length ? (
@@ -1350,10 +1431,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
                 {([
-                  [1, "输入创意"],
-                  [2, "提炼意图"],
-                  [3, "选择方向"],
-                  [4, "生成试玩"],
+                  [1, t("stepInput")],
+                  [2, t("stepIntent")],
+                  [3, t("stepDirection")],
+                  [4, t("stepPlay")],
                 ] as const).map(([step, label]) => {
                   const active = coCreationStep === step;
                   const done = coCreationStep > step;
@@ -1375,8 +1456,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 })}
               </div>
               <p className="mt-3 text-xs leading-relaxed text-[var(--gc-muted)]">
-                当前模式：{creationMode === "generated" ? "已进入试玩与保存阶段" : "仍在共创流程中"}。
-                {projectId ? " 当前创意已绑定已有项目，可继续覆盖保存。" : " 生成后可直接保存为新项目。"}
+                {t("currentModeLabel")}
+                {creationMode === "generated" ? t("modeGenerated") : t("modeFlow")}
+                {projectId ? ` ${t("modeBound")}` : ` ${t("modeNew")}`}
               </p>
               {coDirections.length ? (
                 <div className="mt-3 grid gap-2">
@@ -1407,18 +1489,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               ) : null}
               {coCreationIntent ? (
                 <div className="mt-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]/60 px-3 py-3 text-xs text-[var(--gc-muted)]">
-                  <p className="font-semibold text-[var(--gc-text-soft)]">当前理解</p>
+                  <p className="font-semibold text-[var(--gc-text-soft)]">{t("coCreation.currentUnderstanding")}</p>
                   <p className="mt-1">{coCreationIntent.premise}</p>
-                  <p className="mt-2">模板倾向：<strong className="text-[var(--gc-text-soft)]">{coCreationIntent.templateId}</strong></p>
-                  <p className="mt-1">玩法主轴：{coCreationIntent.gameplayCore}</p>
+                  <p className="mt-2">{t("coCreation.templateTendency")}<strong className="text-[var(--gc-text-soft)]">{coCreationIntent.templateId}</strong></p>
+                  <p className="mt-1">{t("coCreation.gameplayAxis")}{coCreationIntent.gameplayCore}</p>
                 </div>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">试一试</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">{t("tryExamples")}</p>
               <div className="flex flex-wrap gap-2">
-                {EXAMPLES.map((ex) => (
+                {examples.map((ex) => (
                   <button
                     key={ex}
                     type="button"
@@ -1442,7 +1524,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     return;
                   }
                   if (!currentDirection) {
-                    setError("请先选择一个共创方向");
+                    setError(t("chooseDirectionFirst"));
                     return;
                   }
                   void generateStream();
@@ -1450,7 +1532,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 disabled={busy !== "idle" || prompt.trim().length < 2}
                 className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "gen" ? "流式生成中…" : !coCreationIntent ? "1. 提炼创作方向" : "2. 生成可玩版本（SSE）"}
+                {busy === "gen" ? t("streaming") : !coCreationIntent ? t("planIntent") : t("generatePlayable")}
               </button>
               <button
                 type="button"
@@ -1458,7 +1540,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 disabled={busy !== "idle" || prompt.trim().length < 2}
                 className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-6 py-2.5 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] transition hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "gen_variants" ? "三套生成中…" : "一次生成 3 套备选"}
+                {busy === "gen_variants" ? t("variantsGenerating") : t("variantsOnce")}
               </button>
               <button
                 type="button"
@@ -1466,7 +1548,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 disabled={busy !== "idle" || !spec}
                 className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-6 py-2.5 text-sm font-medium text-[var(--gc-text)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "save" ? "保存中…" : projectId ? "更新项目并试玩" : "保存并试玩"}
+                {busy === "save" ? t("busySaving") : projectId ? t("updatingAndPlay") : t("saveAndPlay")}
               </button>
             </div>
 
@@ -1478,7 +1560,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               <div className="flex items-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_30%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,var(--gc-surface-glass))] px-4 py-3">
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[color:color-mix(in_srgb,var(--gc-accent)_60%,transparent)] border-t-transparent" />
                 <span className="text-sm text-[var(--gc-text)]">
-                  正在生成专属游戏贴图（豌豆射手、僵尸、背景等），约需 2-3 分钟，完成后自动跳转试玩页…
+                  {t("spriteWait")}
                 </span>
               </div>
             )}
@@ -1486,7 +1568,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
             {busy !== "gen" && ingestBusy ? (
               <p className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs text-[var(--gc-muted)]">
-                素材解析进行中…（上传优先于剪贴板）
+                {t("ingestBusy")}
               </p>
             ) : null}
 
@@ -1505,10 +1587,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
           <section
             className="flex flex-col gap-4 border-t border-[color:var(--gc-border)] pt-8"
-            aria-label="试玩预览"
+            aria-label={t("previewAria")}
           >
             <p className="text-xs text-[var(--gc-muted)]">
-              完成创意描述与参考素材配置并生成后，在下方试玩；先选 Godot（在线）完整版，Phaser 用于秒开预览。
+              {t("previewHint")}
             </p>
             {spec ? (
               <>
@@ -1517,28 +1599,30 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     <h2 className="text-lg font-semibold text-[var(--gc-text)]">{spec.title}</h2>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">
-                        {spec.templateId} · 实时预览
+                        {spec.templateId} · {t("realtimePreview")}
                       </p>
                       <GameRuntimePreferenceControl />
                     </div>
                     {genSource ? (
                       <p className="mt-2 max-w-md text-xs leading-relaxed text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
-                        {SOURCE_HINT[genSource] ?? genSource}
+                        {genSource && t.has(`sourceHints.${genSource}`)
+                          ? t(`sourceHints.${genSource}`)
+                          : genSource}
                       </p>
                     ) : null}
                     {genDebug ? (
                       <div className="mt-2 max-w-md rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-[11px] text-[var(--gc-muted)]">
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
-                          <span className="font-medium text-[var(--gc-text-soft)]">生成证据</span>
-                          <span>初稿模型：{genDebug.draftModel ?? (genDebug.model ?? (genDebug.fallback ? "（已回退本地）" : "（未知）"))}</span>
-                          <span>强化模型：{genDebug.enhanceModel ?? (genDebug.enhanced ? (genDebug.model ?? "（未知）") : "（未执行）")}</span>
-                          <span>回退：{genDebug.fallback ? "是" : "否"}</span>
-                          <span>检索：{genDebug.searchEnhance ? "开" : "关"}</span>
-                          <span>强化：{genDebug.enhanced ? "开" : "关"}</span>
-                          {genDebug.templateHint ? <span>模板提示：{genDebug.templateHint}</span> : null}
+                          <span className="font-medium text-[var(--gc-text-soft)]">{t("generationEvidence")}</span>
+                          <span>{t("genEvidence.draftModel")}{genDebug.draftModel ?? (genDebug.model ?? (genDebug.fallback ? t("genEvidence.fallbackLocal") : t("genEvidence.unknown")))}</span>
+                          <span>{t("genEvidence.enhanceModel")}{genDebug.enhanceModel ?? (genDebug.enhanced ? (genDebug.model ?? t("genEvidence.unknown")) : t("genEvidence.notRun"))}</span>
+                          <span>{t("genEvidence.fallback")}{genDebug.fallback ? t("genEvidence.yes") : t("genEvidence.no")}</span>
+                          <span>{t("genEvidence.search")}{genDebug.searchEnhance ? t("genEvidence.on") : t("genEvidence.off")}</span>
+                          <span>{t("genEvidence.enhance")}{genDebug.enhanced ? t("genEvidence.on") : t("genEvidence.off")}</span>
+                          {genDebug.templateHint ? <span>{t("genEvidence.templateHint")}{genDebug.templateHint}</span> : null}
                         </div>
                         {genDebug.fallbackReason ? (
-                          <p className="mt-2 text-[11px] text-amber-200/90">回退原因：{genDebug.fallbackReason}</p>
+                          <p className="mt-2 text-[11px] text-amber-200/90">{t("genEvidence.fallbackReason")}{genDebug.fallbackReason}</p>
                         ) : null}
                         {genDebug.provider || genDebug.llmMode ? (
                           <p className="mt-2 text-[11px] text-[var(--gc-text-faint)]">
@@ -1547,11 +1631,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                         ) : null}
                         {genDebug.llmError ? (
                           <p className="mt-2 whitespace-pre-wrap break-words text-[11px] text-amber-200/90">
-                            网关报错：{genDebug.llmError}
+                            {t("gatewayError", { error: genDebug.llmError })}
                           </p>
                         ) : null}
                         {genDebug.enhanceWarning ? (
-                          <p className="mt-2 text-[11px] text-amber-200/90">强化提示：{genDebug.enhanceWarning}</p>
+                          <p className="mt-2 text-[11px] text-amber-200/90">{t("enhanceWarningPrefix")}{genDebug.enhanceWarning}</p>
                         ) : null}
                         {(() => {
                           const ot = genDebug.orchestrationTrace;
@@ -1562,7 +1646,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                           if (cnt === null) return null;
                           return (
                             <p className="mt-2 text-[11px] text-[var(--gc-muted)]">
-                              会话参考图条目（编排记录）：{cnt}
+                              {t("sessionRefItems", { count: cnt })}
                               {revNum !== null ? ` · revision ${revNum}` : ""}
                             </p>
                           );
@@ -1570,8 +1654,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                         {genDebug.orchestrationTrace ? (
                           <details className="mt-2 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]/30 px-2 py-1.5">
                             <summary className="cursor-pointer text-[10px] font-medium text-[var(--gc-text-soft)]">
-                              编排追踪（Phase 0）· {genDebug.orchestrationTrace.steps.length} 步 ·{" "}
-                              {(genDebug.orchestrationTrace.totalMs / 1000).toFixed(2)}s
+                              {t("orchestrationTrace", {
+                                steps: genDebug.orchestrationTrace.steps.length,
+                                seconds: (genDebug.orchestrationTrace.totalMs / 1000).toFixed(2),
+                              })}
                             </summary>
                             <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-snug text-[var(--gc-text-faint)]">
                               {JSON.stringify(genDebug.orchestrationTrace, null, 2)}
@@ -1587,13 +1673,13 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     disabled={busy !== "idle" || prompt.trim().length < 2}
                     className="text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline-offset-4 hover:underline disabled:opacity-40"
                   >
-                    重新流式生成
+                    {t("rerunStream")}
                   </button>
                 </div>
 
                 {variants && variants.length > 1 ? (
                   <div className="flex flex-wrap gap-2">
-                    <span className="w-full text-[11px] uppercase tracking-wider text-[var(--gc-muted)]">备选方案</span>
+                    <span className="w-full text-[11px] uppercase tracking-wider text-[var(--gc-muted)]">{t("options")}</span>
                     {variants.map((v, i) => (
                       <button
                         key={v.label}
@@ -1635,7 +1721,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               <div className="gc-card flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 py-16 text-center">
                 <div className="h-12 w-12 rounded-2xl border border-dashed border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" />
                 <p className="max-w-xs text-sm text-[var(--gc-muted)]">
-                  点击「生成可玩版本」或「三套备选」，试玩区将出现在创意描述与参考素材下方。
+                  {t("previewEmpty")}
                 </p>
               </div>
             )}
@@ -1643,7 +1729,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           </section>
         </div>
       </main>
-    </div>
+      {QuotaModal}
+      </AppMain>
+    </AppPageShell>
   );
 }
 

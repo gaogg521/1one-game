@@ -11,10 +11,10 @@ const RefineBodySchema = z.object({
 
 export type RefineBody = z.infer<typeof RefineBodySchema>;
 
-export function parseRefineBody(raw: unknown): { ok: true; body: RefineBody } | { ok: false; error: string } {
+export function parseRefineBody(raw: unknown): { ok: true; body: RefineBody } | { ok: false; errorKey: string } {
   const r = RefineBodySchema.safeParse(raw);
   if (!r.success) {
-    return { ok: false, error: "请求体无效：需要 instruction（字符串）与 mode（patch | regenerate）" };
+    return { ok: false, errorKey: "refineBodyInvalid" };
   }
   return { ok: true, body: r.data };
 }

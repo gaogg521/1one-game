@@ -6,11 +6,20 @@ import {
   buildComicStyleReferenceInstruction,
   loadStyleReferenceImages,
 } from "@/lib/comic-style-reference";
+import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
 import fs from "fs";
 import path from "path";
+
+const DEFAULT_IMAGE_GEN_TIMEOUT_MS = 12 * 60 * 1000;
+
+function resolveImageGenTimeoutMs(timeoutMs?: number): number {
+  const raw = timeoutMs ?? Number.parseInt(process.env.IMAGE_GEN_TIMEOUT_MS ?? "", 10);
+  if (Number.isFinite(raw) && raw >= 30_000) return Math.min(raw, 30 * 60 * 1000);
+  return DEFAULT_IMAGE_GEN_TIMEOUT_MS;
+}
 
 export interface ImageGenResult {
   url: string;
@@ -84,7 +93,7 @@ function imageItemToResult(
  */
 export async function generateImageWithOpenAI(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number }
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number }
 ): Promise<ImageGenResult | null> {
   const detail = await generateImageWithOpenAIDetail(prompt, options);
   return detail.ok && detail.url ? { url: detail.url, localPath: detail.localPath } : null;
@@ -92,7 +101,7 @@ export async function generateImageWithOpenAI(
 
 export async function generateImageWithOpenAIDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number },
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
   const model = getImageGenOpenAIModel();
@@ -106,6 +115,7 @@ export async function generateImageWithOpenAIDetail(
 
   const size = options?.size ?? getImageGenDefaultSize();
   const n = options?.n ?? 1;
+  const timeoutMs = resolveImageGenTimeoutMs(options?.timeoutMs);
   const attempts: Record<string, unknown>[] = [{ model, prompt, size, n }];
   if (options?.quality) {
     attempts.push({ model, prompt, size, n, quality: options.quality });
@@ -119,6 +129,7 @@ export async function generateImageWithOpenAIDetail(
       }
       const response = await client.images.generate(
         body as unknown as Parameters<typeof client.images.generate>[0],
+        { timeout: timeoutMs } as Parameters<typeof client.images.generate>[1],
       );
       if (!("data" in response) || !response.data?.length) {
         lastErr = "响应无 data 字段";
@@ -172,7 +183,7 @@ function buildBatchCombinedPrompt(prompts: string[]): string {
  */
 export async function generateImagesBatchOpenAIDetail(
   prompts: string[],
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high" },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number },
 ): Promise<ImageGenBatchResult> {
   const t0 = Date.now();
   if (prompts.length === 0) {
@@ -195,6 +206,7 @@ export async function generateImagesBatchOpenAIDetail(
 
   const size = options?.size ?? getImageGenDefaultSize();
   const n = prompts.length;
+  const timeoutMs = resolveImageGenTimeoutMs(options?.timeoutMs);
   const combinedPrompt = buildBatchCombinedPrompt(prompts);
   const attempts: Record<string, unknown>[] = [{ model, prompt: combinedPrompt, size, n }];
   if (options?.quality) {
@@ -209,6 +221,7 @@ export async function generateImagesBatchOpenAIDetail(
       }
       const response = await client.images.generate(
         body as unknown as Parameters<typeof client.images.generate>[0],
+        { timeout: timeoutMs } as Parameters<typeof client.images.generate>[1],
       );
       const data = "data" in response && Array.isArray(response.data) ? response.data : [];
       if (data.length < n) {
@@ -262,7 +275,7 @@ export async function generateImagesBatchOpenAIDetail(
 /** 批量文生图：优先 OpenAI `n` 批量，失败格可降级 Gemini。 */
 export async function generateImagesBatchDetailed(
   prompts: string[],
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high" },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number },
 ): Promise<ImageGenBatchResult> {
   const batch = await generateImagesBatchOpenAIDetail(prompts, options);
   const results = [...batch.results];
@@ -291,13 +304,12 @@ export async function generateImagesBatchDetailed(
  */
 export async function generateImageWithGemini(
   prompt: string,
-  options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre },
+  options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre; timeoutMs?: number },
 ): Promise<ImageGenResult | null> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return null;
 
   try {
-    const size = options?.size ?? getImageGenDefaultSize();
     const geminiModel = getImageGenGeminiModel();
     const refImages = options?.styleReferenceUrls?.length
       ? await loadStyleReferenceImages(options.styleReferenceUrls)
@@ -311,11 +323,15 @@ export async function generateImageWithGemini(
     const textPrompt = refImages.length > 0 ? `${refPrefix}${prompt}` : prompt;
     parts.push({ text: textPrompt });
 
+    const timeoutMs = resolveImageGenTimeoutMs(options?.timeoutMs);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: {
@@ -323,7 +339,7 @@ export async function generateImageWithGemini(
           },
         }),
       },
-    );
+    ).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
@@ -355,6 +371,7 @@ export async function generateImageDetailed(
   options?: {
     size?: "1024x1024" | "1024x1536" | "1536x1024";
     quality?: "standard" | "high";
+    timeoutMs?: number;
     /** 首张分镜图 + 封面等，用于 Gemini 多模态风格锚定 */
     styleReferenceUrls?: string[];
     /** 与参考图一并约束题材（如都市禁止玄幻画风） */
@@ -369,6 +386,7 @@ export async function generateImageDetailed(
       size: options?.size,
       styleReferenceUrls: styleRefs,
       styleGenre: options?.styleGenre,
+      timeoutMs: options?.timeoutMs,
     });
     if (geminiRef?.url) {
       return {
@@ -383,7 +401,7 @@ export async function generateImageDetailed(
   }
 
   const urbanPrefix =
-    options?.styleGenre === "urban"
+    options?.styleGenre === "urban" && !panelLooksHistoricalOrPeriod({ prompt })
       ? "Modern contemporary urban China manhua, realistic clothing, city or office setting, NO fantasy magic, NO purple energy, NO ancient costumes. "
       : "";
   const openai = await generateImageWithOpenAIDetail(
@@ -394,7 +412,7 @@ export async function generateImageDetailed(
   );
   if (openai.ok) return { ...openai, durationMs: openai.durationMs ?? Date.now() - t0 };
 
-  const gemini = await generateImageWithGemini(prompt, { size: options?.size });
+  const gemini = await generateImageWithGemini(prompt, { size: options?.size, timeoutMs: options?.timeoutMs });
   const durationMs = Date.now() - t0;
   if (gemini?.url) {
     return {
@@ -423,6 +441,7 @@ export async function generateImage(
   options?: {
     size?: "1024x1024" | "1024x1536" | "1536x1024";
     quality?: "standard" | "high";
+    timeoutMs?: number;
     coverGenre?: CoverGenre;
   },
 ): Promise<ImageGenResult | null> {

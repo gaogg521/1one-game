@@ -46,7 +46,7 @@ export const CREATIVE_BRIEF_SCHEMA = z.object({
   negatives: z.array(z.string()),
   expandSource: z.enum(["pack", "pack+llm", "llm"]),
   /** 用户原话主要语言（规则检测） */
-  inputLocale: z.enum(["zh", "en", "ja"]).optional(),
+  inputLocale: z.enum(["zh", "zh-Hant", "en", "ja", "ms", "th"]).optional(),
 });
 
 export type CreativeBrief = z.infer<typeof CREATIVE_BRIEF_SCHEMA>;

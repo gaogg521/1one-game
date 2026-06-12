@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { childrenUnnamedLabel, isUntitledLabel } from "@/lib/i18n/chapter-labels";
 import { stripChildrenChapterMarkers } from "@/lib/children-body-normalize";
 import {
   childrenCoreSubjectFromUserPrompt,
@@ -20,34 +22,43 @@ import { truncateNovelToMaxChars } from "@/lib/novel-chapters";
 
 function resolveChildrenStoryTitle(
   parsedTitle: string,
+  uiLocale: AppLocale,
   userPrompt?: string,
   fallbackTitle?: string,
 ): string {
   const parsed = parsedTitle?.trim();
   const core = userPrompt ? childrenCoreSubjectFromUserPrompt(userPrompt) : "";
   const kind = userPrompt ? resolveChildrenInputKind(userPrompt) : "daily_phrase";
+  const unnamed = childrenUnnamedLabel(uiLocale);
 
-  if (userPrompt && isChildrenTitleOffTopic(userPrompt, parsed || "未命名", kind)) {
-    return core.slice(0, 12) || fallbackTitle || "未命名";
+  if (userPrompt && isChildrenTitleOffTopic(userPrompt, parsed || unnamed, kind)) {
+    return core.slice(0, 12) || fallbackTitle || unnamed;
   }
-  if (parsed && parsed !== "未命名") return parsed;
+  if (parsed && !isUntitledLabel(parsed)) return parsed;
   if (core.length >= 2) return core.slice(0, 12);
-  return fallbackTitle || "未命名";
+  return fallbackTitle || unnamed;
 }
 
 export function finalizeChildrenNovelContent(
   raw: string,
-  opts: { targetAge: ChildrenTargetAge; fallbackTitle?: string; userPrompt?: string },
+  opts: {
+    targetAge: ChildrenTargetAge;
+    fallbackTitle?: string;
+    userPrompt?: string;
+    uiLocale?: AppLocale;
+  },
 ): ParsedChildrenStoryOutput & { dbTitle: string; publishedContent: string } {
+  const uiLocale = opts.uiLocale ?? "zh-Hans";
   const age = parseChildrenTargetAge(opts.targetAge);
   const max = childrenMaxCharsForAge(age);
-  const parsed = parseChildrenStoryOutput(raw, age);
+  const parsed = parseChildrenStoryOutput(raw, age, uiLocale);
   let body = stripChildrenChapterMarkers(parsed.body.trim());
   if (body.length > max + 20) {
     body = truncateNovelToMaxChars(body, max + 20);
   }
   const storyTitle = resolveChildrenStoryTitle(
     parsed.storyTitle,
+    uiLocale,
     opts.userPrompt,
     opts.fallbackTitle,
   );
@@ -55,10 +66,10 @@ export function finalizeChildrenNovelContent(
   const parentReadingTip = parsed.parentReadingTip;
   return {
     interpretation,
-    storyTitle: storyTitle,
+    storyTitle,
     body,
     parentReadingTip,
-    dbTitle: childrenNovelDbTitle(storyTitle, opts.fallbackTitle),
+    dbTitle: childrenNovelDbTitle(storyTitle, opts.fallbackTitle, uiLocale),
     publishedContent: formatChildrenPublishedContent(
       interpretation,
       body,

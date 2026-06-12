@@ -5,6 +5,9 @@
  * 音色：https://www.volcengine.com/docs/6561/97465
  */
 
+import type { AppLocale } from "@/i18n/routing";
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
+import { tMessage } from "@/lib/i18n/messages";
 import { randomUUID } from "crypto";
 
 const VOLC_TTS_V1_ENDPOINT = "https://openspeech.bytedance.com/api/v1/tts";
@@ -13,14 +16,19 @@ const VOLC_TTS_V3_ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidir
 /** 有声阅读默认：擎苍 */
 export const VOLC_TTS_DEFAULT_VOICE = "BV701_streaming";
 
-export const VOLC_TTS_VOICES = [
-  { id: "BV701_streaming", label: "擎苍（有声阅读男）" },
-  { id: "BV104_streaming", label: "温柔淑女" },
-  { id: "BV115_streaming", label: "古风少御" },
-  { id: "BV700_streaming", label: "灿灿" },
-  { id: "BV001_streaming", label: "通用女声" },
-  { id: "BV002_streaming", label: "通用男声" },
+export const VOLC_TTS_VOICE_IDS = [
+  "BV701_streaming",
+  "BV104_streaming",
+  "BV115_streaming",
+  "BV700_streaming",
+  "BV001_streaming",
+  "BV002_streaming",
 ] as const;
+
+export type VolcTtsVoiceId = (typeof VOLC_TTS_VOICE_IDS)[number];
+
+/** Legacy shape for callers expecting `{ id, label }[]`. */
+export const VOLC_TTS_VOICES = VOLC_TTS_VOICE_IDS.map((id) => ({ id, label: id }));
 
 export type VolcTtsConfig = {
   appId: string;
@@ -87,10 +95,10 @@ function parseV3NdjsonAudio(raw: string): Buffer {
     }
     if (parsed.code === 20000000) break;
     if (parsed.code !== undefined && parsed.code !== 0) {
-      throw new Error(parsed.message || `火山 TTS V3 错误 code=${parsed.code}`);
+      throw new ApiKeyedError("ttsFailed");
     }
   }
-  if (chunks.length === 0) throw new Error("火山 TTS V3 未返回音频数据");
+  if (chunks.length === 0) throw new ApiKeyedError("ttsFailed");
   return Buffer.concat(chunks);
 }
 
@@ -183,15 +191,15 @@ async function synthesizeVolcTtsV1(
   try {
     json = JSON.parse(raw) as VolcTtsV1Response;
   } catch {
-    throw new Error(`火山 TTS V1 响应异常（HTTP ${res.status}）`);
+    throw new ApiKeyedError("ttsFailed");
   }
 
   if (!res.ok) {
-    throw new Error(json.message || `火山 TTS V1 HTTP ${res.status}`);
+    throw new ApiKeyedError("ttsFailed");
   }
 
   if (json.code !== 3000 || !json.data) {
-    throw new Error(json.message || `火山 TTS V1 合成失败（code=${json.code ?? "unknown"}）`);
+    throw new ApiKeyedError("ttsFailed");
   }
 
   return Buffer.from(json.data, "base64");
@@ -203,12 +211,12 @@ export async function synthesizeVolcTts(
 ): Promise<Buffer> {
   const cfg = getVolcTtsConfig();
   if (!cfg) {
-    throw new Error("未配置火山引擎 TTS（VOLC_TTS_APP_ID + VOLC_TTS_ACCESS_KEY）");
+    throw new ApiKeyedError("ttsNotConfigured");
   }
 
   const trimmed = text.trim();
-  if (!trimmed) throw new Error("朗读文本为空");
-  if (trimmed.length > 900) throw new Error("单段文本过长，请缩短后重试");
+  if (!trimmed) throw new ApiKeyedError("missingText");
+  if (trimmed.length > 900) throw new ApiKeyedError("ttsTextTooLong");
 
   let v1Error: string | null = null;
   try {
@@ -221,16 +229,23 @@ export async function synthesizeVolcTts(
     return await synthesizeVolcTtsV3(trimmed, cfg, options);
   } catch (err) {
     const v3Msg = err instanceof Error ? err.message : String(err);
-    throw new Error(formatVolcTtsError([v1Error, v3Msg].filter(Boolean).join("；")));
+    const combined = [v1Error, v3Msg].filter(Boolean).join("；");
+    if (/grant not found|45000010|requested resource not granted/i.test(combined)) {
+      throw new ApiKeyedError("ttsAuthFailed");
+    }
+    throw new ApiKeyedError("ttsFailed");
   }
 }
 
-export function volcVoiceLabel(voiceType: string): string {
-  return VOLC_TTS_VOICES.find((v) => v.id === voiceType)?.label ?? voiceType;
+export function volcVoiceLabel(voiceType: string, locale: AppLocale = "zh-Hans"): string {
+  if (!isAllowedVolcVoice(voiceType)) return voiceType;
+  const keyPath = `novelListen.volcVoices.${voiceType}`;
+  const label = tMessage(locale, keyPath);
+  return label === keyPath ? voiceType : label;
 }
 
 export function isAllowedVolcVoice(voiceType: string): boolean {
-  return VOLC_TTS_VOICES.some((v) => v.id === voiceType);
+  return VOLC_TTS_VOICE_IDS.includes(voiceType as VolcTtsVoiceId);
 }
 
 /** 请求音色 → 合法 voice_type（未知则回退 .env / 默认） */
@@ -240,14 +255,4 @@ export function resolveVolcVoiceType(requested?: string | null): string {
   const id = requested?.trim();
   if (id && isAllowedVolcVoice(id)) return id;
   return fallback;
-}
-
-export function formatVolcTtsError(message: string): string {
-  if (/grant not found|45000010|requested resource not granted/i.test(message)) {
-    return (
-      "火山语音鉴权失败：请在控制台开通「豆包语音-语音合成」、确认 APP ID 与 Access Key 来自 " +
-      "https://console.volcengine.com/speech/app ，且已授权音色（见音色列表文档）。"
-    );
-  }
-  return message;
 }

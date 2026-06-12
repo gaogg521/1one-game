@@ -1,26 +1,36 @@
 import type { NovelChapter } from "@/lib/novel-chapters";
 import { splitNovelParagraphs } from "@/lib/novel-paragraphs";
+import type { AppLocale } from "@/i18n/routing";
+import { ttsChapterIntro } from "@/lib/i18n/chapter-labels";
 
 const MAX_CHUNK_LEN = 180;
 
+function isCjkTtsLocale(locale: AppLocale): boolean {
+  return locale.startsWith("zh");
+}
+
 /** 章节正文 → 适合朗读的连续文本 */
-export function chapterBodyForTts(body: string): string {
+export function chapterBodyForTts(body: string, locale: AppLocale = "zh-Hans"): string {
+  const cjk = isCjkTtsLocale(locale);
+  const sentenceEnd = cjk ? "。" : ".";
+  const joiner = cjk ? "。" : ". ";
   const paras = splitNovelParagraphs(body);
   const parts = (paras.length > 0 ? paras : [body.trim()])
     .map((p) => p.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   if (parts.length === 0) return "";
-  const joined = parts.join("。");
-  return /[。！？!?]$/.test(joined) ? joined : `${joined}。`;
+  const joined = parts.join(joiner);
+  return /[。！？!?]$/.test(joined) ? joined : `${joined}${sentenceEnd}`;
 }
 
 /** 按句号切分，避免单次 utterance 过长被浏览器截断 */
-export function splitTextForTts(text: string): string[] {
-  const normalized = text.replace(/\s+/g, "").trim();
+export function splitTextForTts(text: string, locale: AppLocale = "zh-Hans"): string[] {
+  const cjk = isCjkTtsLocale(locale);
+  const normalized = cjk ? text.replace(/\s+/g, "").trim() : text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
   if (normalized.length <= MAX_CHUNK_LEN) return [normalized];
 
-  const parts = normalized.split(/(?<=[。！？；.!?])/);
+  const parts = normalized.split(cjk ? /(?<=[。！？；.!?])/ : /(?<=[.!?])\s*/);
   const chunks: string[] = [];
   let buf = "";
   for (const part of parts) {
@@ -38,16 +48,20 @@ export function splitTextForTts(text: string): string[] {
 
 export type TtsQueueItem = { text: string; chapterIndex: number };
 
-export function buildNovelTtsQueue(chapters: NovelChapter[], fromChapterIndex: number): TtsQueueItem[] {
+export function buildNovelTtsQueue(
+  chapters: NovelChapter[],
+  fromChapterIndex: number,
+  locale: AppLocale = "zh-Hans",
+): TtsQueueItem[] {
   const queue: TtsQueueItem[] = [];
   const start = Math.max(0, Math.min(fromChapterIndex, chapters.length - 1));
 
   for (let ci = start; ci < chapters.length; ci++) {
     const ch = chapters[ci]!;
-    const intro = `第${ch.num}章，${ch.title}。`;
-    const body = chapterBodyForTts(ch.body);
+    const intro = ttsChapterIntro(locale, ch.num, ch.title);
+    const body = chapterBodyForTts(ch.body, locale);
     const full = body ? `${intro}${body}` : intro;
-    for (const text of splitTextForTts(full)) {
+    for (const text of splitTextForTts(full, locale)) {
       queue.push({ text, chapterIndex: ci });
     }
   }

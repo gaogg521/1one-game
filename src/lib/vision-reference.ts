@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { apiErrorMessage } from "@/lib/i18n/progress-message";
 import { createOpenAIClient } from "@/lib/openai-client";
 import { PRODUCT } from "@/lib/product-config";
 import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
@@ -25,6 +27,7 @@ export async function describeReferenceImage(params: {
   roleHint?: string;
   /** 本次任务中第几张图（从 1 起），与用户正文「图N」对齐 */
   imageOrdinal?: number;
+  uiLocale?: AppLocale;
 }): Promise<string> {
   const client = createOpenAIClient();
   const models = getModelCascade();
@@ -39,6 +42,7 @@ export async function describeReferenceImage(params: {
   ];
 
   const visionOut = PRODUCT.llm.visionMaxOutputTokens;
+  const locale = params.uiLocale ?? "zh-Hans";
   for (const model of models) {
     try {
       const res = await client.chat.completions.create({
@@ -54,5 +58,5 @@ export async function describeReferenceImage(params: {
     }
   }
 
-  return "（未能生成图片描述）";
+  return apiErrorMessage(locale, "visionDescFailed");
 }

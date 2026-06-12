@@ -1,3 +1,4 @@
+import { isUntitledLabel } from "@/lib/i18n/chapter-labels";
 import { getChildrenAgeTier, parseChildrenTargetAge, type ChildrenTargetAge } from "@/lib/children-age-length";
 import type { ChildrenInputKind } from "@/lib/children-novel-creative";
 
@@ -145,7 +146,7 @@ export function isChildrenTitleOffTopic(
   const k = kind ?? resolveChildrenInputKind(userLine);
   if (!requiresChildrenSourceFidelity(k)) return false;
   const title = generatedTitle.trim();
-  if (!title || title === "未命名") return false;
+  if (!title || isUntitledLabel(title)) return false;
 
   const keywords = childrenPromptKeywords(userLine);
   if (keywords.some((w) => title.includes(w))) return false;

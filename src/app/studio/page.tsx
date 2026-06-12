@@ -3,9 +3,18 @@
 import Link from "next/link";
 import { CoverThumb } from "@/components/CoverThumb";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
+import { CreatorCenterPanel } from "@/components/CreatorCenterPanel";
+import { StudioAdaptationSummary } from "@/components/studio/StudioAdaptationSummary";
+import { StudioComicPanelProgress } from "@/components/studio/StudioComicPanelProgress";
+import { WorkStatusBadge } from "@/components/work/WorkStatusBadge";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type WorkType = "project" | "novel" | "comic";
@@ -25,9 +34,9 @@ type BaseRow = {
 
 type WorkRow = BaseRow & { type: WorkType };
 
-function formatWhen(iso: string) {
+function formatWhen(iso: string, localeTag: string) {
   const d = new Date(iso);
-  return new Intl.DateTimeFormat("zh-Hans", {
+  return new Intl.DateTimeFormat(localeTag, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -35,16 +44,16 @@ function formatWhen(iso: string) {
   }).format(d);
 }
 
-function getWorkLink(type: WorkType, id: string): string {
+function getWorkLink(type: WorkType, id: string, locale: AppLocale): string {
   switch (type) {
     case "project":
-      return `/play/${id}`;
+      return withLocalePath(`/play/${id}`, locale);
     case "novel":
-      return `/novel/${id}`;
+      return withLocalePath(`/novel/${id}`, locale);
     case "comic":
-      return `/comic/${id}`;
+      return withLocalePath(`/comic/${id}`, locale);
     default:
-      return `/`;
+      return withLocalePath(`/`, locale);
   }
 }
 
@@ -61,16 +70,16 @@ function getWorkIcon(type: WorkType): string {
   }
 }
 
-function getWorkTypeLabel(type: WorkType): string {
+function getWorkTypeLabel(type: WorkType, t: ReturnType<typeof useTranslations>): string {
   switch (type) {
     case "project":
-      return "游戏";
+      return t("studio.workType.project");
     case "novel":
-      return "小说";
+      return t("studio.workType.novel");
     case "comic":
-      return "动漫";
+      return t("studio.workType.comic");
     default:
-      return "作品";
+      return t("studio.workType.default");
   }
 }
 
@@ -119,6 +128,9 @@ function normalizeWorkRow(
 
 export default function StudioPage() {
   const router = useRouter();
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const localeTag = locale === "zh-Hant" ? "zh-TW" : locale === "en" ? "en-US" : locale === "ms" ? "ms-MY" : locale === "th" ? "th-TH" : "zh-CN";
   const [rows, setRows] = useState<WorkRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -148,10 +160,11 @@ export default function StudioPage() {
       const warnings: string[] = [];
 
       try {
+        const headers = mergeLocaleHeaders(locale);
         const [projectsRes, novelsRes, comicsRes] = await Promise.all([
-          fetch("/api/projects"),
-          fetch("/api/novel?limit=100&mine=1"),
-          fetch("/api/comic?limit=100&mine=1"),
+          fetch("/api/projects", { headers }),
+          fetch("/api/novel?limit=100&mine=1", { headers }),
+          fetch("/api/comic?limit=100&mine=1", { headers }),
         ]);
 
         const projectsPayload = await readApiJson(projectsRes);
@@ -172,7 +185,11 @@ export default function StudioPage() {
             "error" in projectsPayload
               ? String((projectsPayload as { error: unknown }).error)
               : null;
-          warnings.push(err ? `游戏列表：${err}` : `游戏列表加载失败（HTTP ${projectsRes.status}）`);
+          warnings.push(
+            err
+              ? t("studioErrors.gamesListError", { error: err })
+              : t("studioErrors.gamesListFailed", { status: String(projectsRes.status) }),
+          );
         }
 
         const novelsRaw =
@@ -189,9 +206,13 @@ export default function StudioPage() {
             "error" in novelsPayload
               ? String((novelsPayload as { error: unknown }).error)
               : null;
-          warnings.push(err ? `小说列表：${err}` : `小说列表加载失败（HTTP ${novelsRes.status}）`);
+          warnings.push(
+            err
+              ? t("studioErrors.novelsListError", { error: err })
+              : t("studioErrors.novelsListFailed", { status: String(novelsRes.status) }),
+          );
         } else if (!novelsPayload && novelsRes.status !== 204) {
-          warnings.push("小说列表返回内容无法解析（可能不是 JSON）");
+          warnings.push(t("studioErrors.novelsJsonFailed"));
         }
 
         const comicsRaw =
@@ -208,9 +229,13 @@ export default function StudioPage() {
             "error" in comicsPayload
               ? String((comicsPayload as { error: unknown }).error)
               : null;
-          warnings.push(err ? `动漫列表：${err}` : `动漫列表加载失败（HTTP ${comicsRes.status}）`);
+          warnings.push(
+            err
+              ? t("studioErrors.comicsListError", { error: err })
+              : t("studioErrors.comicsListFailed", { status: String(comicsRes.status) }),
+          );
         } else if (!comicsPayload && comicsRes.status !== 204) {
-          warnings.push("动漫列表返回内容无法解析（可能不是 JSON）");
+          warnings.push(t("studioErrors.comicsJsonFailed"));
         }
 
         const allWorks: WorkRow[] = [];
@@ -231,35 +256,36 @@ export default function StudioPage() {
 
         if (!cancelled) {
           setRows(allWorks);
-          setError(warnings.length ? warnings.join("；") : null);
+          setError(warnings.length ? warnings.join(t("studioErrors.listWarningSeparator")) : null);
           const gameIds = allWorks.filter((w) => w.type === "project").map((w) => w.id);
           prefetchGameProjectsByIds(gameIds, 8);
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "未知错误";
+        const msg = e instanceof Error ? e.message : t("studioErrors.unknownError");
         if (!cancelled) {
           setRows([]);
-          setError(`加载失败：${msg}`);
+          setError(t("studioErrors.loadFailed", { msg }));
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t, locale]);
 
   async function remove(id: string, type: WorkType) {
-    if (!confirm("确定删除该作品？")) return;
+    if (!confirm(t("studioErrors.confirmDeleteOne"))) return;
     let res: Response;
+    const delInit = superAdminFetchInit({ method: "DELETE", headers: mergeLocaleHeaders(locale) });
     switch (type) {
       case "project":
-        res = await fetch(`/api/projects/${id}`, superAdminFetchInit({ method: "DELETE" }));
+        res = await fetch(`/api/projects/${id}`, delInit);
         break;
       case "novel":
-        res = await fetch(`/api/novel/${id}`, superAdminFetchInit({ method: "DELETE" }));
+        res = await fetch(`/api/novel/${id}`, delInit);
         break;
       case "comic":
-        res = await fetch(`/api/comic/${id}`, superAdminFetchInit({ method: "DELETE" }));
+        res = await fetch(`/api/comic/${id}`, delInit);
         break;
     }
     if (!res!.ok) return;
@@ -267,10 +293,13 @@ export default function StudioPage() {
   }
 
   async function duplicateProject(id: string) {
-    const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+    const res = await fetch(`/api/projects/${id}/duplicate`, {
+      method: "POST",
+      headers: mergeLocaleHeaders(locale),
+    });
     const data = (await res.json()) as { project?: { id: string }; error?: string };
     if (!res.ok) {
-      alert(data.error ?? "复制失败");
+      alert(data.error ?? t("studioErrors.duplicateFailed"));
       return;
     }
     if (data.project?.id) {
@@ -279,20 +308,26 @@ export default function StudioPage() {
   }
 
   async function duplicateNovel(id: string) {
-    const res = await fetch(`/api/novel/${id}/duplicate`, { method: "POST" });
+    const res = await fetch(`/api/novel/${id}/duplicate`, {
+      method: "POST",
+      headers: mergeLocaleHeaders(locale),
+    });
     const data = (await res.json()) as { novel?: { id: string }; error?: string };
     if (!res.ok) {
-      alert(data.error ?? "复制失败");
+      alert(data.error ?? t("studioErrors.duplicateFailed"));
       return;
     }
     if (data.novel?.id) router.push(`/novel/${data.novel.id}`);
   }
 
   async function duplicateComic(id: string) {
-    const res = await fetch(`/api/comic/${id}/duplicate`, { method: "POST" });
+    const res = await fetch(`/api/comic/${id}/duplicate`, {
+      method: "POST",
+      headers: mergeLocaleHeaders(locale),
+    });
     const data = (await res.json()) as { comic?: { id: string }; error?: string };
     if (!res.ok) {
-      alert(data.error ?? "复制失败");
+      alert(data.error ?? t("studioErrors.duplicateFailed"));
       return;
     }
     if (data.comic?.id) router.push(`/comic/${data.comic.id}`);
@@ -324,7 +359,7 @@ export default function StudioPage() {
 
   async function handleBatchDelete() {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定要批量删除已选择的 ${selectedIds.size} 个作品吗？此操作不可逆！`)) return;
+    if (!confirm(t("studioErrors.confirmBatchDelete", { count: selectedIds.size }))) return;
 
     const items = Array.from(selectedIds).map((key) => {
       const [type, id] = key.split("-");
@@ -334,7 +369,7 @@ export default function StudioPage() {
     try {
       const res = await fetch("/api/studio/batch-delete", superAdminFetchInit({
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({ items }),
       }));
 
@@ -350,32 +385,37 @@ export default function StudioPage() {
         setSelectedIds(new Set());
         setIsBatchMode(false);
         if (data.errors && data.errors.length > 0) {
-          alert(`删除完毕，部分未能成功：\n${data.errors.join("\n")}`);
+          alert(t("studioErrors.batchDeletePartial", { errors: data.errors.join("\n") }));
         }
       } else {
-        alert("批量删除失败，请重试");
+        alert(t("studioErrors.batchDeleteFailed"));
       }
     } catch (e) {
-      alert(`发生错误: ${e instanceof Error ? e.message : "未知错误"}`);
+      alert(
+        t("studioErrors.batchDeleteError", {
+          msg: e instanceof Error ? e.message : t("studioErrors.unknownError"),
+        }),
+      );
     }
   }
 
   const filterButtons: { key: WorkType | "all"; label: string }[] = [
-    { key: "all", label: "全部" },
-    { key: "project", label: "游戏" },
-    { key: "novel", label: "小说" },
-    { key: "comic", label: "动漫" },
+    { key: "all", label: t("studio.all") },
+    { key: "project", label: t("studio.game") },
+    { key: "novel", label: t("studio.novel") },
+    { key: "comic", label: t("studio.comic") },
   ];
 
   return (
-    <div className="flex min-h-full flex-1 flex-col text-[var(--gc-text)] lg:flex-row">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
-      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col gap-8 px-4 py-10 lg:px-8 xl:pr-12">
+      <AppMain>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-10 lg:px-8 xl:pr-12">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">工作室</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">{t("studio.title")}</h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--gc-muted)]">
-              管理你的游戏、小说和动漫作品。按类型筛选，快速找到需要的内容。
+              {t("studio.desc")}
             </p>
           </div>
           <div className="flex gap-3">
@@ -388,17 +428,22 @@ export default function StudioPage() {
                 }}
                 className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-5 py-2.5 text-sm font-semibold hover:bg-[var(--gc-surface-glass)]"
               >
-                {isBatchMode ? "取消管理" : "批量管理"}
+                {isBatchMode ? t("studio.cancelManage") : t("studio.bulkManage")}
               </button>
             )}
             <Link
-              href="/create"
+              href={withLocalePath("/start", locale)}
               className="gc-theme-cta rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg hover:brightness-110"
             >
-              新建作品
+              {t("studio.newWork")}
             </Link>
           </div>
         </div>
+
+        {rows && rows.length > 0 ? <CreatorCenterPanel works={rows} /> : null}
+
+        <StudioAdaptationSummary />
+        <StudioComicPanelProgress />
 
         {error ? (
           <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
@@ -424,14 +469,14 @@ export default function StudioPage() {
         {rows && rows.length > 0 ? (
           <div className="max-w-md">
             <label htmlFor="studio-search" className="sr-only">
-              搜索作品
+              {t("studio.searchWorks")}
             </label>
             <input
               id="studio-search"
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="按标题、描述或短链片段筛选…"
+              placeholder={t("studio.searchPlaceholder")}
               className="w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-2.5 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_25%,transparent)]"
             />
           </div>
@@ -440,13 +485,13 @@ export default function StudioPage() {
         {isBatchMode && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 shadow-sm">
             <div className="flex items-center gap-3 text-sm">
-              <span>已选择 <strong className="text-[color:var(--gc-accent)]">{selectedIds.size}</strong> 项</span>
+              <span>{t("studio.selectedCount", { count: selectedIds.size })}</span>
               <button
                 type="button"
                 onClick={selectedIds.size === filtered?.length ? clearSelection : selectAll}
                 className="text-xs font-semibold text-[color:var(--gc-accent)] hover:underline cursor-pointer"
               >
-                {selectedIds.size === filtered?.length ? "取消全选" : "全选当前"}
+                {selectedIds.size === filtered?.length ? t("studio.clearSelect") : t("studio.selectAll")}
               </button>
             </div>
             <div className="flex gap-2">
@@ -460,7 +505,7 @@ export default function StudioPage() {
                     : "bg-red-500 hover:bg-red-600 active:scale-95 shadow-md cursor-pointer border border-transparent"
                 }`}
               >
-                批量删除
+                {t("studio.batchDelete")}
               </button>
             </div>
           </div>
@@ -474,17 +519,17 @@ export default function StudioPage() {
           </div>
         ) : rows.length === 0 ? (
           <div className="gc-card flex flex-col items-center justify-center gap-4 px-8 py-20 text-center">
-            <p className="text-sm text-[var(--gc-muted)]">还没有作品。从一个念头开始。</p>
+            <p className="text-sm text-[var(--gc-muted)]">{t("studio.empty")}</p>
             <Link
-              href="/create"
+              href={withLocalePath("/start", locale)}
               className="gc-theme-cta rounded-full px-6 py-2 text-sm font-semibold hover:brightness-110"
             >
-              去创作
+              {t("studio.goCreate")}
             </Link>
           </div>
         ) : filtered?.length === 0 ? (
           <div className="gc-card px-8 py-14 text-center text-sm text-[var(--gc-muted)]">
-            没有匹配的作品，换个关键词试试。
+            {t("studio.noMatch")}
           </div>
         ) : (
           <ul className="grid gap-5 sm:grid-cols-2">
@@ -508,7 +553,7 @@ export default function StudioPage() {
                   }`}
                 >
                   <Link
-                    href={getWorkLink(r.type, r.id)}
+                    href={getWorkLink(r.type, r.id, locale)}
                     onClick={(e) => {
                       if (isBatchMode) e.preventDefault();
                     }}
@@ -526,7 +571,7 @@ export default function StudioPage() {
                     )}
                     <CoverThumb
                       coverPath={r.coverPath}
-                      alt={`《${r.title}》封面`}
+                      alt={t("studioErrors.coverAlt", { title: r.title })}
                       className="h-full min-h-[140px] w-full object-cover transition duration-300 hover:scale-[1.03]"
                       placeholder={
                         <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
@@ -534,54 +579,57 @@ export default function StudioPage() {
                             {getWorkIcon(r.type)}
                           </span>
                           <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
-                            {r.type === "project" ? "试玩后自动生成封面" : "封面生成中…"}
+                            {r.type === "project" ? t("studio.autoCover") : t("studio.coverGenerating")}
                           </span>
                         </div>
                       }
                     />
                     <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                      {getWorkTypeLabel(r.type)}
+                      {getWorkTypeLabel(r.type, t)}
                     </span>
                   </Link>
                   <div className="flex flex-col gap-2 px-5 pb-5 pt-0">
-                    <Link
-                      href={getWorkLink(r.type, r.id)}
-                      onClick={(e) => {
-                        if (isBatchMode) e.preventDefault();
-                      }}
-                      className="truncate text-lg font-semibold text-[var(--gc-text)] hover:text-[color:var(--gc-accent)]"
-                    >
-                      {r.title}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={getWorkLink(r.type, r.id, locale)}
+                        onClick={(e) => {
+                          if (isBatchMode) e.preventDefault();
+                        }}
+                        className="truncate text-lg font-semibold text-[var(--gc-text)] hover:text-[color:var(--gc-accent)]"
+                      >
+                        {r.title}
+                      </Link>
+                      <WorkStatusBadge status={r.status} />
+                    </div>
                     <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">{r.prompt}</p>
                     {r.shareCode ? (
                       <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
-                        短链 /s/{r.shareCode}
+                        {t("studio.shortLink", { code: r.shareCode })}
                       </p>
                     ) : null}
                     <p className="text-[11px] uppercase tracking-wider text-[var(--gc-text-faint)]">
-                      更新 {formatWhen(r.updatedAt)}
+                      {t("studio.updatedAt", { time: formatWhen(r.updatedAt, localeTag) })}
                     </p>
                     <div className="flex items-center gap-3 text-[11px] text-[var(--gc-text-faint)]">
-                      {r.playCount > 0 && <span>▶ {r.playCount} 次试玩</span>}
-                      {r.likeCount > 0 && <span>♥ {r.likeCount} 点赞</span>}
+                      {r.playCount > 0 && <span>{t("studio.playCount", { count: r.playCount })}</span>}
+                      {r.likeCount > 0 && <span>{t("studio.likeCount", { count: r.likeCount })}</span>}
                     </div>
                   </div>
                   {!isBatchMode && (
                     <div className="flex flex-wrap gap-2 border-t border-[color:var(--gc-border)] px-5 pb-5 pt-3">
                       <Link
-                        href={getWorkLink(r.type, r.id)}
+                        href={getWorkLink(r.type, r.id, locale)}
                         className="rounded-full bg-[var(--gc-surface-glass-strong)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text)] hover:bg-[color:color-mix(in_srgb,var(--gc-text)_14%,transparent)]"
                       >
-                        打开
+                        {t("studio.open")}
                       </Link>
                       {r.type === "project" && (
                         <>
                           <Link
-                            href={`/create?from=${encodeURIComponent(r.id)}`}
+                            href={withLocalePath(`/create?from=${encodeURIComponent(r.id)}`, locale)}
                             className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
                           >
-                            再生成
+                            {t("studio.regenerate")}
                           </Link>
                           <button
                             type="button"
@@ -591,7 +639,7 @@ export default function StudioPage() {
                             }}
                             className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
                           >
-                            复制副本
+                            {t("studio.duplicate")}
                           </button>
                         </>
                       )}
@@ -604,7 +652,7 @@ export default function StudioPage() {
                           }}
                           className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
                         >
-                          复制副本
+                          {t("studio.duplicate")}
                         </button>
                       )}
                       {r.type === "comic" && (
@@ -616,7 +664,7 @@ export default function StudioPage() {
                           }}
                           className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
                         >
-                          复制副本
+                          {t("studio.duplicate")}
                         </button>
                       )}
                       <button
@@ -627,7 +675,7 @@ export default function StudioPage() {
                         }}
                         className="ml-auto rounded-full px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:text-red-400"
                       >
-                        删除
+                        {t("studio.delete")}
                       </button>
                     </div>
                   )}
@@ -637,6 +685,7 @@ export default function StudioPage() {
           </ul>
         )}
       </main>
-    </div>
+      </AppMain>
+    </AppPageShell>
   );
 }

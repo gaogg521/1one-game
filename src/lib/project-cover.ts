@@ -1,61 +1,61 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
+import { getBlobStore } from "@/lib/storage/blob-store";
 
 const MAX_BYTES = 320_000;
 const COVERS_DIR = path.join(process.cwd(), "public", "covers");
+
+async function persistCoverJpeg(projectId: string, jpeg: Buffer): Promise<string> {
+  const key = `covers/${projectId}.jpg`;
+  const store = await getBlobStore();
+  return store.put(key, jpeg, "image/jpeg");
+}
 
 /** 将 base64（可带 data:image/jpeg;base64, 前缀）写入 public/covers/{id}.jpg，返回公开路径。 */
 export async function saveProjectCoverJpeg(projectId: string, raw: string): Promise<string> {
   const trimmed = raw.trim();
   const b64 = trimmed.includes(",") ? trimmed.split(",").pop()!.trim() : trimmed;
   if (b64.length < 80) {
-    throw new Error("封面数据过短");
+    throw new ApiKeyedError("coverDataTooShort");
   }
   let buf: Buffer;
   try {
     buf = Buffer.from(b64, "base64");
   } catch {
-    throw new Error("封面不是有效的 Base64");
+    throw new ApiKeyedError("coverInvalidBase64");
   }
   if (buf.length < 512) {
-    throw new Error("封面文件过小");
+    throw new ApiKeyedError("coverFileTooSmall");
   }
   if (buf.length > MAX_BYTES) {
-    throw new Error("封面过大，请压缩后重试");
+    throw new ApiKeyedError("coverTooLarge");
   }
   if (buf[0] !== 0xff || buf[1] !== 0xd8) {
-    throw new Error("仅支持 JPEG 封面");
+    throw new ApiKeyedError("coverJpegOnly");
   }
-  await fs.mkdir(COVERS_DIR, { recursive: true });
-  const rel = `/covers/${projectId}.jpg`;
-  const abs = path.join(process.cwd(), "public", "covers", `${projectId}.jpg`);
-  await fs.writeFile(abs, buf, { mode: 0o644 });
-  return rel;
+  return persistCoverJpeg(projectId, buf);
 }
 
 /** Comfy / 文生图返回的 PNG/JPEG 缓冲，统一落盘为 public/covers/{id}.jpg */
 export async function saveProjectCoverFromBuffer(projectId: string, raw: Buffer): Promise<string> {
   if (raw.length < 512) {
-    throw new Error("封面文件过小");
+    throw new ApiKeyedError("coverFileTooSmall");
   }
   if (raw.length > MAX_BYTES * 2) {
-    throw new Error("封面过大");
+    throw new ApiKeyedError("coverTooLarge");
   }
   let jpeg: Buffer;
   try {
     jpeg = await sharp(raw).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
   } catch {
-    throw new Error("无法处理封面图像");
+    throw new ApiKeyedError("coverImageProcessFailed");
   }
   if (jpeg.length > MAX_BYTES) {
-    throw new Error("封面过大，请压缩后重试");
+    throw new ApiKeyedError("coverTooLarge");
   }
-  await fs.mkdir(COVERS_DIR, { recursive: true });
-  const rel = `/covers/${projectId}.jpg`;
-  const abs = path.join(process.cwd(), "public", "covers", `${projectId}.jpg`);
-  await fs.writeFile(abs, jpeg, { mode: 0o644 });
-  return rel;
+  return persistCoverJpeg(projectId, jpeg);
 }
 
 export function coverAbsPathFromPublicRel(rel: string): string {

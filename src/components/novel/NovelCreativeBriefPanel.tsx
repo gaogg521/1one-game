@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { NovelBriefUserRevision, NovelCreativeBrief } from "@/lib/literary-brief/novel-types";
 
 type Props = {
@@ -37,6 +38,7 @@ export function NovelCreativeBriefPanel({
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
+  const t = useTranslations("novelBrief");
   const [editing, setEditing] = useState(false);
   const [logline, setLogline] = useState("");
   const [world, setWorld] = useState("");
@@ -67,10 +69,10 @@ export function NovelCreativeBriefPanel({
       open={Boolean(brief)}
     >
       <summary className="cursor-pointer list-none text-sm font-medium text-[var(--gc-text-soft)] outline-none [&::-webkit-details-marker]:hidden">
-        小说创意构思（可展开 / 可修订）
+        {t("novelSummary")}
         {brief ? (
           <span className="ml-2 text-[10px] font-normal text-[var(--gc-text-faint)]">
-            {brief.genreLabel} · {brief.expandSource === "pack" ? "类型骨架" : "骨架+模型"}
+            {brief.genreLabel} · {brief.expandSource === "pack" ? t("expandPack") : t("expandModel")}
           </span>
         ) : null}
       </summary>
@@ -82,7 +84,7 @@ export function NovelCreativeBriefPanel({
           <>
             {brief.title ? (
               <p className="text-xs text-[var(--gc-muted)]">
-                <span className="text-[var(--gc-text-faint)]">书名：</span>《{brief.title}》
+                <span className="text-[var(--gc-text-faint)]">{t("titlePrefix")}</span>《{brief.title}》
               </p>
             ) : null}
 
@@ -95,49 +97,49 @@ export function NovelCreativeBriefPanel({
                   rows={2}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs"
                 />
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">世界观</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("worldLabel")}</label>
                 <textarea
                   value={world}
                   onChange={(e) => setWorld(e.target.value)}
                   rows={2}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs"
                 />
-                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">补充</label>
+                <label className="block text-[10px] font-medium text-[var(--gc-muted)]">{t("addonLabel")}</label>
                 <textarea
                   value={addonNotes}
                   onChange={(e) => setAddonNotes(e.target.value)}
                   rows={2}
-                  placeholder="例如：第三人称、感情线更重、结局偏开放式…"
+                  placeholder={t("addonPlaceholder")}
                   className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1.5 text-xs"
                 />
                 <div className="flex gap-2">
                   <button type="button" onClick={applyRevision} className="rounded-lg bg-[var(--gc-accent)]/20 px-3 py-1.5 text-xs">
-                    保存修订
+                    {t("saveRevision")}
                   </button>
                   <button type="button" onClick={() => setEditing(false)} className="rounded-lg border px-3 py-1.5 text-xs text-[var(--gc-muted)]">
-                    取消
+                    {t("cancel")}
                   </button>
                 </div>
               </div>
             ) : (
               <>
                 <p className="text-xs font-medium text-[var(--gc-text)]">{logline || brief.logline}</p>
-                <Section title="时代与地点" items={[brief.setting]} />
-                <Section title="世界观" items={[world || brief.world]} />
-                <Section title="主角" items={[brief.protagonist]} />
-                <Section title="核心矛盾" items={[brief.coreConflict]} />
-                <Section title="主角目标" items={[brief.protagonistGoal]} />
-                <Section title="主要角色" items={brief.characters} />
-                <Section title="对立面" items={brief.antagonists} />
-                <Section title="情节节拍" items={brief.plotBeats} />
-                <Section title="关键场景" items={brief.keyScenes} />
-                <Section title="基调" items={[brief.tone]} />
-                <Section title="文风" items={brief.writingStyle} />
-                <Section title="连载结构提示" items={brief.narrativeHints} />
-                <Section title="禁忌" items={brief.negatives} />
+                <Section title={t("setting")} items={[brief.setting]} />
+                <Section title={t("world")} items={[world || brief.world]} />
+                <Section title={t("protagonist")} items={[brief.protagonist]} />
+                <Section title={t("coreConflict")} items={[brief.coreConflict]} />
+                <Section title={t("protagonistGoal")} items={[brief.protagonistGoal]} />
+                <Section title={t("characters")} items={brief.characters} />
+                <Section title={t("antagonists")} items={brief.antagonists} />
+                <Section title={t("plotBeats")} items={brief.plotBeats} />
+                <Section title={t("keyScenes")} items={brief.keyScenes} />
+                <Section title={t("tone")} items={[brief.tone]} />
+                <Section title={t("writingStyle")} items={brief.writingStyle} />
+                <Section title={t("narrativeHints")} items={brief.narrativeHints} />
+                <Section title={t("negatives")} items={brief.negatives} />
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button type="button" onClick={() => setEditing(true)} className="text-xs text-[var(--gc-accent)] underline-offset-2 hover:underline">
-                    修订构思
+                    {t("editBrief")}
                   </button>
                   {onRegenerateWithRevision ? (
                     <button
@@ -146,7 +148,7 @@ export function NovelCreativeBriefPanel({
                       onClick={() => onRegenerateWithRevision()}
                       className="text-xs text-[var(--gc-muted)] hover:underline disabled:opacity-40"
                     >
-                      重新生成构思
+                      {t("regenerateBrief")}
                     </button>
                   ) : null}
                 </div>

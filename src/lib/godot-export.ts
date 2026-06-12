@@ -21,7 +21,7 @@ export type GodotExportResult =
       templateId: GameSpec["templateId"];
       referenceSummary: GodotReferenceBuildSummary;
     }
-  | { ok: false; error: string; code: "unsupported" | "godot_missing" | "export_failed" };
+  | { ok: false; errorKey?: string; errorParams?: Record<string, string>; error?: string; code: "unsupported" | "godot_missing" | "export_failed" };
 
 function repoRoot(): string {
   return process.cwd();
@@ -65,12 +65,13 @@ export async function exportGameSpecToGodotWeb(params: {
   referencePayloads?: RuntimeReferencePayload[];
 }): Promise<GodotExportResult> {
   if (!PRODUCT.godot.enabled) {
-    return { ok: false, error: "Godot 导出未启用", code: "export_failed" };
+    return { ok: false, errorKey: "godotExportDisabled", code: "export_failed" };
   }
   if (!isGodotExportSupported(params.spec)) {
     return {
       ok: false,
-      error: `模板 ${params.spec.templateId} 不在 Godot 支持列表中`,
+      errorKey: "godotUnsupportedTemplate",
+      errorParams: { templateId: params.spec.templateId },
       code: "unsupported",
     };
   }
@@ -79,7 +80,7 @@ export async function exportGameSpecToGodotWeb(params: {
   if (!(await godotExists(bin))) {
     return {
       ok: false,
-      error: "未找到 Godot 可执行文件，请运行 npm run godot:install",
+      errorKey: "godotNotInstalled",
       code: "godot_missing",
     };
   }
@@ -87,7 +88,7 @@ export async function exportGameSpecToGodotWeb(params: {
   const prepared = await prepareGodotWorkspace(params);
   const { exportId, spec, specHash, workRoot, referenceSummary } = prepared;
   if (!workRoot || typeof workRoot !== "string") {
-    return { ok: false, error: "Godot 工程路径无效", code: "export_failed" };
+    return { ok: false, errorKey: "godotWorkspaceInvalid", code: "export_failed" };
   }
 
   return withGodotWebExportLock(exportId, async () => {
@@ -162,12 +163,13 @@ export async function exportGameSpecToGodotWeb(params: {
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const friendly = msg.includes("path") && msg.includes("undefined")
-        ? "Godot 构建队列冲突，请稍等几秒后点重试"
-        : msg.includes("EEXIST") && msg.includes(".godot")
-          ? "Godot 工程目录冲突（可能正在并行构建），请稍等几秒后点重试"
-          : msg.slice(0, 500);
-      return { ok: false, error: friendly, code: "export_failed" };
+      if (msg.includes("path") && msg.includes("undefined")) {
+        return { ok: false, errorKey: "godotBuildQueueConflict", code: "export_failed" };
+      }
+      if (msg.includes("EEXIST") && msg.includes(".godot")) {
+        return { ok: false, errorKey: "godotWorkspaceConflict", code: "export_failed" };
+      }
+      return { ok: false, error: msg.slice(0, 500), code: "export_failed" };
     }
   });
 }

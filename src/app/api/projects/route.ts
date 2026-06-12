@@ -12,11 +12,12 @@ import { generateGameSprites } from "@/lib/game-sprite-gen";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 
-export async function GET() {
+export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
   const projects = await prisma.project.findMany({
     where: { ownerKey },
@@ -40,19 +41,19 @@ export async function GET() {
 export async function POST(req: Request) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const throttleKey = await getThrottleKey("proj_post", ownerKey);
   if (!rateLimit(throttleKey, 40, 60_000)) {
-    return NextResponse.json({ error: "请求过于频繁" }, { status: 429 });
+    return localizedJsonError(req, "rateLimited", 429);
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const prompt =
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
 
   const trimmed = prompt.trim();
   if (trimmed.length < 1) {
-    return NextResponse.json({ error: "缺少 prompt" }, { status: 400 });
+    return localizedJsonError(req, "missingPrompt", 400);
   }
 
   try {
@@ -95,7 +96,6 @@ export async function POST(req: Request) {
       project: { id: project.id, title: project.title, shareCode: project.shareCode },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "保存失败";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: apiErrorFromUnknown(req, e, "saveFailed") }, { status: 400 });
   }
 }

@@ -11,6 +11,11 @@ import { getReferenceImageStorage } from "@/lib/assets/reference-image-storage.f
 import { cacheIngestReferenceBuffer } from "@/lib/reference-ingest-server-cache";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import { describeReferenceImage } from "@/lib/vision-reference";
+import { localizedApiErrorText, localizedJsonError } from "@/lib/api/localized-error";
+import { apiKeyedErrorText, isApiKeyedError } from "@/lib/api/api-keyed-error";
+import { ingestWarningMessage } from "@/lib/i18n/progress-message";
+import { tMessage } from "@/lib/i18n/messages";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const runtime = "nodejs";
 
@@ -40,7 +45,11 @@ function extOf(name: string): string {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const uiLocale = resolveRequestLocaleSync(req);
   const warnings: string[] = [];
+  const warn = (key: string, params?: Record<string, string | number | undefined | null>) => {
+    warnings.push(ingestWarningMessage(uiLocale, key, params));
+  };
   const chunks: string[] = [];
   const referenceAssets: ReferenceImageHandle[] = [];
   const assetStorage = getReferenceImageStorage();
@@ -59,7 +68,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         const parsed = JSON.parse(rolesRaw) as unknown;
         if (Array.isArray(parsed)) imageRoles = parsed.map((x) => (typeof x === "string" ? x : ""));
       } catch {
-        warnings.push("imageRoles 格式无效，已忽略每张图的用途标注");
+        warn("imageRolesInvalid");
       }
     }
 
@@ -69,16 +78,22 @@ export async function POST(req: Request): Promise<NextResponse> {
         const head = title ? `【网页】${title}\n` : `【网页】${urlField.trim()}\n`;
         chunks.push(truncateDocText(`${head}${text}`));
       } catch (e) {
-        warnings.push(`网页抓取失败：${e instanceof Error ? e.message : "未知错误"}`);
+        const reason = isApiKeyedError(e)
+          ? apiKeyedErrorText(uiLocale, e)
+          : e instanceof Error
+            ? e.message
+            : ingestWarningMessage(uiLocale, "unknownError");
+        warn("urlFetchFailed", { reason });
       }
     }
 
     let imageOrdinal = 0;
 
+    const purposeFallback = tMessage(uiLocale, "ingestWarnings.purposeUnlabeled");
     const roleLabel = (fileIndex: number | undefined): string => {
-      if (fileIndex === undefined || fileIndex < 0) return "未标注用途";
+      if (fileIndex === undefined || fileIndex < 0) return purposeFallback;
       const r = (imageRoles[fileIndex] ?? "").trim();
-      return r.length ? r : "未标注用途";
+      return r.length ? r : purposeFallback;
     };
 
     const decodeOne = async (name: string, mime: string, buf: Buffer, fileIndex?: number) => {
@@ -87,14 +102,14 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       if (mt === "application/zip" || lower.endsWith(".zip")) {
         if (buf.byteLength > MAX_ZIP_BYTES) {
-          warnings.push(`${name}：zip 过大（>${MAX_ZIP_BYTES >> 20}MB），已跳过`);
+          warn("zipTooLarge", { name, maxMb: MAX_ZIP_BYTES >> 20 });
           return;
         }
         let zip: JSZip;
         try {
           zip = await JSZip.loadAsync(buf);
         } catch {
-          warnings.push(`${name}：zip 解包失败`);
+          warn("zipUnpackFailed", { name });
           return;
         }
         let innerCount = 0;
@@ -103,24 +118,23 @@ export async function POST(req: Request): Promise<NextResponse> {
           if (entry.dir) continue;
           if (!isAllowedInnerPath(entry.name)) continue;
           if (innerCount >= 30) {
-            warnings.push(`${name}：压缩包文件过多，仅解析前 30 个`);
+            warn("zipTooManyFiles", { name });
             break;
           }
           const eext = extOf(entry.name);
           if (!["png", "jpg", "jpeg", "webp", "gif", "pdf", "docx", "txt", "md"].includes(eext)) continue;
           const b = Buffer.from(await entry.async("uint8array"));
-          // 递归复用同一套规则（但禁止嵌套 zip）
           if (eext === "zip") continue;
           await decodeOne(`${name}:${entry.name}`, "", b, undefined);
           innerCount += 1;
         }
-        if (innerCount === 0) warnings.push(`${name}：未发现可解析文件（支持图片/pdf/docx/txt/md）`);
+        if (innerCount === 0) warn("zipNoParseable", { name });
         return;
       }
 
       if (IMAGE_TYPES.has(mt) || /\.(png|jpe?g|webp|gif)$/i.test(lower)) {
         if (buf.byteLength > MAX_IMAGE_BYTES) {
-          warnings.push(`${name}：图片过大（>${MAX_IMAGE_BYTES >> 20}MB），已跳过`);
+          warn("imageTooLarge", { name, maxMb: MAX_IMAGE_BYTES >> 20 });
           return;
         }
         const mt2 = mt.startsWith("image/") ? mt : "image/png";
@@ -138,18 +152,18 @@ export async function POST(req: Request): Promise<NextResponse> {
         try {
           await cacheIngestReferenceBuffer(handle.refId, buf, mt2);
         } catch {
-          warnings.push(`${name}：参考图未能写入服务端缓存，Godot 导出可能无法使用贴图`);
+          warn("refCacheFailed", { name });
         }
 
         if (!process.env.OPENAI_API_KEY?.trim()) {
-          warnings.push(`${name}：未配置 OPENAI_API_KEY，无法解读参考图`);
+          warn("noOpenAiKey", { name });
           chunks.push(
             `【参考图 图${imageOrdinal}（用户用途：${roleLabel(fileIndex)}）】${name}（缺少 OPENAI_API_KEY，未解析）`,
           );
           return;
         }
         if (!visionOn) {
-          warnings.push(`${name}：未开启「解读参考图」，仅记录文件名`);
+          warn("visionOff", { name });
           chunks.push(
             `【参考图 图${imageOrdinal}（用户用途：${roleLabel(fileIndex)}）】${name}（未开启视觉解读）`,
           );
@@ -161,6 +175,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           base64: b64,
           roleHint: purpose,
           imageOrdinal: ord,
+          uiLocale,
         });
         chunks.push(`【参考图 图${ord}（用户用途：${roleLabel(fileIndex)}）】\n${cap}`);
         return;
@@ -168,7 +183,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       if (mt === "application/pdf" || lower.endsWith(".pdf")) {
         if (buf.byteLength > MAX_DOC_BYTES) {
-          warnings.push(`${name}：PDF 过大，已跳过`);
+          warn("pdfTooLarge", { name });
           return;
         }
         const t = await extractPdfText(buf);
@@ -181,7 +196,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         lower.endsWith(".docx")
       ) {
         if (buf.byteLength > MAX_DOC_BYTES) {
-          warnings.push(`${name}：文档过大，已跳过`);
+          warn("docTooLarge", { name });
           return;
         }
         const t = await extractDocxText(buf);
@@ -194,7 +209,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         return;
       }
 
-      warnings.push(`${name}：不支持的格式（请用 pdf / docx / txt / md / 图片 / zip）`);
+      warn("unsupportedFormat", { name });
     };
 
     for (let fi = 0; fi < Math.min(files.length, 12); fi += 1) {
@@ -203,7 +218,10 @@ export async function POST(req: Request): Promise<NextResponse> {
       try {
         await decodeOne(file.name, file.type || "", buf, fi);
       } catch (e) {
-        warnings.push(`${file.name}：解析失败（${e instanceof Error ? e.message : "未知"}）`);
+        warn("parseFailed", {
+          name: file.name,
+          reason: e instanceof Error ? e.message : ingestWarningMessage(uiLocale, "unknownError"),
+        });
       }
     }
 
@@ -218,11 +236,11 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     let text = chunks.join("\n\n").trim();
     if (text.length > MAX_APPEND) {
-      text = `${text.slice(0, MAX_APPEND)}\n…（总长已截断）`;
+      text = `${text.slice(0, MAX_APPEND)}\n${ingestWarningMessage(uiLocale, "textTruncated")}`;
     }
 
     if (!text && warnings.length === 0) {
-      return NextResponse.json({ error: "未提供可解析的文件或链接" }, { status: 400 });
+      return localizedJsonError(req, "noIngestInput", 400);
     }
 
     if (
@@ -230,9 +248,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       assetStorage.mode === "cloud" &&
       !process.env.REFERENCE_ASSET_CLOUD_UPLOAD_URL?.trim()
     ) {
-      warnings.push(
-        "REFERENCE_ASSET_STORAGE=cloud 但未配置 REFERENCE_ASSET_CLOUD_UPLOAD_URL，参考图未上传云端（等同仅会话）。",
-      );
+      warn("cloudUploadUrlMissing");
     }
 
     if (
@@ -240,9 +256,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       assetStorage.mode === "cloud" &&
       process.env.REFERENCE_ASSET_CLOUD_UPLOAD_URL?.trim()
     ) {
-      warnings.push(
-        "REFERENCE_ASSET_CLOUD_UPLOAD_URL 已配置但服务端上传逻辑尚未完成，对象未写入；仍为仅会话语义。",
-      );
+      warn("cloudUploadIncomplete");
     }
 
     return NextResponse.json({
@@ -251,10 +265,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       referenceAssetStorageMode: assetStorage.mode,
       referenceAssets: referenceAssets.length ? referenceAssets : undefined,
     });
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "摄取失败" },
-      { status: 500 },
-    );
+  } catch {
+    return localizedJsonError(req, "ingestFailed", 500);
   }
 }

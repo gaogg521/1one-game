@@ -37,8 +37,8 @@ export const PRODUCT = {
     briefExpandTimeoutMs: 24_000,
     llmTimeoutMs: { short: 180_000, medium: 600_000, long: 1_800_000 } as const,
     maxOutputTokens: 65_536,
-    minAcceptCharsFloor: { short: 180, medium: 1_600, long: 8_000 } as const,
-    minAcceptCharsRatio: { short: 0.6, medium: 0.85, long: 0.85 } as const,
+    minAcceptCharsFloor: { short: 1_000, medium: 2_400, long: 10_000 } as const,
+    minAcceptCharsRatio: { short: 0.9, medium: 0.92, long: 0.92 } as const,
     /** 长篇分段续写（设定圣经 → 章规划 → 按章分段写作 → 一致性校验） */
     longSegmented: {
       charsPerSegment: 10_000,
@@ -78,6 +78,10 @@ export const PRODUCT = {
     creativeBriefLlm: true,
     briefExpandTimeoutMs: 22_000,
     panelGenConcurrency: 4,
+    /** 角色参考图并行生成上限（与分镜配图并发共用配置） */
+    charSheetConcurrency: 4,
+    /** 单次流内最多配图格数；短篇默认分镜先入库，详情页再异步补图 */
+    inlinePanelMaxCount: 1,
     batchPanelCount: 4,
     /** 页数 ≥ 此值或小说为 long 时走导演→分镜→镜头→生图流水线 */
     directorPipelineMinPages: 6,
@@ -139,6 +143,25 @@ export const PRODUCT = {
       variantsMax: 10,
       refineMax: 12,
     },
+  },
+
+  /** 商业化：额度、邀请、套餐（密钥见 .env） */
+  commerce: {
+    signupBonusQuota: 30,
+    referralReferrerCredits: 50,
+    referralInviteeCredits: 20,
+    generationCost: {
+      game: 1,
+      novel: 2,
+      novelLong: 5,
+      novelContinue: 2,
+      comic: 3,
+      comicPanels: 2,
+      refine: 1,
+      variants: 2,
+      cover: 1,
+    } as const,
+    freePlanMonthlyQuota: 30,
   },
 
   llm: {

@@ -12,6 +12,7 @@ export type ComicPlotDigest = {
   summary: string;
   emotionalArc: string;
   keyProps: string;
+  keyBeats?: string[];
 };
 
 export type ComicPrereadPack = {
@@ -29,8 +30,9 @@ const DIGEST_SCHEMA = {
       summary: { type: "string" },
       emotionalArc: { type: "string" },
       keyProps: { type: "string" },
+      keyBeats: { type: "array", items: { type: "string" } },
     },
-    required: ["summary", "emotionalArc", "keyProps"],
+    required: ["summary", "emotionalArc", "keyProps", "keyBeats"],
   },
 };
 
@@ -42,7 +44,7 @@ export async function fetchComicPlotDigest(params: {
   const result = await llmJson({
     model: params.model,
     system: `你是漫画改编责编。请先通读全文节选，再输出剧情精读包 JSON。
-禁止编造节选中没有的情节；summary 覆盖起承转合；emotionalArc 写情绪曲线；keyProps 列关键道具与场景。`,
+禁止编造节选中没有的情节；summary 覆盖起承转合；emotionalArc 写情绪曲线；keyProps 列关键道具与场景；keyBeats 提炼 8 条最适合画成分镜的关键情节。`,
     user: `书名：${params.novelTitle}
 
 【全文节选】
@@ -56,13 +58,21 @@ ${params.contentExcerpt.slice(0, 20000)}
   });
 
   if (!result.ok || !result.raw || typeof result.raw !== "object") return null;
-  const raw = result.raw as { summary?: string; emotionalArc?: string; keyProps?: string };
+  const raw = result.raw as {
+    summary?: string;
+    emotionalArc?: string;
+    keyProps?: string;
+    keyBeats?: string[];
+  };
   if (!raw.summary?.trim()) return null;
   return {
     version: 1,
     summary: raw.summary.trim().slice(0, 1200),
     emotionalArc: String(raw.emotionalArc ?? "").trim().slice(0, 400),
     keyProps: String(raw.keyProps ?? "").trim().slice(0, 400),
+    keyBeats: Array.isArray(raw.keyBeats)
+      ? raw.keyBeats.map((x) => String(x).trim()).filter(Boolean).slice(0, 8)
+      : [],
   };
 }
 
@@ -71,7 +81,8 @@ export function formatPlotDigestForPrompt(digest: ComicPlotDigest): string {
 ${digest.summary}
 
 情绪弧线：${digest.emotionalArc}
-关键道具/场景：${digest.keyProps}`;
+关键道具/场景：${digest.keyProps}
+${digest.keyBeats?.length ? `关键情节：\n${digest.keyBeats.map((beat, i) => `${i + 1}. ${beat}`).join("\n")}` : ""}`;
 }
 
 /** 全书精读：剧情摘要 + 人设卡（优先用户/圣经，否则 LLM 提取） */

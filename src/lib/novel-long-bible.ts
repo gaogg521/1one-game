@@ -1,4 +1,9 @@
+import type { AppLocale } from "@/i18n/routing";
+import { untitledNovelLabel } from "@/lib/i18n/chapter-labels";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { llmNovelJson } from "@/lib/llm";
+import { buildLongNovelBibleSystemPrompt } from "@/lib/novel-locale-prompts";
 import type { LongNovelSegmentPlan } from "@/lib/novel-long-config";
 import { novelLengthConfig, type NovelLengthTier } from "@/lib/novel-length";
 import {
@@ -8,10 +13,7 @@ import {
 } from "@/lib/novel-long-pipeline-types";
 import { estimateLongNovelChapterCount, LONG_NOVEL_PRODUCT } from "@/lib/novel-long-config";
 
-const BIBLE_SYSTEM = `你是长篇网络小说「设定圣经」编辑。根据用户创意输出 JSON，锁定世界观与人物，供后续分章写作使用。
-要求：人物姓名具体、关系清晰；世界观可支撑 10 万字级连载；核心矛盾有张力；结局方向明确但不剧透细节。`;
-
-export function formatNovelBibleForPrompt(bible: NovelBible): string {
+export function formatNovelBibleForPrompt(bible: NovelBible, locale: BriefInputLocale = "zh"): string {
   const chars = bible.characters
     .map(
       (c) =>
@@ -20,6 +22,16 @@ export function formatNovelBibleForPrompt(bible: NovelBible): string {
     .join("\n");
   const taboos =
     bible.taboos && bible.taboos.length > 0 ? `\n【禁忌】${bible.taboos.join("；")}` : "";
+  if (locale === "en") {
+    const tabooBlock =
+      bible.taboos && bible.taboos.length > 0 ? `\n[Taboos] ${bible.taboos.join("; ")}` : "";
+    return `[Title] ${bible.title}
+[World] ${bible.worldSetting}
+${bible.tone ? `[Tone] ${bible.tone}\n` : ""}[Characters]
+${bible.characters.map((c) => `- ${c.name} (${c.role}): ${c.traits}${c.relationships ? `; ${c.relationships}` : ""}`).join("\n")}
+[Core conflict] ${bible.coreConflict}
+[Ending direction] ${bible.endingDirection}${tabooBlock}`;
+  }
   return `【书名】${bible.title}
 【世界观】${bible.worldSetting}
 ${bible.tone ? `【基调】${bible.tone}\n` : ""}【主要人物】
@@ -32,9 +44,24 @@ export function buildNovelBibleUserMessage(
   prompt: string,
   title: string | undefined,
   plan: LongNovelSegmentPlan,
+  locale: BriefInputLocale = "zh",
 ): string {
   const cfg = novelLengthConfig("long");
   const chapterCount = estimateLongNovelChapterCount(plan);
+  if (locale === "en") {
+    return `User concept: ${prompt.trim()}
+${title?.trim() ? `Suggested title: ${title.trim()}` : ""}
+
+Target length: ${cfg.minChars}–${cfg.maxChars} characters, about ${chapterCount} chapters across ${plan.totalSegments} writing batches.
+Output bible JSON (title, worldSetting, at least 3 characters, coreConflict, endingDirection). All strings in English.`;
+  }
+  if (locale === "ja") {
+    return `ユーザー創意：${prompt.trim()}
+${title?.trim() ? `推奨タイトル：${title.trim()}` : ""}
+
+目標分量：${cfg.minChars}–${cfg.maxChars} 字、約 ${chapterCount} 章、${plan.totalSegments} 批で完成。
+設定聖書 JSON を日本語で出力（title, worldSetting, characters 3人以上, coreConflict, endingDirection）。`;
+  }
   return `用户创意：${prompt.trim()}
 ${title?.trim() ? `建议书名：${title.trim()}` : ""}
 
@@ -46,8 +73,9 @@ export function fallbackNovelBible(
   prompt: string,
   title: string | undefined,
   plan: LongNovelSegmentPlan,
+  uiLocale: AppLocale = "zh-Hans",
 ): NovelBible {
-  const t = title?.trim() || "未命名长篇";
+  const t = title?.trim() || untitledNovelLabel(uiLocale);
   return {
     title: t,
     worldSetting: `故事发生于与用户创意相关的虚构世界：${prompt.trim().slice(0, 200)}`,
@@ -69,12 +97,14 @@ export async function fetchNovelBible(
   title: string | undefined,
   plan: LongNovelSegmentPlan,
   lengthTier: NovelLengthTier,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<NovelBible> {
+  const locale = resolveNovelOutputLocale(prompt);
   const result = await llmNovelJson(
     {
       model,
-      system: BIBLE_SYSTEM,
-      user: buildNovelBibleUserMessage(prompt, title, plan),
+      system: buildLongNovelBibleSystemPrompt(locale),
+      user: buildNovelBibleUserMessage(prompt, title, plan, locale),
       jsonSchema: buildNovelBibleJsonSchema(),
       temperature: 0.65,
       mode: "json_schema",
@@ -89,5 +119,5 @@ export async function fetchNovelBible(
       return parsed;
     }
   }
-  return fallbackNovelBible(prompt, title, plan);
+  return fallbackNovelBible(prompt, title, plan, uiLocale);
 }

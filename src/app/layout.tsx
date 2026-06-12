@@ -1,23 +1,29 @@
 import type { Metadata } from "next";
-import { SiteFooter } from "@/components/SiteFooter";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { SiteFooterGate } from "@/components/SiteFooterGate";
 import { AppCapabilitiesRoot } from "@/providers/AppCapabilitiesRoot";
+import { localeToHtmlLang, type AppLocale } from "@/i18n/routing";
 import { htmlFontVariableClasses } from "@/lib/fonts";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init-script";
 import { THEME_META_COLOR, DEFAULT_THEME } from "@/lib/themes";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: {
-    default: "1ONE游戏平台 — AI 小游戏创作",
-    template: "%s · 1ONE游戏平台",
-  },
-  description:
-    "1ONE游戏平台：用自然语言生成可玩的网页小游戏；结构化规格、Phaser 运行时、参考图与文档解读、作品保存与分享。",
-  openGraph: {
-    title: "1ONE游戏平台",
-    description: "AI 驱动的浏览器小游戏创作与分享 · 一句话开玩",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("metadata");
+
+  return {
+    title: {
+      default: t("siteTitle"),
+      template: t("siteTemplate"),
+    },
+    description: t("siteDescription"),
+    openGraph: {
+      title: t("siteOgTitle"),
+      description: t("siteOgDescription"),
+    },
+  };
+}
 
 export const viewport = {
   themeColor: THEME_META_COLOR[DEFAULT_THEME],
@@ -27,14 +33,16 @@ export const viewport = {
   viewportFit: "cover" as const,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = (await getLocale()) as AppLocale;
+  const messages = await getMessages();
   return (
     <html
-      lang="zh-Hans"
+      lang={localeToHtmlLang(locale)}
       data-theme={DEFAULT_THEME}
       data-scroll-behavior="smooth"
       className={`h-full antialiased ${htmlFontVariableClasses}`.trim()}
@@ -52,12 +60,14 @@ export default function RootLayout({
           <div className="page-bg-fx__scan" />
         </div>
         <div className="noise" aria-hidden="true" />
-        <AppCapabilitiesRoot>
-          <div className="relative z-10 flex min-h-full flex-1 flex-col">
-            <div className="flex min-h-full flex-1 flex-col">{children}</div>
-            <SiteFooter />
-          </div>
-        </AppCapabilitiesRoot>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <AppCapabilitiesRoot>
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              <SiteFooterGate />
+            </div>
+          </AppCapabilitiesRoot>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

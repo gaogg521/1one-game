@@ -6,21 +6,20 @@ import { formatComicDirectorForPrompt } from "@/lib/comic-director";
 import type { ComicDirectorPack } from "@/lib/comic-director-types";
 import { buildComicStoryboardJsonSchema, type ComicStoryboardPanel } from "@/lib/comic-director-types";
 import {
-  COMIC_MASTER_QUALITY_BLOCK,
   PANELS_PER_PAGE,
   defaultPanelPrompt,
   normalizeComicPagesForGeneration,
+  panelsPerPageForLayout,
 } from "@/lib/comic-generate-config";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import {
+  buildStoryboardChunkUserMessage,
+  buildStoryboardSystemPrompt,
+} from "@/lib/comic-locale-prompts";
+import type { ComicLayoutId } from "@/lib/comic-layout";
 import { normalizePanelTextFields } from "@/lib/comic-panel-text";
 import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import type { PlannedComicPanel } from "@/lib/comic-shot-plan";
-
-const STORYBOARD_SYSTEM = `你是漫画分镜师。必须严格使用导演包中的角色 id、场景 id 与页节拍，不得发明新主角外貌。
-
-${COMIC_MASTER_QUALITY_BLOCK}
-
-每格输出：textType、speaker（对白时）、caption、sceneDescriptionEn、characterIds、locationId、shotType、sourceSegmentIndex（若提供段落编号）。
-全片 ${PANELS_PER_PAGE} 格/页；格间叙事连贯；约 1 段落 1～2 格。`;
 
 function storyboardPanelsToComicPage(
   pageNum: number,
@@ -60,21 +59,35 @@ export async function fetchComicStoryboardChunk(params: {
   totalPages: number;
   genre: CoverGenre;
   stylePreset?: ComicStylePresetId;
+  layoutId?: ComicLayoutId;
+  outputLocale?: BriefInputLocale;
 }): Promise<ComicPage[]> {
   const { model, director, chunkStart, chunkEnd, totalPages, genre, stylePreset } = params;
+  const outputLocale = params.outputLocale ?? "zh";
+  const layoutId = params.layoutId ?? "grid_8";
+  const panelsPerPage = panelsPerPageForLayout(layoutId);
   const chunkPages = chunkEnd - chunkStart + 1;
+  const storyboardSystem = buildStoryboardSystemPrompt(outputLocale, panelsPerPage);
 
   const result = await llmJson({
     model,
-    system: STORYBOARD_SYSTEM,
-    user: `${formatComicDirectorForPrompt(director, { from: chunkStart, to: chunkEnd })}
-
-请输出第 ${chunkStart}～${chunkEnd} 页分镜 JSON（共 ${chunkPages} 页，全书 ${totalPages} 页）。
-每页尽量 4 格；scene 为全书递增格序号。`,
-    jsonSchema: buildComicStoryboardJsonSchema(chunkPages),
+    system: storyboardSystem,
+    user: buildStoryboardChunkUserMessage({
+      locale: outputLocale,
+      directorBlock: formatComicDirectorForPrompt(director, { from: chunkStart, to: chunkEnd }),
+      chunkStart,
+      chunkEnd,
+      chunkPages,
+      totalPages,
+      panelsPerPage,
+    }),
+    jsonSchema: buildComicStoryboardJsonSchema(chunkPages, panelsPerPage),
     temperature: 0.72,
     mode: "json_schema",
-    timeoutMs: Math.min(PRODUCT.comic.storyboardTimeoutMs, 30_000 + chunkPages * 12_000),
+    timeoutMs: Math.min(
+      PRODUCT.comic.storyboardTimeoutMs,
+      Math.max(150_000, 40_000 + chunkPages * 35_000),
+    ),
   });
 
   if (result.ok && result.raw && typeof result.raw === "object" && "pages" in result.raw) {
@@ -83,29 +96,11 @@ export async function fetchComicStoryboardChunk(params: {
       const mapped: ComicPage[] = rawPages.map((rp, i) =>
         storyboardPanelsToComicPage(rp.page ?? chunkStart + i, rp.panels ?? [], genre, stylePreset),
       );
-      return normalizeComicPagesForGeneration(mapped, chunkPages, genre, stylePreset);
+      return normalizeComicPagesForGeneration(mapped, chunkPages, genre, stylePreset, layoutId);
     }
   }
 
-  const placeholder: ComicPage[] = [];
-  for (let i = chunkStart; i <= chunkEnd; i++) {
-    const beat = director.pageBeats.find((b) => b.page === i);
-    placeholder.push({
-      page: i,
-      panels: Array.from({ length: PANELS_PER_PAGE }, (_, j) => {
-        const scene = (i - 1) * PANELS_PER_PAGE + j + 1;
-        const planned: PlannedComicPanel = {
-          scene,
-          caption: beat?.keyEvents.slice(0, 40) ?? "……",
-          prompt: defaultPanelPrompt(genre),
-          characterIds: [director.characters[0]?.id ?? "char_1"],
-          locationId: director.locations[0]?.id ?? "loc_1",
-          shotType: j === 0 ? "wide" : "medium",
-          sceneDescriptionEn: beat?.keyEvents.slice(0, 80) ?? "story scene",
-        };
-        return planned;
-      }),
-    });
-  }
-  return placeholder;
+  throw new Error(
+    `长篇分镜第 ${chunkStart}～${chunkEnd} 页生成失败：模型未返回有效 JSON，请重试或切换阅读模式`,
+  );
 }

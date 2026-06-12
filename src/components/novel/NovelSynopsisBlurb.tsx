@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export function NovelSynopsisBlurb({
   text,
@@ -9,6 +10,7 @@ export function NovelSynopsisBlurb({
   text: string;
   mutedColor?: string;
 }) {
+  const t = useTranslations("novelReader");
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
@@ -50,7 +52,7 @@ export function NovelSynopsisBlurb({
           className="mt-1 text-xs transition hover:opacity-80"
           style={{ color: mutedColor }}
         >
-          {expanded ? "收起" : "… 查看更多"}
+          {expanded ? t("synopsisCollapse") : t("synopsisExpand")}
         </button>
       )}
     </div>

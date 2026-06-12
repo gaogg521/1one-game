@@ -6,6 +6,7 @@ import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
+import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { parseRefinementLog } from "@/lib/refinement-log";
@@ -19,16 +20,17 @@ import {
   parseCreativeBriefBody,
   serializeCreativeBrief,
 } from "@/lib/project-creative-brief-parse";
+import { localizedApiErrorText, localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: RouteContext) {
+export async function GET(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
 
   const row = await prisma.project.findUnique({ where: { id } });
   if (!row) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
@@ -70,19 +72,19 @@ export async function GET(_req: Request, ctx: RouteContext) {
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
     });
   } catch {
-    return NextResponse.json({ error: "损坏的作品数据" }, { status: 500 });
+    return localizedJsonError(req, "corruptWork", 500);
   }
 }
 
 export async function PATCH(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const throttleKey = await getThrottleKey("proj_patch", ownerKey);
   if (!rateLimit(throttleKey, 60, 60_000)) {
-    return NextResponse.json({ error: "请求过于频繁" }, { status: 429 });
+    return localizedJsonError(req, "rateLimited", 429);
   }
 
   const { id } = await ctx.params;
@@ -91,12 +93,12 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const row = await prisma.project.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+    return localizedJsonError(req, "notFound", 404);
   }
 
   const coverJpegBase64 =
@@ -109,8 +111,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       const rel = await saveProjectCoverJpeg(id, coverJpegBase64);
       await prisma.project.update({ where: { id }, data: { coverPath: rel } });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "封面保存失败";
-      return NextResponse.json({ error: msg }, { status: 400 });
+      return NextResponse.json({ error: apiErrorFromUnknown(req, e, "coverSaveFailed") }, { status: 400 });
     }
   }
 
@@ -139,7 +140,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (titleRaw !== undefined) {
     const t = titleRaw.trim().slice(0, 80);
     if (t.length < 1) {
-      return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
+      return localizedJsonError(req, "titleEmpty", 400);
     }
     await prisma.project.update({ where: { id }, data: { title: t } });
   }
@@ -155,7 +156,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     if (promptRaw !== undefined) {
       const nextPrompt = promptRaw.trim().slice(0, 4000);
       if (nextPrompt.length < 1) {
-        return NextResponse.json({ error: "描述不能为空" }, { status: 400 });
+        return localizedJsonError(req, "promptEmpty", 400);
       }
       updateData.prompt = nextPrompt;
     }
@@ -169,9 +170,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         updateData.specJson = JSON.stringify(spec);
         updateData.title = spec.title;
         updateData.status = "ready";
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "规格无效，无法保存";
-        return NextResponse.json({ error: msg }, { status: 400 });
+      } catch {
+        return localizedJsonError(req, "specSaveInvalid", 400);
       }
     }
 
@@ -183,7 +183,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (briefRaw !== undefined) {
     const brief = parseCreativeBriefBody(briefRaw);
     if (!brief) {
-      return NextResponse.json({ error: "Creative Brief 无效" }, { status: 400 });
+      return localizedJsonError(req, "briefInvalid", 400);
     }
     await saveCreativeBriefJson(id, serializeCreativeBrief(brief));
   }
@@ -222,16 +222,19 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   });
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext) {
+export async function DELETE(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
-  if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+  if (!ownerKey && !isSuperAdmin(req)) {
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const row = await prisma.project.findUnique({ where: { id } });
-  if (!row || row.ownerKey !== ownerKey) {
-    return NextResponse.json({ error: "未找到" }, { status: 404 });
+  if (!row) {
+    return localizedJsonError(req, "notFound", 404);
+  }
+  if (!canDeleteOwnedResource(row.ownerKey, ownerKey, req)) {
+    return localizedJsonError(req, "notFound", 404);
   }
 
   await deleteProjectCoverFile(id);

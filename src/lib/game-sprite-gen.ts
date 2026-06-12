@@ -9,6 +9,8 @@ import path from "path";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
+import type { AppLocale } from "@/i18n/routing";
+import { assetGenMessage } from "@/lib/i18n/progress-message";
 
 const SPRITE_DIR = path.join(process.cwd(), "public", "game-sprites");
 
@@ -231,7 +233,10 @@ export type SpriteGenResult = {
 export async function generateGameSprites(
   projectId: string,
   spec: GameSpec,
+  uiLocale: AppLocale = "zh-Hans",
 ): Promise<SpriteGenResult[]> {
+  const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
+    assetGenMessage(uiLocale, key, p);
   const availability = getImageGenAvailability();
   if (!availability.ok) {
     return (["player", "hazard", "gem", "power"] as SpriteKind[]).map((kind) => ({
@@ -266,7 +271,7 @@ export async function generateGameSprites(
 
       if (!result.ok || !result.url) {
         console.warn(`[game-sprite] ${projectId}/${kind} 生成失败：${result.error ?? "无返回"}`);
-        results.push({ kind, url: null, error: result.error ?? "生成失败" });
+        results.push({ kind, url: null, error: result.error ?? ag("generateFailed") });
         continue;
       }
 
@@ -276,7 +281,7 @@ export async function generateGameSprites(
       } else {
         const res = await fetch(result.url);
         if (!res.ok) {
-          results.push({ kind, url: null, error: `下载失败 HTTP ${res.status}` });
+          results.push({ kind, url: null, error: ag("downloadFailedHttp", { status: res.status }) });
           continue;
         }
         buf = Buffer.from(await res.arrayBuffer());

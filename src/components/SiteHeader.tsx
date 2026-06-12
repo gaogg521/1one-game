@@ -3,9 +3,13 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
-import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { AccountMenu } from "@/components/auth/AccountMenu";
+import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
+import { BRAND_LOGO_SRC } from "@/lib/brand";
 
 function IconGameSection(props: { className?: string }) {
   return (
@@ -57,43 +61,62 @@ const ThemeSwitcher = dynamic(() => import("@/components/theme/ThemeSwitcher").t
   ssr: false,
 });
 
-const gameNav = [
-  { href: "/create", label: "游戏创作", match: (p: string) => p === "/create" || p.startsWith("/create/") },
-  { href: "/discover", label: "游戏发现", match: (p: string) => p === "/discover" || p.startsWith("/discover/") },
-  { href: "/samples", label: "游戏样品", match: (p: string) => p === "/samples" || p.startsWith("/samples/") },
-];
-
-const novelNav = [
-  { href: "/novel/create", label: "小说创作", match: (p: string) => p === "/novel/create" || p.startsWith("/novel/create") },
-  { href: "/novel/discover", label: "小说发现", match: (p: string) => p === "/novel/discover" || p.startsWith("/novel/") },
-];
-
-const comicNav = [
-  { href: "/comic/create", label: "动漫创作", match: (p: string) => p === "/comic/create" || p.startsWith("/comic/create") },
-  { href: "/comic/discover", label: "动漫发现", match: (p: string) => p === "/comic/discover" || p.startsWith("/comic/") },
-];
-
-const metaNav = [
-  { href: "/", label: "首页", match: (p: string) => p === "/" },
-  { href: "/studio", label: "我的作品", match: (p: string) => p === "/studio" || p.startsWith("/studio/") },
-];
-
-const mobileNavSections = [
-  { title: "游戏", icon: <IconGameSection className="h-3.5 w-3.5 shrink-0" />, items: gameNav },
-  { title: "小说", icon: <IconNovelSection className="h-3.5 w-3.5 shrink-0" />, items: novelNav },
-  { title: "动漫", icon: <IconComicSection className="h-3.5 w-3.5 shrink-0" />, items: comicNav },
-  { title: "站点", icon: <IconHubMini className="h-3.5 w-3.5 shrink-0" />, items: metaNav },
-];
-
 type NavItem = { href: string; label: string; match: (p: string) => boolean };
+type NavSection = { title: string; icon: ReactNode; items: NavItem[] };
 
-function MobilePrimaryNav({ sections }: { sections: { title: string; icon: ReactNode; items: NavItem[] }[] }) {
-  const pathname = usePathname();
+function appPath(pathname: string, locale: AppLocale) {
+  return withLocalePath(pathname, locale);
+}
+
+function stripLocale(pathname: string) {
+  const segs = pathname.split("/").filter(Boolean);
+  if (segs[0] && ["zh-Hans", "zh-Hant", "en", "ms", "th"].includes(segs[0])) {
+    return `/${segs.slice(1).join("/")}` || "/";
+  }
+  return pathname || "/";
+}
+
+function buildNav(locale: AppLocale, t: ReturnType<typeof useTranslations>) {
+  const gameNav = [
+    { href: appPath("/create", locale), label: t("nav.gameCreate"), match: (p: string) => p === "/create" || p.startsWith("/create/") },
+    { href: appPath("/discover", locale), label: t("nav.gameDiscover"), match: (p: string) => p === "/discover" || p.startsWith("/discover/") },
+    { href: appPath("/samples", locale), label: t("nav.gameSamples"), match: (p: string) => p === "/samples" || p.startsWith("/samples/") },
+  ];
+
+  const novelNav = [
+    { href: appPath("/novel/create", locale), label: t("nav.novelCreate"), match: (p: string) => p === "/novel/create" || p.startsWith("/novel/create") },
+    { href: appPath("/novel/discover", locale), label: t("nav.novelDiscover"), match: (p: string) => p === "/novel/discover" || p.startsWith("/novel/") },
+  ];
+
+  const comicNav = [
+    { href: appPath("/comic/create", locale), label: t("nav.comicCreate"), match: (p: string) => p === "/comic/create" || p.startsWith("/comic/create") },
+    { href: appPath("/comic/discover", locale), label: t("nav.comicDiscover"), match: (p: string) => p === "/comic/discover" || p.startsWith("/comic/") },
+  ];
+
+  const metaNav = [
+    { href: appPath("/", locale), label: t("nav.home"), match: (p: string) => p === "/" },
+    { href: appPath("/start", locale), label: t("nav.start"), match: (p: string) => p === "/start" },
+    { href: appPath("/studio", locale), label: t("nav.studio"), match: (p: string) => p === "/studio" || p.startsWith("/studio/") },
+  ];
+
+  const mobileNavSections: NavSection[] = [
+    { title: t("nav.game"), icon: <IconGameSection className="h-3.5 w-3.5 shrink-0" />, items: gameNav },
+    { title: t("nav.novel"), icon: <IconNovelSection className="h-3.5 w-3.5 shrink-0" />, items: novelNav },
+    { title: t("nav.comic"), icon: <IconComicSection className="h-3.5 w-3.5 shrink-0" />, items: comicNav },
+    { title: t("nav.site"), icon: <IconHubMini className="h-3.5 w-3.5 shrink-0" />, items: metaNav },
+  ];
+
+  return { gameNav, novelNav, comicNav, metaNav, mobileNavSections };
+}
+
+function MobilePrimaryNav({ sections }: { sections: NavSection[] }) {
+  const t = useTranslations();
+  const pathname = stripLocale(typeof window !== "undefined" ? window.location.pathname : "/");
   const linkBase =
     "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition min-h-[40px] sm:min-h-[44px]";
 
   return (
-    <nav className="gc-mobile-nav-scroll flex items-stretch gap-2 overflow-x-auto pb-2 pt-0.5" aria-label="主导航">
+    <nav className="gc-mobile-nav-scroll flex items-stretch gap-2 overflow-x-auto pb-2 pt-0.5" aria-label={t("common.mainNav")}>
       {sections.map((section, si) => (
         <Fragment key={section.title}>
           {si > 0 ? <span className="my-2 w-px shrink-0 bg-[color:var(--gc-border)] opacity-70" aria-hidden /> : null}
@@ -136,7 +159,7 @@ function NavGroup({
   items: NavItem[];
   sectionIcon?: ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = stripLocale(typeof window !== "undefined" ? window.location.pathname : "/");
   const base = "flex w-full items-center gap-1 rounded-xl px-3 py-2 text-sm transition";
 
   const showSectionHeading = label.trim().length > 0;
@@ -181,20 +204,23 @@ function SidebarDivider() {
 }
 
 function BrandBlock({ compact, touchNav }: { compact?: boolean; touchNav?: boolean }) {
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("common");
+  const appName = t("appName");
   return (
     <Link
-      href="/"
-      className={`group flex items-center gap-3 rounded-xl outline-offset-4 ${compact ? "" : "px-1"} ${touchNav ? "min-h-[44px] justify-center" : ""}`}
+      href={appPath("/", locale)}
+      className={`group flex min-w-0 items-center gap-2 rounded-xl outline-offset-4 sm:gap-3 ${compact ? "" : "px-1"} ${touchNav ? "min-h-[44px]" : ""}`}
     >
-      <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-[color:var(--gc-border)] transition group-hover:ring-[color:var(--gc-accent)]/40">
-        <Image src={BRAND_LOGO_SRC} alt={BRAND_NAME} width={40} height={40} className="h-full w-full object-cover" priority />
+      <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl ring-1 ring-[color:var(--gc-border)] transition group-hover:ring-[color:var(--gc-accent)]/40 sm:h-10 sm:w-10">
+        <Image src={BRAND_LOGO_SRC} alt={appName} width={40} height={40} className="h-full w-full object-cover" priority />
       </span>
-      <span className="min-w-0">
-        <span className={`block font-semibold tracking-tight text-[var(--gc-text)] ${compact ? "text-base" : "text-[15px] leading-snug"}`}>
-          {BRAND_NAME}
+      <span className={`min-w-0 ${touchNav ? "hidden min-[400px]:block" : ""}`}>
+        <span className={`block truncate font-semibold tracking-tight text-[var(--gc-text)] ${compact ? "text-sm sm:text-base" : "text-[15px] leading-snug"}`}>
+          {appName}
         </span>
         {!compact ? (
-          <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)]">AI Game Lab</span>
+          <span className="mt-0.5 hidden text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)] sm:block">AI Game Lab</span>
         ) : null}
       </span>
     </Link>
@@ -202,54 +228,78 @@ function BrandBlock({ compact, touchNav }: { compact?: boolean; touchNav?: boole
 }
 
 export function SiteHeader() {
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const { gameNav, novelNav, comicNav, metaNav, mobileNavSections } = buildNav(locale, t);
   return (
     <>
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-50 hidden lg:block lg:pl-[min(280px,30vw)]">
+        <div className="pointer-events-auto flex items-center justify-end gap-2 border-b border-[color:var(--gc-border)] bg-[var(--gc-header-bg)] px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-lg pt-[max(0.5rem,env(safe-area-inset-top,0px))] xl:px-6">
+          <LocaleSwitcher compact />
+          <AccountMenu compact />
+        </div>
+      </div>
+
       <header
-        className="sticky top-0 z-40 border-b backdrop-blur-lg pt-[max(0.5rem,env(safe-area-inset-top,0px))] lg:hidden"
+        className="sticky top-0 z-40 w-full min-w-0 border-b backdrop-blur-lg pt-[max(0.5rem,env(safe-area-inset-top,0px))] lg:hidden"
         style={{ borderColor: "var(--gc-border)", backgroundColor: "var(--gc-header-bg)" }}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 pb-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-3">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-1.5 px-3 pb-2 sm:gap-2 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:gap-2">
             <BrandBlock compact touchNav />
-            <ThemeSwitcher touchFriendly />
+            <div className="hidden shrink-0 sm:block">
+              <ThemeSwitcher touchFriendly />
+            </div>
           </div>
-          <Link
-            href="/create"
-            className="gc-theme-cta inline-flex shrink-0 items-center justify-center rounded-full px-4 py-2.5 text-xs font-semibold min-h-[44px] sm:min-h-0 sm:py-2"
-          >
-            创作
-          </Link>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <LocaleSwitcher compact />
+            <AccountMenu compact />
+            <Link
+              href={appPath("/start", locale)}
+              className="gc-theme-cta inline-flex shrink-0 items-center justify-center rounded-full px-3 py-2 text-xs font-semibold min-h-[40px] sm:min-h-[44px] sm:px-4 sm:py-2.5"
+            >
+              {t("nav.createCta")}
+            </Link>
+          </div>
         </div>
-        <div className="mx-auto max-w-6xl px-4 pb-2">
+        <div className="mx-auto w-full max-w-6xl min-w-0 px-3 pb-2 sm:px-4">
           <MobilePrimaryNav sections={mobileNavSections} />
+        </div>
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-center gap-1 border-t border-[color:color-mix(in_srgb,var(--gc-border)_55%,transparent)] px-3 py-2 sm:hidden">
+          <span className="text-[10px] text-[var(--gc-text-faint)]">{t("common.theme")}</span>
+          <ThemeSwitcher touchFriendly />
         </div>
       </header>
 
       <aside
-        className="relative hidden h-screen w-[260px] shrink-0 border-r backdrop-blur-xl lg:flex lg:flex-col lg:sticky lg:top-0"
+        className="relative hidden w-[min(280px,30vw)] max-w-[280px] shrink-0 border-r backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:max-h-[100dvh] lg:flex-col lg:self-start"
         style={{ borderColor: "var(--gc-border)", backgroundColor: "var(--gc-sidebar-bg)" }}
       >
-        <div className="flex flex-1 flex-col gap-4 px-4 py-8 overflow-y-auto">
-          <div className="flex flex-col gap-3">
+        <div className="flex h-[100dvh] min-h-0 flex-col overflow-x-hidden px-3 py-4 xl:px-4 xl:py-6">
+          <div className="flex shrink-0 flex-col gap-3">
             <BrandBlock />
             <ThemeSwitcher />
           </div>
 
-          <nav className="flex flex-col gap-1" aria-label="主导航">
-            <NavGroup label="游戏" items={gameNav} sectionIcon={<IconGameSection className="h-[18px] w-[18px]" />} />
+          <nav className="mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1" aria-label={t("common.mainNav")}>
+            <NavGroup label={t("nav.game")} items={gameNav} sectionIcon={<IconGameSection className="h-[18px] w-[18px]" />} />
             <SidebarDivider />
-            <NavGroup label="小说" items={novelNav} sectionIcon={<IconNovelSection className="h-[18px] w-[18px]" />} />
+            <NavGroup label={t("nav.novel")} items={novelNav} sectionIcon={<IconNovelSection className="h-[18px] w-[18px]" />} />
             <SidebarDivider />
-            <NavGroup label="动漫" items={comicNav} sectionIcon={<IconComicSection className="h-[18px] w-[18px]" />} />
+            <NavGroup label={t("nav.comic")} items={comicNav} sectionIcon={<IconComicSection className="h-[18px] w-[18px]" />} />
             <SidebarDivider />
             <NavGroup label="" items={metaNav} />
           </nav>
 
-          <div className="mt-auto border-t pt-6" style={{ borderColor: "var(--gc-border)" }}>
-            <p className="gc-theme-soft text-center text-[15px] leading-snug tracking-wide text-[var(--gc-muted)] lg:text-left">
-              写下一句，
-              <br />
-              玩出一座世界。
+          <div className="shrink-0 border-t pt-4" style={{ borderColor: "var(--gc-border)" }}>
+            <Link
+              href={appPath("/start", locale)}
+              className="gc-theme-cta block rounded-full px-4 py-2.5 text-center text-sm font-semibold lg:text-left"
+            >
+              {t("nav.createNow")}
+            </Link>
+            <p className="gc-theme-soft mt-4 text-balance text-center text-[12px] leading-snug tracking-wide text-[var(--gc-muted)] lg:text-left xl:text-[13px]">
+              {t("nav.sidebarHint")}
             </p>
           </div>
         </div>

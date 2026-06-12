@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import type { AppLocale } from "@/i18n/routing";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import type { ComicReadMode } from "@/lib/comic-format";
@@ -25,6 +27,7 @@ type Props = {
   className?: string;
   style?: CSSProperties;
   onError?: (message: string) => void;
+  resumeComicId?: string;
 };
 
 export function ComicGenerateButton({
@@ -37,19 +40,23 @@ export function ComicGenerateButton({
   readMode,
   chapterScope,
   characterRoster,
-  label = "生成漫画",
-  className,
+  label,
+  className = "gc-theme-cta w-full rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-50",
   style,
   onError,
+  resumeComicId,
 }: Props) {
+  const t = useTranslations("comicButton");
+  const locale = useLocale() as AppLocale;
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
+  const buttonLabel = label ?? t("defaultLabel");
 
   async function handleClick() {
     if (loading) return;
     setLoading(true);
-    setProgress("连接漫画生成服务…");
+    setProgress(t("connecting"));
     onError?.("");
 
     const body: Record<string, unknown> = {};
@@ -62,10 +69,11 @@ export function ComicGenerateButton({
     if (readMode) body.readMode = readMode;
     if (chapterScope) body.chapterScope = chapterScope;
     if (characterRoster?.characters.length) body.characterRoster = characterRoster;
+    if (resumeComicId) body.resumeComicId = resumeComicId;
 
     const result = await consumeComicGenerateStream(body, (ev: ComicGenerateStreamEvent) => {
       if (ev.message) setProgress(ev.message);
-    });
+    }, locale);
 
     setLoading(false);
 
@@ -75,7 +83,7 @@ export function ComicGenerateButton({
       return;
     }
 
-    setProgress("正在跳转…");
+    setProgress(t("redirecting"));
     router.push(
       result.needsPanelRender
         ? `/comic/${result.comicId}?renderPanels=1`
@@ -92,7 +100,7 @@ export function ComicGenerateButton({
         className={className}
         style={style}
       >
-        {loading ? progress || "生成中…" : label}
+        {loading ? progress || t("generating") : buttonLabel}
       </button>
     </div>
   );

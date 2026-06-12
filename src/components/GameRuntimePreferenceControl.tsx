@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   GAME_RUNTIME_PREFERENCE_EVENT,
   getGameRuntimePreference,
@@ -11,6 +12,7 @@ import { PRODUCT } from "@/lib/product-config";
 
 /** 全局试玩引擎偏好（创作台 / 试玩页共用，localStorage） */
 export function GameRuntimePreferenceControl({ className = "" }: { className?: string }) {
+  const t = useTranslations("gameRuntime");
   const [choice, setChoice] = useState<GameRuntimeChoice>("phaser");
 
   useEffect(() => {
@@ -47,10 +49,10 @@ export function GameRuntimePreferenceControl({ className = "" }: { className?: s
   return (
     <div
       className={`inline-flex items-center gap-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-1 py-0.5 ${className}`}
-      title="默认试玩引擎；试玩区可随时切换"
+      title={t("preferenceTitle")}
     >
-      <span className="pl-2 text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">引擎</span>
-      {btn("godot", "Godot 在线")}
+      <span className="pl-2 text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("engineShort")}</span>
+      {btn("godot", t("godotOnlineShort"))}
       {btn("phaser", "Phaser")}
     </div>
   );

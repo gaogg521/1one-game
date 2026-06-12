@@ -26,7 +26,7 @@ export type GodotPlatformExportResult =
       buildUrl?: string;
       downloadUrl?: string;
     }
-  | { ok: false; error: string; code: "unsupported" | "godot_missing" | "export_failed" | "platform_unavailable" };
+  | { ok: false; errorKey?: string; errorParams?: Record<string, string>; error?: string; code: "unsupported" | "godot_missing" | "export_failed" | "platform_unavailable" };
 
 function repoRoot(): string {
   return process.cwd();
@@ -75,7 +75,7 @@ export async function exportGodotProjectZip(params: {
   referencePayloads?: RuntimeReferencePayload[];
 }): Promise<GodotPlatformExportResult> {
   if (!isGodotExportSupported(params.spec)) {
-    return { ok: false, error: "模板不支持 Godot", code: "unsupported" };
+    return { ok: false, errorKey: "godotUnsupportedGeneric", code: "unsupported" };
   }
   try {
     const { exportId, spec, workRoot } = await prepareGodotWorkspace(params);
@@ -114,12 +114,12 @@ export async function exportGodotWindowsDesktop(params: {
   referencePayloads?: RuntimeReferencePayload[];
 }): Promise<GodotPlatformExportResult> {
   if (!isGodotExportSupported(params.spec)) {
-    return { ok: false, error: "模板不支持 Godot", code: "unsupported" };
+    return { ok: false, errorKey: "godotUnsupportedGeneric", code: "unsupported" };
   }
   if (process.platform !== "win32") {
     return {
       ok: false,
-      error: "Windows 可执行包需在 Windows 本机或 Windows 构建机导出，请先下载 Godot 工程 zip 在本地用 Godot 导出",
+      errorKey: "godotWindowsNeedsWindows",
       code: "platform_unavailable",
     };
   }
@@ -128,7 +128,7 @@ export async function exportGodotWindowsDesktop(params: {
   if (!(await godotExists(bin))) {
     return {
       ok: false,
-      error: "未找到 Godot，请运行 npm run godot:install",
+      errorKey: "godotNotInstalled",
       code: "godot_missing",
     };
   }
@@ -190,14 +190,14 @@ export async function exportGodotAndroidApk(params: {
   referencePayloads?: RuntimeReferencePayload[];
 }): Promise<GodotPlatformExportResult> {
   if (!isGodotExportSupported(params.spec)) {
-    return { ok: false, error: "模板不支持 Godot", code: "unsupported" };
+    return { ok: false, errorKey: "godotUnsupportedGeneric", code: "unsupported" };
   }
 
   const bin = godotBinPath();
   if (!(await godotExists(bin))) {
     return {
       ok: false,
-      error: "未找到 Godot，请运行 npm run godot:install",
+      errorKey: "godotNotInstalled",
       code: "godot_missing",
     };
   }
@@ -234,8 +234,7 @@ export async function exportGodotAndroidApk(params: {
     if (/android|sdk|java|gradle/i.test(msg)) {
       return {
         ok: false,
-        error:
-          "Android 导出需要本机安装 Android SDK 与导出模板。请先下载 Godot 工程 zip，在 Godot 编辑器中配置 Android 后导出 APK。",
+        errorKey: "godotAndroidNeedsSdk",
         code: "platform_unavailable",
       };
     }
@@ -259,6 +258,6 @@ export async function exportGodotByTarget(
     case "android":
       return exportGodotAndroidApk(params);
     default:
-      return { ok: false, error: `未知导出目标: ${target}`, code: "unsupported" };
+      return { ok: false, errorKey: "godotUnknownTarget", errorParams: { target }, code: "unsupported" };
   }
 }

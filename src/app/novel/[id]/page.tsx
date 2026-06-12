@@ -4,14 +4,22 @@ import type { CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
+import { withLocalePath } from "@/i18n/navigation";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ResultMomentBanner } from "@/components/ResultMomentBanner";
 import {
   ChildrenNovelReader,
   isChildrenFormattedNovelContent,
 } from "@/components/novel/ChildrenNovelReader";
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
+import { ComicChapterAdaptationBanner } from "@/components/comic/ComicChapterAdaptationBanner";
 import { ComicGeneratePanel } from "@/components/comic/ComicGeneratePanel";
+import type { ComicChapterAdaptationProgress } from "@/lib/comic-chapter-adaptation";
+import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import { NovelContinueButton } from "@/components/novel/NovelContinueButton";
 import { NovelSynopsisBlurb } from "@/components/novel/NovelSynopsisBlurb";
 import { parseNovelChapters } from "@/lib/novel-chapters";
@@ -22,6 +30,9 @@ import {
   novelReaderChromeCssVars,
   type NovelReaderThemeId,
 } from "@/lib/novel-reader-theme";
+import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 
 interface Novel {
   id: string;
@@ -32,53 +43,28 @@ interface Novel {
   coverPath: string | null;
   lengthTier: string | null;
   createdAt: string;
-  comics: { id: string; title: string }[];
+  comics: { id: string; title: string; status?: string }[];
   shareCode: string | null;
   isOwner?: boolean;
+  chapterAdaptation?: ComicChapterAdaptationProgress;
+  draftStoryboardComics?: { id: string; title: string }[];
   canContinue?: boolean;
   continuationReason?: string;
   remainingChapterCount?: number;
-}
-
-function ShareButton({ novelId }: { novelId: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    try {
-      const res = await fetch(`/api/novel/${novelId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ensureShareCode: true }),
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as { novel?: { shareCode?: string | null } };
-      const code = data.novel?.shareCode;
-      if (!code) return;
-      const url = `${window.location.origin}/s/${code}`;
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs font-medium text-[var(--gc-muted)] transition hover:border-[color:var(--gc-accent)]/40 hover:text-[var(--gc-text)]"
-    >
-      {copied ? "已复制" : "分享"}
-    </button>
-  );
+  status?: string;
 }
 
 export default function NovelDetailPage() {
   const { id } = useParams();
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("novelRead");
+  const tc = useTranslations("common");
   const [novel, setNovel] = useState<Novel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [comicSetupOpen, setComicSetupOpen] = useState(false);
+  const [initialChapterScope, setInitialChapterScope] = useState<ComicChapterScope | null>(null);
+  const [resumeComicId, setResumeComicId] = useState<string | undefined>();
   const [editing, setEditing] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
@@ -87,17 +73,31 @@ export default function NovelDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/novel/${encodeURIComponent(id as string)}`)
+    fetch(`/api/novel/${encodeURIComponent(id as string)}`, { headers: mergeLocaleHeaders(locale) })
       .then((r) => r.json())
       .then((data) => {
         if (data.novel) setNovel(data.novel);
-        else setError("小说不存在");
+        else setError(t("notFound"));
       })
-      .catch(() => setError("加载失败"))
+      .catch(() => setError(t("loadFailed")))
       .finally(() => setLoading(false));
 
     void fetch(`/api/novel/${encodeURIComponent(id as string)}/play`, { method: "POST" });
-  }, [id]);
+  }, [id, locale, t]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ch = new URLSearchParams(window.location.search).get("comicChapter")?.trim();
+    if (!ch) return;
+    const num = parseInt(ch, 10);
+    if (!Number.isFinite(num) || num < 1) return;
+    setComicSetupOpen(true);
+    setInitialChapterScope({
+      fromChapter: num,
+      toChapter: num,
+      label: t("chapterLabel", { num }),
+    });
+  }, []);
 
   useEffect(() => {
     if (!novel?.id || novel.coverPath || coverRequested.current || editing) return;
@@ -114,24 +114,27 @@ export default function NovelDetailPage() {
 
   const displayMeta = useMemo(() => {
     if (!novel) return null;
-    const displayTitle = normalizeNovelTitle(novel.title, novel.prompt);
-    const blurb = displayNovelSummary(novel.summary, displayTitle, novel.prompt, novel.content);
+    const displayTitle = normalizeNovelTitle(novel.title, novel.prompt, undefined, locale);
+    const blurb = displayNovelSummary(novel.summary, displayTitle, novel.prompt, novel.content, locale);
     const isChildrenReader =
       isChildrenNovelTier(parseNovelLengthTier(novel.lengthTier)) ||
       isChildrenFormattedNovelContent(novel.content);
-    const chapters = isChildrenReader ? [] : parseNovelChapters(novel.content);
+    const chapters = isChildrenReader ? [] : parseNovelChapters(novel.content, locale);
     return { displayTitle, blurb, chapters, isChildrenReader };
-  }, [novel]);
+  }, [novel, locale]);
 
   async function handleRegenerateCover() {
     if (!novel || coverRegenerating) return;
     setCoverRegenerating(true);
     setError("");
     try {
-      const res = await fetch(`/api/novel/${novel.id}/cover?force=1`, { method: "POST" });
+      const res = await fetch(`/api/novel/${novel.id}/cover?force=1`, {
+        method: "POST",
+        headers: mergeLocaleHeaders(locale),
+      });
       const data = (await res.json()) as { coverPath?: string; error?: string };
       if (!res.ok) {
-        setError(data.error || "封面生成失败");
+        setError(data.error || t("coverFailed"));
         return;
       }
       if (data.coverPath) {
@@ -139,7 +142,7 @@ export default function NovelDetailPage() {
         coverRequested.current = true;
       }
     } catch {
-      setError("封面生成请求失败");
+      setError(t("coverRequestFailed"));
     } finally {
       setCoverRegenerating(false);
     }
@@ -147,23 +150,27 @@ export default function NovelDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-1 flex-col bg-[var(--gc-bg)] lg:flex-row">
+      <AppPageShell className="bg-[var(--gc-bg)] text-[var(--gc-text)]">
         <SiteHeader />
-        <main className="flex flex-1 px-6 py-10 lg:px-10">
-          <p className="text-[var(--gc-muted)]">加载中…</p>
+        <AppMain>
+        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+          <p className="text-[var(--gc-muted)]">{tc("loading")}</p>
         </main>
-      </div>
+        </AppMain>
+      </AppPageShell>
     );
   }
 
   if (error && !novel) {
     return (
-      <div className="flex min-h-screen flex-1 flex-col bg-[var(--gc-bg)] lg:flex-row">
+      <AppPageShell className="bg-[var(--gc-bg)] text-[var(--gc-text)]">
         <SiteHeader />
-        <main className="flex flex-1 px-6 py-10 lg:px-10">
-          <p className="text-red-400">{error || "未找到"}</p>
+        <AppMain>
+        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+          <p className="text-red-400">{error || t("notFoundShort")}</p>
         </main>
-      </div>
+        </AppMain>
+      </AppPageShell>
     );
   }
 
@@ -174,7 +181,6 @@ export default function NovelDetailPage() {
   const headerTitle = editing ? novel.title : displayTitle;
   const readPalette = NOVEL_READER_THEMES[readerTheme];
 
-  const shellClass = "flex min-h-screen flex-1 flex-col lg:flex-row";
   const shellStyle =
     !editing ?
       ({
@@ -184,12 +190,55 @@ export default function NovelDetailPage() {
     : undefined;
 
   return (
-    <div className={`${shellClass} ${editing ? "bg-[var(--gc-bg)]" : ""}`} style={shellStyle}>
+    <AppPageShell className={`${editing ? "bg-[var(--gc-bg)]" : ""}`} style={shellStyle}>
       <SiteHeader />
+      <AppMain>
       <div
-        className="flex min-h-screen min-w-0 flex-1 flex-col"
+        className="flex min-h-[100dvh] min-w-0 flex-col"
         style={!editing ? { backgroundColor: readPalette.bg } : undefined}
       >
+        {!editing ? (
+          <div className="mx-auto w-full max-w-6xl px-4 pt-4 lg:px-6">
+            {novel.isOwner && novel.status === "draft_generating" ? (
+              <NovelResumeBanner novelId={novel.id} title={novel.title} className="mb-4" />
+            ) : null}
+            <ResultMomentBanner
+              mode="novel"
+              title={displayTitle}
+              subtitle={blurb ?? undefined}
+              actions={
+                <>
+                  {novel.isOwner ? (
+                    <button
+                      type="button"
+                      onClick={() => setComicSetupOpen(true)}
+                      className="gc-theme-cta rounded-lg px-4 py-2 text-xs font-semibold"
+                    >
+                      {novel.comics.length > 0 ? t("regenerateStoryboard") : t("adaptStoryboard")}
+                    </button>
+                  ) : null}
+                  {novel.comics.length > 0 ? (
+                    <Link
+                      href={withLocalePath(`/comic/${novel.comics[novel.comics.length - 1]!.id}`, locale)}
+                      className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:var(--gc-accent)]/40"
+                    >
+                      {t("viewLatestComic")}
+                    </Link>
+                  ) : null}
+                  {novel.isOwner ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs font-medium text-[var(--gc-muted)] transition hover:text-[var(--gc-text)]"
+                    >
+                      {t("editContent")}
+                    </button>
+                  ) : null}
+                </>
+              }
+            />
+          </div>
+        ) : null}
         <header
           className={`shrink-0 border-b ${editing ? "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]" : ""}`}
           style={
@@ -218,7 +267,7 @@ export default function NovelDetailPage() {
                   : undefined
                 }
               >
-                封面
+                {t("cover")}
               </div>
             ) : null}
 
@@ -233,9 +282,9 @@ export default function NovelDetailPage() {
                 className={`mt-1 text-xs ${editing ? "text-[var(--gc-muted)]" : ""}`}
                 style={!editing ? { color: readPalette.muted } : undefined}
               >
-                {editing ? "编辑模式" : new Date(novel.createdAt).toLocaleDateString("zh-CN")}
-                {!editing && !isChildrenReader ? ` · 共 ${chapters.length} 章` : null}
-                {!editing && isChildrenReader ? " · 儿童短篇" : null}
+                {editing ? t("editMode") : new Date(novel.createdAt).toLocaleDateString(locale)}
+                {!editing && !isChildrenReader ? ` · ${t("chapterCount", { count: chapters.length })}` : null}
+                {!editing && isChildrenReader ? ` · ${t("childrenShort")}` : null}
               </p>
               {!editing && blurb && (
                 <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
@@ -254,23 +303,25 @@ export default function NovelDetailPage() {
                     backgroundColor: `${readPalette.tocActive}12`,
                   }}
                 >
-                  编辑
+                  {t("edit")}
                 </button>
               )}
               {!editing && (
                 <>
-                  {novel.comics.length > 0 ? (
+                  {novel.comics.map((c, idx) => (
                     <Link
-                      href={`/comic/${novel.comics[0].id}`}
+                      key={c.id}
+                      href={withLocalePath(`/comic/${c.id}`, locale)}
                       className="rounded-lg border px-3 py-2 text-xs font-medium transition"
                       style={{
                         borderColor: `${readPalette.tocActive}55`,
                         color: readPalette.tocActive,
                       }}
                     >
-                      查看漫画版
+                      {novel.comics.length > 1 ? t("comicIndex", { index: idx + 1 }) : t("comic")}
                     </Link>
-                  ) : (
+                  ))}
+                  {novel.isOwner ? (
                     <button
                       type="button"
                       onClick={() => setComicSetupOpen((v) => !v)}
@@ -281,16 +332,20 @@ export default function NovelDetailPage() {
                         backgroundColor: comicSetupOpen ? `${readPalette.tocActive}18` : undefined,
                       }}
                     >
-                      {comicSetupOpen ? "收起漫画选项" : "生成漫画"}
+                      {comicSetupOpen
+                        ? t("hideComicOptions")
+                        : novel.comics.length > 0
+                          ? t("regenerateComic")
+                          : t("generateComic")}
                     </button>
-                  )}
+                  ) : null}
                   {novel.isOwner && novel.canContinue && (
                     <NovelContinueButton
                       novelId={novel.id}
                       initialContent={novel.content}
                       lengthTier={novel.lengthTier}
                       canContinue={Boolean(novel.canContinue)}
-                      continuationReason={novel.continuationReason ?? "续写长篇"}
+                      continuationReason={novel.continuationReason ?? t("continueLongForm")}
                       remainingChapterCount={novel.remainingChapterCount}
                       onCompleted={async (data) => {
                         setNovel((prev) =>
@@ -331,10 +386,16 @@ export default function NovelDetailPage() {
                         color: readPalette.muted,
                       }}
                     >
-                      {coverRegenerating ? "封面生成中…" : "重做封面"}
+                      {coverRegenerating ? t("coverGenerating") : t("regenerateCover")}
                     </button>
                   )}
-                  <ShareButton novelId={novel.id} />
+                  <WorkShareBar
+                    workType="novel"
+                    workId={novel.id}
+                    title={novel.title}
+                    patchUrl={`/api/novel/${novel.id}`}
+                    initialShareCode={novel.shareCode}
+                  />
                 </>
               )}
             </div>
@@ -344,18 +405,38 @@ export default function NovelDetailPage() {
           )}
         </header>
 
-        {!editing && comicSetupOpen && novel.comics.length === 0 ? (
+        {!editing && novel.isOwner && novel.chapterAdaptation ? (
+          <div className="mx-auto max-w-2xl px-4 pb-3 lg:px-6">
+            <ComicChapterAdaptationBanner
+              progress={novel.chapterAdaptation}
+              draftComics={novel.draftStoryboardComics}
+              onContinueNext={(scope) => {
+                setInitialChapterScope(scope);
+                setResumeComicId(undefined);
+                setComicSetupOpen(true);
+              }}
+              onResumeDraft={(comicId) => {
+                setResumeComicId(comicId);
+                setComicSetupOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+
+        {!editing && comicSetupOpen && novel.isOwner ? (
           <div className="mx-auto max-w-2xl px-4 pb-4 lg:px-6">
             <ComicGeneratePanel
               novelId={novel.id}
               novelContent={novel.content}
               novelPrompt={novel.prompt}
               lengthTier={novel.lengthTier ?? undefined}
-              label="开始生成漫画"
+              initialChapterScope={initialChapterScope}
+              resumeComicId={resumeComicId}
+              label={novel.comics.length > 0 ? t("generateNewStoryboard") : t("startStoryboard")}
               onError={(msg) =>
                 setError(
-                  msg.includes("无权")
-                    ? "当前账号与创建该小说时不一致，无法生成漫画。请用创作时的浏览器登录态，或在「我的小说」中打开自己的作品。"
+                  /unauthorized|forbidden|sign in|please log in|not logged|无权|未授权|请先登录/i.test(msg)
+                    ? t("loginToAdapt")
                     : msg,
                 )
               }
@@ -400,6 +481,7 @@ export default function NovelDetailPage() {
           />
         )}
       </div>
-    </div>
+      </AppMain>
+    </AppPageShell>
   );
 }

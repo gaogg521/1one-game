@@ -1,4 +1,8 @@
+import type { AppLocale } from "@/i18n/routing";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import type { BriefMedium } from "@/lib/creative-brief/types";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { apiErrorMessage, clientErrorMessage } from "@/lib/i18n/progress-message";
 import {
   CHILDREN_CREATIVE_BRIEF_SCHEMA,
   NOVEL_CREATIVE_BRIEF_SCHEMA,
@@ -21,20 +25,24 @@ export async function fetchCreativeBriefPreview(
     novelGenreId?: string;
     title?: string;
     childrenTargetAge?: number;
+    inputLocale?: BriefInputLocale;
+    uiLocale?: AppLocale;
   },
 ): Promise<BriefPreviewResult> {
+  const locale = options?.uiLocale ?? "zh-Hans";
+
   if (medium === "game") {
-    return { ok: false, error: "游戏扩写请使用创作台" };
+    return { ok: false, error: clientErrorMessage(locale, "useGameStudio") };
   }
 
   const trimmed = prompt.trim();
   if (trimmed.length < 2) {
-    return { ok: false, error: "请先输入至少 2 个字的创意" };
+    return { ok: false, error: clientErrorMessage(locale, "needMinPrompt") };
   }
 
   const res = await fetch("/api/creative-brief/expand", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
     body: JSON.stringify({
       prompt: trimmed,
       medium,
@@ -42,6 +50,7 @@ export async function fetchCreativeBriefPreview(
       novelGenreId: options?.novelGenreId,
       title: options?.title,
       childrenTargetAge: options?.childrenTargetAge,
+      inputLocale: options?.inputLocale,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {
@@ -51,13 +60,13 @@ export async function fetchCreativeBriefPreview(
     oneLineSummary?: string;
   };
   if (!res.ok) {
-    return { ok: false, error: data.error ?? "扩写预览失败" };
+    return { ok: false, error: data.error ?? clientErrorMessage(locale, "expandPreviewFailed") };
   }
 
   if (data.briefKind === "children" || isChildrenGenreTag(options?.novelGenreId)) {
     const parsed = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(data.brief);
     if (!parsed.success) {
-      return { ok: false, error: "儿童构思扩写结果无效" };
+      return { ok: false, error: apiErrorMessage(locale, "expandChildrenInvalid") };
     }
     return {
       ok: true,
@@ -69,7 +78,7 @@ export async function fetchCreativeBriefPreview(
 
   const parsed = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(data.brief);
   if (!parsed.success) {
-    return { ok: false, error: "扩写结果无效" };
+    return { ok: false, error: apiErrorMessage(locale, "expandInvalid") };
   }
   return {
     ok: true,

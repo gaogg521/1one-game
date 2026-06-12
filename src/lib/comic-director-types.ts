@@ -142,7 +142,7 @@ export function buildComicDirectorJsonSchema(pageCount: number) {
   };
 }
 
-export function buildComicStoryboardJsonSchema(chunkPages: number) {
+export function buildComicStoryboardJsonSchema(chunkPages: number, panelsPerPage = 8) {
   const panelSchema = {
     type: "object",
     additionalProperties: false,
@@ -192,7 +192,7 @@ export function buildComicStoryboardJsonSchema(chunkPages: number) {
               panels: {
                 type: "array",
                 minItems: 1,
-                maxItems: 4,
+                maxItems: panelsPerPage,
                 items: panelSchema,
               },
             },

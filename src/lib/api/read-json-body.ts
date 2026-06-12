@@ -1,19 +1,25 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import type { ApiGenerateErrorPayload } from "@/lib/api/json-error-response";
+import { apiErrorMessage } from "@/lib/i18n/progress-message";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { PRODUCT } from "@/lib/product-config";
 
 function maxBodyBytes(): number {
   return PRODUCT.api.bodyMaxBytes;
 }
 
-function previewClHeader(cl: string | null, maxBytes: number): ApiGenerateErrorPayload | null {
+function previewClHeader(
+  req: Request,
+  cl: string | null,
+  maxBytes: number,
+): ApiGenerateErrorPayload | null {
   if (!cl?.trim()) return null;
   const parsed = /^(\d+)$/.exec(cl.trim())?.[1];
   if (!parsed) return null;
   const size = Number(parsed);
   if (size <= maxBytes) return null;
   return {
-    error: "请求体过大",
+    error: apiErrorMessage(resolveRequestLocaleSync(req), "bodyTooLarge"),
     code: generationErrorCodes().BODY_TOO_LARGE,
   };
 }
@@ -36,9 +42,11 @@ export async function readLimitedJson(
   requestId: string,
   opts?: { maxBytes?: number },
 ): Promise<ReadJsonLimitedResult> {
+  const locale = resolveRequestLocaleSync(req);
   const max = opts?.maxBytes ?? maxBodyBytes();
   const clErr =
-    previewClHeader(req.headers.get("content-length"), max) ?? previewClHeader(req.headers.get("Content-Length"), max);
+    previewClHeader(req, req.headers.get("content-length"), max) ??
+    previewClHeader(req, req.headers.get("Content-Length"), max);
   if (clErr) {
     return {
       ok: false,
@@ -57,7 +65,7 @@ export async function readLimitedJson(
       requestId,
       status: 400,
       payload: {
-        error: "无法读取请求体",
+        error: apiErrorMessage(locale, "bodyUnreadable"),
         code: generationErrorCodes().BAD_REQUEST,
         requestId,
       },
@@ -70,7 +78,7 @@ export async function readLimitedJson(
       requestId,
       status: 413,
       payload: {
-        error: "请求体过大",
+        error: apiErrorMessage(locale, "bodyTooLarge"),
         code: generationErrorCodes().BODY_TOO_LARGE,
         requestId,
       },
@@ -78,7 +86,16 @@ export async function readLimitedJson(
   }
 
   if (byteLength === 0) {
-    return { ok: false, requestId, status: 400, payload: { error: "无效的 JSON", code: generationErrorCodes().BAD_JSON, requestId } };
+    return {
+      ok: false,
+      requestId,
+      status: 400,
+      payload: {
+        error: apiErrorMessage(locale, "badJson"),
+        code: generationErrorCodes().BAD_JSON,
+        requestId,
+      },
+    };
   }
 
   const text = new TextDecoder("utf-8", { fatal: false }).decode(ab);
@@ -86,7 +103,16 @@ export async function readLimitedJson(
   try {
     body = JSON.parse(text) as unknown;
   } catch {
-    return { ok: false, requestId, status: 400, payload: { error: "无效的 JSON", code: generationErrorCodes().BAD_JSON, requestId } };
+    return {
+      ok: false,
+      requestId,
+      status: 400,
+      payload: {
+        error: apiErrorMessage(locale, "badJson"),
+        code: generationErrorCodes().BAD_JSON,
+        requestId,
+      },
+    };
   }
 
   return { ok: true, requestId, byteLength, body };

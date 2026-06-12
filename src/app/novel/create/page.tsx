@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChildrenAgePicker } from "@/components/novel/ChildrenAgePicker";
 import { ChildrenCreativeBriefPanel } from "@/components/novel/ChildrenCreativeBriefPanel";
@@ -10,14 +12,17 @@ import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPa
 import { NovelGenreTagPicker } from "@/components/novel/NovelGenreTagPicker";
 import { CHILDREN_ADDON_NOTES_PLACEHOLDER } from "@/lib/children-novel-creative";
 import {
-  childrenAgeLabel,
-  childrenCharRangeLabel,
-  childrenFeaturesLabel,
-  childrenStageLabel,
   getChildrenAgeTier,
   DEFAULT_CHILDREN_TARGET_AGE,
   type ChildrenTargetAge,
 } from "@/lib/children-age-length";
+import {
+  localizedChildrenAgeLabel,
+  localizedChildrenCharRangeLabel,
+  localizedChildrenFeaturesLabel,
+  localizedChildrenStageLabel,
+} from "@/lib/i18n/localized-data";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import {
   type DraftState,
   loadDraft,
@@ -35,11 +40,18 @@ import {
 } from "@/lib/novel-length";
 import {
   displayNovelSummary,
+  measureNovelTitleUnits,
   NOVEL_TITLE_MAX_LEN,
   normalizeNovelTitle,
   validateNovelTitleInput,
+  formatNovelTitleValidationError,
 } from "@/lib/novel-display";
 import { fetchCreativeBriefPreview } from "@/lib/creative-brief/preview-client";
+import {
+  detectBriefInputLocale,
+  type BriefInputLocale,
+} from "@/lib/creative-brief/detect-input-locale";
+import type { AppLocale } from "@/i18n/routing";
 import {
   type ChildrenBriefUserRevision,
   type ChildrenCreativeBrief,
@@ -50,23 +62,43 @@ import { buildChildrenBriefSeed } from "@/lib/literary-brief/children-brief-type
 import {
   buildNovelBriefSeed,
   buildNovelStoredPrompt,
+  getLocalizedNovelGenreTag,
   getNovelGenreTag,
+  inferNovelGenreTagFromText,
   isChildrenGenreTag,
   type NovelGenreTagId,
 } from "@/lib/novel-genre-tags";
 import { PRODUCT } from "@/lib/product-config";
+import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal";
+import { parseQuotaExceeded } from "@/lib/commerce/quota-error";
+import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
+import { GenerationStage, useNovelGenerationStages } from "@/components/generation/GenerationStage";
+import { withLocalePath } from "@/i18n/navigation";
+import { publishVisibilityMessage } from "@/lib/work-status";
 
-const STEPS = [
-  { n: 1 as const, label: "书名与类型" },
-  { n: 2 as const, label: "构思" },
-  { n: 3 as const, label: "写作" },
-  { n: 4 as const, label: "发布" },
-] as const;
+function resolveBriefInputLocale(uiLocale: AppLocale, userText: string): BriefInputLocale {
+  const fromText = detectBriefInputLocale(userText);
+  if (fromText === "en" || fromText === "ja" || fromText === "ms" || fromText === "th") return fromText;
+  if (uiLocale === "zh-Hant") return "zh-Hant";
+  if (uiLocale === "en") return "en";
+  if (uiLocale === "ms") return "ms";
+  if (uiLocale === "th") return "th";
+  return fromText;
+}
 
-type NovelCreateStep = (typeof STEPS)[number]["n"];
+const STEP_KEYS = [1, 2, 3, 4] as const;
+
+type NovelCreateStep = (typeof STEP_KEYS)[number];
 
 export default function NovelCreatePage() {
   const router = useRouter();
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("novelCreatePage");
+  const tn = useTranslations("novelCreate");
+  const tc = useTranslations("common");
+  const stepLabels = t.raw("steps") as string[];
+  const steps = STEP_KEYS.map((n, index) => ({ n, label: stepLabels[index] ?? "" }));
+  const novelGenerationStages = useNovelGenerationStages();
   const [step, setStep] = useState<NovelCreateStep>(1);
   const [title, setTitle] = useState("");
   const [genreId, setGenreId] = useState<NovelGenreTagId | null>(null);
@@ -90,8 +122,22 @@ export default function NovelCreatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
+  const [activeGenerationStage, setActiveGenerationStage] = useState<string | null>(null);
   const [streamPreview, setStreamPreview] = useState("");
-  const [draft, setDraft] = useState<DraftState | null>(null);
+  const [draft, setDraft] = useState<DraftState | null>(() => {
+    const d = loadDraft("novel");
+    return d && d.generating && !d.generatedId ? d : null;
+  });
+  const [generatingDrafts, setGeneratingDrafts] = useState<
+    Array<{
+      id: string;
+      title: string;
+      contentLength: number;
+      completedSegments: number;
+      totalSegments: number | null;
+      updatedAt: string;
+    }>
+  >([]);
 
   const [publishedNovelId, setPublishedNovelId] = useState<string | null>(null);
   const [publishedNovel, setPublishedNovel] = useState<{
@@ -102,7 +148,9 @@ export default function NovelCreatePage() {
     content: string;
     coverPath: string | null;
     shareCode: string | null;
+    visibility?: string | null;
   } | null>(null);
+  const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -133,8 +181,24 @@ export default function NovelCreatePage() {
   }
 
   useEffect(() => {
-    const d = loadDraft("novel");
-    if (d && d.generating && !d.generatedId) setDraft(d);
+    void fetch("/api/novel/generating-drafts")
+      .then((r) => r.json())
+      .then((data: { drafts?: typeof generatingDrafts }) => setGeneratingDrafts(data.drafts ?? []));
+  }, []);
+
+  const prefillApplied = useRef(false);
+  useEffect(() => {
+    if (prefillApplied.current || typeof window === "undefined") return;
+    const prefill = new URLSearchParams(window.location.search).get("prefill")?.trim();
+    if (!prefill) return;
+    prefillApplied.current = true;
+    queueMicrotask(() => {
+      setAddonNotes(prefill);
+      setTitle((t) => (t.trim() ? t : prefill.slice(0, NOVEL_TITLE_MAX_LEN)));
+      const inferred = inferNovelGenreTagFromText(prefill);
+      if (inferred) setGenreId(inferred.id);
+      setStep(inferred ? 2 : 1);
+    });
   }, []);
 
   const expandBrief = useCallback(async () => {
@@ -143,13 +207,16 @@ export default function NovelCreatePage() {
     setBriefPreviewBusy(true);
     setBriefConfirmed(false);
     try {
+      const briefLocale = resolveBriefInputLocale(locale, `${title} ${addonNotes}`);
       const seed = isChildrenGenre
         ? buildChildrenBriefSeed(title, addonNotes || title, childrenTargetAge)
-        : buildNovelBriefSeed(title, genre, addonNotes, undefined);
+        : buildNovelBriefSeed(title, genre, addonNotes, undefined, briefLocale);
       const r = await fetchCreativeBriefPreview(seed, "novel", {
         novelGenreId: genre.id,
         title: title.trim(),
         childrenTargetAge: isChildrenGenre ? childrenTargetAge : undefined,
+        inputLocale: briefLocale,
+        uiLocale: locale,
       });
       if (!r.ok) {
         setError(r.error);
@@ -171,7 +238,9 @@ export default function NovelCreatePage() {
   useEffect(() => {
     const hasBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
     if (step === 2 && title.trim() && genre && !hasBrief && !briefPreviewBusy) {
-      void expandBrief();
+      queueMicrotask(() => {
+        void expandBrief();
+      });
     }
   }, [
     step,
@@ -189,11 +258,11 @@ export default function NovelCreatePage() {
     if (step === 1) {
       const tv = validateNovelTitleInput(title.trim());
       if (!tv.ok) {
-        setError(tv.error);
+        setError(formatNovelTitleValidationError(locale, tv.errorKey));
         return;
       }
       if (!genreId) {
-        setError("请选择小说类型");
+        setError(t("chooseGenre"));
         return;
       }
       setTitle(tv.value);
@@ -209,7 +278,7 @@ export default function NovelCreatePage() {
     if (step === 2) {
       const hasBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
       if (!hasBrief) {
-        setError("请等待 AI 完成构思扩写，或点击重新生成");
+        setError(t("waitForBrief"));
         return;
       }
       setBriefConfirmed(true);
@@ -229,16 +298,31 @@ export default function NovelCreatePage() {
   }
 
   const requestCover = useCallback(async (novelId: string, force = false) => {
-    const res = await fetch(`/api/novel/${novelId}/cover${force ? "?force=1" : ""}`, { method: "POST" });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 180_000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/novel/${novelId}/cover${force ? "?force=1" : ""}`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        throw new Error(t("coverTimeout"));
+      }
+      throw e;
+    } finally {
+      window.clearTimeout(timer);
+    }
     const data = (await res.json()) as { coverPath?: string; error?: string; novel?: { coverPath?: string } };
-    if (!res.ok) throw new Error(data.error || "封面生成失败");
+    if (!res.ok) throw new Error(data.error || t("coverFailed"));
     const path = data.coverPath ?? data.novel?.coverPath ?? null;
     if (path) {
       setPublishedNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
       setCoverImageKey((k) => k + 1);
     }
     return path;
-  }, []);
+  }, [t("coverFailed"), t("coverTimeout")]);
 
   useEffect(() => {
     if (step !== 4 || !publishedNovelId) return;
@@ -270,13 +354,13 @@ export default function NovelCreatePage() {
           await requestCover(publishedNovelId);
         } catch (e) {
           if (!cancelled) {
-            setError(e instanceof Error ? e.message : "封面生成失败");
+            setError(e instanceof Error ? e.message : t("coverFailed"));
           }
         } finally {
           if (!cancelled) setCoverBusy(false);
         }
       } catch {
-        if (!cancelled) setError("加载作品信息失败");
+        if (!cancelled) setError(t("loadNovelFailed"));
       }
     }
 
@@ -294,7 +378,7 @@ export default function NovelCreatePage() {
       await requestCover(publishedNovelId, true);
       coverRequested.current = true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "封面生成失败");
+      setError(e instanceof Error ? e.message : t("coverFailed"));
     } finally {
       setCoverRegenerating(false);
     }
@@ -312,61 +396,46 @@ export default function NovelCreatePage() {
       const data = (await res.json()) as { novel?: { shareCode?: string | null } };
       const code = data.novel?.shareCode;
       if (!code) return;
-      const url = `${window.location.origin}/s/${code}`;
+      const url = `${window.location.origin}${withLocalePath(`/s/${code}`, locale)}`;
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
       setPublishedNovel((prev) => (prev ? { ...prev, shareCode: code } : prev));
       setTimeout(() => setShareCopied(false), 2000);
     } catch {
-      setError("复制分享链接失败");
+      setError(t("copyShareFailed"));
     }
   }
 
-  async function handleStartWriting(e: React.FormEvent) {
-    e.preventDefault();
-    const activeBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
-    if (!title.trim() || !genre || !activeBrief || loading) return;
-
-    const storedPrompt = buildNovelStoredPrompt(title, genre);
+  async function runNovelGenerateStream(body: Record<string, unknown>) {
     setLoading(true);
     setError("");
-    setProgress("连接生成服务…");
+    setProgress(t("connectService"));
     setStreamPreview("");
-
-    markDraftGenerating("novel", storedPrompt, title.trim());
+    setStep(3);
 
     try {
       const res = await fetch("/api/novel/generate/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: storedPrompt,
-          title: title.trim(),
-          lengthTier: effectiveLengthTier,
-          novelGenreTag: genreId,
-          ...(isChildrenGenre ? { childrenTargetAge } : {}),
-          ...(effectiveLengthTier === "long" ? { polish: longPolish } : {}),
-          creativeBrief: activeBrief,
-          ...(isChildrenGenre
-            ? childrenBriefRevision
-              ? { briefRevision: childrenBriefRevision }
-              : {}
-            : novelBriefRevision
-              ? { briefRevision: novelBriefRevision }
-              : {}),
-        }),
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error || `请求失败（${res.status}）`);
+        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        const quota = parseQuotaExceeded(data, res.status);
+        if (quota) {
+          showQuotaExceeded(quota);
+          setLoading(false);
+          return;
+        }
+        setError(data.error || tc("requestFailed", { status: String(res.status) }));
         setLoading(false);
         return;
       }
 
       const ct = res.headers.get("content-type") ?? "";
       if (!ct.includes("text/event-stream") || !res.body) {
-        setError("服务器未返回流式响应");
+        setError(t("streamRequired"));
         setLoading(false);
         return;
       }
@@ -411,15 +480,26 @@ export default function NovelCreatePage() {
               continue;
             }
             if (ev.step === "ping") continue;
-            if (ev.step === "start") setProgress(ev.message ?? "生成中…");
+            if (ev.step === "start") {
+              setActiveGenerationStage("brief");
+              setProgress(ev.message ?? t("generating"));
+            }
             if (ev.step === "bible_start" || ev.step === "outline_start") {
-              setProgress(ev.message ?? "正在生成设定圣经…");
+              setActiveGenerationStage("brief");
+              setProgress(ev.message ?? t("bibleStart"));
             }
             if (ev.step === "bible_ready" || ev.step === "outline_ready") {
-              setProgress(ev.message ?? "设定完成…");
+              setActiveGenerationStage("outline");
+              setProgress(ev.message ?? t("bibleDone"));
             }
-            if (ev.step === "chapter_plan_start") setProgress(ev.message ?? "正在规划章节…");
-            if (ev.step === "chapter_plan_ready") setProgress(ev.message ?? "开始分批写作…");
+            if (ev.step === "chapter_plan_start") {
+              setActiveGenerationStage("outline");
+              setProgress(ev.message ?? t("chapterPlanStart"));
+            }
+            if (ev.step === "chapter_plan_ready") {
+              setActiveGenerationStage("writing");
+              setProgress(ev.message ?? t("chapterPlanReady"));
+            }
             if (
               ev.step === "consistency_start" ||
               ev.step === "consistency_ok" ||
@@ -430,42 +510,55 @@ export default function NovelCreatePage() {
               ev.step === "polish_batch_done" ||
               ev.step === "polish_skip"
             ) {
+              setActiveGenerationStage("polish");
               if (ev.message) setProgress(ev.message);
             }
             if (ev.step === "segment_start") {
+              setActiveGenerationStage("writing");
               setProgress(
                 ev.message ??
-                  `长篇第 ${ev.index ?? "?"}/${ev.total ?? "?"} 段（${ev.label ?? "续写"}）…`,
+                  t("longSegment", { index: String(ev.index ?? "?"), total: String(ev.total ?? "?"), label: String(ev.label ?? t("writing")) }),
               );
             }
             if (ev.step === "segment_done" && typeof ev.length === "number") {
+              setActiveGenerationStage("writing");
               setProgress(
-                `已完成 ${ev.index ?? "?"}/${ev.total ?? "?"} 段 · 全文约 ${ev.length} 字`,
+                t("segmentDone", { index: String(ev.index ?? "?"), total: String(ev.total ?? "?"), length: ev.length.toLocaleString() }),
               );
             }
+            if (
+              (ev.step === "checkpoint_novel" ||
+                ev.step === "checkpoint_saved" ||
+                ev.step === "resume_start" ||
+                ev.step === "resume_ready") &&
+              ev.message
+            ) {
+              setProgress(ev.message);
+            }
             if (ev.step === "model_start" && ev.model) {
-              setProgress(`正在连接模型 ${ev.model}…`);
+              setProgress(t("modelConnect", { model: ev.model }));
             }
             if (ev.step === "delta" && typeof ev.text === "string") {
+              setActiveGenerationStage("writing");
               totalChars += ev.text.length;
               setStreamPreview((p) => p + ev.text);
               setProgress(
-                `生成中… 已约 ${totalChars.toLocaleString()} / ${novelMaxChars(effectiveLengthTier, childrenLengthOpts).toLocaleString()} 字`,
+                t("generatingWords", { current: totalChars.toLocaleString(), target: novelMaxChars(effectiveLengthTier, childrenLengthOpts).toLocaleString() }),
               );
             }
-            if (ev.step === "length_capped") setProgress(ev.message ?? "已达篇幅上限…");
-            if (ev.step === "synopsis_start") setProgress(ev.message ?? "正在撰写简介…");
+            if (ev.step === "length_capped") setProgress(ev.message ?? t("maxLengthReached"));
+            if (ev.step === "synopsis_start") setProgress(ev.message ?? t("synopsisStart"));
             if (ev.step === "model_short" && ev.model) {
-              setProgress(`模型 ${ev.model} 输出偏短，尝试备用…`);
+              setProgress(t("modelShort", { model: ev.model }));
             }
             if (ev.step === "model_error" && ev.model) {
-              setProgress(`模型 ${ev.model} 出错，尝试备用…`);
+              setProgress(t("modelError", { model: ev.model }));
             }
             if (ev.step === "done" && ev.novel?.id) {
               novelId = ev.novel.id;
-              setProgress("正在跳转…");
+              setProgress(t("redirecting"));
             }
-            if (ev.step === "error") streamError = ev.message ?? "生成失败";
+            if (ev.step === "error") streamError = ev.message ?? t("generateFailed");
           }
         }
       }
@@ -480,31 +573,77 @@ export default function NovelCreatePage() {
         setStep(4);
         setProgress("");
       } else {
-        setError(streamError || "生成未完成");
+        setError(streamError || t("generateIncomplete"));
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const timedOut = /abort|timeout|timed out|network|failed to fetch|incomplete/i.test(msg);
-      setError(timedOut ? novelStreamInterruptHint(effectiveLengthTier) : `连接异常：${msg || "请重试"}`);
+      setError(
+        timedOut
+          ? novelStreamInterruptHint(effectiveLengthTier, locale)
+          : t("connectionError", { message: msg || "Please retry" }),
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleStartWriting(e: React.FormEvent) {
+    e.preventDefault();
+    const activeBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
+    if (!title.trim() || !genre || !activeBrief || loading) return;
+
+    const storedPrompt = buildNovelStoredPrompt(title, genre);
+    markDraftGenerating("novel", storedPrompt, title.trim());
+    await runNovelGenerateStream({
+      prompt: storedPrompt,
+      title: title.trim(),
+      lengthTier: effectiveLengthTier,
+      novelGenreTag: genreId,
+      ...(isChildrenGenre ? { childrenTargetAge } : {}),
+      ...(effectiveLengthTier === "long" ? { polish: longPolish } : {}),
+      creativeBrief: activeBrief,
+      ...(isChildrenGenre
+        ? childrenBriefRevision
+          ? { briefRevision: childrenBriefRevision }
+          : {}
+        : novelBriefRevision
+          ? { briefRevision: novelBriefRevision }
+          : {}),
+    });
+  }
+
+  const handleResumeDraft = useCallback(async (draftId: string) => {
+    if (loading) return;
+    await runNovelGenerateStream({ resumeNovelId: draftId });
+  }, [loading, runNovelGenerateStream]);
+
+  const resumeApplied = useRef(false);
+  useEffect(() => {
+    if (resumeApplied.current || typeof window === "undefined") return;
+    const resumeId = new URLSearchParams(window.location.search).get("resumeNovelId")?.trim();
+    if (!resumeId) return;
+    resumeApplied.current = true;
+    queueMicrotask(() => {
+      void handleResumeDraft(resumeId);
+    });
+  }, [handleResumeDraft]);
+
   return (
-    <div className="flex min-h-screen">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
-      <main className="flex-1 px-6 py-10 lg:px-10">
+      <AppMain>
+      <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         <div className="mx-auto max-w-3xl">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-[var(--gc-text)]">创作小说</h1>
+            <h1 className="text-2xl font-bold text-[var(--gc-text)]">{t("pageTitle")}</h1>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">
-              定书名与类型 → AI 解读并扩写构思 → 流式写作（含典故解读+童趣故事）→ 生成封面并分享发布。
+              {t("pageDesc")}
             </p>
           </div>
 
           <ol className="mb-6 flex flex-wrap gap-2">
-            {STEPS.map((s) => {
+            {steps.map((s) => {
               const active = step === s.n;
               const done = step > s.n;
               return (
@@ -524,9 +663,17 @@ export default function NovelCreatePage() {
             })}
           </ol>
 
+          {generatingDrafts.length > 0 && !loading ? (
+            <div className="mb-4 space-y-2">
+              {generatingDrafts.map((d) => (
+                <NovelResumeBanner key={d.id} novelId={d.id} title={d.title} />
+              ))}
+            </div>
+          ) : null}
+
           {draft && step === 1 ? (
             <div className="mb-4 rounded-xl border border-[color:var(--gc-accent)]/30 bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] p-4 text-sm">
-              <p className="font-medium text-[var(--gc-text)]">检测到未完成的生成草稿</p>
+              <p className="font-medium text-[var(--gc-text)]">{t("browserDraft")}</p>
               <button
                 type="button"
                 onClick={() => {
@@ -535,7 +682,7 @@ export default function NovelCreatePage() {
                 }}
                 className="mt-2 text-xs text-[var(--gc-muted)] underline"
               >
-                忽略
+                {t("dismiss")}
               </button>
             </div>
           ) : null}
@@ -544,34 +691,38 @@ export default function NovelCreatePage() {
             <div className="flex flex-col gap-5 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/60 p-5 sm:p-6">
               <div>
                 <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                  小说书名
+                  {t("titleLabel")}
                 </label>
                 <input
+                  data-testid="novel-title-input"
                   type="text"
                   value={title}
-                  maxLength={NOVEL_TITLE_MAX_LEN}
+                  maxLength={Math.max(48, NOVEL_TITLE_MAX_LEN * 4)}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="例如：大明第一锦衣卫"
+                  placeholder={t("titlePlaceholder")}
                   className="w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg)]/80 px-4 py-3 text-base text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:var(--gc-accent)]"
                   autoFocus
                 />
                 <p className="mt-1 text-xs text-[var(--gc-muted)]">
-                  {title.length}/{NOVEL_TITLE_MAX_LEN} 字
+                  {measureNovelTitleUnits(title).toFixed(
+                    Number.isInteger(measureNovelTitleUnits(title)) ? 0 : 1,
+                  )}
+                  /{NOVEL_TITLE_MAX_LEN} {tc("charactersUnit")}
                 </p>
               </div>
 
               <div className="border-t border-[color:var(--gc-border)] pt-5">
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                  小说类型
+                  {tn("genreLabel")}
                 </label>
-                <NovelGenreTagPicker value={genreId} onChange={handleGenreChange} />
+                <NovelGenreTagPicker value={genreId} onChange={handleGenreChange} locale={locale} />
                 {genre ? (
                   <p className="mt-2 text-xs leading-relaxed text-[var(--gc-text-faint)]">
-                    {genre.label}：{genre.desc}
+                    {getLocalizedNovelGenreTag(genre, locale).label}：{getLocalizedNovelGenreTag(genre, locale).desc}
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-[var(--gc-text-faint)]">
-                    选择类型后，AI 将按该类型惯例扩写构思
+                    {t("selectedGenreHint")}
                   </p>
                 )}
               </div>
@@ -579,11 +730,10 @@ export default function NovelCreatePage() {
               {isChildrenGenre ? (
                 <div className="border-t border-[color:var(--gc-border)] pt-5">
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                    读者年龄（决定正文字数）
+                    {t("ageLabel")}
                   </label>
                   <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
-                    专为家长：五档读者（0-3 / 3-6 / 6-8 / 9 / 10 岁），正文 90–900 字，知识点与解读深度随龄递增。支持日常话、成语、国学典故；漫画为
-                    Q 版小人书五格。
+                    {t("ageDesc")}
                   </p>
                   <ChildrenAgePicker
                     value={childrenTargetAge}
@@ -591,17 +741,19 @@ export default function NovelCreatePage() {
                     disabled={loading}
                   />
                   <p className="mt-2 text-[10px] text-[var(--gc-muted)]">
-                    预计 {novelGenerationEtaHint("children")} · 正文 {childrenTier.charRangeLabel}（优先约{" "}
-                    {childrenTier.targetChars} 字）
+                    {t("etaPrefix")} {novelGenerationEtaHint("children", locale)} · {tn("childrenBodyMeta", {
+                      range: childrenTier.charRangeLabel,
+                      target: childrenTier.targetChars,
+                    })}
                   </p>
                 </div>
               ) : (
                 <div className="border-t border-[color:var(--gc-border)] pt-5">
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                    篇幅
+                    {t("lengthLabel")}
                   </label>
                   <p className="mb-2 text-xs text-[var(--gc-text-faint)]">
-                    短篇 / 中篇 / 长篇。进入「写作」步骤前仍可修改。
+                    {t("lengthDesc")}
                   </p>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
@@ -615,13 +767,23 @@ export default function NovelCreatePage() {
                             : "border-[color:var(--gc-border)] bg-[var(--gc-bg)]/50 hover:border-[color:var(--gc-accent)]/30"
                         }`}
                       >
-                        <span className="block text-sm font-semibold">{tier.label}</span>
+                        <span className="block text-sm font-semibold">
+                          {tier.id === "short"
+                            ? tn("lengthShort")
+                            : tier.id === "medium"
+                              ? tn("lengthMedium")
+                              : tn("lengthLong")}
+                        </span>
                         <span className="mt-0.5 block text-[11px] leading-snug text-[var(--gc-muted)]">
-                          {tier.desc}
+                          {tier.id === "short"
+                            ? tn("lengthShortDesc")
+                            : tier.id === "medium"
+                              ? tn("lengthMediumDesc")
+                              : tn("lengthLongDesc")}
                         </span>
                         {lengthTier === tier.id ? (
                           <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
-                            预计 {novelGenerationEtaHint(tier.id)}
+                            {t("etaPrefix")} {novelGenerationEtaHint(tier.id, locale)}
                           </span>
                         ) : null}
                       </button>
@@ -637,7 +799,7 @@ export default function NovelCreatePage() {
                 disabled={!title.trim() || !genreId}
                 className="gc-theme-cta w-full rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-50 sm:w-auto"
               >
-                下一步：AI 扩写构思
+                {t("nextToBrief")}
               </button>
             </div>
           ) : null}
@@ -651,20 +813,25 @@ export default function NovelCreatePage() {
                   {isChildrenGenre ? (
                     <span className="text-[var(--gc-muted)]">
                       {" "}
-                      · 正文 {childrenCharRangeLabel(childrenTargetAge)}
+                      · {tn("bodyText")} {localizedChildrenCharRangeLabel(childrenTargetAge, locale)}
                     </span>
                   ) : (
                     <span className="text-[var(--gc-muted)]">
                       {" "}
-                      · {novelLengthConfig(effectiveLengthTier).label}
+                      ·{" "}
+                      {effectiveLengthTier === "short"
+                        ? tn("lengthShort")
+                        : effectiveLengthTier === "medium"
+                          ? tn("lengthMedium")
+                          : tn("lengthLong")}
                     </span>
                   )}
                 </span>
-                {briefPreviewBusy ? " — 正在根据书名与类型扩写构思…" : ""}
+                {briefPreviewBusy ? ` — ${t("regenerateBrief")}` : ""}
               </p>
               <div>
                 <label className="mb-1 block text-xs font-medium text-[var(--gc-muted)]">
-                  补充想法（可选）
+                  {t("addonLabel")}
                 </label>
                 <textarea
                   value={addonNotes}
@@ -673,7 +840,7 @@ export default function NovelCreatePage() {
                   placeholder={
                     isChildrenGenre
                       ? CHILDREN_ADDON_NOTES_PLACEHOLDER
-                      : "例如：主角要腹黑、前期慢热、结局 HE…"
+                      : t("addonPlaceholder")
                   }
                   className="w-full resize-none rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-sm text-[var(--gc-text)]"
                 />
@@ -699,13 +866,13 @@ export default function NovelCreatePage() {
               ) : briefPreviewBusy ? (
                 <p className="text-sm text-[var(--gc-accent)]">
                   {isChildrenGenre
-                    ? "AI 正在整理儿童故事构思（解读 + 三句话情节）…"
-                    : "AI 正在扩写世界观、人物与章节奏…"}
+                    ? t("briefBusyChildren")
+                    : t("briefBusyNovel")}
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={goBack} className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-muted)]">
-                  上一步
+                  {t("prevStep")}
                 </button>
                 <button
                   type="button"
@@ -713,7 +880,7 @@ export default function NovelCreatePage() {
                   onClick={() => void expandBrief()}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] disabled:opacity-50"
                 >
-                  重新生成构思
+                  {t("regenerateBrief")}
                 </button>
                 <button
                   type="button"
@@ -723,7 +890,7 @@ export default function NovelCreatePage() {
                   }
                   className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
                 >
-                  确认构思，进入写作
+                  {t("confirmBrief")}
                 </button>
               </div>
               {error ? <p className="text-sm text-red-400">{error}</p> : null}
@@ -740,8 +907,8 @@ export default function NovelCreatePage() {
                 {briefConfirmed ? (
                   <p className="mt-2 text-[10px] text-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]">
                     {isChildrenGenre
-                      ? "构思已确认，读者年龄已在第 1 步选定，可直接开始生成正文"
-                      : "构思已确认，请选择篇幅后开始写作"}
+                      ? t("briefConfirmedChildren")
+                      : t("briefConfirmedNovel")}
                   </p>
                 ) : null}
               </div>
@@ -750,22 +917,29 @@ export default function NovelCreatePage() {
                 <div className="rounded-xl border border-[color:var(--gc-accent)]/30 bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
                   <p>
                     <span className="font-medium text-[var(--gc-accent)]">
-                      {childrenAgeLabel(childrenTargetAge)} · {childrenStageLabel(childrenTargetAge)}
+                      {localizedChildrenAgeLabel(childrenTargetAge, locale)} ·{" "}
+                      {localizedChildrenStageLabel(childrenTargetAge, locale)}
                     </span>
                     <span className="text-[var(--gc-muted)]">
                       {" "}
-                      · 正文 {childrenCharRangeLabel(childrenTargetAge)}
+                      · {tn("bodyText")} {localizedChildrenCharRangeLabel(childrenTargetAge, locale)}
                     </span>
                   </p>
-                  <p className="mt-1 text-[10px] text-[var(--gc-text-faint)]">{childrenFeaturesLabel(childrenTargetAge)}</p>
+                  <p className="mt-1 text-[10px] text-[var(--gc-text-faint)]">
+                    {localizedChildrenFeaturesLabel(childrenTargetAge, locale)}
+                  </p>
                   <p className="mt-1 text-[var(--gc-muted)]">
-                    成稿：{childrenTier.interpretMark} → {childrenTier.bodyMark} → {childrenTier.closingMark}。若要改档位，请点「修改构思」再点「上一步」回到第 1 步。
+                    {tn("structureMarks", {
+                      interpret: childrenTier.interpretMark,
+                      body: childrenTier.bodyMark,
+                      closing: childrenTier.closingMark,
+                    })}
                   </p>
                 </div>
               ) : (
                 <div>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                    篇幅（与第 1 步同步，可在此修改）
+                    {t("lengthSync")}
                   </label>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => (
@@ -784,7 +958,7 @@ export default function NovelCreatePage() {
                         <span className="mt-0.5 block text-xs text-[var(--gc-muted)]">{tier.desc}</span>
                         {lengthTier === tier.id && !loading ? (
                           <span className="mt-1 block text-[10px] text-[var(--gc-accent)]">
-                            预计 {novelGenerationEtaHint(tier.id)}
+                            {t("etaPrefix")} {novelGenerationEtaHint(tier.id, locale)}
                           </span>
                         ) : null}
                       </button>
@@ -801,12 +975,31 @@ export default function NovelCreatePage() {
                     onChange={(e) => setLongPolish(e.target.checked)}
                     disabled={loading}
                   />
-                  每批写完后轻量润色
+                  {t("lightPolish")}
                 </label>
               ) : null}
 
+              {loading ? (
+                <GenerationStage
+                  title={t("generatingTitle")}
+                  stages={novelGenerationStages.map((s) => {
+                    const activeIndex = activeGenerationStage
+                      ? novelGenerationStages.findIndex((x) => x.key === activeGenerationStage)
+                      : -1;
+                    const selfIndex = novelGenerationStages.findIndex((x) => x.key === s.key);
+                    return {
+                      ...s,
+                      active: s.key === activeGenerationStage,
+                      done: activeIndex > selfIndex,
+                    };
+                  })}
+                  detail={progress || undefined}
+                />
+              ) : null}
               {error ? <p className="text-sm text-red-400">{error}</p> : null}
-              {progress && !error ? <p className="text-sm text-[var(--gc-accent)]">{progress}</p> : null}
+              {progress && !error && !loading ? (
+                <p className="text-sm text-[var(--gc-accent)]">{progress}</p>
+              ) : null}
               {loading && streamPreview ? (
                 <div className="min-h-72 max-h-[min(65vh,36rem)] overflow-y-auto rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 text-sm leading-relaxed whitespace-pre-wrap text-[var(--gc-text-soft)]">
                   {streamPreview}
@@ -820,7 +1013,7 @@ export default function NovelCreatePage() {
                   disabled={loading}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-muted)] disabled:opacity-50"
                 >
-                  修改构思
+                  {t("editBrief")}
                 </button>
                 <button
                   type="submit"
@@ -829,7 +1022,7 @@ export default function NovelCreatePage() {
                   }
                   className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
                 >
-                  {loading ? "正在写作…" : "开始生成正文"}
+                  {loading ? t("writing") : t("startWriting")}
                 </button>
               </div>
             </form>
@@ -839,22 +1032,23 @@ export default function NovelCreatePage() {
             <div className="flex flex-col gap-5">
               <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/60 p-5 sm:p-6">
                 <p className="text-sm font-medium text-[var(--gc-text)]">
-                  正文已生成，作品已出现在「小说发现」广场
+                  {t("contentReady")}
+                  {publishVisibilityMessage(publishedNovel?.visibility, locale)}
                 </p>
                 <p className="mt-1 text-xs text-[var(--gc-muted)]">
-                  下方可预览竖版封面；不满意可点「重做封面」无需进入阅读页。生成完成后可复制分享链接。
+                  {t("coverHint")}
                 </p>
 
                 <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
                   <div className="mx-auto w-full max-w-[12rem] shrink-0 sm:mx-0 sm:max-w-[14rem]">
                     <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wider text-[var(--gc-muted)] sm:text-left">
-                      封面预览
+                      {t("coverPreview")}
                     </p>
                     <div className="relative aspect-[3/4] overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] shadow-lg ring-1 ring-[color:color-mix(in_srgb,var(--gc-accent)_15%,transparent)]">
                       {publishedNovel?.coverPath ? (
                         <img
                           src={`${publishedNovel.coverPath}${publishedNovel.coverPath.includes("?") ? "&" : "?"}v=${coverImageKey}`}
-                          alt="小说封面"
+                          alt={t("novelCoverAlt")}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -862,17 +1056,17 @@ export default function NovelCreatePage() {
                           {coverBusy || coverRegenerating ? (
                             <>
                               <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-[var(--gc-accent)] border-t-transparent" />
-                              AI 正在绘制封面…
+                              {t("coverDrawing")}
                             </>
                           ) : (
-                            "封面待生成"
+                            t("coverPending")
                           )}
                         </div>
                       )}
                     </div>
                     {publishedNovel?.coverPath ? (
                       <p className="mt-2 text-center text-[10px] text-[var(--gc-text-faint)] sm:text-left">
-                        对画风不满意可「重做封面」，约需数十秒
+                        {t("redoCoverHint")}
                       </p>
                     ) : null}
                   </div>
@@ -892,13 +1086,14 @@ export default function NovelCreatePage() {
                       <p className="mt-3 text-sm leading-relaxed text-[var(--gc-text-soft)]">
                         {displayNovelSummary(
                           publishedNovel.summary,
-                          normalizeNovelTitle(publishedNovel.title, publishedNovel.prompt),
+                          normalizeNovelTitle(publishedNovel.title, publishedNovel.prompt, undefined, locale),
                           publishedNovel.prompt,
                           publishedNovel.content,
+                          locale,
                         )}
                       </p>
                     ) : (
-                      <p className="mt-3 text-sm text-[var(--gc-muted)]">正在加载简介…</p>
+                      <p className="mt-3 text-sm text-[var(--gc-muted)]">{t("loadingSummary")}</p>
                     )}
                   </div>
                 </div>
@@ -914,10 +1109,10 @@ export default function NovelCreatePage() {
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] disabled:opacity-50"
                 >
                   {coverRegenerating || coverBusy
-                    ? "封面绘制中…"
+                    ? t("generatingCover")
                     : publishedNovel?.coverPath
-                      ? "不满意？重做封面"
-                      : "生成封面"}
+                      ? t("regenerateCover")
+                      : t("generateCover")}
                 </button>
                 <button
                   type="button"
@@ -925,26 +1120,28 @@ export default function NovelCreatePage() {
                   disabled={coverBusy}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] disabled:opacity-50"
                 >
-                  {shareCopied ? "链接已复制" : "复制分享链接"}
+                  {shareCopied ? t("copiedLink") : t("copyShareLink")}
                 </button>
                 <Link
-                  href="/novel/discover"
+                  href={withLocalePath("/novel/discover", locale)}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-muted)]"
                 >
-                  去发现广场
+                  {t("goDiscover")}
                 </Link>
                 <button
                   type="button"
-                  onClick={() => router.push(`/novel/${publishedNovelId}`)}
+                  onClick={() => router.push(withLocalePath(`/novel/${publishedNovelId}`, locale))}
                   className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold"
                 >
-                  进入阅读
+                  {t("enterRead")}
                 </button>
               </div>
             </div>
           ) : null}
         </div>
       </main>
-    </div>
+      {QuotaModal}
+      </AppMain>
+    </AppPageShell>
   );
 }

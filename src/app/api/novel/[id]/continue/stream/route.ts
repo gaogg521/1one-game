@@ -4,12 +4,15 @@ import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade } from "@/lib/llm";
+import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-message";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { generateNovelSynopsis } from "@/lib/novel-synopsis";
 import { novelMaxChars, parseNovelLengthTier } from "@/lib/novel-length";
 import { parseNovelContinueOptions } from "@/lib/novel-continue-options";
 import { assessNovelContinuation, streamLongNovelContinue } from "@/lib/novel-long-continue";
 import { loadNovelGenerationMeta, persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { getOwnerKey } from "@/lib/owner";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { prisma } from "@/lib/prisma";
@@ -22,19 +25,23 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(req: Request, ctx: RouteContext) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
+  const uiLocale = resolveRequestLocaleSync(req);
   const { id } = await ctx.params;
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return new Response(JSON.stringify({ error: "未授权", code: codes.UNAUTHORIZED, requestId }), {
+    return new Response(JSON.stringify({ error: apiErrorMessage(uiLocale, "unauthorized"), code: codes.UNAUTHORIZED, requestId }), {
       status: 401,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
   }
 
+  const quotaBlock = await gateGenerationQuota("novelContinue", { refId: id, uiLocale });
+  if (quotaBlock) return quotaBlock;
+
   const rl = generateRateLimits();
   const throttleKey = await getThrottleKey("novel_continue_stream", ownerKey);
   if (!rateLimit(throttleKey, rl.streamMax, rl.windowMs)) {
-    return new Response(JSON.stringify({ error: "续写次数过多，请稍后再试", code: codes.RATE_LIMITED, requestId }), {
+    return new Response(JSON.stringify({ error: apiErrorMessage(uiLocale, "continueRateLimited"), code: codes.RATE_LIMITED, requestId }), {
       status: 429,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
@@ -42,7 +49,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const row = await prisma.novel.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
-    return new Response(JSON.stringify({ error: "未找到", code: codes.BAD_REQUEST, requestId }), {
+    return new Response(JSON.stringify({ error: apiErrorMessage(uiLocale, "notFound"), code: codes.BAD_REQUEST, requestId }), {
       status: 404,
       headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
     });
@@ -54,6 +61,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     lengthTier: row.lengthTier,
     content: row.content,
     meta,
+    uiLocale,
   });
 
   if (!assessment.canContinue) {
@@ -82,11 +90,15 @@ export async function POST(req: Request, ctx: RouteContext) {
       try {
         const chapterHint =
           maxChaptersToWrite == null
-            ? "全部待写章"
-            : `本次最多 ${maxChaptersToWrite} 章`;
+            ? progressNovelMessage(uiLocale, "continueChapterHintAll")
+            : progressNovelMessage(uiLocale, "continueChapterHintMax", { count: maxChaptersToWrite });
         send({
           step: "start",
-          message: `${assessment.reason}，${chapterHint}${continueOpts.polish ? "，含润色" : ""}（请勿关闭页面）…`,
+          message: progressNovelMessage(uiLocale, "continueStart", {
+            reason: assessment.reason,
+            hint: chapterHint,
+            polish: continueOpts.polish ? progressNovelMessage(uiLocale, "continuePolishSuffix") : "",
+          }),
           requestId,
           remainingChapterCount: assessment.remainingChapterCount,
           maxChapters: maxChaptersToWrite,
@@ -110,6 +122,7 @@ export async function POST(req: Request, ctx: RouteContext) {
               lengthTier,
               maxChaptersToWrite,
               polish: continueOpts.polish,
+              uiLocale,
               emit: send,
             });
             newContent = result.content;
@@ -126,20 +139,21 @@ export async function POST(req: Request, ctx: RouteContext) {
             send({
               step: "model_short",
               model,
-              message: "续写未增加正文长度",
+              message: progressNovelMessage(uiLocale, "continueNoDelta"),
               length: newContent.length,
               priorLength: row.content.length,
             });
             continue;
           }
 
-          send({ step: "synopsis_start", message: "正在更新剧情简介…" });
+          send({ step: "synopsis_start", message: progressNovelMessage(uiLocale, "continueSynopsis") });
           const summary = await generateNovelSynopsis({
             model,
             title: row.title,
             prompt: row.prompt,
             content: newContent,
             lengthTier,
+            uiLocale,
           });
 
           const novel = await prisma.novel.update({
@@ -165,7 +179,7 @@ export async function POST(req: Request, ctx: RouteContext) {
             novel,
             model,
             provider: providerLabel,
-            message: "续写完成",
+            message: progressNovelMessage(uiLocale, "continueDone"),
             requestId,
             addedChars: newContent.length - row.content.length,
             maxChars: novelMaxChars(lengthTier),
@@ -177,14 +191,14 @@ export async function POST(req: Request, ctx: RouteContext) {
         if (!saved) {
           send({
             step: "error",
-            message: "续写失败：模型未返回有效增量，请稍后重试",
+            message: progressNovelMessage(uiLocale, "continueFailed"),
             code: codes.LLM_FAILED,
             requestId,
             ok: false,
           });
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : "续写过程异常";
+        const message = e instanceof Error ? e.message : progressNovelMessage(uiLocale, "continueProcessError");
         send({ step: "error", message, ok: false, requestId });
       } finally {
         controller.close();

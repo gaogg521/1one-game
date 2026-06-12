@@ -1,9 +1,9 @@
 import type { ComicPage } from "@/lib/comic-format";
 import type { NovelLengthTier } from "@/lib/novel-length";
-import { PRODUCT } from "@/lib/product-config";
 import {
   buildUrbanPanelImagePrompt,
   isPlaceholderComicPanel,
+  panelLooksHistoricalOrPeriod,
   panelPromptLooksFantasy,
   type ComicStoryContext,
 } from "@/lib/comic-panel-prompt-urban";
@@ -26,9 +26,17 @@ import {
   resolveComicLayoutId,
   type ComicLayoutId,
 } from "@/lib/comic-layout";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import {
+  buildComicMasterQualityBlock,
+  captionFieldInstruction,
+  panelContinuationSuffix,
+  shouldPreferLightComicPipeline,
+} from "@/lib/comic-locale-prompts";
+import { PRODUCT } from "@/lib/product-config";
 
-/** @deprecated 请用 panelsPerPageForLayout(layoutId)；默认四宫格 */
-export const PANELS_PER_PAGE = 4;
+/** @deprecated 请用 panelsPerPageForLayout(layoutId)；默认成人/通用为八宫格 */
+export const PANELS_PER_PAGE = 8;
 export const COMIC_MAX_PAGES = 32;
 
 /** 按小说篇幅默认漫画页数 */
@@ -50,26 +58,8 @@ export function defaultPanelPrompt(
   return `${style}, highly detailed manga panel, dramatic composition with clear focal point, expressive character pose, rich environmental detail, cinematic lighting`;
 }
 
-/** 小说转漫画质量总则（分镜 LLM system 注入） */
-export const COMIC_MASTER_QUALITY_BLOCK = `【改编总则 — 必须遵守】
-1. 严格按原文小说剧情制作连载漫画：逐段对应分镜，禁止私自篡改、脑补无关画面。
-2. 每一格必须还原该段落的动作、神态、场景氛围、人物站位；区分打斗/对话/独处/回忆，情绪贴合原文。
-3. 全程固定所有人物外貌、发型、服饰、身高与标志性特征，整本人设统一。
-4. 规范漫画分镜：合理搭配远景( wide )交代场景、中景( medium )互动、特写( close )表情、必要时过肩( over_shoulder )。
-5. 中文叠字体系（画进网页，不画进图里）：
-   - textType=dialogue：人物台词，caption 只写台词正文，speaker 写说话人名
-   - textType=narration：页面叙事旁白（老式小人书解说）
-   - textType=inner：内心独白，caption 用（……）包裹
-   - textType=scene_note：场景/道具/环境注解
-   - textType=time_place：时间地点标注
-6. prompt 仅英文描述可见画面，禁止 dialogue / speech bubble / 可读文字 / 网红厚涂美颜 / 夸张二次元浓妆特效。
-7. **prompt 质量要求（极重要）**：每一格 prompt 必须是 **80–150 词的完整英文画面描述**，不可偷懒写成"角色在房间里"这类空泛短语。必须包含：
-   - 具体场景环境（室内/室外、天气、光源方向、材质）
-   - 人物外貌+服饰+动作+表情（若有人设锁定则严格按人设描述）
-   - shotType 对应的构图（wide=全景交代空间关系，medium=中景两人互动，close=表情特写）
-   - 画面氛围关键词（lighting, mood, color temperature）
-   - 禁止在 prompt 中写对话内容或文字气泡
-8. **漫画感（重要）**：动作场面可加入 speed lines（速度线）、motion blur、impact frames；紧张场面可用 dramatic shadows、dutch angle；抒情场面用 soft focus、浅景深。prompt 中应体现这些漫画技法关键词。`;
+/** 小说转漫画质量总则（分镜 LLM system 注入，默认简体） */
+export const COMIC_MASTER_QUALITY_BLOCK = buildComicMasterQualityBlock("zh");
 
 /** 文生图统一约束：中文对白由页面 caption 叠字，禁止模型在画面内生成任何可读文字。 */
 export const COMIC_IMAGE_NO_TEXT_SUFFIX =
@@ -105,6 +95,7 @@ export function buildPanelImagePrompt(
     genre === "urban" &&
     opts?.story &&
     typeof opts.sceneIndex === "number" &&
+    !panelLooksHistoricalOrPeriod(panel) &&
     (isPlaceholderComicPanel(panel) ||
       panelPromptLooksFantasy(panel.prompt ?? "") ||
       panelPromptLooksFantasy(panel.caption ?? ""))
@@ -123,8 +114,13 @@ export function buildPanelImagePrompt(
   const shotHint = panel.shotType ? shotFramingHint(panel.shotType as import("@/lib/comic-director-types").ComicShotType) : "";
   const raw = panel.prompt?.trim();
   const caption = panel.caption?.trim() ?? "";
+  const genericStyleOnly =
+    !raw ||
+    /^Japanese |^Manga comic panel, Japanese|^Comic panel, story continues/i.test(raw);
   let base = raw;
-  if (!base || (genre === "urban" && raw && panelPromptLooksFantasy(raw))) {
+  if (caption && !isPlaceholderComicPanel({ caption, prompt: raw }) && genericStyleOnly) {
+    base = `Manga comic panel, ${styleLock}, scene for story beat (dialogue not drawn in image): ${caption.slice(0, 100)}`;
+  } else if (!base || (genre === "urban" && raw && panelPromptLooksFantasy(raw))) {
     base = caption && !panelPromptLooksFantasy(caption)
       ? `Manga comic panel, ${styleLock}, scene for story beat (dialogue not in image): ${caption.slice(0, 80)}`
       : defaultPanelPrompt(genre, opts?.stylePreset);
@@ -142,23 +138,25 @@ export function buildPanelImagePrompt(
   return `${base}. ${COMIC_IMAGE_NO_TEXT_SUFFIX}`;
 }
 
-/** 将模型输出的 pages 规整为固定页数、每页 4 格，避免页数略少或格子不齐导致整段生成失败或配图错位。 */
+/** 将模型输出的 pages 规整为固定页数、固定格数，避免页数略少或格子不齐导致整段生成失败或配图错位。 */
 export function normalizeComicPagesForGeneration(
   rawPages: ComicPage[],
   targetPageCount: number,
   genre: CoverGenre = "general",
   stylePreset?: ComicStylePresetId,
-  layoutId: ComicLayoutId = "grid_4",
+  layoutId: ComicLayoutId = "grid_8",
+  outputLocale: BriefInputLocale = "zh",
 ): ComicPage[] {
   const panelsPerPage = panelsPerPageForLayout(layoutId);
   const fallbackPrompt = defaultPanelPrompt(genre, stylePreset);
+  const contSuffix = panelContinuationSuffix(outputLocale);
   const safe = rawPages.filter((p) => p && typeof p === "object");
   if (targetPageCount < 1 || safe.length < 1) return [];
 
   const out: ComicPage[] = [];
   for (let i = 0; i < targetPageCount; i++) {
     const src = safe[Math.min(i, safe.length - 1)]!;
-    let panels = [...(src.panels ?? [])]
+    const panels = [...(src.panels ?? [])]
       .filter((pan) => pan && typeof pan === "object")
       .slice(0, panelsPerPage)
       .map((pan, j) => {
@@ -191,7 +189,7 @@ export function normalizeComicPagesForGeneration(
       const j = panels.length;
       panels.push({
         scene: i * panelsPerPage + j + 1,
-        caption: panels[j - 1]?.caption ? `${panels[j - 1]!.caption}（续）` : "……",
+        caption: panels[j - 1]?.caption ? `${panels[j - 1]!.caption}${contSuffix}` : "……",
         prompt: panels[j - 1]?.prompt ?? fallbackPrompt,
         textType: "narration",
         shotType: "medium",
@@ -207,10 +205,22 @@ export function normalizeComicPagesForGeneration(
 export function shouldUseLongComicPipeline(
   pageCount: number,
   lengthTier?: NovelLengthTier | null,
+  outputLocale: BriefInputLocale = "zh",
 ): boolean {
+  if (
+    shouldPreferLightComicPipeline(
+      pageCount,
+      lengthTier,
+      outputLocale,
+      PRODUCT.comic.directorPipelineMinPages,
+    )
+  ) {
+    return false;
+  }
   if (lengthTier === "long") return true;
-  // 4 页以上短篇也走导演流水线以保证人物一致性与分镜质量
-  if (pageCount >= 4) return true;
+  if (pageCount >= PRODUCT.comic.directorPipelineMinPages) return true;
+  // 中文/日文 4 页以上短篇也走导演流水线以保证人物一致性与分镜质量（繁中走轻量+繁体 prompt）
+  if (pageCount >= 4 && ["zh", "ja"].includes(outputLocale)) return true;
   return false;
 }
 
@@ -253,9 +263,13 @@ export function buildComicSystemPrompt(
     roster?: ComicCharacterRoster | null;
     plotDigest?: ComicPlotDigest | null;
     layoutId?: ComicLayoutId;
+    outputLocale?: BriefInputLocale;
   },
 ): string {
-  const layoutId = extras?.layoutId ?? "grid_4";
+  const outputLocale = extras?.outputLocale ?? "zh";
+  const qualityBlock = buildComicMasterQualityBlock(outputLocale);
+  const captionRule = captionFieldInstruction(outputLocale);
+  const layoutId = extras?.layoutId ?? "grid_8";
   const layout = getComicLayout(layoutId);
   const panelsPerPage = layout.panelsPerPage;
   const totalPanels = pageCount * panelsPerPage;
@@ -267,18 +281,17 @@ export function buildComicSystemPrompt(
   const digestBlock = extras?.plotDigest
     ? `\n${formatPlotDigestForPrompt(extras.plotDigest)}\n`
     : "";
-  return `你是一位擅长连载漫画分镜的 AI 艺术家。用户会提供**按段落编号**的小说节选，你必须逐段改编，禁止断章取义只抓关键词。
-
-${COMIC_MASTER_QUALITY_BLOCK}
-${digestBlock}${rosterBlock}
-
-${genreGuide}
-
-**全片画风（贯穿每一格 prompt）**：${preset.label} — ${preset.promptEn}
-
-目标：**尽量输出 ${pageCount} 页**，每页 **尽量 ${panelsPerPage} 格**（理想共 ${totalPanels} 格）。${layout.layoutGuideZh} 若篇幅所限，至少 **1 页、每页至少 1 格**。
-
-要求：
+  const intro =
+    outputLocale === "zh" || outputLocale === "zh-Hant"
+      ? "你是一位擅长连载漫画分镜的 AI 艺术家。用户会提供小说节选、剧情精读与关键情节线索，你必须按**关键情节节点**改编，禁止只做线性切段拼接。"
+      : "You are a serialized manga storyboard artist. Adapt by **key story beats**, not linear chunking of paragraphs.";
+  const targetLine =
+    outputLocale === "zh" || outputLocale === "zh-Hant"
+      ? `目标：**尽量输出 ${pageCount} 页**，每页 **尽量 ${panelsPerPage} 格**（理想共 ${totalPanels} 格）。${layout.layoutGuideZh} 若篇幅所限，至少 **1 页、每页至少 1 格**。`
+      : `Target: up to ${pageCount} pages, ${panelsPerPage} panels each (${totalPanels} total). At minimum 1 page with 1 panel.`;
+  const rulesBlock =
+    outputLocale === "zh" || outputLocale === "zh-Hant"
+      ? `要求：
 1. 只输出 JSON，不要 markdown
 2. 根对象 "pages" 长度 **1～${pageCount}**
 3. 每页 "panels" **1～${panelsPerPage}** 格
@@ -287,15 +300,38 @@ ${genreGuide}
    - sourceSegmentIndex：对应提供的 [段落#N] 的 N-1（整数，尽量填写）
    - textType：dialogue | narration | inner | scene_note | time_place
    - speaker：对白时说话人名（其它类型可省略）
-   - caption：中文叠字（≤48 字）
+   - ${captionRule}
    - shotType：wide | medium | close | over_shoulder | extreme_close
    - prompt：英文 **80–150 词**，${preset.promptEn}，详细描述场景/人物/动作/光影/氛围，**必须包含具体环境细节与镜头构图感**。禁止图内文字与气泡。动作场加 speed lines/motion blur，紧张场加 dramatic shadows，抒情场加 soft focus
-5. 约 **1 个段落对应 1～2 格**；优先还原该段动作、对话、情绪，不脑补原文没有的情节
-6. 开篇先用 narration 或 scene_note 交代场景，对话格用 dialogue + speaker
-7. prompt 质量红线：每格 prompt 必须 ≥60 词英文，包含人物外貌、场景环境、动作、光影氛围至少四项；空泛短语（如 "A character in a room"）会被文生图模型退回重写`;
+5. 每一格必须是一个**可单独成立的关键情节瞬间**：优先选择冲突、反转、角色决定、高潮、收束，不要机械按段落平均切分
+6. 同一页内 ${panelsPerPage} 格要形成完整阅读节奏：开场交代、推进、转折、高潮/收束；不能 ${panelsPerPage} 格都在重复同一件小事
+7. 开篇先用 narration 或 scene_note 交代场景，对话格用 dialogue + speaker
+8. prompt 质量红线：每格 prompt 必须 ≥60 词英文，包含人物外貌、场景环境、动作、光影氛围至少四项；空泛短语（如 "A character in a room"）会被文生图模型退回重写`
+      : `Rules:
+1. JSON only, no markdown
+2. Root "pages" length 1–${pageCount}
+3. Each page "panels" 1–${panelsPerPage}
+4. Panel fields: scene (global index), sourceSegmentIndex (segment# minus 1), textType, speaker (if dialogue), ${captionRule}, shotType, prompt (English 80–150 words, ${preset.promptEn}, rich visual detail, no text in image)
+5. One panel = one key story moment (conflict, reversal, decision, climax)
+6. Page rhythm: setup → escalation → turn → payoff
+7. Open with narration/scene_note; dialogue uses dialogue + speaker
+8. Each prompt ≥60 English words with character, environment, action, lighting`;
+
+  return `${intro}
+
+${qualityBlock}
+${digestBlock}${rosterBlock}
+
+${genreGuide}
+
+**全片画风（贯穿每一格 prompt）**：${preset.label} — ${preset.promptEn}
+
+${targetLine}
+
+${rulesBlock}`;
 }
 
-export function buildComicJsonSchema(pageCount: number, layoutId: ComicLayoutId = "grid_4") {
+export function buildComicJsonSchema(pageCount: number, layoutId: ComicLayoutId = "grid_8") {
   const maxPanels = panelsPerPageForLayout(layoutId);
   const panelSchema = {
     type: "object",

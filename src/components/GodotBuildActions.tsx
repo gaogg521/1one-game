@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildGodotExportRequestPayload } from "@/lib/godot-export-request.client";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
@@ -18,6 +19,7 @@ type Props = {
 type RowState = "idle" | "loading" | "ready" | "error";
 
 export function GodotBuildActions({ spec, projectId, referencePayloads, referenceHandles }: Props) {
+  const t = useTranslations("godotExport");
   const [rows, setRows] = useState<Record<Target, { state: RowState; error?: string }>>({
     windows: { state: "idle" },
     project: { state: "idle" },
@@ -48,7 +50,7 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
         if (!res.ok || !data.downloadUrl) {
           setRows((r) => ({
             ...r,
-            [target]: { state: "error", error: data.error ?? "导出失败" },
+            [target]: { state: "error", error: data.error ?? t("exportFailed") },
           }));
           return;
         }
@@ -57,27 +59,27 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
       } catch {
         setRows((r) => ({
           ...r,
-          [target]: { state: "error", error: "网络异常" },
+          [target]: { state: "error", error: t("networkError") },
         }));
       }
     },
-    [spec, projectId, referencePayloads, referenceHandles],
+    [referenceHandles, referencePayloads, projectId, spec, t],
   );
 
   const btn =
     "rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)] disabled:opacity-50";
 
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Godot 离线下载（可选）">
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("ariaLabel")}>
       <button
         type="button"
         data-testid="godot-download-windows"
         className={btn}
         disabled={rows.windows.state === "loading"}
         onClick={() => void run("windows")}
-        title="在本机 Windows 上由服务端打出 exe 压缩包（需已 npm run godot:install）"
+        title={t("windowsTitle")}
       >
-        {rows.windows.state === "loading" ? "正在打包 Windows…" : "下载 Windows 版"}
+        {rows.windows.state === "loading" ? t("windowsLoading") : t("windowsLabel")}
       </button>
       <button
         type="button"
@@ -85,9 +87,9 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
         className={btn}
         disabled={rows.project.state === "loading"}
         onClick={() => void run("project")}
-        title="含 GameSpec 与参考图的 Godot 4 工程，可用编辑器打开继续改"
+        title={t("projectTitle")}
       >
-        {rows.project.state === "loading" ? "正在打包工程…" : "下载 Godot 工程"}
+        {rows.project.state === "loading" ? t("projectLoading") : t("projectLabel")}
       </button>
       <button
         type="button"
@@ -95,14 +97,14 @@ export function GodotBuildActions({ spec, projectId, referencePayloads, referenc
         className={btn}
         disabled={rows.android.state === "loading"}
         onClick={() => void run("android")}
-        title="需本机 Android SDK；未配置时会提示改用工程在编辑器内导出"
+        title={t("androidTitle")}
       >
-        {rows.android.state === "loading" ? "正在导出 Android…" : "Android APK"}
+        {rows.android.state === "loading" ? t("androidLoading") : t("androidLabel")}
       </button>
-      {(["windows", "project", "android"] as const).map((t) =>
-        rows[t].state === "error" ? (
-          <span key={t} className="text-[11px] text-red-400">
-            {rows[t].error}
+      {(["windows", "project", "android"] as const).map((target) =>
+        rows[target].state === "error" ? (
+          <span key={target} className="text-[11px] text-red-400">
+            {rows[target].error}
           </span>
         ) : null,
       )}

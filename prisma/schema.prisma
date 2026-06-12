@@ -7,10 +7,220 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// 注册用户（OAuth / 邮箱）；legacyOwnerKey 桥接匿名 Cookie 作品。
+model User {
+  id              String   @id @default(cuid())
+  legacyOwnerKey  String?  @unique
+  email           String?  @unique
+  phone           String?  @unique
+  displayName     String?
+  avatarUrl       String?
+  /// user | admin | super_admin
+  role            String   @default("user")
+  /// 裂变邀请码（分享链接 ?ref=）
+  referralCode    String   @unique @default(cuid())
+  referredById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  /// 可用生成额度（积分）；订阅月度额度另计
+  quotaBalance  Int      @default(0)
+  referredBy   User?          @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals    User[]         @relation("UserReferrals")
+  oauthAccounts OAuthAccount[]
+  sessions     UserSession[]
+  quotaLedger  QuotaLedger[]
+  referralRewardsGiven ReferralReward[] @relation("ReferrerRewards")
+  referralRewardReceived ReferralReward? @relation("InviteeReward")
+  subscriptions UserSubscription[]
+  paymentEvents PaymentEvent[]
+
+  @@index([role])
+}
+
+/// 额度流水（邀请奖励、购买、生成消耗）
+model QuotaLedger {
+  id           String   @id @default(cuid())
+  userId       String
+  delta        Int
+  balanceAfter Int
+  /// referral_signup | referral_invitee | purchase | generation_* | signup_bonus | admin_grant
+  reason       String
+  refType      String?
+  refId        String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([reason])
+  @@index([createdAt])
+}
+
+/// 邀请裂变奖励（一次性的邀请关系记录）
+model ReferralReward {
+  id          String   @id @default(cuid())
+  referrerId  String
+  inviteeId   String   @unique
+  credits     Int
+  createdAt   DateTime @default(now())
+
+  referrer User @relation("ReferrerRewards", fields: [referrerId], references: [id], onDelete: Cascade)
+  invitee  User @relation("InviteeReward", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+}
+
+/// 套餐定义（free / creator / pro）
+model SubscriptionPlan {
+  id            String   @id
+  name          String
+  monthlyQuota  Int
+  priceCents    Int
+  currency      String   @default("CNY")
+  active        Boolean  @default(true)
+  featuresJson  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions UserSubscription[]
+}
+
+/// 用户订阅周期
+model UserSubscription {
+  id             String   @id @default(cuid())
+  userId         String
+  planId         String
+  /// active | cancelled | expired | pending
+  status         String   @default("pending")
+  periodStart    DateTime
+  periodEnd      DateTime
+  externalSubId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([periodEnd])
+}
+
+/// 支付订单 / Webhook 事件
+model PaymentEvent {
+  id          String    @id @default(cuid())
+  userId      String?
+  /// wechat | alipay | dev
+  provider    String
+  orderId     String    @unique
+  amountCents Int
+  currency    String    @default("CNY")
+  /// pending | paid | failed | refunded
+  status      String    @default("pending")
+  planId      String?
+  payloadJson String?
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([provider])
+}
+
+/// 异步任务（长生成迁移队列；单实例可用内存，多实例配 REDIS_URL）
+model JobQueueItem {
+  id          String    @id @default(cuid())
+  /// novel_generate | comic_generate | cover_gen | ...
+  type        String
+  payloadJson String
+  /// pending | running | done | failed
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  lastError   String?
+  runAfter    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAfter])
+  @@index([type])
+}
+
+/// 第三方登录绑定（微信 / QQ / 飞书 / Line / 抖音等）
+model OAuthAccount {
+  id              String    @id @default(cuid())
+  userId          String
+  /// wechat | qq | feishu | line | douyin | dev
+  provider        String
+  providerUserId  String
+  accessToken     String?
+  refreshToken    String?
+  expiresAt       DateTime?
+  profileJson     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// 登录会话（HttpOnly gcreator_session）
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// 分享 / 裂变归因事件
+model ShareEvent {
+  id              String   @id @default(cuid())
+  shareCode       String
+  workType        String
+  workId          String
+  /// wechat | qq | feishu | line | douyin | copy | link | unknown
+  channel         String   @default("unknown")
+  referrerUserId  String?
+  visitorOwnerKey String?
+  createdAt       DateTime @default(now())
+
+  @@index([shareCode])
+  @@index([workId, workType])
+  @@index([referrerUserId])
+}
+
+/// 后台治理审计
+model AdminAuditLog {
+  id            String   @id @default(cuid())
+  actorUserId   String?
+  actorOwnerKey String?
+  action        String
+  targetType    String?
+  targetId      String?
+  detailJson    String?
+  createdAt     DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+
 /// 访客或未来登录用户的作品容器；ownerKey 由 HttpOnly Cookie 持有，便于后续接入 OAuth 时迁移合并。
 model Project {
   id        String   @id @default(cuid())
   ownerKey  String
+  /// public | hidden | pending_review
+  visibility String  @default("public")
+  featured   Boolean @default(false)
   /// 可选短链 slug，用于 /s/[shareCode] 跳转试玩页
   shareCode String?  @unique
   title     String
@@ -31,11 +241,15 @@ model Project {
   updatedAt DateTime @updatedAt
 
   @@index([ownerKey])
+  @@index([visibility, featured, playCount])
+  @@index([visibility, createdAt])
 }
 
 model Novel {
   id        String   @id @default(cuid())
   ownerKey  String
+  visibility String  @default("public")
+  featured   Boolean @default(false)
   shareCode String?  @unique
   title     String
   prompt    String
@@ -57,11 +271,15 @@ model Novel {
   comics Comic[]
 
   @@index([ownerKey])
+  @@index([visibility, featured, playCount])
+  @@index([visibility, createdAt])
 }
 
 model Comic {
   id        String   @id @default(cuid())
   ownerKey  String
+  visibility String  @default("public")
+  featured   Boolean @default(false)
   novelId   String
   shareCode String?  @unique
   title     String
@@ -79,4 +297,6 @@ model Comic {
 
   @@index([ownerKey])
   @@index([novelId])
+  @@index([visibility, featured, likeCount])
+  @@index([visibility, createdAt])
 }

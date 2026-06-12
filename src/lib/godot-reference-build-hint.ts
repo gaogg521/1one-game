@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/i18n/routing";
+import { godotBuildHintMessage } from "@/lib/i18n/chapter-labels";
 import type { GodotReferenceBuildSummary } from "@/lib/godot-export-refs";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
@@ -16,31 +18,43 @@ export function countQueuedReferenceSources(
 export function formatGodotReferenceBuildHint(
   summary: GodotReferenceBuildSummary | null | undefined,
   queuedCount: number,
-  opts?: { loading?: boolean; cached?: boolean },
+  opts?: { loading?: boolean; cached?: boolean; uiLocale?: AppLocale },
 ): string | null {
+  const locale = opts?.uiLocale ?? "zh-Hans";
+  const msg = (key: string, params?: Record<string, string | number>) =>
+    godotBuildHintMessage(locale, key, params);
+
   if (opts?.loading) {
     if (queuedCount > 0) {
-      return `正在构建 Godot 在线版，将尝试写入 ${queuedCount} 张参考图…`;
+      return msg("loadingWithRefs", { count: queuedCount });
     }
-    return "正在构建 Godot 在线版（约 10～30 秒）…";
+    return msg("loading");
   }
 
   if (!summary) return null;
 
   if (summary.imageCount > 0) {
     const parts: string[] = [];
-    if (summary.hasBackground) parts.push("地图/背景");
-    if (summary.monsterCount > 0) parts.push(`怪物×${summary.monsterCount}`);
-    if (summary.towerSkinCount > 0) parts.push(`炮塔×${summary.towerSkinCount}`);
-    if (summary.hasProtagonist) parts.push("主角/守点");
-    const detail = parts.length ? `（${parts.join("、")}）` : "";
-    const cacheNote = opts?.cached ? " · 命中缓存" : "";
-    return `参考图已写入 Godot 构建：${summary.imageCount} 张${detail}${cacheNote}`;
+    if (summary.hasBackground) parts.push(msg("detailMap"));
+    if (summary.monsterCount > 0) parts.push(msg("detailMonster", { count: summary.monsterCount }));
+    if (summary.towerSkinCount > 0) parts.push(msg("detailTower", { count: summary.towerSkinCount }));
+    if (summary.hasProtagonist) parts.push(msg("detailProtagonist"));
+    const listSep = locale.startsWith("zh") ? "、" : ", ";
+    const detailWrap = locale.startsWith("zh")
+      ? (s: string) => `（${s}）`
+      : (s: string) => ` (${s})`;
+    const detail = parts.length ? detailWrap(parts.join(listSep)) : "";
+    const cacheNote = opts?.cached ? msg("cacheHit") : "";
+    return msg("refsWritten", {
+      count: summary.imageCount,
+      detail,
+      cache: cacheNote,
+    });
   }
 
   if (queuedCount > 0) {
-    return "已排队参考图，但未能写入 Godot 构建（将使用默认造型）。请重新「解析素材」后点 Godot 重试。";
+    return msg("queuedButFailed");
   }
 
-  return "本次 Godot 构建未包含参考贴图（仅使用默认造型）。";
+  return msg("noRefs");
 }

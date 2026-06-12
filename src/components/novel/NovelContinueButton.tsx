@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { NOVEL_CONTINUE_CHAPTER_PRESETS } from "@/lib/novel-continue-options";
 import { novelMaxChars, parseNovelLengthTier } from "@/lib/novel-length";
 import { PRODUCT } from "@/lib/product-config";
@@ -31,6 +32,8 @@ export function NovelContinueButton({
   className,
   style,
 }: Props) {
+  const t = useTranslations("novelContinue");
+  const tc = useTranslations("common");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
   const [maxChapters, setMaxChapters] = useState<number>(
@@ -45,7 +48,7 @@ export function NovelContinueButton({
   async function handleContinue() {
     if (loading) return;
     setLoading(true);
-    setProgress("连接续写服务…");
+    setProgress(t("connectService"));
     onError("");
 
     const body = {
@@ -62,14 +65,14 @@ export function NovelContinueButton({
 
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        onError(data.error || `请求失败（${res.status}）`);
+        onError(data.error || tc("requestFailed", { status: String(res.status) }));
         setLoading(false);
         return;
       }
 
       const ct = res.headers.get("content-type") ?? "";
       if (!ct.includes("text/event-stream") || !res.body) {
-        onError("服务器未返回流式响应");
+        onError(t("streamRequired"));
         setLoading(false);
         return;
       }
@@ -112,7 +115,12 @@ export function NovelContinueButton({
             if (ev.message) setProgress(ev.message);
             if (ev.step === "delta" && typeof ev.text === "string") {
               previewLen += ev.text.length;
-              setProgress(`续写中… 全文约 ${previewLen.toLocaleString()} / ${cap.toLocaleString()} 字`);
+              setProgress(
+                t("continuingProgress", {
+                  current: previewLen.toLocaleString(),
+                  target: cap.toLocaleString(),
+                }),
+              );
             }
             if (
               ev.step === "polish_start" ||
@@ -130,17 +138,17 @@ export function NovelContinueButton({
               done = true;
             }
             if (ev.step === "error") {
-              streamError = ev.message ?? "续写失败";
+              streamError = ev.message ?? t("continueFailed");
             }
           }
         }
       }
 
       if (!done) {
-        onError(streamError || "续写连接中断，请保持页面打开后重试");
+        onError(streamError || t("continueInterrupted"));
       }
     } catch {
-      onError("网络错误");
+      onError(t("networkError"));
     } finally {
       setLoading(false);
       setProgress("");
@@ -150,7 +158,7 @@ export function NovelContinueButton({
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] uppercase tracking-wide opacity-70">本次章数</label>
+        <label className="text-[10px] uppercase tracking-wide opacity-70">{t("chaptersThisRun")}</label>
         <select
           value={maxChapters}
           disabled={loading}
@@ -162,8 +170,13 @@ export function NovelContinueButton({
           {presets.map((n) => (
             <option key={n} value={n}>
               {n === 0
-                ? `全部待写${remainingChapterCount > 0 ? `（约 ${remainingChapterCount} 章）` : ""}`
-                : `${n} 章`}
+                ? t("allRemaining", {
+                    suffix:
+                      remainingChapterCount > 0
+                        ? t("allRemainingSuffix", { count: remainingChapterCount })
+                        : "",
+                  })
+                : t("chapterOption", { count: n })}
             </option>
           ))}
         </select>
@@ -176,7 +189,7 @@ export function NovelContinueButton({
           onChange={(e) => setPolish(e.target.checked)}
           className="rounded"
         />
-        润色
+        {t("polish")}
       </label>
       <button
         type="button"
@@ -185,7 +198,7 @@ export function NovelContinueButton({
         className={className}
         style={style}
       >
-        {loading ? progress || "续写中…" : "续写"}
+        {loading ? progress || t("continuing") : t("continueBtn")}
       </button>
     </div>
   );

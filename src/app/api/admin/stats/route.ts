@@ -1,0 +1,46 @@
+import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/admin";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(req: Request) {
+  const gate = await requireAdmin(req);
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
+  const [
+    users,
+    projects,
+    novels,
+    comics,
+    shares24h,
+    pendingG,
+    pendingN,
+    pendingC,
+    hiddenG,
+    hiddenN,
+    hiddenC,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.project.count(),
+    prisma.novel.count(),
+    prisma.comic.count(),
+    prisma.shareEvent.count({
+      where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    }),
+    prisma.project.count({ where: { visibility: "pending_review" } }),
+    prisma.novel.count({ where: { visibility: "pending_review" } }),
+    prisma.comic.count({ where: { visibility: "pending_review" } }),
+    prisma.project.count({ where: { visibility: "hidden" } }),
+    prisma.novel.count({ where: { visibility: "hidden" } }),
+    prisma.comic.count({ where: { visibility: "hidden" } }),
+  ]);
+  const pendingReview = pendingG + pendingN + pendingC;
+  const hidden = hiddenG + hiddenN + hiddenC;
+
+  return NextResponse.json({
+    users,
+    works: { game: projects, novel: novels, comic: comics },
+    shares24h,
+    moderation: { pendingReview, hidden },
+    viaLegacySuperAdmin: gate.viaLegacy,
+  });
+}

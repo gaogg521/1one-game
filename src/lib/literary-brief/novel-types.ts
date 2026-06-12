@@ -22,7 +22,7 @@ export const NOVEL_CREATIVE_BRIEF_SCHEMA = z.object({
   narrativeHints: z.array(z.string()),
   negatives: z.array(z.string()),
   expandSource: z.enum(["pack", "pack+llm", "llm"]),
-  inputLocale: z.enum(["zh", "en", "ja"]).optional(),
+  inputLocale: z.enum(["zh", "zh-Hant", "en", "ja", "ms", "th"]).optional(),
 });
 
 export type NovelCreativeBrief = z.infer<typeof NOVEL_CREATIVE_BRIEF_SCHEMA>;
@@ -32,6 +32,8 @@ export type ExpandNovelBriefParams = {
   prompt: string;
   title?: string;
   genreId?: string;
+  /** 用户原话语言（勿从 brief seed 反推） */
+  inputLocale?: import("@/lib/creative-brief/detect-input-locale").BriefInputLocale;
   skipLlm?: boolean;
   /** 儿童短篇：读者档位码（2=0-3岁，4=3-6，7=6-8，9，10） */
   childrenTargetAge?: number;

@@ -7,42 +7,52 @@ import { copyProjectCoverFile } from "@/lib/project-cover";
 import { fetchCreativeBriefJson, saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
+import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
+import { duplicateTitle } from "@/lib/cover-file-copy";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(_req: Request, ctx: RouteContext) {
+export async function POST(req: Request, ctx: RouteContext) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const key = await getThrottleKey("dup", ownerKey);
   if (!rateLimit(key, 20, 60_000)) {
-    return NextResponse.json({ error: "请求过于频繁，请稍后再试" }, { status: 429 });
+    return localizedJsonError(req, "rateLimitedRetry", 429);
   }
 
   const { id } = await ctx.params;
   const source = await prisma.project.findUnique({ where: { id } });
   if (!source) {
-    return NextResponse.json({ error: "未找到源作品" }, { status: 404 });
+    return localizedJsonError(req, "sourceNotFound", 404);
   }
 
   try {
     parseGameSpec(JSON.parse(source.specJson));
   } catch {
-    return NextResponse.json({ error: "源作品数据损坏" }, { status: 500 });
+    return localizedJsonError(req, "sourceCorrupt", 500);
   }
 
-  const title =
-    source.title.length > 70 ? `${source.title.slice(0, 68)}…（副本）` : `${source.title}（副本）`;
+  const title = duplicateTitle(source.title, resolveRequestLocaleSync(req), 80);
 
-  const clone = await createProjectRecord({
-    ownerKey,
-    title,
-    prompt: source.prompt,
-    specJson: source.specJson,
-    status: source.status,
-  });
+  let clone;
+  try {
+    clone = await createProjectRecord({
+      ownerKey,
+      title,
+      prompt: source.prompt,
+      specJson: source.specJson,
+      status: source.status,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: apiErrorFromUnknown(req, e, "shareCodeFailed") },
+      { status: 503 },
+    );
+  }
 
   if (source.coverPath) {
     const rel = await copyProjectCoverFile(source.id, clone.id);

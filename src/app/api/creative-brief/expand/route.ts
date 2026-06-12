@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { detectBriefInputLocale, type BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { expandCreativeBrief } from "@/lib/creative-brief/expand-brief";
 import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import type { GameSpec } from "@/lib/game-spec";
@@ -13,23 +14,24 @@ import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { PRODUCT } from "@/lib/product-config";
+import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 
 export async function POST(req: Request) {
   const ownerKey = await getOwnerKey();
   if (!ownerKey) {
-    return NextResponse.json({ error: "未授权" }, { status: 401 });
+    return localizedJsonError(req, "unauthorized", 401);
   }
 
   const throttleKey = await getThrottleKey("brief_expand", ownerKey);
   if (!rateLimit(throttleKey, 30, 60_000)) {
-    return NextResponse.json({ error: "请求过于频繁" }, { status: 429 });
+    return localizedJsonError(req, "rateLimited", 429);
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "无效的 JSON" }, { status: 400 });
+    return localizedJsonError(req, "badJson", 400);
   }
 
   const prompt =
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
       ? String((body as { prompt?: unknown }).prompt ?? "").trim()
       : "";
   if (prompt.length < 1) {
-    return NextResponse.json({ error: "缺少 prompt" }, { status: 400 });
+    return localizedJsonError(req, "missingPrompt", 400);
   }
 
   const mediumRaw =
@@ -66,14 +68,27 @@ export async function POST(req: Request) {
     typeof body === "object" && body !== null && "childrenTargetAge" in body
       ? Number((body as { childrenTargetAge?: unknown }).childrenTargetAge)
       : undefined;
+  const inputLocaleRaw =
+    typeof body === "object" && body !== null && "inputLocale" in body
+      ? String((body as { inputLocale?: unknown }).inputLocale ?? "").trim()
+      : "";
+  const inputLocale: BriefInputLocale | undefined =
+    inputLocaleRaw === "zh" ||
+    inputLocaleRaw === "zh-Hant" ||
+    inputLocaleRaw === "en" ||
+    inputLocaleRaw === "ja" ||
+    inputLocaleRaw === "ms" ||
+    inputLocaleRaw === "th"
+      ? inputLocaleRaw
+      : undefined;
 
   try {
     if (medium === "novel" || medium === "comic") {
       if (medium === "novel" && !PRODUCT.novel.creativeBriefExpand) {
-        return NextResponse.json({ error: "小说构思扩写未启用" }, { status: 503 });
+        return localizedJsonError(req, "expandNovelDisabled", 503);
       }
       if (medium === "comic" && !PRODUCT.comic.creativeBriefExpand) {
-        return NextResponse.json({ error: "漫画构思扩写未启用" }, { status: 503 });
+        return localizedJsonError(req, "expandComicDisabled", 503);
       }
       if (isChildrenBriefExpandRequest(novelGenreId)) {
         const result = await expandChildrenCreativeBrief({
@@ -84,7 +99,7 @@ export async function POST(req: Request) {
         });
         const checked = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
         if (!checked.success) {
-          return NextResponse.json({ error: "儿童构思扩写结果无效" }, { status: 500 });
+          return localizedJsonError(req, "expandChildrenInvalid", 500);
         }
         return NextResponse.json({
           briefKind: "children",
@@ -98,11 +113,12 @@ export async function POST(req: Request) {
         prompt,
         title,
         genreId: novelGenreId,
+        inputLocale: inputLocale ?? detectBriefInputLocale(prompt),
         skipLlm,
       });
       const checked = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
       if (!checked.success) {
-        return NextResponse.json({ error: "扩写结果无效" }, { status: 500 });
+        return localizedJsonError(req, "expandInvalid", 500);
       }
       return NextResponse.json({
         briefKind: "novel",
@@ -113,7 +129,7 @@ export async function POST(req: Request) {
     }
 
     if (!PRODUCT.game.creativeBriefExpand) {
-      return NextResponse.json({ error: "游戏 Brief 扩写未启用" }, { status: 503 });
+      return localizedJsonError(req, "expandGameDisabled", 503);
     }
 
     const templateHint =
@@ -130,7 +146,7 @@ export async function POST(req: Request) {
     });
     const checked = CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
     if (!checked.success) {
-      return NextResponse.json({ error: "扩写结果无效" }, { status: 500 });
+      return localizedJsonError(req, "expandInvalid", 500);
     }
     return NextResponse.json({
       brief: checked.data,
@@ -138,7 +154,6 @@ export async function POST(req: Request) {
       augmentedPrompt: result.augmentedPrompt,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "扩写失败";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: apiErrorFromUnknown(req, e, "expandFailed") }, { status: 500 });
   }
 }

@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState, useTransition } from "react";
+import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
+import { DiscoverIntakeBanner } from "@/components/DiscoverIntakeBanner";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
+import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 
 type DiscoverProject = {
   id: string;
@@ -17,19 +23,11 @@ type DiscoverProject = {
   createdAt: string;
 };
 
-const TEMPLATE_LABELS: Record<string, string> = {
-  avoider: "躲避",
-  collector: "收集",
-  survivor: "生存",
-  platformer: "平台",
-  towerDefense: "塔防",
-  shooter: "射击",
-};
-
 const ALL_TEMPLATES = ["avoider", "collector", "survivor", "platformer", "towerDefense", "shooter"];
 
-function GameCard({ p }: { p: DiscoverProject }) {
-  const label = p.templateId ? (TEMPLATE_LABELS[p.templateId] ?? p.templateId) : null;
+function GameCard({ p, locale }: { p: DiscoverProject; locale: AppLocale }) {
+  const t = useTranslations();
+  const label = p.templateId ? (t.has(`discover.templateLabels.${p.templateId}`) ? t(`discover.templateLabels.${p.templateId}`) : p.templateId) : null;
   const [liked, setLiked] = useState(() => {
     if (typeof localStorage === "undefined") return false;
     return !!localStorage.getItem(`liked:${p.id}`);
@@ -48,7 +46,7 @@ function GameCard({ p }: { p: DiscoverProject }) {
 
   return (
     <Link
-      href={`/play/${p.id}`}
+      href={withLocalePath(`/play/${p.id}`, locale)}
       className="group flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-lg"
     >
       <div className="relative aspect-[920/560] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
@@ -74,7 +72,7 @@ function GameCard({ p }: { p: DiscoverProject }) {
         <p className="line-clamp-2 text-xs text-[var(--gc-muted)]">{p.prompt}</p>
         <div className="mt-auto flex items-center justify-between pt-1">
           <p className="text-[11px] text-[var(--gc-text-faint)]">
-            {p.playCount > 0 ? `${p.playCount} 次试玩` : "等待首位玩家"}
+            {p.playCount > 0 ? t("discover.playedTimes", { count: p.playCount }) : t("discover.firstPlayer")}
           </p>
           <button
             type="button"
@@ -93,15 +91,11 @@ function GameCard({ p }: { p: DiscoverProject }) {
   );
 }
 
-const SORT_OPTIONS = [
-  { key: "playCount", label: "最多试玩", subtitle: "按累计试玩次数排行" },
-  { key: "likeCount", label: "最多点赞", subtitle: "按累计点赞数排行" },
-  { key: "createdAt", label: "最新发布", subtitle: "按发布时间从新到旧" },
-  { key: "hot", label: "综合推荐", subtitle: "试玩与点赞加权综合排行" },
-] as const;
-type SortKey = (typeof SORT_OPTIONS)[number]["key"];
+type SortKey = "playCount" | "likeCount" | "createdAt" | "hot";
 
 export default function DiscoverPage() {
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
   const [, startTransition] = useTransition();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,17 +103,26 @@ export default function DiscoverPage() {
   const [filter, setFilter] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("playCount");
 
+  const SORT_OPTIONS = [
+    { key: "playCount", label: t("discover.sort.playCount"), subtitle: t("discover.sortSubtitle.playCount") },
+    { key: "likeCount", label: t("discover.sort.likeCount"), subtitle: t("discover.sortSubtitle.likeCount") },
+    { key: "createdAt", label: t("discover.sort.createdAt"), subtitle: t("discover.sortSubtitle.createdAt") },
+    { key: "hot", label: t("discover.sort.hot"), subtitle: t("discover.sortSubtitle.hot") },
+  ] as const;
+
   useEffect(() => {
     let stale = false;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 45_000);
-    startTransition(() => setLoading(true));
-    setLoadError(null);
+    startTransition(() => {
+      setLoading(true);
+      setLoadError(null);
+    });
     const params = new URLSearchParams();
     if (filter) params.set("template", filter);
     if (sort !== "playCount") params.set("sort", sort);
     const url = `/api/discover${params.size > 0 ? `?${params.toString()}` : ""}`;
-    fetch(url, { signal: ac.signal })
+    fetch(url, { signal: ac.signal, headers: mergeLocaleHeaders(locale) })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -139,8 +142,8 @@ export default function DiscoverPage() {
         const aborted = e instanceof DOMException && e.name === "AbortError";
         setLoadError(
           aborted
-            ? "加载超时：服务响应过慢，请稍后重试"
-            : "加载失败：请确认 npm run dev 已启动并访问 http://localhost:8888",
+            ? t("common.loadingTimeout")
+            : t("common.loadingFailed"),
         );
       })
       .finally(() => {
@@ -152,26 +155,29 @@ export default function DiscoverPage() {
       ac.abort();
       clearTimeout(timer);
     };
-  }, [filter, sort]);
+  }, [filter, sort, t, locale]);
 
   const sortMeta = SORT_OPTIONS.find((o) => o.key === sort) ?? SORT_OPTIONS[0];
 
   return (
-    <div className="flex min-h-full flex-1 flex-col text-[var(--gc-text)] lg:flex-row">
+    <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
-      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col gap-8 px-4 py-10 lg:px-8 xl:pr-12">
+      <AppMain>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-10 lg:px-8 xl:pr-12">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">发现游戏</h1>
-            <p className="mt-1 text-sm text-[var(--gc-muted)]">社区共创的一句话小游戏，{sortMeta.subtitle}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">{t("discover.title")}</h1>
+            <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("discover.desc", { subtitle: sortMeta.subtitle })}</p>
           </div>
           <Link
-            href="/create"
+            href={withLocalePath("/start", locale)}
             className="gc-theme-cta self-start rounded-full px-5 py-2 text-sm font-semibold sm:self-auto"
           >
-            创作新游戏
+            {t("common.startCreating")}
           </Link>
         </div>
+
+        <DiscoverIntakeBanner />
 
         {/* Template filter chips */}
         <div className="flex flex-wrap gap-2">
@@ -184,20 +190,20 @@ export default function DiscoverPage() {
                 : "border-[color:var(--gc-border)] text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
             }`}
           >
-            全部
+            {t("discover.all")}
           </button>
-          {ALL_TEMPLATES.map((t) => (
+          {ALL_TEMPLATES.map((templateId) => (
             <button
-              key={t}
+              key={templateId}
               type="button"
-              onClick={() => setFilter(filter === t ? null : t)}
+              onClick={() => setFilter(filter === templateId ? null : templateId)}
               className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
-                filter === t
+                filter === templateId
                   ? "border-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_16%,transparent)] text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
                   : "border-[color:var(--gc-border)] text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
               }`}
             >
-              {TEMPLATE_LABELS[t] ?? t}
+              {t.has(`discover.templateLabels.${templateId}`) ? t(`discover.templateLabels.${templateId}`) : templateId}
             </button>
           ))}
         </div>
@@ -228,7 +234,7 @@ export default function DiscoverPage() {
               className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-text)]"
               onClick={() => window.location.reload()}
             >
-              重新加载
+              {t("common.reload")}
             </button>
           </div>
         ) : loading ? (
@@ -239,19 +245,24 @@ export default function DiscoverPage() {
           </div>
         ) : projects.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-20 text-center">
-            <p className="text-[var(--gc-muted)]">暂无游戏{filter ? `（${TEMPLATE_LABELS[filter] ?? filter}类型）` : ""}</p>
-            <Link href="/create" className="text-sm text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline underline-offset-4">
-              成为第一个创作者
+            <p className="text-[var(--gc-muted)]">
+              {t("discover.noGames", {
+                suffix: filter ? `（${t.has(`discover.templateLabels.${filter}`) ? t(`discover.templateLabels.${filter}`) : filter}）` : "",
+              })}
+            </p>
+            <Link href={withLocalePath("/create", locale)} className="text-sm text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline underline-offset-4">
+              {t("discover.beFirstCreator")}
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {projects.map((p) => (
-              <GameCard key={p.id} p={p} />
+              <GameCard key={p.id} p={p} locale={locale} />
             ))}
           </div>
         )}
       </main>
-    </div>
+      </AppMain>
+    </AppPageShell>
   );
 }

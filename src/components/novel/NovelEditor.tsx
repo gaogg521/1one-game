@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { NOVEL_TITLE_MAX_LEN, validateNovelTitleInput } from "@/lib/novel-display";
 
@@ -19,11 +21,13 @@ interface NovelEditorProps {
 }
 
 export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, onCancel }: NovelEditorProps) {
-  const parsed = useMemo(() => parseNovelChapters(initialContent), [initialContent]);
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("novelEditor");
+  const parsed = useMemo(() => parseNovelChapters(initialContent, locale), [initialContent, locale]);
 
   const [title, setTitle] = useState(() => {
-    const t = initialTitle.trim();
-    return t.length > NOVEL_TITLE_MAX_LEN ? t.slice(0, NOVEL_TITLE_MAX_LEN) : t;
+    const tv = initialTitle.trim();
+    return tv.length > NOVEL_TITLE_MAX_LEN ? tv.slice(0, NOVEL_TITLE_MAX_LEN) : tv;
   });
   const [chapters, setChapters] = useState<ChapterEdit[]>(() =>
     parsed.map((ch) => ({ num: ch.num, title: ch.title, body: ch.body })),
@@ -38,16 +42,16 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
   async function handleSave() {
     const tv = validateNovelTitleInput(title);
     if (!tv.ok) {
-      setError(tv.error);
+      setError(t(tv.errorKey, { max: NOVEL_TITLE_MAX_LEN }));
       return;
     }
     if (chapters.length === 0) {
-      setError("至少保留一章内容");
+      setError(t("minChapterError"));
       return;
     }
     for (const ch of chapters) {
       if (!ch.body.trim()) {
-        setError(`第${ch.num}章正文不能为空`);
+        setError(t("emptyBodyError", { num: ch.num }));
         return;
       }
     }
@@ -62,7 +66,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
           title: tv.value,
           chapters: chapters.map((ch, i) => ({
             num: i + 1,
-            title: ch.title.trim() || `第${i + 1}章`,
+            title: ch.title.trim() || t("defaultChapterTitle", { num: i + 1 }),
             body: ch.body,
           })),
         }),
@@ -72,7 +76,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
         error?: string;
       };
       if (!res.ok) {
-        setError(data.error || "保存失败");
+        setError(data.error || t("saveFailed"));
         return;
       }
       onSaved({
@@ -81,7 +85,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
         summary: data.novel?.summary,
       });
     } catch {
-      setError("网络错误");
+      setError(t("networkError"));
     } finally {
       setSaving(false);
     }
@@ -91,7 +95,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
     <div className="mx-auto max-w-3xl px-4 py-8 lg:px-6">
       <div className="mb-6 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5">
         <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-          书名（{title.length}/{NOVEL_TITLE_MAX_LEN} 字）
+          {t("titleLabel", { count: title.length, max: NOVEL_TITLE_MAX_LEN })}
         </label>
         <input
           type="text"
@@ -99,7 +103,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
           maxLength={NOVEL_TITLE_MAX_LEN}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-4 py-2.5 text-lg font-semibold text-[var(--gc-text)] outline-none focus:border-[color:var(--gc-accent)]"
-          placeholder="请输入书名"
+          placeholder={t("titlePlaceholder")}
         />
       </div>
 
@@ -110,13 +114,15 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
             className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5"
           >
             <div className="mb-3 flex items-center gap-3">
-              <span className="text-xs font-medium text-[var(--gc-muted)]">第 {idx + 1} 章</span>
+              <span className="text-xs font-medium text-[var(--gc-muted)]">
+                {t("chapterLabel", { num: idx + 1 })}
+              </span>
               <input
                 type="text"
                 value={ch.title}
                 onChange={(e) => updateChapter(idx, { title: e.target.value })}
                 className="min-w-0 flex-1 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-3 py-1.5 text-sm font-medium text-[var(--gc-text)] outline-none focus:border-[color:var(--gc-accent)]"
-                placeholder="章节标题"
+                placeholder={t("chapterTitlePlaceholder")}
               />
             </div>
             <textarea
@@ -124,7 +130,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
               onChange={(e) => updateChapter(idx, { body: e.target.value })}
               rows={12}
               className="w-full resize-y rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-3 py-2 text-sm leading-relaxed text-[var(--gc-text)] outline-none focus:border-[color:var(--gc-accent)]"
-              placeholder="章节正文…"
+              placeholder={t("chapterBodyPlaceholder")}
             />
           </section>
         ))}
@@ -139,7 +145,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
           disabled={saving}
           className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
         >
-          {saving ? "保存中…" : "保存修改"}
+          {saving ? t("saving") : t("save")}
         </button>
         <button
           type="button"
@@ -147,7 +153,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
           disabled={saving}
           className="rounded-xl border border-[color:var(--gc-border)] px-6 py-2.5 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
         >
-          取消
+          {t("cancel")}
         </button>
       </div>
     </div>

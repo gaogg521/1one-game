@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
@@ -7,6 +8,7 @@ import { readLimitedJson } from "@/lib/api/read-json-body";
 import { generateGameSpecVariantBatch } from "@/lib/generate-spec";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 
@@ -14,12 +16,20 @@ import { getThrottleKey } from "@/lib/request-key";
 export async function POST(req: Request) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
+  const quotaBlock = await gateGenerationQuota("variants");
+  if (quotaBlock) {
+    const body = await quotaBlock.json();
+    return NextResponse.json(body, { status: 402, headers: ridHeaders(requestId) });
+  }
   const rl = generateRateLimits();
   const ownerKey = (await getOwnerKey()) ?? "anon";
   const throttleKey = await getThrottleKey("gen_variants", ownerKey);
   if (!rateLimit(throttleKey, rl.variantsMax, rl.windowMs)) {
     return NextResponse.json(
-      { error: "多套生成次数过多，请稍后再试", code: codes.RATE_LIMITED, requestId },
+      localizedApiErrorPayload(req, "variantsRateLimited", {
+        code: codes.RATE_LIMITED,
+        requestId,
+      }),
       { status: 429, headers: ridHeaders(requestId) },
     );
   }
@@ -35,7 +45,7 @@ export async function POST(req: Request) {
   const parsed = parseGeneratePayload(json.body);
   if (!parsed.ok) {
     return NextResponse.json(
-      { error: parsed.error, code: codes.BAD_REQUEST, requestId },
+      localizedApiErrorPayload(req, parsed.errorKey, { code: codes.BAD_REQUEST, requestId }),
       { status: parsed.status, headers: ridHeaders(requestId) },
     );
   }
@@ -78,7 +88,10 @@ export async function POST(req: Request) {
     return NextResponse.json(payload, { headers: ridHeaders(requestId) });
   } catch {
     return NextResponse.json(
-      { error: "多套生成失败", code: codes.INTERNAL, requestId },
+      localizedApiErrorPayload(req, "variantsFailed", {
+        code: codes.INTERNAL,
+        requestId,
+      }),
       { status: 500, headers: ridHeaders(requestId) },
     );
   }

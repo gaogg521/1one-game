@@ -1,5 +1,8 @@
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmNovelJson } from "@/lib/llm";
+import { buildLongNovelChapterPlanSystemPrompt } from "@/lib/novel-locale-prompts";
 import {
   estimateLongNovelChapterCount,
   LONG_NOVEL_PRODUCT,
@@ -15,9 +18,6 @@ import {
   parseNovelChapterPlan,
 } from "@/lib/novel-long-pipeline-types";
 
-const CHAPTER_PLAN_SYSTEM = `你是长篇网络小说章节规划编辑。根据设定圣经，输出全书分章要点 JSON。
-要求：章节号从 1 递增；title 2–12 字；summary 每章 2–3 句写清本章事件与情绪；phase 分布合理（opening→rising→climax→resolution）。`;
-
 export type ChapterSegmentSlice = {
   segmentIndex: number;
   chapters: ChapterPlanItem[];
@@ -28,14 +28,27 @@ export function buildChapterPlanUserMessage(
   prompt: string,
   bible: NovelBible,
   chapterCount: number,
+  locale: BriefInputLocale = "zh",
+  avgCharsPerChapter?: number,
+  lengthTier: NovelLengthTier = "long",
 ): string {
-  const cfg = novelLengthConfig("long");
+  const cfg = novelLengthConfig(lengthTier);
+  const avg = avgCharsPerChapter ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter;
+  if (locale === "en") {
+    return `User concept: ${prompt.trim()}
+
+${formatNovelBibleForPrompt(bible, locale)}
+
+Plan exactly **${chapterCount} chapters** as chapter-plan JSON in English.
+Target ${cfg.minChars}–${cfg.maxChars} characters; suggested targetChars per chapter ~${avg}.
+No prose body—chapters array only.`;
+  }
   return `用户创意：${prompt.trim()}
 
-${formatNovelBibleForPrompt(bible)}
+${formatNovelBibleForPrompt(bible, locale)}
 
 请规划全书 **恰好 ${chapterCount} 章** 的 chapter plan JSON。
-全书目标 ${cfg.minChars}–${cfg.maxChars} 字；每章 targetChars 建议 ${LONG_NOVEL_PRODUCT.avgCharsPerChapter} 左右。
+全书目标 ${cfg.minChars}–${cfg.maxChars} 字；每章 targetChars 建议 ${avg} 左右。
 不要写正文，只输出 chapters 数组。`;
 }
 
@@ -67,19 +80,33 @@ export function fallbackChapterPlan(bible: NovelBible, chapterCount: number): No
   return { chapters };
 }
 
+export type FetchNovelChapterPlanOpts = {
+  chapterCount?: number;
+  avgCharsPerChapter?: number;
+};
+
 export async function fetchNovelChapterPlan(
   model: string,
   prompt: string,
   bible: NovelBible,
   plan: LongNovelSegmentPlan,
   lengthTier: NovelLengthTier,
+  opts?: FetchNovelChapterPlanOpts,
 ): Promise<NovelChapterPlan> {
-  const chapterCount = estimateLongNovelChapterCount(plan);
+  const chapterCount = opts?.chapterCount ?? estimateLongNovelChapterCount(plan);
+  const locale = resolveNovelOutputLocale(prompt);
   const result = await llmNovelJson(
     {
       model,
-      system: CHAPTER_PLAN_SYSTEM,
-      user: buildChapterPlanUserMessage(prompt, bible, chapterCount),
+      system: buildLongNovelChapterPlanSystemPrompt(locale),
+      user: buildChapterPlanUserMessage(
+        prompt,
+        bible,
+        chapterCount,
+        locale,
+        opts?.avgCharsPerChapter,
+        lengthTier,
+      ),
       jsonSchema: buildNovelChapterPlanJsonSchema(chapterCount),
       temperature: 0.6,
       mode: "json_schema",
@@ -89,7 +116,11 @@ export async function fetchNovelChapterPlan(
   );
   if (result.ok) {
     const parsed = parseNovelChapterPlan(result.raw);
-    if (parsed && parsed.chapters.length >= LONG_NOVEL_PRODUCT.minChapterCount) {
+    const minValid =
+      lengthTier === "long"
+        ? LONG_NOVEL_PRODUCT.minChapterCount
+        : Math.max(3, Math.floor(chapterCount * 0.75));
+    if (parsed && parsed.chapters.length >= minValid) {
       return normalizeChapterPlan(parsed, chapterCount);
     }
   }
@@ -166,7 +197,15 @@ export function splitChapterPlanIntoSegments(
   return slices;
 }
 
-export function formatChapterSliceForPrompt(chapters: ChapterPlanItem[]): string {
+export function formatChapterSliceForPrompt(
+  chapters: ChapterPlanItem[],
+  locale: BriefInputLocale = "zh",
+): string {
+  if (locale === "en") {
+    return chapters
+      .map((c) => `Chapter ${c.num} "${c.title}" (${c.phase}): ${c.summary}`)
+      .join("\n");
+  }
   return chapters
     .map((c) => `第${c.num}章《${c.title}》（${c.phase}）：${c.summary}`)
     .join("\n");
@@ -213,10 +252,11 @@ export async function fetchExtendedChapterPlan(
   recentRecap: string,
   lengthTier: NovelLengthTier,
 ): Promise<ChapterPlanItem[]> {
+  const locale = resolveNovelOutputLocale(prompt);
   const result = await llmNovelJson(
     {
       model,
-      system: CHAPTER_PLAN_SYSTEM,
+      system: buildLongNovelChapterPlanSystemPrompt(locale),
       user: buildExtendChapterPlanUserMessage({
         prompt,
         bible,

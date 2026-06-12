@@ -11,6 +11,8 @@ import {
   type ChildrenTargetAge,
 } from "@/lib/children-age-length";
 import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
+import type { AppLocale } from "@/i18n/routing";
+import { tMessage } from "@/lib/i18n/messages";
 
 export type NovelLengthOptions = {
   childrenTargetAge?: ChildrenTargetAge | number | null;
@@ -92,16 +94,17 @@ export function parseNovelLengthTier(raw: unknown): NovelLengthTier {
 }
 
 /** 创作页提示：预计耗时与保持页面打开说明。 */
-export function novelGenerationEtaHint(tier: NovelLengthTier): string {
-  if (tier === "children") return "儿童短篇约 1–3 分钟";
-  if (tier === "short") return "短篇约 1–3 分钟";
-  if (tier === "long") return "长篇分段续写约 1–3 小时（约 8 万字级），请勿关闭页面";
-  return "中篇约 5–15 分钟";
+export function novelGenerationEtaHint(tier: NovelLengthTier, locale: AppLocale = "zh-Hans"): string {
+  const key = tier === "children" ? "children" : tier === "short" ? "short" : tier === "long" ? "long" : "medium";
+  return tMessage(locale, `novelLength.eta.${key}`);
 }
 
-export function novelStreamInterruptHint(tier: NovelLengthTier): string {
-  const eta = novelGenerationEtaHint(tier);
-  return `生成连接中断（多为网关或代理超时）。${eta}，请保持页面打开后重试；若反复失败请联系管理员检查 LLM 网关超时设置。`;
+export function novelStreamInterruptHint(tier: NovelLengthTier, locale: AppLocale = "zh-Hans"): string {
+  const eta = novelGenerationEtaHint(tier, locale);
+  if (tier === "long") {
+    return tMessage(locale, "novelLength.streamInterruptLong", { eta });
+  }
+  return tMessage(locale, "novelLength.streamInterruptShort", { eta });
 }
 
 export function novelLengthConfig(tier: NovelLengthTier, opts?: NovelLengthOptions) {
@@ -116,10 +119,10 @@ export function novelLengthConfig(tier: NovelLengthTier, opts?: NovelLengthOptio
           row.maxChars,
         )
       : tier === "short"
-      ? "2–4 章，每章 80–600 字"
+      ? "3–4 章，每章 250–700 字，必须写完完整主线并收束结尾"
       : tier === "medium"
-        ? "4–8 章，每章 400–1200 字（全文不得超过上限）"
-        : "10–40 章，每章 800–3000 字（可分多段输出）";
+        ? "5–8 章，每章 500–1500 字（全文不得超过上限，必须完成完整主线与结尾）"
+        : "10–40 章，每章 800–3000 字（可分多段输出，最终必须写完全部规划章节并落到结局）";
   return { ...row, chapterHint };
 }
 

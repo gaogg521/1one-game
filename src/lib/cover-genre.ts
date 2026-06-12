@@ -135,9 +135,17 @@ const URBAN_GENRE_RE =
 export function inferCoverGenre(title: string, summary = "", storyHint = ""): CoverGenre {
   const t = `${title} ${summary} ${storyHint}`;
   const headline = `${title} ${summary}`.trim();
+  const hasTransmigration = /穿越|穿成|回到.*(年|朝|代)|转生|魂穿|时空裂缝/.test(t);
+  const hasHistorical =
+    /崇祯|明末|大清|三国|秦汉|唐宋|历史|王朝|朝堂|皇帝|皇后|宫廷|陛下|殿下|内阁|东厂|锦衣卫/.test(
+      t,
+    );
 
   if (/仙侠|修仙|渡劫|仙界|天道|灵根|飞升|宗门|元婴|金丹|剑仙|功法/.test(t)) return "xianxia";
   if (/武侠|江湖|剑客|武林|门派|大侠|刀光|内力/.test(t)) return "wuxia";
+  if (hasHistorical && hasTransmigration) return "historical";
+  if (hasHistorical) return "historical";
+  if (hasTransmigration) return "transmigration";
 
   /** 标题/摘要含豪门都市信号时优先（正文「未来」等勿判科幻） */
   if (URBAN_GENRE_RE.test(headline)) return "urban";
@@ -145,11 +153,8 @@ export function inferCoverGenre(title: string, summary = "", storyHint = ""): Co
 
   if (/言情|恋爱|甜宠|婚恋|竹马|青梅/.test(t)) return "romance";
   if (/悬疑|推理|侦探|谋杀|密室|刑侦/.test(t)) return "mystery";
-  if (/崇祯|明末|大清|三国|秦汉|唐宋|历史|王朝|朝堂|皇帝|皇后|宫廷(?!.*都市)/.test(t)) return "historical";
   if (/科幻|赛博|星际|机器人|太空|末世|机甲|未来世界|未来都市|未来科技/.test(t)) return "scifi";
-
-  if (/穿越|穿成|回到.*(年|朝|代)|转生/.test(t)) return "transmigration";
-  if (/重生|逆袭/.test(t) && !/古代|宫廷|仙侠|修仙|异界|玄幻|王朝|皇上|陛下/.test(t)) return "urban";
+  if (/重生|逆袭/.test(t) && !/古代|宫廷|仙侠|修仙|异界|玄幻|王朝|皇上|陛下|崇祯|明末/.test(t)) return "urban";
   if (/玄幻|异界|魔兽|斗气|魔法|系统|升级流|灵力|血脉觉醒/.test(t)) return "fantasy";
 
   return "general";

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { withLocalePath } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
 
 interface FeaturedNovel {
   id: string;
@@ -13,6 +16,9 @@ interface FeaturedNovel {
 }
 
 export function FeaturedNovelsSection() {
+  const t = useTranslations("featured");
+  const tc = useTranslations("common");
+  const locale = useLocale() as AppLocale;
   const [novels, setNovels] = useState<FeaturedNovel[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -32,14 +38,14 @@ export function FeaturedNovelsSection() {
     <section className="border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
       <div className="flex items-end justify-between">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">Stories</p>
-          <h2 className="mt-2 text-xl font-medium tracking-tight text-[var(--gc-text)] sm:text-2xl">社区热门小说</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("stories")}</p>
+          <h2 className="mt-2 text-xl font-medium tracking-tight text-[var(--gc-text)] sm:text-2xl">{t("hotNovels")}</h2>
         </div>
         <Link
-          href="/novel/discover"
+          href={withLocalePath("/novel/discover", locale)}
           className="text-xs font-medium text-[var(--gc-muted)] underline-offset-4 hover:text-[var(--gc-text)] hover:underline"
         >
-          查看全部 →
+          {tc("viewAllArrow")}
         </Link>
       </div>
 
@@ -51,7 +57,7 @@ export function FeaturedNovelsSection() {
           : novels.map((n) => (
               <Link
                 key={n.id}
-                href={`/novel/${n.id}`}
+                href={withLocalePath(`/novel/${n.id}`, locale)}
                 className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
               >
                 <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
@@ -71,7 +77,7 @@ export function FeaturedNovelsSection() {
                 <div className="flex flex-col gap-0.5 px-3 py-2">
                   <p className="line-clamp-1 text-xs font-semibold text-[var(--gc-text)]">{n.title}</p>
                   <div className="flex items-center gap-2 text-[10px] text-[var(--gc-text-faint)]">
-                    {n.playCount > 0 && <span>{n.playCount} 读</span>}
+                    {n.playCount > 0 && <span>{t("readsShort", { count: n.playCount })}</span>}
                     {n.likeCount > 0 && <span>♥ {n.likeCount}</span>}
                   </div>
                 </div>

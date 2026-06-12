@@ -26,7 +26,7 @@ export function formatCreativeBriefForComic(brief: CreativeBrief): string {
     "",
     "【分镜与页节奏提示】",
     ...brief.gameplayHints.map((s) => `- ${s}`),
-    "- 每页 4 格；格间动作连贯；对白简短有力。",
+    "- 成人/通用小说默认每页 8 格关键情节分镜；儿童短篇走独立小人书分格。",
     "- 分镜 prompt 须可画、无文字水印；角色外貌在全书保持一致。",
   ];
 

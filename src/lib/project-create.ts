@@ -1,3 +1,5 @@
+import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
+import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { prisma } from "@/lib/prisma";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
@@ -24,6 +26,7 @@ export async function createProjectRecord(args: CreateArgs) {
           specJson: args.specJson,
           creativeBriefJson: args.creativeBriefJson ?? null,
           status,
+          visibility: defaultWorkVisibility(),
           shareCode: newShareCode(),
         },
       });
@@ -32,5 +35,5 @@ export async function createProjectRecord(args: CreateArgs) {
       throw e;
     }
   }
-  throw new Error("无法分配短链，请重试");
+  throw new ApiKeyedError("shareCodeFailed");
 }

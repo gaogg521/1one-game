@@ -1,7 +1,12 @@
 import Link from "next/link";
-import { BRAND_NAME } from "@/lib/brand";
+import { useLocale, useTranslations } from "next-intl";
+import type { AppLocale } from "@/i18n/routing";
+import { withLocalePath } from "@/i18n/navigation";
 
 export function SiteFooter() {
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const appName = t("common.appName");
   return (
     <footer
       className="mt-auto border-t py-10 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))] text-sm text-[var(--gc-muted)] lg:pb-10"
@@ -9,22 +14,22 @@ export function SiteFooter() {
     >
       <div className="flex flex-col gap-6 px-6 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-14 xl:px-20 2xl:px-28">
         <p className="max-w-md leading-relaxed text-[var(--gc-text)]">
-          {BRAND_NAME} — AI 与规格驱动的浏览器小游戏管线；适合创意验证、教学演示与快速迭代。
+          {t("footer.description", { appName })}
         </p>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-6 sm:gap-y-2">
           <Link
-            href="/create"
+            href={withLocalePath("/create", locale)}
             className="-m-1 inline-flex min-h-[44px] items-center rounded-lg px-3 py-2 text-[var(--gc-muted)] hover:text-[var(--gc-accent)] sm:min-h-0 sm:px-0 sm:py-0"
           >
-            创作
+            {t("footer.create")}
           </Link>
           <Link
-            href="/studio"
+            href={withLocalePath("/studio", locale)}
             className="-m-1 inline-flex min-h-[44px] items-center rounded-lg px-3 py-2 text-[var(--gc-muted)] hover:text-[var(--gc-accent)] sm:min-h-0 sm:px-0 sm:py-0"
           >
-            工作室
+            {t("footer.studio")}
           </Link>
-          <span className="hidden opacity-70 sm:inline">Next.js · Phaser · Prisma</span>
+          <span className="hidden opacity-70 sm:inline">{t("footer.techStack")}</span>
         </div>
       </div>
     </footer>
