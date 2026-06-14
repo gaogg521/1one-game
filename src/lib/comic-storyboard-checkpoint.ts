@@ -47,11 +47,11 @@ export function buildPartialComicDoc(opts: {
 
 export async function findDraftStoryboardComic(
   ownerKey: string,
-  novelId: string,
+  novelId: string | null | undefined,
   chapterScope: ComicChapterScope | null | undefined,
 ): Promise<{ id: string; doc: ComicDocument } | null> {
   const rows = await prisma.comic.findMany({
-    where: { ownerKey, novelId, status: COMIC_STATUS_DRAFT_STORYBOARD },
+    where: { ownerKey, novelId: novelId ?? null, status: COMIC_STATUS_DRAFT_STORYBOARD },
     orderBy: { updatedAt: "desc" },
     take: 8,
     select: { id: true, imageUrls: true },
@@ -69,7 +69,7 @@ export async function findDraftStoryboardComic(
 export async function upsertStoryboardDraftComic(opts: {
   comicId?: string;
   ownerKey: string;
-  novelId: string;
+  novelId?: string | null;
   title: string;
   prompt: string;
   doc: ComicDocument;
@@ -85,7 +85,7 @@ export async function upsertStoryboardDraftComic(opts: {
   const comic = await prisma.comic.create({
     data: {
       ownerKey: opts.ownerKey,
-      novelId: opts.novelId,
+      novelId: opts.novelId ?? null,
       title: opts.title,
       prompt: opts.prompt.slice(0, 200),
       imageUrls,

@@ -8,6 +8,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
+import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
+import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
 
 interface NovelWork {
   id: string;
@@ -20,27 +22,51 @@ interface NovelWork {
   createdAt: string;
 }
 
-function NovelCard({ novel, locale }: { novel: NovelWork; locale: AppLocale }) {
+function NovelCard({
+  novel,
+  locale,
+  onCoverUpdate,
+}: {
+  novel: NovelWork;
+  locale: AppLocale;
+  onCoverUpdate?: (id: string, path: string) => void;
+}) {
   const tf = useTranslations("featured");
+  const tl = useTranslations("lists");
   const title = normalizeNovelTitle(novel.title, novel.prompt, undefined, locale);
   const blurb = displayNovelSummary(novel.summary, title, novel.prompt, undefined, locale);
+  const { displayCover, coverFailed, coverPending, retryCover } = useAutoWorkCover({
+    kind: "novel",
+    id: novel.id,
+    coverPath: novel.coverPath,
+    locale,
+    onUpdated: (path) => onCoverUpdate?.(novel.id, path),
+  });
+
   return (
     <Link
       href={withLocalePath(`/novel/${novel.id}`, locale)}
       className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
     >
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
-        {novel.coverPath ? (
+      <div className={novelCoverCardFrameClass}>
+        {displayCover ? (
           <img
-            src={novel.coverPath}
+            src={displayCover}
             alt={title}
             className="h-full w-full object-cover transition group-hover:scale-105"
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-3xl text-[var(--gc-muted)] opacity-30">
-            📖
-          </div>
+          <WorkCoverPlaceholder
+            icon="📖"
+            failedLabel={tl("coverFailed")}
+            generatingLabel={tl("coverGenerating")}
+            retryLabel={tl("coverRetry")}
+            coverFailed={coverFailed}
+            coverPending={coverPending}
+            onRetry={retryCover}
+            testId={`novel-list-cover-retry-${novel.id}`}
+          />
         )}
       </div>
       <div className="flex flex-col gap-0.5 px-3 py-2">
@@ -119,7 +145,7 @@ export default function NovelsPage() {
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-[var(--gc-surface-glass)]" />
+              <div key={i} className={`${novelCoverCardFrameClass} animate-pulse rounded-xl bg-[var(--gc-surface-glass)]`} />
             ))}
           </div>
         ) : novels.length === 0 ? (
@@ -132,7 +158,14 @@ export default function NovelsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {novels.map((n) => (
-              <NovelCard key={n.id} novel={n} locale={locale} />
+              <NovelCard
+                key={n.id}
+                novel={n}
+                locale={locale}
+                onCoverUpdate={(id, coverPath) => {
+                  setNovels((prev) => prev.map((x) => (x.id === id ? { ...x, coverPath } : x)));
+                }}
+              />
             ))}
           </div>
         )}

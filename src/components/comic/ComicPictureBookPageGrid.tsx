@@ -24,64 +24,62 @@ export function ComicPictureBookPageGrid({
   page,
   rendering,
   stylePreset,
+  canRemovePanel,
+  onRemovePanel,
+  removeBusy,
 }: {
   page: ComicPage;
   rendering?: boolean;
   stylePreset?: ComicStylePresetId;
+  canRemovePanel?: boolean;
+  onRemovePanel?: (panelIndex: number) => void;
+  removeBusy?: boolean;
 }) {
   const isPictureBook = stylePreset === "children_picture_book";
   const panels = page.panels.slice(0, PANEL_COUNT);
   while (panels.length < PANEL_COUNT) panels.push(emptyPanel());
+  const removable = Boolean(canRemovePanel && onRemovePanel && page.panels.length > 1);
+
+  const panelProps = (idx: number) => ({
+    pageNum: page.page,
+    idx,
+    rendering,
+    stylePreset,
+    shellClassName: panelShellClass(isPictureBook),
+    canRemove: removable,
+    onRemove: removable ? () => onRemovePanel!(idx) : undefined,
+    removeBusy,
+  });
 
   return (
     <div className="flex flex-col gap-2 sm:gap-3">
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <ComicPanelCard
           panel={panels[0]!}
-          pageNum={page.page}
-          idx={0}
           aspectClass="col-span-1 aspect-square"
-          rendering={rendering}
-          stylePreset={stylePreset}
-          shellClassName={panelShellClass(isPictureBook)}
+          {...panelProps(0)}
         />
         <ComicPanelCard
           panel={panels[1]!}
-          pageNum={page.page}
-          idx={1}
           aspectClass="col-span-2 aspect-[4/3]"
-          rendering={rendering}
-          stylePreset={stylePreset}
-          shellClassName={panelShellClass(isPictureBook)}
+          {...panelProps(1)}
         />
       </div>
       <ComicPanelCard
         panel={panels[2]!}
-        pageNum={page.page}
-        idx={2}
         aspectClass="aspect-[21/9] min-h-[5rem] sm:min-h-[6rem]"
-        rendering={rendering}
-        stylePreset={stylePreset}
-        shellClassName={panelShellClass(isPictureBook)}
+        {...panelProps(2)}
       />
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <ComicPanelCard
           panel={panels[3]!}
-          pageNum={page.page}
-          idx={3}
           aspectClass="aspect-square"
-          rendering={rendering}
-          stylePreset={stylePreset}
-          shellClassName={panelShellClass(isPictureBook)}
+          {...panelProps(3)}
         />
         <ComicPanelCard
           panel={panels[4]!}
-          pageNum={page.page}
-          idx={4}
           aspectClass="aspect-square"
-          rendering={rendering}
-          stylePreset={stylePreset}
-          shellClassName={panelShellClass(isPictureBook)}
+          {...panelProps(4)}
         />
       </div>
     </div>

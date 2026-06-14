@@ -17,7 +17,10 @@ import {
 import { NovelReader } from "@/components/novel/NovelReader";
 import { NovelEditor } from "@/components/novel/NovelEditor";
 import { ComicChapterAdaptationBanner } from "@/components/comic/ComicChapterAdaptationBanner";
+import { LiteraryAdaptationTrustBadge } from "@/components/LiteraryAdaptationTrustBadge";
 import { ComicGeneratePanel } from "@/components/comic/ComicGeneratePanel";
+import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-user";
 import type { ComicChapterAdaptationProgress } from "@/lib/comic-chapter-adaptation";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import { NovelContinueButton } from "@/components/novel/NovelContinueButton";
@@ -31,9 +34,13 @@ import {
   type NovelReaderThemeId,
 } from "@/lib/novel-reader-theme";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
+import { WorkLikeButton } from "@/components/work/WorkLikeButton";
 import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
+import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/novel/NovelReadCoverThumb";
+import { NovelCharacterRosterPanel } from "@/components/literary/NovelCharacterRosterPanel";
+import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
-import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 interface Novel {
   id: string;
@@ -47,12 +54,15 @@ interface Novel {
   comics: { id: string; title: string; status?: string }[];
   shareCode: string | null;
   isOwner?: boolean;
+  playCount?: number;
+  likeCount?: number;
   chapterAdaptation?: ComicChapterAdaptationProgress;
   draftStoryboardComics?: { id: string; title: string }[];
   canContinue?: boolean;
   continuationReason?: string;
   remainingChapterCount?: number;
   status?: string;
+  characterRoster?: ComicCharacterRoster | null;
 }
 
 export default function NovelDetailPage() {
@@ -67,10 +77,9 @@ export default function NovelDetailPage() {
   const [initialChapterScope, setInitialChapterScope] = useState<ComicChapterScope | null>(null);
   const [resumeComicId, setResumeComicId] = useState<string | undefined>();
   const [editing, setEditing] = useState(false);
-  const [coverLoading, setCoverLoading] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
   const [readerTheme, setReaderTheme] = useState<NovelReaderThemeId>("paper");
-  const coverRequested = useRef(false);
+  const coverRef = useRef<NovelReadCoverHandle>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -86,12 +95,25 @@ export default function NovelDetailPage() {
     void fetch(`/api/novel/${encodeURIComponent(id as string)}/play`, {
       method: "POST",
       headers: mergeLocaleHeaders(locale),
+    }).then(() => {
+      setNovel((prev) =>
+        prev ? { ...prev, playCount: (prev.playCount ?? 0) + 1 } : prev,
+      );
     });
   }, [id, locale, t]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const ch = new URLSearchParams(window.location.search).get("comicChapter")?.trim();
+    const params = new URLSearchParams(window.location.search);
+    const ch = params.get("comicChapter")?.trim();
+    if (params.get("adaptComic") === "1") {
+      setComicSetupOpen(true);
+    }
+    const resume = params.get("resumeComic")?.trim();
+    if (resume) {
+      setResumeComicId(resume);
+      setComicSetupOpen(true);
+    }
     if (!ch) return;
     const num = parseInt(ch, 10);
     if (!Number.isFinite(num) || num < 1) return;
@@ -102,19 +124,6 @@ export default function NovelDetailPage() {
       label: t("chapterLabel", { num }),
     });
   }, []);
-
-  useEffect(() => {
-    if (!novel?.id || novel.coverPath || coverRequested.current || editing) return;
-    coverRequested.current = true;
-    setCoverLoading(true);
-    void fetch(`/api/novel/${novel.id}/cover`, { method: "POST", headers: mergeLocaleHeaders(locale) })
-      .then((r) => r.json())
-      .then((data: { coverPath?: string; novel?: { coverPath?: string } }) => {
-        const path = data.coverPath ?? data.novel?.coverPath;
-        if (path) setNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
-      })
-      .finally(() => setCoverLoading(false));
-  }, [novel?.id, novel?.coverPath, editing]);
 
   const displayMeta = useMemo(() => {
     if (!novel) return null;
@@ -127,34 +136,28 @@ export default function NovelDetailPage() {
     return { displayTitle, blurb, chapters, isChildrenReader };
   }, [novel, locale]);
 
-  async function handleRegenerateCover() {
+  const adaptationPreview = useMemo(() => {
+    if (!novel) return null;
+    const storyGenre = inferStoryGenre({
+      title: novel.title,
+      summary: novel.summary ?? "",
+      prompt: novel.prompt,
+      contentSnippet: novel.content.slice(0, 1200),
+    });
+    return resolveLiteraryAdaptationUserInfo({
+      novelTitle: displayMeta?.displayTitle ?? novel.title,
+      chapterScope: initialChapterScope,
+      readMode: "segment",
+      storyGenre,
+      uiLocale: locale,
+    });
+  }, [novel, displayMeta?.displayTitle, initialChapterScope, locale]);
+
+  function handleRegenerateCover() {
     if (!novel || coverRegenerating) return;
-    setCoverRegenerating(true);
     setError("");
-    try {
-      const res = await fetch(`/api/novel/${novel.id}/cover?force=1`, {
-        method: "POST",
-        headers: mergeLocaleHeaders(locale),
-      });
-      const data = (await res.json()) as {
-        coverPath?: string;
-        error?: string;
-        errorKey?: string;
-        errorParams?: Record<string, string | number>;
-      };
-      if (!res.ok) {
-        setError(resolveClientApiError(locale, data, "coverGenFailed"));
-        return;
-      }
-      if (data.coverPath) {
-        setNovel((prev) => (prev ? { ...prev, coverPath: data.coverPath! } : prev));
-        coverRequested.current = true;
-      }
-    } catch {
-      setError(t("coverRequestFailed"));
-    } finally {
-      setCoverRegenerating(false);
-    }
+    setCoverRegenerating(true);
+    coverRef.current?.regenerate();
   }
 
   if (loading) {
@@ -217,6 +220,19 @@ export default function NovelDetailPage() {
               subtitle={blurb ?? undefined}
               actions={
                 <>
+                  <WorkEngagementStats
+                    kind="novel"
+                    playCount={novel.playCount ?? 0}
+                    likeCount={novel.likeCount ?? 0}
+                    hideLikes
+                    size="md"
+                  />
+                  <WorkLikeButton
+                    kind="novel"
+                    id={novel.id}
+                    initialCount={novel.likeCount ?? 0}
+                    variant="banner"
+                  />
                   {novel.isOwner ? (
                     <button
                       type="button"
@@ -257,28 +273,20 @@ export default function NovelDetailPage() {
           }
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3 lg:px-6">
-            {novel.coverPath ? (
-              <img
-                src={novel.coverPath}
-                alt=""
-                className="h-[4.5rem] w-12 shrink-0 rounded-md object-cover shadow-sm"
-                style={!editing ? { boxShadow: `0 0 0 1px ${readPalette.border}` } : undefined}
-              />
-            ) : coverLoading ? (
-              <div
-                className={`flex h-[4.5rem] w-12 shrink-0 items-center justify-center rounded-md text-[10px] ${editing ? "bg-[var(--gc-surface-glass)] text-[var(--gc-muted)]" : ""}`}
-                style={
-                  !editing ?
-                    {
-                      backgroundColor: `color-mix(in srgb, ${readPalette.text} 8%, transparent)`,
-                      color: readPalette.muted,
-                    }
-                  : undefined
-                }
-              >
-                {t("cover")}
-              </div>
-            ) : null}
+            <NovelReadCoverThumb
+              ref={coverRef}
+              novelId={novel.id}
+              coverPath={novel.coverPath}
+              locale={locale}
+              editing={editing}
+              readPalette={readPalette}
+              onCoverUpdate={(path) => {
+                setNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
+                setError("");
+              }}
+              onCoverFailed={() => setError(t("coverFailed"))}
+              onRegenerateSettled={() => setCoverRegenerating(false)}
+            />
 
             <div className="min-w-0 flex-1">
               <h1
@@ -434,6 +442,11 @@ export default function NovelDetailPage() {
 
         {!editing && comicSetupOpen && novel.isOwner ? (
           <div className="mx-auto max-w-2xl px-4 pb-4 lg:px-6">
+            {adaptationPreview ? (
+              <div className="mb-3">
+                <LiteraryAdaptationTrustBadge info={adaptationPreview} compact />
+              </div>
+            ) : null}
             <ComicGeneratePanel
               novelId={novel.id}
               novelContent={novel.content}
@@ -449,6 +462,16 @@ export default function NovelDetailPage() {
                     : msg,
                 )
               }
+            />
+          </div>
+        ) : null}
+
+        {!editing && novel.isOwner && !isChildrenReader ? (
+          <div className="mx-auto max-w-2xl px-4 pb-6 lg:px-6">
+            <NovelCharacterRosterPanel
+              novelId={novel.id}
+              isOwner={Boolean(novel.isOwner)}
+              initialRoster={novel.characterRoster}
             />
           </div>
         ) : null}

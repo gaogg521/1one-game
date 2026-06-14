@@ -14,13 +14,20 @@ export function ComicEightGridPageGrid({
   page,
   rendering,
   stylePreset,
+  canRemovePanel,
+  onRemovePanel,
+  removeBusy,
 }: {
   page: ComicPage;
   rendering?: boolean;
   stylePreset?: ComicStylePresetId;
+  canRemovePanel?: boolean;
+  onRemovePanel?: (panelIndex: number) => void;
+  removeBusy?: boolean;
 }) {
   const panels = page.panels.slice(0, PANEL_COUNT);
   while (panels.length < PANEL_COUNT) panels.push(emptyPanel());
+  const removable = Boolean(canRemovePanel && onRemovePanel && page.panels.length > 1);
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
@@ -33,6 +40,9 @@ export function ComicEightGridPageGrid({
           aspectClass="aspect-[4/5]"
           rendering={rendering}
           stylePreset={stylePreset}
+          canRemove={removable}
+          onRemove={removable ? () => onRemovePanel!(idx) : undefined}
+          removeBusy={removeBusy}
         />
       ))}
     </div>

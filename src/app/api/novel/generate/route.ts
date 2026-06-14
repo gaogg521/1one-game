@@ -60,7 +60,9 @@ import {
 } from "@/lib/novel-creative-brief-db";
 import { buildNovelBriefSeed, getNovelGenreTag, isChildrenGenreTag } from "@/lib/novel-genre-tags";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
-import { extendNovelToEnding } from "@/lib/novel-completion-pass";
+import {
+  generateChildrenNovelRaw,
+} from "@/lib/novel-completeness-repair";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export const maxDuration = 3600;
@@ -153,6 +155,9 @@ export async function POST(req: Request) {
   try {
     let content = "";
     let pipelineMeta: Awaited<ReturnType<typeof generateLongNovelBody>>["pipelineMeta"] | null = null;
+    let pipelineCompleteness:
+      | Awaited<ReturnType<typeof generatePlannedNovelBody>>["completeness"]
+      | undefined;
     let providerUsed = "";
     let modelUsed = "";
 
@@ -214,11 +219,13 @@ export async function POST(req: Request) {
             titleTrim: title?.trim(),
             plan: longPlan,
             lengthTier,
+            lengthOpts,
             uiLocale,
           });
-          if (longResult.content.length >= longPlan.minAcceptChars) {
+          if (longResult.content.length >= longPlan.minAcceptChars && longResult.completeness.ok) {
             content = longResult.content;
             pipelineMeta = longResult.pipelineMeta;
+            pipelineCompleteness = longResult.completeness;
             modelUsed = model;
             providerUsed = getActiveProvider();
             break;
@@ -234,10 +241,31 @@ export async function POST(req: Request) {
             titleTrim: title?.trim(),
             lengthTier,
             lengthOpts,
+            uiLocale,
           });
-          if (planned.content.length >= minChars) {
+          if (planned.content.length >= minChars && planned.completeness.ok) {
             content = planned.content;
             pipelineMeta = planned.pipelineMeta;
+            pipelineCompleteness = planned.completeness;
+            modelUsed = model;
+            providerUsed = getActiveProvider();
+            break;
+          }
+        } catch {
+          continue;
+        }
+      } else if (isChildrenNovelTier(lengthTier)) {
+        try {
+          const raw = await generateChildrenNovelRaw({
+            model,
+            promptTrim: pipelinePrompt,
+            titleTrim: title?.trim(),
+            lengthOpts,
+            uiLocale,
+          });
+          if (raw.length >= minChars) {
+            content = raw;
+            pipelineMeta = null;
             modelUsed = model;
             providerUsed = getActiveProvider();
             break;
@@ -282,6 +310,8 @@ export async function POST(req: Request) {
     let parentReadingTip: string | undefined;
     let childrenSynopsisBody: string | undefined;
     let childrenInterpretation: string | undefined;
+    let completeness: Awaited<ReturnType<typeof assessNovelCompleteness>> | undefined =
+      pipelineCompleteness;
 
     if (isChildrenNovelTier(lengthTier) && lengthOpts?.childrenTargetAge !== undefined) {
       const finalized = finalizeChildrenNovelContent(finalContent, {
@@ -297,32 +327,14 @@ export async function POST(req: Request) {
       childrenInterpretation = finalized.interpretation || undefined;
     }
 
-    let completeness = assessNovelCompleteness(
+    completeness ??= assessNovelCompleteness(
       finalContent,
       lengthTier,
       lengthOpts,
       promptTrim,
-      pipelineMeta?.chapterPlan,
+      isChildrenNovelTier(lengthTier) ? null : pipelineMeta?.chapterPlan,
       uiLocale,
     );
-    if (!completeness.ok && !isChildrenNovelTier(lengthTier)) {
-      finalContent = await extendNovelToEnding({
-        model: modelUsed || cascade[0]!,
-        title: finalTitle,
-        prompt: promptTrim,
-        content: finalContent,
-        lengthTier,
-        lengthOpts,
-      });
-      completeness = assessNovelCompleteness(
-        finalContent,
-        lengthTier,
-        lengthOpts,
-        promptTrim,
-        pipelineMeta?.chapterPlan,
-        uiLocale,
-      );
-    }
     if (!completeness.ok) {
       return NextResponse.json(
         localizedApiErrorPayload(req, "novelIncomplete", {

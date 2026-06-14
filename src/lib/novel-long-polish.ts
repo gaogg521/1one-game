@@ -1,3 +1,5 @@
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { parseNovelChapters, serializeNovelChapters } from "@/lib/novel-chapters";
 import { llmNovelText } from "@/lib/llm";
 import { LONG_NOVEL_PRODUCT } from "@/lib/novel-long-config";
@@ -5,11 +7,10 @@ import type { NovelLengthTier } from "@/lib/novel-length";
 import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 import type { NovelBible } from "@/lib/novel-long-pipeline-types";
 import type { NovelStreamEmitter } from "@/lib/novel-long-generate";
-
-const POLISH_SYSTEM = `你是中文网文润色编辑。对单章正文做轻量润色。
-硬性要求：情节、人物姓名、因果关系不变；不增删关键事件；不改变章节含义。
-只修正语病、重复用词、生硬衔接与明显口语赘余。保持网文节奏，勿改成文艺腔。
-只输出润色后的本章正文（不要输出「=== 第X章」标题行、不要输出说明）。`;
+import {
+  buildLongNovelPolishUserMessage,
+  getLongNovelPolishSystemPrompt,
+} from "@/lib/novel-locale-prompts";
 
 /** 润色一批刚写完的章节段落（保留章节标记结构）。 */
 export async function polishNovelSegmentText(params: {
@@ -17,14 +18,17 @@ export async function polishNovelSegmentText(params: {
   bible: NovelBible;
   model: string;
   lengthTier: NovelLengthTier;
+  prompt?: string;
+  outputLocale?: BriefInputLocale;
   emit?: NovelStreamEmitter;
   segmentIndex?: number;
 }): Promise<string> {
   const { segmentText, bible, model, lengthTier, emit, segmentIndex } = params;
+  const locale = params.outputLocale ?? resolveNovelOutputLocale(params.prompt ?? "");
   const chapters = parseNovelChapters(segmentText.trim());
   if (chapters.length === 0) return segmentText;
 
-  const bibleBrief = formatNovelBibleForPrompt(bible).slice(0, 1200);
+  const bibleBrief = formatNovelBibleForPrompt(bible, locale).slice(0, 1200);
   const polished: Array<{ num: number; title: string; body: string }> = [];
 
   for (const ch of chapters) {
@@ -45,8 +49,14 @@ export async function polishNovelSegmentText(params: {
     const result = await llmNovelText(
       {
         model,
-        system: POLISH_SYSTEM,
-        user: `【设定参考】\n${bibleBrief}\n\n【第${ch.num}章 ${ch.title}】\n${body.slice(0, 12_000)}\n\n请润色以上正文，字数与原文接近。`,
+        system: getLongNovelPolishSystemPrompt(locale),
+        user: buildLongNovelPolishUserMessage({
+          locale,
+          bibleBrief,
+          chapterNum: ch.num,
+          chapterTitle: ch.title,
+          body,
+        }),
         temperature: 0.35,
         maxTokens: Math.min(
           LONG_NOVEL_PRODUCT.polishMaxTokens,
@@ -70,5 +80,5 @@ export async function polishNovelSegmentText(params: {
     });
   }
 
-  return serializeNovelChapters(polished);
+  return serializeNovelChapters(polished, { outputLocale: locale });
 }

@@ -8,7 +8,10 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChildrenAgePicker } from "@/components/novel/ChildrenAgePicker";
 import { ChildrenCreativeBriefPanel } from "@/components/novel/ChildrenCreativeBriefPanel";
+import { NovelCreateCoverPreview } from "@/components/novel/NovelCreateCoverPreview";
 import { NovelCreativeBriefPanel } from "@/components/novel/NovelCreativeBriefPanel";
+import type { NovelReadCoverHandle } from "@/components/novel/NovelReadCoverThumb";
+import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
 import { NovelGenreTagPicker } from "@/components/novel/NovelGenreTagPicker";
 import { NovelLengthTierPicker } from "@/components/novel/NovelLengthTierPicker";
 import {
@@ -72,7 +75,9 @@ import {
 import { PRODUCT } from "@/lib/product-config";
 import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal";
 import { parseQuotaExceeded } from "@/lib/commerce/quota-error";
-import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
+import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-user";
+import { LiteraryAdaptationTrustBadge } from "@/components/LiteraryAdaptationTrustBadge";
 import { GenerationStage, useNovelGenerationStages } from "@/components/generation/GenerationStage";
 import { withLocalePath } from "@/i18n/navigation";
 import { publishVisibilityMessage } from "@/lib/work-status";
@@ -153,12 +158,10 @@ export default function NovelCreatePage() {
     visibility?: string | null;
   } | null>(null);
   const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
-  const [coverBusy, setCoverBusy] = useState(false);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
+  const [coverPending, setCoverPending] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
-  /** 防浏览器缓存旧封面图（重做后 URL 不变时仍刷新） */
-  const [coverImageKey, setCoverImageKey] = useState(0);
-  const coverRequested = useRef(false);
+  const coverRef = useRef<NovelReadCoverHandle>(null);
 
   const genre = genreId ? getNovelGenreTag(genreId) : null;
   const localizedGenre = genre ? getLocalizedNovelGenreTag(genre, locale) : null;
@@ -301,40 +304,6 @@ export default function NovelCreatePage() {
     if (step > 1) setStep((step - 1) as NovelCreateStep);
   }
 
-  const requestCover = useCallback(async (novelId: string, force = false) => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 180_000);
-    let res: Response;
-    try {
-      res = await fetch(`/api/novel/${novelId}/cover${force ? "?force=1" : ""}`, {
-        method: "POST",
-        headers: mergeLocaleHeaders(locale),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        throw new Error(t("coverTimeout"));
-      }
-      throw e;
-    } finally {
-      window.clearTimeout(timer);
-    }
-    const data = (await res.json()) as {
-      coverPath?: string;
-      error?: string;
-      errorKey?: string;
-      errorParams?: Record<string, string | number>;
-      novel?: { coverPath?: string };
-    };
-    if (!res.ok) throw new Error(resolveClientApiError(locale, data, "coverGenFailed"));
-    const path = data.coverPath ?? data.novel?.coverPath ?? null;
-    if (path) {
-      setPublishedNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
-      setCoverImageKey((k) => k + 1);
-    }
-    return path;
-  }, [locale, t]);
-
   useEffect(() => {
     if (step !== 4 || !publishedNovelId) return;
     let cancelled = false;
@@ -355,23 +324,11 @@ export default function NovelCreatePage() {
             content: string;
             coverPath: string | null;
             shareCode: string | null;
+            visibility?: string | null;
           };
         };
         if (cancelled || !data.novel) return;
         setPublishedNovel(data.novel);
-        if (data.novel.coverPath || coverRequested.current) return;
-        coverRequested.current = true;
-        setCoverBusy(true);
-        setError("");
-        try {
-          await requestCover(publishedNovelId);
-        } catch (e) {
-          if (!cancelled) {
-            setError(e instanceof Error ? e.message : t("coverFailed"));
-          }
-        } finally {
-          if (!cancelled) setCoverBusy(false);
-        }
       } catch {
         if (!cancelled) setError(t("loadNovelFailed"));
       }
@@ -381,20 +338,13 @@ export default function NovelCreatePage() {
     return () => {
       cancelled = true;
     };
-  }, [step, publishedNovelId, requestCover, locale, t]);
+  }, [step, publishedNovelId, locale, t]);
 
-  async function handleRegenerateCover() {
-    if (!publishedNovelId || coverRegenerating) return;
+  function handleRegenerateCover() {
+    if (!publishedNovelId || coverRegenerating || coverPending) return;
     setCoverRegenerating(true);
     setError("");
-    try {
-      await requestCover(publishedNovelId, true);
-      coverRequested.current = true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("coverFailed"));
-    } finally {
-      setCoverRegenerating(false);
-    }
+    coverRef.current?.regenerate();
   }
 
   async function handleShareCopy() {
@@ -585,9 +535,10 @@ export default function NovelCreatePage() {
         clearDraft("novel");
         setDraft(null);
         setPublishedNovelId(novelId);
-        coverRequested.current = false;
         setPublishedNovel(null);
         setShareCopied(false);
+        setCoverPending(false);
+        setCoverRegenerating(false);
         setStep(4);
         setProgress("");
       } else {
@@ -655,9 +606,6 @@ export default function NovelCreatePage() {
         <div className="mx-auto max-w-3xl">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-[var(--gc-text)]">{t("pageTitle")}</h1>
-            <p className="mt-1 text-sm text-[var(--gc-muted)]">
-              {t("pageDesc")}
-            </p>
           </div>
 
           <ol className="mb-6 flex flex-wrap gap-2">
@@ -1018,31 +966,19 @@ export default function NovelCreatePage() {
                     <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wider text-[var(--gc-muted)] sm:text-left">
                       {t("coverPreview")}
                     </p>
-                    <div className="relative aspect-[3/4] overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] shadow-lg ring-1 ring-[color:color-mix(in_srgb,var(--gc-accent)_15%,transparent)]">
-                      {publishedNovel?.coverPath ? (
-                        <img
-                          src={`${publishedNovel.coverPath}${publishedNovel.coverPath.includes("?") ? "&" : "?"}v=${coverImageKey}`}
-                          alt={t("novelCoverAlt")}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center text-xs text-[var(--gc-muted)]">
-                          {coverBusy || coverRegenerating ? (
-                            <>
-                              <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-[var(--gc-accent)] border-t-transparent" />
-                              {t("coverDrawing")}
-                            </>
-                          ) : (
-                            t("coverPending")
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {publishedNovel?.coverPath ? (
-                      <p className="mt-2 text-center text-[10px] text-[var(--gc-text-faint)] sm:text-left">
-                        {t("redoCoverHint")}
-                      </p>
-                    ) : null}
+                    <NovelCreateCoverPreview
+                      ref={coverRef}
+                      novelId={publishedNovelId}
+                      coverPath={publishedNovel?.coverPath ?? null}
+                      locale={locale}
+                      onCoverUpdate={(path) => {
+                        setPublishedNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
+                        setError("");
+                      }}
+                      onCoverFailed={setError}
+                      onRegenerateSettled={() => setCoverRegenerating(false)}
+                      onPendingChange={setCoverPending}
+                    />
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -1073,25 +1009,55 @@ export default function NovelCreatePage() {
                 </div>
               </div>
 
+              {publishedNovel ? (
+                <div className="mt-4">
+                  <LiteraryAdaptationTrustBadge
+                    info={resolveLiteraryAdaptationUserInfo({
+                      novelTitle: normalizeNovelTitle(
+                        publishedNovel.title,
+                        publishedNovel.prompt,
+                        undefined,
+                        locale,
+                      ),
+                      storyGenre: inferStoryGenre({
+                        title: publishedNovel.title,
+                        summary: publishedNovel.summary ?? "",
+                        prompt: publishedNovel.prompt,
+                        contentSnippet: publishedNovel.content.slice(0, 1200),
+                      }),
+                      uiLocale: locale,
+                    })}
+                    compact
+                  />
+                </div>
+              ) : null}
+
               {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleRegenerateCover()}
-                  disabled={coverBusy || coverRegenerating || !publishedNovelId}
+                  onClick={() => handleRegenerateCover()}
+                  disabled={coverPending || coverRegenerating || !publishedNovelId}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] disabled:opacity-50"
                 >
-                  {coverRegenerating || coverBusy
+                  {coverRegenerating || coverPending
                     ? t("generatingCover")
                     : publishedNovel?.coverPath
                       ? t("regenerateCover")
                       : t("generateCover")}
                 </button>
+                <Link
+                  href={withLocalePath(`/novel/${publishedNovelId}?adaptComic=1`, locale)}
+                  className="gc-theme-cta rounded-xl px-6 py-2.5 text-sm font-semibold"
+                  data-testid="novel-adapt-comic-cta"
+                >
+                  {t("adaptToComic")}
+                </Link>
                 <button
                   type="button"
                   onClick={() => void handleShareCopy()}
-                  disabled={coverBusy}
+                  disabled={coverPending || coverRegenerating}
                   className="rounded-xl border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text-soft)] disabled:opacity-50"
                 >
                   {shareCopied ? t("copiedLink") : t("copyShareLink")}

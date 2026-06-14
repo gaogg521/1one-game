@@ -19,6 +19,10 @@ import {
 } from "@/lib/comic-style-presets";
 import { formatCharacterRosterForPrompt, type ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { formatPlotDigestForPrompt, type ComicPlotDigest } from "@/lib/comic-preread";
+import {
+  formatAdaptationBlueprintForPrompt,
+  type ComicAdaptationBlueprint,
+} from "@/lib/comic-adaptation-blueprint";
 import { buildFinalPanelImagePrompt, shotFramingHint, type PlannedComicPanel } from "@/lib/comic-shot-plan";
 import {
   getComicLayout,
@@ -72,6 +76,19 @@ export type PanelImagePromptOpts = {
   stylePreset?: ComicStylePresetId;
 };
 
+/** 历史暴力/自害类 caption 转为象征性画面，降低文生图内容策略拒图概率 */
+export function softenPanelCaptionForImageGen(caption: string): string {
+  const raw = caption.trim();
+  if (!raw) return raw;
+  if (/自刎|横剑/.test(raw)) {
+    return "明末战场余烬中，一名军官跪地持剑、决意尽忠的历史戏剧瞬间（无血腥、无伤口特写、无自害动作细节）";
+  }
+  if (/自缢|缢于|缢死/.test(raw)) {
+    return "崇祯十七年煤山古柏下的历史结局象征画面：落魄帝王披发侧影、空荡宫殿与远山（无绳索、无暴力细节）";
+  }
+  return raw;
+}
+
 /** 将分镜格转为文生图 prompt（英文画面描述 + 题材画风锁 + 禁止图内文字）。 */
 export function buildPanelImagePrompt(
   panel: {
@@ -113,7 +130,7 @@ export function buildPanelImagePrompt(
     : getComicPanelStyleLock(genre);
   const shotHint = panel.shotType ? shotFramingHint(panel.shotType as import("@/lib/comic-director-types").ComicShotType) : "";
   const raw = panel.prompt?.trim();
-  const caption = panel.caption?.trim() ?? "";
+  const caption = softenPanelCaptionForImageGen(panel.caption?.trim() ?? "");
   const genericStyleOnly =
     !raw ||
     /^Japanese |^Manga comic panel, Japanese|^Comic panel, story continues/i.test(raw);
@@ -201,12 +218,23 @@ export function normalizeComicPagesForGeneration(
   return out;
 }
 
-/** 长篇或页数较多时使用导演流水线。 */
+/** 长篇或页数较多时使用导演流水线。短篇/儿童/中篇（默认页数）走轻量，避免无必要的导演包+精读阻塞。 */
 export function shouldUseLongComicPipeline(
   pageCount: number,
   lengthTier?: NovelLengthTier | null,
   outputLocale: BriefInputLocale = "zh",
+  opts?: { forceLightStoryboard?: boolean },
 ): boolean {
+  if (opts?.forceLightStoryboard || process.env.COMIC_FORCE_LIGHT_PIPELINE === "1") {
+    return false;
+  }
+  if (lengthTier === "short" || lengthTier === "children") {
+    return false;
+  }
+  if (lengthTier === "medium") {
+    const minPages = PRODUCT.comic.mediumDirectorMinPages ?? 12;
+    return pageCount >= minPages;
+  }
   if (
     shouldPreferLightComicPipeline(
       pageCount,
@@ -219,8 +247,6 @@ export function shouldUseLongComicPipeline(
   }
   if (lengthTier === "long") return true;
   if (pageCount >= PRODUCT.comic.directorPipelineMinPages) return true;
-  // 中文/日文 4 页以上短篇也走导演流水线以保证人物一致性与分镜质量（繁中走轻量+繁体 prompt）
-  if (pageCount >= 4 && ["zh", "ja"].includes(outputLocale)) return true;
   return false;
 }
 
@@ -262,6 +288,7 @@ export function buildComicSystemPrompt(
   extras?: {
     roster?: ComicCharacterRoster | null;
     plotDigest?: ComicPlotDigest | null;
+    adaptationBlueprint?: ComicAdaptationBlueprint | null;
     layoutId?: ComicLayoutId;
     outputLocale?: BriefInputLocale;
   },
@@ -278,9 +305,11 @@ export function buildComicSystemPrompt(
   const rosterBlock = extras?.roster?.characters.length
     ? `\n【锁定人设 — 全片不得变脸】\n${formatCharacterRosterForPrompt(extras.roster)}\n`
     : "";
-  const digestBlock = extras?.plotDigest
-    ? `\n${formatPlotDigestForPrompt(extras.plotDigest)}\n`
-    : "";
+  const digestBlock = extras?.adaptationBlueprint
+    ? `\n${formatAdaptationBlueprintForPrompt(extras.adaptationBlueprint)}\n`
+    : extras?.plotDigest
+      ? `\n${formatPlotDigestForPrompt(extras.plotDigest)}\n`
+      : "";
   const intro =
     outputLocale === "zh" || outputLocale === "zh-Hant"
       ? "你是一位擅长连载漫画分镜的 AI 艺术家。用户会提供小说节选、剧情精读与关键情节线索，你必须按**关键情节节点**改编，禁止只做线性切段拼接。"

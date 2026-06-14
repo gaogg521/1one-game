@@ -3,20 +3,30 @@ import { progressNovelMessage } from "@/lib/i18n/progress-message";
 import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { llmNovelTextStream } from "@/lib/llm";
-import { fitNovelContentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
+import { assessNovelCompleteness, type NovelCompletenessReport } from "@/lib/novel-completeness";
+import { repairPlannedNovelCompleteness } from "@/lib/novel-completeness-repair";
+import { fitNovelContentToMaxChars, mergeNovelChapterContents, normalizeSegmentToChapterPlan, parseNovelChapters } from "@/lib/novel-chapters";
 import { getNovelSystemPrompt } from "@/lib/novel-generate-config";
+import { fillMissingPlannedNovelChapters } from "@/lib/novel-missing-chapters-fill";
 import {
   getLongNovelContinuationSystemPrompt,
   longNovelSegmentPhaseLabel,
+  buildLongNovelSegmentBatchTask,
+  buildLongNovelSegmentUserMessageBody,
+  formatChapterRecapLine,
+  joinChapterNums,
 } from "@/lib/novel-locale-prompts";
-import { novelMaxChars, type NovelLengthTier } from "@/lib/novel-length";
+import { novelMaxChars, type NovelLengthOptions, type NovelLengthTier } from "@/lib/novel-length";
 import { fetchNovelBible, formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 import {
   fetchNovelChapterPlan,
   formatChapterSliceForPrompt,
+  getRemainingChapterPlan,
   splitChapterPlanIntoSegments,
+  computeSegmentCapForChapterPlan,
   type ChapterSegmentSlice,
 } from "@/lib/novel-long-chapter-plan";
+import { allocateChapterTargetChars, planNovelScope } from "@/lib/novel-scope-plan";
 import {
   checkSegmentConsistency,
   formatConsistencyIssues,
@@ -33,6 +43,7 @@ export { planLongNovelSegments, type LongNovelSegmentPlan };
 export type LongNovelGenerateResult = {
   content: string;
   pipelineMeta: NovelGenerationMeta;
+  completeness: NovelCompletenessReport;
 };
 
 export function usesSegmentedLongGeneration(tier: NovelLengthTier): boolean {
@@ -71,54 +82,37 @@ export function buildLongNovelSegmentUserMessage(opts: {
   const chapters = parseNovelChapters(previousContent);
   const recap = chapters
     .slice(-LONG_NOVEL_PRODUCT.contextRecapChapters)
-    .map((c) =>
-      locale === "en"
-        ? `Chapter ${c.num} "${c.title}": ${c.body.replace(/\s+/g, " ").slice(0, 100)}…`
-        : `第${c.num}章《${c.title}》：${c.body.replace(/\s+/g, " ").slice(0, 100)}…`,
-    )
+    .map((c) => formatChapterRecapLine(c, locale))
     .join("\n");
   const tail = previousContent.slice(-LONG_NOVEL_PRODUCT.contextTailChars);
   const chapterBlock = formatChapterSliceForPrompt(chapterSlice.chapters, locale);
-  const nums =
-    locale === "en"
-      ? chapterSlice.chapters.map((c) => c.num).join(", ")
-      : chapterSlice.chapters.map((c) => c.num).join("、");
+  const nums = joinChapterNums(
+    chapterSlice.chapters.map((c) => c.num),
+    locale,
+  );
 
   const hasPrior = previousContent.trim().length > 0;
-  const task =
-    locale === "en"
-      ? !hasPrior && segmentIndex === 0 && !isContinuation
-        ? `Batch 1/${totalSegments} (${chapterSlice.phase}): write **only** chapter(s) ${nums}; open the story and introduce characters. Target ~${targetCharsThisSegment} characters.`
-        : `Batch ${segmentIndex + 1}/${totalSegments} (${chapterSlice.phase}): write **only** chapter(s) ${nums}; ${hasPrior || isContinuation ? "continue smoothly from prior text; " : ""}do not repeat written beats. Target ~${targetCharsThisSegment} characters.`
-      : !hasPrior && segmentIndex === 0 && !isContinuation
-        ? `第 1/${totalSegments} 批（${chapterSlice.phase}）：**只写**第 ${nums} 章，完成开篇与人物登场。本批目标约 ${targetCharsThisSegment} 字。`
-        : `第 ${segmentIndex + 1}/${totalSegments} 批（${chapterSlice.phase}）：**只写**第 ${nums} 章，${hasPrior || isContinuation ? "紧接前文续写，" : ""}不要重复已写情节。本批目标约 ${targetCharsThisSegment} 字。`;
+  const task = buildLongNovelSegmentBatchTask({
+    locale,
+    segmentIndex,
+    totalSegments,
+    phase: chapterSlice.phase,
+    nums,
+    targetChars: targetCharsThisSegment,
+    hasPrior,
+    isContinuation: Boolean(isContinuation),
+  });
 
-  if (locale === "en") {
-    return `[User concept] ${prompt.trim()}
-${title?.trim() ? `[Suggested title] ${title.trim()}` : ""}
-
-[Story bible]
-${bibleText}
-
-[Chapters to write in this batch]
-${chapterBlock}
-
-${recap ? `[Recent recap]\n${recap}\n` : ""}${tail ? `[Prior ending—continue naturally]\n…${tail}\n` : ""}
-[Batch task] ${task}`;
-  }
-
-  return `【用户创意】${prompt.trim()}
-${title?.trim() ? `【建议书名】${title.trim()}` : ""}
-
-【设定圣经】
-${bibleText}
-
-【本批须完成的章节规划】
-${chapterBlock}
-
-${recap ? `【前文摘要（最近章节）】\n${recap}\n` : ""}${tail ? `【上一批末尾原文（请自然衔接）】\n…${tail}\n` : ""}
-【本批任务】${task}`;
+  return buildLongNovelSegmentUserMessageBody({
+    locale,
+    prompt,
+    title,
+    bibleText,
+    chapterBlock,
+    recap,
+    tail,
+    task,
+  });
 }
 
 export type LongNovelResumeInput = {
@@ -139,6 +133,7 @@ export async function streamLongNovelBody(params: {
   titleTrim?: string;
   plan: LongNovelSegmentPlan;
   lengthTier: NovelLengthTier;
+  lengthOpts?: NovelLengthOptions;
   uiLocale?: AppLocale;
   emit: NovelStreamEmitter;
   polish?: boolean;
@@ -182,7 +177,14 @@ export async function streamLongNovelBody(params: {
     });
 
     emit({ step: "chapter_plan_start", message: progressNovelMessage(uiLocale, "chapterPlanStart") });
-    chapterPlan = await fetchNovelChapterPlan(model, promptTrim, bible, plan, lengthTier);
+    const scope = planNovelScope(lengthTier);
+    chapterPlan = await fetchNovelChapterPlan(model, promptTrim, bible, plan, lengthTier, {
+      chapterCount: scope.chapterCount,
+      avgCharsPerChapter: scope.avgCharsPerChapter,
+    });
+    chapterPlan = {
+      chapters: allocateChapterTargetChars(chapterPlan.chapters, scope.targetTotalChars),
+    };
     emit({
       step: "chapter_plan_ready",
       message: progressNovelMessage(uiLocale, "chapterPlanReady", {
@@ -194,8 +196,12 @@ export async function streamLongNovelBody(params: {
 
   const outputLocale = resolveNovelOutputLocale(promptTrim);
   const bibleText = formatNovelBibleForPrompt(bible, outputLocale);
-  const slices = splitChapterPlanIntoSegments(chapterPlan, plan, (index, total) =>
-    longNovelSegmentPhaseLabel(index, total, outputLocale),
+  const segmentCap = computeSegmentCapForChapterPlan(chapterPlan.chapters.length, plan);
+  const slices = splitChapterPlanIntoSegments(
+    chapterPlan,
+    plan,
+    (index, total) => longNovelSegmentPhaseLabel(index, total, outputLocale),
+    { maxSegmentCap: segmentCap },
   );
   const hardMax = novelMaxChars(lengthTier);
   const baseMeta: NovelGenerationMeta = {
@@ -210,7 +216,7 @@ export async function streamLongNovelBody(params: {
     await params.onPipelineReady(baseMeta);
   }
 
-  const { content } = await writeNovelSegmentSlices({
+  let { content } = await writeNovelSegmentSlices({
     model,
     promptTrim: resume?.promptTrim ?? promptTrim,
     titleTrim: resume?.titleTrim ?? titleTrim,
@@ -236,8 +242,56 @@ export async function streamLongNovelBody(params: {
       : undefined,
   });
 
-  const finalContent = fitNovelContentToMaxChars(content, hardMax);
-  return { content: finalContent, pipelineMeta: baseMeta };
+  if (getRemainingChapterPlan(chapterPlan, content).length > 0) {
+    content = await fillMissingPlannedNovelChapters({
+      model,
+      promptTrim: resume?.promptTrim ?? promptTrim,
+      titleTrim: resume?.titleTrim ?? titleTrim,
+      content,
+      lengthTier,
+      lengthOpts: params.lengthOpts,
+      pipelineMeta: baseMeta,
+      uiLocale,
+      emit,
+    });
+  }
+
+  const repaired = await repairPlannedNovelCompleteness({
+    model,
+    promptTrim: resume?.promptTrim ?? promptTrim,
+    titleTrim: resume?.titleTrim ?? titleTrim,
+    content,
+    lengthTier,
+    lengthOpts: params.lengthOpts,
+    pipelineMeta: baseMeta,
+    uiLocale,
+    emit,
+  });
+
+  if (!repaired.completeness.ok) {
+    throw new Error(
+      progressNovelMessage(uiLocale, "completenessFail", { reason: repaired.completeness.reason }),
+    );
+  }
+
+  let finalContent = repaired.content.trim();
+  if (getRemainingChapterPlan(chapterPlan, finalContent).length === 0) {
+    const fitted = fitNovelContentToMaxChars(finalContent, hardMax);
+    if (getRemainingChapterPlan(chapterPlan, fitted).length === 0) {
+      finalContent = fitted;
+    }
+  }
+
+  const completeness = assessNovelCompleteness(
+    finalContent,
+    lengthTier,
+    params.lengthOpts,
+    resume?.promptTrim ?? promptTrim,
+    chapterPlan,
+    uiLocale,
+  );
+
+  return { content: finalContent, pipelineMeta: baseMeta, completeness };
 }
 
 /** 按切片流式写作（首启与续写共用）。 */
@@ -321,26 +375,43 @@ export async function writeNovelSegmentSlices(params: {
       isContinuation || content.length > 0 || i > 0;
     const system = useContinuationSystem
       ? getNovelContinuationSystemPrompt(outputLocale)
-      : getNovelSystemPrompt("long", undefined, promptTrim);
+      : getNovelSystemPrompt(lengthTier, undefined, promptTrim);
 
     let segmentText = "";
-    for await (const delta of llmNovelTextStream(
-      {
-        model,
-        system,
-        user: userMsg,
-        temperature: 0.82,
-        maxTokens: segmentMaxTokens,
-        timeoutMs: segmentTimeout,
-      },
-      lengthTier,
-    )) {
-      segmentText += delta;
-      emit({ step: "delta", text: delta, segment: i + 1 });
+    const contentBeforeSegment = content;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      segmentText = "";
+      for await (const delta of llmNovelTextStream(
+        {
+          model,
+          system,
+          user: userMsg,
+          temperature: attempt === 1 ? 0.82 : 0.75,
+          maxTokens: segmentMaxTokens,
+          timeoutMs: segmentTimeout,
+        },
+        lengthTier,
+      )) {
+        segmentText += delta;
+        emit({ step: "delta", text: delta, segment: i + 1, attempt });
+      }
+
+      segmentText = segmentText.trim();
+      if (!segmentText) continue;
+
+      segmentText = normalizeSegmentToChapterPlan(segmentText, slice.chapters, outputLocale);
+      const trial = mergeNovelChapterContents(content, segmentText, outputLocale);
+      const writtenNums = new Set(parseNovelChapters(trial).map((c) => c.num));
+      if (slice.chapters.every((ch) => writtenNums.has(ch.num))) {
+        content = trial;
+        break;
+      }
+      if (attempt === 3) {
+        content = trial;
+      }
     }
 
-    segmentText = segmentText.trim();
-    if (!segmentText) {
+    if (!segmentText.trim()) {
       throw new Error(progressNovelMessage(uiLocale, "segmentEmpty", { index: i + 1 }));
     }
 
@@ -371,13 +442,15 @@ export async function writeNovelSegmentSlices(params: {
         bible,
         model,
         lengthTier,
+        prompt: promptTrim,
+        outputLocale,
         emit,
         segmentIndex: i + 1,
       });
       emit({ step: "polish_batch_done", index: i + 1, message: progressNovelMessage(uiLocale, "polishBatchDone", { index: i + 1 }) });
+      content = mergeNovelChapterContents(contentBeforeSegment, segmentText, outputLocale);
     }
 
-    content = content ? `${content}\n\n${segmentText}` : segmentText;
     emit({
       step: "segment_done",
       index: i + 1,

@@ -7,20 +7,22 @@ import {
 
 export async function saveComicCreativeBriefJson(comicId: string, briefJson: string): Promise<void> {
   try {
-    await prisma.$executeRaw`
-      UPDATE "Comic" SET "creativeBriefJson" = ${briefJson} WHERE "id" = ${comicId}
-    `;
+    await prisma.comic.update({
+      where: { id: comicId },
+      data: { creativeBriefJson: briefJson },
+    });
   } catch {
-    /* 列未迁移时忽略 */
+    /* ignore */
   }
 }
 
 export async function loadComicCreativeBrief(comicId: string): Promise<NovelCreativeBrief | null> {
   try {
-    const rows = await prisma.$queryRaw<{ creativeBriefJson: string | null }[]>`
-      SELECT creativeBriefJson FROM "Comic" WHERE id = ${comicId}
-    `;
-    const raw = rows[0]?.creativeBriefJson;
+    const row = await prisma.comic.findUnique({
+      where: { id: comicId },
+      select: { creativeBriefJson: true },
+    });
+    const raw = row?.creativeBriefJson;
     if (!raw?.trim()) return null;
     return parseNovelCreativeBrief(JSON.parse(raw));
   } catch {

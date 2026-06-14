@@ -1,6 +1,6 @@
 import type { AppLocale } from "@/i18n/routing";
 import { progressComicMessage } from "@/lib/i18n/progress-message";
-import type { ComicPage } from "@/lib/comic-format";
+import type { ComicPage, ComicReadMode } from "@/lib/comic-format";
 import type { CoverGenre } from "@/lib/cover-genre";
 import {
   buildComicJsonSchema,
@@ -16,6 +16,7 @@ import {
   panelContinuationSuffix,
   resolveComicOutputLocale,
   resolveStoryboardChunkPages,
+  resolveStoryboardChunkPagesForTier,
 } from "@/lib/comic-locale-prompts";
 import { type ComicLayoutId } from "@/lib/comic-layout";
 import { fetchComicDirectorPack } from "@/lib/comic-director";
@@ -29,6 +30,12 @@ import { ComicGenerationRunError, resolveComicRunErrorMessage } from "@/lib/comi
 import type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 import { applyShotPlanToPages } from "@/lib/comic-shot-plan";
 import { fetchComicStoryboardChunk } from "@/lib/comic-storyboard-long";
+import {
+  accumulateDirectorStoryboardStats,
+  formatDirectorStoryboardStatsLine,
+  type DirectorStoryboardChunkStat,
+  type DirectorStoryboardRunStats,
+} from "@/lib/comic-director-chunk-stats";
 import { llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
@@ -45,13 +52,22 @@ import {
   rosterFromDirectorPack,
   rosterFromNovelMeta,
 } from "@/lib/comic-character-roster";
-import { enrichPagesFromSegmentDialogues } from "@/lib/comic-dialogue-extract";
+import { enrichPagesFromNovelSegments } from "@/lib/comic-dialogue-extract";
 import {
   buildComicPrereadPack,
   formatPlotDigestForPrompt,
   type ComicPlotDigest,
 } from "@/lib/comic-preread";
-import type { ComicReadMode } from "@/lib/comic-format";
+import {
+  fetchComicAdaptationBlueprint,
+  formatAdaptationBlueprintForPrompt,
+  scopedChapterNums as blueprintScopedChapterNums,
+  selectBlueprintBeatsForChunk,
+  shouldBuildAdaptationBlueprint,
+  type ComicAdaptationBlueprint,
+} from "@/lib/comic-adaptation-blueprint";
+import type { NovelChapter } from "@/lib/novel-chapters";
+import { parseNovelChapters } from "@/lib/novel-chapters";
 
 export type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 
@@ -67,10 +83,14 @@ export type ComicPagesGenerateResult = {
   layoutId: ComicLayoutId;
   characterRoster?: ComicCharacterRoster;
   plotDigest?: ComicPlotDigest;
+  adaptationBlueprint?: ComicAdaptationBlueprint;
+  directorStoryboardStats?: DirectorStoryboardRunStats;
 };
 
 function buildKeyBeatsForChunk(opts: {
   plotDigest?: ComicPlotDigest | null;
+  adaptationBlueprint?: ComicAdaptationBlueprint | null;
+  scopedChapterNums?: number[];
   allSegments: ReturnType<typeof splitNovelIntoSegments>;
   chunkStart: number;
   chunkEnd: number;
@@ -78,6 +98,19 @@ function buildKeyBeatsForChunk(opts: {
   panelsPerPage: number;
 }): string[] {
   const target = Math.max(1, (opts.chunkEnd - opts.chunkStart + 1) * opts.panelsPerPage);
+
+  if (opts.adaptationBlueprint) {
+    const fromBlueprint = selectBlueprintBeatsForChunk({
+      blueprint: opts.adaptationBlueprint,
+      scopedChapterNums: opts.scopedChapterNums ?? [],
+      chunkStart: opts.chunkStart,
+      chunkEnd: opts.chunkEnd,
+      pageCount: opts.pageCount,
+      panelsPerPage: opts.panelsPerPage,
+    });
+    if (fromBlueprint.length >= Math.min(target, 2)) return fromBlueprint.slice(0, target);
+  }
+
   const digestBeats = opts.plotDigest?.keyBeats?.filter(Boolean) ?? [];
   if (digestBeats.length >= target) return digestBeats.slice(0, target);
 
@@ -100,6 +133,8 @@ function buildLightStoryboardSource(opts: {
   panelsPerPage: number;
   maxChars: number;
   plotDigest?: ComicPlotDigest | null;
+  adaptationBlueprint?: ComicAdaptationBlueprint | null;
+  scopedChapterNums?: number[];
   outputLocale: ReturnType<typeof resolveComicOutputLocale>;
 }): string {
   const labels = lightStoryboardHeaderLabels(opts.outputLocale);
@@ -112,7 +147,11 @@ function buildLightStoryboardSource(opts: {
   if (summary.length >= 2) {
     headerParts.push(`${labels.summary}\n${summary.slice(0, 1200)}`);
   }
-  if (opts.plotDigest) {
+  if (opts.adaptationBlueprint) {
+    headerParts.push(
+      formatAdaptationBlueprintForPrompt(opts.adaptationBlueprint, opts.scopedChapterNums),
+    );
+  } else if (opts.plotDigest) {
     headerParts.push(formatPlotDigestForPrompt(opts.plotDigest));
   }
   const header = headerParts.join("\n\n");
@@ -120,6 +159,8 @@ function buildLightStoryboardSource(opts: {
   const chunkSegs = segmentsForPageChunk(segments, opts.chunkStart, opts.chunkEnd, opts.pageCount);
   const chunkBeats = buildKeyBeatsForChunk({
     plotDigest: opts.plotDigest,
+    adaptationBlueprint: opts.adaptationBlueprint,
+    scopedChapterNums: opts.scopedChapterNums,
     allSegments: segments,
     chunkStart: opts.chunkStart,
     chunkEnd: opts.chunkEnd,
@@ -184,7 +225,13 @@ async function fetchLightStoryboardChunk(params: {
   plotDigest?: ComicPlotDigest | null;
   llmTemperature: number;
   uiLocale: AppLocale;
+  /** 构建本批 storySource（批大小可变时用于二分降级） */
+  buildStorySource?: (chunkStart: number, chunkEnd: number, chunkPages: number) => string;
 }): Promise<{ pages: ComicPage[]; provider: string; model: string }> {
+  const buildSource =
+    params.buildStorySource ??
+    ((_start: number, _end: number, _pages: number) => params.storySource);
+
   const tryOnce = async (pagesInChunk: number, startPage: number) => {
     const chunkPanels = pagesInChunk * params.panelsPerPage;
     const comicSystem = buildComicSystemPrompt(pagesInChunk, params.storyGenre, params.stylePreset, {
@@ -194,6 +241,7 @@ async function fetchLightStoryboardChunk(params: {
       outputLocale: params.outputLocale,
     });
     const comicSchema = buildComicJsonSchema(pagesInChunk, params.layoutId);
+    const storySource = buildSource(startPage, startPage + pagesInChunk - 1, pagesInChunk);
     const result = await llmJson({
       model: params.model,
       system: comicSystem,
@@ -206,14 +254,14 @@ async function fetchLightStoryboardChunk(params: {
         chunkPanels,
         pageCount: params.pageCount,
         novelTitle: params.novelTitle,
-        storySource: params.storySource,
+        storySource,
       }),
       jsonSchema: comicSchema,
       temperature: params.llmTemperature,
       mode: "json_schema",
       timeoutMs: Math.min(
         PRODUCT.comic.storyboardTimeoutMs,
-        Math.max(150_000, 40_000 + pagesInChunk * 35_000),
+        Math.max(120_000, 35_000 + pagesInChunk * params.panelsPerPage * 4_500),
       ),
     });
     if (result.ok && result.raw && typeof result.raw === "object" && "pages" in result.raw) {
@@ -236,26 +284,28 @@ async function fetchLightStoryboardChunk(params: {
     return null;
   };
 
-  const batch = await tryOnce(params.chunkPages, params.chunkStart);
-  if (batch) return batch;
+  const fetchRange = async (
+    chunkStart: number,
+    chunkPages: number,
+  ): Promise<{ pages: ComicPage[]; provider: string; model: string }> => {
+    const batch = await tryOnce(chunkPages, chunkStart);
+    if (batch) return batch;
 
-  if (params.chunkPages <= 1) {
-    throw new ComicGenerationRunError("storyboardJsonInvalid");
-  }
+    if (chunkPages <= 1) {
+      throw new ComicGenerationRunError("storyboardPageJsonFailed", { page: chunkStart });
+    }
 
-  let providerUsed = "";
-  let modelUsed = params.model;
-  const merged: ComicPage[] = [];
-  for (let i = 0; i < params.chunkPages; i++) {
-    const pageNum = params.chunkStart + i;
-    const single = await tryOnce(1, pageNum);
-    if (!single) throw new ComicGenerationRunError("storyboardPageJsonFailed", { page: pageNum });
-    single.pages[0] = { ...single.pages[0]!, page: pageNum };
-    merged.push(single.pages[0]!);
-    providerUsed = single.provider;
-    modelUsed = single.model;
-  }
-  return { pages: merged, provider: providerUsed, model: modelUsed };
+    const half = Math.ceil(chunkPages / 2);
+    const left = await fetchRange(chunkStart, half);
+    const right = await fetchRange(chunkStart + half, chunkPages - half);
+    return {
+      pages: [...left.pages, ...right.pages],
+      provider: right.provider || left.provider,
+      model: right.model || left.model,
+    };
+  };
+
+  return fetchRange(params.chunkStart, params.chunkPages);
 }
 
 async function generateComicPagesLight(params: {
@@ -270,6 +320,9 @@ async function generateComicPagesLight(params: {
   layoutId: ComicLayoutId;
   plotDigest?: ComicPlotDigest | null;
   characterRoster?: ComicCharacterRoster | null;
+  adaptationBlueprint?: ComicAdaptationBlueprint | null;
+  scopedChapterNums?: number[];
+  lengthTier: NovelLengthTier;
   outputLocale: ReturnType<typeof resolveComicOutputLocale>;
   uiLocale: AppLocale;
   emit?: ComicStreamEmitter;
@@ -289,6 +342,8 @@ async function generateComicPagesLight(params: {
     layoutId,
     plotDigest,
     characterRoster,
+    adaptationBlueprint,
+    scopedChapterNums,
     outputLocale,
     uiLocale,
     emit,
@@ -296,7 +351,11 @@ async function generateComicPagesLight(params: {
   const panelsPerPage = panelsPerPageForLayout(layoutId);
   const allSegments = splitNovelIntoSegments(novelContent, 24, outputLocale);
   const send = emit ?? (() => {});
-  const CHUNK_SIZE = resolveStoryboardChunkPages(outputLocale, PRODUCT.comic.storyboardChunkPages);
+  const CHUNK_SIZE = resolveStoryboardChunkPagesForTier(
+    params.lengthTier,
+    outputLocale,
+    PRODUCT.comic.storyboardChunkPages,
+  );
   const pages: ComicPage[] = params.existingPages?.length ? [...params.existingPages] : [];
   let providerUsed = "";
   let modelUsed = model;
@@ -339,26 +398,6 @@ async function generateComicPagesLight(params: {
       }),
     });
 
-    const comicSystem = buildComicSystemPrompt(chunkPages, storyGenre, stylePreset, {
-      roster: characterRoster,
-      plotDigest,
-      layoutId,
-      outputLocale,
-    });
-    const comicSchema = buildComicJsonSchema(chunkPages, layoutId);
-    const storySource = buildLightStoryboardSource({
-      novelContent,
-      novelPrompt,
-      novelSummary,
-      chunkStart,
-      chunkEnd,
-      pageCount,
-      panelsPerPage,
-      maxChars: PRODUCT.comic.lightPathContentMaxChars,
-      plotDigest,
-      outputLocale,
-    });
-
     let chunkResult: ComicPage[] = [];
     const llmTemperature = ["zh", "zh-Hant", "ja"].includes(outputLocale) ? 0.7 : 0.55;
     const fetched = await fetchLightStoryboardChunk({
@@ -369,7 +408,7 @@ async function generateComicPagesLight(params: {
       panelsPerPage,
       pageCount,
       novelTitle,
-      storySource,
+      storySource: "",
       storyGenre,
       stylePreset,
       layoutId,
@@ -378,6 +417,21 @@ async function generateComicPagesLight(params: {
       plotDigest,
       llmTemperature,
       uiLocale,
+      buildStorySource: (start, end, pagesInChunk) =>
+        buildLightStoryboardSource({
+          novelContent,
+          novelPrompt,
+          novelSummary,
+          chunkStart: start,
+          chunkEnd: end,
+          pageCount,
+          panelsPerPage,
+          maxChars: PRODUCT.comic.lightPathContentMaxChars,
+          plotDigest,
+          adaptationBlueprint,
+          scopedChapterNums,
+          outputLocale,
+        }),
     });
     chunkResult = fetched.pages;
     providerUsed = fetched.provider;
@@ -411,7 +465,7 @@ async function generateComicPagesLight(params: {
 
   let finalPages = pages.slice(0, pageCount);
   if (allSegments.length > 0) {
-    finalPages = enrichPagesFromSegmentDialogues(finalPages, allSegments);
+    finalPages = enrichPagesFromNovelSegments(finalPages, allSegments);
   }
 
   return { pages: finalPages, provider: providerUsed, model: modelUsed, storyboardSource: "llm" as const };
@@ -435,7 +489,13 @@ async function generateComicPagesLong(params: {
   existingDirector?: ComicDirectorPack | null;
   startChunkIndex?: number;
   onChunkCheckpoint?: (ev: ComicChunkCheckpoint) => void | Promise<void>;
-}): Promise<{ pages: ComicPage[]; director: ComicDirectorPack; provider: string; model: string }> {
+}): Promise<{
+  pages: ComicPage[];
+  director: ComicDirectorPack;
+  provider: string;
+  model: string;
+  directorStoryboardStats: DirectorStoryboardRunStats;
+}> {
   const { model, emit, stylePreset } = params;
   const send = emit ?? (() => {});
   const uiLocale = params.uiLocale;
@@ -480,6 +540,7 @@ async function generateComicPagesLong(params: {
   const CHUNK_SIZE = resolveStoryboardChunkPages(params.outputLocale, PRODUCT.comic.storyboardChunkPages);
   let pages: ComicPage[] = params.existingPages?.length ? [...params.existingPages] : [];
   const chunkCount = Math.ceil(params.pageCount / CHUNK_SIZE);
+  const chunkStats: DirectorStoryboardChunkStat[] = [];
   const startChunk = Math.min(
     Math.max(0, params.startChunkIndex ?? 0),
     Math.max(0, chunkCount - 1),
@@ -516,7 +577,7 @@ async function generateComicPagesLong(params: {
       }),
     });
 
-    const chunkResult = await fetchComicStoryboardChunk({
+    const { pages: chunkResult, stat } = await fetchComicStoryboardChunk({
       model,
       director,
       chunkStart,
@@ -527,6 +588,7 @@ async function generateComicPagesLong(params: {
       layoutId: params.layoutId,
       outputLocale: params.outputLocale,
     });
+    chunkStats.push(stat);
 
     for (let i = 0; i < chunkResult.length; i++) {
       chunkResult[i] = { ...chunkResult[i]!, page: chunkStart + i };
@@ -538,6 +600,7 @@ async function generateComicPagesLong(params: {
       index: chunkIdx + 1,
       total: chunkCount,
       pagesSoFar: pages.length,
+      chunkStrategy: stat.strategy,
       message: progressComicMessage(uiLocale, "chunkDone", { index: chunkIdx + 1 }),
     });
     await params.onChunkCheckpoint?.({
@@ -547,16 +610,24 @@ async function generateComicPagesLong(params: {
     });
   }
 
+  const directorStoryboardStats = accumulateDirectorStoryboardStats(chunkStats);
+  const statsLocale = params.outputLocale === "en" ? "en" : "zh";
+  send({
+    step: "director_storyboard_stats",
+    ...directorStoryboardStats,
+    message: formatDirectorStoryboardStatsLine(directorStoryboardStats, statsLocale),
+  });
+
   send({ step: "shot_plan_start", message: progressComicMessage(uiLocale, "shotPlanStart") });
   pages = applyShotPlanToPages(pages, director, params.storyGenre);
   send({ step: "shot_plan_done", message: progressComicMessage(uiLocale, "shotPlanDone") });
 
   const segments = splitNovelIntoSegments(params.novelContent, 24, params.outputLocale);
   if (segments.length > 0) {
-    pages = enrichPagesFromSegmentDialogues(pages, segments);
+    pages = enrichPagesFromNovelSegments(pages, segments);
   }
 
-  return { pages, director, provider: "", model };
+  return { pages, director, provider: "", model, directorStoryboardStats };
 }
 
 async function resolveComicRosterAndDigest(opts: {
@@ -564,24 +635,36 @@ async function resolveComicRosterAndDigest(opts: {
   readMode: ComicReadMode;
   novelTitle: string;
   novelSummary: string;
-  novelContent: string;
+  /** 全书正文（改编前勿切片），用于精读与分章关键情节 */
+  fullNovelContent: string;
+  scopedChapters: NovelChapter[];
   novelMeta: NovelGenerationMeta | null;
+  lengthTier: NovelLengthTier;
   userRoster?: ComicCharacterRoster | null;
   uiLocale: AppLocale;
   emit?: ComicStreamEmitter;
-}): Promise<{ roster: ComicCharacterRoster | null; plotDigest: ComicPlotDigest | null }> {
+}): Promise<{
+  roster: ComicCharacterRoster | null;
+  plotDigest: ComicPlotDigest | null;
+  adaptationBlueprint: ComicAdaptationBlueprint | null;
+}> {
   const send = opts.emit ?? (() => {});
   const uiLocale = opts.uiLocale;
   let plotDigest: ComicPlotDigest | null = null;
+  let adaptationBlueprint: ComicAdaptationBlueprint | null = null;
   let roster = opts.userRoster?.characters.length ? opts.userRoster : null;
 
-  if (opts.readMode === "full") {
+  const allChapters = parseNovelChapters(opts.fullNovelContent, uiLocale);
+  const shouldAdapt =
+    shouldBuildAdaptationBlueprint(opts.fullNovelContent.length, allChapters.length, opts.lengthTier);
+
+  if (shouldAdapt) {
     send({ step: "preread_start", message: progressComicMessage(uiLocale, "prereadStart") });
     const pack = await buildComicPrereadPack({
       model: opts.model,
       novelTitle: opts.novelTitle,
       novelSummary: opts.novelSummary,
-      novelContent: opts.novelContent,
+      novelContent: opts.fullNovelContent,
       novelMeta: opts.novelMeta,
       userRoster: roster,
     });
@@ -601,12 +684,36 @@ async function resolveComicRosterAndDigest(opts: {
       model: opts.model,
       novelTitle: opts.novelTitle,
       novelSummary: opts.novelSummary,
-      contentExcerpt: opts.novelContent.slice(0, 14_000),
+      contentExcerpt: opts.fullNovelContent.slice(0, 14_000),
     });
-    if (roster) send({ step: "roster_done", message: progressComicMessage(uiLocale, "rosterDone", { count: roster.characters.length }) });
+    if (roster) {
+      send({
+        step: "roster_done",
+        message: progressComicMessage(uiLocale, "rosterDone", { count: roster.characters.length }),
+      });
+    }
   }
 
-  return { roster, plotDigest };
+  if (shouldAdapt && plotDigest && roster?.characters.length) {
+    send({ step: "blueprint_start", message: progressComicMessage(uiLocale, "blueprintStart") });
+    adaptationBlueprint = await fetchComicAdaptationBlueprint({
+      model: opts.model,
+      novelTitle: opts.novelTitle,
+      chapters: allChapters,
+      plotDigest,
+      characterRoster: roster,
+    });
+    if (adaptationBlueprint) {
+      send({
+        step: "blueprint_done",
+        message: progressComicMessage(uiLocale, "blueprintDone", {
+          chapters: adaptationBlueprint.chapters.length,
+        }),
+      });
+    }
+  }
+
+  return { roster, plotDigest, adaptationBlueprint };
 }
 
 /** 生成漫画分镜（短篇轻量 / 长篇导演流水线）。 */
@@ -616,6 +723,8 @@ export async function generateComicPages(opts: {
   novelPrompt: string;
   novelSummary: string;
   novelContent: string;
+  fullNovelContent?: string;
+  scopedChapters?: NovelChapter[];
   pageCount: number;
   storyGenre: CoverGenre;
   stylePreset: ComicStylePresetId;
@@ -630,25 +739,61 @@ export async function generateComicPages(opts: {
   existingDirector?: ComicDirectorPack | null;
   startChunkIndex?: number;
   onChunkCheckpoint?: (ev: ComicChunkCheckpoint) => void | Promise<void>;
+  /** 跳过导演包，直接轻量分镜（长篇试跑 / 降低失败率） */
+  forceLightStoryboard?: boolean;
 }): Promise<ComicPagesGenerateResult> {
   const readMode = opts.readMode ?? "segment";
   const layoutId = opts.layoutId;
   const outputLocale = resolveComicOutputLocale(opts.novelPrompt, opts.novelContent);
-  const useLong = shouldUseLongComicPipeline(opts.pageCount, opts.lengthTier, outputLocale);
+  const useLong = shouldUseLongComicPipeline(opts.pageCount, opts.lengthTier, outputLocale, {
+    forceLightStoryboard: opts.forceLightStoryboard,
+  });
   const send = opts.emit ?? (() => {});
   const uiLocale = opts.uiLocale;
 
-  const { roster, plotDigest } = await resolveComicRosterAndDigest({
-    model: opts.model,
-    readMode,
-    novelTitle: opts.novelTitle,
-    novelSummary: opts.novelSummary,
-    novelContent: opts.novelContent,
-    novelMeta: opts.novelMeta,
-    userRoster: opts.characterRoster,
-    uiLocale,
-    emit: send,
-  });
+  const fullNovelContent = opts.fullNovelContent?.trim() || opts.novelContent;
+  const scopedChapters = opts.scopedChapters ?? parseNovelChapters(fullNovelContent, uiLocale);
+  const chapterNums = blueprintScopedChapterNums(scopedChapters);
+
+  let roster: ComicCharacterRoster | null = null;
+  let plotDigest: ComicPlotDigest | null = null;
+  let adaptationBlueprint: ComicAdaptationBlueprint | null = null;
+
+  if (useLong) {
+    ({ roster, plotDigest, adaptationBlueprint } = await resolveComicRosterAndDigest({
+      model: opts.model,
+      readMode,
+      novelTitle: opts.novelTitle,
+      novelSummary: opts.novelSummary,
+      fullNovelContent,
+      scopedChapters,
+      novelMeta: opts.novelMeta,
+      lengthTier: opts.lengthTier,
+      userRoster: opts.characterRoster,
+      uiLocale,
+      emit: send,
+    }));
+  } else {
+    roster = opts.characterRoster?.characters.length ? opts.characterRoster : null;
+    if (!roster) {
+      roster = rosterFromNovelMeta(opts.novelMeta);
+    }
+    if (!roster?.characters.length) {
+      send({ step: "roster_start", message: progressComicMessage(uiLocale, "rosterStart") });
+      roster = await fetchComicCharacterRoster({
+        model: opts.model,
+        novelTitle: opts.novelTitle,
+        novelSummary: opts.novelSummary,
+        contentExcerpt: opts.novelContent.slice(0, 8000),
+      });
+      if (roster) {
+        send({
+          step: "roster_done",
+          message: progressComicMessage(uiLocale, "rosterDone", { count: roster.characters.length }),
+        });
+      }
+    }
+  }
 
   send({
     step: "pipeline_mode",
@@ -658,7 +803,7 @@ export async function generateComicPages(opts: {
 
   if (useLong) {
     try {
-      const { pages, director, model } = await generateComicPagesLong({
+      const { pages, director, model, directorStoryboardStats } = await generateComicPagesLong({
         model: opts.model,
         novelTitle: opts.novelTitle,
         novelPrompt: opts.novelPrompt,
@@ -703,6 +848,8 @@ export async function generateComicPages(opts: {
         layoutId,
         ...(longRoster ? { characterRoster: longRoster } : {}),
         ...(plotDigest ? { plotDigest } : {}),
+        ...(adaptationBlueprint ? { adaptationBlueprint } : {}),
+        ...(directorStoryboardStats ? { directorStoryboardStats } : {}),
       };
     } catch (error) {
       send({
@@ -728,6 +875,9 @@ export async function generateComicPages(opts: {
       layoutId,
       plotDigest,
       characterRoster: roster,
+      adaptationBlueprint,
+      scopedChapterNums: chapterNums,
+      lengthTier: opts.lengthTier,
       outputLocale,
       uiLocale,
       emit: opts.emit,
@@ -748,6 +898,7 @@ export async function generateComicPages(opts: {
       layoutId,
       ...(roster ? { characterRoster: roster } : {}),
       ...(plotDigest ? { plotDigest } : {}),
+      ...(adaptationBlueprint ? { adaptationBlueprint } : {}),
     };
   } catch (error) {
     send({
@@ -778,6 +929,7 @@ export async function generateComicPages(opts: {
       layoutId,
       ...(roster ? { characterRoster: roster } : {}),
       ...(plotDigest ? { plotDigest } : {}),
+      ...(adaptationBlueprint ? { adaptationBlueprint } : {}),
     };
   }
 }

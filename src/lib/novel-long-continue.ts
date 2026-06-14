@@ -2,7 +2,9 @@ import type { AppLocale } from "@/i18n/routing";
 import { novelContinuationMessage, novelContinuePhaseMessage } from "@/lib/i18n/chapter-labels";
 import { progressNovelMessage } from "@/lib/i18n/progress-message";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
+import { formatChapterRecapLine } from "@/lib/novel-locale-prompts";
 import { fitNovelContentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
+import { assessNovelCompleteness } from "@/lib/novel-completeness";
 import { novelMaxChars, parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
 import { fetchNovelBible, formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
 import {
@@ -85,12 +87,13 @@ export function assessNovelContinuation(opts: {
   };
 }
 
-function recentChapterRecap(content: string, maxChars = 600): string {
+function recentChapterRecap(content: string, prompt: string, maxChars = 600): string {
+  const locale = resolveNovelOutputLocale(prompt);
   const chapters = parseNovelChapters(content);
   if (chapters.length === 0) return content.slice(-maxChars);
   return chapters
     .slice(-3)
-    .map((c) => `第${c.num}章《${c.title}》：${c.body.replace(/\s+/g, " ").slice(0, 120)}…`)
+    .map((c) => formatChapterRecapLine(c, locale, 120))
     .join("\n")
     .slice(0, maxChars);
 }
@@ -158,7 +161,7 @@ export async function streamLongNovelContinue(params: {
         bible,
         lastNum,
         extendCount,
-        recentChapterRecap(content),
+        recentChapterRecap(content, promptTrim),
         lengthTier,
       );
       meta = {
@@ -197,7 +200,7 @@ export async function streamLongNovelContinue(params: {
       bible,
       lastNum,
       extendCount,
-      recentChapterRecap(content),
+      recentChapterRecap(content, promptTrim),
       lengthTier,
     );
     meta = {
@@ -260,14 +263,24 @@ export async function streamLongNovelContinue(params: {
   });
 
   const finalContent = fitNovelContentToMaxChars(writeResult.content, hardMax);
+  const pipelineMeta = {
+    ...meta,
+    segmentCount: (meta.segmentCount ?? 0) + slices.length,
+    createdAt: meta.createdAt,
+  };
+  const completeness = assessNovelCompleteness(
+    finalContent,
+    lengthTier,
+    undefined,
+    promptTrim,
+    pipelineMeta.chapterPlan,
+    uiLocale,
+  );
 
   return {
     content: finalContent,
-    pipelineMeta: {
-      ...meta,
-      segmentCount: (meta.segmentCount ?? 0) + slices.length,
-      createdAt: meta.createdAt,
-    },
+    pipelineMeta,
+    completeness,
   };
 }
 

@@ -47,6 +47,18 @@ export function resolveStoryboardChunkPages(
   return 1;
 }
 
+/** 按篇幅缩小分镜批大小：中篇/短篇默认页数多、正文长，4 页×8 格 JSON 易超时。 */
+export function resolveStoryboardChunkPagesForTier(
+  lengthTier: import("@/lib/novel-length").NovelLengthTier | null | undefined,
+  outputLocale: BriefInputLocale,
+  defaultChunkPages: number,
+): number {
+  const base = resolveStoryboardChunkPages(outputLocale, defaultChunkPages);
+  if (lengthTier === "medium") return Math.min(base, 2);
+  if (lengthTier === "short") return Math.min(base, 2);
+  return base;
+}
+
 /** 非中文短篇默认四宫格，减少单次 JSON 格数（32→16） */
 export function resolveComicLayoutForLocale(
   layoutId: import("@/lib/comic-layout").ComicLayoutId,

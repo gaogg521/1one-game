@@ -33,7 +33,7 @@ export function NovelLengthTierPicker({
   return (
     <div className={`grid gap-2 sm:grid-cols-3 ${className ?? ""}`}>
       {NOVEL_LENGTH_TIERS_FOR_UI.map((tier) => {
-        const ui = getNovelLengthTierUiCopy(tier.id, locale);
+        const ui = getNovelLengthTierUiCopy(tier.id as "short" | "medium" | "long", locale);
         const selected = value === tier.id;
         return (
           <button

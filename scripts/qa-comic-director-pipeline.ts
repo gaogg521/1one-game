@@ -2,6 +2,7 @@
  * 长篇漫画导演流水线离线检查：npx tsx scripts/qa-comic-director-pipeline.ts
  */
 import { shouldUseLongComicPipeline } from "@/lib/comic-generate-config";
+import { shouldSkipComicBriefExpand } from "@/lib/comic-standalone-pipeline";
 import { fallbackComicDirectorPack } from "@/lib/comic-director";
 import { applyShotPlanToPages } from "@/lib/comic-shot-plan";
 import { checkComicPanelsConsistency } from "@/lib/comic-panel-consistency";
@@ -9,7 +10,17 @@ import type { ComicPage } from "@/lib/comic-format";
 
 console.log("[OK] shouldUseLong(16, long):", shouldUseLongComicPipeline(16, "long"));
 console.log("[OK] shouldUseLong(8, medium):", shouldUseLongComicPipeline(8, "medium"));
+console.log("[OK] shouldUseLong(12, medium):", shouldUseLongComicPipeline(12, "medium"));
 console.log("[OK] shouldUseLong(9, medium):", shouldUseLongComicPipeline(9, "medium"));
+console.log(
+  "[OK] skip brief from_novel:",
+  shouldSkipComicBriefExpand({
+    sourceMode: "from_novel",
+    actualNovelId: "n1",
+    hasBriefRevision: false,
+    skipStandaloneBrief: false,
+  }),
+);
 
 const director = fallbackComicDirectorPack({
   novelTitle: "测试",

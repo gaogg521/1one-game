@@ -1,6 +1,6 @@
-import { llmNovelText } from "@/lib/llm";
+import { fitNovelContentToMaxChars, mergeNovelChapterContents, parseNovelChapters } from "@/lib/novel-chapters";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
-import { fitNovelContentToMaxChars } from "@/lib/novel-chapters";
+import { llmNovelText } from "@/lib/llm";
 import { novelCompletionPassCharBudget } from "@/lib/novel-locale-prompts";
 import { type NovelLengthOptions, novelMaxChars, type NovelLengthTier } from "@/lib/novel-length";
 
@@ -133,6 +133,13 @@ ${params.content.slice(-4000)}
   );
 
   if (!result.ok || !result.text.trim()) return params.content;
-  const merged = `${params.content.trim()}\n\n${result.text.trim()}`.trim();
-  return fitNovelContentToMaxChars(merged, hardMax);
+  const merged = mergeNovelChapterContents(
+    params.content.trim(),
+    result.text.trim(),
+    locale,
+  );
+  const chaptersBefore = parseNovelChapters(merged).length;
+  const fitted = fitNovelContentToMaxChars(merged, hardMax);
+  const chaptersAfter = parseNovelChapters(fitted).length;
+  return chaptersAfter >= chaptersBefore ? fitted : merged;
 }

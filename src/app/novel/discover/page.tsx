@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -13,6 +14,12 @@ import { SuperAdminPanel } from "@/components/SuperAdminPanel";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
+import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { DiscoverSortBar, type NovelDiscoverSort } from "@/components/work/DiscoverSortBar";
+import { DiscoverListSkeleton } from "@/components/work/DiscoverListSkeleton";
+import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
+import { WorkLikeButton } from "@/components/work/WorkLikeButton";
 
 interface Novel {
   id: string;
@@ -27,26 +34,27 @@ interface Novel {
   canDelete?: boolean;
 }
 
-function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => void }) {
+function NovelCard({
+  n,
+  onDeleted,
+  onCoverUpdate,
+}: {
+  n: Novel;
+  onDeleted?: (id: string) => void;
+  onCoverUpdate?: (id: string, coverPath: string) => void;
+}) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
+  const router = useRouter();
   const title = normalizeNovelTitle(n.title, n.prompt, undefined, locale);
   const blurb = displayNovelSummary(n.summary, title, n.prompt, undefined, locale);
-  const [liked, setLiked] = useState(() => {
-    if (typeof localStorage === "undefined") return false;
-    return !!localStorage.getItem(`liked:novel:${n.id}`);
+  const { displayCover, coverFailed, coverPending, retryCover } = useAutoWorkCover({
+    kind: "novel",
+    id: n.id,
+    coverPath: n.coverPath,
+    locale,
+    onUpdated: (path) => onCoverUpdate?.(n.id, path),
   });
-  const [likes, setLikes] = useState(n.likeCount);
-
-  function handleLike(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (liked) return;
-    setLiked(true);
-    setLikes((c) => c + 1);
-    localStorage.setItem(`liked:novel:${n.id}`, "1");
-    void fetch(`/api/novel/${n.id}/like`, { method: "POST", headers: mergeLocaleHeaders(locale) });
-  }
 
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
@@ -74,7 +82,21 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
       href={withLocalePath(`/novel/${n.id}`, locale)}
       className="group relative flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:var(--gc-accent)]/40"
     >
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+      <div className={novelCoverCardFrameClass}>
+        {n.isOwner ? (
+          <button
+            type="button"
+            title={t("studio.adaptToComic")}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(withLocalePath(`/comic/create?novelId=${encodeURIComponent(n.id)}`, locale));
+            }}
+            className="absolute left-2 top-2 z-10 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] opacity-90 backdrop-blur-sm transition hover:bg-black/80 group-hover:opacity-100"
+          >
+            {t("studio.adaptToComic")}
+          </button>
+        ) : null}
         {n.isOwner || n.canDelete ? (
           <button
             type="button"
@@ -85,39 +107,37 @@ function NovelCard({ n, onDeleted }: { n: Novel; onDeleted?: (id: string) => voi
             {n.canDelete && !n.isOwner ? t("lists.adminDelete") : t("studio.delete")}
           </button>
         ) : null}
-        {n.coverPath ? (
+        {displayCover ? (
           <img
-            src={n.coverPath}
+            src={displayCover}
             alt={title}
             className="h-full w-full object-cover transition group-hover:scale-105"
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--gc-muted)] opacity-60">
-            <span className="text-2xl">📖</span>
-            <span className="text-[10px]">{t("studio.coverGenerating")}</span>
-          </div>
+          <WorkCoverPlaceholder
+            icon="📖"
+            failedLabel={t("lists.coverFailed")}
+            generatingLabel={t("lists.coverGenerating")}
+            retryLabel={t("lists.coverRetry")}
+            coverFailed={coverFailed}
+            coverPending={coverPending}
+            onRetry={retryCover}
+            testId={`novel-cover-retry-${n.id}`}
+          />
         )}
       </div>
-      <div className="flex flex-col gap-0.5 p-3">
+      <div className="flex flex-col gap-0.5 p-2.5">
         <h3 className="line-clamp-1 text-sm font-semibold text-[var(--gc-text)] group-hover:text-[var(--gc-accent)]">
           {title}
         </h3>
-        {blurb && <p className="line-clamp-2 text-xs text-[var(--gc-text-soft)]">{blurb}</p>}
-        <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--gc-muted)]">
-          <div className="flex items-center gap-3">
-            <span>▶ {n.playCount}</span>
-            <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+        {blurb ? <p className="line-clamp-1 text-[11px] text-[var(--gc-text-soft)]">{blurb}</p> : null}
+        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[var(--gc-muted)]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <WorkEngagementStats kind="novel" playCount={n.playCount} likeCount={n.likeCount} hideLikes />
+            <span className="shrink-0">{new Date(n.createdAt).toLocaleDateString()}</span>
           </div>
-          <button
-            type="button"
-            onClick={handleLike}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition ${
-              liked ? "text-red-400" : "text-[var(--gc-text-faint)] hover:text-red-400"
-            }`}
-          >
-            {liked ? "♥" : "♡"} {likes > 0 ? likes : ""}
-          </button>
+          <WorkLikeButton kind="novel" id={n.id} initialCount={n.likeCount} />
         </div>
       </div>
     </Link>
@@ -130,6 +150,7 @@ export default function NovelDiscoverPage() {
   const [novels, setNovels] = useState<Novel[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [sort, setSort] = useState<NovelDiscoverSort>("playCount");
   const limit = 24;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,7 +163,7 @@ export default function NovelDiscoverPage() {
     startTransition(() => setLoading(true));
     setLoadError(null);
     fetch(
-      `/api/novel?page=${page}&limit=${limit}`,
+      `/api/novel?page=${page}&limit=${limit}&sort=${sort}`,
       superAdminFetchInit({ signal: ac.signal, headers: mergeLocaleHeaders(locale) }),
     )
       .then((r) => {
@@ -170,16 +191,21 @@ export default function NovelDiscoverPage() {
       ac.abort();
       clearTimeout(timer);
     };
-  }, [page, limit, locale]);
+  }, [page, limit, sort, locale, t]);
 
   const totalPages = Math.ceil(total / limit);
+
+  function handleSort(next: NovelDiscoverSort) {
+    setSort(next);
+    setPage(1);
+  }
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
       <AppMain>
       <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
-        <div className="mx-auto max-w-5xl">
+        <div className="mx-auto max-w-6xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-[var(--gc-text)]">{t("lists.novelsTitle")}</h1>
@@ -194,6 +220,10 @@ export default function NovelDiscoverPage() {
             <DiscoverIntakeBanner />
           </div>
 
+          <div className="mb-6">
+            <DiscoverSortBar kind="novel" value={sort} onChange={handleSort} />
+          </div>
+
           {loadError ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-sm text-amber-100/90">
               <p>{loadError}</p>
@@ -206,7 +236,7 @@ export default function NovelDiscoverPage() {
               </button>
             </div>
           ) : loading ? (
-            <p className="text-[var(--gc-muted)]">{t("common.loading")}</p>
+            <DiscoverListSkeleton frameClass={novelCoverCardFrameClass} />
           ) : novels.length === 0 ? (
             <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-8 text-center">
               <p className="text-[var(--gc-muted)]">{t("lists.noNovels")}</p>
@@ -216,11 +246,14 @@ export default function NovelDiscoverPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {novels.map((n) => (
                   <NovelCard
                     key={n.id}
                     n={n}
+                    onCoverUpdate={(id, coverPath) => {
+                      setNovels((prev) => prev.map((x) => (x.id === id ? { ...x, coverPath } : x)));
+                    }}
                     onDeleted={(id) => {
                       setNovels((prev) => prev.filter((x) => x.id !== id));
                       setTotal((t) => Math.max(0, t - 1));

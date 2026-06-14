@@ -15,6 +15,8 @@ model User {
   phone           String?  @unique
   displayName     String?
   avatarUrl       String?
+  /// scrypt 哈希（邮箱注册/登录）；OAuth 用户可为空
+  passwordHash    String?
   /// user | admin | super_admin
   role            String   @default("user")
   /// 裂变邀请码（分享链接 ?ref=）
@@ -36,6 +38,20 @@ model User {
   paymentEvents PaymentEvent[]
 
   @@index([role])
+}
+
+/// 邮箱验证码（注册 / 找回密码）
+model EmailVerification {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  purpose    String    @default("register")
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
 }
 
 /// 额度流水（邀请奖励、购买、生成消耗）
@@ -199,6 +215,25 @@ model ShareEvent {
   @@index([referrerUserId])
 }
 
+/// 平台运行时配置（密钥加密存储；模型等可覆盖 product-config 默认值）
+model PlatformRuntimeConfig {
+  id              String   @id @default("default")
+  /// AES-GCM 加密 JSON（API Key 等敏感字段）
+  secretsEnc      String?
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+/// 平台邮件配置（SMTP / Resend；密钥加密存储；后台可改，无需改 .env）
+model PlatformEmailConfig {
+  id              String   @id @default("default")
+  configEnc       String?
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
 /// 后台治理审计
 model AdminAuditLog {
   id            String   @id @default(cuid())
@@ -261,6 +296,8 @@ model Novel {
   generationMetaJson String?
   /// Creative Brief 结构化扩写 JSON
   creativeBriefJson String?
+  /// 角色资产库 JSON（ComicCharacterRoster）
+  characterRosterJson String?
   status    String   @default("ready")
   coverPath String?
   playCount Int      @default(0)
@@ -280,7 +317,7 @@ model Comic {
   ownerKey  String
   visibility String  @default("public")
   featured   Boolean @default(false)
-  novelId   String
+  novelId   String?
   shareCode String?  @unique
   title     String
   prompt    String
@@ -293,7 +330,7 @@ model Comic {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  novel Novel? @relation(fields: [novelId], references: [id], onDelete: SetNull)
 
   @@index([ownerKey])
   @@index([novelId])

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getOwnerKey } from "@/lib/owner";
-import { queryComicList } from "@/lib/comic-list-query";
+import { queryComicList, type ComicListOrderBy } from "@/lib/comic-list-query";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 
-const VALID_SORTS = new Set(["likeCount", "createdAt"]);
+const VALID_SORTS = new Set(["likeCount", "createdAt", "featured"]);
 
 export async function GET(req: Request) {
   try {
@@ -16,6 +16,7 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const skip = (page - 1) * limit;
     const mine = searchParams.get("mine") === "1";
+    const featuredOnly = searchParams.get("featured") === "1";
     const viewerKey = await getOwnerKey();
     const ownerKey = mine ? viewerKey : null;
 
@@ -23,8 +24,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ comics: [], total: 0, page, limit });
     }
 
-    const where = mine && ownerKey ? { ownerKey } : { visibility: "public" as const };
-    const orderBy = sort === "likeCount" ? ({ likeCount: "desc" } as const) : ({ createdAt: "desc" } as const);
+    const where =
+      mine && ownerKey
+        ? { ownerKey }
+        : { visibility: "public" as const, ...(featuredOnly ? { featured: true } : {}) };
+    const orderBy: ComicListOrderBy =
+      sort === "featured"
+        ? [{ featured: "desc" }, { likeCount: "desc" }]
+        : sort === "likeCount"
+          ? { likeCount: "desc" }
+          : { createdAt: "desc" };
 
     const { comics, total } = await queryComicList({ where, orderBy, skip, take: limit });
     const superAdmin = isSuperAdmin(req, viewerKey);

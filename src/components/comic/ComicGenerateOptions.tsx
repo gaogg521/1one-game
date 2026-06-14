@@ -23,6 +23,7 @@ export type ComicGenerateOptionsState = {
   readMode: ComicReadMode;
   chapterScope: ComicChapterScope | null;
   characterRoster: ComicCharacterRoster | null;
+  forceLightStoryboard: boolean;
 };
 
 type Props = {
@@ -33,6 +34,8 @@ type Props = {
   novelPrompt?: string;
   /** 预填按章改编范围（连载下一章 / URL 参数） */
   initialChapterScope?: ComicChapterScope | null;
+  /** standalone=独立漫画：隐藏章节改编范围 */
+  variant?: "standalone" | "adapt";
   value: ComicGenerateOptionsState;
   onChange: (next: ComicGenerateOptionsState) => void;
   compact?: boolean;
@@ -53,6 +56,7 @@ export function defaultComicGenerateOptions(): ComicGenerateOptionsState {
     readMode: "segment",
     chapterScope: null,
     characterRoster: null,
+    forceLightStoryboard: false,
   };
 }
 
@@ -65,6 +69,7 @@ export function ComicGenerateOptions({
   onChange,
   compact,
   initialChapterScope,
+  variant = "adapt",
 }: Props) {
   const t = useTranslations("comicOptions");
   const tStyles = useTranslations("comicStyles");
@@ -153,11 +158,27 @@ export function ComicGenerateOptions({
 
   useEffect(() => {
     if (!novelId) return;
-    const saved = loadComicRosterFromStorage(novelId);
-    if (saved?.characters.length) {
-      setRosterDraft(saved);
-      onChange({ ...value, characterRoster: saved });
-    }
+    void (async () => {
+      try {
+        const res = await fetch(`/api/novel/${encodeURIComponent(novelId)}/character-roster`);
+        if (res.ok) {
+          const data = (await res.json()) as { roster?: ComicCharacterRoster };
+          if (data.roster?.characters.length) {
+            setRosterDraft(data.roster);
+            saveComicRosterToStorage(novelId, data.roster);
+            onChange({ ...value, characterRoster: data.roster });
+            return;
+          }
+        }
+      } catch {
+        /* fallback local */
+      }
+      const saved = loadComicRosterFromStorage(novelId);
+      if (saved?.characters.length) {
+        setRosterDraft(saved);
+        onChange({ ...value, characterRoster: saved });
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅 novelId 变化时恢复
   }, [novelId]);
 
@@ -264,7 +285,22 @@ export function ComicGenerateOptions({
         </button>
       </div>
 
-      {chapters.length > 1 ? (
+      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs text-[var(--gc-text-soft)]">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={value.forceLightStoryboard}
+          onChange={(e) => patch({ forceLightStoryboard: e.target.checked })}
+        />
+        <span>
+          <span className="font-medium text-[var(--gc-text)]">{t("forceLightLabel")}</span>
+          <span className="mt-0.5 block text-[10px] leading-snug text-[var(--gc-muted)]">
+            {t("forceLightHint")}
+          </span>
+        </span>
+      </label>
+
+      {variant !== "standalone" && chapters.length > 1 ? (
         <div>
           <label className="mb-1 block text-xs text-[var(--gc-muted)]">
             {isChildren ? t("scopeLabelChildren") : t("scopeLabelNovel")}

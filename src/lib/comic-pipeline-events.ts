@@ -9,6 +9,7 @@ export const COMIC_SSE_STEPS = [
   "director_ready",
   "storyboard_chunk_start",
   "storyboard_chunk_done",
+  "director_storyboard_stats",
   "shot_plan_start",
   "shot_plan_done",
   "consistency_start",

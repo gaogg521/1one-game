@@ -1,11 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test";
+
+test.describe.configure({ mode: "serial" });
 
 test.describe("小说模块", () => {
   test("小说创作页可加载", async ({ page }) => {
-    await page.goto("http://127.0.0.1:8888/novel/create");
-    await expect(page.getByRole("heading", { name: "创作小说" })).toBeVisible();
-    await expect(page.getByPlaceholder(/书名|例如/)).toBeVisible();
-    await expect(page.getByRole("button", { name: /下一步/ })).toBeVisible();
+    await page.goto("/novel/create");
+    await expect(page.getByRole("heading", { name: /创作小说|Create Novel/i })).toBeVisible();
+    await expect(page.getByPlaceholder(/书名|例如|title/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /下一步|Next/i })).toBeVisible();
   });
 
   test("小说创作页在接口失败时会退出加载态", async ({ page }) => {
@@ -54,47 +56,87 @@ test.describe("小说模块", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:8888/novel/create", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "创作小说" })).toBeVisible();
+    await page.goto("/novel/create", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: /创作小说|Create Novel/i })).toBeVisible();
     const titleInput = page.getByTestId("novel-title-input");
     await expect(titleInput).toBeVisible();
-    await titleInput.fill("断点恢复测试");
     const urbanButton = page.locator('button[data-genre-id="urban"]');
-    await expect(urbanButton).toBeVisible();
-    for (let i = 0; i < 3; i += 1) {
+    await expect(async () => {
+      await urbanButton.scrollIntoViewIfNeeded();
       await urbanButton.click();
-      if ((await urbanButton.getAttribute("aria-pressed")) === "true") break;
-      await page.waitForTimeout(300);
-    }
-    await expect(urbanButton).toHaveAttribute("aria-pressed", "true");
-    const nextButton = page.getByRole("button", { name: /下一步/ });
+      await expect(urbanButton).toHaveAttribute("aria-pressed", "true");
+    }).toPass({ timeout: 15_000 });
+    await titleInput.fill("断点恢复测试");
+    const nextButton = page.getByRole("button", { name: /下一步|Next/i });
     await titleInput.fill("断点恢复测试");
     await expect(nextButton).toBeEnabled();
     await nextButton.click();
-    await page.getByRole("button", { name: /确认构思，进入写作/ }).click({ timeout: 20_000 });
-    await page.getByRole("button", { name: /开始生成正文/ }).click();
+    await page.getByRole("button", { name: /确认构思，进入写作|Confirm Brief and Start Writing/i }).click({ timeout: 20_000 });
+    await page.getByRole("button", { name: /开始生成正文|Generate Story/i }).click();
 
-    await expect(page.getByRole("button", { name: /正在写作/ })).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText(/小说生成失败|生成失败/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /正在写作|Writing/i })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/小说生成失败|生成失败|generation failed/i)).toBeVisible({ timeout: 15_000 });
   });
 
   test("小说广场可加载", async ({ page }) => {
-    await page.goto("http://127.0.0.1:8888/novel/discover");
-    await expect(page.locator("text=小说广场")).toBeVisible();
-    await expect(page.getByRole("link", { name: /创作小说|开始创作/ }).first()).toBeVisible();
+    await page.goto("/novel/discover");
+    await expect(page.getByRole("heading", { name: /小说作品|Novel Works/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /开始创作|Start Creating/i }).first()).toBeVisible();
   });
 });
 
 test.describe("漫画模块", () => {
-  test("漫画创作页可加载", async ({ page }) => {
-    await page.goto("http://127.0.0.1:8888/comic/create");
-    await expect(page.locator("text=创作漫画")).toBeVisible();
-    await expect(page.locator("textarea")).toBeVisible();
-    await expect(page.getByRole("button", { name: /生成分镜/ })).toBeVisible();
+  test("漫画创作页可加载（独立创作模式）", async ({ page }) => {
+    await page.goto("/comic/create");
+    await expect(page.getByRole("heading", { name: /创作漫画|Create Comic/i })).toBeVisible();
+    await expect(page.getByTestId("comic-create-mode-standalone")).toBeVisible();
+    await expect(page.getByTestId("comic-create-mode-from-novel")).toBeVisible();
+    await expect(page.getByTestId("comic-create-standalone-form")).toBeVisible();
+    await expect(page.locator("textarea").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /生成分镜|Generate storyboard/i })).toBeVisible();
+  });
+
+  test("漫画创作页可切换到「从我的小说」", async ({ page }) => {
+    await page.goto("/comic/create");
+    await page.getByTestId("comic-create-mode-from-novel").click();
+    const fromNovelPanel = page.getByTestId("comic-create-from-novel-panel");
+    await expect(fromNovelPanel).toBeVisible();
+    await expect(fromNovelPanel.getByText(/选择你写过的小说|Pick a novel you wrote/i)).toBeVisible();
+  });
+
+  test("漫画创作页 novelId 深链可预填小说", async ({ page }) => {
+    const novelId = "e2e-comic-prefill-novel";
+    await page.route("**/api/novel?**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ novels: [] }),
+      });
+    });
+    await page.route(`**/api/novel/${novelId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          novel: {
+            id: novelId,
+            title: "深链测试小说",
+            prompt: "穿越 历史",
+            isOwner: true,
+            lengthTier: "medium",
+          },
+        }),
+      });
+    });
+    await page.goto(`/comic/create?novelId=${novelId}`);
+    const selectedNovel = page.getByTestId("comic-create-selected-novel");
+    await expect(selectedNovel).toBeVisible({ timeout: 15_000 });
+    await expect(selectedNovel.getByText(/深链测试小说/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /从该小说生成分镜|Generate storyboard from this novel/i })).toBeVisible();
   });
 
   test("漫画广场可加载", async ({ page }) => {
-    await page.goto("http://127.0.0.1:8888/comic/discover");
-    await expect(page.locator("text=动漫广场")).toBeVisible();
+    await page.goto("/comic/discover");
+    await expect(page.getByRole("heading", { name: /动漫作品|Comic Works/i })).toBeVisible();
   });
 });

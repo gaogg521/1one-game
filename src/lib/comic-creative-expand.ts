@@ -1,4 +1,4 @@
-import { getNovelStyleTextModelCascade, llmText } from "@/lib/llm";
+import { getComicStoryboardModelCascade, llmText } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 
 const MIN_COMIC_BODY_CHARS = 280;
@@ -22,7 +22,7 @@ export async function expandComicCreativeToStoryBody(
     return { body: trimmed, expanded: false };
   }
 
-  const cascade = getNovelStyleTextModelCascade();
+  const cascade = getComicStoryboardModelCascade();
   const system = `你是漫画改编前的故事扩写助手。用户只给了一句话创意，你需要写成可供分镜改编的短篇叙事正文。
 要求：
 - 800～1800 汉字，2～4 个自然段，可含 1～2 句人物对白（写在正文里）

@@ -66,7 +66,7 @@ function main() {
     false,
     "英文 4 页短篇应优先轻量分镜",
   );
-  assert.equal(shouldUseLongComicPipeline(4, "short", "zh"), true);
+  assert.equal(shouldUseLongComicPipeline(4, "short", "zh"), false, "中文短篇应走轻量分镜");
   assert.equal(shouldUseLongComicPipeline(4, "short", "zh-Hant"), false);
   assert.equal(
     resolveComicLayoutForLocale("grid_8", "en", 4),

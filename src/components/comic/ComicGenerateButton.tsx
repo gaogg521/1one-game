@@ -8,10 +8,12 @@ import type { AppLocale } from "@/i18n/routing";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import type { ComicReadMode } from "@/lib/comic-format";
+import type { ComicGenerateStreamBody } from "@/lib/comic-generate-request";
 import {
   consumeComicGenerateStream,
   type ComicGenerateStreamEvent,
 } from "@/lib/comic-generate-stream.client";
+import { resolveComicPipelineMode } from "@/lib/comic-pipeline-mode";
 
 type Props = {
   novelId?: string;
@@ -23,6 +25,7 @@ type Props = {
   readMode?: ComicReadMode;
   chapterScope?: ComicChapterScope | null;
   characterRoster?: ComicCharacterRoster | null;
+  forceLightStoryboard?: boolean;
   label?: string;
   className?: string;
   style?: CSSProperties;
@@ -40,6 +43,7 @@ export function ComicGenerateButton({
   readMode,
   chapterScope,
   characterRoster,
+  forceLightStoryboard,
   label,
   className = "gc-theme-cta w-full rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-50",
   style,
@@ -59,17 +63,22 @@ export function ComicGenerateButton({
     setProgress(t("connecting"));
     onError?.("");
 
-    const body: Record<string, unknown> = {};
-    if (novelId) body.novelId = novelId;
-    if (content) body.content = content;
-    if (title) body.title = title;
-    if (lengthTier) body.lengthTier = lengthTier;
-    if (pageCount) body.pageCount = pageCount;
-    if (stylePreset) body.stylePreset = stylePreset;
-    if (readMode) body.readMode = readMode;
-    if (chapterScope) body.chapterScope = chapterScope;
-    if (characterRoster?.characters.length) body.characterRoster = characterRoster;
-    if (resumeComicId) body.resumeComicId = resumeComicId;
+    const body: ComicGenerateStreamBody = {
+      sourceMode: novelId
+        ? resolveComicPipelineMode({ sourceMode: "from_novel", novelId })
+        : resolveComicPipelineMode({ sourceMode: "standalone" }),
+      ...(novelId ? { novelId } : {}),
+      ...(content ? { content } : {}),
+      ...(title ? { title } : {}),
+      ...(lengthTier ? { lengthTier } : {}),
+      ...(pageCount ? { pageCount } : {}),
+      ...(stylePreset ? { stylePreset } : {}),
+      ...(readMode ? { readMode } : {}),
+      ...(chapterScope ? { chapterScope } : {}),
+      ...(characterRoster?.characters.length ? { characterRoster } : {}),
+      ...(forceLightStoryboard ? { forceLightStoryboard: true } : {}),
+      ...(resumeComicId ? { resumeComicId } : {}),
+    };
 
     const result = await consumeComicGenerateStream(body, (ev: ComicGenerateStreamEvent) => {
       if (ev.message) setProgress(ev.message);

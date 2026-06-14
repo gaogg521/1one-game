@@ -20,7 +20,7 @@ export const maxDuration = 600;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-type PanelsBody = { regenerate?: boolean; page?: number };
+type PanelsBody = { regenerate?: boolean; page?: number; panel?: number };
 
 export async function POST(req: Request, ctx: RouteContext) {
   const uiLocale = resolveRequestLocaleSync(req);
@@ -56,7 +56,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (body.regenerate) {
     const scope =
       typeof body.page === "number" && body.page >= 1
-        ? { pageNumber: Math.floor(body.page) }
+        ? {
+            pageNumber: Math.floor(body.page),
+            ...(typeof body.panel === "number" && body.panel >= 1
+              ? { panelNumber: Math.floor(body.panel) }
+              : {}),
+          }
         : "all";
     clearComicPanelImages(doc, scope);
   }
@@ -106,6 +111,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         skipStyleRefs: fullRegenerate && !doc.characterSheetUrls?.length,
         director: doc.director,
         characterSheetUrls: doc.characterSheetUrls,
+        comicId: id,
         uiLocale,
       });
     const after = countPanelsWithImages(updated);

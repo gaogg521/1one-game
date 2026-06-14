@@ -22,7 +22,11 @@ import {
   type ComicPanel,
 } from "@/lib/comic-format";
 import { formatImageGenElapsed } from "@/lib/format-duration";
+import {
+  ensureComicCharacterSheetsForRender,
+} from "@/lib/comic-character-sheet-gen";
 import { getComicPanelGenConcurrency } from "@/lib/model-config";
+import { PRODUCT } from "@/lib/product-config";
 import type { AppLocale } from "@/i18n/routing";
 import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 
@@ -99,6 +103,8 @@ export async function renderComicPanels(
     director?: ComicDirectorPack | null;
     /** Character Sheet First：角色参考图 URL 列表，用于分镜配图风格锚定 */
     characterSheetUrls?: string[];
+    /** 漫画 id，配图阶段按需生成角色参考图 */
+    comicId?: string;
     uiLocale?: AppLocale;
   },
 ): Promise<RenderComicPanelsResult> {
@@ -139,8 +145,23 @@ export async function renderComicPanels(
     storyGenre,
     skipStyleRefs,
   });
-  // 合并角色参考图（Character Sheet First）
-  const charSheets = opts?.characterSheetUrls?.filter(Boolean) ?? [];
+  let charSheets = opts?.characterSheetUrls?.filter(Boolean) ?? doc.characterSheetUrls?.filter(Boolean) ?? [];
+  if (charSheets.length === 0 && opts?.comicId && doc.stylePreset) {
+    const ensured = await ensureComicCharacterSheetsForRender({
+      comicKey: opts.comicId,
+      stylePreset: doc.stylePreset,
+      roster: doc.characterRoster,
+      director: opts?.director ?? doc.director ?? null,
+      existingUrls: charSheets,
+      uiLocale: locale,
+      timeoutMs: PRODUCT.comic.charSheetTimeoutMs,
+    });
+    charSheets = ensured.urls;
+    if (ensured.roster) {
+      doc.characterRoster = ensured.roster;
+      doc.characterSheetUrls = ensured.urls;
+    }
+  }
   for (const url of charSheets) {
     if (!styleRefUrls.includes(url)) styleRefUrls.push(url);
   }
@@ -150,7 +171,10 @@ export async function renderComicPanels(
   /** 漫画禁用 OpenAI 批量：无法锚定参考图，格与格之间易画风不一 */
   const useOpenAIBatch = false;
 
-  if (hasPanelAnchor && needsGeminiForRefs && !availability.hasGemini) {
+  /** 全量重绘且已有锚点图时须 Gemini；补缺失格允许 OpenAI 无参考图降级，避免 62/64 永久卡死 */
+  const blockWithoutGemini =
+    hasPanelAnchor && needsGeminiForRefs && !availability.hasGemini && !onlyMissing;
+  if (blockWithoutGemini) {
     const geminiMsg = comicStyleGeminiRequiredMessage(locale);
     opts?.onProgress?.({
       type: "done",
@@ -170,7 +194,9 @@ export async function renderComicPanels(
   }
 
   const styleConsistencyNote =
-    !availability.hasGemini && flat.length > 1 ? pm("geminiWeakOpenAI") : null;
+    !availability.hasGemini && (flat.length > 1 || (onlyMissing && hasPanelAnchor))
+      ? pm("geminiWeakOpenAI")
+      : null;
 
   const panelConcurrency = getComicPanelGenConcurrency();
   const extraRef =
@@ -292,7 +318,16 @@ export async function renderComicPanels(
       for (let i = 0; i < batch.results.length; i++) {
         if (urls[i]) continue;
         const label = flat[i]!.index;
-        const detail = batch.results[i]!;
+        let detail = batch.results[i]!;
+        if ((!detail.ok || !detail.url) && process.env.COMIC_PANEL_RETRY !== "0") {
+          const timeoutMs = resolveComicPanelImageTimeoutMs();
+          const retry = await generateImageDetailed(prompts[i]!, {
+            size: "1024x1024",
+            quality: "standard",
+            timeoutMs,
+          });
+          if (retry.ok && retry.url) detail = retry;
+        }
         const elapsedMs = batch.durationMs;
 
         if (!detail.ok || !detail.url) {
@@ -373,13 +408,18 @@ export async function renderComicPanels(
         let detail;
         try {
           const timeoutMs = resolveComicPanelImageTimeoutMs();
-          detail = await generateImageDetailed(prompt, {
-            size: "1024x1024",
-            quality: "standard",
+          const genOpts = {
+            size: "1024x1024" as const,
+            quality: "standard" as const,
             styleReferenceUrls: useRefs,
             styleGenre: storyGenre,
             timeoutMs,
-          });
+          };
+          detail = await generateImageDetailed(prompt, genOpts);
+          if ((!detail.ok || !detail.url) && process.env.COMIC_PANEL_RETRY !== "0") {
+            await new Promise((r) => setTimeout(r, 2500));
+            detail = await generateImageDetailed(prompt, genOpts);
+          }
         } finally {
           clearInterval(heartbeat);
         }
@@ -473,13 +513,26 @@ export async function renderComicPanels(
 }
 
 /** 清空分镜配图 URL（保留 caption/prompt；封面在 comic.coverPath 不受影响）。 */
+export type ComicPanelClearScope =
+  | "all"
+  | { pageNumber: number; panelNumber?: number };
+
 export function clearComicPanelImages(
   doc: ComicDocument,
-  scope: "all" | { pageNumber: number } = "all",
+  scope: ComicPanelClearScope = "all",
 ): number {
   let cleared = 0;
   for (const page of doc.pages) {
     if (scope !== "all" && page.page !== scope.pageNumber) continue;
+    if (scope !== "all" && scope.panelNumber != null) {
+      const idx = scope.panelNumber - 1;
+      const panel = page.panels[idx];
+      if (panel?.imageUrl?.trim()) {
+        delete panel.imageUrl;
+        cleared += 1;
+      }
+      continue;
+    }
     for (const panel of page.panels) {
       if (panel.imageUrl?.trim()) {
         delete panel.imageUrl;

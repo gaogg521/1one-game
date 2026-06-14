@@ -3,7 +3,9 @@ import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { runComicGeneration, ComicGenerateError, resolveComicRunErrorMessage } from "@/lib/comic-generate-run";
+import { runComicGeneration, ComicGenerateError, resolveComicPipelineMode, resolveComicRunErrorMessage } from "@/lib/comic-generate-run";
+import { validateComicPipelineRequest } from "@/lib/comic-pipeline-mode";
+import { isComicGenerateStubEnabled, stubComicGenerateResponse } from "@/lib/comic-generate-stub";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { getOwnerKey } from "@/lib/owner";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
@@ -41,24 +43,55 @@ export async function POST(req: Request) {
 
   const body = json.body as {
     novelId?: string;
+    sourceMode?: "standalone" | "from_novel";
     content?: string;
+    creativePrompt?: string;
     title?: string;
     pageCount?: number;
+    layoutId?: string;
     lengthTier?: string;
     stylePreset?: string;
     readMode?: string;
     chapterScope?: { fromChapter: number; toChapter: number; label?: string };
     characterRoster?: unknown;
     resumeComicId?: string;
+    forceLightStoryboard?: boolean;
   };
 
   try {
+    if (isComicGenerateStubEnabled()) {
+      return NextResponse.json(stubComicGenerateResponse(body.pageCount ?? 8), {
+        headers: ridHeaders(requestId),
+      });
+    }
+
+    const uiLocale = resolveRequestLocaleSync(req);
+
+    const pipelineError = validateComicPipelineRequest({
+      sourceMode: body.sourceMode,
+      novelId: body.novelId,
+      content: body.content,
+      creativePrompt: body.creativePrompt,
+    });
+    if (pipelineError) {
+      return NextResponse.json(
+        localizedApiErrorPayload(req, pipelineError, { code: codes.LLM_FAILED, requestId }),
+        {
+          status: pipelineError === "novelNotFound" ? 404 : 400,
+          headers: ridHeaders(requestId),
+        },
+      );
+    }
+
     const result = await runComicGeneration({
       ownerKey,
       novelId: body.novelId,
+      sourceMode: resolveComicPipelineMode({ sourceMode: body.sourceMode, novelId: body.novelId }),
       content: body.content,
+      creativePrompt: body.creativePrompt,
       title: body.title,
       pageCount: body.pageCount,
+      layoutId: body.layoutId,
       lengthTier: body.lengthTier,
       stylePreset: body.stylePreset,
       readMode: body.readMode === "full" ? "full" : "segment",
@@ -71,6 +104,8 @@ export async function POST(req: Request) {
         : null,
       characterRoster: body.characterRoster as import("@/lib/comic-character-roster").ComicCharacterRoster | null,
       resumeComicId: body.resumeComicId?.trim() || undefined,
+      forceLightStoryboard: body.forceLightStoryboard === true,
+      uiLocale,
     });
 
     return NextResponse.json(

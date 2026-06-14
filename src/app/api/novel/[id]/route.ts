@@ -18,6 +18,7 @@ import { buildChapterAdaptationProgress } from "@/lib/comic-chapter-adaptation";
 import { isChildrenFormattedNovelContent } from "@/lib/children-comic-sections";
 import { isChildrenNovelTier } from "@/lib/novel-length";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 
@@ -57,6 +58,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     meta: pipelineMeta,
     uiLocale,
   });
+  const characterRoster = isOwner ? await loadNovelCharacterRoster(id) : null;
   return NextResponse.json({
     novel: {
       id: row.id,
@@ -102,6 +104,7 @@ export async function GET(req: Request, ctx: RouteContext) {
             draftStoryboardComics: row.comics
               .filter((c) => c.status === "draft_storyboard")
               .map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt })),
+            characterRoster,
           }
         : {}),
     },

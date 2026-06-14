@@ -30,5 +30,12 @@ export function resolveComicRunErrorMessage(locale: AppLocale, err: unknown): st
   if (err instanceof ComicGenerationRunError) {
     return progressComicMessage(locale, err.messageKey, err.params);
   }
+  if (err instanceof Error) {
+    const msg = err.message.trim();
+    // 保留 LLM/分镜层抛出的可读文案，避免一律显示「漫画生成失败」
+    if (msg && msg !== "Error" && !/^[a-z][a-zA-Z0-9]*$/.test(msg)) {
+      return msg.slice(0, 240);
+    }
+  }
   return progressComicMessage(locale, "comicFailed");
 }

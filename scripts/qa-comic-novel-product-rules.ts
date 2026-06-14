@@ -1,12 +1,54 @@
 import assert from "node:assert/strict";
 
-import { buildComicSystemPrompt } from "@/lib/comic-generate-config";
+import { resolveComicPipelineMode, validateComicPipelineRequest } from "@/lib/comic-pipeline-mode";
+import {
+  COMIC_COVER_MAX_HEIGHT_PX,
+  NOVEL_COVER_MAX_HEIGHT_PX,
+  comicCoverDetailFrameClass,
+} from "@/lib/cover-display-sizes";
+import {
+  selectBlueprintBeatsForChunk,
+  type ComicAdaptationBlueprint,
+} from "@/lib/comic-adaptation-blueprint";
+import {
+  assignSourceSegmentIndicesToPages,
+  comicPagesAreAllPlaceholders,
+  enrichPagesFromNovelSegments,
+} from "@/lib/comic-dialogue-extract";
+import { buildComicSystemPrompt, softenPanelCaptionForImageGen } from "@/lib/comic-generate-config";
 import { resolveComicLayoutId } from "@/lib/comic-layout";
 import { inferStoryGenre } from "@/lib/cover-genre";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
 import { buildNovelUserMessage, getNovelSystemPrompt, novelMinAcceptChars } from "@/lib/novel-generate-config";
+import { splitNovelIntoSegments } from "@/lib/comic-storyboard-segments";
 
 function main() {
+  assert.equal(resolveComicPipelineMode({}), "standalone");
+  assert.equal(resolveComicPipelineMode({ novelId: "n1" }), "from_novel");
+  assert.equal(resolveComicPipelineMode({ sourceMode: "from_novel" }), "from_novel");
+  assert.equal(
+    resolveComicPipelineMode({ sourceMode: "standalone", novelId: "n1" }),
+    "standalone",
+    "显式 standalone 应忽略 novelId",
+  );
+  assert.equal(
+    resolveComicPipelineMode({ sourceMode: "from_novel", novelId: "" }),
+    "from_novel",
+    "显式 from_novel 由服务端校验 novelId",
+  );
+
+  assert.equal(validateComicPipelineRequest({ sourceMode: "from_novel" }), "novelNotFound");
+  assert.equal(validateComicPipelineRequest({ sourceMode: "standalone" }), "needNovelOrContent");
+  assert.equal(
+    validateComicPipelineRequest({ sourceMode: "standalone", creativePrompt: "赛博朋克探案" }),
+    null,
+  );
+  assert.equal(validateComicPipelineRequest({ sourceMode: "from_novel", novelId: "n1" }), null);
+
+  assert.equal(NOVEL_COVER_MAX_HEIGHT_PX, 350);
+  assert.equal(COMIC_COVER_MAX_HEIGHT_PX, 400);
+  assert.match(comicCoverDetailFrameClass, /max-h-\[400px\]/);
+
   assert.equal(
     resolveComicLayoutId({ lengthTier: "medium" }),
     "grid_8",
@@ -68,6 +110,58 @@ function main() {
     ).ok,
     false,
     "只有开端和推进、没有收束的短篇不应被视为完成",
+  );
+
+  const novelBody = `=== 第1章 煤山 ===\n崇祯低声道：「朕不能亡于此。」\n\n=== 第2章 破局 ===\n他终于改写了亡国结局，天下重归太平。`;
+  const segments = splitNovelIntoSegments(novelBody);
+  const pages = assignSourceSegmentIndicesToPages(
+    [{ page: 1, panels: [{ caption: "……", prompt: "scene" }, { caption: "……", prompt: "scene2" }] }],
+    segments,
+  );
+  const enriched = enrichPagesFromNovelSegments(pages, segments);
+  const firstCaption = enriched[0]!.panels[0]!.caption ?? "";
+  const secondCaption = enriched[0]!.panels[1]!.caption ?? "";
+  assert.ok(
+    !comicPagesAreAllPlaceholders(enriched),
+    "占位格经 enrichPagesFromNovelSegments 后不应仍为全占位",
+  );
+  assert.match(firstCaption, /朕|不能/, "第1格应回填对白");
+  assert.match(secondCaption, /改写/, "第2格无对白时应回填旁白");
+  assert.doesNotMatch(secondCaption, /第2章/, "旁白回填应 strip 章节标题 boilerplate");
+
+  const blueprint: ComicAdaptationBlueprint = {
+    version: 1,
+    consistencyLock: "崇祯须保持明制龙袍与煤山场景一致",
+    chapters: [
+      {
+        chapterNum: 1,
+        title: "煤山",
+        sceneAnchor: "煤山歪脖树",
+        keyBeats: ["朕不能亡于此", "决意改命"],
+      },
+      {
+        chapterNum: 2,
+        title: "破局",
+        sceneAnchor: "京城",
+        keyBeats: ["改写结局", "天下太平"],
+      },
+    ],
+  };
+  const chunkBeats = selectBlueprintBeatsForChunk({
+    blueprint,
+    scopedChapterNums: [1, 2],
+    chunkStart: 1,
+    chunkEnd: 1,
+    pageCount: 2,
+    panelsPerPage: 4,
+  });
+  assert.ok(chunkBeats.length >= 2, "改编蓝图应按页块切片输出关键情节");
+  assert.match(chunkBeats.join(" "), /朕不能|改命|改写/, "切片应来自章级 keyBeats");
+
+  assert.match(
+    softenPanelCaptionForImageGen("崇祯十七年三月十九日，帝自缢煤山。"),
+    /象征|侧影/,
+    "自缢 caption 应软化为象征性画面描述",
   );
 
   console.log("qa-comic-novel-product-rules: ok");

@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { useIdleEffect } from "@/hooks/use-idle-effect";
+import { comicCoverFeaturedFrameClass } from "@/lib/cover-display-sizes";
+import { ComicNovelSourceMeta } from "@/components/comic/ComicNovelSourceMeta";
 
 interface FeaturedComic {
   id: string;
   title: string;
   imageUrls?: string;
   coverPath?: string | null;
-  novel: { title: string };
+  novel?: { id?: string; title: string } | null;
   likeCount: number;
 }
 
@@ -22,14 +25,27 @@ export function FeaturedComicsSection() {
   const [comics, setComics] = useState<FeaturedComic[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/comic?limit=6")
-      .then((r) => r.json())
-      .then((d: { comics?: FeaturedComic[] }) => {
-        setComics((d.comics ?? []).slice(0, 6));
+  useIdleEffect(() => {
+    const ac = new AbortController();
+    void (async () => {
+      try {
+        const featuredRes = await fetch("/api/comic?featured=1&limit=6", { signal: ac.signal });
+        const featuredData = (await featuredRes.json()) as { comics?: FeaturedComic[] };
+        const featured = featuredData.comics ?? [];
+        if (featured.length > 0) {
+          setComics(featured.slice(0, 6));
+          setLoaded(true);
+          return;
+        }
+        const fallbackRes = await fetch("/api/comic?sort=likeCount&limit=6", { signal: ac.signal });
+        const fallbackData = (await fallbackRes.json()) as { comics?: FeaturedComic[] };
+        setComics((fallbackData.comics ?? []).slice(0, 6));
         setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
+      } catch {
+        if (!ac.signal.aborted) setLoaded(true);
+      }
+    })();
+    return () => ac.abort();
   }, []);
 
   if (loaded && comics.length === 0) return null;
@@ -75,7 +91,7 @@ export function FeaturedComicsSection() {
       <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:mt-10 lg:grid-cols-6 lg:gap-3">
         {!loaded
           ? Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-[var(--gc-surface-glass)]" />
+              <div key={i} className={`${comicCoverFeaturedFrameClass} animate-pulse rounded-xl bg-[var(--gc-surface-glass)]`} />
             ))
           : comics.map((c) => {
               const img = coverImage(c);
@@ -85,7 +101,7 @@ export function FeaturedComicsSection() {
                   href={withLocalePath(`/comic/${c.id}`, locale)}
                   className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
                 >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+                  <div className={comicCoverFeaturedFrameClass}>
                     {img ? (
                       <img
                         src={img}
@@ -101,6 +117,12 @@ export function FeaturedComicsSection() {
                   </div>
                   <div className="flex flex-col gap-0.5 px-3 py-2">
                     <p className="line-clamp-1 text-xs font-semibold text-[var(--gc-text)]">{c.title}</p>
+                    <ComicNovelSourceMeta
+                      novel={c.novel}
+                      locale={locale}
+                      className="line-clamp-1 text-[10px] text-[var(--gc-text-faint)]"
+                      insideCardLink
+                    />
                     <div className="flex items-center gap-2 text-[10px] text-[var(--gc-text-faint)]">
                       {c.likeCount > 0 && <span>♥ {c.likeCount}</span>}
                     </div>

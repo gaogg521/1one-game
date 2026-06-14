@@ -5,6 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { parseComicImageUrls } from "@/lib/comic-format";
+import { estimateComicPanelEtaMs } from "@/lib/comic-panel-eta";
+import { formatImageGenElapsed } from "@/lib/format-duration";
 
 type ComicRow = {
   id: string;
@@ -14,14 +17,17 @@ type ComicRow = {
 };
 
 function countPanels(imageUrls: string): { total: number; withImage: number } {
-  try {
-    const doc = JSON.parse(imageUrls) as { panels?: { imageUrl?: string }[] };
-    const panels = doc.panels ?? [];
-    const withImage = panels.filter((p) => p.imageUrl && !p.imageUrl.includes("placeholder")).length;
-    return { total: panels.length, withImage };
-  } catch {
-    return { total: 0, withImage: 0 };
+  const doc = parseComicImageUrls(imageUrls);
+  let total = 0;
+  let withImage = 0;
+  for (const page of doc.pages) {
+    for (const panel of page.panels) {
+      total += 1;
+      const url = panel.imageUrl?.trim();
+      if (url && !url.includes("placeholder")) withImage += 1;
+    }
   }
+  return { total, withImage };
 }
 
 export function StudioComicPanelProgress() {
@@ -36,6 +42,7 @@ export function StudioComicPanelProgress() {
       if (!res.ok || cancelled) return;
       const data = (await res.json()) as { comics?: ComicRow[] };
       const pending = (data.comics ?? []).filter((c) => {
+        if (c.status === "draft_storyboard") return false;
         const { total, withImage } = countPanels(c.imageUrls);
         return total > 0 && withImage < total;
       });
@@ -55,7 +62,12 @@ export function StudioComicPanelProgress() {
       <ul className="mt-3 space-y-2">
         {rows.map((c) => {
           const { total, withImage } = countPanels(c.imageUrls);
+          const remaining = Math.max(0, total - withImage);
           const pct = total > 0 ? Math.round((withImage / total) * 100) : 0;
+          const eta =
+            remaining > 0
+              ? formatImageGenElapsed(estimateComicPanelEtaMs(remaining), locale)
+              : null;
           return (
             <li key={c.id} className="flex items-center gap-3 text-sm">
               <div className="min-w-0 flex-1">
@@ -68,6 +80,7 @@ export function StudioComicPanelProgress() {
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {t("progress", { withImage, total, pct })}
+                  {eta ? ` · ${t("etaRemaining", { remaining, eta })}` : ""}
                 </p>
               </div>
               <Link

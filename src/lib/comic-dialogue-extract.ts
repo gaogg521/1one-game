@@ -42,12 +42,17 @@ export function formatDialogueHintsForSegment(segment: NovelStorySegment): strin
     .join("\n");
 }
 
-function excerptNarration(text: string, maxLen = 52): string {
-  const clean = text
-    .replace(/^#+\s*/gm, "")
-    .replace(/[「」“”]/g, "")
+function stripSegmentBoilerplate(text: string): string {
+  return text
+    .replace(/^#+\s*.+$/gm, "")
+    .replace(/^={2,}\s*.+?={2,}\s*$/gm, "")
+    .replace(/^第[0-9零一二三四五六七八九十百千两]+章\s*.+$/gm, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function excerptNarration(text: string, maxLen = 52): string {
+  const clean = stripSegmentBoilerplate(text).replace(/[「」“”]/g, "").trim();
   if (!clean) return "";
   const sentence = clean.split(/(?<=[。！？!?])/)[0]?.trim() || clean;
   return sentence.slice(0, maxLen);
@@ -107,6 +112,18 @@ export function comicPagesAreAllPlaceholders(pages: ComicPage[]): boolean {
   const panels = pages.flatMap((p) => p.panels);
   if (panels.length === 0) return true;
   return panels.every((p) => isPlaceholderComicPanel(p));
+}
+
+/** 绑定段落 → 对白回填 → 旁白回填（pipeline 与 generate-run 共用） */
+export function enrichPagesFromNovelSegments(
+  pages: ComicPage[],
+  segments: NovelStorySegment[],
+): ComicPage[] {
+  if (segments.length === 0) return pages;
+  let next = assignSourceSegmentIndicesToPages(pages, segments);
+  next = enrichPagesFromSegmentDialogues(next, segments);
+  next = enrichPagesFromSegmentNarration(next, segments);
+  return next;
 }
 
 /** LLM 漏标时：用段落对白补全占位格 */

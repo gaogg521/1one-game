@@ -59,18 +59,22 @@ export async function persistChildrenNovelMeta(
 ): Promise<void> {
   const json = serializeChildrenNovelMeta(meta);
   try {
-    await prisma.$executeRaw`UPDATE "Novel" SET "generationMetaJson" = ${json} WHERE "id" = ${novelId}`;
+    await prisma.novel.update({
+      where: { id: novelId },
+      data: { generationMetaJson: json },
+    });
   } catch {
-    /* 列或 Client 未同步时忽略 */
+    /* ignore */
   }
 }
 
 export async function loadChildrenNovelMeta(novelId: string): Promise<ChildrenNovelMeta | null> {
   try {
-    const rows = await prisma.$queryRaw<Array<{ generationMetaJson: string | null }>>`
-      SELECT "generationMetaJson" FROM "Novel" WHERE "id" = ${novelId}
-    `;
-    return parseChildrenNovelMeta(rows[0]?.generationMetaJson);
+    const row = await prisma.novel.findUnique({
+      where: { id: novelId },
+      select: { generationMetaJson: true },
+    });
+    return parseChildrenNovelMeta(row?.generationMetaJson);
   } catch {
     return null;
   }

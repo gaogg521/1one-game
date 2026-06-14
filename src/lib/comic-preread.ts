@@ -43,8 +43,8 @@ export async function fetchComicPlotDigest(params: {
 }): Promise<ComicPlotDigest | null> {
   const result = await llmJson({
     model: params.model,
-    system: `你是漫画改编责编。请先通读全文节选，再输出剧情精读包 JSON。
-禁止编造节选中没有的情节；summary 覆盖起承转合；emotionalArc 写情绪曲线；keyProps 列关键道具与场景；keyBeats 提炼 8 条最适合画成分镜的关键情节。`,
+    system: `你是漫画改编责编。请先通读全书节选，在锁定人物/场景一致性的前提下输出剧情精读包 JSON。
+禁止编造节选中没有的情节；summary 覆盖全书起承转合；emotionalArc 写情绪曲线；keyProps 列关键道具与场景；keyBeats 提炼 8 条跨章关键情节（供后续按章再精炼）。`,
     user: `书名：${params.novelTitle}
 
 【全文节选】

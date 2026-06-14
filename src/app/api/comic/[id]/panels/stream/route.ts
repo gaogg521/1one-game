@@ -29,6 +29,8 @@ type PanelStreamBody = {
   regenerate?: boolean;
   /** 仅重画指定页（1-based，与分镜 page 字段一致） */
   page?: number;
+  /** 仅重画指定页内某一格（1-based） */
+  panel?: number;
 };
 
 export async function POST(req: Request, ctx: RouteContext) {
@@ -102,7 +104,12 @@ export async function POST(req: Request, ctx: RouteContext) {
         if (body.regenerate) {
           const scope =
             typeof body.page === "number" && body.page >= 1
-              ? { pageNumber: Math.floor(body.page) }
+              ? {
+                  pageNumber: Math.floor(body.page),
+                  ...(typeof body.panel === "number" && body.panel >= 1
+                    ? { panelNumber: Math.floor(body.panel) }
+                    : {}),
+                }
               : "all";
           const cleared = clearComicPanelImages(doc, scope);
           const clearedUrls = serializeComicPanels(doc);
@@ -116,7 +123,13 @@ export async function POST(req: Request, ctx: RouteContext) {
               cleared > 0
                 ? scope === "all"
                   ? pm("clearedAll", { count: cleared })
-                  : pm("clearedPage", { page: scope.pageNumber, count: cleared })
+                  : "panelNumber" in scope
+                    ? pm("clearedPanel", {
+                        page: scope.pageNumber,
+                        panel: scope.panelNumber,
+                        count: cleared,
+                      })
+                    : pm("clearedPage", { page: scope.pageNumber, count: cleared })
                 : pm("scopeNoImages"),
             imageUrls: clearedUrls,
           });
@@ -137,6 +150,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           skipStyleRefs: fullRegenerate && !doc.characterSheetUrls?.length,
           director: doc.director,
           characterSheetUrls: doc.characterSheetUrls,
+          comicId: id,
           uiLocale,
           onProgress: (ev) => {
             send(ev as unknown as Record<string, unknown>);

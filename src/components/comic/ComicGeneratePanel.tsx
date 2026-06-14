@@ -64,10 +64,12 @@ export function ComicGeneratePanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_22%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_6%,transparent)] px-4 py-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
-        <p className="font-medium text-[var(--gc-text)]">{t("consistencyTitle")}</p>
-        <p className="mt-1 text-[var(--gc-muted)]">{t("consistencyBody")}</p>
-      </div>
+      {novelId ? (
+        <div className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_22%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_6%,transparent)] px-4 py-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
+          <p className="font-medium text-[var(--gc-text)]">{t("consistencyTitle")}</p>
+          <p className="mt-1 text-[var(--gc-muted)]">{t("consistencyBody")}</p>
+        </div>
+      ) : null}
       {showOptions ? (
         <ComicGenerateOptions
           novelId={novelId}
@@ -88,6 +90,7 @@ export function ComicGeneratePanel({
         readMode={opts.readMode}
         chapterScope={opts.chapterScope}
         characterRoster={opts.characterRoster}
+        forceLightStoryboard={opts.forceLightStoryboard}
         label={label}
         className={
           className ??

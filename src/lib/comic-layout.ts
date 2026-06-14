@@ -43,13 +43,14 @@ export function panelsPerPageForLayout(layoutId: ComicLayoutId): number {
   return COMIC_LAYOUTS[layoutId].panelsPerPage;
 }
 
-/** 儿童短篇 → 小人书五格；其余默认八宫格图文页 */
+/** 儿童短篇 → 小人书五格；中篇默认四宫格（降低单次分镜 JSON 格数）；其余八宫格 */
 export function resolveComicLayoutId(opts: {
   lengthTier?: NovelLengthTier | null;
   layoutId?: ComicLayoutId | null;
 }): ComicLayoutId {
   if (opts.layoutId && opts.layoutId in COMIC_LAYOUTS) return opts.layoutId;
   if (opts.lengthTier === "children") return "picture_book_5";
+  if (opts.lengthTier === "medium") return "grid_4";
   return "grid_8";
 }
 

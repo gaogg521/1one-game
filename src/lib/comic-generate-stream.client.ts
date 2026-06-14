@@ -2,6 +2,7 @@
 
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import type { ComicGenerateStreamBody } from "@/lib/comic-generate-request";
 import { apiErrorMessage, clientErrorMessage } from "@/lib/i18n/progress-message";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
@@ -22,14 +23,21 @@ export type ComicGenerateStreamEvent = {
   total?: number;
   chunkStart?: number;
   chunkEnd?: number;
+  chunkStrategy?: "batch" | "per_page";
+  chunksTotal?: number;
+  chunksBatch?: number;
+  chunksPerPage?: number;
+  batchSuccessRate?: number;
 };
 
 export type ComicGenerateStreamResult =
   | { ok: true; comicId: string; needsPanelRender: boolean; events: ComicGenerateStreamEvent[] }
   | { ok: false; error: string; code?: string; needed?: number; available?: number };
 
+export type { ComicGenerateStreamBody } from "@/lib/comic-generate-request";
+
 export async function consumeComicGenerateStream(
-  body: Record<string, unknown>,
+  body: ComicGenerateStreamBody,
   onEvent?: (ev: ComicGenerateStreamEvent) => void,
   uiLocale: AppLocale = "zh-Hans",
 ): Promise<ComicGenerateStreamResult> {

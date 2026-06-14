@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { useIdleEffect } from "@/hooks/use-idle-effect";
+import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
 
 interface FeaturedNovel {
   id: string;
@@ -22,14 +24,16 @@ export function FeaturedNovelsSection() {
   const [novels, setNovels] = useState<FeaturedNovel[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/novel?limit=6")
+  useIdleEffect(() => {
+    const ac = new AbortController();
+    fetch("/api/novel?limit=6", { signal: ac.signal })
       .then((r) => r.json())
       .then((d: { novels?: FeaturedNovel[] }) => {
         setNovels((d.novels ?? []).slice(0, 6));
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
+    return () => ac.abort();
   }, []);
 
   if (loaded && novels.length === 0) return null;
@@ -52,7 +56,7 @@ export function FeaturedNovelsSection() {
       <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:mt-10 lg:grid-cols-6 lg:gap-3">
         {!loaded
           ? Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-[var(--gc-surface-glass)]" />
+              <div key={i} className={`${novelCoverCardFrameClass} animate-pulse rounded-xl bg-[var(--gc-surface-glass)]`} />
             ))
           : novels.map((n) => (
               <Link
@@ -60,7 +64,7 @@ export function FeaturedNovelsSection() {
                 href={withLocalePath(`/novel/${n.id}`, locale)}
                 className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
               >
-                <div className="relative aspect-[3/4] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
+                <div className={novelCoverCardFrameClass}>
                   {n.coverPath ? (
                     <img
                       src={n.coverPath}

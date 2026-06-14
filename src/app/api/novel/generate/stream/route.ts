@@ -62,7 +62,9 @@ import {
 } from "@/lib/novel-genre-tags";
 import { PRODUCT } from "@/lib/product-config";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
-import { extendNovelToEnding } from "@/lib/novel-completion-pass";
+import {
+  generateChildrenNovelRaw,
+} from "@/lib/novel-completeness-repair";
 import {
   createDraftGeneratingNovel,
   finalizeDraftNovel,
@@ -316,6 +318,9 @@ export async function POST(req: Request) {
           let content = "";
           let pipelineMeta: Awaited<ReturnType<typeof streamLongNovelBody>>["pipelineMeta"] | null =
             null;
+          let pipelineCompleteness:
+            | Awaited<ReturnType<typeof streamPlannedNovelBody>>["completeness"]
+            | undefined;
           const ping = setInterval(() => send({ step: "ping" }), 15_000);
           try {
             if (longPlan && draftNovelId) {
@@ -325,6 +330,7 @@ export async function POST(req: Request) {
                 titleTrim: resumeState?.checkpoint.title ?? titleTrim,
                 plan: longPlan,
                 lengthTier,
+                lengthOpts,
                 uiLocale,
                 polish: Boolean(longPolish),
                 emit: send,
@@ -367,48 +373,18 @@ export async function POST(req: Request) {
               content = longResult.content;
               pipelineMeta = longResult.pipelineMeta;
 
-              let longFinalContent = content;
-              let longCompleteness = assessNovelCompleteness(
-                longFinalContent,
-                lengthTier,
-                lengthOpts,
-                promptTrim,
-                pipelineMeta?.chapterPlan,
-                uiLocale,
-              );
-              if (!longCompleteness.ok) {
-                send({
-                  step: "completion_pass",
-                  message: progressNovelMessage(uiLocale, "completionPass", { reason: longCompleteness.reason }),
-                });
-                longFinalContent = await extendNovelToEnding({
-                  model,
-                  title: extractNovelTitleFromContent(longFinalContent, titleTrim, promptTrim, uiLocale),
-                  prompt: promptTrim,
-                  content: longFinalContent,
-                  lengthTier,
-                  lengthOpts,
-                });
-                longCompleteness = assessNovelCompleteness(
-                  longFinalContent,
-                  lengthTier,
-                  lengthOpts,
-                  promptTrim,
-                  pipelineMeta?.chapterPlan,
-                  uiLocale,
-                );
-              }
-              if (!longCompleteness.ok) {
+              if (!longResult.completeness.ok) {
                 send({
                   step: "model_short",
                   model,
-                  length: longFinalContent.length,
+                  length: content.length,
                   minChars: minChars,
-                  message: progressNovelMessage(uiLocale, "completenessFail", { reason: longCompleteness.reason }),
+                  message: progressNovelMessage(uiLocale, "completenessFail", {
+                    reason: longResult.completeness.reason,
+                  }),
                 });
                 continue;
               }
-              content = longFinalContent;
 
               send({ step: "synopsis_start", message: progressNovelMessage(uiLocale, "synopsisStart") });
               const summary = await generateNovelSynopsis({
@@ -478,6 +454,17 @@ export async function POST(req: Request) {
               });
               content = planned.content;
               pipelineMeta = planned.pipelineMeta;
+              pipelineCompleteness = planned.completeness;
+            } else if (isChildrenNovelTier(lengthTier)) {
+              content = await generateChildrenNovelRaw({
+                model,
+                promptTrim: pipelinePrompt,
+                titleTrim,
+                lengthOpts,
+                uiLocale,
+                emit: send,
+              });
+              pipelineMeta = null;
             } else {
               const { content: accumulated } = await accumulateNovelTextStream({
                 maxChars: maxCharsLimit,
@@ -506,20 +493,16 @@ export async function POST(req: Request) {
 
           if (longPlan) continue;
 
-          const acceptChars = minChars;
-          if (content.length < acceptChars) {
-            send({ step: "model_short", model, length: content.length, minChars: acceptChars });
-            continue;
-          }
-
           let finalTitle = extractNovelTitleFromContent(content, titleTrim, promptTrim, uiLocale);
           let finalContent = content;
           let parentReadingTip: string | undefined;
           let childrenSynopsisBody: string | undefined;
           let childrenInterpretation: string | undefined;
+          let completeness: Awaited<ReturnType<typeof assessNovelCompleteness>> | undefined =
+            pipelineCompleteness;
 
           if (isChildrenNovelTier(lengthTier) && lengthOpts?.childrenTargetAge !== undefined) {
-            const finalized = finalizeChildrenNovelContent(content, {
+            const finalized = finalizeChildrenNovelContent(finalContent, {
               targetAge: parseChildrenTargetAge(lengthOpts.childrenTargetAge),
               fallbackTitle: titleTrim,
               userPrompt: promptTrim,
@@ -532,33 +515,20 @@ export async function POST(req: Request) {
             childrenInterpretation = finalized.interpretation || undefined;
           }
 
-          let completeness = assessNovelCompleteness(
+          const acceptChars = minChars;
+          if (!isChildrenNovelTier(lengthTier) && finalContent.length < acceptChars) {
+            send({ step: "model_short", model, length: finalContent.length, minChars: acceptChars });
+            continue;
+          }
+
+          completeness ??= assessNovelCompleteness(
             finalContent,
             lengthTier,
             lengthOpts,
             promptTrim,
-            pipelineMeta?.chapterPlan,
+            isChildrenNovelTier(lengthTier) ? null : pipelineMeta?.chapterPlan,
             uiLocale,
           );
-          if (!completeness.ok && !isChildrenNovelTier(lengthTier)) {
-            send({ step: "completion_pass", message: progressNovelMessage(uiLocale, "completionPass", { reason: completeness.reason }) });
-            finalContent = await extendNovelToEnding({
-              model,
-              title: finalTitle,
-              prompt: promptTrim,
-              content: finalContent,
-              lengthTier,
-              lengthOpts,
-            });
-            completeness = assessNovelCompleteness(
-              finalContent,
-              lengthTier,
-              lengthOpts,
-              promptTrim,
-              pipelineMeta?.chapterPlan,
-              uiLocale,
-            );
-          }
           if (!completeness.ok) {
             send({
               step: "model_short",

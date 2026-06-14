@@ -1,21 +1,27 @@
-import { generateComicCover } from "@/lib/cover-generation";
+import { ensureComicCoverAfterCreate } from "@/lib/cover-generation";
 import { inferStoryGenre, resolveNovelCoverGenre } from "@/lib/cover-genre";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 import {
   resolvePageCountForChapterScope,
   sliceNovelByChapterScope,
 } from "@/lib/comic-chapter-scope";
-import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
-import type { ComicReadMode } from "@/lib/comic-format";
+import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
+import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
+import {
+  applyCharacterSheetUrlsToRoster,
+  collectCharacterSheetUrls,
+  mergeCharacterRosterReferenceUrls,
+  type ComicCharacterRoster,
+} from "@/lib/comic-character-roster";
 import { resolveComicStylePreset } from "@/lib/comic-style-presets";
-import { getNovelStyleTextModelCascade } from "@/lib/llm";
+import { getComicStoryboardModelCascade } from "@/lib/llm";
 import {
   ComicGenerateError,
   ComicGenerationRunError,
   resolveComicRunErrorMessage,
 } from "@/lib/comic-run-errors";
 import { generateComicPages, type ComicChunkCheckpoint } from "@/lib/comic-pipeline";
-import type { ComicPage } from "@/lib/comic-format";
+import type { ComicPage, ComicReadMode } from "@/lib/comic-format";
 import { parseComicImageUrls } from "@/lib/comic-format";
 import { comicCreativeNeedsExpansion, expandComicCreativeToStoryBody } from "@/lib/comic-creative-expand";
 import type { ComicDirectorPack } from "@/lib/comic-director-types";
@@ -28,10 +34,8 @@ import {
 } from "@/lib/comic-storyboard-checkpoint";
 import type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 import {
-  assignSourceSegmentIndicesToPages,
   comicPagesAreAllPlaceholders,
-  enrichPagesFromSegmentDialogues,
-  enrichPagesFromSegmentNarration,
+  enrichPagesFromNovelSegments,
 } from "@/lib/comic-dialogue-extract";
 import { splitNovelIntoSegments } from "@/lib/comic-storyboard-segments";
 import {
@@ -42,11 +46,13 @@ import {
   panelsPerPageForLayout,
   resolveComicLayoutId,
   resolveComicPageCount,
+  shouldUseLongComicPipeline,
+  type ComicLayoutId,
 } from "@/lib/comic-generate-config";
 import {
   resolveComicOutputLocale,
   resolveComicLayoutForLocale,
-  resolveStoryboardChunkPages,
+  resolveStoryboardChunkPagesForTier,
 } from "@/lib/comic-locale-prompts";
 import { formatComicStorageTitle } from "@/lib/comic-display";
 import { renderComicPanels, serializeComicPanels } from "@/lib/comic-panel-render";
@@ -62,9 +68,7 @@ import {
   resolveNovelLengthTier,
 } from "@/lib/novel-length";
 import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
-import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { loadChildrenNovelMeta } from "@/lib/children-novel-meta-db";
-import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import {
   extractComicCreativePitch,
   resolveMediaCreativeBrief,
@@ -94,9 +98,24 @@ import { untitledNovelLabel } from "@/lib/i18n/chapter-labels";
 export type { ComicGenerateErrorKey } from "@/lib/comic-run-errors";
 export { ComicGenerateError, ComicGenerationRunError, resolveComicRunErrorMessage } from "@/lib/comic-run-errors";
 
+export type { ComicSourceMode } from "@/lib/comic-pipeline-mode";
+export { resolveComicPipelineMode, validateComicPipelineRequest } from "@/lib/comic-pipeline-mode";
+import { resolveComicPipelineMode, validateComicPipelineRequest, type ComicSourceMode } from "@/lib/comic-pipeline-mode";
+import {
+  comicCreativeExpandKey,
+  comicProgressScopeKey,
+  comicProgressStartKey,
+  resolveChapterScopeForComicGenerate,
+  shouldSkipStandaloneComicBrief,
+  shouldSkipComicBriefExpand,
+} from "@/lib/comic-standalone-pipeline";
+
 export type ComicGenerateRunInput = {
   ownerKey: string;
+  /** 从已有小说改编时传入；独立创作勿传 */
   novelId?: string;
+  /** standalone=独立漫画流水线；from_novel=绑定小说并继承 Brief/改编机制 */
+  sourceMode?: ComicSourceMode;
   content?: string;
   /** 一句话漫画创意（全文粘贴时可单独填写；不填则从短文或首段提取） */
   creativePrompt?: string;
@@ -105,6 +124,7 @@ export type ComicGenerateRunInput = {
   briefRevision?: NovelBriefUserRevision;
   title?: string;
   pageCount?: number;
+  layoutId?: string;
   lengthTier?: string;
   /** 漫画画风预设：japanese_clean | chibi_cute | korean_shoujo | chinese_wuxia | chinese_campus */
   stylePreset?: string;
@@ -116,6 +136,12 @@ export type ComicGenerateRunInput = {
   characterRoster?: ComicCharacterRoster | null;
   /** 续跑未完成的分镜草稿（status=draft_storyboard） */
   resumeComicId?: string;
+  /** 跳过导演流水线，直接轻量分镜 */
+  forceLightStoryboard?: boolean;
+  /** 跳过人设参考图文生图（分镜仍可进行，无跨格锚定） */
+  skipCharSheets?: boolean;
+  /** 单角色参考图超时（毫秒）；QA 可设较短值 */
+  charSheetTimeoutMs?: number;
   uiLocale?: AppLocale;
 };
 
@@ -141,7 +167,7 @@ export async function resolveComicGenerateNovel(
   novelContent: string;
   novelSummary: string;
   novelPrompt: string;
-  actualNovelId: string;
+  actualNovelId: string | null;
   novelLengthTier: ReturnType<typeof parseNovelLengthTier>;
   novelMeta: Awaited<ReturnType<typeof loadNovelGenerationMeta>>;
   creativeExpanded: boolean;
@@ -150,13 +176,15 @@ export async function resolveComicGenerateNovel(
   let novelContent = "";
   let novelSummary = "";
   let novelPrompt = "";
-  let actualNovelId = input.novelId;
+  let actualNovelId: string | null = input.novelId ?? null;
   let novelLengthTier = parseNovelLengthTier(input.lengthTier);
   let novelMeta = null;
   let creativeExpanded = false;
   const uiLocale = input.uiLocale ?? "zh-Hans";
+  const sourceMode = resolveComicPipelineMode(input);
+  const fromNovel = sourceMode === "from_novel";
 
-  if (actualNovelId) {
+  if (fromNovel && actualNovelId) {
     const novel = await prisma.novel.findUnique({ where: { id: actualNovelId } });
     if (!novel) throw new ComicGenerateError("novelNotFound", 404);
     if (novel.ownerKey !== input.ownerKey) throw new ComicGenerateError("comicNovelForbidden", 403);
@@ -171,18 +199,25 @@ export async function resolveComicGenerateNovel(
       lengthTierPick: novelLengthTier,
     });
     novelMeta = await loadNovelGenerationMeta(actualNovelId);
-  } else if (input.content?.trim()) {
-    novelContent = input.content.trim();
+  } else if (input.content?.trim() || input.creativePrompt?.trim()) {
     const pitch = input.creativePrompt?.trim();
-    const expandFrom =
-      pitch && pitch.length >= 2 && comicCreativeNeedsExpansion(novelContent) ? pitch : novelContent;
-    if (comicCreativeNeedsExpansion(novelContent)) {
-      const expanded = await expandComicCreativeToStoryBody(expandFrom, input.title);
-      novelContent = expanded.body;
-      creativeExpanded = expanded.expanded;
-      if (expanded.expanded) {
-        novelSummary = novelContent.slice(0, 200).replace(/\n/g, " ").slice(0, 160) + "…";
+    if (input.content?.trim()) {
+      novelContent = input.content.trim();
+      const expandFrom =
+        pitch && pitch.length >= 2 && comicCreativeNeedsExpansion(novelContent) ? pitch : novelContent;
+      if (comicCreativeNeedsExpansion(novelContent)) {
+        const expanded = await expandComicCreativeToStoryBody(expandFrom, input.title);
+        novelContent = expanded.body;
+        creativeExpanded = expanded.expanded;
+        if (expanded.expanded) {
+          novelSummary = novelContent.slice(0, 200).replace(/\n/g, " ").slice(0, 160) + "…";
+        }
       }
+    } else if (pitch) {
+      const expanded = await expandComicCreativeToStoryBody(pitch, input.title);
+      novelContent = expanded.body;
+      creativeExpanded = true;
+      novelSummary = novelContent.slice(0, 200).replace(/\n/g, " ").slice(0, 160) + "…";
     }
     if (input.title?.trim()) {
       const tv = validateNovelTitleInput(input.title.trim());
@@ -192,25 +227,15 @@ export async function resolveComicGenerateNovel(
     } else {
       novelTitle = extractNovelTitleFromContent(
         novelContent,
-        undefined,
+        pitch,
         novelContent.slice(0, 500),
         uiLocale,
       );
     }
-    const pitchForStore = extractComicCreativePitch(novelContent, input.creativePrompt).slice(0, 400);
-    const novel = await prisma.novel.create({
-      data: {
-        ownerKey: input.ownerKey,
-        title: novelTitle,
-        prompt: pitchForStore,
-        content: novelContent,
-        summary: novelContent.slice(0, 300).replace(/\n/g, " ").slice(0, 200) + "…",
-        status: "ready",
-        visibility: defaultWorkVisibility(),
-      },
-    });
-    await persistNovelLengthTier(novel.id, novelLengthTier);
-    actualNovelId = novel.id;
+    novelPrompt = pitch ?? extractComicCreativePitch(novelContent, input.creativePrompt).slice(0, 400);
+    actualNovelId = null;
+  } else if (fromNovel) {
+    throw new ComicGenerateError("novelNotFound", 404);
   } else {
     throw new ComicGenerateError("needNovelOrContent", 400);
   }
@@ -220,7 +245,7 @@ export async function resolveComicGenerateNovel(
     novelContent,
     novelSummary,
     novelPrompt,
-    actualNovelId: actualNovelId!,
+    actualNovelId: actualNovelId,
     novelLengthTier,
     novelMeta,
     creativeExpanded,
@@ -233,6 +258,7 @@ export async function runComicGeneration(
 ): Promise<ComicGenerateRunResult> {
   const send = emit ?? (() => {});
   const uiLocale = input.uiLocale ?? "zh-Hans";
+  const sourceMode = resolveComicPipelineMode(input);
 
   const resolved = await resolveComicGenerateNovel(input);
   const {
@@ -248,7 +274,7 @@ export async function runComicGeneration(
   if (creativeExpanded) {
     send({
       step: "creative_expand",
-      message: progressComicMessage(uiLocale, "creativeExpand"),
+      message: progressComicMessage(uiLocale, comicCreativeExpandKey(sourceMode)),
     });
   }
 
@@ -268,10 +294,28 @@ export async function runComicGeneration(
   }
 
   let comicBriefJson: string | null = null;
-  if (PRODUCT.comic.creativeBriefExpand && creativePitch.length >= 2) {
-    const childrenMeta = isChildrenNovelTier(novelLengthTier)
-      ? await loadChildrenNovelMeta(actualNovelId)
-      : null;
+  const skipStandaloneBrief = shouldSkipStandaloneComicBrief({
+    sourceMode,
+    contentLength: novelContent.length,
+    hasInheritedBrief: Boolean(inheritedBrief),
+    hasUserBrief: Boolean(input.creativeBrief),
+  });
+  const skipBriefExpand = shouldSkipComicBriefExpand({
+    sourceMode,
+    actualNovelId,
+    hasBriefRevision: Boolean(input.briefRevision),
+    skipStandaloneBrief,
+  });
+
+  if (
+    PRODUCT.comic.creativeBriefExpand &&
+    creativePitch.length >= 2 &&
+    !skipBriefExpand
+  ) {
+    const childrenMeta =
+      isChildrenNovelTier(novelLengthTier) && actualNovelId
+        ? await loadChildrenNovelMeta(actualNovelId)
+        : null;
     const preParsed = inheritedBrief
       ? parseChildrenCreativeBrief(inheritedBrief) ??
         parseNovelCreativeBrief(inheritedBrief)
@@ -298,9 +342,15 @@ export async function runComicGeneration(
 
   const fullContentLength = novelContent.length;
   const comicScopeOpts = { isChildren: isChildrenNovelTier(novelLengthTier), uiLocale };
-  const scoped = sliceNovelByChapterScope(novelContent, input.chapterScope ?? null, comicScopeOpts);
+  const fullNovelContent = novelContent;
+  const effectiveChapterScope = resolveChapterScopeForComicGenerate(sourceMode, input.chapterScope);
+  const scoped = sliceNovelByChapterScope(novelContent, effectiveChapterScope, comicScopeOpts);
   novelContent = scoped.content;
   const chapterScopeLabel = scoped.scopeLabel;
+  const progressScope =
+    comicProgressScopeKey(sourceMode) != null
+      ? progressComicMessage(uiLocale, comicProgressScopeKey(sourceMode)!)
+      : chapterScopeLabel;
 
   const pageCount = resolvePageCountForChapterScope({
     fullContentLength,
@@ -318,11 +368,15 @@ export async function runComicGeneration(
   });
   const outputLocale = resolveComicOutputLocale(novelPrompt, novelContent);
   const layoutId = resolveComicLayoutForLocale(
-    resolveComicLayoutId({ lengthTier: novelLengthTier }),
+    resolveComicLayoutId({
+      lengthTier: novelLengthTier,
+      layoutId: (input.layoutId as ComicLayoutId | undefined) ?? null,
+    }),
     outputLocale,
     pageCount,
   );
-  const storyboardChunkSize = resolveStoryboardChunkPages(
+  const storyboardChunkSize = resolveStoryboardChunkPagesForTier(
+    novelLengthTier,
     outputLocale,
     PRODUCT.comic.storyboardChunkPages,
   );
@@ -336,8 +390,8 @@ export async function runComicGeneration(
 
   send({
     step: "start",
-    message: progressComicMessage(uiLocale, "startAdapt", {
-      scope: chapterScopeLabel,
+    message: progressComicMessage(uiLocale, comicProgressStartKey(sourceMode), {
+      scope: progressScope,
       readMode: progressComicMessage(
         uiLocale,
         readMode === "full" ? "readModeFull" : "readModeSegment",
@@ -347,15 +401,26 @@ export async function runComicGeneration(
     pageCount,
     stylePreset,
     readMode,
-    chapterScopeLabel,
+    chapterScopeLabel: progressScope,
   });
 
   const storageTitle = formatComicStorageTitle(novelTitle, novelContent.slice(0, 300), uiLocale);
-  const checkpointScope = input.chapterScope ?? null;
+  const checkpointScope = effectiveChapterScope;
   let draftComicId: string | undefined = input.resumeComicId;
   let existingPages: ComicPage[] | undefined;
   let existingDirector: ComicDirectorPack | null | undefined;
   let startChunkIndex = 0;
+
+  const draftMatchesCurrentRun = (doc: ReturnType<typeof parseComicImageUrls>) => {
+    const docLayout = doc.layoutId;
+    if (docLayout && docLayout !== layoutId) return false;
+    if (doc.director && !shouldUseLongComicPipeline(pageCount, novelLengthTier, outputLocale, {
+      forceLightStoryboard: input.forceLightStoryboard === true,
+    })) {
+      return false;
+    }
+    return true;
+  };
 
   if (draftComicId) {
     const row = await prisma.comic.findUnique({ where: { id: draftComicId } });
@@ -365,17 +430,21 @@ export async function runComicGeneration(
       row.status === COMIC_STATUS_DRAFT_STORYBOARD
     ) {
       const doc = parseComicImageUrls(row.imageUrls);
-      existingPages = doc.pages;
-      existingDirector = doc.director ?? null;
-      startChunkIndex = resumeChunkIndexFromDoc(doc, {
-        chunkSize: storyboardChunkSize,
-        pageCount,
-      });
-      send({
-        step: "resume_found",
-        message: progressComicMessage(uiLocale, "resumeDraft", { pages: existingPages.length }),
-        comicId: draftComicId,
-      });
+      if (draftMatchesCurrentRun(doc)) {
+        existingPages = doc.pages;
+        existingDirector = doc.director ?? null;
+        startChunkIndex = resumeChunkIndexFromDoc(doc, {
+          chunkSize: storyboardChunkSize,
+          pageCount,
+        });
+        send({
+          step: "resume_found",
+          message: progressComicMessage(uiLocale, "resumeDraft", { pages: existingPages.length }),
+          comicId: draftComicId,
+        });
+      } else {
+        draftComicId = undefined;
+      }
     } else {
       draftComicId = undefined;
     }
@@ -386,7 +455,7 @@ export async function runComicGeneration(
       actualNovelId,
       checkpointScope,
     );
-    if (found) {
+    if (found && draftMatchesCurrentRun(found.doc)) {
       draftComicId = found.id;
       existingPages = found.doc.pages;
       existingDirector = found.doc.director ?? null;
@@ -432,9 +501,18 @@ export async function runComicGeneration(
     });
   };
 
-  const cascade = getNovelStyleTextModelCascade();
+  const cascade = getComicStoryboardModelCascade();
   let gen = null as Awaited<ReturnType<typeof generateComicPages>> | null;
   let lastError = "";
+
+  let effectiveCharacterRoster = input.characterRoster ?? null;
+  if (actualNovelId) {
+    const serverRoster = await loadNovelCharacterRoster(actualNovelId);
+    effectiveCharacterRoster = mergeCharacterRosterReferenceUrls(
+      effectiveCharacterRoster,
+      serverRoster,
+    );
+  }
 
   for (const model of cascade) {
     send({ step: "model_start", model });
@@ -444,12 +522,14 @@ export async function runComicGeneration(
         novelPrompt,
         novelSummary,
         novelContent,
+        fullNovelContent,
+        scopedChapters: scoped.chapters,
         pageCount,
         storyGenre,
         stylePreset,
         readMode,
         layoutId,
-        characterRoster: input.characterRoster ?? null,
+        characterRoster: effectiveCharacterRoster,
         lengthTier: novelLengthTier,
         novelMeta,
         model,
@@ -459,6 +539,7 @@ export async function runComicGeneration(
         existingDirector,
         startChunkIndex,
         onChunkCheckpoint,
+        forceLightStoryboard: input.forceLightStoryboard === true,
       });
       break;
     } catch (e) {
@@ -474,9 +555,7 @@ export async function runComicGeneration(
   let pages = gen.pages;
   const segments = splitNovelIntoSegments(novelContent, 24, outputLocale);
   if (segments.length > 0) {
-    pages = assignSourceSegmentIndicesToPages(pages, segments);
-    pages = enrichPagesFromSegmentDialogues(pages, segments);
-    pages = enrichPagesFromSegmentNarration(pages, segments);
+    pages = enrichPagesFromNovelSegments(pages, segments);
   }
   if (comicPagesAreAllPlaceholders(pages)) {
     throw new ComicGenerationRunError("storyboardPlaceholder");
@@ -502,8 +581,14 @@ export async function runComicGeneration(
   let rendered = 0;
   let imageSource = "none";
 
-  // Character Sheet First：中长篇也预生成角色参考图，保证跨格人设一致
+  // Character Sheet First：优先复用 roster 已有 referenceImageUrl，仅对缺失角色生成
   let charSheetUrls: string[] = [];
+  const rosterForSheets =
+    mergeCharacterRosterReferenceUrls(gen.characterRoster, effectiveCharacterRoster) ??
+    gen.characterRoster ??
+    effectiveCharacterRoster;
+  charSheetUrls = collectCharacterSheetUrls(rosterForSheets);
+
   const charSubjects =
     gen.director?.characters?.length
       ? gen.director.characters.map((c) => ({
@@ -511,43 +596,75 @@ export async function runComicGeneration(
           name: c.name,
           visualDesc: [c.appearanceEn, c.outfitEn, c.hairEn].filter(Boolean).join(", "),
         }))
-      : gen.characterRoster?.characters?.length
-        ? gen.characterRoster.characters.map((c) => ({
+      : rosterForSheets?.characters?.length
+        ? rosterForSheets.characters.map((c) => ({
             id: c.id,
             name: c.name,
             visualDesc: [c.appearanceZh, c.outfitZh, c.notes].filter(Boolean).join(", "),
           }))
-        : input.characterRoster?.characters?.length
-          ? input.characterRoster.characters.map((c) => ({
-              id: c.id,
-              name: c.name,
-              visualDesc: [c.appearanceZh, c.outfitZh, c.notes].filter(Boolean).join(", "),
-            }))
-          : [];
+        : [];
+
+  const rosterRefById = new Map(
+    (rosterForSheets?.characters ?? [])
+      .filter((c) => c.referenceImageUrl?.trim())
+      .map((c) => [c.id, c.referenceImageUrl!.trim()]),
+  );
+  const needGenerate = charSubjects.filter((s) => !rosterRefById.has(s.id));
+  const willRenderPanelsInline = !skipInlinePanels;
 
   if (charSubjects.length > 0) {
-    send({
-      step: "char_sheets_start",
-      message: progressComicMessage(uiLocale, "charSheetStart", { count: charSubjects.length }),
-    });
-    const sheets = await generateCharacterSheets({
-      subjects: charSubjects,
-      stylePreset,
-      comicKey: actualNovelId,
-      uiLocale,
-    });
-    charSheetUrls = sheets.filter((s) => s.url).map((s) => s.url!);
     if (charSheetUrls.length > 0) {
       send({
-        step: "char_sheets_done",
-        message: progressComicMessage(uiLocale, "charSheetReady", {
+        step: "char_sheets_reuse",
+        message: progressComicMessage(uiLocale, "charSheetReuse", {
           ready: charSheetUrls.length,
           total: charSubjects.length,
         }),
         charSheetUrls,
       });
     }
+    if (!willRenderPanelsInline) {
+      send({
+        step: "char_sheets_deferred",
+        message: progressComicMessage(uiLocale, "charSheetDeferred"),
+      });
+    } else if (input.skipCharSheets) {
+      send({
+        step: "char_sheets_skip",
+        message: progressComicMessage(uiLocale, "charSheetSkip"),
+      });
+    } else if (needGenerate.length > 0) {
+      send({
+        step: "char_sheets_start",
+        message: progressComicMessage(uiLocale, "charSheetStart", { count: needGenerate.length }),
+      });
+      const sheets = await generateCharacterSheets({
+        subjects: needGenerate,
+        stylePreset,
+        comicKey: draftComicId ?? actualNovelId ?? `standalone-${storageTitle.slice(0, 24)}`,
+        uiLocale,
+        timeoutMs: input.charSheetTimeoutMs ?? PRODUCT.comic.charSheetTimeoutMs,
+      });
+      const newUrls = sheets.filter((s) => s.url).map((s) => s.url!);
+      charSheetUrls = [...charSheetUrls, ...newUrls];
+      if (rosterForSheets && newUrls.length > 0) {
+        effectiveCharacterRoster = applyCharacterSheetUrlsToRoster(rosterForSheets, sheets);
+      }
+      if (newUrls.length > 0) {
+        send({
+          step: "char_sheets_done",
+          message: progressComicMessage(uiLocale, "charSheetReady", {
+            ready: charSheetUrls.length,
+            total: charSubjects.length,
+          }),
+          charSheetUrls,
+        });
+      }
+    }
   }
+
+  const finalCharacterRoster =
+    effectiveCharacterRoster ?? rosterForSheets ?? gen.characterRoster ?? null;
 
   const comicDoc = {
     formatVersion: gen.director ? 3 : 2,
@@ -558,8 +675,9 @@ export async function runComicGeneration(
     readMode,
     chapterScopeLabel,
     ...(checkpointScope ? { chapterScope: checkpointScope } : {}),
-    ...(gen.characterRoster ? { characterRoster: gen.characterRoster } : {}),
+    ...(finalCharacterRoster ? { characterRoster: finalCharacterRoster } : {}),
     ...(gen.plotDigest ? { plotDigest: gen.plotDigest } : {}),
+    ...(gen.adaptationBlueprint ? { adaptationBlueprint: gen.adaptationBlueprint } : {}),
     ...(gen.director ? { director: gen.director, pipeline: gen.pipeline } : { pipeline: gen.pipeline }),
     storyboardSource: gen.storyboardSource,
     ...(charSheetUrls.length ? { characterSheetUrls: charSheetUrls } : {}),
@@ -660,17 +778,24 @@ export async function runComicGeneration(
 
   if (comicBriefJson) {
     await saveComicCreativeBriefJson(comicId, comicBriefJson);
-    await saveNovelCreativeBriefJson(actualNovelId, comicBriefJson);
+    if (actualNovelId) {
+      await saveNovelCreativeBriefJson(actualNovelId, comicBriefJson);
+    }
   }
 
   send({ step: "cover_start", message: progressComicMessage(uiLocale, "coverStart") });
-  void generateComicCover(
+  void ensureComicCoverAfterCreate(
     comicId,
     storageTitle,
     novelSummary || novelContent.slice(0, 400).replace(/\n/g, " "),
     novelContent.slice(0, 800),
+    600_000,
     storyGenre,
-  ).catch(() => {});
+  ).catch((e) => {
+    if (process.env.GENERATE_STRUCTURED_LOG === "1") {
+      console.warn("[comic] cover async failed", comicId, e);
+    }
+  });
 
   const consistencyNote =
     gen.consistencyIssues.length > 0

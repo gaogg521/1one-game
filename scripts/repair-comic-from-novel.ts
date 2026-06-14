@@ -2,11 +2,7 @@
  * 将占位分镜（……）按小说正文重新对齐对白/旁白，并可选重跑配图。
  * 用法：npx tsx scripts/repair-comic-from-novel.ts <comicId> [--render]
  */
-import {
-  assignSourceSegmentIndicesToPages,
-  enrichPagesFromSegmentDialogues,
-  enrichPagesFromSegmentNarration,
-} from "@/lib/comic-dialogue-extract";
+import { enrichPagesFromNovelSegments } from "@/lib/comic-dialogue-extract";
 import { parseComicImageUrls, serializeComicDocument } from "@/lib/comic-format";
 import { isPlaceholderComicPanel } from "@/lib/comic-panel-prompt-urban";
 import { renderComicPanels } from "@/lib/comic-panel-render";
@@ -30,9 +26,7 @@ async function main() {
 
   const doc = parseComicImageUrls(comic.imageUrls);
   const segments = splitNovelIntoSegments(novel.content);
-  let pages = assignSourceSegmentIndicesToPages(doc.pages, segments);
-  pages = enrichPagesFromSegmentDialogues(pages, segments);
-  pages = enrichPagesFromSegmentNarration(pages, segments);
+  const pages = enrichPagesFromNovelSegments(doc.pages, segments);
 
   const before = doc.pages.flatMap((p) => p.panels).filter((p) => isPlaceholderComicPanel(p)).length;
   const after = pages.flatMap((p) => p.panels).filter((p) => isPlaceholderComicPanel(p)).length;

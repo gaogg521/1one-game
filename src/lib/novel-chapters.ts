@@ -1,10 +1,17 @@
 import type { AppLocale } from "@/i18n/routing";
+import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import {
   defaultChapterTitle,
   novelChapterBodyLabel,
   novelChapterOpeningLabel,
   novelChapterSectionLabel,
 } from "@/lib/i18n/chapter-labels";
+import {
+  defaultNovelChapterTitle,
+  formatNovelChapterMarkerHead,
+  usesLatinNovelChapterMarkers,
+} from "@/lib/novel-locale-prompts";
+import type { ChapterPlanItem } from "@/lib/novel-long-pipeline-types";
 
 export interface NovelChapter {
   num: number;
@@ -61,6 +68,65 @@ export function parseNovelChapters(content: string, uiLocale: AppLocale = "zh-Ha
   return chapters;
 }
 
+const STRIP_CHAPTER_HEAD_RE = /^===\s*(?:Chapter\s*\d+|第\s*\d+\s*章).+===\s*/im;
+
+/**
+ * 将 segment 输出对齐到提纲章号，避免无 `=== 第N章 ===` 时被 parse 成第 1 章导致 merge 丢章。
+ */
+export function normalizeSegmentToChapterPlan(
+  segmentText: string,
+  expectedChapters: ChapterPlanItem[],
+  outputLocale: BriefInputLocale,
+): string {
+  const trimmed = segmentText.trim();
+  if (!trimmed || expectedChapters.length === 0) return trimmed;
+
+  const parsed = parseNovelChapters(trimmed);
+  const hasAllExpected = expectedChapters.every((ec) =>
+    parsed.some((p) => p.num === ec.num && p.body.trim().length > 20),
+  );
+  if (hasAllExpected) {
+    return expectedChapters
+      .map((ec) => {
+        const p = parsed.find((x) => x.num === ec.num)!;
+        return `${formatNovelChapterMarkerHead(ec.num, ec.title || p.title, outputLocale)}\n\n${p.body.trim()}`;
+      })
+      .join("\n\n");
+  }
+
+  if (expectedChapters.length === 1) {
+    const ec = expectedChapters[0]!;
+    const matched = parsed.find((p) => p.num === ec.num);
+    const body = (
+      matched?.body.trim() ||
+      (parsed.length === 1 ? parsed[0]!.body : trimmed.replace(STRIP_CHAPTER_HEAD_RE, ""))
+    ).trim();
+    if (!body) return trimmed;
+    const title = ec.title.trim() || body.slice(0, 12);
+    return `${formatNovelChapterMarkerHead(ec.num, title, outputLocale)}\n\n${body}`;
+  }
+
+  if (parsed.length === expectedChapters.length) {
+    return expectedChapters
+      .map((ec, i) =>
+        `${formatNovelChapterMarkerHead(ec.num, ec.title || parsed[i]!.title, outputLocale)}\n\n${parsed[i]!.body.trim()}`,
+      )
+      .join("\n\n");
+  }
+
+  const nonEmpty = parsed.filter((p) => p.body.trim().length > 20);
+  if (nonEmpty.length > 0 && nonEmpty.length <= expectedChapters.length) {
+    return expectedChapters
+      .slice(0, nonEmpty.length)
+      .map((ec, i) =>
+        `${formatNovelChapterMarkerHead(ec.num, ec.title || nonEmpty[i]!.title, outputLocale)}\n\n${nonEmpty[i]!.body.trim()}`,
+      )
+      .join("\n\n");
+  }
+
+  return trimmed;
+}
+
 function usesLatinChapterMarkers(content: string): boolean {
   return /===\s*Chapter\s*\d+/i.test(content);
 }
@@ -68,21 +134,56 @@ function usesLatinChapterMarkers(content: string): boolean {
 /** 将章节列表写回正文存储格式 */
 export function serializeNovelChapters(
   chapters: Array<{ num: number; title: string; body: string }>,
-  opts?: { latinMarkers?: boolean },
+  opts?: { latinMarkers?: boolean; outputLocale?: BriefInputLocale },
 ): string {
-  const latin = opts?.latinMarkers ?? false;
+  const latin =
+    opts?.latinMarkers ??
+    (opts?.outputLocale ? usesLatinNovelChapterMarkers(opts.outputLocale) : false);
   return chapters
     .map((ch, i) => {
       const num = ch.num > 0 ? ch.num : i + 1;
-      const title = ch.title.trim() || (latin ? "Body" : "正文");
+      const title =
+        ch.title.trim() ||
+        (opts?.outputLocale
+          ? defaultNovelChapterTitle(opts.outputLocale)
+          : latin
+            ? "Body"
+            : "正文");
       const body = ch.body.trim();
-      const head = latin
-        ? `=== Chapter ${num}: ${title} ===`
-        : `=== 第${num}章 ${title} ===`;
+      if (!body) return "";
+      const head = opts?.outputLocale
+        ? formatNovelChapterMarkerHead(num, title, opts.outputLocale)
+        : latin
+          ? `=== Chapter ${num}: ${title} ===`
+          : `=== 第${num}章 ${title} ===`;
       return `${head}\n\n${body}`;
     })
-    .filter((block) => block.length > 20)
+    .filter(Boolean)
     .join("\n\n");
+}
+
+/** 按章号合并正文（补写前置章时不会误追加到文末）。 */
+export function mergeNovelChapterContents(
+  existing: string,
+  addition: string,
+  outputLocale?: BriefInputLocale,
+): string {
+  const latinMarkers = outputLocale
+    ? usesLatinNovelChapterMarkers(outputLocale)
+    : usesLatinChapterMarkers(existing) || usesLatinChapterMarkers(addition);
+  const map = new Map<number, { num: number; title: string; body: string }>();
+  for (const ch of parseNovelChapters(existing)) {
+    map.set(ch.num, { num: ch.num, title: ch.title, body: ch.body });
+  }
+  for (const ch of parseNovelChapters(addition)) {
+    const prev = map.get(ch.num);
+    if (!prev || ch.body.trim().length > prev.body.trim().length) {
+      map.set(ch.num, { num: ch.num, title: ch.title, body: ch.body });
+    }
+  }
+  const sorted = [...map.values()].sort((a, b) => a.num - b.num);
+  if (sorted.length === 0) return existing.trim() || addition.trim();
+  return serializeNovelChapters(sorted, { latinMarkers, outputLocale });
 }
 
 /**

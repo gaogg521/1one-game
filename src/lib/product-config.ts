@@ -3,7 +3,7 @@
  * 发版时在代码中调整；**.env 仅保留密钥、网关地址、部署开关**（见 `.env.example`）。
  */
 
-import { godotExportTemplateIds } from "@/lib/game-templates/registry";
+import { godotExportTemplateIds, GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 
 export type ImageGenSizeOption = "1024x1024" | "1024x1536" | "1536x1024";
 export type OrchestrationQualityTier = "fast" | "standard" | "rich" | "astrocade";
@@ -82,16 +82,22 @@ export const PRODUCT = {
     panelGenConcurrency: 4,
     /** 角色参考图并行生成上限（与分镜配图并发共用配置） */
     charSheetConcurrency: 4,
+    /** 单张角色参考图超时（毫秒）；过长会阻塞分镜入库 */
+    charSheetTimeoutMs: 180_000,
     /** 单次流内最多配图格数；短篇默认分镜先入库，详情页再异步补图 */
     inlinePanelMaxCount: 1,
     batchPanelCount: 4,
     /** 页数 ≥ 此值或小说为 long 时走导演→分镜→镜头→生图流水线 */
     directorPipelineMinPages: 6,
+    /** 中篇默认 8 页走轻量分镜；≥ 此页数才启用导演流水线 */
+    mediumDirectorMinPages: 12,
     storyboardChunkPages: 4,
     directorTimeoutMs: 900_000,
     storyboardTimeoutMs: 180_000,
     directorContentMaxChars: 24_000,
     lightPathContentMaxChars: 12_000,
+    /** 独立漫画：正文 ≥ 此字数时跳过后台 Brief，直接进入分镜 */
+    standaloneBriefSkipMinChars: 1500,
   },
 
   image: {
@@ -114,6 +120,9 @@ export const PRODUCT = {
     genTimeoutMs: 18_000,
     repairTimeoutMs: 12_000,
     enhanceTimeoutMs: 18_000,
+    /** Agentic 模块：完整 JS 源码 JSON，需更长网关超时 */
+    agenticTimeoutMs: 120_000,
+    agenticRepairTimeoutMs: 90_000,
     totalTimeoutMs: 42_000,
     maxRepairRounds: 2,
     /** 部分网关 strict schema 不兼容扩展 director 时保持 false */
@@ -126,6 +135,17 @@ export const PRODUCT = {
     /** Astrocade 级：默认开启 Agentic（AGENTIC_GAME_MODULE=0 关闭） */
     agenticModuleEnabled:
       process.env.AGENTIC_GAME_MODULE === "0" || process.env.AGENTIC_GAME_MODULE === "false"
+        ? false
+        : true,
+    /** 优先 template fallback（接近样品 Scene）；默认全模板；AGENTIC_FORCE_LLM=1 可测 LLM */
+    agenticTemplateFirst: (process.env.AGENTIC_TEMPLATE_FIRST ?? GAME_TEMPLATE_IDS.join(","))
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    /** Astrocade 竞对：template-first 用户生成走专用 Scene（与样品馆一致）；DEDICATED_SCENE_FOR_TEMPLATE_FIRST=0 关闭 */
+    dedicatedSceneForTemplateFirst:
+      process.env.DEDICATED_SCENE_FOR_TEMPLATE_FIRST === "0" ||
+      process.env.DEDICATED_SCENE_FOR_TEMPLATE_FIRST === "false"
         ? false
         : true,
   },

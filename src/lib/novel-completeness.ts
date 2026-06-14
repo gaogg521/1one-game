@@ -70,15 +70,38 @@ export function assessNovelCompleteness(
     return { ok: false, reason: msg("tooShort"), chapterCount };
   }
 
-  if (chapterPlan && chapterPlan.chapters.length > 0 && chapterCount < chapterPlan.chapters.length) {
-    return {
-      ok: false,
-      reason: msg("planIncomplete", {
-        planned: chapterPlan.chapters.length,
-        written: chapterCount,
-      }),
-      chapterCount,
-    };
+  if (tier === "children") {
+    if (UNFINISHED_ENDING_RE.test(trimmed.slice(-400)) && !endingRe.test(trimmed.slice(-400))) {
+      return { ok: false, reason: msg("unfinishedEnding"), chapterCount };
+    }
+    return { ok: true, reason: msg("okComplete"), chapterCount };
+  }
+
+  if (chapterPlan && chapterPlan.chapters.length > 0) {
+    const writtenNums = new Set(chapters.map((c) => c.num));
+    const plannedNums = chapterPlan.chapters.map((c) => c.num);
+    const missingCount = plannedNums.filter((n) => !writtenNums.has(n)).length;
+    if (missingCount > 0) {
+      const tail = trimmed.slice(-500);
+      const lastChapter = chapters.at(-1);
+      const tailBlob = `${lastChapter?.title ?? ""}\n${lastChapter?.body ?? tail}`;
+      const partialOk =
+        tier === "long" &&
+        missingCount / plannedNums.length <= 0.12 &&
+        writtenNums.size >= Math.ceil(plannedNums.length * 0.88) &&
+        endingRe.test(tailBlob);
+      if (partialOk) {
+        return { ok: true, reason: msg("okCompletePartialPlan"), chapterCount };
+      }
+      return {
+        ok: false,
+        reason: msg("planIncomplete", {
+          planned: plannedNums.length,
+          written: plannedNums.length - missingCount,
+        }),
+        chapterCount,
+      };
+    }
   }
 
   if (tier === "short" && chapterCount < 3) {

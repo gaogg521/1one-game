@@ -11,6 +11,12 @@ import { getComicPanelGenConcurrency } from "@/lib/model-config";
 import { PRODUCT } from "@/lib/product-config";
 import type { AppLocale } from "@/i18n/routing";
 import { assetGenMessage } from "@/lib/i18n/progress-message";
+import {
+  applyCharacterSheetUrlsToRoster,
+  collectCharacterSheetUrls,
+  type ComicCharacterRoster,
+} from "@/lib/comic-character-roster";
+import type { ComicDirectorPack } from "@/lib/comic-director-types";
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -66,16 +72,40 @@ export type CharSheetResult = {
   error?: string;
 };
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s）`)), ms);
+    }),
+  ]);
+}
+
 export async function generateCharacterSheets(params: {
   subjects: CharSheetSubject[];
   stylePreset: ComicStylePresetId;
   comicKey: string;
   maxCharacters?: number;
   uiLocale?: AppLocale;
+  /** 跳过文生图（QA / 降级） */
+  skip?: boolean;
+  /** 单角色参考图超时；默认 PRODUCT.comic.charSheetTimeoutMs */
+  timeoutMs?: number;
 }): Promise<CharSheetResult[]> {
   const locale = params.uiLocale ?? "zh-Hans";
   const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
     assetGenMessage(locale, key, p);
+
+  if (params.skip) {
+    return params.subjects.map((c) => ({
+      characterId: c.id,
+      name: c.name,
+      url: null,
+      error: "skipped",
+    }));
+  }
+
   const availability = getImageGenAvailability();
   if (!availability.ok) {
     return params.subjects.map((c) => ({
@@ -86,6 +116,7 @@ export async function generateCharacterSheets(params: {
     }));
   }
 
+  const perCharTimeoutMs = params.timeoutMs ?? PRODUCT.comic.charSheetTimeoutMs ?? 180_000;
   const chars = params.subjects.slice(0, params.maxCharacters ?? 6);
   const concurrency = Math.min(
     getComicPanelGenConcurrency(),
@@ -106,10 +137,12 @@ export async function generateCharacterSheets(params: {
     console.info(`[char-sheet] 生成 ${char.id} (${char.name})…`);
 
     try {
-      const result = await generateImageDetailed(prompt, {
+      const gen = generateImageDetailed(prompt, {
         size: "1024x1024",
         quality: "standard",
+        timeoutMs: perCharTimeoutMs,
       });
+      const result = await withTimeout(gen, perCharTimeoutMs + 5_000, char.name);
 
       if (!result.ok || !result.url) {
         return {
@@ -143,4 +176,54 @@ export async function generateCharacterSheets(params: {
       };
     }
   });
+}
+
+/** 配图阶段按需生成角色参考图（分镜入库时不阻塞）。 */
+export async function ensureComicCharacterSheetsForRender(params: {
+  comicKey: string;
+  stylePreset: ComicStylePresetId;
+  roster?: ComicCharacterRoster | null;
+  director?: ComicDirectorPack | null;
+  existingUrls?: string[];
+  uiLocale?: AppLocale;
+  timeoutMs?: number;
+}): Promise<{ urls: string[]; roster?: ComicCharacterRoster | null }> {
+  let roster = params.roster ?? null;
+  const cached = collectCharacterSheetUrls(roster);
+  const urls = new Set([...(params.existingUrls?.filter(Boolean) ?? []), ...cached]);
+
+  const charSubjects =
+    params.director?.characters?.length
+      ? params.director.characters.map((c) => ({
+          id: c.id,
+          name: c.name,
+          visualDesc: [c.appearanceEn, c.outfitEn, c.hairEn].filter(Boolean).join(", "),
+        }))
+      : roster?.characters
+          ?.filter((c) => !c.referenceImageUrl?.trim())
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            visualDesc: [c.appearanceZh, c.outfitZh, c.notes].filter(Boolean).join(", "),
+          })) ?? [];
+
+  const needGenerate = charSubjects.filter((s) => !urls.has(`/comic-char-sheets/${params.comicKey}-${s.id}.png`));
+  if (needGenerate.length === 0) {
+    return { urls: [...urls], roster };
+  }
+
+  const sheets = await generateCharacterSheets({
+    subjects: needGenerate,
+    stylePreset: params.stylePreset,
+    comicKey: params.comicKey,
+    uiLocale: params.uiLocale,
+    timeoutMs: params.timeoutMs,
+  });
+  if (roster && sheets.some((s) => s.url)) {
+    roster = applyCharacterSheetUrlsToRoster(roster, sheets);
+  }
+  for (const sheet of sheets) {
+    if (sheet.url) urls.add(sheet.url);
+  }
+  return { urls: [...urls], roster };
 }

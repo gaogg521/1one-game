@@ -14,20 +14,32 @@ import { parseComicImageUrls, type ComicPage } from "@/lib/comic-format";
 import { type ComicLayoutId } from "@/lib/comic-layout";
 import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import { formatImageGenElapsed } from "@/lib/format-duration";
+import { avgPanelMsFromSession, estimateComicPanelEtaMs } from "@/lib/comic-panel-eta";
 import { consumeSSE } from "@/lib/read-sse";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
+import { WorkLikeButton } from "@/components/work/WorkLikeButton";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { LiteraryAdaptationTrustBadge } from "@/components/LiteraryAdaptationTrustBadge";
+import { ComicDetailCoverPreview } from "@/components/comic/ComicDetailCoverPreview";
+import { ComicStoryboardOutline } from "@/components/literary/ComicStoryboardOutline";
+import { inferStoryGenre } from "@/lib/cover-genre";
+import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-user";
 
 interface Comic {
   id: string;
   title: string;
   displayTitle?: string;
   imageUrls: string;
-  novel: { id: string; title: string; displayTitle?: string };
+  coverPath?: string | null;
+  novelId?: string | null;
+  novel: { id: string; title: string; displayTitle?: string } | null;
   createdAt: string;
   shareCode: string | null;
+  likeCount?: number;
   isOwner?: boolean;
   status?: string;
   panelsWithImage?: number;
@@ -36,10 +48,12 @@ interface Comic {
 
 export default function ComicDetailPage() {
   const tr = useTranslations("comicRead");
+  const tStory = useTranslations("storyboardOutline");
   const locale = useLocale() as AppLocale;
   const { id } = useParams();
   const searchParams = useSearchParams();
   const autoRenderStarted = useRef(false);
+  const renderSessionStartWithImage = useRef(0);
   const [comic, setComic] = useState<Comic | null>(null);
   const [pages, setPages] = useState<ComicPage[]>([]);
   const [stylePreset, setStylePreset] = useState<ComicStylePresetId | undefined>();
@@ -77,6 +91,7 @@ export default function ComicDetailPage() {
     message: string;
     elapsedMs?: number;
   } | null>(null);
+  const [reorderBusy, setReorderBusy] = useState(false);
 
   const loadComic = useCallback(async () => {
     if (!id) return;
@@ -145,12 +160,33 @@ export default function ComicDetailPage() {
 
   const missingImages = panelStats.total > 0 && panelStats.missing > 0;
 
+  const pendingPanelEta = useMemo(() => {
+    if (panelStats.missing <= 0) return null;
+    return formatImageGenElapsed(estimateComicPanelEtaMs(panelStats.missing), locale);
+  }, [panelStats.missing, locale]);
+
+  const renderPanelEta = useMemo(() => {
+    if (!renderProgress) return null;
+    const remaining = Math.max(0, renderProgress.total - renderProgress.withImage);
+    if (remaining <= 0) return null;
+    const completedThisSession = Math.max(
+      0,
+      renderProgress.withImage - renderSessionStartWithImage.current,
+    );
+    const avgMs = avgPanelMsFromSession({
+      panelsCompletedThisSession: completedThisSession,
+      elapsedMs: renderProgress.elapsedMs ?? 0,
+    });
+    return formatImageGenElapsed(estimateComicPanelEtaMs(remaining, avgMs), locale);
+  }, [renderProgress, locale]);
+
   const handleRenderPanels = useCallback(
-    async (opts?: { regenerate?: boolean; page?: number }) => {
+    async (opts?: { regenerate?: boolean; page?: number; panel?: number }) => {
       if (!comic) return;
       setRendering(true);
       setRenderMsg(null);
       setError("");
+      renderSessionStartWithImage.current = panelStats.withImage;
     const regenPage = opts?.page;
     setRenderProgress({
       total: panelStats.total || comic.panelsTotal || 4,
@@ -169,7 +205,11 @@ export default function ComicDetailPage() {
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify(
           opts?.regenerate
-            ? { regenerate: true, ...(regenPage != null ? { page: regenPage } : {}) }
+            ? {
+                regenerate: true,
+                ...(opts.page != null ? { page: opts.page } : {}),
+                ...(opts.panel != null ? { panel: opts.panel } : {}),
+              }
             : {},
         ),
       });
@@ -320,6 +360,100 @@ export default function ComicDetailPage() {
     [comic, runLoadComic, applyComicDoc, panelStats.total, panelStats.withImage, tr, locale],
   );
 
+  const confirmRegeneratePanel = useCallback(
+    (pageNumber: number, panelNumber: number) => {
+      if (!comic || rendering) return;
+      if (
+        !window.confirm(tr("confirmRegenPanel", { page: pageNumber, panel: panelNumber }))
+      ) {
+        return;
+      }
+      void handleRenderPanels({ regenerate: true, page: pageNumber, panel: panelNumber });
+    },
+    [comic, rendering, handleRenderPanels, tr],
+  );
+
+  const patchStoryboard = useCallback(
+    async (payload: Record<string, unknown>) => {
+      if (!id || !comic?.isOwner || reorderBusy || rendering) return null;
+      setReorderBusy(true);
+      setError("");
+      try {
+        const res = await fetch(`/api/comic/${encodeURIComponent(id as string)}`, {
+          method: "PATCH",
+          headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as { pages?: ComicPage[]; errorKey?: string };
+        if (!res.ok || !data.pages) {
+          setError(resolveClientApiError(locale, data, "reorderFailed"));
+          return null;
+        }
+        setPages(data.pages);
+        setCurrentPage((p) => Math.min(p, Math.max(0, data.pages!.length - 1)));
+        return data.pages;
+      } catch {
+        setError(tStory("reorderFailed"));
+        return null;
+      } finally {
+        setReorderBusy(false);
+      }
+    },
+    [id, comic?.isOwner, reorderBusy, rendering, locale, tStory],
+  );
+
+  const handleMovePanel = useCallback(
+    (fromPageIndex: number, fromPanelIndex: number, toPageIndex: number, toPanelIndex: number) => {
+      void patchStoryboard({
+        storyboardMovePanel: { fromPageIndex, fromPanelIndex, toPageIndex, toPanelIndex },
+      });
+    },
+    [patchStoryboard],
+  );
+
+  const handleAddPanel = useCallback(
+    (pageIndex: number, afterPanelIndex?: number) => {
+      void patchStoryboard({
+        storyboardAddPanel: { pageIndex, ...(afterPanelIndex !== undefined ? { afterPanelIndex } : {}) },
+      });
+    },
+    [patchStoryboard],
+  );
+
+  const handleRemovePanel = useCallback(
+    (pageIndex: number, panelIndex: number) => {
+      void patchStoryboard({ storyboardRemovePanel: { pageIndex, panelIndex } });
+    },
+    [patchStoryboard],
+  );
+
+  const handleAddPage = useCallback(
+    (afterPageIndex?: number) => {
+      void patchStoryboard({
+        storyboardAddPage: { ...(afterPageIndex !== undefined ? { afterPageIndex } : {}) },
+      });
+    },
+    [patchStoryboard],
+  );
+
+  const handleMergePage = useCallback(
+    (pageIndex: number) => {
+      void patchStoryboard({ storyboardMergePage: { pageIndex } });
+    },
+    [patchStoryboard],
+  );
+
+  const handleUpdatePanel = useCallback(
+    (
+      pageIndex: number,
+      panelIndex: number,
+      fields: { speaker?: string; caption?: string; prompt?: string },
+    ) => {
+      void patchStoryboard({ storyboardUpdatePanel: { pageIndex, panelIndex, fields } });
+    },
+    [patchStoryboard],
+  );
+
   const confirmRegenerate = useCallback(
     (scope: "all" | "page") => {
       if (!comic || rendering) return;
@@ -377,7 +511,23 @@ export default function ComicDetailPage() {
   const page = pages[currentPage];
   const total = pages.length;
   const heading = comic.displayTitle ?? comic.title;
-  const novelLabel = comic.novel.displayTitle ?? comic.novel.title;
+  const linkedNovel = comic.novel;
+  const novelLabel = linkedNovel ? linkedNovel.displayTitle ?? linkedNovel.title : heading;
+  const adaptationInfo = linkedNovel
+    ? resolveLiteraryAdaptationUserInfo({
+        novelTitle: novelLabel,
+        chapterScope,
+        chapterScopeLabel,
+        readMode,
+        storyGenre: inferStoryGenre({
+          title: novelLabel,
+          summary: "",
+          prompt: novelLabel,
+          contentSnippet: "",
+        }),
+        uiLocale: locale,
+      })
+    : null;
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">
@@ -385,20 +535,49 @@ export default function ComicDetailPage() {
       <AppMain>
       <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         <div className="mx-auto max-w-3xl">
+          <div className="mb-6 flex justify-center">
+            <ComicDetailCoverPreview
+              comicId={comic.id}
+              title={heading}
+              coverPath={comic.coverPath ?? null}
+              imageUrls={comic.imageUrls}
+              locale={locale}
+              onCoverUpdate={(path) => setComic((prev) => (prev ? { ...prev, coverPath: path } : prev))}
+            />
+          </div>
+          {adaptationInfo ? (
+            <div className="mb-4">
+              <LiteraryAdaptationTrustBadge info={adaptationInfo} />
+            </div>
+          ) : null}
           <div className="mb-6">
           <ResultMomentBanner
             mode="comic"
             title={heading}
-            subtitle={tr("subtitle", {
-              novel: novelLabel,
-              total,
-              scope: chapterScopeLabel ? tr("scopeSuffix", { scope: chapterScopeLabel }) : "",
-            })}
+            subtitle={
+              linkedNovel
+                ? tr("subtitle", {
+                    novel: novelLabel,
+                    total,
+                    scope: chapterScopeLabel ? tr("scopeSuffix", { scope: chapterScopeLabel }) : "",
+                  })
+                : tr("subtitleStandalone", { total })
+            }
             actions={
               <>
-                {comic.isOwner && chapterScope ? (
+                <WorkEngagementStats kind="comic" likeCount={comic.likeCount ?? 0} hideLikes size="md" />
+                <WorkLikeButton
+                  kind="comic"
+                  id={comic.id}
+                  initialCount={comic.likeCount ?? 0}
+                  variant="banner"
+                />
+                {comic.isOwner && chapterScope && linkedNovel ? (
                   <Link
-                    href={`/novel/${comic.novel.id}?comicChapter=${chapterScope.toChapter + 1}`}
+                    href={withLocalePath(
+                      `/novel/${linkedNovel.id}?comicChapter=${chapterScope.toChapter + 1}`,
+                      locale,
+                    )}
                     className="gc-theme-cta rounded-lg px-4 py-2 text-xs font-semibold"
                   >
                     {tr("adaptNext")}
@@ -415,11 +594,21 @@ export default function ComicDetailPage() {
             }
             details={
               <p className="text-xs leading-relaxed text-[var(--gc-muted)]">
-                {tr("basedOn")}
-                <Link href={`/novel/${comic.novel.id}`} className="mx-1 underline hover:text-[var(--gc-accent)]">
-                  《{novelLabel}》
-                </Link>
-                · {layoutId === "picture_book_5" ? tr("layoutChildren") : tr("layoutGrid")}
+                {linkedNovel ? (
+                  <>
+                    {tr("basedOn")}
+                    <Link
+                      href={withLocalePath(`/novel/${linkedNovel.id}`, locale)}
+                      className="mx-1 underline hover:text-[var(--gc-accent)]"
+                    >
+                      《{novelLabel}》
+                    </Link>
+                    ·{" "}
+                  </>
+                ) : (
+                  <>{tr("standaloneWork")} · </>
+                )}
+                {layoutId === "picture_book_5" ? tr("layoutChildren") : tr("layoutGrid")}
                 {readMode === "full" ? tr("readModeFull") : ""} · {new Date(comic.createdAt).toLocaleDateString()}
                 <br />
                 {tr("metaHint")}
@@ -471,7 +660,12 @@ export default function ComicDetailPage() {
                     {renderProgress.elapsedMs != null
                       ? tr("elapsed", { elapsed: formatImageGenElapsed(renderProgress.elapsedMs, locale) })
                       : null}
-                    {tr("etaHint")}
+                    {renderPanelEta
+                      ? tr("panelEtaRemaining", {
+                          remaining: Math.max(0, renderProgress.total - renderProgress.withImage),
+                          eta: renderPanelEta,
+                        })
+                      : tr("etaHint")}
                   </p>
                     </>
                   )}
@@ -492,6 +686,14 @@ export default function ComicDetailPage() {
                             total: panelStats.total,
                           })}
                   </p>
+                  {panelStats.missing > 0 && pendingPanelEta ? (
+                    <p className="text-xs text-amber-200/80">
+                      {tr("panelEtaPending", {
+                        remaining: panelStats.missing,
+                        eta: pendingPanelEta,
+                      })}
+                    </p>
+                  ) : null}
                 </div>
               )}
               {comic.isOwner && !rendering ? (
@@ -547,6 +749,23 @@ export default function ComicDetailPage() {
             <p className="text-[var(--gc-muted)]">{tr("noPanels")}</p>
           ) : (
             <>
+              <ComicStoryboardOutline
+                pages={pages}
+                currentPage={currentPage}
+                onSelectPage={setCurrentPage}
+                isOwner={Boolean(comic.isOwner)}
+                rendering={rendering}
+                onRegeneratePanel={confirmRegeneratePanel}
+                onMovePanel={comic.isOwner ? handleMovePanel : undefined}
+                onAddPanel={comic.isOwner ? handleAddPanel : undefined}
+                onRemovePanel={comic.isOwner ? handleRemovePanel : undefined}
+                onAddPage={comic.isOwner ? handleAddPage : undefined}
+                onMergePage={comic.isOwner ? handleMergePage : undefined}
+                onUpdatePanel={comic.isOwner ? handleUpdatePanel : undefined}
+                reorderBusy={reorderBusy}
+                className="mb-6"
+              />
+
               <div className="mb-4 flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -575,9 +794,23 @@ export default function ComicDetailPage() {
                     page={page}
                     rendering={rendering}
                     stylePreset={stylePreset}
+                    canRemovePanel={Boolean(comic.isOwner)}
+                    onRemovePanel={
+                      comic.isOwner ? (panelIdx) => handleRemovePanel(currentPage, panelIdx) : undefined
+                    }
+                    removeBusy={reorderBusy}
                   />
                 ) : (
-                  <ComicEightGridPageGrid page={page} rendering={rendering} stylePreset={stylePreset} />
+                  <ComicEightGridPageGrid
+                    page={page}
+                    rendering={rendering}
+                    stylePreset={stylePreset}
+                    canRemovePanel={Boolean(comic.isOwner)}
+                    onRemovePanel={
+                      comic.isOwner ? (panelIdx) => handleRemovePanel(currentPage, panelIdx) : undefined
+                    }
+                    removeBusy={reorderBusy}
+                  />
                 ))}
 
               {total > 1 && (

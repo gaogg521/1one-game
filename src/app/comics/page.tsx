@@ -7,45 +7,76 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
+import { comicCoverFromImageUrls } from "@/lib/comic-display";
+import { comicCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { ComicNovelSourceMeta } from "@/components/comic/ComicNovelSourceMeta";
 
 interface ComicWork {
   id: string;
   title: string;
   prompt: string;
   coverPath: string | null;
+  imageUrls?: string;
   likeCount: number;
   createdAt: string;
-  novel?: { title: string };
+  novel?: { id?: string; title: string } | null;
 }
 
-function ComicCard({ comic, locale }: { comic: ComicWork; locale: AppLocale }) {
+function ComicCard({
+  comic,
+  locale,
+  onCoverUpdate,
+}: {
+  comic: ComicWork;
+  locale: AppLocale;
+  onCoverUpdate?: (id: string, path: string) => void;
+}) {
   const t = useTranslations("lists");
+  const panelFallback = comic.imageUrls ? comicCoverFromImageUrls(comic.imageUrls) : null;
+  const { displayCover, coverFailed, coverPending, retryCover } = useAutoWorkCover({
+    kind: "comic",
+    id: comic.id,
+    coverPath: comic.coverPath,
+    locale,
+    fallbackCover: panelFallback,
+    onUpdated: (path) => onCoverUpdate?.(comic.id, path),
+  });
+
   return (
     <Link
       href={withLocalePath(`/comic/${comic.id}`, locale)}
       className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:shadow-md"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--gc-bg-elevated)]">
-        {comic.coverPath ? (
+      <div className={comicCoverCardFrameClass}>
+        {displayCover ? (
           <img
-            src={comic.coverPath}
+            src={displayCover}
             alt={comic.title}
             className="h-full w-full object-cover transition group-hover:scale-105"
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-3xl text-[var(--gc-muted)] opacity-30">
-            🎨
-          </div>
+          <WorkCoverPlaceholder
+            icon="🎨"
+            failedLabel={t("coverFailed")}
+            generatingLabel={t("coverGenerating")}
+            retryLabel={t("coverRetry")}
+            coverFailed={coverFailed}
+            coverPending={coverPending}
+            onRetry={retryCover}
+            testId={`comic-list-cover-retry-${comic.id}`}
+          />
         )}
       </div>
       <div className="flex flex-col gap-0.5 px-3 py-2">
         <p className="line-clamp-1 text-sm font-semibold text-[var(--gc-text)]">{comic.title}</p>
-        {comic.novel ? (
-          <p className="line-clamp-1 text-xs text-[var(--gc-muted)]">
-            {t("basedOnNovel", { title: comic.novel.title })}
-          </p>
-        ) : null}
+        <ComicNovelSourceMeta
+          novel={comic.novel}
+          locale={locale}
+          className="line-clamp-1 text-xs text-[var(--gc-muted)]"
+          insideCardLink
+        />
         <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--gc-text-faint)]">
           {comic.likeCount > 0 && <span>♥ {comic.likeCount}</span>}
         </div>
@@ -117,7 +148,7 @@ export default function ComicsPage() {
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-[var(--gc-surface-glass)]" />
+              <div key={i} className={`${comicCoverCardFrameClass} animate-pulse rounded-xl bg-[var(--gc-surface-glass)]`} />
             ))}
           </div>
         ) : comics.length === 0 ? (
@@ -130,7 +161,14 @@ export default function ComicsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {comics.map((c) => (
-              <ComicCard key={c.id} comic={c} locale={locale} />
+              <ComicCard
+                key={c.id}
+                comic={c}
+                locale={locale}
+                onCoverUpdate={(id, coverPath) => {
+                  setComics((prev) => prev.map((x) => (x.id === id ? { ...x, coverPath } : x)));
+                }}
+              />
             ))}
           </div>
         )}

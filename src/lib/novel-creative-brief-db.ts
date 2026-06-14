@@ -12,24 +12,17 @@ export { parseNovelCreativeBrief, parseChildrenCreativeBrief };
 
 export async function fetchNovelCreativeBriefJson(novelId: string): Promise<string | null> {
   try {
-    const rows = await prisma.$queryRaw<{ creativeBriefJson: string | null }[]>`
-      SELECT creativeBriefJson FROM "Novel" WHERE id = ${novelId}
-    `;
-    return rows[0]?.creativeBriefJson ?? null;
+    const row = await prisma.novel.findUnique({
+      where: { id: novelId },
+      select: { creativeBriefJson: true },
+    });
+    return row?.creativeBriefJson ?? null;
   } catch {
     return null;
   }
 }
 
 export async function saveNovelCreativeBriefJson(novelId: string, briefJson: string): Promise<void> {
-  try {
-    await prisma.$executeRaw`
-      UPDATE "Novel" SET "creativeBriefJson" = ${briefJson} WHERE "id" = ${novelId}
-    `;
-    return;
-  } catch {
-    /* 列未迁移 */
-  }
   try {
     await prisma.novel.update({
       where: { id: novelId },

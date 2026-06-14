@@ -2,7 +2,7 @@ import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale"
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmNovelJson } from "@/lib/llm";
-import { buildLongNovelChapterPlanSystemPrompt } from "@/lib/novel-locale-prompts";
+import { buildLongNovelChapterPlanSystemPrompt, formatChapterPlanSliceLine } from "@/lib/novel-locale-prompts";
 import {
   estimateLongNovelChapterCount,
   LONG_NOVEL_PRODUCT,
@@ -24,6 +24,24 @@ export type ChapterSegmentSlice = {
   phase: string;
 };
 
+/** 保证章提纲每一章都能分到至少一个写作批次（避免 plan.totalSegments 过小截断末章）。 */
+export function computeSegmentCapForChapterPlan(
+  chapterCount: number,
+  plan: LongNovelSegmentPlan,
+): number {
+  if (chapterCount <= 0) return plan.totalSegments;
+  const byMaxBatch = Math.ceil(chapterCount / LONG_NOVEL_PRODUCT.chaptersPerSegmentMax);
+  const avgPerSegment = Math.max(
+    1,
+    Math.floor(plan.charsPerSegment / LONG_NOVEL_PRODUCT.avgCharsPerChapter),
+  );
+  const byCharBudget = Math.ceil(chapterCount / avgPerSegment);
+  return Math.min(
+    LONG_NOVEL_PRODUCT.maxSegments,
+    Math.max(plan.totalSegments, byMaxBatch, byCharBudget),
+  );
+}
+
 export function buildChapterPlanUserMessage(
   prompt: string,
   bible: NovelBible,
@@ -34,22 +52,59 @@ export function buildChapterPlanUserMessage(
 ): string {
   const cfg = novelLengthConfig(lengthTier);
   const avg = avgCharsPerChapter ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter;
-  if (locale === "en") {
-    return `User concept: ${prompt.trim()}
+  const bibleBlock = formatNovelBibleForPrompt(bible, locale);
+  const concept = prompt.trim();
 
-${formatNovelBibleForPrompt(bible, locale)}
+  switch (locale) {
+    case "en":
+      return `User concept: ${concept}
+
+${bibleBlock}
 
 Plan exactly **${chapterCount} chapters** as chapter-plan JSON in English.
 Target ${cfg.minChars}–${cfg.maxChars} characters; suggested targetChars per chapter ~${avg}.
 No prose body—chapters array only.`;
-  }
-  return `用户创意：${prompt.trim()}
+    case "ja":
+      return `ユーザー創意：${concept}
 
-${formatNovelBibleForPrompt(bible, locale)}
+${bibleBlock}
+
+**ちょうど ${chapterCount} 章**の chapter plan JSON を日本語で出力。
+目標 ${cfg.minChars}–${cfg.maxChars} 字；各章 targetChars は ~${avg}。
+本文は書かず chapters 配列のみ。`;
+    case "ms":
+      return `Idea pengguna: ${concept}
+
+${bibleBlock}
+
+Rancang **tepat ${chapterCount} bab** sebagai chapter-plan JSON dalam Bahasa Melayu.
+Sasaran ${cfg.minChars}–${cfg.maxChars} aksara; targetChars ~${avg} setiap bab.
+Tiada prosa—hanya array chapters.`;
+    case "th":
+      return `แนวคิด: ${concept}
+
+${bibleBlock}
+
+วางแผน** ${chapterCount} บท** เป็น chapter-plan JSON ภาษาไทย
+เป้าหมาย ${cfg.minChars}–${cfg.maxChars} อักขระ targetChars ~${avg} ต่อบท
+ไม่เขียนเนื้อเรื่อง—เฉพาะ array chapters`;
+    case "zh-Hant":
+      return `用戶創意：${concept}
+
+${bibleBlock}
+
+請規劃全書 **恰好 ${chapterCount} 章** 的 chapter plan JSON（繁體中文）。
+全書目標 ${cfg.minChars}–${cfg.maxChars} 字；每章 targetChars 建議 ${avg} 左右。
+不要寫正文，只輸出 chapters 陣列。`;
+    default:
+      return `用户创意：${concept}
+
+${bibleBlock}
 
 请规划全书 **恰好 ${chapterCount} 章** 的 chapter plan JSON。
 全书目标 ${cfg.minChars}–${cfg.maxChars} 字；每章 targetChars 建议 ${avg} 左右。
 不要写正文，只输出 chapters 数组。`;
+  }
 }
 
 function phaseForIndex(i: number, total: number): ChapterPlanItem["phase"] {
@@ -156,7 +211,9 @@ export function splitChapterPlanIntoSegments(
   const slices: ChapterSegmentSlice[] = [];
   let i = 0;
   let segIdx = 0;
-  const maxSeg = opts?.maxSegmentCap ?? plan.totalSegments;
+  const maxSeg =
+    opts?.maxSegmentCap ??
+    computeSegmentCapForChapterPlan(chapters.length, plan);
 
   while (i < chapters.length && segIdx < maxSeg) {
     let charBudget = 0;
@@ -187,6 +244,14 @@ export function splitChapterPlanIntoSegments(
     segIdx++;
   }
 
+  if (i < chapters.length) {
+    slices.push({
+      segmentIndex: segIdx,
+      chapters: chapters.slice(i),
+      phase: segmentPhaseLabel(segIdx, Math.max(segIdx + 1, maxSeg)),
+    });
+  }
+
   if (slices.length === 0 && chapters.length > 0) {
     slices.push({
       segmentIndex: 0,
@@ -197,18 +262,25 @@ export function splitChapterPlanIntoSegments(
   return slices;
 }
 
+/** 短篇/中篇：每批只写一章，从根上避免「一次输出漏章」。 */
+export function splitChapterPlanOneChapterPerSlice(
+  chapterPlan: NovelChapterPlan,
+  segmentPhaseLabel: (index: number, total: number) => string,
+): ChapterSegmentSlice[] {
+  const chapters = chapterPlan.chapters;
+  if (chapters.length === 0) return [];
+  return chapters.map((ch, i) => ({
+    segmentIndex: i,
+    chapters: [ch],
+    phase: segmentPhaseLabel(i, chapters.length),
+  }));
+}
+
 export function formatChapterSliceForPrompt(
   chapters: ChapterPlanItem[],
   locale: BriefInputLocale = "zh",
 ): string {
-  if (locale === "en") {
-    return chapters
-      .map((c) => `Chapter ${c.num} "${c.title}" (${c.phase}): ${c.summary}`)
-      .join("\n");
-  }
-  return chapters
-    .map((c) => `第${c.num}章《${c.title}》（${c.phase}）：${c.summary}`)
-    .join("\n");
+  return chapters.map((c) => formatChapterPlanSliceLine(c, locale)).join("\n");
 }
 
 export function getRemainingChapterPlan(

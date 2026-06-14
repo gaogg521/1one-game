@@ -15,6 +15,9 @@ type Props = {
   stylePreset?: ComicStylePresetId;
   shellClassName?: string;
   imageClassName?: string;
+  canRemove?: boolean;
+  onRemove?: () => void;
+  removeBusy?: boolean;
 };
 
 function shouldRenderOverlay(textType: ReturnType<typeof inferPanelTextType>) {
@@ -34,8 +37,12 @@ export function ComicPanelCard({
   stylePreset,
   shellClassName,
   imageClassName,
+  canRemove,
+  onRemove,
+  removeBusy,
 }: Props) {
   const t = useTranslations("comicPanelCard");
+  const tStory = useTranslations("comicStoryboardOutline");
   const hasImage = Boolean(panel.imageUrl?.trim());
   const caption = panel.caption?.trim() ?? "";
   const textType = inferPanelTextType(panel);
@@ -44,8 +51,23 @@ export function ComicPanelCard({
 
   return (
     <article
-      className={`${shellClassName ?? "overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"} ${aspectClass}`.trim()}
+      className={`group/panel relative ${shellClassName ?? "overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]"} ${aspectClass}`.trim()}
     >
+      {canRemove && onRemove ? (
+        <button
+          type="button"
+          disabled={removeBusy}
+          title={tStory("removePanel")}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(tStory("confirmRemovePanel"))) onRemove();
+          }}
+          className="absolute right-1.5 top-1.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-sm text-white opacity-0 transition hover:bg-black/75 group-hover/panel:opacity-100 disabled:opacity-40"
+          data-testid={`reader-remove-p${pageNum - 1}-n${idx}`}
+        >
+          ×
+        </button>
+      ) : null}
       <div className={`relative h-full w-full overflow-hidden bg-[var(--gc-bg-elevated)] ${showBelowText ? "" : "min-h-[9rem]"}`}>
         {hasImage ? (
           <img

@@ -1,8 +1,10 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { runComicGeneration, resolveComicRunErrorMessage } from "@/lib/comic-generate-run";
+import { runComicGeneration, resolveComicPipelineMode, resolveComicRunErrorMessage } from "@/lib/comic-generate-run";
+import { validateComicPipelineRequest } from "@/lib/comic-pipeline-mode";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { parseNovelCreativeBrief, type NovelBriefUserRevision } from "@/lib/literary-brief";
 import { getOwnerKey } from "@/lib/owner";
@@ -41,19 +43,40 @@ export async function POST(req: Request) {
 
   const body = json.body as {
     novelId?: string;
+    sourceMode?: "standalone" | "from_novel";
     content?: string;
     creativePrompt?: string;
     creativeBrief?: unknown;
     briefRevision?: NovelBriefUserRevision;
     title?: string;
     pageCount?: number;
+    layoutId?: string;
     lengthTier?: string;
     stylePreset?: string;
     readMode?: string;
     chapterScope?: { fromChapter: number; toChapter: number; label?: string };
     characterRoster?: unknown;
     resumeComicId?: string;
+    forceLightStoryboard?: boolean;
   };
+
+  const pipelineError = validateComicPipelineRequest({
+    sourceMode: body.sourceMode,
+    novelId: body.novelId,
+    content: body.content,
+    creativePrompt: body.creativePrompt,
+  });
+  if (pipelineError) {
+    return new Response(
+      JSON.stringify(
+        localizedApiErrorPayload(req, pipelineError, { code: codes.LLM_FAILED, requestId }),
+      ),
+      {
+        status: pipelineError === "novelNotFound" ? 404 : 400,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
+      },
+    );
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -75,6 +98,7 @@ export async function POST(req: Request) {
           {
             ownerKey,
             novelId: body.novelId,
+            sourceMode: resolveComicPipelineMode({ sourceMode: body.sourceMode, novelId: body.novelId }),
             content: body.content,
             creativePrompt: body.creativePrompt,
             creativeBrief: body.creativeBrief
@@ -83,6 +107,7 @@ export async function POST(req: Request) {
             briefRevision: body.briefRevision,
             title: body.title,
             pageCount: body.pageCount,
+            layoutId: body.layoutId,
             lengthTier: body.lengthTier,
             stylePreset: body.stylePreset,
             readMode: body.readMode === "full" ? "full" : "segment",
@@ -95,6 +120,7 @@ export async function POST(req: Request) {
               : null,
             characterRoster: body.characterRoster as import("@/lib/comic-character-roster").ComicCharacterRoster | null,
             resumeComicId: body.resumeComicId?.trim() || undefined,
+            forceLightStoryboard: body.forceLightStoryboard === true,
             uiLocale,
           },
           send,

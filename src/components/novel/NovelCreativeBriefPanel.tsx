@@ -10,6 +10,8 @@ type Props = {
   brief: NovelCreativeBrief | null;
   summary?: string | null;
   className?: string;
+  /** 文案命名空间：独立漫画用 comicScriptBrief */
+  messageNamespace?: "novelBrief" | "comicScriptBrief";
   onRevisionChange?: (rev: NovelBriefUserRevision | null) => void;
   onRegenerateWithRevision?: () => void;
   regenerateDisabled?: boolean;
@@ -36,12 +38,13 @@ export function NovelCreativeBriefPanel({
   brief,
   summary,
   className = "",
+  messageNamespace = "novelBrief",
   onRevisionChange,
   onRegenerateWithRevision,
   regenerateDisabled,
 }: Props) {
   const locale = useLocale() as AppLocale;
-  const t = useTranslations("novelBrief");
+  const t = useTranslations(messageNamespace);
   const [editing, setEditing] = useState(false);
   const [logline, setLogline] = useState("");
   const [world, setWorld] = useState("");
