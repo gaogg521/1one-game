@@ -18,6 +18,7 @@ import {
 import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
 import { PRODUCT } from "@/lib/product-config";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
+import { prefersPhaserAstrocadeScene } from "@/lib/astrocade-play-spec";
 import {
   countQueuedReferenceSources,
   formatGodotReferenceBuildHint,
@@ -53,6 +54,7 @@ export function GameRuntimeTabs({
 
   const [runtime, setRuntime] = useState<GameRuntimeChoice>(() => {
     if (!godotGloballyOn) return "phaser";
+    if (prefersPhaserAstrocadeScene(spec)) return "phaser";
     return getGameRuntimePreference();
   });
 
@@ -99,13 +101,17 @@ export function GameRuntimeTabs({
     uiLocale: locale,
   });
 
+  const astrocadePhaser = prefersPhaserAstrocadeScene(spec);
+
   return (
     <div className="space-y-3">
       {godotGloballyOn && specSupportsGodot ? (
         <p className="text-[11px] leading-relaxed text-[var(--gc-muted)]">
-          {t.rich("hint", {
-            godot: (chunks) => <strong className="text-[var(--gc-text-soft)]">{chunks}</strong>,
-          })}
+          {astrocadePhaser
+            ? t("hintPhaserAstrocade")
+            : t.rich("hint", {
+                godot: (chunks) => <strong className="text-[var(--gc-text-soft)]">{chunks}</strong>,
+              })}
         </p>
       ) : null}
 
@@ -152,6 +158,12 @@ export function GameRuntimeTabs({
           data-testid="godot-reference-build-hint"
         >
           {refBuildHint}
+        </p>
+      ) : null}
+
+      {showGodot && astrocadePhaser ? (
+        <p className="text-[11px] leading-relaxed text-amber-400/90" data-testid="phaser-astrocade-hint">
+          {t("phaserAstrocadeHint")}
         </p>
       ) : null}
 

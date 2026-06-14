@@ -13,6 +13,7 @@ export function GamePlayer(props: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
+  promptHint?: string;
 }) {
   return <GamePlayerInner {...props} />;
 }

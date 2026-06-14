@@ -12,6 +12,7 @@ import {
   hudShooterKills,
   hudShooterWave,
   hudControlsShooter,
+  hudDefaultSkill,
   shooterFinishText,
   shooterSkillStatus,
   shooterShiftReady,
@@ -28,6 +29,7 @@ import {
   themeParticleHex,
 } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -119,6 +121,20 @@ export class ShooterScene extends Phaser.Scene {
   private enemySpriteKey = "texEnemy";
   private bootstrapDone = false;
   private sceneDisposed = false;
+
+  private orbitMode = false;
+
+  private orbitAngle = -Math.PI / 2;
+
+  private orbitSpeed = 0.0018;
+
+  private planetCx = 0;
+
+  private planetCy = 0;
+
+  private planetRx = 0;
+
+  private planetRy = 0;
 
   constructor(
     spec: GameSpec,
@@ -311,6 +327,21 @@ export class ShooterScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(25);
 
+    const shooterPf = this.spec.samplePlayProfile?.shooter;
+    if (shooterPf?.sniperScope) {
+      this.add
+        .circle(width / 2, height / 2, Math.min(width, height) * 0.32, 0x000000, 0)
+        .setStrokeStyle(3, 0x4ade80, 0.55)
+        .setDepth(4);
+      this.add.circle(width / 2, height / 2, 4, 0xef4444, 0.9).setDepth(5);
+    }
+    if (shooterPf?.orbitChopper) {
+      this.orbitMode = true;
+      this.hintText.setText(
+        this.uiLocale === "zh-Hans" ? "环绕星球 · 左右调速 · 自动斩击" : "Orbit planet · Steer · Auto chop",
+      );
+    }
+
     this.banner = new HudBanner(this, ui.banner);
 
     // 射击模板默认星舰造型；有参考图则贴主角/敌舰
@@ -330,11 +361,22 @@ export class ShooterScene extends Phaser.Scene {
     this.makeRectTexture("texPlayerBullet", 5, 14, this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
     this.makeRectTexture("texEnemyBullet", 5, 12, this.spec.theme.hazardColor);
 
+    if (this.orbitMode) {
+      this.setupOrbitPlanet(width, height);
+    }
+
     // Player ship
-    this.player = this.physics.add.image(width / 2, height - 56, playerTex);
-    this.player.setCollideWorldBounds(true);
+    this.player = this.physics.add.image(
+      this.orbitMode ? this.planetCx : width / 2,
+      this.orbitMode ? this.planetCy - this.planetRy - 36 : height - 56,
+      playerTex,
+    );
+    this.player.setCollideWorldBounds(!this.orbitMode);
     this.player.body.setSize(28, 32);
     this.player.setDepth(8);
+    if (this.orbitMode) {
+      this.syncOrbitPlayerPosition();
+    }
 
     // Bullet groups
     this.playerBullets = this.physics.add.group({
@@ -377,6 +419,9 @@ export class ShooterScene extends Phaser.Scene {
 
     // Auto-fire timer (recursive so delay can change)
     this.currentFireDelay = Math.max(120, Math.floor(260 - this.intensity * 60));
+    if (this.orbitMode) {
+      this.currentEnemyFireDelay = 60_000;
+    }
     this.schedulePlayerFire();
 
     // Enemy fire timer (recursive)
@@ -392,6 +437,7 @@ export class ShooterScene extends Phaser.Scene {
     this.dangerVignette.setAlpha(0);
     this.dangerVignette.fillStyle(0xff2233, 1);
     this.dangerVignette.fillRect(0, 0, width, height);
+    schedulePhaserPlayReady(this, 500);
   }
 
   // ─── Recursive fire schedulers ─────────────────────────────────────────────
@@ -510,6 +556,39 @@ export class ShooterScene extends Phaser.Scene {
 
   // ─── Wave system ───────────────────────────────────────────────────────────
 
+  private setupOrbitPlanet(w: number, h: number) {
+    this.planetCx = w / 2;
+    this.planetCy = h * 0.48;
+    this.planetRx = Math.min(w, h) * 0.28;
+    this.planetRy = this.planetRx * 0.62;
+    const g = this.add.graphics().setDepth(1);
+    g.fillStyle(0x22c55e, 1);
+    g.fillEllipse(this.planetCx, this.planetCy, this.planetRx * 2, this.planetRy * 2);
+    g.fillStyle(0x15803d, 0.92);
+    for (let i = 0; i < 10; i += 1) {
+      const a = (i / 10) * Math.PI * 2 + 0.2;
+      g.fillCircle(
+        this.planetCx + Math.cos(a) * this.planetRx * Phaser.Math.FloatBetween(0.25, 0.75),
+        this.planetCy + Math.sin(a) * this.planetRy * Phaser.Math.FloatBetween(0.25, 0.75),
+        Phaser.Math.Between(5, 11),
+      );
+    }
+    g.lineStyle(2, 0x14532d, 0.55);
+    g.strokeEllipse(this.planetCx, this.planetCy, this.planetRx * 2, this.planetRy * 2);
+  }
+
+  private syncOrbitPlayerPosition() {
+    const radiusX = this.planetRx + 34;
+    const radiusY = this.planetRy + 26;
+    const x = this.planetCx + Math.cos(this.orbitAngle) * radiusX;
+    const y = this.planetCy + Math.sin(this.orbitAngle) * radiusY;
+    this.player.setPosition(x, y);
+    this.player.setRotation(this.orbitAngle + Math.PI / 2);
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setAllowGravity(false);
+  }
+
   private startWave() {
     if (this.finished) return;
     this.wave += 1;
@@ -562,6 +641,28 @@ export class ShooterScene extends Phaser.Scene {
   }
 
   private spawnFormation(cols: number, rows: number, elite: boolean) {
+    if (this.orbitMode) {
+      const count = cols * rows;
+      for (let i = 0; i < count; i += 1) {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const dist = Phaser.Math.FloatBetween(0.35, 0.88);
+        const x = this.planetCx + Math.cos(angle) * this.planetRx * dist;
+        const y = this.planetCy + Math.sin(angle) * this.planetRy * dist;
+        const key = elite ? "texElite" : this.enemySpriteKey;
+        const hp = elite ? 2 : 1;
+        const e = this.enemies.create(x, y, key) as Phaser.Physics.Arcade.Image;
+        e.setDepth(5);
+        e.setScale(0.85);
+        e.setData("hp", hp);
+        e.setData("maxHp", hp);
+        e.setData("orbitObstacle", true);
+        e.setData("orbitAngle", angle);
+        e.setData("orbitDist", dist);
+      }
+      this.waveEnemiesLeft = count;
+      return;
+    }
+
     const { width } = this.scale;
     const enemyW = elite ? 36 : 30;
     const totalW = cols * (enemyW + 18) - 18;
@@ -618,6 +719,24 @@ export class ShooterScene extends Phaser.Scene {
       juiceShake(this, { durationMs: 36, intensity: 0.0018 });
     }
     for (const offset of spread) {
+      const speed = isBurst ? this.bulletSpeed * 1.4 : this.bulletSpeed;
+      if (this.orbitMode) {
+        const aim = this.orbitAngle + Math.PI / 2 + offset * 0.004;
+        const dx = Math.cos(aim);
+        const dy = Math.sin(aim);
+        const b = this.playerBullets.get(
+          this.player.x + dx * 10,
+          this.player.y + dy * 10,
+          "texPlayerBullet",
+        ) as Phaser.Physics.Arcade.Image | null;
+        if (!b) continue;
+        b.setActive(true);
+        b.setVisible(true);
+        b.setDepth(7);
+        b.setRotation(aim + Math.PI / 2);
+        (b.body as Phaser.Physics.Arcade.Body).setVelocity(dx * speed, dy * speed);
+        continue;
+      }
       const b = this.playerBullets.get(
         this.player.x + offset,
         this.player.y - 20,
@@ -627,7 +746,6 @@ export class ShooterScene extends Phaser.Scene {
       b.setActive(true);
       b.setVisible(true);
       b.setDepth(7);
-      const speed = isBurst ? this.bulletSpeed * 1.4 : this.bulletSpeed;
       (b.body as Phaser.Physics.Arcade.Body).setVelocityY(-speed);
       (b.body as Phaser.Physics.Arcade.Body).setVelocityX(offset * 1.5);
     }
@@ -718,6 +836,8 @@ export class ShooterScene extends Phaser.Scene {
     if (large) {
       juiceFlash(this, { r: 255, g: 180, b: 60 }, { durationMs: 220 });
       juiceShake(this, { durationMs: 200, intensity: 0.005 });
+    } else if (this.spec.samplePlayProfile?.shooter?.sniperScope) {
+      juiceFlash(this, { r: 90, g: 255, b: 130 }, { durationMs: 110 });
     }
   }
 
@@ -866,7 +986,7 @@ export class ShooterScene extends Phaser.Scene {
     this.waveText.setText(hudShooterWave(this.uiLocale, this.wave));
     const prog = Math.min(this.totalKills, this.winScore);
     this.progressText.setText(hudShooterKills(this.uiLocale, prog, this.winScore));
-    const skillName = this.spec.systems?.skill?.name ?? tMessage(this.uiLocale, "gameEvents.hud.defaultSkill");
+    const skillName = this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale);
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
     const status: "shield" | "slow" | "wing" | "standby" =
       this.time.now < this.shieldUntil
@@ -937,12 +1057,20 @@ export class ShooterScene extends Phaser.Scene {
 
     // Player movement
     const { height } = this.scale;
-    let vx = 0;
-    if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
-    this.player.setVelocityX(vx * this.playerSpeed);
-    this.player.setVelocityY(0);
-    this.player.y = height - 56;
+    if (this.orbitMode) {
+      if (this.cursors.left.isDown || this.keyA.isDown) this.orbitSpeed -= 0.00006;
+      if (this.cursors.right.isDown || this.keyD.isDown) this.orbitSpeed += 0.00006;
+      this.orbitSpeed = Phaser.Math.Clamp(this.orbitSpeed, 0.0009, 0.0034);
+      this.orbitAngle += this.orbitSpeed * (this.game.loop.delta / 16.67);
+      this.syncOrbitPlayerPosition();
+    } else {
+      let vx = 0;
+      if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
+      if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
+      this.player.setVelocityX(vx * this.playerSpeed);
+      this.player.setVelocityY(0);
+      this.player.y = height - 56;
+    }
 
     // Invulnerable flash
     if (this.time.now < this.invulnUntil) {
@@ -956,6 +1084,20 @@ export class ShooterScene extends Phaser.Scene {
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i] as Phaser.Physics.Arcade.Image;
       if (!e.active) continue;
+
+      if (e.getData("orbitObstacle")) {
+        const baseAngle = (e.getData("orbitAngle") as number) ?? 0;
+        const dist = (e.getData("orbitDist") as number) ?? 0.6;
+        const wobble = Math.sin(time * 0.0012 + baseAngle * 3) * 0.04;
+        const ang = baseAngle + time * 0.00015 + wobble;
+        e.setPosition(
+          this.planetCx + Math.cos(ang) * this.planetRx * dist,
+          this.planetCy + Math.sin(ang) * this.planetRy * dist,
+        );
+        (e.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        continue;
+      }
+
       const entryY = (e.getData("entryY") as number) ?? 100;
       const baseX = (e.getData("baseX") as number) ?? e.x;
       const phase = (e.getData("driftPhase") as number) ?? 0;

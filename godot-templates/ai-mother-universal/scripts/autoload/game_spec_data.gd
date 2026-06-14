@@ -154,10 +154,50 @@ func puzzle() -> Dictionary:
 	return p if p is Dictionary else {}
 
 
+func platformer() -> Dictionary:
+	ensure_loaded()
+	var p = raw.get("platformer", {})
+	return p if p is Dictionary else {}
+
+
+func sample_play_profile() -> Dictionary:
+	ensure_loaded()
+	var p = raw.get("samplePlayProfile", {})
+	return p if p is Dictionary else {}
+
+
+func profile_f(key: String, sub: String, fallback: float) -> float:
+	var pf := sample_play_profile()
+	var block = pf.get(key, {})
+	if block is Dictionary and block.has(sub):
+		return float(block[sub])
+	return fallback
+
+
+func profile_b(key: String, sub: String, fallback: bool) -> bool:
+	var pf := sample_play_profile()
+	var block = pf.get(key, {})
+	if block is Dictionary and block.has(sub):
+		return bool(block[sub])
+	return fallback
+
+
 func farming() -> Dictionary:
 	ensure_loaded()
 	var f = raw.get("farming", {})
 	return f if f is Dictionary else {}
+
+
+func strategy() -> Dictionary:
+	ensure_loaded()
+	var s = raw.get("strategy", {})
+	return s if s is Dictionary else {}
+
+
+func customization() -> Dictionary:
+	ensure_loaded()
+	var c = raw.get("customization", {})
+	return c if c is Dictionary else {}
 
 
 func reference_texture(res_path: String) -> Texture2D:

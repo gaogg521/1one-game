@@ -1,13 +1,16 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { juiceBurst, juiceFlash } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildStrategyBlueprint, type StrategyNode } from "@/lib/strategy-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
-import { hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import { bannerStrategyFinish, hudReady, hudScore, hudStrategyControls } from "@/lib/i18n/game-hud-labels";
+import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -32,6 +35,10 @@ export class StrategyScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
   private cohesive!: CohesivePresentation;
+  private winNodes = 4;
+  private aiAggression = 1;
+  private rushMode = false;
+  private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "StrategyScene" });
@@ -43,9 +50,15 @@ export class StrategyScene extends Phaser.Scene {
   create() {
     this.cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(this.cohesive.bleepTemperament);
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     this.nodes = JSON.parse(
       JSON.stringify(this.spec.strategy?.nodes ?? buildStrategyBlueprint({ spec: this.spec }).nodes),
     ) as StrategyNode[];
+
+    const stratPf = this.spec.samplePlayProfile?.strategy;
+    this.winNodes = stratPf?.winNodes ?? this.spec.strategy?.winNodes ?? 4;
+    this.aiAggression = stratPf?.aiAggression ?? 1;
+    this.rushMode = stratPf?.rushMode ?? false;
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -56,13 +69,21 @@ export class StrategyScene extends Phaser.Scene {
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
     );
     this.hintText = styleHudText(
-      this.add.text(w / 2, h - 48, "点击己方节点 → 点击相邻节点派兵占领", { fontSize: "13px", color: "#cbd5e1" }).setOrigin(0.5),
+      this.add.text(w / 2, h - 48, hudStrategyControls(this.uiLocale), { fontSize: "13px", color: "#cbd5e1" }).setOrigin(0.5),
     );
+    if (this.rushMode) {
+      this.hintText.setText(
+        this.uiLocale === "zh-Hans"
+          ? `闪电征服 · 占领 ${this.winNodes} 个节点即胜`
+          : `Blitz · Hold ${this.winNodes} nodes to win`,
+      );
+    }
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onTap(p));
     this.redraw();
+    schedulePhaserPlayReady(this, 400);
   }
 
   private nodeAt(x: number, y: number): StrategyNode | null {
@@ -98,6 +119,9 @@ export class StrategyScene extends Phaser.Scene {
       if (!this.linked(from, hit)) return;
       const send = Math.floor(from.troops / 2);
       if (send < 1) return;
+      const prevOwner = hit.owner;
+      const nx = hit.x * this.scale.width;
+      const ny = hit.y * this.scale.height;
       from.troops -= send;
       if (hit.owner === "player") hit.troops += send;
       else if (send > hit.troops) {
@@ -105,24 +129,34 @@ export class StrategyScene extends Phaser.Scene {
         hit.troops = send - hit.troops;
       } else hit.troops -= send;
 
+      if (prevOwner !== "player" && hit.owner === "player") {
+        juiceBurst(this, nx, ny, this.spec.theme.playerColor, 12, this.runtimeRng);
+        juiceFlash(this, { r: 90, g: 210, b: 130 }, { durationMs: 130 });
+      }
+
       this.selected = null;
       this.score += 15;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
       playBleep("pickup");
       this.playerTurn = false;
       this.redraw();
-      this.time.delayedCall(500, () => this.aiTurn());
+      const playerNodes = this.nodes.filter((n) => n.owner === "player").length;
+      if (playerNodes >= this.winNodes) {
+        this.finish(true);
+        return;
+      }
+      this.time.delayedCall(this.rushMode ? 280 : 500, () => this.aiTurn());
     }
   }
 
   private aiTurn() {
     const ai = this.nodes.filter((n) => n.owner === "ai" && n.troops > 4);
-    const pick = ai[Math.floor(Math.random() * ai.length)];
+    const pick = pickSeededFromArray(ai, this.runtimeRng);
     if (pick) {
       const targets = this.nodes.filter((n) => this.linked(pick, n) && n.owner !== "ai");
-      const tgt = targets[Math.floor(Math.random() * targets.length)];
+      const tgt = pickSeededFromArray(targets, this.runtimeRng);
       if (tgt) {
-        const send = Math.floor(pick.troops / 2);
+        const send = Math.floor(pick.troops * 0.5 * this.aiAggression);
         pick.troops -= send;
         if (send > tgt.troops) {
           tgt.owner = "ai";
@@ -132,7 +166,8 @@ export class StrategyScene extends Phaser.Scene {
     }
     this.playerTurn = true;
     this.redraw();
-    if (this.nodes.every((n) => n.owner === "player")) this.finish(true);
+    const playerNodes = this.nodes.filter((n) => n.owner === "player").length;
+    if (playerNodes >= this.winNodes) this.finish(true);
     else if (this.nodes.every((n) => n.owner === "ai")) this.finish(false);
   }
 
@@ -160,6 +195,10 @@ export class StrategyScene extends Phaser.Scene {
             : "#64748b";
       const nx = n.x * w;
       const ny = n.y * h;
+      if (n.owner === "player") {
+        this.gfx.lineStyle(3, Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 0.35);
+        this.gfx.strokeCircle(nx, ny, 34);
+      }
       this.gfx.fillStyle(Phaser.Display.Color.HexStringToColor(col).color, 1);
       this.gfx.fillCircle(nx, ny, n.id === this.selected ? 30 : 26);
       const t = styleHudText(
@@ -176,7 +215,7 @@ export class StrategyScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    this.banner.show({ title: won ? "征服完成！" : "被 AI 占领", ms: 2000 });
+    this.banner.show({ ...bannerStrategyFinish(this.uiLocale, won), ms: 2000 });
     this.time.delayedCall(2200, () => this.onEnd({ score: this.score, won }));
   }
 }

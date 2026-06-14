@@ -1,6 +1,6 @@
 # 历史问题闭环清单
 
-更新时间：**2026-06-13**
+更新时间：**2026-06-14**
 
 一键总验：`npm run qa:historical-closure`
 
@@ -27,6 +27,9 @@
 | 17 | 导演 chunk 整批 JSON 失败 | ✅ | `fetchComicStoryboardChunk` 逐页降级 |
 | 18 | 长篇必先跑导演包再 fallback | ✅ | UI「快速分镜」+ `COMIC_FORCE_LIGHT_PIPELINE` |
 | 19 | 配图 ETA 与 Studio 分镜续跑 | ✅ | `comic-panel-eta` + 改编摘要 `resumeComic` 深链 |
+| 20 | 中篇 8 页误走导演包 ~15min | ✅ | `mediumDirectorMinPages=12` + `qa:comic-director-pipeline` |
+| 21 | from_novel 多一轮 Brief LLM | ✅ | `shouldSkipComicBriefExpand` |
+| 22 | roster 迁移后仍 raw SQL | ✅ | `novel-character-roster-db.ts` 改 Prisma Client |
 
 ## 仍属产品差距（非阻断 bug）
 

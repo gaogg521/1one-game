@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
+import { PRODUCT } from "@/lib/product-config";
 
 /** Phase 3：Agentic 游戏模块契约 */
 export const AgenticModuleSchema = z.object({
@@ -32,6 +33,8 @@ export type AgenticEngineContext = {
   onScore: (delta: number) => void;
   onEnd: (won: boolean) => void;
   rng: () => number;
+  /** 与 GameSpec.gameplay.winScore 对齐（AgenticScene 注入） */
+  winScore?: number;
 };
 
 export type AgenticGameModuleInstance = {
@@ -133,4 +136,13 @@ function createGame(ctx, Phaser) {
 
 export function shouldUseAgenticRuntime(spec: { agenticModule?: AgenticGameModule | null; templateId?: string }): boolean {
   return Boolean(spec.agenticModule?.source);
+}
+
+/** Astrocade 竞对：template-first 模板不 attach agenticModule，路由到样品级专用 Scene */
+export function shouldUseDedicatedSceneForTemplateFirst(spec: { templateId?: string }): boolean {
+  if (process.env.AGENTIC_FORCE_LLM === "1") return false;
+  if (!PRODUCT.game.dedicatedSceneForTemplateFirst) return false;
+  const tid = spec.templateId;
+  if (!tid) return false;
+  return PRODUCT.game.agenticTemplateFirst.includes(tid);
 }

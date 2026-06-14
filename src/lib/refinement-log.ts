@@ -40,3 +40,11 @@ export function appendRefinementLog(
   while (list.length > MAX_ENTRIES) list.shift();
   return JSON.stringify(list);
 }
+
+/** 取最近一次 refine 记录（Studio / 回放摘要） */
+export function pickLastRefinementEntry(
+  json: string | null | undefined,
+): RefinementLogEntry | null {
+  const list = parseRefinementLog(json);
+  return list.length > 0 ? list[list.length - 1]! : null;
+}

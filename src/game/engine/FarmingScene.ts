@@ -1,14 +1,23 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
-import { hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import {
+  bannerFarmingFinish,
+  bannerFarmingInsufficientCoins,
+  hudFarmingCoins,
+  hudFarmingControls,
+  hudFarmingCropSelected,
+  hudReady,
+  hudScore,
+} from "@/lib/i18n/game-hud-labels";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 type TileState = "empty" | "seeded" | "growing" | "ready";
@@ -42,6 +51,8 @@ export class FarmingScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
   private cohesive!: CohesivePresentation;
+  private autoWater = false;
+  private harvestGoal = 0;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "FarmingScene" });
@@ -55,11 +66,35 @@ export class FarmingScene extends Phaser.Scene {
     setBleepTemperament(cohesive.bleepTemperament);
     this.cohesive = cohesive;
     this.bp = this.spec.farming ?? buildFarmingBlueprint({ spec: this.spec });
+    const farmPf = this.spec.samplePlayProfile?.farming;
+    if (farmPf?.harvestGoalBoost) {
+      this.bp = {
+        ...this.bp,
+        harvestGoal: Math.round(this.bp.harvestGoal * farmPf.harvestGoalBoost),
+      };
+    }
+    if (farmPf?.gridBoost) {
+      this.bp = {
+        ...this.bp,
+        cols: Math.min(this.bp.cols + farmPf.gridBoost, 6),
+        rows: Math.min(this.bp.rows + farmPf.gridBoost, 6),
+      };
+    }
+    this.autoWater = farmPf?.autoWater ?? false;
+    this.harvestGoal = this.bp.harvestGoal;
     this.coins = this.bp.startingCoins;
 
     const w = this.scale.width;
     const h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+
+    if (farmPf?.decorativeFence) {
+      const fence = this.add.graphics().setDepth(2);
+      fence.lineStyle(3, 0xfde047, 0.55);
+      fence.strokeRect(24, 72, w - 48, h - 160);
+      fence.fillStyle(0x15803d, 0.12);
+      fence.fillRect(24, 72, w - 48, h - 160);
+    }
 
     const cell = Math.min(72, (w - 80) / this.bp.cols);
     const ox = (w - cell * this.bp.cols) / 2;
@@ -87,10 +122,10 @@ export class FarmingScene extends Phaser.Scene {
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
     );
     this.coinText = styleHudText(
-      this.add.text(16, 38, `金币 ${this.coins}`, { fontSize: "15px", color: "#fde047" }),
+      this.add.text(16, 38, hudFarmingCoins(this.uiLocale, this.coins), { fontSize: "15px", color: "#fde047" }),
     );
     this.hintText = styleHudText(
-      this.add.text(w / 2, h - 48, "空格切换种子 · 点击空地播种 · 成熟点击收获", {
+      this.add.text(w / 2, h - 48, hudFarmingControls(this.uiLocale), {
         fontSize: "13px",
         color: "#d9f99d",
       }).setOrigin(0.5),
@@ -98,11 +133,20 @@ export class FarmingScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
+    if (farmPf?.autoWater) {
+      this.hintText.setText(
+        this.uiLocale === "zh-Hans"
+          ? "自动浇水 · 空格切换种子 · 点击地块播种/收获"
+          : "Auto-water · Space switch crop · Tap tiles",
+      );
+    }
+
     this.input.keyboard?.on("keydown-SPACE", () => {
       this.selectedCrop = (this.selectedCrop + 1) % this.bp.crops.length;
       const crop = this.bp.crops[this.selectedCrop]!;
-      this.hintText.setText(`当前种子：${crop.name} (${crop.seedCost} 金币)`);
+      this.hintText.setText(hudFarmingCropSelected(this.uiLocale, crop.name, crop.seedCost));
     });
+    schedulePhaserPlayReady(this, 400);
   }
 
   private onTile(idx: number) {
@@ -112,7 +156,7 @@ export class FarmingScene extends Phaser.Scene {
 
     if (tile.state === "empty") {
       if (this.coins < crop.seedCost) {
-        this.banner.show({ title: "金币不足", ms: 800 });
+        this.banner.show({ ...bannerFarmingInsufficientCoins(this.uiLocale), ms: 800 });
         return;
       }
       this.coins -= crop.seedCost;
@@ -131,9 +175,11 @@ export class FarmingScene extends Phaser.Scene {
       tile.progress = 0;
       tile.rect.setFillStyle(0x365314);
       tile.label.setText("");
-      juiceBurst(this, tile.rect.x, tile.rect.y, c.color, 8);
+      juiceBurst(this, tile.rect.x, tile.rect.y, c.color, 10);
+      juiceFlash(this, { r: 250, g: 220, b: 80 }, { durationMs: 100 });
+      juiceFloater(this, tile.rect.x, tile.rect.y - 14, `+${c.sellPrice}`, this.cohesive.hud.accent);
       this.scoreText.setText(hudScore(this.uiLocale, this.harvests * 10));
-      this.coinText.setText(`金币 ${this.coins}`);
+      this.coinText.setText(hudFarmingCoins(this.uiLocale, this.coins));
       this.soundscape?.triggerEvent("restore");
       if (this.harvests >= this.bp.harvestGoal) this.finish(true);
     } else if (tile.state === "growing") {
@@ -146,7 +192,7 @@ export class FarmingScene extends Phaser.Scene {
       tile.state = "growing";
       tile.label.setText("💧");
     }
-    this.coinText.setText(`金币 ${this.coins}`);
+    this.coinText.setText(hudFarmingCoins(this.uiLocale, this.coins));
   }
 
   update(_t: number, dt: number) {
@@ -154,13 +200,19 @@ export class FarmingScene extends Phaser.Scene {
     if (this.finished) return;
     const sec = dt / 1000;
     for (const tile of this.tiles) {
+      if (this.autoWater && tile.state === "seeded") {
+        tile.state = "growing";
+        tile.label.setText("💧");
+      }
       if (tile.state !== "growing") continue;
       const crop = this.bp.crops.find((c) => c.id === tile.cropId);
       if (!crop) continue;
       tile.progress += sec / crop.growSec;
+      tile.rect.setScale(0.88 + tile.progress * 0.22);
       if (tile.progress >= 1) {
         tile.state = "ready";
         tile.label.setText("✨");
+        tile.rect.setScale(1.05);
       }
     }
   }
@@ -168,7 +220,8 @@ export class FarmingScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    this.banner.show({ title: won ? "农场目标达成！" : "继续努力", ms: 2000 });
+    if (won) juiceFlash(this, { r: 120, g: 220, b: 140 }, { durationMs: 140 });
+    this.banner.show({ ...bannerFarmingFinish(this.uiLocale, won), ms: 2000 });
     this.time.delayedCall(2200, () => this.onEnd({ score: this.harvests * 10 + this.coins, won }));
   }
 }

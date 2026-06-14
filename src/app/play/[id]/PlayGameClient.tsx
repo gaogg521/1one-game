@@ -7,6 +7,9 @@ import { useEffect, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
 import { GamePlayer } from "@/components/GamePlayer";
 import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
+import { SampleParityTrustBadge } from "@/components/SampleParityTrustBadge";
+import { resolveSampleParityUserInfo } from "@/lib/sample-parity-user";
+import { buildCreatePrefillPath } from "@/lib/sample-create-prefill";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
 import { writeAssetManifestToSession } from "@/lib/assets/asset-manifest-session.client";
 import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
@@ -18,6 +21,7 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ResultMomentBanner } from "@/components/ResultMomentBanner";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -25,6 +29,8 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
+  const tBanner = useTranslations("resultBanner");
+  const tParity = useTranslations("sampleParity");
   const locale = useLocale() as AppLocale;
   const router = useRouter();
   const [spec, setSpec] = useState<GameSpec | null>(null);
@@ -35,6 +41,7 @@ export function PlayGameClient({ id }: { id: string }) {
     isSampleGallery: boolean;
     shareCode: string | null;
     likeCount: number;
+    playCount: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -52,6 +59,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [playCount, setPlayCount] = useState(0);
 
   const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
 
@@ -69,6 +77,7 @@ export function PlayGameClient({ id }: { id: string }) {
             isSampleGallery?: boolean;
             shareCode: string | null;
             likeCount?: number;
+            playCount?: number;
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           error?: string;
@@ -106,8 +115,14 @@ export function PlayGameClient({ id }: { id: string }) {
             isSampleGallery: Boolean(data.project.isSampleGallery),
             shareCode: data.project.shareCode ?? null,
             likeCount: data.project.likeCount ?? 0,
+            playCount: data.project.playCount ?? 0,
           });
           setLikeCount(data.project.likeCount ?? 0);
+          setPlayCount(data.project.playCount ?? 0);
+          void fetch(`/api/projects/${id}/play`, {
+            method: "POST",
+            headers: apiHeaders(),
+          }).then(() => setPlayCount((c) => c + 1));
           if (typeof localStorage !== "undefined") {
             setLiked(!!localStorage.getItem(`liked:${id}`));
           }
@@ -204,7 +219,7 @@ export function PlayGameClient({ id }: { id: string }) {
         return;
       }
       if (data.project?.id) {
-        router.push(`/play/${data.project.id}`);
+        router.push(withLocalePath(`/play/${data.project.id}`, locale));
       }
     } finally {
       setRemixBusy(false);
@@ -320,6 +335,21 @@ export function PlayGameClient({ id }: { id: string }) {
         ? `/s/${meta.shareCode}`
         : null;
 
+  const parityInfo =
+    spec && meta ? resolveSampleParityUserInfo(spec, meta.prompt) : null;
+
+  const resultTitle =
+    parityInfo?.promptAligned
+      ? tBanner("parityTitle", { sample: parityInfo.sampleTitle, title: meta?.title ?? "" })
+      : meta?.title ?? "";
+  const resultSubtitle =
+    parityInfo?.promptAligned
+      ? tParity("bodySamePrompt", {
+          sample: parityInfo.sampleTitle,
+          scene: parityInfo.sceneName,
+        })
+      : meta?.prompt;
+
   return (
     <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
@@ -335,16 +365,26 @@ export function PlayGameClient({ id }: { id: string }) {
         ) : (
           <>
             {meta.isSampleGallery ? (
-              <p className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-sm text-[var(--gc-text-soft)]">
-                {t("samplePlayHint")}
-              </p>
+              <div className="space-y-3 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-sm text-[var(--gc-text-soft)]">
+                <p>{t("samplePlayHint")}</p>
+                <Link
+                  href={buildCreatePrefillPath(meta.prompt, locale)}
+                  className="inline-flex text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_92%,white)] hover:underline"
+                  data-testid="sample-play-create-with-prompt"
+                >
+                  {t("createWithSamplePrompt")}
+                </Link>
+              </div>
+            ) : parityInfo ? (
+              <SampleParityTrustBadge info={parityInfo} />
             ) : null}
             <ResultMomentBanner
               mode="game"
-              title={meta.title}
-              subtitle={meta.prompt}
+              title={resultTitle}
+              subtitle={resultSubtitle}
               actions={
                 <>
+                  <WorkEngagementStats kind="game" playCount={playCount} likeCount={likeCount} hideLikes size="md" />
                   <GameRuntimePreferenceControl />
                   <button
                     type="button"
@@ -445,7 +485,7 @@ export function PlayGameClient({ id }: { id: string }) {
             <GameRuntimeTabs
               spec={spec}
               projectId={id}
-              phaser={<GamePlayer spec={spec} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} />}
+              phaser={<GamePlayer spec={spec} promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} />}
             />
             {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 

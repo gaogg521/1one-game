@@ -15,10 +15,12 @@ export default function GamePlayerInner({
   spec,
   coverCapture,
   projectId,
+  promptHint,
 }: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
+  promptHint?: string;
 }) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
@@ -31,6 +33,7 @@ export default function GamePlayerInner({
   const [audioHint, setAudioHint] = useState(true);
   const [session, setSession] = useState(0);
   const [result, setResult] = useState<{ score: number; won: boolean } | null>(null);
+  const [playReady, setPlayReady] = useState(false);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
   const shellStyle = useMemo(
@@ -105,12 +108,11 @@ export default function GamePlayerInner({
     if (!el) return;
     setResult(null);
     const refPayloads = readReferenceImagePayloadsFromSession();
-    const bgUrl = projectId ? `/game-bg/${projectId}.png` : null;
     const handle = createPhaserGame(el, spec, (r) => setResult(r), {
       referencePayloads: refPayloads,
-      backgroundUrl: bgUrl,
       projectId: projectId ?? undefined,
       uiLocale: locale,
+      promptHint,
     });
     gameRef.current = handle.game;
     bootAudioRef.current = handle.bootAudio;
@@ -125,7 +127,22 @@ export default function GamePlayerInner({
       gameRef.current = null;
       bootAudioRef.current = null;
     };
-  }, [spec, session]);
+  }, [spec, session, locale, projectId, promptHint]);
+
+  /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
+  useEffect(() => {
+    setPlayReady(false);
+    const poll = window.setInterval(() => {
+      if ((window as unknown as { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__) {
+        setPlayReady(true);
+      }
+    }, 80);
+    const fallback = window.setTimeout(() => setPlayReady(true), 4500);
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(fallback);
+    };
+  }, [spec, session, locale, projectId, promptHint]);
 
   useEffect(() => {
     if (!audioHint) return;
@@ -177,6 +194,15 @@ export default function GamePlayerInner({
           aria-label={t("gameAria")}
           className="aspect-[920/560] w-full max-h-[min(70vh,620px)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)]"
         />
+        {!playReady && !result ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center gap-3 bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,#000)] backdrop-blur-sm"
+            aria-live="polite"
+          >
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--gc-border)] border-t-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]" />
+            <p className="text-xs text-[var(--gc-muted)]">{t("loading")}</p>
+          </div>
+        ) : null}
         {audioHint && !result ? (
           <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1 text-[10px] text-[var(--gc-muted)] backdrop-blur-sm">
             {t("audioHint")}

@@ -131,6 +131,11 @@ body {
   --gc-cta-c: #10b981;
 }
 
+/* 运营控制台：使用实色背景，避免透明 KPI/图表叠在全局动效上 */
+.admin-console-root {
+  isolation: isolate;
+}
+
 /* 派生字色：任意主题下随 --gc-text / --gc-muted / --gc-bg 变化 */
 [data-theme] {
   --gc-text-soft: color-mix(in srgb, var(--gc-text) 82%, var(--gc-muted));

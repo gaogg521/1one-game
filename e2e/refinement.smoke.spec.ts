@@ -1,5 +1,6 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "./test";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { addZhLocaleCookie } from "./helpers/locale";
 
 /** SQLite 并行写易锁；精炼链路串行跑更稳 */
 test.describe.configure({ mode: "serial" });
@@ -82,13 +83,15 @@ test.describe("refinement API", () => {
     expect(refine.ok()).toBeTruthy();
 
     await page.goto(`/create?from=${encodeURIComponent(id)}`);
-    await expect(page.getByText("试玩页精炼记录（摘要）")).toBeVisible();
+    await expect(page.getByText(/试玩页精炼记录|Play page refinements/i)).toBeVisible();
     await expect(page.getByText(/regenerate.*e2e-regen/)).toBeVisible();
   });
 
   test("访客 GET 不返回 refinementHistory", async ({ browser }) => {
     const ownerCtx = await browser.newContext();
+    await addZhLocaleCookie(ownerCtx);
     const guestCtx = await browser.newContext();
+    await addZhLocaleCookie(guestCtx);
     const ownerPage = await ownerCtx.newPage();
     const ownerApiCtx = await ownerApi(ownerPage);
     const { id } = await createProject(ownerApiCtx);
@@ -110,12 +113,14 @@ test.describe("refinement API", () => {
 
   test("访客 refine 返回 401", async ({ browser }) => {
     const ownerCtx = await browser.newContext();
+    await addZhLocaleCookie(ownerCtx);
     const ownerPage = await ownerCtx.newPage();
     const ownerApiCtx = await ownerApi(ownerPage);
     const { id } = await createProject(ownerApiCtx);
     await ownerCtx.close();
 
     const guestCtx = await browser.newContext();
+    await addZhLocaleCookie(guestCtx);
     const res = await guestCtx.request.post(`/api/projects/${id}/refine`, {
       data: { instruction: "hack", mode: "patch" },
     });
@@ -130,16 +135,16 @@ test.describe("refinement UI", () => {
     const { id } = await createProject(api);
 
     await page.goto(`/play/${id}`);
-    await expect(page.getByText("继续共创")).toBeVisible();
-    await expect(page.getByRole("button", { name: "局部 patch" })).toBeVisible();
+    await expect(page.getByText(/继续共创|Keep co-creating/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /局部 patch|Partial patch/i })).toBeVisible();
 
     await page.locator("#patch-prompt").fill("ui-patch");
-    await page.getByRole("button", { name: "AI 修改" }).click();
-    await expect(page.getByText("最近精炼（最新在后）")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /AI 修改|AI patch/i }).click();
+    await expect(page.getByText(/最近精炼|Recent refinements/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/patch.*ui-patch/)).toBeVisible();
 
-    await page.getByRole("button", { name: "应用并保存" }).click();
-    await expect(page.getByText("已保存到项目版本")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /应用并保存|Apply and save/i }).click();
+    await expect(page.getByText(/已保存到项目版本|Saved to project version/i)).toBeVisible({ timeout: 10_000 });
 
     const reload = await api.get(`/api/projects/${id}`);
     const data = (await reload.json()) as { spec?: { title?: string } };
@@ -148,16 +153,18 @@ test.describe("refinement UI", () => {
 
   test("访客试玩页无 refine 模式按钮", async ({ browser }) => {
     const ownerCtx = await browser.newContext();
+    await addZhLocaleCookie(ownerCtx);
     const ownerPage = await ownerCtx.newPage();
     const ownerApiCtx = await ownerApi(ownerPage);
     const { id } = await createProject(ownerApiCtx);
     await ownerCtx.close();
 
     const guestCtx = await browser.newContext();
+    await addZhLocaleCookie(guestCtx);
     const guestPage = await guestCtx.newPage();
     await guestPage.goto(`/play/${id}`);
-    await expect(guestPage.getByText("继续共创")).toBeVisible();
-    await expect(guestPage.getByRole("button", { name: "局部 patch" })).toHaveCount(0);
+    await expect(guestPage.getByText(/继续共创|Keep co-creating/i)).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: /局部 patch|Partial patch/i })).toHaveCount(0);
     await guestCtx.close();
   });
 });

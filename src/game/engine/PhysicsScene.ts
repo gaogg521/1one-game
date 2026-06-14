@@ -1,13 +1,15 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceShake } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import type { GameSpec } from "@/lib/game-spec";
-import { hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -34,6 +36,13 @@ export class PhysicsScene extends Phaser.Scene {
   private banner!: HudBanner;
   private cohesive!: CohesivePresentation;
 
+  private comboWindowMs = 900;
+
+  private hitImpulse = 1;
+
+  private comboMultiplier = 1;
+  private runtimeRng!: () => number;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "PhysicsScene" });
     this.spec = spec;
@@ -45,7 +54,12 @@ export class PhysicsScene extends Phaser.Scene {
     const cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(cohesive.bleepTemperament);
     this.cohesive = cohesive;
-    this.winScore = this.spec.gameplay.winScore ?? 500;
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
+    const physPf = this.spec.samplePlayProfile?.physics;
+    this.winScore = physPf?.targetHits ?? this.spec.gameplay.winScore ?? 500;
+    this.comboWindowMs = physPf?.comboWindowMs ?? 900;
+    this.hitImpulse = physPf?.hitImpulse ?? 1;
+    this.comboMultiplier = physPf?.comboMultiplier ?? 1;
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -72,10 +86,10 @@ export class PhysicsScene extends Phaser.Scene {
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
     );
     this.comboText = styleHudText(
-      this.add.text(16, 38, "连击 x0", { fontSize: "15px", color: "#fbbf24" }),
+      this.add.text(16, 38, floaterCombo(this.uiLocale, 0), { fontSize: "15px", color: "#fbbf24" }),
     );
     this.hintText = styleHudText(
-      this.add.text(w / 2, h - 52, "点击假人猛击 · 拖拽方向施加冲量", {
+      this.add.text(w / 2, h - 52, hudPhysicsControls(this.uiLocale), {
         fontSize: "14px",
         color: "#cbd5e1",
       }).setOrigin(0.5),
@@ -84,6 +98,7 @@ export class PhysicsScene extends Phaser.Scene {
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
+    schedulePhaserPlayReady(this, 400);
   }
 
   private hitDummy(p: Phaser.Input.Pointer) {
@@ -93,7 +108,7 @@ export class PhysicsScene extends Phaser.Scene {
     const dist = Math.hypot(dx, dy);
     if (dist > 120) return;
 
-    const force = Phaser.Math.Clamp(280 - dist, 120, 420);
+    const force = Phaser.Math.Clamp(280 - dist, 120, 420) * this.hitImpulse;
     const nx = dx / (dist || 1);
     const ny = dy / (dist || 1);
     this.dummy.setVelocity(nx * force, ny * force - 80);
@@ -101,15 +116,18 @@ export class PhysicsScene extends Phaser.Scene {
     const now = this.time.now;
     if (now < this.comboUntil) this.combo += 1;
     else this.combo = 1;
-    this.comboUntil = now + 900;
+    this.comboUntil = now + this.comboWindowMs;
 
-    const gain = Math.round(20 + this.combo * 8);
+    const gain = Math.round((20 + this.combo * 8) * this.comboMultiplier);
     this.score += gain;
     this.hits += 1;
     this.scoreText.setText(hudScore(this.uiLocale, this.score));
-    this.comboText.setText(`连击 x${this.combo}`);
+    this.comboText.setText(floaterCombo(this.uiLocale, this.combo));
     juiceShake(this, { intensityScale: 0.8 + this.combo * 0.15 });
-    juiceBurst(this, this.dummy.x, this.dummy.y, this.spec.theme.particleTint ?? "#f97316", 6 + this.combo);
+    juiceBurst(this, this.dummy.x, this.dummy.y, this.spec.theme.particleTint ?? "#f97316", 6 + this.combo, this.runtimeRng);
+    if (this.combo >= 4) {
+      juiceFlash(this, { r: 255, g: 190, b: 70 }, { durationMs: 90 });
+    }
     playBleep("hit");
     this.soundscape?.triggerEvent("restore");
 
@@ -121,7 +139,7 @@ export class PhysicsScene extends Phaser.Scene {
     if (this.finished) return;
     if (this.time.now > this.comboUntil && this.combo > 0) {
       this.combo = 0;
-      this.comboText.setText("连击 x0");
+      this.comboText.setText(floaterCombo(this.uiLocale, 0));
     }
     if (this.hits === 0 && this.time.now > 45_000) this.finish(false);
     void dt;
@@ -130,7 +148,8 @@ export class PhysicsScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    this.banner.show({ title: won ? "解压达成！" : "时间到", ms: 2200 });
+    if (won) juiceFlash(this, { r: 180, g: 140, b: 255 }, { durationMs: 160 });
+    this.banner.show({ ...bannerPhysicsFinish(this.uiLocale, won), ms: 2200 });
     this.time.delayedCall(2400, () => this.onEnd({ score: this.score, won }));
   }
 }

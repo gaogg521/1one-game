@@ -29,6 +29,15 @@ export const THEME_META_COLOR: Record<ThemeId, string> = {
   "forest-green": "#071610",
 };
 
+/** 与 globals.css 中 --gc-accent / --gc-accent2 对齐，供 ThemeSwitcher 色点展示 */
+export const THEME_SWATCH_COLORS: Record<ThemeId, { primary: string; secondary: string }> = {
+  dark: { primary: "#818cf8", secondary: "#c084fc" },
+  light: { primary: "#4338ca", secondary: "#9333ea" },
+  "cyber-blue": { primary: "#38bdf8", secondary: "#22d3ee" },
+  "warm-orange": { primary: "#f59e0b", secondary: "#f97316" },
+  "forest-green": { primary: "#10b981", secondary: "#34d399" },
+};
+
 /** 旧版游戏站主题 id → 1oneclaw id */
 export const LEGACY_THEME_MAP: Record<string, ThemeId> = {
   nebula: "dark",

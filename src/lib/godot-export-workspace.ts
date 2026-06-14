@@ -25,7 +25,7 @@ import {
 import { ensureGodotUiFont } from "@/lib/godot-ui-font";
 
 /** 母版 GDScript 变更时递增，使旧 Web 构建缓存失效 */
-const GODOT_RUNTIME_BUILD_REV = "20260612-chess-3d-theme";
+const GODOT_RUNTIME_BUILD_REV = "20260612-strategy-3d-theme";
 
 export type PreparedGodotWorkspace = {
   exportId: string;

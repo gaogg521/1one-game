@@ -62,7 +62,14 @@ async function main(): Promise<void> {
     const page = await fetch(`${base}/${locale}/samples`, { redirect: "follow" });
     assert.ok(page.ok, `${locale} /samples HTTP ${page.status}`);
     const html = await page.text();
-    assert.ok(html.includes("Sample gallery") || html.includes("样品馆") || html.includes("樣品館"), `${locale} samples page title`);
+    const expectedTitle = (messages(locale).samples as Record<string, string>).title;
+    assert.ok(
+      html.includes(expectedTitle) ||
+        html.includes("Sample gallery") ||
+        html.includes("样品馆") ||
+        html.includes("樣品館"),
+      `${locale} samples page title (expected "${expectedTitle}")`,
+    );
     console.log(`[OK] ${locale} page /${locale}/samples`);
   }
 

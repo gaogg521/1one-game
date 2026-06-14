@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
+import { SamplePlayProfileSchema } from "@/lib/sample-play-profiles/types";
 
 const RelPointSchema = z.object({
   /** 0..1，按画布宽高归一化 */
@@ -82,9 +83,16 @@ const CoasterPathPointSchema = z.object({
 });
 
 const CoasterBlueprintSchema = z.object({
+  mode: z.enum(["coaster", "endlessRoad"]).optional(),
   path: z.array(CoasterPathPointSchema).min(8).max(128),
-  targetTimeSec: z.number().min(20).max(180).optional(),
+  targetTimeSec: z.number().min(20).max(999).optional(),
   cameraDistance: z.number().min(4).max(16).optional(),
+  distanceGoal: z.number().min(100).max(5000).optional(),
+});
+
+const CustomizationBlueprintSchema = z.object({
+  mode: z.enum(["carPaint", "pottery"]),
+  editGoal: z.number().min(3).max(12),
 });
 
 const PuzzleBlueprintSchema = z.object({
@@ -93,6 +101,15 @@ const PuzzleBlueprintSchema = z.object({
   rows: z.number().min(2).max(12),
   targetScore: z.number().min(1).max(999),
   moveLimit: z.number().min(1).max(999),
+});
+
+const PlatformerBlueprintSchema = z.object({
+  mode: z.enum(["standard", "stealth"]),
+  doubleJump: z.boolean().optional(),
+  grappleEnabled: z.boolean().optional(),
+  levelLayers: z.number().min(32).max(96).optional(),
+  worldWidth: z.number().min(3600).max(9000).optional(),
+  suggestedWinScore: z.number().min(24).max(120).optional(),
 });
 
 const FarmingBlueprintSchema = z.object({
@@ -253,8 +270,12 @@ export const GameSpecSchema = z.object({
   towerDefense: TowerDefenseBlueprintSchema.optional(),
   /** coaster：3D 空中轨道（缺省则由引擎侧生成默认轨道） */
   coaster: CoasterBlueprintSchema.optional(),
+  /** customization：汽车涂色 / 陶艺拉坯 */
+  customization: CustomizationBlueprintSchema.optional(),
   /** puzzle：消除/找不同/记忆/拼图模式 */
   puzzle: PuzzleBlueprintSchema.optional(),
+  /** platformer / stealth：二段跳与弹性摆荡 */
+  platformer: PlatformerBlueprintSchema.optional(),
   /** farming：网格种植经济 */
   farming: FarmingBlueprintSchema.optional(),
   /** strategy：区域征服派兵 */
@@ -265,6 +286,8 @@ export const GameSpecSchema = z.object({
   director: DirectorSchema.optional(),
   /** 通用系统层（可选；缺省则由引擎侧补齐） */
   systems: SystemsSchema.optional(),
+  /** Astrocade 式 per-game 定制（seed/生成时烘焙；运行时读 profile 不查 sampleId） */
+  samplePlayProfile: SamplePlayProfileSchema.optional(),
 });
 
 export type GameSpec = z.infer<typeof GameSpecSchema>;

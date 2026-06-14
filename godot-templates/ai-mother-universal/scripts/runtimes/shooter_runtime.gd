@@ -1,11 +1,14 @@
 extends Node2D
-## 俯视角射击：自动开火、敌舰下压、敌方弹幕、波次与技能
+## 3D 俯视角射击：自动开火、敌舰下压、波次与导演
 
-@onready var _player: CharacterBody2D = $Player
-@onready var _bullets: Node2D = $Bullets
-@onready var _enemies: Node2D = $Enemies
-@onready var _enemy_bullets: Node2D = $EnemyBullets
+@onready var _world: Node3D = $ViewportContainer/SubViewport/World
+@onready var _viewport: SubViewport = $ViewportContainer/SubViewport
 
+var _player: CharacterBody3D
+var _camera: Camera3D
+var _bullets_root: Node3D
+var _enemies_root: Node3D
+var _enemy_bullets_root: Node3D
 var _hud := GameHud.new()
 var _director := GameDirector.new()
 var _score := 0
@@ -20,13 +23,19 @@ var _wave_clearing := false
 var _between_waves_until := 0.0
 var _ended := false
 var _invuln := 0.0
-var _player_speed := 280.0
-var _bullet_speed := 520.0
+var _player_speed := 5.6
+var _bullet_speed := 10.4
 var _game_time := 0.0
 var _score_mult := 1.0
 var _burst_until := 0.0
 var _shots_fired := 0
-var _muzzle_layer: Node2D
+var _bounds_x := Vector2(-7.2, 7.2)
+var _player_z := 4.4
+var _orbit_mode := false
+var _orbit_angle := -PI * 0.5
+var _orbit_speed := 0.0018
+var _planet_center := Vector3.ZERO
+var _sniper_scope := false
 
 
 func _ready() -> void:
@@ -35,48 +44,110 @@ func _ready() -> void:
 	RuntimeReferenceRegistry.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
+	var sp := GameSpecData.sample_play_profile().get("shooter", {})
+	if sp is Dictionary:
+		_orbit_mode = bool(sp.get("orbitChopper", false))
+		_sniper_scope = bool(sp.get("sniperScope", false))
 	_win_score = GameSpecData.gameplay_i("winScore", 50)
 	_lives = GameSpecData.gameplay_i("lives", 3)
-	_player_speed = GameSpecData.gameplay_f("playerSpeed", 280)
-	_bullet_speed = GameSpecData.gameplay_f("jumpStrength", 520)
+	_player_speed = GameSpecData.gameplay_f("playerSpeed", 280) * 0.02
+	_bullet_speed = GameSpecData.gameplay_f("jumpStrength", 520) * 0.02
+	_bounds_x = Vector2(40.0 * Runtime3DEnv.SCALE - Runtime3DEnv.MAP_W * Runtime3DEnv.SCALE * 0.5,
+		760.0 * Runtime3DEnv.SCALE - Runtime3DEnv.MAP_W * Runtime3DEnv.SCALE * 0.5)
 	_wave = 1
 	_director.load_from_spec()
 	_director.banner.connect(func(t, m): _hud.show_banner(t, m))
 	_director.spawn_mini_boss.connect(_spawn_boss_enemy)
 	_director.goal_shift_ended.connect(_on_goal_shift_ended)
-	_muzzle_layer = Node2D.new()
-	_muzzle_layer.z_index = 40
-	add_child(_muzzle_layer)
+	_player_z = Runtime3DEnv.px_to_world(Vector2(400, 520), 0).z
+	_build_world()
 	_start_wave()
-	_swap_player_visual()
+	if _orbit_mode:
+		_hud.set_extra("环绕星球 · 左右调速 · 自动斩击")
+	elif _sniper_scope:
+		_hud.set_extra("狙击瞄准 · 绿圈锁定 · 自动开火")
+		queue_redraw()
+	if _viewport:
+		_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 
-func _is_space_theme() -> bool:
-	var blob := "%s %s %s %s" % [
-		GameSpecData.title(),
-		GameSpecData.subtitle(),
-		GameSpecData.labels("player", ""),
-		GameSpecData.labels("hazard", ""),
-	]
-	blob = blob.to_lower()
-	return (
-		"星" in blob
-		or "舰" in blob
-		or "太空" in blob
-		or "space" in blob
-		or "star" in blob
-		or "war" in blob
-	)
+func _build_world() -> void:
+	Runtime3DEnv.add_environment(_world, GameSpecData.theme_color("backgroundColor", Color("#0f1520")))
+	_camera = Runtime3DEnv.make_camera(_world, true)
+	_add_ground()
+	_bullets_root = Node3D.new()
+	_bullets_root.name = "Bullets"
+	_world.add_child(_bullets_root)
+	_enemies_root = Node3D.new()
+	_enemies_root.name = "Enemies"
+	_world.add_child(_enemies_root)
+	_enemy_bullets_root = Node3D.new()
+	_enemy_bullets_root.name = "EnemyBullets"
+	_world.add_child(_enemy_bullets_root)
+	_player = _make_player()
+	_world.add_child(_player)
+	if _orbit_mode:
+		_planet_center = Vector3(0, 0.6, 0)
+		var planet := MeshInstance3D.new()
+		var sph := SphereMesh.new()
+		sph.radius = 2.2
+		sph.height = 4.4
+		planet.mesh = sph
+		planet.position = _planet_center
+		var pmat := StandardMaterial3D.new()
+		pmat.albedo_color = Color("#22c55e")
+		planet.material_override = pmat
+		_world.add_child(planet)
+		_sync_orbit_player()
 
 
-func _swap_player_visual() -> void:
-	var vis := _player.get_node_or_null("Visual")
-	if vis:
-		vis.queue_free()
-	var uv := UnitVisual.new()
-	uv.kind = UnitVisual.Kind.STARSHIP
-	uv.unit_id = "hero"
-	_player.add_child(uv)
+func _add_ground() -> void:
+	var floor_body := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(Runtime3DEnv.MAP_W * Runtime3DEnv.SCALE, 0.2, Runtime3DEnv.MAP_H * Runtime3DEnv.SCALE)
+	col.shape = shape
+	floor_body.add_child(col)
+	var vis := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = shape.size
+	vis.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color("#141c28")
+	vis.material_override = mat
+	floor_body.add_child(vis)
+	floor_body.position = Vector3(0, -0.1, 0)
+	_world.add_child(floor_body)
+
+
+func _make_player() -> CharacterBody3D:
+	var body := CharacterBody3D.new()
+	body.position = Runtime3DEnv.px_to_world(Vector2(400, 520), 0.55)
+	var col := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.7, 0.35, 0.9)
+	col.shape = box
+	body.add_child(col)
+	var vis := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = box.size
+	vis.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = GameSpecData.theme_color("playerColor", Color.CYAN)
+	mat.emission_enabled = true
+	mat.emission = mat.albedo_color * 0.25
+	vis.material_override = mat
+	body.add_child(vis)
+	var ref := RuntimeReferenceRegistry.protagonist_texture
+	if ref:
+		var spr := Sprite3D.new()
+		spr.texture = ref
+		spr.pixel_size = 0.01
+		spr.position = Vector3(0, 0.2, 0.35)
+		spr.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		body.add_child(spr)
+		vis.visible = false
+	return body
 
 
 func _start_wave() -> void:
@@ -88,7 +159,7 @@ func _start_wave() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _ended:
+	if _ended or _player == null:
 		return
 	_game_time += delta
 	var progress := clampf(float(_score) / float(maxi(_win_score, 1)), 0.0, 1.0)
@@ -121,7 +192,7 @@ func _physics_process(delta: float) -> void:
 		_between_waves_until = maxf(0.0, _between_waves_until - delta)
 	elif (
 		not _wave_clearing
-		and _enemies.get_child_count() == 0
+		and _enemies_root.get_child_count() == 0
 		and _enemies_left <= 0
 		and _spawn_cd <= 0.05
 		and not _ended
@@ -134,11 +205,28 @@ func _physics_process(delta: float) -> void:
 		_end(true)
 
 
-func _move_player(delta: float) -> void:
+func _move_player(_delta: float) -> void:
+	if _orbit_mode:
+		var steer := Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
+		_orbit_speed = clampf(_orbit_speed + steer.x * _delta * 0.0012, 0.0009, 0.0034)
+		_orbit_angle += _orbit_speed * _delta * 60.0
+		_sync_orbit_player()
+		return
 	var dir := Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
-	_player.velocity = Vector2(dir.x * _player_speed, 0)
+	_player.velocity = Vector3(dir.x * _player_speed, 0.0, 0.0)
 	_player.move_and_slide()
-	_player.position.x = clampf(_player.position.x, 40.0, 760.0)
+	_player.position.x = clampf(_player.position.x, _bounds_x.x, _bounds_x.y)
+	_player.position.z = _player_z
+
+
+func _sync_orbit_player() -> void:
+	if _player == null:
+		return
+	var rx := 2.55
+	var rz := 1.65
+	_player.position = _planet_center + Vector3(cos(_orbit_angle) * rx, 0.35, sin(_orbit_angle) * rz)
+	_player.rotation.y = _orbit_angle + PI * 0.5
+	_player.velocity = Vector3.ZERO
 
 
 func _intensity() -> float:
@@ -163,19 +251,14 @@ func _fire_player_salvo() -> void:
 	var col := GameSpecData.theme_color("collectibleColor", Color.YELLOW)
 	var rapid := _is_rapid_fire()
 	var speed := _bullet_speed * (1.35 if rapid else 1.0)
-	var origin := _player.position + Vector2(0, -24)
+	var origin := _player.position + Vector3(0, 0.2, -0.45)
 	var spreads: Array[float] = [0.0]
 	if rapid:
-		spreads = [-18.0, 0.0, 18.0]
+		spreads = [-0.36, 0.0, 0.36]
 	for ox in spreads:
-		var b := _make_bullet(
-			origin + Vector2(ox, 0),
-			Vector2(ox * 1.5, -speed),
-			col,
-			true
-		)
-		_bullets.add_child(b["node"] as Node2D)
-	_muzzle_flash(origin, col)
+		_make_bullet(origin + Vector3(ox, 0, 0), Vector3(ox * 0.08, 0, -speed), col, true)
+	if _camera:
+		GameJuice.burst(self, _camera.unproject_position(origin), col, 4)
 	_shots_fired += 1
 	if _shots_fired % 4 == 0:
 		GameAudio.play_bleep(GameBleeps.Kind.FIRE)
@@ -185,94 +268,101 @@ func _fire_player_salvo() -> void:
 		GameJuice.shake_node(self, 1.2, 0.04)
 
 
-func _muzzle_flash(at: Vector2, col: Color) -> void:
-	if _muzzle_layer == null or not is_instance_valid(_muzzle_layer):
-		return
-	var flash := ColorRect.new()
-	flash.size = Vector2(14, 8)
-	flash.position = at + Vector2(-7, -4)
-	flash.color = Color(col.r, col.g, col.b, 0.85)
-	_muzzle_layer.add_child(flash)
-	var tw := flash.create_tween()
-	tw.tween_property(flash, "modulate:a", 0.0, 0.08)
-	tw.tween_callback(flash.queue_free)
-
-
 func _spawn_boss_enemy() -> void:
 	_spawn_enemy(5, 0.55, 1.5)
 
 
 func _spawn_enemy(hp: int = 2, speed_mul: float = 1.0, scale_mul: float = 1.0) -> void:
-	var x := randf_range(60.0, 740.0)
-	var node := Node2D.new()
-	node.position = Vector2(x, -20)
-	var vis := UnitVisual.new()
-	vis.kind = UnitVisual.Kind.INTERCEPTOR
-	vis.unit_id = "tank" if hp >= 4 else "grunt"
-	vis.scale = Vector2(scale_mul, scale_mul)
+	var spawn_px := Vector2(randf_range(60.0, 740.0), -20.0)
+	var node := Node3D.new()
+	node.position = Runtime3DEnv.px_to_world(spawn_px, 0.55)
+	var vis := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.65 * scale_mul, 0.35 * scale_mul, 0.8 * scale_mul)
+	vis.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = GameSpecData.theme_color("hazardColor", Color.ORANGE_RED)
+	vis.material_override = mat
+	node.add_child(vis)
 	var mt := RuntimeReferenceRegistry.next_monster_texture()
 	if mt:
-		vis.overlay_texture = mt
-	node.add_child(vis)
-	_enemies.add_child(node)
+		var spr := Sprite3D.new()
+		spr.texture = mt
+		spr.pixel_size = 0.009 * scale_mul
+		spr.position = Vector3(0, 0.2, 0)
+		spr.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		node.add_child(spr)
+		vis.visible = false
+	_enemies_root.add_child(node)
 	node.set_meta("data", {
 		"hp": hp,
 		"is_boss": hp >= 5,
-		"speed": GameSpecData.gameplay_f("hazardSpeed", 100) * speed_mul,
+		"speed": GameSpecData.gameplay_f("hazardSpeed", 100) * Runtime3DEnv.SCALE * speed_mul,
 	})
 
 
 func _tick_enemies(delta: float) -> void:
-	for c in _enemies.get_children():
-		if not c is Node2D:
+	for c in _enemies_root.get_children():
+		if not c is Node3D:
 			continue
 		var d: Dictionary = c.get_meta("data", {})
-		c.position.y += float(d.get("speed", 90)) * delta
-		if _invuln <= 0.0 and c.position.distance_to(_player.position) < 28.0:
+		c.position.z += float(d.get("speed", 1.8)) * delta
+		var flat := Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
+		if _invuln <= 0.0 and flat.length() < 0.56:
 			_hurt()
-		if c.position.y > 640:
+		if c.position.z > 6.4:
 			c.queue_free()
-		if _enemy_fire_cd <= 0.0 and c.position.y > 40 and c.position.y < 400:
+		if _enemy_fire_cd <= 0.0 and c.position.z > -4.0 and c.position.z < 2.0:
 			_enemy_fire_cd = maxf(0.8, GameSpecData.gameplay_f("spawnIntervalMs", 1200) / 1000.0)
-			_spawn_enemy_bullet(c.position + Vector2(0, 20))
+			_spawn_enemy_bullet(c.position + Vector3(0, 0.1, 0.35))
 
 
-func _spawn_enemy_bullet(from: Vector2) -> void:
-	var dir := (_player.position - from).normalized()
-	var b := _make_bullet(from, dir * 260.0, Color(1, 0.35, 0.35), false)
-	_enemy_bullets.add_child(b["node"] as Node2D)
+func _spawn_enemy_bullet(from: Vector3) -> void:
+	var to := _player.position - from
+	to.y = 0.0
+	var dir := to.normalized()
+	_make_bullet(from, dir * 5.2, Color(1, 0.35, 0.35), false)
 
 
-func _make_bullet(pos: Vector2, vel: Vector2, col: Color, friendly: bool) -> Dictionary:
-	var n := Node2D.new()
+func _make_bullet(pos: Vector3, vel: Vector3, col: Color, friendly: bool) -> void:
+	var n := Node3D.new()
 	n.position = pos
-	var r := ColorRect.new()
-	r.size = Vector2(6, 14)
-	r.position = Vector2(-3, -7)
-	r.color = col
-	n.add_child(r)
+	var vis := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.12, 0.12, 0.28)
+	vis.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.emission_enabled = true
+	mat.emission = col * 0.3
+	vis.material_override = mat
+	n.add_child(vis)
 	n.set_meta("b", {"vel": vel, "friendly": friendly})
-	return {"node": n}
+	if friendly:
+		_bullets_root.add_child(n)
+	else:
+		_enemy_bullets_root.add_child(n)
 
 
 func _tick_bullets(delta: float) -> void:
-	for c in _bullets.get_children():
+	for c in _bullets_root.get_children():
 		_move_bullet_node(c, delta, true)
 
 
 func _tick_enemy_bullets(delta: float) -> void:
-	for c in _enemy_bullets.get_children():
+	for c in _enemy_bullets_root.get_children():
 		_move_bullet_node(c, delta, false)
 
 
 func _move_bullet_node(c: Node, delta: float, friendly: bool) -> void:
-	if not c is Node2D:
+	if not c is Node3D:
 		return
 	var b: Dictionary = c.get_meta("b", {})
-	c.position += b.get("vel", Vector2.ZERO) as Vector2 * delta
+	c.position += b.get("vel", Vector3.ZERO) as Vector3 * delta
 	if friendly:
-		for e in _enemies.get_children():
-			if c.position.distance_to(e.position) < 22.0:
+		for e in _enemies_root.get_children():
+			var flat := Vector2(c.position.x - e.position.x, c.position.z - e.position.z)
+			if flat.length() < 0.44:
 				var d: Dictionary = e.get_meta("data", {})
 				d["hp"] = int(d.get("hp", 1)) - 1
 				e.set_meta("data", d)
@@ -281,7 +371,8 @@ func _move_bullet_node(c: Node, delta: float, friendly: bool) -> void:
 					_score += int((2 if is_boss else 1) * _score_mult)
 					GameAudio.play_bleep(GameBleeps.Kind.EXPLODE if not is_boss else GameBleeps.Kind.WIN)
 					var burst_n := 14 if is_boss else 8
-					GameJuice.burst(self, e.global_position, GameSpecData.theme_color("hazardColor", Color.ORANGE), burst_n)
+					if _camera:
+						GameJuice.burst(self, _camera.unproject_position(e.global_position), GameSpecData.theme_color("hazardColor", Color.ORANGE), burst_n)
 					if is_boss:
 						GameJuice.flash_background(self, Color(1, 0.7, 0.2), 0.22)
 						GameJuice.shake_node(self, 5.0, 0.12)
@@ -289,11 +380,12 @@ func _move_bullet_node(c: Node, delta: float, friendly: bool) -> void:
 				c.queue_free()
 				return
 	else:
-		if _invuln <= 0.0 and c.position.distance_to(_player.position) < 20.0:
+		var flat_p := Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
+		if _invuln <= 0.0 and flat_p.length() < 0.4:
 			_hurt()
 			c.queue_free()
 			return
-	if c.position.y < -40 or c.position.y > 640 or c.position.x < -20 or c.position.x > 820:
+	if c.position.z < -6.5 or c.position.z > 6.8 or c.position.x < -8.5 or c.position.x > 8.5:
 		c.queue_free()
 
 
@@ -317,3 +409,21 @@ func _hurt() -> void:
 func _end(won: bool) -> void:
 	_ended = true
 	_hud.show_banner("胜利！" if won else "战机坠毁", "", 2.2)
+
+
+func _draw() -> void:
+	if not _sniper_scope or _ended:
+		return
+	var rect := get_viewport_rect()
+	var center := rect.size * 0.5
+	var radius := minf(rect.size.x, rect.size.y) * 0.31
+	draw_arc(center, radius, 0.0, TAU, 72, Color(0.29, 0.87, 0.5, 0.55), 3.0)
+	draw_circle(center, 4.0, Color(0.93, 0.27, 0.27, 0.92))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and _camera:
+		Runtime3DEnv.raycast_world(_viewport, _camera, _viewport.get_mouse_position())
+		GameAudio.boot_interactive()
+	elif event is InputEventKey and event.pressed:
+		GameAudio.boot_interactive()

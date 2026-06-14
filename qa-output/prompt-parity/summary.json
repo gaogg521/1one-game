@@ -1,0 +1,363 @@
+{
+  "aligned": 17,
+  "total": 17,
+  "rows": [
+    {
+      "sampleId": "smash-the-dummy",
+      "title": "Smash the Dummy",
+      "promptLen": 97,
+      "sampleTemplate": "physics",
+      "userTemplate": "physics",
+      "sampleScene": "PhysicsScene",
+      "userScene": "PhysicsScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 5312,
+      "userCanvasMs": 3415,
+      "sampleShot": "qa-output\\prompt-parity\\sample-smash-the-dummy.png",
+      "userShot": "qa-output\\prompt-parity\\user-smash-the-dummy.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "rail-in-air",
+      "title": "Rail in Air",
+      "promptLen": 105,
+      "sampleTemplate": "coaster",
+      "userTemplate": "coaster",
+      "sampleScene": "CoasterScene",
+      "userScene": "CoasterScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3063,
+      "userCanvasMs": 3340,
+      "sampleShot": "qa-output\\prompt-parity\\sample-rail-in-air.png",
+      "userShot": "qa-output\\prompt-parity\\user-rail-in-air.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "grow-a-garden",
+      "title": "Grow a Garden",
+      "promptLen": 65,
+      "sampleTemplate": "farming",
+      "userTemplate": "farming",
+      "sampleScene": "FarmingScene",
+      "userScene": "FarmingScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3571,
+      "userCanvasMs": 3631,
+      "sampleShot": "qa-output\\prompt-parity\\sample-grow-a-garden.png",
+      "userShot": "qa-output\\prompt-parity\\user-grow-a-garden.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "color-bloom",
+      "title": "Color Bloom",
+      "promptLen": 71,
+      "sampleTemplate": "puzzle",
+      "userTemplate": "puzzle",
+      "sampleScene": "PuzzleScene",
+      "userScene": "PuzzleScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3105,
+      "userCanvasMs": 16026,
+      "sampleShot": "qa-output\\prompt-parity\\sample-color-bloom.png",
+      "userShot": "qa-output\\prompt-parity\\user-color-bloom.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "whimsy-differences",
+      "title": "Whimsy Differences",
+      "promptLen": 71,
+      "sampleTemplate": "puzzle",
+      "userTemplate": "puzzle",
+      "sampleScene": "PuzzleScene",
+      "userScene": "PuzzleScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 4199,
+      "userCanvasMs": 3259,
+      "sampleShot": "qa-output\\prompt-parity\\sample-whimsy-differences.png",
+      "userShot": "qa-output\\prompt-parity\\user-whimsy-differences.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "gun-merge-3d-zombie-apocalypse",
+      "title": "Gun Merge 3D: Zombie Apocalypse",
+      "promptLen": 90,
+      "sampleTemplate": "towerDefense",
+      "userTemplate": "towerDefense",
+      "sampleScene": "TowerDefenseScene",
+      "userScene": "TowerDefenseScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3373,
+      "userCanvasMs": 3124,
+      "sampleShot": "qa-output\\prompt-parity\\sample-gun-merge-3d-zombie-apocalypse.png",
+      "userShot": "qa-output\\prompt-parity\\user-gun-merge-3d-zombie-apocalypse.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "ultimate-3d-chess",
+      "title": "Ultimate 3D Chess",
+      "promptLen": 83,
+      "sampleTemplate": "chess",
+      "userTemplate": "chess",
+      "sampleScene": "ChessScene",
+      "userScene": "ChessScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3477,
+      "userCanvasMs": 15344,
+      "sampleShot": "qa-output\\prompt-parity\\sample-ultimate-3d-chess.png",
+      "userShot": "qa-output\\prompt-parity\\user-ultimate-3d-chess.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "elastic-thief-2",
+      "title": "Elastic Thief 2",
+      "promptLen": 73,
+      "sampleTemplate": "stealth",
+      "userTemplate": "stealth",
+      "sampleScene": "PlatformerScene",
+      "userScene": "PlatformerScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3398,
+      "userCanvasMs": 3746,
+      "sampleShot": "qa-output\\prompt-parity\\sample-elastic-thief-2.png",
+      "userShot": "qa-output\\prompt-parity\\user-elastic-thief-2.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "state-conquest",
+      "title": "State Conquest",
+      "promptLen": 66,
+      "sampleTemplate": "strategy",
+      "userTemplate": "strategy",
+      "sampleScene": "StrategyScene",
+      "userScene": "StrategyScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3341,
+      "userCanvasMs": 3094,
+      "sampleShot": "qa-output\\prompt-parity\\sample-state-conquest.png",
+      "userShot": "qa-output\\prompt-parity\\user-state-conquest.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "tiny-planet-chopper",
+      "title": "Tiny Planet Chopper",
+      "promptLen": 93,
+      "sampleTemplate": "shooter",
+      "userTemplate": "shooter",
+      "sampleScene": "ShooterScene",
+      "userScene": "ShooterScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3239,
+      "userCanvasMs": 15758,
+      "sampleShot": "qa-output\\prompt-parity\\sample-tiny-planet-chopper.png",
+      "userShot": "qa-output\\prompt-parity\\user-tiny-planet-chopper.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "blade-defender-merge",
+      "title": "Blade Defender Merge",
+      "promptLen": 89,
+      "sampleTemplate": "towerDefense",
+      "userTemplate": "towerDefense",
+      "sampleScene": "TowerDefenseScene",
+      "userScene": "TowerDefenseScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3193,
+      "userCanvasMs": 4584,
+      "sampleShot": "qa-output\\prompt-parity\\sample-blade-defender-merge.png",
+      "userShot": "qa-output\\prompt-parity\\user-blade-defender-merge.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "car-color-palette",
+      "title": "Car Color Palette",
+      "promptLen": 73,
+      "sampleTemplate": "customization",
+      "userTemplate": "customization",
+      "sampleScene": "CustomizationScene",
+      "userScene": "CustomizationScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3532,
+      "userCanvasMs": 3094,
+      "sampleShot": "qa-output\\prompt-parity\\sample-car-color-palette.png",
+      "userShot": "qa-output\\prompt-parity\\user-car-color-palette.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "blocky-sniper-hunter",
+      "title": "BLOCKY SNIPER HUNTER",
+      "promptLen": 97,
+      "sampleTemplate": "sniper",
+      "userTemplate": "sniper",
+      "sampleScene": "ShooterScene",
+      "userScene": "ShooterScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3256,
+      "userCanvasMs": 14692,
+      "sampleShot": "qa-output\\prompt-parity\\sample-blocky-sniper-hunter.png",
+      "userShot": "qa-output\\prompt-parity\\user-blocky-sniper-hunter.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "memory-match-mania",
+      "title": "Memory Match Mania",
+      "promptLen": 66,
+      "sampleTemplate": "puzzle",
+      "userTemplate": "puzzle",
+      "sampleScene": "PuzzleScene",
+      "userScene": "PuzzleScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3223,
+      "userCanvasMs": 4485,
+      "sampleShot": "qa-output\\prompt-parity\\sample-memory-match-mania.png",
+      "userShot": "qa-output\\prompt-parity\\user-memory-match-mania.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "kids-puzzle",
+      "title": "KIDS PUZZLE",
+      "promptLen": 73,
+      "sampleTemplate": "puzzle",
+      "userTemplate": "puzzle",
+      "sampleScene": "PuzzleScene",
+      "userScene": "PuzzleScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 2894,
+      "userCanvasMs": 3993,
+      "sampleShot": "qa-output\\prompt-parity\\sample-kids-puzzle.png",
+      "userShot": "qa-output\\prompt-parity\\user-kids-puzzle.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "pottery-master-3d",
+      "title": "Pottery Master 3D",
+      "promptLen": 83,
+      "sampleTemplate": "customization",
+      "userTemplate": "customization",
+      "sampleScene": "CustomizationScene",
+      "userScene": "CustomizationScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 2932,
+      "userCanvasMs": 14836,
+      "sampleShot": "qa-output\\prompt-parity\\sample-pottery-master-3d.png",
+      "userShot": "qa-output\\prompt-parity\\user-pottery-master-3d.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    },
+    {
+      "sampleId": "crashy-roads",
+      "title": "Crashy Roads",
+      "promptLen": 67,
+      "sampleTemplate": "racing",
+      "userTemplate": "racing",
+      "sampleScene": "CoasterScene",
+      "userScene": "CoasterScene",
+      "templateMatch": true,
+      "sceneMatch": true,
+      "routeParity": true,
+      "userAgentic": false,
+      "sampleCanvasMs": 3113,
+      "userCanvasMs": 4563,
+      "sampleShot": "qa-output\\prompt-parity\\sample-crashy-roads.png",
+      "userShot": "qa-output\\prompt-parity\\user-crashy-roads.png",
+      "gapNotes": [
+        "路由已对齐；视觉 polish 需目视对比 sample/user 截图",
+        "竞品差距（平台级）：专用 Scene 为 template 族通用实现，非 Astrocade 每款定制 JS；juice/3D/关卡密度仍低于竞品"
+      ]
+    }
+  ]
+}

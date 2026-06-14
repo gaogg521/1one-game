@@ -24,5 +24,5 @@
 ## E. 下一步（P5）
 
 1. ~~分镜：新增空白页 / 合并页（可选）~~ ✅ 迭代七
-2. `npx prisma generate` 后逐步去掉 email/roster raw SQL
+2. ~~`npx prisma generate` 后逐步去掉 email/roster raw SQL~~ ✅ 2026-06-14（email 已用 Prisma；roster 已切 Client）
 3. 独立漫画：可选显式「页数 + 每页格数」高级选项

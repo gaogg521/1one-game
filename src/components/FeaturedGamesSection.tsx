@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
-import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
+import { useIdleEffect } from "@/hooks/use-idle-effect";
 
 type FeaturedGame = {
   id: string;
@@ -23,19 +23,16 @@ export function FeaturedGamesSection() {
   const [games, setGames] = useState<FeaturedGame[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/discover?limit=6")
+  useIdleEffect(() => {
+    const ac = new AbortController();
+    fetch("/api/discover?limit=6", { signal: ac.signal })
       .then((r) => r.json())
       .then((d: { projects?: FeaturedGame[] }) => {
-        const list = (d.projects ?? []).slice(0, 6);
-        setGames(list);
-        prefetchGameProjectsByIds(
-          list.map((g) => g.id),
-          6,
-        );
+        setGames((d.projects ?? []).slice(0, 6));
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
+    return () => ac.abort();
   }, []);
 
   if (loaded && games.length === 0) return null;

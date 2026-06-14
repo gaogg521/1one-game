@@ -1,0 +1,223 @@
+{
+  "at": "2026-06-13T09:21:00.114Z",
+  "pass": true,
+  "modules": {
+    "game": {
+      "at": "2026-06-13T09:20:56.544Z",
+      "stories": [
+        "用户复制样品 prompt → 创作/试玩与 demo 同款",
+        "用户克隆样品 → 继承 polish，试玩一致",
+        "用户自由 prompt → 不虚假承诺「同款」",
+        "样品馆「用此 prompt 创作」→ 创作台 prefill 深链可还原"
+      ],
+      "story1Ok": 17,
+      "story1Total": 17,
+      "pass": true,
+      "failures": [],
+      "rows": [
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "smash-the-dummy",
+          "ok": true,
+          "detail": "PhysicsScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "rail-in-air",
+          "ok": true,
+          "detail": "CoasterScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "grow-a-garden",
+          "ok": true,
+          "detail": "FarmingScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "color-bloom",
+          "ok": true,
+          "detail": "PuzzleScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "whimsy-differences",
+          "ok": true,
+          "detail": "PuzzleScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "gun-merge-3d-zombie-apocalypse",
+          "ok": true,
+          "detail": "TowerDefenseScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "ultimate-3d-chess",
+          "ok": true,
+          "detail": "ChessScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "elastic-thief-2",
+          "ok": true,
+          "detail": "PlatformerScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "state-conquest",
+          "ok": true,
+          "detail": "StrategyScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "tiny-planet-chopper",
+          "ok": true,
+          "detail": "ShooterScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "blade-defender-merge",
+          "ok": true,
+          "detail": "TowerDefenseScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "car-color-palette",
+          "ok": true,
+          "detail": "CustomizationScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "blocky-sniper-hunter",
+          "ok": true,
+          "detail": "ShooterScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "memory-match-mania",
+          "ok": true,
+          "detail": "PuzzleScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "kids-puzzle",
+          "ok": true,
+          "detail": "PuzzleScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "pottery-master-3d",
+          "ok": true,
+          "detail": "CustomizationScene"
+        },
+        {
+          "story": "同 prompt 创作 = 样品同款",
+          "sampleId": "crashy-roads",
+          "ok": true,
+          "detail": "CoasterScene"
+        },
+        {
+          "story": "克隆保留 polish",
+          "sampleId": "smash-the-dummy",
+          "ok": true,
+          "detail": "smash-the-dummy"
+        },
+        {
+          "story": "克隆保留 polish",
+          "sampleId": "rail-in-air",
+          "ok": true,
+          "detail": "rail-in-air"
+        },
+        {
+          "story": "克隆保留 polish",
+          "sampleId": "grow-a-garden",
+          "ok": true,
+          "detail": "grow-a-garden"
+        },
+        {
+          "story": "克隆保留 polish",
+          "sampleId": "color-bloom",
+          "ok": true,
+          "detail": "color-bloom"
+        },
+        {
+          "story": "克隆保留 polish",
+          "sampleId": "whimsy-differences",
+          "ok": true,
+          "detail": "whimsy-differences"
+        },
+        {
+          "story": "非样品 prompt 不误标",
+          "sampleId": "(generic)",
+          "ok": true,
+          "detail": "no profile"
+        },
+        {
+          "story": "样品馆 prefill 深链",
+          "sampleId": "smash-the-dummy",
+          "ok": true,
+          "detail": "roundtrip ok"
+        },
+        {
+          "story": "样品馆 prefill 深链",
+          "sampleId": "rail-in-air",
+          "ok": true,
+          "detail": "roundtrip ok"
+        },
+        {
+          "story": "样品馆 prefill 深链",
+          "sampleId": "grow-a-garden",
+          "ok": true,
+          "detail": "roundtrip ok"
+        }
+      ]
+    },
+    "literary": {
+      "at": "2026-06-13T09:20:57.804Z",
+      "pass": true,
+      "failures": [],
+      "rows": [
+        {
+          "story": "短篇拒绝悬念截断",
+          "ok": true,
+          "detail": "正文长度明显不足，仍像半成品"
+        },
+        {
+          "story": "历史题材视觉路由",
+          "ok": true,
+          "detail": "historical"
+        },
+        {
+          "story": "中篇漫画 8 宫格",
+          "ok": true,
+          "detail": "grid_8"
+        },
+        {
+          "story": "分镜策略=关键情节",
+          "ok": true,
+          "detail": "key moments"
+        },
+        {
+          "story": "正文对白/旁白回填分镜",
+          "ok": true,
+          "detail": "朕不能亡于此。"
+        },
+        {
+          "story": "按章改编进度",
+          "ok": true,
+          "detail": "adapted=1 next=2"
+        }
+      ],
+      "stories": [
+        "用户写短篇 → 必须收束才入库",
+        "用户改编历史小说 → 视觉题材不错判都市",
+        "用户中篇改编 → 8 宫格而非缩水四格",
+        "分镜 LLM → 抽关键情节而非逐段铺格",
+        "LLM 占位格 → 正文对白/旁白自动回填",
+        "长篇按章 → 改编进度与下一章可续"
+      ]
+    }
+  },
+  "e2e": "npx playwright test e2e/platform-user-journey.smoke.spec.ts"
+}

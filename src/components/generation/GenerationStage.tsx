@@ -13,10 +13,11 @@ type Props = {
   title: string;
   stages: Stage[];
   detail?: string;
+  detailTone?: "default" | "warn";
   progress?: number;
 };
 
-export function GenerationStage({ title, stages, detail, progress }: Props) {
+export function GenerationStage({ title, stages, detail, detailTone = "default", progress }: Props) {
   return (
     <div className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,var(--gc-surface-glass))] p-4">
       <div className="flex items-center justify-between gap-3">
@@ -51,7 +52,15 @@ export function GenerationStage({ title, stages, detail, progress }: Props) {
           </li>
         ))}
       </ol>
-      {detail ? <p className="mt-2 text-xs text-[var(--gc-muted)]">{detail}</p> : null}
+      {detail ? (
+        <p
+          className={`mt-2 text-xs ${
+            detailTone === "warn" ? "text-amber-600 dark:text-amber-300/90" : "text-[var(--gc-muted)]"
+          }`}
+        >
+          {detail}
+        </p>
+      ) : null}
     </div>
   );
 }

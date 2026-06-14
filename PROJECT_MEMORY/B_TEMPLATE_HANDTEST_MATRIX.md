@@ -15,6 +15,7 @@
 | 小说/漫画页 E2E | `e2e/novel-comic.smoke.spec.ts` | 5/5 |
 | 漫画 8 页分镜 HTTP | `COMIC_HANDTEST=1 node scripts/simulate-handtest.mjs` | 8 页 / 32 格（~206s） |
 | 一键脚本 | `scripts/run-handtest-all.ps1` | 见上 |
+| Console SSO E2E | `npm run test:e2e:admin-console-sso` | 2/2（stub） |
 | 构建 | `npm run build` | 通过 |
 
 ## 浏览器手测（每模板 1 条 prompt）
@@ -44,5 +45,7 @@
 - [x] 共创保存 E2E 2/2（2026-05-17）  
 - [x] 六模板浏览器手测 E2E 8/8（canvas + 全屏/重开 + 标题，2026-05-17）  
 - [x] 漫画 8 页分段分镜 HTTP 实测（2026-05-17，`cmp9mqea8000h5cxxygt8c4i2`，~280s）  
-- [ ] 漫画 **32 格配图** SSE 长测（~40+ 分钟，按需）  
-- [ ] 六模板**肉眼**玩一局（章节横幅/事件/胜负 — 自动化无法替代）  
+- [x] 漫画 **32 格配图** SSE 长测（2026-06-13，`qa:comic-32-panels` 64/64）  
+- [x] 煤山崇祯 **8 页完整漫画**（2026-06-13，`cmqcjell90008hwa0d2ngatyz`，64/64）  
+- [x] 六模板**章节事件结构**（goalShift / finalBarrage 等 — `qa:director-spec` + `qa:template-matrix`）  
+- [ ] 六模板**肉眼**玩一局（章节横幅动效/胜负手感 — 自动化无法替代，可选 PM 签收）  

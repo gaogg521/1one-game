@@ -298,9 +298,6 @@ export function SiteHeader() {
             >
               {t("nav.createNow")}
             </Link>
-            <p className="gc-theme-soft mt-4 text-balance text-center text-[12px] leading-snug tracking-wide text-[var(--gc-muted)] lg:text-left xl:text-[13px]">
-              {t("nav.sidebarHint")}
-            </p>
           </div>
         </div>
       </aside>

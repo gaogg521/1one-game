@@ -3,11 +3,24 @@ import type { GameSpec } from "@/lib/game-spec";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { buildCoasterBlueprint } from "@/lib/coaster-blueprint";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
+import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
 import { buildStrategyBlueprint } from "@/lib/strategy-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
+import {
+  applySamplePlayProfile,
+  inferSampleIdFromPrompt,
+  reapplySamplePlayProfileByVariant,
+  sampleIdFromProjectId,
+} from "@/lib/sample-play-profiles";
+
+export type EnrichGameSpecOptions = {
+  projectId?: string;
+  sampleId?: string;
+};
 
 /**
  * Phaser / Godot 共用：导出与试玩前补全导演、塔防蓝图、试听与粒子色，
@@ -17,43 +30,52 @@ export function enrichGameSpecForRuntime(
   spec: GameSpec,
   promptHint = "",
   locale: AppLocale = "zh-Hans",
+  opts: EnrichGameSpecOptions = {},
 ): GameSpec {
   const hint = promptHint || spec.title;
   let next = withPresentationDefaults(spec);
 
   const rt = resolveTemplateRuntime(next.templateId);
-  if (rt.blueprint === "towerDefense" && !next.towerDefense) {
-    next = {
-      ...next,
-      towerDefense: buildTowerDefenseBlueprint({ prompt: hint, spec: next }),
-    };
-  }
 
-  if (rt.blueprint === "coaster" && !next.coaster) {
+  if (rt.blueprint === "coaster") {
     next = {
       ...next,
       coaster: buildCoasterBlueprint({ prompt: hint, spec: next }),
     };
   }
 
-  if (rt.blueprint === "puzzle" && !next.puzzle) {
+  if (rt.blueprint === "puzzle") {
     next = {
       ...next,
       puzzle: buildPuzzleBlueprint({ prompt: hint, spec: next }),
     };
   }
 
-  if (rt.blueprint === "farming" && !next.farming) {
+  if (rt.blueprint === "farming") {
     next = {
       ...next,
       farming: buildFarmingBlueprint({ prompt: hint, spec: next }),
     };
   }
 
-  if (rt.blueprint === "strategy" && !next.strategy) {
+  if (rt.blueprint === "strategy") {
     next = {
       ...next,
       strategy: buildStrategyBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
+  if (rt.blueprint === "towerDefense") {
+    next = {
+      ...next,
+      towerDefense: buildTowerDefenseBlueprint({ prompt: hint, spec: next }),
+    };
+  }
+
+  if (next.templateId === "customization") {
+    next = {
+      ...next,
+      customization: buildCustomizationBlueprint({ prompt: hint, spec: next }),
     };
   }
 
@@ -111,6 +133,24 @@ export function enrichGameSpecForRuntime(
         particleTint: next.theme.collectibleColor,
       },
     };
+  }
+
+  if (rt.phaser === "platformer") {
+    const platBp = buildPlatformerBlueprint({ prompt: hint, spec: next });
+    const winScore = Math.max(next.gameplay.winScore ?? 0, platBp.suggestedWinScore ?? 0);
+    next = {
+      ...next,
+      platformer: platBp,
+      gameplay: { ...next.gameplay, winScore },
+    };
+  }
+
+  const sampleId =
+    opts.sampleId ?? sampleIdFromProjectId(opts.projectId) ?? inferSampleIdFromPrompt(hint);
+  if (sampleId) {
+    next = applySamplePlayProfile(next, sampleId, hint);
+  } else if (next.samplePlayProfile?.variantId) {
+    next = reapplySamplePlayProfileByVariant(next, hint);
   }
 
   return next;

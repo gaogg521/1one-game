@@ -7,6 +7,11 @@ import path from "path";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
+import {
+  specTextForStyleDetection,
+  buildAssetMoodLine,
+  templateVisualStyle,
+} from "@/lib/assets/template-visual-styles";
 
 const BG_DIR = path.join(process.cwd(), "public", "game-bg");
 
@@ -16,32 +21,26 @@ function ensureDir() {
   }
 }
 
-function buildBackgroundPrompt(spec: GameSpec): string {
-  const title = spec.title || "game";
-  const subtitle = spec.labels?.subtitle?.trim() || "";
-  const mood = subtitle || title;
-  const bgColor = spec.theme.backgroundColor || "#1a1a2e";
-
-  // 风格检测：与 game-sprite-gen.ts 保持一致
-  const allText = `${title} ${mood} ${spec.labels?.player || ""} ${spec.labels?.hazard || ""}`.toLowerCase();
+export function resolveBackgroundTemplateStyle(spec: GameSpec): string {
+  const allText = specTextForStyleDetection(spec);
   const isPvZ = /植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant|温室|防线|射手|阳光|塔防|腐化|变异|植/.test(allText);
-
-  let templateStyle: string;
-  if (spec.templateId === "platformer") {
-    templateStyle = "side-scrolling platformer game background, layered parallax scenery";
-  } else if (spec.templateId === "towerDefense") {
-    templateStyle = isPvZ
-      ? " Plants vs Zombies style garden lawn background, green grassy yard with curved dirt paths, wooden fence, small flower beds, daytime bright and cheerful"
-      : "top-down tactical game background, gridded terrain with path";
-  } else if (spec.templateId === "shooter") {
-    templateStyle = "top-down space shooter background, starfield with nebulae";
-  } else {
-    templateStyle = "abstract geometric game background, clean flat design";
+  let templateStyle = templateVisualStyle(spec.templateId);
+  if (spec.templateId === "towerDefense" && isPvZ) {
+    templateStyle =
+      "Plants vs Zombies style garden lawn background, green grassy yard with curved dirt paths, wooden fence, small flower beds, daytime bright and cheerful";
   }
+  return templateStyle;
+}
+
+export function buildBackgroundPrompt(spec: GameSpec): string {
+  const mood = buildAssetMoodLine(spec);
+  const bgColor = spec.theme.backgroundColor || "#1a1a2e";
+  const templateStyle = resolveBackgroundTemplateStyle(spec);
 
   return [
     `2D game background scene, ${templateStyle}`,
-    `mood: ${mood}`,
+    `game title mood: ${mood}`,
+    `template: ${spec.templateId}`,
     `dominant color: ${bgColor}, smooth gradients, atmospheric depth`,
     `simple clean vector game art style, no text, no UI elements, no characters`,
     `seamless and tileable, suitable for a casual web game`,

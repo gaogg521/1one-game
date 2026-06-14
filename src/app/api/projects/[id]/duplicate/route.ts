@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
+import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
 import { createProjectRecord } from "@/lib/project-create";
 import { copyProjectCoverFile } from "@/lib/project-cover";
 import { fetchCreativeBriefJson, saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
@@ -30,11 +31,14 @@ export async function POST(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "sourceNotFound", 404);
   }
 
+  let sourceSpec: ReturnType<typeof parseGameSpec>;
   try {
-    parseGameSpec(JSON.parse(source.specJson));
+    sourceSpec = parseGameSpec(JSON.parse(source.specJson));
   } catch {
     return localizedJsonError(req, "sourceCorrupt", 500);
   }
+
+  const normalizedSpec = normalizeAstrocadePlaySpec(sourceSpec);
 
   const title = duplicateTitle(source.title, resolveRequestLocaleSync(req), 80);
 
@@ -44,7 +48,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       ownerKey,
       title,
       prompt: source.prompt,
-      specJson: source.specJson,
+      specJson: JSON.stringify(normalizedSpec),
       status: source.status,
     });
   } catch (e) {

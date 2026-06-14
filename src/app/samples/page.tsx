@@ -10,6 +10,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { buildCreatePrefillPath, buildStartPrefillPath } from "@/lib/sample-create-prefill";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import {
   getLocalizedSamplesByShelf,
@@ -153,6 +154,20 @@ function SampleCard({
           className={`gc-theme-cta rounded-full px-4 py-2 text-xs font-semibold shadow-md hover:brightness-110 sm:px-5 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
         >
           {ts("play")}
+        </Link>
+        <Link
+          href={buildStartPrefillPath(s.prompt, locale)}
+          className={`rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+          data-testid="sample-start-with-prompt"
+        >
+          {ts("startViaIntake")}
+        </Link>
+        <Link
+          href={buildCreatePrefillPath(s.prompt, locale)}
+          className={`rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-4 py-2 text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] transition hover:brightness-110 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+          data-testid="sample-create-with-prompt"
+        >
+          {ts("createWithPrompt")}
         </Link>
         <button
           type="button"

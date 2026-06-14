@@ -1,54 +1,40 @@
 /**
- * Astrocade 用户生成路径：Agentic attach → AgenticScene 路由 → 样品不含 agentic
+ * Astrocade 用户生成路径：template-first → 专用 Scene（与样品馆一致）→ 样品不含 agentic
  * npm run qa:astrocade-user-path
  */
 import { mockSpecFromPrompt } from "../src/lib/mock-spec";
 import { attachAgenticModuleIfEnabled } from "../src/lib/agentic/generate-game-module";
-import { shouldUseAgenticRuntime } from "../src/lib/agentic/game-module";
-import { expectedPhaserSceneName } from "../src/lib/game-templates/runtime";
-import { enrichGameSpecForRuntime } from "../src/lib/enrich-game-spec";
+import { checkAstrocadeParity, templateFirstCoverage } from "../src/lib/astrocade-architecture";
 import { buildRuntimeAssetManifest } from "../src/lib/assets/asset-runtime-resolver";
 import { SAMPLES } from "../src/lib/samples";
 import { specForSample } from "../src/lib/sample-specs";
 import { PRODUCT } from "../src/lib/product-config";
+import { AGENTIC_QA_CASES } from "./agentic-qa-cases";
 
-function assert(cond: boolean, msg: string) {
-  if (!cond) throw new Error(msg);
-}
+const USER_CASES = AGENTIC_QA_CASES.slice(0, 6);
 
 async function main() {
-  assert(PRODUCT.game.agenticModuleEnabled, "agenticModuleEnabled must be true");
-  assert(PRODUCT.orchestration.qualityTier === "astrocade", "qualityTier must be astrocade");
+  if (!PRODUCT.game.agenticModuleEnabled) throw new Error("agenticModuleEnabled must be true");
+  if (!PRODUCT.game.dedicatedSceneForTemplateFirst) throw new Error("dedicatedSceneForTemplateFirst must be true");
+  if (PRODUCT.orchestration.qualityTier !== "astrocade") throw new Error("qualityTier must be astrocade");
 
-  const prompts = [
-    "做一个解压打 dummy 的假人游戏",
-    "空中轨道过山车竞速",
-    "地图征服派兵占领",
-  ];
+  const { missing } = templateFirstCoverage();
+  if (missing.length) throw new Error(`template-first missing: ${missing.join(", ")}`);
 
-  for (const p of prompts) {
-    const base = mockSpecFromPrompt(p);
-    const withAgentic = await attachAgenticModuleIfEnabled(p, base, true);
-    assert(shouldUseAgenticRuntime(withAgentic), `agentic attached: ${p.slice(0, 12)}`);
-    assert(
-      expectedPhaserSceneName(withAgentic) === "AgenticScene",
-      `routes AgenticScene: ${withAgentic.templateId}`,
-    );
-    const enriched = enrichGameSpecForRuntime(withAgentic, p);
-    assert(Boolean(enriched.agenticModule?.source), "enrich preserves agenticModule");
-    assert(
-      validateAgenticSourceQuick(enriched.agenticModule!.source),
-      "agentic source passes forbidden check",
-    );
+  for (const c of USER_CASES) {
+    const base = mockSpecFromPrompt(c.prompt);
+    if (base.templateId !== c.expectTemplate) {
+      throw new Error(`mock ${c.expectTemplate} got ${base.templateId}`);
+    }
+    const attached = await attachAgenticModuleIfEnabled(c.prompt, base, true);
+    const violations = checkAstrocadeParity(attached, { label: c.expectTemplate });
+    if (violations.length) throw new Error(violations.map((v) => v.message).join("; "));
   }
 
   for (const s of SAMPLES) {
     const spec = specForSample(s);
-    assert(!shouldUseAgenticRuntime(spec), `sample ${s.id} must use dedicated scene`);
-    assert(
-      expectedPhaserSceneName(spec) !== "AgenticScene",
-      `sample ${s.id} must not route AgenticScene`,
-    );
+    const violations = checkAstrocadeParity(spec, { label: s.id });
+    if (violations.length) throw new Error(violations.map((v) => v.message).join("; "));
   }
 
   const manifest = buildRuntimeAssetManifest({
@@ -60,17 +46,13 @@ async function main() {
       { kind: "gem", url: "/game-sprites/test/gem.png" },
     ],
   });
-  assert(manifest.runtimeSchema === 2, "manifest v2");
-  assert(manifest.slots?.some((s) => s.slot === "background"), "background slot");
-  assert(manifest.slots?.some((s) => s.slot === "player"), "player slot");
-  assert(manifest.slots?.some((s) => s.slot === "enemy"), "enemy slot from hazard");
-  assert(manifest.slots?.some((s) => s.slot === "collectible"), "collectible slot from gem");
+  if (manifest.runtimeSchema !== 2) throw new Error("manifest v2");
+  if (!manifest.slots?.some((s) => s.slot === "background")) throw new Error("background slot");
+  if (!manifest.slots?.some((s) => s.slot === "player")) throw new Error("player slot");
+  if (!manifest.slots?.some((s) => s.slot === "enemy")) throw new Error("enemy slot from hazard");
+  if (!manifest.slots?.some((s) => s.slot === "collectible")) throw new Error("collectible slot from gem");
 
-  console.log("[OK] qa-astrocade-user-path: agentic attach + routing + samples + asset slots");
-}
-
-function validateAgenticSourceQuick(source: string): boolean {
-  return !/\b(fetch|eval\s*\(|new\s+Function|import\s|require\s)\b/i.test(source);
+  console.log("[OK] qa-astrocade-user-path: architecture parity + samples + asset slots");
 }
 
 main().catch((e) => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, writeAdminAudit } from "@/lib/auth/admin";
+import { attachWorkShareCounts } from "@/lib/admin/work-engagement";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
 
@@ -21,8 +22,11 @@ export async function GET(req: Request) {
     visibility: string;
     featured: boolean;
     createdAt: string;
+    shareCode: string | null;
     playCount?: number;
-    likeCount?: number;
+    likeCount: number;
+    novelId?: string | null;
+    novelTitle?: string | null;
   }> = [];
 
   const visFilter = visibility && ["public", "hidden", "pending_review"].includes(visibility)
@@ -44,6 +48,7 @@ export async function GET(req: Request) {
         visibility: true,
         featured: true,
         createdAt: true,
+        shareCode: true,
         playCount: true,
         likeCount: true,
       },
@@ -57,6 +62,7 @@ export async function GET(req: Request) {
         visibility: r.visibility,
         featured: r.featured,
         createdAt: r.createdAt.toISOString(),
+        shareCode: r.shareCode,
         playCount: r.playCount,
         likeCount: r.likeCount,
       })),
@@ -78,6 +84,7 @@ export async function GET(req: Request) {
         visibility: true,
         featured: true,
         createdAt: true,
+        shareCode: true,
         playCount: true,
         likeCount: true,
       },
@@ -91,6 +98,7 @@ export async function GET(req: Request) {
         visibility: r.visibility,
         featured: r.featured,
         createdAt: r.createdAt.toISOString(),
+        shareCode: r.shareCode,
         playCount: r.playCount,
         likeCount: r.likeCount,
       })),
@@ -112,9 +120,20 @@ export async function GET(req: Request) {
         visibility: true,
         featured: true,
         createdAt: true,
+        shareCode: true,
         likeCount: true,
+        novelId: true,
       },
     });
+    const novelIds = [...new Set(rows.map((r) => r.novelId).filter((id): id is string => Boolean(id)))];
+    const novelTitleMap = new Map<string, string>();
+    if (novelIds.length > 0) {
+      const novels = await prisma.novel.findMany({
+        where: { id: { in: novelIds } },
+        select: { id: true, title: true },
+      });
+      for (const n of novels) novelTitleMap.set(n.id, n.title);
+    }
     items.push(
       ...rows.map((r) => ({
         type: "comic",
@@ -124,13 +143,17 @@ export async function GET(req: Request) {
         visibility: r.visibility,
         featured: r.featured,
         createdAt: r.createdAt.toISOString(),
+        shareCode: r.shareCode,
         likeCount: r.likeCount,
+        novelId: r.novelId,
+        novelTitle: r.novelId ? novelTitleMap.get(r.novelId) ?? null : null,
       })),
     );
   }
 
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return NextResponse.json({ items: items.slice(0, limit) });
+  const enriched = await attachWorkShareCounts(items.slice(0, limit));
+  return NextResponse.json({ items: enriched });
 }
 
 type ModerateItem = { type: string; id: string };

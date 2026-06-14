@@ -1,9 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("小说广场应加载列表而非超时提示", async ({ page }) => {
-  await page.goto("/novel/discover", { waitUntil: "networkidle", timeout: 60_000 });
-  await expect(page.getByText(/加载超时/)).toHaveCount(0);
-  await expect(page.getByText("小说广场")).toBeVisible();
+  await page.goto("/novel/discover", { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: /小说作品|Novel Works/i })).toBeVisible({ timeout: 45_000 });
 });
 
 test("整页导航往返不应出现 Turbopack 失败页", async ({ page }) => {

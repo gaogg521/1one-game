@@ -3,16 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { ThemeId } from "@/lib/themes";
-import { THEME_IDS } from "@/lib/themes";
+import { THEME_IDS, THEME_SWATCH_COLORS } from "@/lib/themes";
 import { useTheme } from "./ThemeProvider";
-
-const DOT_COLOR: Record<ThemeId, string> = {
-  dark: "#22d3ee",
-  light: "#0e7490",
-  "cyber-blue": "#67e8f9",
-  "warm-orange": "#fb923c",
-  "forest-green": "#34d399",
-};
 
 export function ThemeSwitcher({ touchFriendly }: { touchFriendly?: boolean }) {
   const { theme, setTheme } = useTheme();
@@ -30,6 +22,7 @@ export function ThemeSwitcher({ touchFriendly }: { touchFriendly?: boolean }) {
         const active = theme === id;
         const isHovered = hovered === id;
         const name = t(`${id}.name`);
+        const swatch = THEME_SWATCH_COLORS[id];
         return (
           <button
             key={id}
@@ -41,15 +34,22 @@ export function ThemeSwitcher({ touchFriendly }: { touchFriendly?: boolean }) {
             aria-label={name}
             className={`relative flex shrink-0 items-center justify-center rounded-full transition-all ${
               touchFriendly ? "min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px]" : ""
-            } ${active ? "ring-2 ring-white/80 ring-offset-1 ring-offset-[var(--gc-bg)] scale-110" : "hover:scale-105"}`}
+            } ${active ? "scale-110" : "hover:scale-105"}`}
+            style={
+              active
+                ? {
+                    boxShadow: `0 0 0 2px var(--gc-bg), 0 0 0 4px ${swatch.primary}`,
+                  }
+                : undefined
+            }
           >
             <span
               className="rounded-full"
               style={{
                 width: touchFriendly ? 16 : 14,
                 height: touchFriendly ? 16 : 14,
-                backgroundColor: DOT_COLOR[id],
-                opacity: active ? 1 : 0.65,
+                background: `linear-gradient(135deg, ${swatch.primary} 0%, ${swatch.secondary} 100%)`,
+                opacity: active ? 1 : 0.72,
               }}
             />
             {!touchFriendly && (isHovered || active) ? (

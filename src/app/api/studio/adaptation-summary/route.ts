@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       title: true,
       content: true,
       comics: {
-        select: { imageUrls: true, status: true },
+        select: { id: true, title: true, imageUrls: true, status: true },
         orderBy: { createdAt: "asc" },
       },
     },
@@ -36,7 +36,12 @@ export async function GET(req: Request) {
         n.comics.filter((c) => c.status !== "draft_storyboard"),
         { isChildren, uiLocale },
       );
-      if (progress.totalChapters <= 1 && progress.adaptedCount === 0) return null;
+      const draftStoryboardComics = n.comics
+        .filter((c) => c.status === "draft_storyboard")
+        .map((c) => ({ id: c.id, title: c.title }));
+      if (progress.totalChapters <= 1 && progress.adaptedCount === 0 && draftStoryboardComics.length === 0) {
+        return null;
+      }
       return {
         novelId: n.id,
         title: n.title,
@@ -44,6 +49,7 @@ export async function GET(req: Request) {
         adaptedCount: progress.adaptedCount,
         adaptedChapterNums: progress.adaptedChapterNums,
         nextChapter: progress.nextChapter,
+        draftStoryboardComics,
         percent:
           progress.totalChapters > 0
             ? Math.min(100, Math.round((progress.adaptedCount / progress.totalChapters) * 100))

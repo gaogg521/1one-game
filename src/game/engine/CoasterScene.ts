@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceShake } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
@@ -12,8 +12,20 @@ import {
   type CoasterPathPoint,
 } from "@/lib/coaster-blueprint";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { paintCoasterSkyBackdrop } from "@/game/engine/template-theme-visual";
 import type { GameSpec } from "@/lib/game-spec";
-import { hudScore, hudReady } from "@/lib/i18n/game-hud-labels";
+import {
+  bannerCoasterFinishLose,
+  bannerCoasterFinishWin,
+  hudCoasterControls,
+  hudCoasterSpeed,
+  hudEndlessRoadControls,
+  hudEndlessRoadDistance,
+  hudReady,
+  hudScore,
+} from "@/lib/i18n/game-hud-labels";
+import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -60,6 +72,22 @@ export class CoasterScene extends Phaser.Scene {
   private keyBrake!: Phaser.Input.Keyboard.Key;
   private keyV!: Phaser.Input.Keyboard.Key;
 
+  private endlessMode = false;
+  private distanceGoal = 600;
+  private distanceM = 0;
+  private lane = 0;
+  private targetLane = 0;
+  private roadObstacles: Array<{ lane: number; z: number; w: number; h: number }> = [];
+  private obstacleSpawnCd = 0;
+  private roadLives = 3;
+
+  private lastMilestone = 0;
+
+  private nearMissCd = 0;
+
+  private bankIntensity = 1;
+  private runtimeRng!: () => number;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "CoasterScene" });
     this.spec = spec;
@@ -70,15 +98,23 @@ export class CoasterScene extends Phaser.Scene {
   create() {
     this.cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(this.cohesive.bleepTemperament);
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
 
     const bp = this.spec.coaster ?? buildCoasterBlueprint({ spec: this.spec });
     this.path = bp.path;
-    this.baseSpeed = 38 + (this.spec.director?.intensity ?? 0.55) * 22;
-    this.maxSpeed = 95 + (this.spec.gameplay.playerSpeed - 300) * 0.15;
+    this.endlessMode = bp.mode === "endlessRoad";
+    this.distanceGoal = bp.distanceGoal ?? 600;
+    const coasterPf = this.spec.samplePlayProfile?.coaster;
+    const speedBoost = coasterPf?.speedBoost ?? 1;
+    this.bankIntensity = coasterPf?.bankIntensity ?? 1;
+    this.baseSpeed = (38 + (this.spec.director?.intensity ?? 0.55) * 22) * speedBoost;
+    this.maxSpeed = this.endlessMode ? 95 : 95 + (this.spec.gameplay.playerSpeed - 300) * 0.15;
     this.speed = this.baseSpeed * 0.6;
 
     const w = this.scale.width;
     const h = this.scale.height;
+
+    paintCoasterSkyBackdrop(this, this.spec, w, h, this.endlessMode);
 
     this.trackGfx = this.add.graphics().setDepth(2);
     this.decorGfx = this.add.graphics().setDepth(1);
@@ -86,10 +122,10 @@ export class CoasterScene extends Phaser.Scene {
 
     for (let i = 0; i < 14; i += 1) {
       this.clouds.push({
-        x: Phaser.Math.Between(0, w),
-        y: Phaser.Math.Between(20, h * 0.42),
-        r: Phaser.Math.Between(18, 42),
-        sp: Phaser.Math.FloatBetween(0.08, 0.22),
+        x: seededIntBetween(this.runtimeRng, 0, w),
+        y: seededIntBetween(this.runtimeRng, 20, Math.floor(h * 0.42)),
+        r: seededIntBetween(this.runtimeRng, 18, 42),
+        sp: seededFloatBetween(this.runtimeRng, 0.08, 0.22),
       });
     }
 
@@ -98,11 +134,13 @@ export class CoasterScene extends Phaser.Scene {
     this.timerText = styleHudText(
       this.add.text(w / 2, 14, formatTime(0), { fontSize: "22px" }).setOrigin(0.5, 0),
     );
-    this.speedText = styleHudText(this.add.text(16, 44, "0 KM/H", { fontSize: "14px" }));
+    this.speedText = styleHudText(
+      this.add.text(16, 44, hudCoasterSpeed(this.uiLocale, 0), { fontSize: "14px" }),
+    );
     this.hintText = styleHudText(
-      this.add
-        .text(w / 2, h - 28, "Boost · E / →   ·   Brake · Q / ←   ·   视角 · V", { fontSize: "11px" })
-        .setOrigin(0.5),
+      this.add.text(w / 2, h - 28, this.endlessMode ? hudEndlessRoadControls(this.uiLocale) : hudCoasterControls(this.uiLocale), {
+        fontSize: "11px",
+      }).setOrigin(0.5),
     );
 
     const kb = this.input.keyboard;
@@ -123,10 +161,15 @@ export class CoasterScene extends Phaser.Scene {
       message: this.spec.labels.subtitle ?? hudReady(this.uiLocale),
       ms: 2200,
     });
+    schedulePhaserPlayReady(this, 500);
   }
 
   update(_time: number, deltaMs: number) {
     if (this.finished) return;
+    if (this.endlessMode) {
+      this.updateEndlessRoad(deltaMs);
+      return;
+    }
     const dt = deltaMs / 1000;
     this.elapsed += dt;
 
@@ -155,13 +198,13 @@ export class CoasterScene extends Phaser.Scene {
     const totalLen = coasterPathLength(this.path) || 1;
     this.trackProgress += (this.speed * dt) / totalLen;
 
-    if (this.boostPower > 0.6 && Math.random() < 0.12) {
+    if (this.boostPower > 0.6 && this.runtimeRng() < 0.12) {
       juiceShake(this, { intensity: 0.004, durationMs: 80 });
     }
 
     this.drawWorld();
     this.timerText.setText(formatTime(this.elapsed));
-    this.speedText.setText(`${Math.round(this.speed * 3.2)} KM/H`);
+    this.speedText.setText(hudCoasterSpeed(this.uiLocale, Math.round(this.speed * 3.2)));
     this.scoreText.setText(hudScore(this.uiLocale, Math.round(this.trackProgress * 100)));
 
     if (this.trackProgress >= 1) {
@@ -246,10 +289,124 @@ export class CoasterScene extends Phaser.Scene {
     this.cartGfx.strokeRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
 
     if (Math.abs(bank) > 0.05) {
-      this.cameras.main.setRotation(bank * 0.08);
+      this.cameras.main.setRotation(bank * 0.08 * this.bankIntensity);
     } else {
       this.cameras.main.setRotation(0);
     }
+  }
+
+  private updateEndlessRoad(deltaMs: number) {
+    const dt = deltaMs / 1000;
+    this.elapsed += dt;
+    const cursors = this.input.keyboard?.createCursorKeys();
+    if (cursors?.left?.isDown && Phaser.Input.Keyboard.JustDown(cursors.left)) {
+      this.targetLane = Math.max(-1, this.targetLane - 1);
+    }
+    if (cursors?.right?.isDown && Phaser.Input.Keyboard.JustDown(cursors.right)) {
+      this.targetLane = Math.min(1, this.targetLane + 1);
+    }
+    this.lane = Phaser.Math.Linear(this.lane, this.targetLane, dt * 8);
+    this.speed = Phaser.Math.Linear(this.speed, this.baseSpeed + 20, dt * 0.8);
+    this.distanceM += this.speed * dt * 0.35;
+    this.trackProgress = Math.min(1, this.distanceM / this.distanceGoal);
+
+    this.obstacleSpawnCd -= dt;
+    if (this.obstacleSpawnCd <= 0) {
+      this.obstacleSpawnCd = Math.max(0.55, 1.4 - this.trackProgress);
+      this.roadObstacles.push({
+        lane: Phaser.Math.Between(-1, 1),
+        z: 1.1,
+        w: 36 + Phaser.Math.Between(0, 18),
+        h: 28 + Phaser.Math.Between(0, 16),
+      });
+    }
+    for (const o of this.roadObstacles) o.z -= dt * (0.55 + this.speed * 0.012);
+    this.roadObstacles = this.roadObstacles.filter((o) => o.z > -0.05);
+
+    this.nearMissCd = Math.max(0, this.nearMissCd - dt);
+    for (const o of this.roadObstacles) {
+      if (o.z < 0.12 && o.z > 0.02 && Math.abs(o.lane - this.lane) < 0.55) {
+        this.roadLives -= 1;
+        o.z = -1;
+        juiceShake(this, { intensity: 0.018, durationMs: 180 });
+        playBleep("hit");
+        if (this.roadLives <= 0) {
+          this.finish(false);
+          return;
+        }
+      } else if (
+        o.z < 0.05 &&
+        o.z > 0.03 &&
+        this.nearMissCd <= 0 &&
+        Math.abs(o.lane - this.lane) >= 0.55 &&
+        Math.abs(o.lane - this.lane) < 0.9
+      ) {
+        this.nearMissCd = 0.8;
+        juiceFloater(this, this.scale.width / 2, this.scale.height * 0.42, this.uiLocale === "zh-Hans" ? "擦边!" : "Near!", "#fde047");
+        juiceShake(this, { intensity: 0.003, durationMs: 60 });
+      }
+    }
+
+    const milestoneStep = 200;
+    const milestone = Math.floor(this.distanceM / milestoneStep);
+    if (milestone > this.lastMilestone) {
+      this.lastMilestone = milestone;
+      juiceFloater(
+        this,
+        this.scale.width / 2,
+        this.scale.height * 0.36,
+        `${milestone * milestoneStep}m`,
+        this.cohesive.hud.accent,
+      );
+      playBleep("pickup");
+    }
+
+    this.drawEndlessRoad();
+    this.timerText.setText(formatTime(this.elapsed));
+    this.speedText.setText(hudCoasterSpeed(this.uiLocale, Math.round(this.speed * 3.2)));
+    this.scoreText.setText(hudEndlessRoadDistance(this.uiLocale, Math.round(this.distanceM)));
+
+    if (this.distanceM >= this.distanceGoal) this.finish(true);
+  }
+
+  private drawEndlessRoad() {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const horizon = h * 0.3;
+    this.decorGfx.clear();
+    this.decorGfx.fillGradientStyle(0x7dd3fc, 0x7dd3fc, 0xbae6fd, 0xe0f2fe, 1);
+    this.decorGfx.fillRect(0, 0, w, h);
+
+    this.trackGfx.clear();
+    const laneW = 110;
+    for (let lane = -1; lane <= 1; lane += 1) {
+      const cx = w / 2 + lane * laneW + this.lane * -laneW * 0.15;
+      this.trackGfx.fillStyle(0x334155, 0.85);
+      this.trackGfx.fillRect(cx - laneW * 0.42, horizon, laneW * 0.84, h - horizon - 40);
+      this.trackGfx.lineStyle(2, 0xfde047, 0.35);
+      this.trackGfx.lineBetween(cx - laneW * 0.42, horizon, cx - laneW * 0.42, h - 40);
+      this.trackGfx.lineBetween(cx + laneW * 0.42, horizon, cx + laneW * 0.42, h - 40);
+    }
+
+    for (const o of this.roadObstacles) {
+      const depth = 1 - o.z;
+      if (depth <= 0 || depth > 1) continue;
+      const cx = w / 2 + o.lane * laneW;
+      const y = horizon + (1 - depth) * (h - horizon - 120);
+      const scale = 0.25 + depth * 0.85;
+      this.trackGfx.fillStyle(0xef4444, 0.55 + depth * 0.4);
+      this.trackGfx.fillRoundedRect(cx - (o.w * scale) / 2, y, o.w * scale, o.h * scale, 6);
+    }
+
+    this.cartGfx.clear();
+    const cartX = w / 2 + this.lane * laneW;
+    const cartY = h - 108;
+    const pc = Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor);
+    this.cartGfx.fillStyle(pc.color, 1);
+    this.cartGfx.fillRoundedRect(cartX - 28, cartY - 22, 56, 28, 6);
+    this.cartGfx.fillStyle(0x1f2937, 1);
+    this.cartGfx.fillCircle(cartX - 18, cartY + 8, 7);
+    this.cartGfx.fillCircle(cartX + 18, cartY + 8, 7);
   }
 
   private finish(won: boolean) {
@@ -257,12 +414,17 @@ export class CoasterScene extends Phaser.Scene {
     this.finished = true;
     const score = won ? Math.max(1, Math.round(10000 / Math.max(this.elapsed, 1))) : 0;
     this.banner.show({
-      title: won ? "完赛！" : "脱轨",
-      message: won ? `用时 ${formatTime(this.elapsed)}` : this.spec.labels.hazard,
+      ...(won
+        ? bannerCoasterFinishWin(this.uiLocale, formatTime(this.elapsed))
+        : bannerCoasterFinishLose(this.uiLocale, this.spec.labels.hazard)),
       ms: 3200,
     });
     playBleep(won ? "win" : "hit");
     juiceShake(this, { intensity: won ? 0.012 : 0.02, durationMs: 220 });
+    if (won) {
+      juiceFlash(this, { r: 120, g: 210, b: 255 }, { durationMs: 160 });
+      juiceFloater(this, this.scale.width / 2, this.scale.height * 0.4, this.uiLocale === "zh-Hans" ? "完赛!" : "Finish!", this.cohesive.hud.accent);
+    }
     this.time.delayedCall(900, () => {
       this.onEnd({ score, won });
     });

@@ -10,13 +10,6 @@ export type PuzzleBlueprint = {
   moveLimit: number;
 };
 
-const SAMPLE_MODES: Record<string, PuzzleMode> = {
-  "color-bloom": "match3",
-  "whimsy-differences": "spotDifference",
-  "memory-match-mania": "memoryMatch",
-  "kids-puzzle": "jigsaw",
-};
-
 function hashSeed(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i += 1) {
@@ -27,11 +20,11 @@ function hashSeed(s: string): number {
 }
 
 export function inferPuzzleMode(opts: { prompt?: string; sampleId?: string }): PuzzleMode {
-  if (opts.sampleId && SAMPLE_MODES[opts.sampleId]) return SAMPLE_MODES[opts.sampleId]!;
+  void opts.sampleId;
   const blob = (opts.prompt ?? "").toLowerCase();
   if (/找不同|spot the difference|whimsy/i.test(blob)) return "spotDifference";
   if (/记忆|翻牌|memory match/i.test(blob)) return "memoryMatch";
-  if (/拼图|jigsaw|kids puzzle/i.test(blob)) return "jigsaw";
+  if (/拼图|jigsaw|kids puzzle|儿童.*拼图/i.test(blob)) return "jigsaw";
   return "match3";
 }
 
@@ -46,18 +39,20 @@ export function buildPuzzleBlueprint(opts: {
 
   switch (mode) {
     case "spotDifference":
-      return { mode, cols: 2, rows: 2, targetScore: 5, moveLimit: 90 };
+      return { mode, cols: 2, rows: 2, targetScore: 7, moveLimit: 110 };
     case "memoryMatch":
-      return { mode, cols: 4, rows: 3, targetScore: 6, moveLimit: 40 + (seed % 10) };
-    case "jigsaw":
-      return { mode, cols: 3, rows: 3, targetScore: 9, moveLimit: 999 };
+      return { mode, cols: 4, rows: 4, targetScore: 8, moveLimit: 52 + (seed % 12) };
+    case "jigsaw": {
+      const grid = 3 + (seed % 2);
+      return { mode, cols: grid, rows: grid, targetScore: grid * grid, moveLimit: 999 };
+    }
     default:
       return {
         mode,
-        cols: 7 + (seed % 2),
-        rows: 7 + (seed % 2),
-        targetScore: Math.round(120 + intensity * 80),
-        moveLimit: 28 + (seed % 8),
+        cols: 8 + (seed % 2),
+        rows: 8 + (seed % 2),
+        targetScore: Math.round(160 + intensity * 100),
+        moveLimit: 32 + (seed % 10),
       };
   }
 }

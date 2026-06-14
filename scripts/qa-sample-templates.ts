@@ -25,12 +25,17 @@ async function main() {
     where: { id: sampleProjectId("rail-in-air") },
     select: { specJson: true },
   });
-  const railSpec = JSON.parse(rail!.specJson) as GameSpec;
-  if (railSpec.templateId !== "coaster") {
-    console.error(`[FAIL] DB rail-in-air templateId=${railSpec.templateId}`);
+  if (!rail?.specJson) {
+    console.error("[FAIL] DB 缺少样品 rail-in-air — 请 DATABASE_URL=file:./prisma/ci.sqlite npm run seed:samples");
     failed += 1;
   } else {
-    console.log("[OK] DB sample-rail-in-air templateId=coaster");
+    const railSpec = JSON.parse(rail.specJson) as GameSpec;
+    if (railSpec.templateId !== "coaster") {
+      console.error(`[FAIL] DB rail-in-air templateId=${railSpec.templateId}`);
+      failed += 1;
+    } else {
+      console.log("[OK] DB sample-rail-in-air templateId=coaster");
+    }
   }
 
   await prisma.$disconnect();

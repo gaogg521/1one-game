@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
+import { pickLastRefinementEntry } from "@/lib/refinement-log";
+import { fetchRefinementLogJsonBatch } from "@/lib/project-refinement-db";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { createProjectRecord } from "@/lib/project-create";
 import {
@@ -10,7 +12,7 @@ import {
 import { saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { generateGameSprites } from "@/lib/game-sprite-gen";
 import { generateGameBackground } from "@/lib/game-background-gen";
-import { buildFallbackAgenticModule, shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
+import { buildFallbackAgenticModule, shouldUseAgenticRuntime, shouldUseDedicatedSceneForTemplateFirst } from "@/lib/agentic/game-module";
 import { PRODUCT } from "@/lib/product-config";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
@@ -37,7 +39,21 @@ export async function GET(req: Request) {
       updatedAt: true,
     },
   });
-  return NextResponse.json({ projects });
+  const logMap = await fetchRefinementLogJsonBatch(projects.map((p) => p.id));
+  const projectsWithRefine = projects.map((p) => {
+    const last = pickLastRefinementEntry(logMap.get(p.id));
+    return last
+      ? {
+          ...p,
+          lastRefinement: {
+            mode: last.mode,
+            instruction: last.instruction,
+            at: last.at,
+          },
+        }
+      : p;
+  });
+  return NextResponse.json({ projects: projectsWithRefine });
 }
 
 export async function POST(req: Request) {
@@ -78,7 +94,11 @@ export async function POST(req: Request) {
 
   try {
     let spec = prepareGameSpecForPersist(specRaw, trimmed);
-    if (PRODUCT.game.agenticModuleEnabled && !shouldUseAgenticRuntime(spec)) {
+    if (
+      PRODUCT.game.agenticModuleEnabled &&
+      !shouldUseAgenticRuntime(spec) &&
+      !shouldUseDedicatedSceneForTemplateFirst(spec)
+    ) {
       spec = { ...spec, agenticModule: buildFallbackAgenticModule(spec.title, spec) };
     }
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;

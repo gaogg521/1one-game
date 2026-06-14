@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test.describe("工作室批量删除", () => {
   test("批量删除请求命中可用 API 路由", async ({ page }) => {
@@ -10,7 +10,7 @@ test.describe("工作室批量删除", () => {
       await route.fulfill({ response });
     });
 
-    await page.goto("http://127.0.0.1:8888/studio");
+    await page.goto("/studio");
 
     const req = page.waitForRequest("**/api/studio/batch-delete");
     await page.evaluate(() =>

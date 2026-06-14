@@ -8,6 +8,12 @@ import {
   stripLocalePrefix,
 } from "@/i18n/routing";
 import { LOCALE_COOKIE, OWNER_COOKIE, REF_COOKIE } from "@/lib/constants";
+import {
+  getAdminConsoleHost,
+  getAdminConsolePath,
+  isAdminConsolePath,
+  isLegacyAdminPath,
+} from "@/lib/admin-console-path";
 import { parseDevCanonicalOriginRaw } from "@/lib/dev-canonical-origin";
 
 /** Next.js 16+：原 middleware 更名为 proxy，运行在请求边界上。 */
@@ -46,6 +52,56 @@ export function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const { locale: pathnameLocale, pathname: rewrittenPathname } = stripLocalePrefix(pathname);
+  const consolePath = getAdminConsolePath();
+  const hostHeader = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
+  const consoleHost = getAdminConsoleHost();
+
+  if (consoleHost && hostHeader === consoleHost) {
+    if (!isAdminConsolePath(rewrittenPathname) && !isLegacyAdminPath(rewrittenPathname)) {
+      const target = new URL(`${consolePath}${request.nextUrl.search}`, request.url);
+      const res = NextResponse.redirect(target, 308);
+      res.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return res;
+    }
+  }
+
+  if (isLegacyAdminPath(rewrittenPathname)) {
+    const target = new URL(`${consolePath}${request.nextUrl.search}`, request.url);
+    const res = NextResponse.redirect(target, 308);
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
+  }
+
+  if (isAdminConsolePath(rewrittenPathname)) {
+    if (pathnameLocale !== null) {
+      const target = new URL(`${consolePath}${request.nextUrl.search}`, request.url);
+      const res = NextResponse.redirect(target, 308);
+      res.cookies.set(LOCALE_COOKIE, pathnameLocale, {
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 400,
+        secure: request.nextUrl.protocol === "https:",
+      });
+      res.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return res;
+    }
+    const activeLocale = isAppLocale(cookieLocale) ? cookieLocale : detectedLocale;
+    const res = NextResponse.next();
+    res.headers.set(LOCALE_HEADER, activeLocale);
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    res.headers.set("Referrer-Policy", "no-referrer");
+    res.headers.set("X-Frame-Options", "DENY");
+    if (!isAppLocale(cookieLocale)) {
+      res.cookies.set(LOCALE_COOKIE, activeLocale, {
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 400,
+        secure: request.nextUrl.protocol === "https:",
+      });
+    }
+    return res;
+  }
+
   const localePrefix = getLocalePrefix(detectedLocale);
   const hasLocalePrefix = pathnameLocale !== null;
 

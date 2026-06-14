@@ -273,3 +273,19 @@ export async function generateComicCover(
 
   return coverUrl;
 }
+
+/** 漫画入库后生成封面（带超时，避免 SSE 永久挂起） */
+export async function ensureComicCoverAfterCreate(
+  comicId: string,
+  title: string,
+  summary?: string,
+  storyHint?: string,
+  timeoutMs = 600_000,
+  genre?: CoverGenre,
+): Promise<string | null> {
+  const task = generateComicCover(comicId, title, summary, storyHint, genre);
+  const timeout = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), timeoutMs);
+  });
+  return Promise.race([task, timeout]);
+}

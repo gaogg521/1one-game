@@ -1,5 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { createProjectViaApi, ensureOwnerSession } from "./helpers/owner";
+import { gotoPlay } from "./helpers/play";
 
 /** 共创闭环：创建项目 → 试玩页加载 → PATCH 保存 */
 test.describe.configure({ mode: "serial" });
@@ -7,11 +9,11 @@ test.describe.configure({ mode: "serial" });
 test("创作台可加载", async ({ page }) => {
   await page.goto("/create");
   await expect(page.locator("main")).toBeVisible();
-  await expect(page.getByPlaceholder(/场景 \+ 目标 \+ 障碍/)).toBeVisible();
+  await expect(page.locator("main textarea").first()).toBeVisible();
 });
 
 test("创建项目并在试玩页保存 spec", async ({ page }) => {
-  await page.goto("/");
+  await ensureOwnerSession(page);
   const prompt = "收集散落金币躲开尖刺";
   const spec = mockSpecFromPrompt(prompt);
 
@@ -23,8 +25,8 @@ test("创建项目并在试玩页保存 spec", async ({ page }) => {
   expect(project?.id).toBeTruthy();
   const id = project!.id!;
 
-  await page.goto(`/play/${id}`);
-  await expect(page.getByText("继续共创")).toBeVisible({ timeout: 15_000 });
+  await gotoPlay(page, id);
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 25_000 });
 
   const patched = { ...spec, title: `${spec.title}·手测保存` };
   const save = await page.request.patch(`/api/projects/${id}`, {

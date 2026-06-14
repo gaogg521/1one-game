@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { CoverThumb } from "@/components/CoverThumb";
-import { useRouter } from "next/navigation";
+import { StudioWorkCover } from "@/components/studio/StudioWorkCover";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CreatorCenterPanel } from "@/components/CreatorCenterPanel";
 import { StudioAdaptationSummary } from "@/components/studio/StudioAdaptationSummary";
 import { StudioComicPanelProgress } from "@/components/studio/StudioComicPanelProgress";
+import { StudioLiteraryChainPanel, type StudioChainWork } from "@/components/studio/StudioLiteraryChainPanel";
 import { WorkStatusBadge } from "@/components/work/WorkStatusBadge";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
@@ -17,9 +18,26 @@ import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { formatStudioWorkSummary } from "@/lib/i18n/studio-work-summary";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { comicCoverFromImageUrls } from "@/lib/comic-display";
+import { studioWorkCoverLinkClass } from "@/lib/cover-display-sizes";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
 
 type WorkType = "project" | "novel" | "comic";
+
+const WORK_KEY_SEP = ":";
+
+function workKey(type: WorkType, id: string): string {
+  return `${type}${WORK_KEY_SEP}${id}`;
+}
+
+function parseWorkKey(key: string): { type: WorkType; id: string } | null {
+  const sep = key.indexOf(WORK_KEY_SEP);
+  if (sep <= 0) return null;
+  const type = key.slice(0, sep);
+  const id = key.slice(sep + WORK_KEY_SEP.length);
+  if (!id || (type !== "project" && type !== "novel" && type !== "comic")) return null;
+  return { type, id };
+}
 
 type BaseRow = {
   id: string;
@@ -34,7 +52,14 @@ type BaseRow = {
   updatedAt: string;
 };
 
-type WorkRow = BaseRow & { type: WorkType };
+type WorkRow = BaseRow & {
+  type: WorkType;
+  /** 漫画分镜首图：coverPath 为空时展示，且跳过 POST 生图 */
+  panelCoverFallback?: string | null;
+  /** 漫画绑定的小说 id；独立漫画为 null */
+  linkedNovelId?: string | null;
+  lastRefinement?: { mode: "patch" | "regenerate"; instruction: string; at: string };
+};
 
 function formatWhen(iso: string, localeTag: string) {
   const d = new Date(iso);
@@ -130,6 +155,8 @@ function normalizeWorkRow(
 
 export default function StudioPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registerOk = searchParams.get("register") === "ok";
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
   const localeTag = locale === "zh-Hant" ? "zh-TW" : locale === "en" ? "en-US" : locale === "ms" ? "ms-MY" : locale === "th" ? "th-TH" : "zh-CN";
@@ -139,6 +166,15 @@ export default function StudioPage() {
   const [activeFilter, setActiveFilter] = useState<WorkType | "all">("all");
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [focusedWorkKey, setFocusedWorkKey] = useState<string | null>(null);
+  const chainPanelRef = useRef<HTMLDivElement>(null);
+
+  const handleCoverUpdate = useCallback((workId: string, workType: WorkType, path: string) => {
+    setRows((prev) =>
+      prev?.map((r) => (r.id === workId && r.type === workType ? { ...r, coverPath: path } : r)) ??
+      null,
+    );
+  }, []);
 
   const filtered = useMemo(() => {
     if (!rows) return null;
@@ -155,6 +191,26 @@ export default function StudioPage() {
         (r.shareCode && r.shareCode.toLowerCase().includes(q)),
     );
   }, [rows, query, activeFilter]);
+
+  const focusedWork = useMemo((): StudioChainWork | null => {
+    if (!focusedWorkKey || !rows) return null;
+    const parsed = parseWorkKey(focusedWorkKey);
+    if (!parsed) return null;
+    const row = rows.find((r) => r.type === parsed.type && r.id === parsed.id);
+    if (!row || row.type === "project") return null;
+    return {
+      type: row.type,
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      linkedNovelId: row.linkedNovelId,
+    };
+  }, [focusedWorkKey, rows]);
+
+  useEffect(() => {
+    if (!focusedWorkKey || !chainPanelRef.current) return;
+    chainPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusedWorkKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,7 +299,25 @@ export default function StudioPage() {
         const allWorks: WorkRow[] = [];
         for (const p of projectsRaw) {
           const row = normalizeWorkRow(p, {});
-          if (row) allWorks.push({ ...row, type: "project" });
+          if (!row) continue;
+          const rawRefine = (p as { lastRefinement?: unknown }).lastRefinement;
+          const lastRefinement =
+            rawRefine &&
+            typeof rawRefine === "object" &&
+            rawRefine !== null &&
+            typeof (rawRefine as { instruction?: unknown }).instruction === "string" &&
+            ((rawRefine as { mode?: unknown }).mode === "patch" ||
+              (rawRefine as { mode?: unknown }).mode === "regenerate")
+              ? {
+                  mode: (rawRefine as { mode: "patch" | "regenerate" }).mode,
+                  instruction: String((rawRefine as { instruction: string }).instruction),
+                  at:
+                    typeof (rawRefine as { at?: unknown }).at === "string"
+                      ? (rawRefine as { at: string }).at
+                      : "",
+                }
+              : undefined;
+          allWorks.push({ ...row, type: "project", ...(lastRefinement ? { lastRefinement } : {}) });
         }
         for (const n of novelsRaw) {
           const row = normalizeWorkRow(n, {});
@@ -251,7 +325,19 @@ export default function StudioPage() {
         }
         for (const c of comicsRaw) {
           const row = normalizeWorkRow(c, { playCount: 0 });
-          if (row) allWorks.push({ ...row, type: "comic" });
+          if (row) {
+            const imageUrls =
+              typeof (c as { imageUrls?: unknown }).imageUrls === "string" ?
+                (c as { imageUrls: string }).imageUrls
+              : null;
+            allWorks.push({
+              ...row,
+              type: "comic",
+              panelCoverFallback: imageUrls ? comicCoverFromImageUrls(imageUrls) : null,
+              linkedNovelId:
+                (c as { novel?: { id?: string } | null }).novel?.id ?? null,
+            });
+          }
         }
 
         allWorks.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -351,7 +437,7 @@ export default function StudioPage() {
   }
 
   function toggleSelect(type: WorkType, id: string) {
-    const key = `${type}-${id}`;
+    const key = workKey(type, id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -366,7 +452,7 @@ export default function StudioPage() {
   function selectAll() {
     if (!filtered) return;
     const next = new Set<string>();
-    filtered.forEach((r) => next.add(`${r.type}-${r.id}`));
+    filtered.forEach((r) => next.add(workKey(r.type, r.id)));
     setSelectedIds(next);
   }
 
@@ -378,10 +464,10 @@ export default function StudioPage() {
     if (selectedIds.size === 0) return;
     if (!confirm(t("studioErrors.confirmBatchDelete", { count: selectedIds.size }))) return;
 
-    const items = Array.from(selectedIds).map((key) => {
-      const [type, id] = key.split("-");
-      return { id, type: type as WorkType };
-    });
+    const items = Array.from(selectedIds)
+      .map((key) => parseWorkKey(key))
+      .filter((item): item is { type: WorkType; id: string } => item !== null);
+    if (items.length === 0) return;
 
     try {
       const res = await fetch("/api/studio/batch-delete", superAdminFetchInit({
@@ -401,7 +487,7 @@ export default function StudioPage() {
 
       if (res.ok && data?.ok) {
         const deletedSet = new Set(Array.from(selectedIds));
-        setRows((prev) => (prev ? prev.filter((r) => !deletedSet.has(`${r.type}-${r.id}`)) : prev));
+        setRows((prev) => (prev ? prev.filter((r) => !deletedSet.has(workKey(r.type, r.id))) : prev));
         setSelectedIds(new Set());
         setIsBatchMode(false);
         if (data.errors && data.errors.length > 0) {
@@ -459,6 +545,32 @@ export default function StudioPage() {
             </Link>
           </div>
         </div>
+
+        {registerOk ? (
+          <p
+            className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)] px-4 py-3 text-sm text-[var(--gc-text-soft)]"
+            data-testid="studio-register-welcome"
+          >
+            {t("studio.registerWelcome")}
+          </p>
+        ) : null}
+
+        {(activeFilter === "all" || activeFilter === "novel" || activeFilter === "comic") && (
+          <div className="space-y-2">
+            {focusedWork ? (
+              <button
+                type="button"
+                onClick={() => setFocusedWorkKey(null)}
+                className="text-xs text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+              >
+                {t("studio.clearChainFocus")}
+              </button>
+            ) : null}
+            <div id="studio-literary-chain-panel" ref={chainPanelRef} className="scroll-mt-24">
+              <StudioLiteraryChainPanel work={focusedWork} locale={locale} />
+            </div>
+          </div>
+        )}
 
         {rows && rows.length > 0 ? <CreatorCenterPanel works={rows} /> : null}
 
@@ -554,7 +666,8 @@ export default function StudioPage() {
         ) : (
           <ul className="grid gap-5 sm:grid-cols-2">
             {filtered?.map((r) => {
-              const isSelected = selectedIds.has(`${r.type}-${r.id}`);
+              const isSelected = selectedIds.has(workKey(r.type, r.id));
+              const isFocused = focusedWorkKey === workKey(r.type, r.id);
               return (
                 <li
                   key={`${r.type}-${r.id}`}
@@ -567,9 +680,11 @@ export default function StudioPage() {
                   className={`gc-card flex flex-col gap-3 overflow-hidden p-0 transition cursor-pointer relative ${
                     isBatchMode && isSelected
                       ? "border-[color:var(--gc-accent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] shadow-lg scale-[1.01]"
-                      : isBatchMode
-                        ? "border-[color:var(--gc-border)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_30%,transparent)]"
-                        : "hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
+                      : isFocused
+                        ? "border-[color:color-mix(in_srgb,var(--gc-accent)_50%,var(--gc-border))] ring-1 ring-[color:color-mix(in_srgb,var(--gc-accent)_25%,transparent)]"
+                        : isBatchMode
+                          ? "border-[color:var(--gc-border)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_30%,transparent)]"
+                          : "hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
                   }`}
                 >
                   <Link
@@ -577,7 +692,7 @@ export default function StudioPage() {
                     onClick={(e) => {
                       if (isBatchMode) e.preventDefault();
                     }}
-                    className="relative block aspect-video w-full overflow-hidden bg-[var(--gc-bg-elevated)]"
+                    className={studioWorkCoverLinkClass(r.type)}
                   >
                     {isBatchMode && (
                       <div className="absolute left-3 top-3 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/60 shadow backdrop-blur-md">
@@ -589,20 +704,16 @@ export default function StudioPage() {
                         />
                       </div>
                     )}
-                    <CoverThumb
+                    <StudioWorkCover
+                      type={r.type}
+                      id={r.id}
                       coverPath={r.coverPath}
-                      alt={t("studioErrors.coverAlt", { title: r.title })}
+                      locale={locale}
+                      icon={getWorkIcon(r.type)}
+                      fallbackCover={r.type === "comic" ? r.panelCoverFallback : undefined}
+                      coverAlt={t("studioErrors.coverAlt", { title: r.title })}
                       className="h-full min-h-[140px] w-full object-cover transition duration-300 hover:scale-[1.03]"
-                      placeholder={
-                        <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-bg))] to-[color:color-mix(in_srgb,var(--gc-cyan)_18%,var(--gc-bg))]">
-                          <span className="text-3xl opacity-50" aria-hidden>
-                            {getWorkIcon(r.type)}
-                          </span>
-                          <span className="text-[11px] font-medium text-[var(--gc-text-faint)]">
-                            {r.type === "project" ? t("studio.autoCover") : t("studio.coverGenerating")}
-                          </span>
-                        </div>
-                      }
+                      onCoverUpdate={(path) => handleCoverUpdate(r.id, r.type, path)}
                     />
                     <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
                       {getWorkTypeLabel(r.type, t)}
@@ -624,6 +735,13 @@ export default function StudioPage() {
                     <p className="line-clamp-2 text-sm text-[var(--gc-muted)]">
                       {formatStudioWorkSummary(r, locale)}
                     </p>
+                    {r.type === "project" && r.lastRefinement ? (
+                      <p className="line-clamp-2 rounded-lg border border-[color:color-mix(in_srgb,var(--gc-accent)_15%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_5%,transparent)] px-2.5 py-1.5 text-[11px] text-[var(--gc-text-soft)]">
+                        {r.lastRefinement.mode === "regenerate"
+                          ? t("studio.lastRefinementRegen", { instruction: r.lastRefinement.instruction })
+                          : t("studio.lastRefinementPatch", { instruction: r.lastRefinement.instruction })}
+                      </p>
+                    ) : null}
                     {r.shareCode ? (
                       <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
                         {t("studio.shortLink", { code: r.shareCode })}
@@ -666,28 +784,79 @@ export default function StudioPage() {
                         </>
                       )}
                       {r.type === "novel" && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void duplicateNovel(r.id);
-                          }}
-                          className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
-                        >
-                          {t("studio.duplicate")}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFocusedWorkKey(workKey(r.type, r.id));
+                            }}
+                            className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                            data-testid="studio-track-chain"
+                          >
+                            {t("studio.trackChain")}
+                          </button>
+                          <Link
+                            href={withLocalePath(`/comic/create?novelId=${encodeURIComponent(r.id)}`, locale)}
+                            className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
+                          >
+                            {t("studio.adaptToComic")}
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void duplicateNovel(r.id);
+                            }}
+                            className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                          >
+                            {t("studio.duplicate")}
+                          </button>
+                        </>
                       )}
                       {r.type === "comic" && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void duplicateComic(r.id);
-                          }}
-                          className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
-                        >
-                          {t("studio.duplicate")}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFocusedWorkKey(workKey(r.type, r.id));
+                            }}
+                            className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                            data-testid="studio-track-chain"
+                          >
+                            {t("studio.trackChain")}
+                          </button>
+                          {r.linkedNovelId ? (
+                            <>
+                              <Link
+                                href={withLocalePath(`/novel/${r.linkedNovelId}`, locale)}
+                                className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] px-4 py-1.5 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
+                              >
+                                {t("studio.viewSourceNovel")}
+                              </Link>
+                              <Link
+                                href={withLocalePath(
+                                  `/comic/create?novelId=${encodeURIComponent(r.linkedNovelId)}`,
+                                  locale,
+                                )}
+                                className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                              >
+                                {t("studio.continueAdaptComic")}
+                              </Link>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void duplicateComic(r.id);
+                            }}
+                            className="rounded-full border border-[color:var(--gc-border)] px-4 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_50%,transparent)] hover:text-[var(--gc-text)]"
+                          >
+                            {t("studio.duplicate")}
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"

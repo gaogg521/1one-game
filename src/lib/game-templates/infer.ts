@@ -22,6 +22,8 @@ export const SAMPLE_TEMPLATE_OVERRIDES: Partial<Record<string, GameTemplateId>> 
   "tiny-planet-chopper": "shooter",
   "blade-defender-merge": "towerDefense",
   "car-color-palette": "customization",
+  "pottery-master-3d": "customization",
+  "crashy-roads": "racing",
   "blocky-sniper-hunter": "sniper",
   "memory-match-mania": "puzzle",
   "kids-puzzle": "puzzle",

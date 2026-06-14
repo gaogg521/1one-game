@@ -13,10 +13,13 @@ import {
 const longSrc = readFileSync(resolve(process.cwd(), "src/lib/comic-storyboard-long.ts"), "utf8");
 const pipelineSrc = readFileSync(resolve(process.cwd(), "src/lib/comic-pipeline.ts"), "utf8");
 const eventsSrc = readFileSync(resolve(process.cwd(), "src/lib/comic-pipeline-events.ts"), "utf8");
+const chunkStatsSrc = readFileSync(resolve(process.cwd(), "src/lib/comic-director-chunk-stats.ts"), "utf8");
 
 assert.match(longSrc, /ComicStoryboardChunkResult/);
+assert.match(chunkStatsSrc, /"batch"/);
+assert.match(chunkStatsSrc, /"per_page"/);
 assert.match(longSrc, /strategy: "batch"/);
-assert.match(longSrc, /strategy: "per_page"/);
+assert.match(longSrc, /per_page_fallback|"per_page"/);
 assert.match(pipelineSrc, /director_storyboard_stats/);
 assert.match(pipelineSrc, /accumulateDirectorStoryboardStats/);
 assert.match(eventsSrc, /director_storyboard_stats/);

@@ -542,18 +542,19 @@ export type WebEnhanceMeta = {
 };
 
 function normalizeTemplateHint(hint: GenerateOptions["templateHint"]): "auto" | GameSpec["templateId"] {
-  if (!hint) return "auto";
-  if (hint === "auto") return "auto";
-  if (
-    hint === "avoider" ||
-    hint === "collector" ||
-    hint === "survivor" ||
-    hint === "platformer" ||
-    hint === "towerDefense" ||
-    hint === "shooter"
-  ) {
-    return hint;
-  }
+  if (!hint || hint === "auto") return "auto";
+  return isGameTemplateId(hint) ? hint : "auto";
+}
+
+/** 用户显式 templateHint 优先于 Brief 推断 */
+function resolveEffectiveTemplateHint(
+  optionsHint: GenerateOptions["templateHint"] | undefined,
+  briefResult: ExpandCreativeBriefResult | null | undefined,
+): "auto" | GameSpec["templateId"] {
+  const userHint = normalizeTemplateHint(optionsHint);
+  if (userHint !== "auto") return userHint;
+  const briefHint = briefResult?.brief.intent.templateHint;
+  if (briefHint && briefHint !== "auto" && isGameTemplateId(briefHint)) return briefHint;
   return "auto";
 }
 
@@ -712,10 +713,7 @@ export async function generateGameSpecDraftWithMeta(
     options?.orchestration?.note("web_search_skipped", { reason: "disabled" });
   }
 
-  const hint =
-    briefResult?.brief.intent.templateHint && briefResult.brief.intent.templateHint !== "auto"
-      ? normalizeTemplateHint(briefResult.brief.intent.templateHint)
-      : normalizeTemplateHint(options?.templateHint);
+  const hint = resolveEffectiveTemplateHint(options?.templateHint, briefResult);
   const mock = mockSpecFromPrompt(clean);
   const base = augmented;
   const userContent = options?.flavorSuffix ? `${base}\n\n${options.flavorSuffix}` : base;
@@ -1047,6 +1045,8 @@ export async function generateGameSpecWithMeta(
     debug: GenerationDebug;
   }) => {
     let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
+    const hint = resolveEffectiveTemplateHint(options?.templateHint, briefPre ?? null);
+    spec = applyTemplateHint(spec, hint);
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {
       spec = await attachAgenticModuleIfEnabled(prompt.trim(), spec, true);

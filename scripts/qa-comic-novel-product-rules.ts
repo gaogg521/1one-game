@@ -51,12 +51,17 @@ function main() {
 
   assert.equal(
     resolveComicLayoutId({ lengthTier: "medium" }),
+    "grid_4",
+    "中篇默认四宫格（降低单次分镜 JSON 格数，迭代十八）",
+  );
+  assert.equal(
+    resolveComicLayoutId({ lengthTier: "long" }),
     "grid_8",
-    "成人/通用小说默认应切到 8 宫格",
+    "长篇仍默认八宫格",
   );
 
   const comicPrompt = buildComicSystemPrompt(4, "historical", "chinese_wuxia", {
-    layoutId: "grid_8",
+    layoutId: "grid_4",
   });
   assert.match(
     comicPrompt,

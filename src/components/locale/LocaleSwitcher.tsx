@@ -4,8 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
-import { localeLabels, localeShortLabels, locales } from "@/i18n/routing";
+import { localeLabels, localeShortLabels, locales, stripLocalePrefix } from "@/i18n/routing";
 import { withLocalePath } from "@/i18n/navigation";
+import { getAdminConsolePathClient, isAdminConsolePath } from "@/lib/admin-console-path";
 import { LOCALE_COOKIE } from "@/lib/constants";
 
 function writeLocaleCookie(locale: AppLocale) {
@@ -45,6 +46,13 @@ export function LocaleSwitcher({
     if (typeof window === "undefined") return "/";
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
   }, []);
+
+  const consolePath = getAdminConsolePathClient();
+  const onConsole = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const { pathname: barePath } = stripLocalePrefix(window.location.pathname);
+    return isAdminConsolePath(barePath);
+  }, [currentPath]);
 
   const updatePosition = useCallback(() => {
     const button = buttonRef.current;
@@ -130,16 +138,20 @@ export function LocaleSwitcher({
           aria-label={t("language")}
         >
           {locales.map((item) => {
-            const href = withLocalePath(currentPath, item);
+            const href = onConsole ? consolePath : withLocalePath(currentPath, item);
             const active = item === locale;
             return (
               <a
                 key={item}
                 href={href}
                 role="menuitem"
-                onClick={() => {
+                onClick={(e) => {
                   writeLocaleCookie(item);
                   setOpen(false);
+                  if (onConsole && item !== locale) {
+                    e.preventDefault();
+                    window.location.href = consolePath;
+                  }
                 }}
                 className={`flex items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-[var(--gc-surface-glass)] ${
                   active ? "text-[var(--gc-text)]" : "text-[var(--gc-text-soft)]"

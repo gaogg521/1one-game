@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { withLocalePath } from "@/i18n/navigation";
+import { getAdminConsolePathClient } from "@/lib/admin-console-path";
 import { localizedPlanName } from "@/lib/i18n/commerce-localized";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -117,12 +118,14 @@ export function AccountMenu({
 
   if (!user) {
     return (
-      <Link
-        href={withLocalePath("/login", locale)}
-        className="gc-utility-btn"
-      >
-        {t("account.login")}
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link href={withLocalePath("/register", locale)} className="gc-utility-btn hidden sm:inline-flex">
+          {t("account.register")}
+        </Link>
+        <Link href={withLocalePath("/login", locale)} className="gc-utility-btn">
+          {t("account.login")}
+        </Link>
+      </div>
     );
   }
 
@@ -169,7 +172,7 @@ export function AccountMenu({
           </Link>
           {isAdmin ? (
             <Link
-              href={withLocalePath("/admin", locale)}
+              href={getAdminConsolePathClient()}
               className="block px-3 py-2 text-xs text-[var(--gc-accent)] hover:bg-[var(--gc-surface-glass)]"
               onClick={() => setOpen(false)}
               role="menuitem"

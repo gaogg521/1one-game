@@ -283,6 +283,42 @@ export const SAMPLES: Sample[] = [
     shelf: "trending",
     photoCover: true,
   },
+  {
+    id: "pottery-master-3d",
+    title: "Pottery Master 3D",
+    subtitle: "3D 陶艺 · 拉坯转盘 · 釉色定制",
+    prompt:
+      "做一个 3D 陶艺拉坯小游戏：转盘上的湿 clay 随点击拉高成花瓶，玩家从调色盘选釉色/口沿/底座颜色，转盘旋转展示成品；操作简单、反馈即时，完成若干次上色即过关。",
+    tags: ["陶艺", "3D", "定制", "创意"],
+    coverImageSrc: "/samples/astrocade/pottery-master-3d.webp",
+    coverAlt: "Pottery Master 3D — pottery wheel creative cover",
+    coverGradient: "linear-gradient(155deg, #78350f 0%, #b45309 38%, #fcd34d 72%, #fef3c7 100%)",
+    accentGlow: "rgba(180, 83, 9, 0.38)",
+    emoji: "🏺",
+    plays: "1.1M",
+    creator: "Majisok",
+    shelf: "trending",
+    badge: "new",
+    photoCover: true,
+  },
+  {
+    id: "crashy-roads",
+    title: "Crashy Roads",
+    subtitle: "无尽公路 · 换道躲避 · 距离得分",
+    prompt:
+      "做一个无尽公路驾驶小游戏：车辆自动前进，玩家用左右键换道躲避障碍与抛锚车辆，强调距离得分与碰撞减命；伪 3D 透视公路，节奏越来越快。",
+    tags: ["竞速", "无尽", "躲避", "街机"],
+    coverImageSrc: "/samples/astrocade/crashy-roads.webp",
+    coverAlt: "Crashy Roads — endless swerve driving cover",
+    coverGradient: "linear-gradient(150deg, #1e3a8a 0%, #2563eb 40%, #fbbf24 70%, #ef4444 100%)",
+    accentGlow: "rgba(37, 99, 235, 0.38)",
+    emoji: "🚗",
+    plays: "890K",
+    creator: "highsmith",
+    shelf: "trending",
+    badge: "hot",
+    photoCover: true,
+  },
 ];
 
 const SHELF_META: Record<

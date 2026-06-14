@@ -1,0 +1,86 @@
+name: Nightly Competitor Gates
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-competitor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  competitor-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: file:./ci.sqlite
+      GODOT_BIN: ${{ github.workspace }}/tools/godot/Godot_v4.4.1-stable_linux.x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma migrate & generate (SQLite)
+        run: npx prisma migrate deploy && npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Cache Godot engine & export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/godot
+            ~/.local/share/godot/export_templates/4.4.1.stable
+          key: godot-4.4.1-linux-${{ hashFiles('scripts/godot-install*.sh') }}
+          restore-keys: |
+            godot-4.4.1-linux-
+
+      - name: Install Godot (for E2E wasm / iframe)
+        run: bash scripts/godot-install-ci.sh
+
+      - name: Full competitor gates + matrix
+        env:
+          CI: true
+          PW_EXTERNAL: "1"
+          COMPETITOR_PARITY_STRICT: "1"
+        run: |
+          npm run start &
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:8888/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8888/api/health
+          npm run qa:seed-en-fixtures
+          npm run seed:samples
+          npm run qa:competitor-gates
+          npm run qa:astrocade-competitor-matrix
+
+      - name: Upload QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-competitor-qa
+          if-no-files-found: warn
+          path: |
+            qa-output/competitor-gates.json
+            qa-output/astrocade-competitor-matrix.md
+            qa-output/competitor-parity/REPORT.md
+            qa-output/competitor-parity/summary.json
+            qa-output/competitor-parity/prompt/**
+            qa-output/competitor-parity/clone/**
+            qa-output/godot-matrix/REPORT.md
+            qa-output/godot-matrix/summary.json
+            qa-output/regression-archive/LATEST.json
+            qa-output/regression-archive/**/INDEX.md
+            qa-output/game-effect/REPORT.md

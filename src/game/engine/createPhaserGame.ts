@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import type { GameSpec } from "@/lib/game-spec";
 import type { AppLocale } from "@/i18n/routing";
-import { enrichGameSpecForRuntime } from "@/lib/enrich-game-spec";
+import { canonicalSpecForPlay, resolveAssetProjectId } from "@/lib/astrocade-canonical-spec";
+import { markPhaserPlayReady, resetPhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft-franchise";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { CoasterScene } from "@/game/engine/CoasterScene";
@@ -34,6 +35,8 @@ export type CreatePhaserGameOptions = {
   projectId?: string;
   /** UI locale for in-game HUD copy */
   uiLocale?: AppLocale;
+  /** 原始 prompt，用于 blueprint 推断（样品馆 / 用户项目） */
+  promptHint?: string;
 };
 
 export type PhaserGameHandle = {
@@ -53,11 +56,20 @@ export function createPhaserGame(
     [];
 
   const uiLocale = opts?.uiLocale ?? "zh-Hans";
-  const specPlay = applyMinecraftThemeOverlay(enrichGameSpecForRuntime(spec, "", uiLocale));
+  const promptHint =
+    opts?.promptHint?.trim() ||
+    [spec.labels.subtitle, spec.title].filter(Boolean).join(" · ");
+  resetPhaserPlayReady();
+  const specPlay = applyMinecraftThemeOverlay(
+    canonicalSpecForPlay(spec, promptHint, uiLocale, opts?.projectId),
+  );
+  const assetProjectId = resolveAssetProjectId(specPlay, opts?.projectId);
+  const canonicalBackgroundUrl = assetProjectId ? `/game-bg/${assetProjectId}.png` : null;
   const presentation = buildCohesivePresentation(specPlay);
   const assets = resolveRuntimeAssets({
-    projectId: opts?.projectId,
-    backgroundUrl: opts?.backgroundUrl,
+    projectId: assetProjectId,
+    /** 样品 profile 优先：忽略 GamePlayer 传入的 raw projectId 背景 */
+    backgroundUrl: canonicalBackgroundUrl ?? opts?.backgroundUrl ?? null,
     manifest: typeof window !== "undefined" ? readAssetManifestFromSession() : null,
     themeBackground: specPlay.theme.backgroundColor,
   });
@@ -83,8 +95,8 @@ export function createPhaserGame(
     StrategyScene,
     AgenticScene,
   });
-  scene.backgroundUrl = assets.backgroundUrl ?? opts?.backgroundUrl ?? null;
-  scene.projectId = opts?.projectId ?? null;
+  scene.backgroundUrl = assets.backgroundUrl ?? null;
+  scene.projectId = assetProjectId ?? opts?.projectId ?? null;
   scene.uiLocale = uiLocale;
 
   const dpr =
@@ -118,6 +130,10 @@ export function createPhaserGame(
   } as Phaser.Types.Core.GameConfig;
 
   const game = new Phaser.Game(config);
+
+  /** 同步 Scene 兜底；异步 Scene 在 bootstrap 完成后会再次 mark */
+  const fallbackReady = window.setTimeout(() => markPhaserPlayReady(), 4200);
+  game.events.once(Phaser.Core.Events.DESTROY, () => window.clearTimeout(fallbackReady));
 
   const bootAudio = () => {
     void soundscape.startInteractive();

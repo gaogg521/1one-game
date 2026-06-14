@@ -7,6 +7,8 @@ import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import type { ComicChapterScope } from "@/lib/comic-chapter-scope";
 
+type DraftComic = { id: string; title: string };
+
 type Item = {
   novelId: string;
   title: string;
@@ -14,6 +16,7 @@ type Item = {
   adaptedCount: number;
   percent: number;
   nextChapter: ComicChapterScope | null;
+  draftStoryboardComics?: DraftComic[];
 };
 
 export function StudioAdaptationSummary() {
@@ -32,11 +35,16 @@ export function StudioAdaptationSummary() {
   if (loading) return null;
   if (items.length === 0) return null;
 
+  const draftTotal = items.reduce((n, i) => n + (i.draftStoryboardComics?.length ?? 0), 0);
+
   return (
     <section className="mb-8 rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_22%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_5%,transparent)] p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-[var(--gc-text)]">{t("title")}</h2>
-        <span className="text-[11px] text-[var(--gc-muted)]">{t("countLabel", { count: items.length })}</span>
+        <span className="text-[11px] text-[var(--gc-muted)]">
+          {t("countLabel", { count: items.length })}
+          {draftTotal > 0 ? ` · ${t("draftCount", { count: draftTotal })}` : ""}
+        </span>
       </div>
       <ul className="flex flex-col gap-3">
         {items.slice(0, 6).map((item) => (
@@ -62,19 +70,33 @@ export function StudioAdaptationSummary() {
                 style={{ width: `${item.percent}%` }}
               />
             </div>
-            {item.nextChapter ? (
-              <Link
-                href={withLocalePath(
-                  `/novel/${item.novelId}?comicChapter=${item.nextChapter.fromChapter}`,
-                  locale,
-                )}
-                className="mt-2 inline-block text-[11px] text-[var(--gc-accent)]"
-              >
-                {t("continueAdapt", { label: item.nextChapter.label })}
-              </Link>
-            ) : (
-              <p className="mt-2 text-[11px] text-[var(--gc-text-faint)]">{t("allAdapted")}</p>
-            )}
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {(item.draftStoryboardComics ?? []).map((d) => (
+                <Link
+                  key={d.id}
+                  href={withLocalePath(
+                    `/novel/${item.novelId}?resumeComic=${encodeURIComponent(d.id)}`,
+                    locale,
+                  )}
+                  className="text-[11px] font-medium text-amber-300 hover:text-amber-200"
+                >
+                  {t("resumeDraft", { title: d.title })}
+                </Link>
+              ))}
+              {item.nextChapter ? (
+                <Link
+                  href={withLocalePath(
+                    `/novel/${item.novelId}?comicChapter=${item.nextChapter.fromChapter}`,
+                    locale,
+                  )}
+                  className="text-[11px] text-[var(--gc-accent)]"
+                >
+                  {t("continueAdapt", { label: item.nextChapter.label })}
+                </Link>
+              ) : item.draftStoryboardComics?.length ? null : (
+                <p className="text-[11px] text-[var(--gc-text-faint)]">{t("allAdapted")}</p>
+              )}
+            </div>
           </li>
         ))}
       </ul>

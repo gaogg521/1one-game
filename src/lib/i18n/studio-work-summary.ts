@@ -7,6 +7,8 @@ type WorkRow = {
   type: "project" | "novel" | "comic";
   title: string;
   prompt: string;
+  /** 漫画是否绑定小说（独立创作时为 null） */
+  linkedNovelId?: string | null;
 };
 
 /** 工作室卡片副标题：避免直接展示入库中文 prompt 摘要。 */
@@ -25,14 +27,18 @@ export function formatStudioWorkSummary(row: WorkRow, locale: AppLocale): string
     }
   }
   if (row.type === "comic") {
-    const tag = inferNovelGenreTagFromStoredPrompt(row.prompt);
-    if (tag) {
-      const genre = getLocalizedNovelGenreTag(tag, locale);
-      return tMessage(locale, "studio.workSummary.comicGenre", {
-        title: row.title,
-        genre: genre.label,
-      });
+    if (row.linkedNovelId) {
+      const tag = inferNovelGenreTagFromStoredPrompt(row.prompt);
+      if (tag) {
+        const genre = getLocalizedNovelGenreTag(tag, locale);
+        return tMessage(locale, "studio.workSummary.comicAdaptedGenre", {
+          title: row.title,
+          genre: genre.label,
+        });
+      }
+      return tMessage(locale, "studio.workSummary.comicAdapted", { title: row.title });
     }
+    return tMessage(locale, "studio.workSummary.comicStandalone", { title: row.title });
   }
   return row.title;
 }

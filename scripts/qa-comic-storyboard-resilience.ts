@@ -1,5 +1,5 @@
 /**
- * 导演分镜 resilience：长篇 chunk 失败时须逐页降级（与 light 路径一致）
+ * 导演分镜 resilience：长篇 chunk 失败时须逐页降级；轻量路径须二分降级
  * npm run qa:comic-storyboard-resilience
  */
 import { readFileSync } from "node:fs";
@@ -8,8 +8,10 @@ import { shouldUseLongComicPipeline } from "../src/lib/comic-generate-config.ts"
 
 const longPath = resolve(process.cwd(), "src/lib/comic-storyboard-long.ts");
 const pipelinePath = resolve(process.cwd(), "src/lib/comic-pipeline.ts");
+const chunkStatsPath = resolve(process.cwd(), "src/lib/comic-director-chunk-stats.ts");
 const longSrc = readFileSync(longPath, "utf8");
 const pipelineSrc = readFileSync(pipelinePath, "utf8");
+const chunkStatsSrc = readFileSync(chunkStatsPath, "utf8");
 
 const checks: { name: string; ok: boolean; detail?: string }[] = [];
 
@@ -21,8 +23,8 @@ assert("exports fetchComicStoryboardChunk", longSrc.includes("export async funct
 assert(
   "chunk returns stat strategy",
   longSrc.includes("ComicStoryboardChunkResult") &&
-    longSrc.includes('strategy: "batch"') &&
-    longSrc.includes('strategy: "per_page"'),
+    chunkStatsSrc.includes('"batch"') &&
+    chunkStatsSrc.includes('"per_page"'),
 );
 assert(
   "pipeline emits director_storyboard_stats",
@@ -33,11 +35,17 @@ assert(
   "director batch then single-page fallback",
   longSrc.includes("tryDirectorStoryboardOnce") &&
     longSrc.includes("chunkPages <= 1") &&
-    longSrc.includes("storyboardPageJsonFailed"),
+    longSrc.includes("fetchDirectorStoryboardChunkWithRetry"),
+);
+assert(
+  "light path bisect fallback on chunk failure",
+  pipelineSrc.includes("fetchRange") &&
+    pipelineSrc.includes("Math.ceil(chunkPages / 2)") &&
+    pipelineSrc.includes("storyboardPageJsonFailed"),
 );
 assert(
   "uses ComicGenerationRunError",
-  longSrc.includes("ComicGenerationRunError") && longSrc.includes("storyboardPageJsonFailed"),
+  pipelineSrc.includes("ComicGenerationRunError") && pipelineSrc.includes("storyboardPageJsonFailed"),
 );
 assert("pipeline imports long storyboard", pipelineSrc.includes("fetchComicStoryboardChunk"));
 assert(

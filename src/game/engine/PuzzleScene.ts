@@ -1,14 +1,28 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
+import type { GameSpec } from "@/lib/game-spec";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
-import type { GameSpec } from "@/lib/game-spec";
-import { hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import {
+  paintPuzzleBoardFrame,
+  paintPuzzleThemeBackdrop,
+  paintSpotDiffPanels,
+} from "@/game/engine/template-theme-visual";
+import {
+  bannerPuzzleFinish,
+  hudPuzzleMatch3Hint,
+  hudPuzzleMoves,
+  hudPuzzleSpotDiffHint,
+  hudReady,
+  hudScore,
+} from "@/lib/i18n/game-hud-labels";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -47,6 +61,16 @@ export class PuzzleScene extends Phaser.Scene {
   private flipped: typeof this.cards = [];
   private jigsawSlots: Phaser.GameObjects.Rectangle[] = [];
   private jigsawDone = 0;
+  private jigsawCols = 3;
+  private jigsawRows = 3;
+  private memoryTimerSec = 0;
+  private memoryTimerLeft = 0;
+  private memoryTimerWarned = false;
+  private timerText!: Phaser.GameObjects.Text;
+  private kidsJigsaw = false;
+  private starReward = false;
+  private jigsawLargeBlocks = false;
+  private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "PuzzleScene" });
@@ -59,21 +83,43 @@ export class PuzzleScene extends Phaser.Scene {
     const cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(cohesive.bleepTemperament);
     this.cohesive = cohesive;
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     const bp = this.spec.puzzle ?? buildPuzzleBlueprint({ spec: this.spec });
     this.mode = bp.mode;
     this.target = bp.targetScore;
     this.moveLimit = bp.moveLimit;
+    this.jigsawCols = bp.cols;
+    this.jigsawRows = bp.rows;
+
+    const puzzlePf = this.spec.samplePlayProfile?.puzzle;
+    if (puzzlePf?.diffCount && this.mode === "spotDifference") {
+      this.target = puzzlePf.diffCount;
+    }
+    if (puzzlePf?.memoryTimerSec && this.mode === "memoryMatch") {
+      this.memoryTimerSec = puzzlePf.memoryTimerSec;
+      this.memoryTimerLeft = puzzlePf.memoryTimerSec;
+    }
+    if (puzzlePf?.kidsJigsaw && this.mode === "jigsaw") {
+      this.kidsJigsaw = true;
+      this.starReward = puzzlePf.starReward ?? true;
+      this.jigsawLargeBlocks = puzzlePf.jigsawLargeBlocks ?? true;
+    }
 
     const w = this.scale.width;
     const h = this.scale.height;
-    this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+    paintPuzzleThemeBackdrop(this, this.spec, w, h, this.mode);
 
     this.scoreText = styleHudText(
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
     );
     this.moveText = styleHudText(
-      this.add.text(16, 38, `步数 ${this.moves}/${this.moveLimit}`, { fontSize: "15px", color: "#cbd5e1" }),
+      this.add.text(16, 38, hudPuzzleMoves(this.uiLocale, this.moves, this.moveLimit), { fontSize: "15px", color: "#cbd5e1" }),
     );
+    if (this.memoryTimerSec > 0) {
+      this.timerText = styleHudText(
+        this.add.text(w - 16, 12, `${this.memoryTimerLeft}s`, { fontSize: "16px", color: "#fbbf24" }).setOrigin(1, 0),
+      );
+    }
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
     this.gridGfx = this.add.graphics();
@@ -91,28 +137,61 @@ export class PuzzleScene extends Phaser.Scene {
       default:
         this.buildMatch3(bp.cols, bp.rows, w);
     }
+    schedulePhaserPlayReady(this, 400);
+  }
+
+  update(_time: number, deltaMs: number) {
+    this.banner.tick();
+    if (this.finished) return;
+    if (this.memoryTimerSec <= 0) return;
+    this.memoryTimerLeft -= deltaMs / 1000;
+    if (this.timerText) {
+      const left = Math.max(0, Math.ceil(this.memoryTimerLeft));
+      this.timerText.setText(`${left}s`);
+      if (left <= 10) {
+        this.timerText.setColor("#fb7185");
+        if (!this.memoryTimerWarned) {
+          this.memoryTimerWarned = true;
+          juiceFlash(this, { r: 251, g: 113, b: 133 }, { durationMs: 120 });
+          juiceShake(this, { durationMs: 140, intensity: 0.004 });
+        }
+      }
+    }
+    if (this.memoryTimerLeft <= 0) {
+      this.finish(false);
+    }
   }
 
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    this.banner.show({ title: won ? "益智目标达成！" : "步数用尽", ms: 2000 });
+    this.banner.show({ ...bannerPuzzleFinish(this.uiLocale, won), ms: 2000 });
+    if (won) {
+      juiceShake(this, { durationMs: 220, intensity: 0.012 });
+      juiceFlash(this, { r: 140, g: 200, b: 255 }, { durationMs: 140 });
+    } else {
+      juiceShake(this, { durationMs: 180, intensity: 0.008 });
+    }
     this.time.delayedCall(2200, () => this.onEnd({ score: this.score, won }));
   }
 
   private addMove(cost = 1) {
     this.moves += cost;
-    this.moveText.setText(`步数 ${this.moves}/${this.moveLimit}`);
+    this.moveText.setText(hudPuzzleMoves(this.uiLocale, this.moves, this.moveLimit));
     if (this.moves >= this.moveLimit && this.score < this.target) this.finish(false);
   }
 
   private buildMatch3(cols: number, rows: number, w: number) {
+    const bloomScale = this.spec.samplePlayProfile?.puzzle?.match3BloomScale ?? 1;
     this.cell = Math.min(48, (w - 40) / cols);
     this.ox = (w - this.cell * cols) / 2;
+    paintPuzzleBoardFrame(this, this.spec, this.ox - 4, this.oy - 4, this.cell * cols + 8, this.cell * rows + 8);
     this.grid = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => Math.floor(Math.random() * COLORS.length)),
+      Array.from({ length: cols }, () => Math.floor(this.runtimeRng() * COLORS.length)),
     );
     this.redrawMatch3(cols, rows);
+    const h = this.scale.height;
+    this.add.text(w / 2, h - 48, hudPuzzleMatch3Hint(this.uiLocale), { fontSize: "14px", color: "#e2e8f0" }).setOrigin(0.5);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.finished) return;
       const c = Math.floor((p.x - this.ox) / this.cell);
@@ -129,7 +208,8 @@ export class PuzzleScene extends Phaser.Scene {
       const gain = group.size * group.size * 3;
       this.score += gain;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
-      juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", Math.min(12, group.size));
+      juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", Math.min(18, Math.round(group.size * bloomScale)));
+      juiceFloater(this, p.x, p.y - 12, `+${gain}`, this.cohesive.hud.accent);
       playBleep("pickup");
       this.addMove();
       this.redrawMatch3(cols, rows);
@@ -157,7 +237,7 @@ export class PuzzleScene extends Phaser.Scene {
         if (v >= 0) stack.push(v);
       }
       for (let r = rows - 1; r >= 0; r -= 1) {
-        this.grid[r]![c] = stack[rows - 1 - r] ?? Math.floor(Math.random() * COLORS.length);
+        this.grid[r]![c] = stack[rows - 1 - r] ?? Math.floor(this.runtimeRng() * COLORS.length);
       }
     }
   }
@@ -180,49 +260,71 @@ export class PuzzleScene extends Phaser.Scene {
     const y = 100;
     const lx = w / 2 - pw - 12;
     const rx = w / 2 + 12;
-    this.add.rectangle(lx + pw / 2, y + ph / 2, pw, ph, 0x6366f1);
-    this.add.rectangle(rx + pw / 2, y + ph / 2, pw, ph, 0x6366f1);
-    this.diffMarks = [false, false, false, false, false];
-    const diffPoints = [
-      { x: lx + pw * 0.3, y: y + ph * 0.25 },
-      { x: lx + pw * 0.7, y: y + ph * 0.55 },
-      { x: lx + pw * 0.45, y: y + ph * 0.78 },
-      { x: rx + pw * 0.62, y: y + ph * 0.35 },
-      { x: rx + pw * 0.28, y: y + ph * 0.62 },
-    ];
-    diffPoints.forEach((pt, i) => {
-      this.add.circle(pt.x, pt.y, 10, 0xfde047).setVisible(false);
+    const whimsical = this.spec.samplePlayProfile?.puzzle?.whimsicalPanels ?? false;
+    const panelA = whimsical ? 0xa78bfa : 0x6366f1;
+    const panelB = whimsical ? 0xf472b6 : 0x6366f1;
+    paintSpotDiffPanels(this, this.spec, lx, rx, y, pw, ph);
+    this.add.rectangle(lx + pw / 2, y + ph / 2, pw, ph, panelA, whimsical ? 0.22 : 0.35);
+    this.add.rectangle(rx + pw / 2, y + ph / 2, pw, ph, panelB, whimsical ? 0.22 : 0.35);
+    if (whimsical) {
+      for (const pt of [
+        { x: lx + 12, y: y + 12 },
+        { x: lx + pw - 12, y: y + ph - 12 },
+        { x: rx + pw - 12, y: y + 12 },
+        { x: rx + 12, y: y + ph - 12 },
+      ]) {
+        juiceBurst(this, pt.x, pt.y, "#fcd34d", 4);
+      }
+    }
+    const diffCount = this.target;
+    this.diffMarks = Array.from({ length: diffCount }, () => false);
+    const markCircles: Phaser.GameObjects.Arc[] = [];
+    for (let i = 0; i < diffCount; i += 1) {
+      const onLeft = i % 2 === 0;
+      const baseX = onLeft ? lx : rx;
+      const pt = {
+        x: baseX + pw * (0.18 + ((i * 13) % 62) / 100),
+        y: y + ph * (0.16 + ((i * 11) % 68) / 100),
+      };
+      const mark = this.add.circle(pt.x, pt.y, 10, whimsical ? 0xf472b6 : 0xfde047).setVisible(false);
+      markCircles.push(mark);
       this.add
         .circle(pt.x, pt.y, 22, 0x000000, 0)
         .setInteractive({ useHandCursor: true })
         .on("pointerdown", () => {
           if (this.diffMarks[i] || this.finished) return;
           this.diffMarks[i] = true;
+          mark.setVisible(true);
           this.foundDiff += 1;
           this.score += 20;
           this.scoreText.setText(hudScore(this.uiLocale, this.score));
+          juiceBurst(this, pt.x, pt.y, whimsical ? "#f472b6" : themeParticleHex(this.spec), 14);
+          juiceFloater(this, pt.x, pt.y - 16, "+20", this.cohesive.hud.accent);
+          juiceShake(this, { durationMs: 90, intensity: 0.004 });
           this.addMove();
           playBleep("pickup");
-          if (this.foundDiff >= 5) this.finish(true);
+          if (this.foundDiff >= diffCount) this.finish(true);
         });
-    });
-    this.add.text(w / 2, h - 48, "找出左右两幅插画的 5 处不同", { fontSize: "14px", color: "#e2e8f0" }).setOrigin(0.5);
+    }
+    this.add.text(w / 2, h - 48, hudPuzzleSpotDiffHint(this.uiLocale), { fontSize: "14px", color: "#e2e8f0" }).setOrigin(0.5);
   }
 
   private buildMemoryMatch(cols: number, rows: number, w: number) {
     const pairs = (cols * rows) / 2;
     const ids = Array.from({ length: pairs }, (_, i) => i);
-    const deck = [...ids, ...ids].sort(() => Math.random() - 0.5);
+    const deck = seededShuffle([...ids, ...ids], runtimeSeedFromSpec(this.spec));
     this.cell = Math.min(64, (w - 40) / cols);
     this.ox = (w - this.cell * cols) / 2;
+    paintPuzzleBoardFrame(this, this.spec, this.ox - 4, this.oy - 4, this.cell * cols + 8, this.cell * rows + 8);
+    const timed = this.memoryTimerSec > 0;
     deck.forEach((id, i) => {
       const c = i % cols;
       const r = Math.floor(i / cols);
       const x = this.ox + c * this.cell + this.cell / 2;
       const y = this.oy + r * this.cell + this.cell / 2;
       const rect = this.add
-        .rectangle(x, y, this.cell - 8, this.cell - 8, 0x4c1d95)
-        .setStrokeStyle(2, 0xc4b5fd)
+        .rectangle(x, y, this.cell - 8, this.cell - 8, timed ? 0x581c87 : 0x4c1d95)
+        .setStrokeStyle(2, timed ? 0xf472b6 : 0xc4b5fd)
         .setInteractive({ useHandCursor: true });
       const label = this.add.text(x, y, "?", { fontSize: "20px", color: "#fff" }).setOrigin(0.5);
       const card = { id, face: false, matched: false, x, y, rect, label };
@@ -245,8 +347,12 @@ export class PuzzleScene extends Phaser.Scene {
         this.score += 15;
         this.flipped = [];
         this.scoreText.setText(hudScore(this.uiLocale, this.score));
+        juiceBurst(this, a!.x, a!.y, COLORS[a!.id % COLORS.length] ?? "#fff", 12);
+        juiceFloater(this, a!.x, a!.y - 14, "+15", this.cohesive.hud.accent);
+        playBleep("pickup");
         if (this.cards.every((c) => c.matched)) this.finish(true);
       } else {
+        juiceShake(this, { durationMs: 100, intensity: 0.003 });
         this.time.delayedCall(600, () => {
           a!.face = b!.face = false;
           a!.label.setText("?");
@@ -260,16 +366,33 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private buildJigsaw(w: number, h: number) {
-    const size = 90;
-    const sx = w / 2 - size * 1.5;
-    const sy = h / 2 - size;
-    for (let i = 0; i < 9; i += 1) {
-      const tx = sx + (i % 3) * size;
-      const ty = sy + Math.floor(i / 3) * size;
-      const slot = this.add.rectangle(tx + size / 2, ty + size / 2, size - 4, size - 4, 0x334155).setStrokeStyle(2, 0x94a3b8);
+    const cols = this.jigsawCols;
+    const rows = this.jigsawRows;
+    const total = cols * rows;
+    const blockScale = this.jigsawLargeBlocks ? 1.18 : 1;
+    const size = Math.min(88 * blockScale, Math.min((w - 100) / (cols + 1), (h - 220) / (rows + 2)));
+    const sx = w / 2 - (cols * size) / 2;
+    const sy = h / 2 - (rows * size) / 2 - 20;
+    if (this.kidsJigsaw) {
+      const frame = this.add.graphics().setDepth(1);
+      frame.lineStyle(4, 0xfcd34d, 0.85);
+      frame.strokeRoundedRect(sx - 16, sy - 16, cols * size + 32, rows * size + 32, 12);
+      frame.lineStyle(2, 0x38bdf8, 0.6);
+      frame.strokeRoundedRect(sx - 8, sy - 8, cols * size + 16, rows * size + 16, 8);
+    } else {
+      paintPuzzleBoardFrame(this, this.spec, sx - 10, sy - 10, cols * size + 20, rows * size + 20);
+    }
+    for (let i = 0; i < total; i += 1) {
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const tx = sx + c * size;
+      const ty = sy + r * size;
+      const slot = this.add
+        .rectangle(tx + size / 2, ty + size / 2, size - 4, size - 4, 0x334155)
+        .setStrokeStyle(2, 0x94a3b8);
       this.jigsawSlots.push(slot);
-      const px = 40 + (i % 3) * (size + 8);
-      const py = h - 130 + Math.floor(i / 3) * (size + 8);
+      const px = 36 + (i % cols) * (size + 6);
+      const py = h - 150 + Math.floor(i / cols) * (size + 6);
       const piece = this.add
         .rectangle(px, py, size - 8, size - 8, Phaser.Display.Color.HexStringToColor(COLORS[i % COLORS.length]!).color)
         .setInteractive({ useHandCursor: true, draggable: true });
@@ -284,8 +407,14 @@ export class PuzzleScene extends Phaser.Scene {
           this.jigsawDone += 1;
           this.score += 10;
           this.scoreText.setText(hudScore(this.uiLocale, this.score));
+          juiceBurst(this, piece.x, piece.y, COLORS[slotIdx % COLORS.length] ?? "#fff", 10);
+          if (this.starReward) {
+            juiceFloater(this, piece.x, piece.y - 18, "⭐", "#fcd34d");
+          }
+          juiceFloater(this, piece.x, piece.y - 12, "+10", this.cohesive.hud.accent);
+          playBleep("pickup");
           this.addMove(0);
-          if (this.jigsawDone >= 9) this.finish(true);
+          if (this.jigsawDone >= total) this.finish(true);
         }
       });
     }

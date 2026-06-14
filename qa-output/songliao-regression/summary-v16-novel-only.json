@@ -1,0 +1,14 @@
+{
+  "at": "2026-06-14T14:06:37.000Z",
+  "title": "我穿越到了宋辽之战的战场",
+  "owner": "qa-songliao-regression",
+  "model": "deepseek-v4-pro",
+  "note": "run-v16-full 小说四档已全部通过；漫画 char-sheet 文生图阶段耗时过长，单独跑",
+  "novels": [
+    { "tier": "short", "ok": true, "novelId": "cmqdu4uh30000t1ct7zflvjai", "chars": 1905, "chapters": 3, "completeness": "ok", "ms": 128000 },
+    { "tier": "medium", "ok": true, "novelId": "cmqdub6vx0001t1ctchwz59rc", "chars": 13372, "chapters": 5, "completeness": "ok", "ms": 296000 },
+    { "tier": "long", "ok": true, "novelId": "cmqduxhtq0002t1ctgyqoudaz", "chars": 64240, "chapters": 17, "completeness": "ok", "ms": 1041000 },
+    { "tier": "children", "ok": true, "novelId": "cmqduy8mn0003t1ctjg48ts93", "chars": 515, "chapters": 1, "completeness": "ok", "ms": 35000 }
+  ],
+  "pass": true
+}

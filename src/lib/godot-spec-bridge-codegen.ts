@@ -108,6 +108,9 @@ export const GODOT_MOTHER_PLATFORMER_DIR = GODOT_MOTHER_UNIVERSAL_DIR;
 export const GODOT_BRIDGE_REL = "scripts/game_spec_bridge.gd";
 export const GODOT_SPEC_JSON_REL = "spec/gamespec.json";
 
+/** 母版 Godot 模板升级时递增，使 Web 导出缓存失效 */
+export const GODOT_TEMPLATE_BUILD_ID = "20260613-all-runtimes-3d";
+
 export function godotExportCacheKey(
   spec: GameSpec,
   projectId?: string,
@@ -116,10 +119,11 @@ export function godotExportCacheKey(
   const pid = typeof projectId === "string" ? projectId.trim() : "";
   if (pid) {
     const base = pid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48) || "project";
-    return referenceDigest === "0" ? base : `${base}_r${referenceDigest}`;
+    const suffix = referenceDigest === "0" ? GODOT_TEMPLATE_BUILD_ID : `r${referenceDigest}_${GODOT_TEMPLATE_BUILD_ID}`;
+    return `${base}_${suffix}`;
   }
   return createHash("sha256")
-    .update(JSON.stringify({ spec, ref: referenceDigest }))
+    .update(JSON.stringify({ spec, ref: referenceDigest, tpl: GODOT_TEMPLATE_BUILD_ID }))
     .digest("hex")
     .slice(0, 16);
 }

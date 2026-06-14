@@ -11,6 +11,7 @@ import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import type { AppLocale } from "@/i18n/routing";
 import { assetGenMessage } from "@/lib/i18n/progress-message";
+import { templateVisualStyle, buildAssetMoodLine } from "@/lib/assets/template-visual-styles";
 
 const SPRITE_DIR = path.join(process.cwd(), "public", "game-sprites");
 
@@ -22,8 +23,11 @@ function ensureDir(projectId: string) {
 
 type SpriteKind = "player" | "hazard" | "gem" | "power" | "boss";
 
-function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
+export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
+  const templateCtx = templateVisualStyle(spec.templateId, "casual arcade game");
+  const mood = buildAssetMoodLine(spec);
+  const sceneLine = `game mood: ${mood}, scene: ${templateCtx}`;
   const title = (spec.title || "").toLowerCase();
   const labels = spec.labels || {};
   const playerLabel = (labels.player || "hero").toLowerCase();
@@ -52,6 +56,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `friendly expressive face, rounded leafy body, front-facing or 3/4 view`,
           `dominant color ${color}, colorful casual cartoon game art`,
           `solid ${bgColor} background, flat clean vector style`,
+          sceneLine,
           `suitable for casual tower defense mobile game, 1:1 aspect ratio`,
           `no text, no UI, no weapons`,
         ].join(", ");
@@ -62,6 +67,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `sleek sci-fi design with glowing thrusters, metallic details`,
           `dominant color ${color}, clean vector game art`,
           `solid ${bgColor} background, flat design`,
+          sceneLine,
           `suitable for space shooter mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -72,6 +78,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `front-facing, simple geometric shapes, iconic square head and body`,
           `dominant color ${color}, retro pixel art aesthetic`,
           `solid ${bgColor} background, crisp edges`,
+          sceneLine,
           `suitable for Minecraft-inspired mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -82,6 +89,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `front-facing, elegant pose, long hair and traditional clothing`,
           `dominant color ${color}, ink-wash and cel-shaded hybrid style`,
           `solid ${bgColor} background, clean game art`,
+          sceneLine,
           `suitable for wuxia action mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -91,6 +99,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
         `centered front-facing, simple clean vector game art style`,
         `dominant color ${color}, rounded friendly shapes`,
         `isolated on solid ${bgColor} background, flat design`,
+        sceneLine,
         `suitable for casual mobile web game, 1:1 aspect ratio`,
         `no text, no UI, no weapons unless thematically required`,
       ].join(", ");
@@ -103,6 +112,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `front-facing, silly expressive face, arms reaching forward`,
           `dominant color ${color}, Plants vs Zombies cartoon style`,
           `solid ${bgColor} background, flat clean vector style`,
+          sceneLine,
           `suitable for casual tower defense mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -113,6 +123,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `top-down view, angular aggressive design, glowing weapons`,
           `dominant color ${color}, sci-fi vector game art`,
           `solid ${bgColor} background, flat design`,
+          sceneLine,
           `suitable for space shooter mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -123,6 +134,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `front-facing, iconic square body, recognizable Minecraft mob design`,
           `dominant color ${color}, retro pixel art aesthetic`,
           `solid ${bgColor} background, crisp edges`,
+          sceneLine,
           `suitable for Minecraft-inspired mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -133,6 +145,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `front-facing, threatening stance, traditional weapons`,
           `dominant color ${color}, ink-wash and cel-shaded hybrid style`,
           `solid ${bgColor} background, clean game art`,
+          sceneLine,
           `suitable for wuxia action mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -142,6 +155,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
         `centered front-facing, simple clean vector game art style`,
         `dominant color ${color}, angular spiky shapes`,
         `isolated on solid ${bgColor} background, flat design`,
+        sceneLine,
         `suitable for casual mobile web game, 1:1 aspect ratio`,
         `no text, no UI`,
       ].join(", ");
@@ -154,6 +168,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `glowing radiant, simple clean cartoon style`,
           `dominant color ${color}, Plants vs Zombies inspired`,
           `solid ${bgColor} background`,
+          sceneLine,
           `suitable for casual tower defense mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -164,6 +179,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `geometric crystalline shape, bright sparkle, energy pulse effect`,
           `dominant color ${color}, vector game art`,
           `solid ${bgColor} background`,
+          sceneLine,
           `suitable for space shooter mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -173,6 +189,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
         `centered, simple clean vector game art style`,
         `dominant color ${color}, glowing radiant`,
         `isolated on solid ${bgColor} background`,
+        sceneLine,
         `suitable for casual mobile web game, 1:1 aspect ratio`,
         `no text, no UI`,
       ].join(", ");
@@ -184,6 +201,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
         `centered, simple clean vector game art style`,
         `dominant color ${color}, bright sparkle`,
         `isolated on solid ${bgColor} background`,
+        sceneLine,
         `suitable for casual mobile web game, 1:1 aspect ratio`,
         `no text, no UI`,
       ].join(", ");
@@ -196,6 +214,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `towering menacing design, front-facing, exaggerated cartoon proportions`,
           `dominant color ${color}, Plants vs Zombies cartoon style`,
           `solid ${bgColor} background, flat clean vector style`,
+          sceneLine,
           `suitable for casual tower defense mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -206,6 +225,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
           `top-down view, heavy armored design, glowing core weapon`,
           `dominant color ${color}, sci-fi vector game art`,
           `solid ${bgColor} background, flat design`,
+          sceneLine,
           `suitable for space shooter mobile game, 1:1 aspect ratio`,
           `no text, no UI`,
         ].join(", ");
@@ -215,6 +235,7 @@ function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
         `centered front-facing, towering menacing design`,
         `dominant color ${color}, dark shadows, glowing red eyes`,
         `isolated on solid ${bgColor} background`,
+        sceneLine,
         `suitable for casual mobile web game, 1:1 aspect ratio`,
         `no text, no UI`,
       ].join(", ");

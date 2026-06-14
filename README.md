@@ -496,8 +496,15 @@ npm run dev
 | `npm run qa:en-path` | `/en/` 路径无中文 UI 泄漏验收 |
 | `npm run qa:orch-smoke` | 编排冒烟 |
 | `npm run qa:godot-export:matrix` | 六模板 Godot Web 导出 |
+| `npm run qa:runtime-config-admin` | 运行时配置 smoke（离线 DB + 可选 HTTP） |
+| `npm run qa:runtime-config-admin:http` | 强制 HTTP PATCH roundtrip（需 dev + `SUPER_ADMIN_SECRET`） |
+| `npm run fix:dev-db-migrations` | 修复本地 `dev.db` 迁移漂移 |
+| `npm run promote:super-admin -- --email …` | CLI 升权 super_admin |
+| `npm run test:e2e:admin-runtime-config` | 后台「网关/模型」页 Playwright 截图 |
 
-**CI**（`.github/workflows/ci.yml`）：并行 `quality`（lint + 编排冒烟 + 多语回归）与 `bundle-e2e`（migrate → build → Playwright）。
+**本地库 / 迁移**：见 [`docs/local-database.md`](docs/local-database.md)。**超级管理员 / 运行时配置**：见 [`docs/admin-super-admin.md`](docs/admin-super-admin.md)。
+
+**CI**（`.github/workflows/ci.yml`）：并行 `quality`（lint + 编排冒烟 + 多语回归 + `qa:runtime-config-admin`）与 `bundle-e2e`（migrate → build → Playwright + admin-runtime E2E）。
 
 测试库：**`prisma/ci.sqlite`**（无密钥，E2E 可直接 `DATABASE_URL=file:./prisma/ci.sqlite`）。
 

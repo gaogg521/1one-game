@@ -1,0 +1,68 @@
+{
+  "at": "2026-06-14T15:35:54.855Z",
+  "pass": true,
+  "dbUrl": "file:./prisma/ci.sqlite",
+  "checks": [
+    {
+      "name": "prisma migrate deploy",
+      "ok": true,
+      "detail": "file:./prisma/ci.sqlite"
+    },
+    {
+      "name": "crypto roundtrip",
+      "ok": true
+    },
+    {
+      "name": "defaults.gamePrimary",
+      "ok": true
+    },
+    {
+      "name": "defaults.novelTextPrimary",
+      "ok": true
+    },
+    {
+      "name": "defaults.imageOpenAI",
+      "ok": true
+    },
+    {
+      "name": "persist gamePrimary",
+      "ok": true
+    },
+    {
+      "name": "persist novelTextPrimary",
+      "ok": true
+    },
+    {
+      "name": "persist imageGemini",
+      "ok": true
+    },
+    {
+      "name": "public view has productDefaults",
+      "ok": true
+    },
+    {
+      "name": "modelSources.gamePrimary is db after seed",
+      "ok": true,
+      "detail": "db"
+    },
+    {
+      "name": "HTTP dev server reachable",
+      "ok": true,
+      "detail": "skipped — DATABASE_URL=file:./prisma/ci.sqlite PORT=8888 npm run dev"
+    }
+  ],
+  "seededModels": {
+    "gamePrimary": "gpt-5.2",
+    "gameFallbacks": [
+      "gemini-3.1-pro-preview"
+    ],
+    "novelTextPrimary": "deepseek-v4-pro",
+    "novelTextFallback": "doubao-seed-2-pro",
+    "imageOpenAI": "gpt-image-2",
+    "imageGemini": "gemini-3.1-flash-image-preview",
+    "anthropicPrimary": "claude-3-7-sonnet-latest",
+    "anthropicFallbacks": [],
+    "geminiPrimary": "gemini-3-flash-preview",
+    "geminiFallbacks": []
+  }
+}

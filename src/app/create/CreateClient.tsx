@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-storage";
 import { saveReferenceHandlesToSession } from "@/lib/assets/reference-storage";
 import {
@@ -31,6 +31,9 @@ import type { OrchestrationRunTrace } from "@/lib/orchestration/run-trace";
 import { consumeSSE } from "@/lib/read-sse";
 import { GamePlayer } from "@/components/GamePlayer";
 import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
+import { SampleParityTrustBadge } from "@/components/SampleParityTrustBadge";
+import { resolveSampleParityUserInfo } from "@/lib/sample-parity-user";
+import { resolveSampleIntentFromPrompt } from "@/lib/sample-create-prefill";
 import { GameRuntimePreferenceControl } from "@/components/GameRuntimePreferenceControl";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
 import { readReferenceHandlesFromSession } from "@/lib/assets/reference-image-storage.client";
@@ -170,6 +173,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const router = useRouter();
   const locale = useLocale() as AppLocale;
   const t = useTranslations("createFlow");
+  const tParity = useTranslations("sampleParity");
   const replayId = props.replayFromProjectId?.trim();
 
   const refStrong = (chunks: ReactNode) => (
@@ -200,6 +204,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           return draft?.prompt && !draft.generatedId ? draft.prompt : initial;
         })(),
   );
+  const sampleIntent = useMemo(() => resolveSampleIntentFromPrompt(prompt), [prompt]);
   const [busy, setBusy] = useState<"idle" | "gen" | "gen_variants" | "save" | "sprites">("idle");
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<GameSpec | null>(null);
@@ -527,6 +532,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setStreamStartedAt(Date.now());
     setEtaText(null);
     setElapsedSec(0);
+    const matchedSample = resolveSampleIntentFromPrompt(prompt);
+    if (matchedSample) {
+      setStreamMsg(tParity("generatingSameAs", { sample: matchedSample.sampleTitle }));
+    }
     setVariants(null);
     setWebMeta(null);
     setGenDebug(null);
@@ -806,6 +815,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     searchEnhance,
     showQuotaExceeded,
     t,
+    tParity,
     templateHint,
   ]);
 
@@ -1204,6 +1214,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 placeholder={t("promptPlaceholder")}
                 className="min-h-[180px] w-full resize-y rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]"
               />
+              {sampleIntent && !spec ? (
+                <p
+                  className="mt-3 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-3 py-2.5 text-xs leading-relaxed text-[var(--gc-muted)]"
+                  data-testid="sample-intent-hint"
+                >
+                  {tParity("createPrefillHint", { sample: sampleIntent.sampleTitle })}
+                </p>
+              ) : null}
             </div>
 
             <div
@@ -1625,6 +1643,14 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                           : genSource}
                       </p>
                     ) : null}
+                    {(() => {
+                      const parity = resolveSampleParityUserInfo(spec, prompt);
+                      return parity ? (
+                        <div className="mt-3 max-w-lg">
+                          <SampleParityTrustBadge info={parity} compact />
+                        </div>
+                      ) : null;
+                    })()}
                     {genDebug ? (
                       <div className="mt-2 max-w-md rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-[11px] text-[var(--gc-muted)]">
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -1727,6 +1753,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                     <GamePlayer
                       key={`${variants ? `v-${variantIndex}` : "one-shot"}-px-${refPixelEpoch}`}
                       spec={spec}
+                      promptHint={prompt}
                     />
                   }
                 />

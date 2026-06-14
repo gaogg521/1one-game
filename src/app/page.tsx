@@ -2,9 +2,8 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
-import { FeaturedGamesSection } from "@/components/FeaturedGamesSection";
-import { FeaturedNovelsSection } from "@/components/FeaturedNovelsSection";
-import { FeaturedComicsSection } from "@/components/FeaturedComicsSection";
+import { HomeFeaturedSections } from "@/components/HomeFeaturedSections";
+import { HomeLiteraryPipelineSection } from "@/components/HomeLiteraryPipelineSection";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { getProductPromise, getWowSteps } from "@/lib/product-ia";
@@ -14,23 +13,6 @@ export default async function Home() {
   const t = await getTranslations();
   const productPromise = getProductPromise(locale);
   const wowSteps = getWowSteps(locale);
-  const pillars = [
-    {
-      en: "Wow",
-      title: t("home.pillars.wowTitle"),
-      body: t("home.pillars.wowBody"),
-    },
-    {
-      en: "Depth",
-      title: t("home.pillars.depthTitle"),
-      body: t("home.pillars.depthBody"),
-    },
-    {
-      en: "Community",
-      title: t("home.pillars.communityTitle"),
-      body: t("home.pillars.communityBody"),
-    },
-  ] as const;
   return (
     <AppPageShell>
       <SiteHeader />
@@ -102,12 +84,6 @@ export default async function Home() {
                   </li>
                 ))}
               </ol>
-              <div className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_75%,transparent)] p-5">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)]">{t("home.dualProduct")}</p>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--gc-muted)]">
-                  {t("home.dualProductDesc")}
-                </p>
-              </div>
             </aside>
           </div>
         </section>
@@ -119,10 +95,10 @@ export default async function Home() {
         <section className="px-6 py-20 sm:px-10 sm:py-24 lg:px-14 lg:py-28 xl:px-20 2xl:px-28">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("home.strategy")}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("home.literaryPipelineLabel")}</p>
               <h2 className="mt-2 text-2xl font-medium tracking-tight text-[var(--gc-text)] sm:text-3xl">{t("home.strategyTitle")}</h2>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
-                {t("home.strategyDesc")}
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
+                {t("home.literaryPipelineDesc")}
               </p>
             </div>
             <Link
@@ -132,26 +108,10 @@ export default async function Home() {
               {t("home.enterLauncher")}
             </Link>
           </div>
-
-          <div className="mt-14 grid gap-6 sm:mt-16 sm:grid-cols-2 lg:mt-20 lg:grid-cols-3 lg:gap-8">
-            {pillars.map((item) => (
-              <div
-                key={item.en}
-                className="group relative overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] to-transparent p-8 transition duration-500 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))]"
-              >
-                <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--gc-text-faint)]">{item.en}</p>
-                <h3 className="relative mt-4 text-lg font-medium tracking-tight text-[var(--gc-text)]">{item.title}</h3>
-                <p className="relative mt-4 text-sm leading-relaxed text-[var(--gc-muted)] lg:text-[15px] lg:leading-7">
-                  {item.body}
-                </p>
-              </div>
-            ))}
-          </div>
+          <HomeLiteraryPipelineSection />
         </section>
 
-        <FeaturedGamesSection />
-        <FeaturedNovelsSection />
-        <FeaturedComicsSection />
+        <HomeFeaturedSections />
 
         <section className="mt-auto border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
           <div className="max-w-4xl">

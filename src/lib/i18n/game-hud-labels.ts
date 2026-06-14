@@ -343,3 +343,195 @@ export function shooterShiftReady(locale: AppLocale): string {
 export function shooterShiftCooldown(locale: AppLocale, sec: string): string {
   return hud(locale, "shooterShiftCooldown", { sec });
 }
+
+export function hudCoasterSpeed(locale: AppLocale, kmh: number): string {
+  return hud(locale, "coasterSpeed", { kmh });
+}
+
+export function hudCoasterControls(locale: AppLocale): string {
+  return hud(locale, "coasterControls");
+}
+
+export function hudEndlessRoadControls(locale: AppLocale): string {
+  return hud(locale, "endlessRoadControls");
+}
+
+export function hudEndlessRoadDistance(locale: AppLocale, meters: number): string {
+  return hud(locale, "endlessRoadDistance", { meters });
+}
+
+export function bannerCoasterFinishWin(locale: AppLocale, time: string) {
+  return {
+    title: banner(locale, "coasterFinishWin"),
+    message: banner(locale, "coasterFinishWinMsg", { time }),
+  };
+}
+
+export function bannerCoasterFinishLose(locale: AppLocale, hazard?: string) {
+  return {
+    title: banner(locale, "coasterFinishLose"),
+    message: hazard?.trim() ? hazard : banner(locale, "coasterFinishLoseMsg"),
+  };
+}
+
+export function hudPhysicsControls(locale: AppLocale): string {
+  return hud(locale, "physicsControls");
+}
+
+export function bannerPhysicsFinish(locale: AppLocale, won: boolean) {
+  return { title: banner(locale, won ? "physicsFinishWin" : "physicsFinishLose") };
+}
+
+export function hudChessTurnWhite(locale: AppLocale): string {
+  return hud(locale, "chessTurnWhite");
+}
+
+export function hudChessThinkingBlack(locale: AppLocale): string {
+  return hud(locale, "chessThinkingBlack");
+}
+
+export function hudChessTurnWhiteShort(locale: AppLocale): string {
+  return hud(locale, "chessTurnWhiteShort");
+}
+
+export function bannerChessFinish(locale: AppLocale) {
+  return { title: banner(locale, "chessFinish") };
+}
+
+export function customizationPartLabel(
+  locale: AppLocale,
+  part: "body" | "wheel" | "bg" | "glaze" | "rim" | "base",
+): string {
+  const key =
+    part === "body"
+      ? "customizationPartBody"
+      : part === "wheel"
+        ? "customizationPartWheel"
+        : part === "bg"
+          ? "customizationPartBg"
+          : part === "glaze"
+            ? "customizationPartGlaze"
+            : part === "rim"
+              ? "customizationPartRim"
+              : "customizationPartBase";
+  return hud(locale, key);
+}
+
+export function hudCustomizationPotteryHint(locale: AppLocale): string {
+  return hud(locale, "customizationPotteryHint");
+}
+
+export function hudCustomizationEditing(locale: AppLocale, part: string): string {
+  return hud(locale, "customizationEditing", { part });
+}
+
+export function hudCustomizationHint(locale: AppLocale): string {
+  return hud(locale, "customizationHint");
+}
+
+export function hudCustomizationRandom(locale: AppLocale): string {
+  return hud(locale, "customizationRandom");
+}
+
+export function bannerCustomizationFinish(locale: AppLocale) {
+  return { title: banner(locale, "customizationFinish") };
+}
+
+export function hudFarmingCoins(locale: AppLocale, coins: number): string {
+  return hud(locale, "farmingCoins", { coins });
+}
+
+export function hudFarmingControls(locale: AppLocale): string {
+  return hud(locale, "farmingControls");
+}
+
+export function hudFarmingCropSelected(locale: AppLocale, name: string, cost: number): string {
+  return hud(locale, "farmingCropSelected", { name, cost });
+}
+
+export function bannerFarmingInsufficientCoins(locale: AppLocale) {
+  return { title: banner(locale, "farmingInsufficientCoins") };
+}
+
+export function bannerFarmingFinish(locale: AppLocale, won: boolean) {
+  return { title: banner(locale, won ? "farmingFinishWin" : "farmingFinishLose") };
+}
+
+export function hudStrategyControls(locale: AppLocale): string {
+  return hud(locale, "strategyControls");
+}
+
+export function bannerStrategyFinish(locale: AppLocale, won: boolean) {
+  return { title: banner(locale, won ? "strategyFinishWin" : "strategyFinishLose") };
+}
+
+export function hudPuzzleMoves(locale: AppLocale, moves: number, limit: number): string {
+  return hud(locale, "puzzleMoves", { moves, limit });
+}
+
+export function hudPuzzleSpotDiffHint(locale: AppLocale): string {
+  return hud(locale, "puzzleSpotDiffHint");
+}
+
+export function hudPuzzleMatch3Hint(locale: AppLocale): string {
+  return hud(locale, "puzzleMatch3Hint");
+}
+
+export function bannerPuzzleFinish(locale: AppLocale, won: boolean) {
+  return { title: banner(locale, won ? "puzzleFinishWin" : "puzzleFinishLose") };
+}
+
+export function bannerAgenticFinish(locale: AppLocale, won: boolean) {
+  return { title: banner(locale, won ? "agenticFinishWin" : "agenticFinishLose") };
+}
+
+export function hudAgenticModuleFailed(locale: AppLocale): string {
+  return hud(locale, "agenticModuleFailed");
+}
+
+export function hudChessPieceSelected(locale: AppLocale): string {
+  return hud(locale, "chessPieceSelected");
+}
+
+export function hudDefaultSkill(locale: AppLocale): string {
+  return hud(locale, "defaultSkill");
+}
+
+export function hudDefaultCollectible(locale: AppLocale): string {
+  return hud(locale, "defaultCollectible");
+}
+
+export function hudDefaultPlatformerCollectible(locale: AppLocale): string {
+  return hud(locale, "defaultPlatformerCollectible");
+}
+
+export function hudDefaultTowerLabel(locale: AppLocale): string {
+  return hud(locale, "defaultTowerLabel");
+}
+
+export function hudDefaultFoeLabel(locale: AppLocale): string {
+  return hud(locale, "defaultFoeLabel");
+}
+
+export function hudTdDefaultBase(locale: AppLocale): string {
+  return hud(locale, "tdDefaultBase");
+}
+
+export function hudTdEnemyName(locale: AppLocale, enemyId: string): string {
+  const key = enemyId === "tank" ? "tdEnemyTank" : "tdEnemyGrunt";
+  return hud(locale, key);
+}
+
+export function hudTdTowerName(locale: AppLocale, towerId: string): string {
+  const key = towerId === "splash" ? "tdTowerSplash" : "tdTowerDart";
+  return hud(locale, key);
+}
+
+/** Agentic onScore 震屏强度（按模板） */
+export function agenticScoreJuiceScale(templateId: string, score: number): number {
+  if (templateId === "physics") return 0.55 + Math.min(0.35, score / 600);
+  if (templateId === "coaster" || templateId === "racing") return 0.5;
+  if (templateId === "shooter" || templateId === "sniper") return 0.42;
+  if (templateId === "towerDefense" || templateId === "strategy") return 0.28;
+  return 0.32;
+}

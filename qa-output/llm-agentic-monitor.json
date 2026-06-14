@@ -1,0 +1,123 @@
+{
+  "at": "2026-06-13T05:26:56.646Z",
+  "total": 16,
+  "llm": 16,
+  "fallback": 0,
+  "failed": 0,
+  "repairRate": 0,
+  "timeoutMs": 120000,
+  "rows": [
+    {
+      "templateId": "avoider",
+      "source": "llm",
+      "ok": true,
+      "chars": 3014,
+      "ms": 10590
+    },
+    {
+      "templateId": "collector",
+      "source": "llm",
+      "ok": true,
+      "chars": 4236,
+      "ms": 13075
+    },
+    {
+      "templateId": "survivor",
+      "source": "llm",
+      "ok": true,
+      "chars": 4663,
+      "ms": 13061
+    },
+    {
+      "templateId": "platformer",
+      "source": "llm",
+      "ok": true,
+      "chars": 4156,
+      "ms": 13770
+    },
+    {
+      "templateId": "towerDefense",
+      "source": "llm",
+      "ok": true,
+      "chars": 5163,
+      "ms": 16349
+    },
+    {
+      "templateId": "shooter",
+      "source": "llm",
+      "ok": true,
+      "chars": 5131,
+      "ms": 16058
+    },
+    {
+      "templateId": "sniper",
+      "source": "llm",
+      "ok": true,
+      "chars": 5095,
+      "ms": 15252
+    },
+    {
+      "templateId": "coaster",
+      "source": "llm",
+      "ok": true,
+      "chars": 7966,
+      "ms": 22196
+    },
+    {
+      "templateId": "racing",
+      "source": "llm",
+      "ok": true,
+      "chars": 5444,
+      "ms": 14619
+    },
+    {
+      "templateId": "puzzle",
+      "source": "llm",
+      "ok": true,
+      "chars": 5498,
+      "ms": 16685
+    },
+    {
+      "templateId": "farming",
+      "source": "llm",
+      "ok": true,
+      "chars": 4940,
+      "ms": 15636
+    },
+    {
+      "templateId": "physics",
+      "source": "llm",
+      "ok": true,
+      "chars": 4026,
+      "ms": 12943
+    },
+    {
+      "templateId": "chess",
+      "source": "llm",
+      "ok": true,
+      "chars": 7581,
+      "ms": 40480
+    },
+    {
+      "templateId": "customization",
+      "source": "llm",
+      "ok": true,
+      "chars": 4146,
+      "ms": 16826
+    },
+    {
+      "templateId": "strategy",
+      "source": "llm",
+      "ok": true,
+      "chars": 5941,
+      "ms": 16833
+    },
+    {
+      "templateId": "stealth",
+      "source": "llm",
+      "ok": true,
+      "chars": 7818,
+      "ms": 23604
+    }
+  ]
+}

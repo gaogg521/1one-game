@@ -1,4 +1,5 @@
 import { getModelCascade } from "@/lib/model-config";
+import { getEffectiveModels } from "@/lib/runtime-config";
 import { PRODUCT } from "@/lib/product-config";
 import type { LlmProvider } from "@/lib/llm/types";
 
@@ -6,12 +7,18 @@ export { getNovelStyleTextModelCascade } from "@/lib/model-config";
 
 export function getModelCascadeForProvider(provider: LlmProvider): string[] {
   if (provider === "anthropic") {
-    const { anthropicPrimary, anthropicFallbacks } = PRODUCT.models;
-    return [anthropicPrimary, ...anthropicFallbacks].filter(Boolean);
+    const { anthropicPrimary, anthropicFallbacks } = getEffectiveModels();
+    return [
+      anthropicPrimary ?? PRODUCT.models.anthropicPrimary,
+      ...(anthropicFallbacks ?? PRODUCT.models.anthropicFallbacks),
+    ].filter(Boolean);
   }
   if (provider === "gemini") {
-    const { geminiPrimary, geminiFallbacks } = PRODUCT.models;
-    return [geminiPrimary, ...geminiFallbacks].filter(Boolean);
+    const { geminiPrimary, geminiFallbacks } = getEffectiveModels();
+    return [
+      geminiPrimary ?? PRODUCT.models.geminiPrimary,
+      ...(geminiFallbacks ?? PRODUCT.models.geminiFallbacks),
+    ].filter(Boolean);
   }
   return getModelCascade();
 }

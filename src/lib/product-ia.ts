@@ -73,9 +73,11 @@ export function getCreationModes(locale: AppLocale): Record<
 }
 
 const GAME_HINT =
-  /游戏|塔防|射击|平台|试玩|关卡|玩|收集|生存|躲避|Phaser|Godot|像素|萝卜|僵尸/i;
-const NOVEL_HINT = /小说|章节|长篇|短篇|故事|正文|续写|儿童|童话|听书/i;
-const COMIC_HINT = /漫画|分镜|格|动漫|条漫|绘本|画面|配图/i;
+  /游戏|塔防|射击|平台|试玩|关卡|玩|收集|生存|躲避|Phaser|Godot|像素|萝卜|蘿蔔|僵尸|tower defense|tower-defense|platformer|shooter|survival game|puzzle game|physics game|arcade|mini-?game|stress-?relief|playable game|pertahanan menara|menara anak panah|ป้องกันฐาน|หอคอย/i;
+const NOVEL_HINT =
+  /小说|小說|章节|章節|长篇|長篇|短篇|故事|正文|续写|續寫|儿童|兒童|童话|童話|听书|聽書|穿越|历史走向|歷史走向|改变历史|改變歷史|novel|chapter|short story|children'?s story|fairy tale|time traveler|historical fiction|write a .*story|cerita pendek|kanak-kanak|pengembara masa|sejarah|นิทาน|เด็ก|ข้ามเวลา|ประวัติศาสตร์/i;
+const COMIC_HINT =
+  /漫画|分镜|格|动漫|条漫|绘本|画面|配图|comic|storyboard|panel|manga|webtoon|four-?panel|strip comic|komik|สตอรีบอร์ด|คอมิก/i;
 
 /** 根据用户输入推荐创作载体；默认游戏（最快 wow）。 */
 export function inferCreationMode(text: string): CreationMode {

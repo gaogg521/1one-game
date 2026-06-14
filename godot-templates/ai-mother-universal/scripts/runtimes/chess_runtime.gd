@@ -15,12 +15,21 @@ var _moves := 0
 var _ended := false
 var _camera: Camera3D
 var _piece_nodes: Dictionary = {}
+var _legal_markers: Node3D
+var _win_moves := 6
+var _show_legal := false
+var _isometric := false
 
 
 func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
+	var cp := GameSpecData.sample_play_profile().get("chess", {})
+	if cp is Dictionary:
+		_win_moves = int(cp.get("winMoves", 6))
+		_show_legal = bool(cp.get("showLegalMoves", false))
+		_isometric = bool(cp.get("isometricHints", false))
 	_pieces = [
 		{"c": "w", "t": "K", "r": 7, "col": 4},
 		{"c": "w", "t": "P", "r": 6, "col": 3},
@@ -31,7 +40,12 @@ func _ready() -> void:
 	]
 	_build_scene()
 	_sync_piece_meshes()
-	_hud.set_extra("白方回合 · 点击棋子再点目标格")
+	if _isometric:
+		_hud.set_extra("3D 视角 · 白方回合 · 合法走法高亮")
+	elif _show_legal:
+		_hud.set_extra("白方回合 · 选中棋子显示可走格")
+	else:
+		_hud.set_extra("白方回合 · 点击棋子再点目标格")
 	if _viewport:
 		_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
@@ -54,10 +68,18 @@ func _build_scene() -> void:
 	_world.add_child(sun)
 
 	_camera = Camera3D.new()
-	_camera.position = Vector3(0, 9.5, 8.5)
-	_camera.rotation_degrees = Vector3(-52, 0, 0)
+	if _isometric:
+		_camera.position = Vector3(5.5, 11.0, 9.0)
+		_camera.rotation_degrees = Vector3(-58, -28, 0)
+	else:
+		_camera.position = Vector3(0, 9.5, 8.5)
+		_camera.rotation_degrees = Vector3(-52, 0, 0)
 	_camera.current = true
 	_world.add_child(_camera)
+
+	_legal_markers = Node3D.new()
+	_legal_markers.name = "LegalMoves"
+	_world.add_child(_legal_markers)
 
 	var board_root := Node3D.new()
 	board_root.name = "Board"
@@ -156,11 +178,24 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _selected.is_empty() and hit != null and hit.c == "w":
 		_selected = hit
 		_highlight_selection(true)
+		if _show_legal:
+			_draw_legal_moves(hit)
 		return
 	if not _selected.is_empty():
+		_clear_legal_moves()
 		var cap := _piece_at(row, col)
-		if cap != null and cap.c == "b":
+		var captured := cap != null and cap.c == "b"
+		if captured:
 			_pieces.erase(cap)
+			if _camera:
+				var wpos := _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.45, 0))
+				GameJuice.burst(
+					self,
+					_camera.unproject_position(wpos),
+					GameSpecData.theme_color("collectibleColor", Color.GOLD),
+					10,
+				)
+				GameJuice.shake_node(self, 3.5, 0.08)
 		_selected.r = row
 		_selected.col = col
 		_selected = {}
@@ -168,10 +203,62 @@ func _unhandled_input(event: InputEvent) -> void:
 		_moves += 1
 		_white_turn = false
 		_sync_piece_meshes()
+		if not captured and _camera:
+			var wpos := _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.35, 0))
+			GameJuice.burst(
+				self,
+				_camera.unproject_position(wpos),
+				GameSpecData.theme_color("playerColor", Color.WHITE),
+				4,
+			)
 		await get_tree().create_timer(0.45).timeout
 		_black_move()
-		if _moves >= 6:
+		if _moves >= _win_moves:
 			_finish(true)
+
+
+func _draw_legal_moves(p: Dictionary) -> void:
+	_clear_legal_moves()
+	var moves: Array = []
+	if p.t == "P":
+		moves.append({"r": int(p.r) - 1, "col": int(p.col)})
+		if int(p.r) == 6:
+			moves.append({"r": int(p.r) - 2, "col": int(p.col)})
+		for dc in [-1, 1]:
+			for cap in _pieces:
+				if cap.c == "b" and int(cap.r) == int(p.r) - 1 and int(cap.col) == int(p.col) + dc:
+					moves.append({"r": int(p.r) - 1, "col": int(p.col) + dc})
+	else:
+		for dr in range(-1, 2):
+			for dc in range(-1, 2):
+				if dr == 0 and dc == 0:
+					continue
+				moves.append({"r": int(p.r) + dr, "col": int(p.col) + dc})
+	for m in moves:
+		var r := int(m.r)
+		var c := int(m.col)
+		if r < 0 or r > 7 or c < 0 or c > 7:
+			continue
+		var marker := MeshInstance3D.new()
+		var disc := CylinderMesh.new()
+		disc.top_radius = 0.18
+		disc.bottom_radius = 0.18
+		disc.height = 0.06
+		marker.mesh = disc
+		marker.position = _cell_to_world(r, c) + Vector3(0, 0.08, 0)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color("#4ade80")
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color.a = 0.55
+		marker.material_override = mat
+		_legal_markers.add_child(marker)
+
+
+func _clear_legal_moves() -> void:
+	if _legal_markers == null:
+		return
+	for c in _legal_markers.get_children():
+		c.queue_free()
 
 
 func _mouse_to_cell(screen_pos: Vector2) -> Vector2i:
@@ -219,5 +306,8 @@ func _black_move() -> void:
 
 func _finish(won: bool) -> void:
 	_ended = true
+	if won:
+		GameJuice.flash_background(self, Color(0.85, 0.92, 1.0), 0.28)
+		GameJuice.shake_node(self, 4.0, 0.1)
 	_hud.show_banner("对局完成" if won else "结束", "步数 %d" % _moves)
 	GameAudio.play_bleep(GameBleeps.Kind.WIN if won else GameBleeps.Kind.HIT)

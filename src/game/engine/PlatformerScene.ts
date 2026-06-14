@@ -1,13 +1,17 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import {
   addMinecraftPlatformerBackdrop,
   ensureMinecraftPlatformerTextures,
   isMinecraftLikeSpec,
 } from "@/game/engine/minecraft-visuals";
 import type { GameSpec } from "@/lib/game-spec";
+import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
+import {
+  paintPlatformerParallax,
+} from "@/game/engine/template-theme-visual";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import { gameEventTitle, platformerFinalSprint } from "@/lib/i18n/game-event-labels";
@@ -24,6 +28,14 @@ import {
   hudReady,
   hudScore,
   hudControlsPlatformer,
+  hudDefaultCollectible,
+  hudDefaultFoeLabel,
+  hudDefaultPlatformerCollectible,
+  hudDefaultSkill,
+  hudDefaultTowerLabel,
+  hudTdDefaultBase,
+  hudTdEnemyName,
+  hudTdTowerName,
   platformerFinishText,
   platformerStageMessage,
 } from "@/lib/i18n/game-hud-labels";
@@ -32,18 +44,11 @@ import {
   phaserUintToCssHex,
   type CohesivePresentation,
 } from "@/lib/cohesive-presentation";
+import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
-
-function hashTitle(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
-}
 
 /** 确定性伪随机 0..1 */
 function rnd(seed: number, i: number): number {
@@ -123,7 +128,7 @@ export class PlatformerScene extends Phaser.Scene {
 
   private baseGravity = 980;
 
-  private readonly worldW = 4400;
+  private worldW = 4800;
 
   private intensity = 0.6;
 
@@ -177,6 +182,28 @@ export class PlatformerScene extends Phaser.Scene {
 
   private nextMiniSpawnAt = 0;
 
+  private stealthMode = false;
+
+  private grappleEnabled = false;
+
+  private doubleJumpAllowed = false;
+
+  private doubleJumpUsed = false;
+
+  private grappleActive = false;
+
+  private grappleGfx!: Phaser.GameObjects.Graphics;
+
+  private treasureHeist = false;
+
+  private laserSentries = false;
+
+  private grapplePull = 0.022;
+
+  private treasureSprite: Phaser.Physics.Arcade.Image | null = null;
+
+  private laserGfx!: Phaser.GameObjects.Graphics;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlatformerScene");
     this.spec = spec;
@@ -208,6 +235,28 @@ export class PlatformerScene extends Phaser.Scene {
     this.physics.world.gravity.y = grav;
     this.intensity = this.spec.director?.intensity ?? 0.6;
 
+    const platBp = this.spec.platformer ?? buildPlatformerBlueprint({ spec: this.spec });
+    this.stealthMode = platBp.mode === "stealth";
+    this.grappleEnabled = platBp.grappleEnabled ?? this.stealthMode;
+    this.doubleJumpAllowed = platBp.doubleJump ?? this.stealthMode;
+    if (this.stealthMode) {
+      this.jumpVel = Math.max(this.jumpVel, 480);
+      this.baseGravity = Math.min(this.baseGravity, 820);
+      this.physics.world.gravity.y = this.baseGravity;
+    }
+    this.worldW = platBp.worldWidth ?? this.worldW;
+    const suggestedWin = platBp.suggestedWinScore ?? this.winScore;
+    if ((this.spec.gameplay.winScore ?? 0) < suggestedWin) {
+      this.winScore = suggestedWin;
+    }
+    this.grappleGfx = this.add.graphics().setDepth(50);
+
+    const samplePf = this.spec.samplePlayProfile?.platformer;
+    this.treasureHeist = samplePf?.treasureHeist ?? false;
+    this.laserSentries = samplePf?.laserSentries ?? false;
+    this.grapplePull = samplePf?.grapplePull ?? 0.022;
+    this.laserGfx = this.add.graphics().setDepth(48);
+
     const ui = buildCohesivePresentation(this.spec);
     setBleepTemperament(ui.bleepTemperament);
     this.cohesive = ui;
@@ -217,6 +266,7 @@ export class PlatformerScene extends Phaser.Scene {
       addMinecraftPlatformerBackdrop(this, this.worldW);
     } else {
       this.addStarfield();
+      paintPlatformerParallax(this, this.spec, this.worldW, viewH);
     }
 
     // 文生图背景
@@ -284,7 +334,7 @@ export class PlatformerScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
 
-    const collLabel = this.spec.labels.collectible ?? "能量核";
+    const collLabel = this.spec.labels.collectible ?? hudDefaultPlatformerCollectible(this.uiLocale);
     this.hintText = this.add
       .text(viewW / 2, viewH - 20, hudControlsPlatformer(this.uiLocale, collLabel), {
         fontFamily: "system-ui, sans-serif",
@@ -425,10 +475,14 @@ export class PlatformerScene extends Phaser.Scene {
         }
       }
       this.refreshHud();
-      if (this.score >= this.winScore) {
+      if (!this.treasureHeist && this.score >= this.winScore) {
         this.finish({ score: this.score, won: true });
       }
     });
+
+    if (this.treasureHeist) {
+      this.setupTreasureHeist(viewH);
+    }
 
     this.physics.add.overlap(this.player, this.powerups, (_p, pu) => {
       if (this.finished) return;
@@ -459,7 +513,9 @@ export class PlatformerScene extends Phaser.Scene {
     this.shieldRing.setDepth(120);
     this.shieldRing.setScrollFactor(0);
 
-    const skillName = this.spec.systems?.skill?.name ?? "技能";
+    const skillName = this.stealthMode && this.grappleEnabled
+      ? (this.uiLocale === "zh-Hans" ? "弹性摆荡" : "Elastic swing")
+      : (this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale));
     this.skillText = this.add
       .text(18, viewH - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
@@ -495,14 +551,17 @@ export class PlatformerScene extends Phaser.Scene {
     this.dangerVignette.setAlpha(0);
     this.dangerVignette.fillStyle(0xff2233, 1);
     this.dangerVignette.fillRect(0, 0, viewW * 4, viewH);
+
+    this.cameras.main.setScroll(Math.max(0, this.player.x - viewW / 2), 0);
+    schedulePhaserPlayReady(this, 350);
   }
 
   private buildLevel(viewH: number) {
-    const seed = hashTitle(this.spec.title);
+    const seed = runtimeSeedFromSpec(this.spec);
     const groundY = viewH - 36;
     const pad = this.spec.gameplay.arenaPadding ?? 36;
     const acts = this.spec.director?.acts ?? [];
-    const totalLayers = 44;
+    const totalLayers = this.spec.platformer?.levelLayers ?? 56;
 
     const getActIndexForRatio = (ratio: number) => {
       let idx = 0;
@@ -640,6 +699,58 @@ export class PlatformerScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
     });
+    if (this.laserSentries) {
+      sentry.setData("laserOriginX", x);
+      sentry.setData("laserOriginY", y);
+      sentry.setData("laserRange", patrolRange);
+    }
+  }
+
+  private setupTreasureHeist(viewH: number) {
+    const groundY = viewH - 36;
+    const tx = this.worldW - 120;
+    const ty = groundY - 210;
+    this.treasureSprite = this.physics.add.image(tx, ty, "texGem");
+    this.treasureSprite.setDepth(14).setScale(1.35).setTint(0xfbbf24);
+    const tb = this.treasureSprite.body as Phaser.Physics.Arcade.Body | null;
+    if (tb) tb.setAllowGravity(false);
+    this.tweens.add({
+      targets: this.treasureSprite,
+      y: ty - 8,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.physics.add.overlap(this.player, this.treasureSprite, () => {
+      if (this.finished) return;
+      juiceBurst(this, tx, ty, "#fbbf24", 24);
+      juiceFlash(this, { r: 255, g: 220, b: 80 }, { durationMs: 200 });
+      this.finish({ score: this.score + 50, won: true });
+    });
+    this.hintText.setText(
+      this.uiLocale === "zh-Hans"
+        ? "Shift 摆荡 · 偷取金色目标 · 避开激光"
+        : "Shift swing · Steal the gold · Avoid lasers",
+    );
+  }
+
+  private drawLaserSentries() {
+    if (!this.laserSentries) return;
+    this.laserGfx.clear();
+    const children = this.sentryHazards.getChildren();
+    for (let i = 0; i < children.length; i += 1) {
+      const s = children[i] as Phaser.Physics.Arcade.Image;
+      if (!s?.active) continue;
+      const ox = (s.getData("laserOriginX") as number) ?? s.x;
+      const oy = (s.getData("laserOriginY") as number) ?? s.y;
+      const range = (s.getData("laserRange") as number) ?? 60;
+      const ex = ox + range * (s.x >= ox ? 1 : -1);
+      this.laserGfx.lineStyle(2, 0xef4444, 0.55);
+      this.laserGfx.lineBetween(ox, oy, ex, oy + 120);
+      this.laserGfx.fillStyle(0xef4444, 0.25);
+      this.laserGfx.fillCircle(ex, oy + 120, 6);
+    }
   }
 
   private addStarfield() {
@@ -774,6 +885,7 @@ export class PlatformerScene extends Phaser.Scene {
   private onHitHazard() {
     if (this.finished) return;
     if (this.time.now < this.invulnUntil) return;
+    if (this.grappleActive && this.stealthMode) return;
     if (this.shieldCharges > 0) {
       this.shieldCharges -= 1;
       this.fxShield();
@@ -839,8 +951,45 @@ export class PlatformerScene extends Phaser.Scene {
     if (payload.won) {
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
+      juiceShake(this, { durationMs: 280, intensity: 0.014 });
+      juiceFlash(this, { r: 120, g: 220, b: 160 }, { durationMs: 160 });
+      juiceBurst(this, this.player.x, this.player.y, themeParticleHex(this.spec), 18);
     }
     this.onEnd(payload);
+  }
+
+  private updateGrapple(body: Phaser.Physics.Arcade.Body) {
+    const wantGrapple = this.keyShift.isDown && !body.blocked.down;
+    if (wantGrapple) {
+      if (!this.grappleActive) {
+        this.grappleActive = true;
+        playBleep("pickup");
+      }
+      const cam = this.cameras.main;
+      const wx = cam.scrollX + this.input.activePointer.x;
+      const wy = cam.scrollY + this.input.activePointer.y;
+      const dx = wx - this.player.x;
+      const dy = wy - this.player.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const maxLen = 260;
+      const ax = dist > maxLen ? this.player.x + (dx / dist) * maxLen : wx;
+      const ay = dist > maxLen ? this.player.y + (dy / dist) * maxLen : wy;
+      const pull = this.grapplePull;
+      this.player.setVelocityX(body.velocity.x + (ax - this.player.x) * pull);
+      this.player.setVelocityY(body.velocity.y + (ay - this.player.y) * pull * 1.15);
+      this.player.setAlpha(0.55);
+      this.grappleGfx.clear();
+      this.grappleGfx.lineStyle(3, 0xfde047, 0.85);
+      this.grappleGfx.lineBetween(this.player.x, this.player.y, ax, ay);
+      this.grappleGfx.fillStyle(0xfde047, 1);
+      this.grappleGfx.fillCircle(ax, ay, 5);
+      return;
+    }
+    if (this.grappleActive) {
+      this.grappleActive = false;
+      this.player.setAlpha(1);
+    }
+    this.grappleGfx.clear();
   }
 
   update() {
@@ -852,7 +1001,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.tickDirectorEvents();
     this.tickEventLoops();
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keyShift) && !(this.stealthMode && this.grappleEnabled)) {
       this.tryCastSkill();
     }
 
@@ -877,7 +1026,19 @@ export class PlatformerScene extends Phaser.Scene {
 
     if (jumpPressed && body.blocked.down) {
       this.player.setVelocityY(-this.jumpVel);
+      this.doubleJumpUsed = false;
+    } else if (jumpPressed && this.doubleJumpAllowed && !this.doubleJumpUsed) {
+      this.doubleJumpUsed = true;
+      this.player.setVelocityY(-this.jumpVel * 0.82);
+      juiceBurst(this, this.player.x, this.player.y + 18, themeParticleHex(this.spec), 8);
+      playBleep("pickup");
     }
+
+    if (this.grappleEnabled) {
+      this.updateGrapple(body);
+    }
+
+    this.drawLaserSentries();
 
     if (this.time.now < this.magnetUntil) {
       const items = this.gems.getChildren();

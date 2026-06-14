@@ -73,13 +73,16 @@ async function smoke() {
   if (errors.length > 0) {
     console.error("\n❌ Smoke test failed:");
     errors.forEach((e) => console.error("  -", e));
+    await prisma.$disconnect();
     process.exit(1);
   } else {
     console.log("\n🎉 Novel + Comic smoke test passed");
   }
+  await prisma.$disconnect();
 }
 
-smoke().catch((e) => {
+smoke().catch(async (e) => {
   console.error(e);
+  await prisma.$disconnect().catch(() => undefined);
   process.exit(1);
 });

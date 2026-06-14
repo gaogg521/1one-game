@@ -91,6 +91,13 @@ export async function DELETE(req: Request) {
           errors.push(studioErrorText(req, "deleteNovelForbidden", { id: item.id }));
           continue;
         }
+        const linkedComics = await prisma.comic.findMany({
+          where: { novelId: item.id },
+          select: { id: true, imageUrls: true },
+        });
+        for (const comic of linkedComics) {
+          await deleteComicAssetFiles(comic.id, comic.imageUrls);
+        }
         await prisma.novel.delete({ where: { id: item.id } });
         await deleteNovelCoverFile(item.id);
         deletedCount += 1;

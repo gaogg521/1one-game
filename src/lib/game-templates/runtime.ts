@@ -120,34 +120,35 @@ export function createPhaserSceneForSpec(
 ): PhaserSceneInstance {
   const family = phaserFamilyFor(spec);
   const playSpec = toPhaserPlaySpec(spec);
-  const sfx = soundscape ?? undefined;
+  const sfxOpt = soundscape ?? undefined;
+  const sfxNull = soundscape ?? null;
 
   switch (family) {
     case "agentic":
-      return new imports.AgenticScene(playSpec, onEnd, sfx ?? null);
+      return new imports.AgenticScene(playSpec, onEnd, sfxNull);
     case "towerDefense":
-      return new imports.TowerDefenseScene(playSpec, onEnd, ref, sfx);
+      return new imports.TowerDefenseScene(playSpec, onEnd, ref, sfxOpt);
     case "platformer":
-      return new imports.PlatformerScene(playSpec, onEnd, sfx ?? null);
+      return new imports.PlatformerScene(playSpec, onEnd, sfxOpt);
     case "shooter":
-      return new imports.ShooterScene(playSpec, onEnd, ref, sfx);
+      return new imports.ShooterScene(playSpec, onEnd, ref, sfxOpt);
     case "coaster":
-      return new imports.CoasterScene(playSpec, onEnd, sfx);
+      return new imports.CoasterScene(playSpec, onEnd, sfxNull);
     case "puzzle":
-      return new imports.PuzzleScene(playSpec, onEnd, sfx ?? null);
+      return new imports.PuzzleScene(playSpec, onEnd, sfxNull);
     case "farming":
-      return new imports.FarmingScene(playSpec, onEnd, sfx ?? null);
+      return new imports.FarmingScene(playSpec, onEnd, sfxNull);
     case "physics":
-      return new imports.PhysicsScene(playSpec, onEnd, sfx ?? null);
+      return new imports.PhysicsScene(playSpec, onEnd, sfxNull);
     case "chess":
-      return new imports.ChessScene(playSpec, onEnd, sfx ?? null);
+      return new imports.ChessScene(playSpec, onEnd, sfxNull);
     case "customization":
-      return new imports.CustomizationScene(playSpec, onEnd, sfx ?? null);
+      return new imports.CustomizationScene(playSpec, onEnd, sfxNull);
     case "strategy":
-      return new imports.StrategyScene(playSpec, onEnd, sfx ?? null);
+      return new imports.StrategyScene(playSpec, onEnd, sfxNull);
     case "arena":
     default:
-      return new imports.PlayScene(playSpec, onEnd, sfx);
+      return new imports.PlayScene(playSpec, onEnd, sfxOpt);
   }
 }
 

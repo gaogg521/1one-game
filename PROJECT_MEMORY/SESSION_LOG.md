@@ -1,3 +1,111 @@
+## 2026-06-14 — 今日 MD 审计收尾（roster Prisma + 漫画流水线离线门禁）
+
+Completed:
+
+- **`novel-character-roster-db.ts`**：移除 raw SQL，统一 Prisma `characterRosterJson`
+- **`qa:comic-director-pipeline`**：断言中篇 8 页轻量 / Brief 跳过 / 蓝图阈值；接入 `qa:b-tier-smoke` + `qa:deploy-preflight`
+- **`qa:songliao-literary-regression`**：补 npm script
+- **记忆**：`CURRENT_STATUS` · `NEXT_ACTION` · `LITERARY_CHAIN_CHECKLIST` · `HISTORICAL_ISSUES_CLOSURE` · `TASK_QUEUE` · `DECISIONS`
+
+---
+
+
+- **B10**：`StudioLiteraryChainPanel` + 作品卡片「追踪生产链」按钮，按 novel/comic API 推断当前步
+- **C2**：`Novel.characterRosterJson` 迁移 · `GET/PUT /api/novel/[id]/character-roster` · 面板 debounce 同步
+- **C4**：`clearComicPanelImages` 支持单格 · panels/stream `panel` 参数 · outline「重绘此格」
+- **`npm run build`** ✅
+
+---
+
+Completed:
+
+- **`literary-production-chain.ts`**：`inferNovelChainStep` / `inferComicChainStep` + 五步深链
+- **工作链**：`novel/[id]`、`comic/[id]`、`studio` compact；Chain 组件 pending 可点 + compact 模式
+- **角色资产库**：`NovelCharacterRosterPanel`（localStorage + 改编 CTA）
+- **结构化分镜**：`ComicStoryboardOutline`（页/格/对白/镜头/配图进度）
+- **账号 UX**：AccountMenu 注册、studio `?register=ok` 欢迎条、register testid
+- **E2E**：`e2e/register.smoke.spec.ts`
+- **清单**：`PROJECT_MEMORY/LITERARY_CHAIN_CHECKLIST.md`
+- **`npm run build`** ✅
+
+---
+
+Completed:
+
+- **注册/登录**：Prisma `User.passwordHash`、`EmailVerification`；`POST /api/auth/register/send-code`、`/register`、`/api/auth/login/email`；`/register` 页 + `/login` 邮箱入口
+- **工作链 UI**：`LiteraryProductionChain`（大纲→章节→角色→分镜→漫画）挂载 `novel/create`、`comic/create`
+- **i18n**：五语言 `account.*` 注册文案 + `apiErrors.*` + `literaryChain.*`
+- **`npm run build`** 通过
+
+Notes:
+
+- 生产 SMTP 未接；开发用 `EMAIL_AUTH_DEV_EXPOSE=1` 或 API 返回 `devCode`
+- 对标 [轻灵AI](https://www.qinglingdesign.cn/#features) 的 P1 缺口见 `DECISIONS.md` 2026-06-14 条目
+
+Changed Files:
+
+- `prisma/schema.prisma` · `prisma/migrations/20260614100000_email_auth/`
+- `src/lib/auth/password.ts` · `email-verification.ts` · `email-register.ts`
+- `src/app/register/page.tsx` · `src/app/login/page.tsx`
+- `src/app/api/auth/register/**` · `src/app/api/auth/login/email/route.ts`
+- `src/components/literary/LiteraryProductionChain.tsx`
+- `src/app/novel/create/page.tsx` · `src/app/comic/create/page.tsx`
+- `src/messages/*.json` · `.env.example`
+
+---
+
+Completed:
+
+- 详情页：`WorkEngagementStats` + `WorkLikeButton`（游戏/小说/漫画）；游戏试玩页 POST `/play` 并展示试玩数
+- Discover：小说/漫画排序（最热/最多赞/最新）、`DiscoverListSkeleton`、漫画 loadError
+- `/start`：社区回流链（游戏/小说/漫画发现 + 工作室）
+- 漫画详情：`withLocalePath` 修复改编/next 深链
+- 共享组件：`src/components/work/*`
+
+Changed Files:
+
+- `src/components/work/` · discover pages · detail pages · `CreationLauncher.tsx`
+- `src/app/api/projects/[id]/route.ts`（返回 playCount）
+- i18n 五语言 `start.browseCommunityTitle`
+
+---
+
+## 2026-06-14 — 漫画独立流水线 QA 收尾 + E2E 修复
+
+Completed:
+
+- `qa:comic-featured:offline`：默认 `DATABASE_URL=file:./prisma/ci.sqlite`，避免与 dev.db 争锁导致 b-tier 挂起
+- `qa:b-tier-smoke` 11/11 · `qa:deploy-preflight` 全绿 · `npm run build` 通过
+- E2E：`novel-comic.smoke` 修正「从我的小说」文案断言；`comic-create-from-novel-panel` testid；深链 strict mode 修复
+- E2E：`novel-comic` + `admin-runtime-config` 共 8 passed
+
+Changed Files:
+
+- `scripts/qa-comic-featured-offline.ts`
+- `src/app/comic/create/page.tsx`
+- `e2e/novel-comic.smoke.spec.ts`
+- `PROJECT_MEMORY/NEXT_ACTION.md`
+
+---
+
+## 2026-06-13 — 封面链路收尾 + dev.db 修复 + HTTP runtime QA 全绿
+
+Completed:
+
+- 封面：`novel/create` → `NovelCreateCoverPreview` + `useAutoWorkCover`（超时/cache bust/重试）
+- Hook：`autoFetch` · `fetchTimeoutMs` · `onFailed(reason)`
+- dev.db：`npm run fix:dev-db-migrations`（visibility + coverPath 漂移 resolve）
+- QA：`qa:runtime-config-admin:http` 17/17；`PW_REUSE_SERVER=1 test:e2e:admin-runtime-config` 1 passed
+- 文档：`.env.example` · `README` · `docs/local-database.md` · `docs/admin-super-admin.md`
+
+Changed Files:
+
+- `scripts/fix-dev-db-migrations.ts` · `package.json`
+- `src/components/novel/NovelCreateCoverPreview.tsx` · `src/hooks/use-auto-work-cover.tsx`
+- `PROJECT_MEMORY/NEXT_ACTION.md` · `TASK_QUEUE.md`
+
+---
+
 ## 2026-06-08 — UI 真实浏览器复查与侧栏账号菜单修复
 
 Completed:

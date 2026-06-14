@@ -43,7 +43,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     blueprint: "coaster",
     defaultSubtitle: "竞速冲刺 · 计时挑战",
     llmSummary: "轨道/赛道竞速（与 coaster 同引擎，偏计时）",
-    infer: [{ pattern: /竞速|赛车|racing|赛道|圈速|计时赛/i, priority: 75 }],
+    infer: [{ pattern: /竞速|赛车|racing|赛道|圈速|计时赛|crashy roads|无尽公路|撞车/i, priority: 75 }],
   },
   {
     id: "shooter",
@@ -126,7 +126,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     infer: [
       { pattern: /找不同|spot the difference|whimsy differences/i, priority: 93 },
       { pattern: /记忆配对|memory match|翻牌配对/i, priority: 91 },
-      { pattern: /儿童拼图|kids puzzle|jigsaw/i, priority: 89 },
+      { pattern: /儿童.*拼图|kids puzzle|jigsaw|拼图小游戏|拖拽.*拼图/i, priority: 90 },
       { pattern: /消除|益智|puzzle|match.?3|bloomy|color bloom|连连看/i, priority: 84 },
     ],
   },

@@ -6,8 +6,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(_req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
   try {
-    // Raw SQL because likeCount was added after last prisma generate (binary locked by dev server)
-    await prisma.$executeRaw`UPDATE "Project" SET "likeCount" = "likeCount" + 1 WHERE "id" = ${id}`;
+    await prisma.project.update({
+      where: { id },
+      data: { likeCount: { increment: 1 } },
+    });
   } catch {
     // silently ignore — fire-and-forget
   }

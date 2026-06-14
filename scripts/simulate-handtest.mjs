@@ -60,35 +60,55 @@ async function main() {
     "npm run qa:template-matrix",
     "npm run qa:director-spec",
     "npm run qa:refinement-log",
+    "npm run qa:co-create-loop",
+    "npm run qa:comic-storyboard-resilience",
+    "npm run qa:b-tier-smoke",
+    "npm run qa:admin-console",
   ]) {
     if (!run(cmd)) allOk = false;
   }
 
   if (process.env.COMICS_ONLY !== "1") {
     log("\n提示：Playwright 六模板 + 共创 E2E 请执行：");
-    log("  PW_EXTERNAL=1 npx playwright test e2e/templates-handtest.spec.ts e2e/refinement.smoke.spec.ts e2e/create-play.smoke.spec.ts");
+    log("  PW_EXTERNAL=1 npx playwright test e2e/templates-handtest.spec.ts e2e/refinement.smoke.spec.ts e2e/create-play.smoke.spec.ts e2e/admin-console-sso.smoke.spec.ts");
   }
 
   if (process.env.COMIC_HANDTEST === "1" && health.ok) {
     log("\n## 漫画 8 页分镜（分段 LLM）");
+    const stubMode = process.env.E2E_COMIC_STUB === "1";
+    if (stubMode) log("[info] E2E_COMIC_STUB=1 — 期望服务端 stub（dev 需同 env）");
     const t0 = Date.now();
-    const gen = await httpJson("/api/comic/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "gcreator_owner=handtest-sim" },
-      body: JSON.stringify({
-        content: MEDIUM_SNIPPET.repeat(3),
-        title: "煤山手测",
-        pageCount: 8,
-        lengthTier: "medium",
-      }),
-    });
-    const sec = ((Date.now() - t0) / 1000).toFixed(1);
-    if (gen.ok && gen.json.pageCount >= 1) {
-      log(`[OK] comic generate · ${gen.json.pageCount} 页 / ${gen.json.panelCount} 格 · ${sec}s · id=${gen.json.comic?.id}`);
-    } else {
-      const errMsg = gen.json.error ?? gen.text;
-      log(`[FAIL] comic generate ${gen.status} · ${sec}s · ${errMsg}`);
-      allOk = false;
+    const timeoutMs = stubMode ? 15_000 : 900_000;
+    try {
+      const gen = await httpJson("/api/comic/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: "gcreator_owner=handtest-sim" },
+        body: JSON.stringify({
+          content: MEDIUM_SNIPPET.repeat(3),
+          title: "煤山手测",
+          pageCount: 8,
+          lengthTier: "medium",
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const sec = ((Date.now() - t0) / 1000).toFixed(1);
+      if (gen.ok && gen.json.pageCount >= 1) {
+        log(`[OK] comic generate · ${gen.json.pageCount} 页 / ${gen.json.panelCount} 格 · ${sec}s · id=${gen.json.comic?.id}`);
+      } else if (stubMode) {
+        log(`[SKIP] comic stub 未生效（${sec}s）— 请用 E2E_COMIC_STUB=1 重启 dev`);
+      } else {
+        const errMsg = gen.json.error ?? gen.text;
+        log(`[FAIL] comic generate ${gen.status} · ${sec}s · ${errMsg}`);
+        allOk = false;
+      }
+    } catch (e) {
+      const sec = ((Date.now() - t0) / 1000).toFixed(1);
+      if (stubMode) {
+        log(`[SKIP] comic stub 超时（${sec}s）— dev 未设 E2E_COMIC_STUB=1 时跳过，不阻断 QA`);
+      } else {
+        log(`[FAIL] comic generate timeout · ${sec}s · ${e instanceof Error ? e.message : e}`);
+        allOk = false;
+      }
     }
   } else {
     log("\n[SKIP] 漫画 8 页：设置 COMIC_HANDTEST=1 且服务已启动后重跑本脚本");

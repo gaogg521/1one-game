@@ -10,6 +10,9 @@ import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
+import { getRuntimeConfigSync } from "@/lib/runtime-config";
+import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
+import { resolveSceneRoute } from "@/lib/runtime-providers";
 import fs from "fs";
 import path from "path";
 
@@ -37,6 +40,28 @@ export type ImageGenDetail = {
   durationMs?: number;
 };
 
+function resolveOpenAIImageClient(): ReturnType<typeof createOpenAIClient> {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
+  if (ctx) return createOpenAIClientForProvider(ctx.provider);
+  return createOpenAIClient();
+}
+
+function resolveGeminiImageConfig(): { base: string; key: string; model: string } | null {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_gemini");
+  const model = getImageGenGeminiModel();
+  if (ctx) {
+    return {
+      base: (ctx.provider.baseUrl?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, ""),
+      key: ctx.provider.apiKey.trim(),
+      model,
+    };
+  }
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) return null;
+  const base = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
+  return { base, key, model };
+}
+
 export function getImageGenAvailability(): {
   ok: boolean;
   message: string;
@@ -44,22 +69,25 @@ export function getImageGenAvailability(): {
   hasOpenAI: boolean;
   hasGemini: boolean;
 } {
-  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY?.trim());
+  const openaiCtx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
+  const geminiCfg = resolveGeminiImageConfig();
+  const hasOpenAI = Boolean(openaiCtx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim());
+  const hasGemini = Boolean(geminiCfg?.key);
   const openaiModel = getImageGenOpenAIModel();
   if (!hasOpenAI && !hasGemini) {
     return {
       ok: false,
-      message: "未配置 OPENAI_API_KEY 或 GEMINI_API_KEY，无法调用文生图",
+      message: "未配置文生图服务商（请在 Console 模型路由中绑定 comic_image_openai / comic_image_gemini）",
       openaiModel,
       hasOpenAI,
       hasGemini,
     };
   }
+  const openaiLabel = openaiCtx?.provider.name ?? "OpenAI 兼容网关";
   return {
     ok: true,
     message: hasOpenAI
-      ? `将经 OpenAI 兼容网关调用 ${openaiModel}（短篇可一次 n=4 批量，约 2～8 分钟）`
+      ? `将经 ${openaiLabel} 调用 ${openaiModel}（短篇可一次 n=4 批量，约 2～8 分钟）`
       : `将使用 Gemini ${getImageGenGeminiModel()}`,
     openaiModel,
     hasOpenAI,
@@ -107,7 +135,7 @@ export async function generateImageWithOpenAIDetail(
   const model = getImageGenOpenAIModel();
   let client: ReturnType<typeof createOpenAIClient>;
   try {
-    client = createOpenAIClient();
+    client = resolveOpenAIImageClient();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, model, error: msg, durationMs: Date.now() - t0 };
@@ -197,7 +225,7 @@ export async function generateImagesBatchOpenAIDetail(
   const model = getImageGenOpenAIModel();
   let client: ReturnType<typeof createOpenAIClient>;
   try {
-    client = createOpenAIClient();
+    client = resolveOpenAIImageClient();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const fail = prompts.map(() => ({ ok: false as const, model, error: msg }));
@@ -306,11 +334,11 @@ export async function generateImageWithGemini(
   prompt: string,
   options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre; timeoutMs?: number },
 ): Promise<ImageGenResult | null> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) return null;
+  const cfg = resolveGeminiImageConfig();
+  if (!cfg) return null;
 
   try {
-    const geminiModel = getImageGenGeminiModel();
+    const geminiModel = cfg.model;
     const refImages = options?.styleReferenceUrls?.length
       ? await loadStyleReferenceImages(options.styleReferenceUrls)
       : [];
@@ -327,7 +355,7 @@ export async function generateImageWithGemini(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
+      `${cfg.base}/v1beta/models/${geminiModel}:generateContent?key=${encodeURIComponent(cfg.key)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

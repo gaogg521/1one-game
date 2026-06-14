@@ -1,5 +1,7 @@
 import Phaser from "phaser";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
@@ -15,7 +17,13 @@ import {
   type AgenticGameModuleInstance,
 } from "@/lib/agentic/game-module";
 import type { GameSpec } from "@/lib/game-spec";
-import { hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import {
+  agenticScoreJuiceScale,
+  bannerAgenticFinish,
+  hudAgenticModuleFailed,
+  hudReady,
+  hudScore,
+} from "@/lib/i18n/game-hud-labels";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -79,13 +87,25 @@ export class AgenticScene extends Phaser.Scene {
       onScore: (delta) => {
         this.score += delta;
         this.scoreText.setText(hudScore(this.uiLocale, this.score));
+        if (delta > 0) {
+          juiceShake(this, {
+            intensityScale: agenticScoreJuiceScale(this.spec.templateId, this.score),
+            durationMs: this.spec.templateId === "physics" ? 120 : 85,
+          });
+          if (delta >= 20) playBleep("hit");
+          else if (delta >= 5) playBleep("pickup");
+        }
         this.soundscape?.triggerEvent("restore");
       },
       onEnd: (won) => {
-        this.banner.show({ title: won ? "完成" : "结束", ms: 1800 });
+        const fin = bannerAgenticFinish(this.uiLocale, won);
+        this.banner.show({ ...fin, ms: 1800 });
+        juiceShake(this, { intensityScale: won ? 0.9 : 0.65, durationMs: won ? 180 : 220 });
+        playBleep(won ? "win" : "hit");
         this.time.delayedCall(2000, () => this.onEnd({ score: this.score, won }));
       },
       rng: () => Math.random(),
+      winScore: this.spec.gameplay.winScore ?? 500,
     };
 
     this.moduleInstance = runAgenticModule(mod, ctx, Phaser);
@@ -98,7 +118,9 @@ export class AgenticScene extends Phaser.Scene {
       this.moduleInstance.create(this);
       this.banner.show({ title: hudReady(this.uiLocale), ms: 1000 });
     } else {
-      this.add.text(w / 2, h / 2, "Agent 模块加载失败", { fontSize: "18px", color: "#f87171" }).setOrigin(0.5);
+      this.add
+        .text(w / 2, h / 2, hudAgenticModuleFailed(this.uiLocale), { fontSize: "18px", color: "#f87171" })
+        .setOrigin(0.5);
       this.time.delayedCall(2000, () => this.onEnd({ score: 0, won: false }));
     }
   }

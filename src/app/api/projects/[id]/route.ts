@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
+import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
@@ -35,18 +36,10 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
-
-  // Fetch likeCount via raw query (added after last prisma generate)
-  let likeCount = 0;
-  try {
-    const rows = await prisma.$queryRaw<{ likeCount: number }[]>`SELECT likeCount FROM "Project" WHERE id = ${id}`;
-    likeCount = rows[0]?.likeCount ?? 0;
-  } catch {
-    likeCount = 0;
-  }
+  const likeCount = row.likeCount ?? 0;
 
   try {
-    const spec = parseGameSpec(JSON.parse(row.specJson));
+    const spec = normalizeAstrocadePlaySpec(parseGameSpec(JSON.parse(row.specJson)));
 
     let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
     let creativeBrief: ReturnType<typeof parseStoredCreativeBrief> = null;
@@ -66,6 +59,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         shareCode: row.shareCode,
         coverPath: row.coverPath,
         likeCount,
+        playCount: row.playCount,
         isOwner: Boolean(isOwner),
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
       },

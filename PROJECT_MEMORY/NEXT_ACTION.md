@@ -22,20 +22,27 @@
 |------|------|------|
 | 中篇 8 页 600s 超时 | 仍走 `long_director` 或轻量 4 页×8 格=32 格 JSON 单次 LLM ~8min | **`mediumDirectorMinPages=12`**；**中篇默认四宫格**；**2 页/批**；**二分降级**替代逐页 180s×N |
 | 改编多一轮 Brief | `creativeBriefExpand` 对 `from_novel` 也跑 | **`shouldSkipComicBriefExpand`** |
-| 旧 draft  Resume 错批大小 | grid_8/4 页批 checkpoint 与新区不兼容 | **layout/pipeline 不匹配则忽略 draft** |
+| 旧 draft Resume 错批大小 | grid_8/4 页批 checkpoint 与新区不兼容 | **layout/pipeline 不匹配则忽略 draft** |
+| roster 仍用 raw SQL | 迁移前 Prisma Client 未 generate | **改用 Prisma `characterRosterJson`** |
 
 验证（2026-06-14）：`pipeline=light`，8 页 32 格，314s，无 `QA_SKIP_CHAR_SHEETS`
 
 ```powershell
+# 分镜路径（跳过配图，~5min）
 $env:QA_COMIC_NOVEL_ID="cmqdub6vx0001t1ctchwz59rc"
 $env:QA_COMIC_PAGES="8"
 $env:SKIP_COMIC_PANELS="1"
-npx tsx scripts/qa-songliao-literary-regression.ts
+npm run qa:songliao-literary-regression
+
+# 离线断言（秒级，CI 可用）
+npm run qa:comic-director-pipeline
 ```
 
 ## 待办
 
 | 状态 | 项 |
 |------|-----|
-| ⬜ | 四档小说 + 中篇漫画全量 E2E（无 skip env） |
+| ⬜ | 四档小说 + 中篇漫画**全量实机**（无 `SKIP_COMIC_PANELS` / `QA_SKIP_CHAR_SHEETS`；需 API Key，预计 30min+） |
 | ⬜ | git commit（需用户明确要求） |
+| ⬜ | Console SSO 生产 IdP 联调（需企业 Azure/飞书配置） |
+| ⬜ | 六模板章节感 PM 肉眼签收（自动化已覆盖结构） |

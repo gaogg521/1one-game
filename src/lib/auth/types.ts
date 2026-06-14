@@ -1,6 +1,6 @@
 export type UserRole = "user" | "admin" | "super_admin";
 
-export type OAuthProviderId = "wechat" | "qq" | "feishu" | "line" | "douyin" | "dev";
+export type OAuthProviderId = "wechat" | "qq" | "feishu" | "line" | "douyin" | "dev" | "console_oidc";
 
 export type AuthUser = {
   id: string;

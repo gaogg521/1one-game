@@ -13,6 +13,7 @@ type WorkSnapshot = {
   status: string;
   likeCount: number;
   updatedAt: string;
+  lastRefinement?: { mode: "patch" | "regenerate"; instruction: string };
 };
 
 function workHref(type: WorkSnapshot["type"], id: string, locale: AppLocale) {
@@ -35,7 +36,7 @@ export function CreatorCenterPanel({ works }: { works: WorkSnapshot[] }) {
   const recent = works.slice(0, 3);
   const needsCover = works.filter((w) => !w.coverPath).slice(0, 3);
   const worthPolish = [...works]
-    .filter((w) => w.likeCount > 0 || w.status !== "ready")
+    .filter((w) => w.likeCount > 0 || w.status !== "ready" || w.lastRefinement)
     .sort((a, b) => b.likeCount - a.likeCount)
     .slice(0, 2);
 
@@ -113,7 +114,13 @@ export function CreatorCenterPanel({ works }: { works: WorkSnapshot[] }) {
                 >
                   <span className="line-clamp-1">{w.title}</span>
                   <span className="text-[10px] text-[var(--gc-muted)]">
-                    {w.likeCount > 0 ? t("worthPolish", { count: w.likeCount }) : t("draftOrPublish")}
+                    {w.lastRefinement
+                      ? w.lastRefinement.mode === "regenerate"
+                        ? t("lastRefinementRegen", { instruction: w.lastRefinement.instruction })
+                        : t("lastRefinementPatch", { instruction: w.lastRefinement.instruction })
+                      : w.likeCount > 0
+                        ? t("worthPolish", { count: w.likeCount })
+                        : t("draftOrPublish")}
                   </span>
                 </Link>
               </li>

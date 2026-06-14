@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   creationEntryHref,
   getCreationModes,
   getStarterPrompts,
-  inferCreationMode,
   type CreationMode,
 } from "@/lib/product-ia";
+import { decodeStartPrefillParam } from "@/lib/sample-create-prefill";
+import { resolveStartIntake } from "@/lib/start-intake";
 import type { AppLocale } from "@/i18n/routing";
 import { withLocalePath } from "@/i18n/navigation";
 
@@ -18,12 +19,26 @@ export function CreationLauncher() {
   const router = useRouter();
   const locale = useLocale() as AppLocale;
   const t = useTranslations();
+  const ts = useTranslations("start");
   const [prompt, setPrompt] = useState("");
   const [picked, setPicked] = useState<CreationMode | null>(null);
   const creationModes = useMemo(() => getCreationModes(locale), [locale]);
   const starterPrompts = useMemo(() => getStarterPrompts(locale), [locale]);
+  const prefillApplied = useRef(false);
 
-  const suggested = useMemo(() => inferCreationMode(prompt), [prompt]);
+  useEffect(() => {
+    if (prefillApplied.current || typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("prefill")?.trim();
+    if (!raw) return;
+    prefillApplied.current = true;
+    queueMicrotask(() => {
+      setPrompt(decodeStartPrefillParam(raw));
+      setPicked(null);
+    });
+  }, []);
+
+  const intake = useMemo(() => resolveStartIntake(prompt), [prompt]);
+  const suggested = intake.mode;
   const active = picked ?? suggested;
 
   function go(mode?: CreationMode) {
@@ -49,6 +64,7 @@ export function CreationLauncher() {
         </label>
         <textarea
           id="start-prompt"
+          data-testid="start-prompt-input"
           value={prompt}
           onChange={(e) => {
             setPrompt(e.target.value);
@@ -58,6 +74,24 @@ export function CreationLauncher() {
           placeholder={t("start.placeholder")}
           className="mt-2 w-full resize-y rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)]"
         />
+
+        {intake.hint?.kind === "sample_parity" ? (
+          <div
+            className="mt-3 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-3 py-2.5 text-xs leading-relaxed text-[var(--gc-muted)]"
+            data-testid="start-sample-parity-hint"
+          >
+            <p className="font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_92%,white)]">
+              {ts("sampleMatchTitle", { sample: intake.hint.sampleTitle })}
+            </p>
+            <p className="mt-1">{ts("sampleMatchBody")}</p>
+            <Link
+              href={withLocalePath(intake.hint.samplePlayPath, locale)}
+              className="mt-2 inline-flex text-[11px] font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] hover:underline"
+            >
+              {ts("compareSample")}
+            </Link>
+          </div>
+        ) : null}
 
         <p className="mt-3 text-[11px] text-[var(--gc-text-faint)]">{t("start.tryThese")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -78,9 +112,14 @@ export function CreationLauncher() {
       </div>
 
       <div>
-        <p className="mb-3 text-xs font-medium text-[var(--gc-muted)]">
+        <p className="mb-3 text-xs font-medium text-[var(--gc-muted)]" data-testid="start-mode-recommendation">
           {t("start.recommendedMode")}
           <span className="ml-2 text-[var(--gc-text-faint)]">{t("start.switchable")}</span>
+          {prompt.trim() ? (
+            <span className="ml-2 text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
+              → {creationModes[suggested].label}
+            </span>
+          ) : null}
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {(["game", "novel", "comic"] as const).map((mode) => {
@@ -120,6 +159,7 @@ export function CreationLauncher() {
           onClick={() => go()}
           disabled={!prompt.trim()}
           className="gc-theme-cta rounded-full px-8 py-3 text-sm font-semibold disabled:opacity-40"
+          data-testid="start-create-cta"
         >
           {t("start.createWithMode", { mode: creationModes[active].label })}
         </button>
@@ -129,6 +169,36 @@ export function CreationLauncher() {
         >
           {t("start.viewSamples")}
         </Link>
+      </div>
+
+      <div className="rounded-2xl border border-dashed border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_40%,transparent)] p-4 sm:p-5">
+        <p className="text-center text-xs font-medium text-[var(--gc-text-soft)]">{t("start.browseCommunityTitle")}</p>
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <Link
+            href={withLocalePath("/discover", locale)}
+            className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
+          >
+            {t("nav.gameDiscover")}
+          </Link>
+          <Link
+            href={withLocalePath("/novel/discover", locale)}
+            className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
+          >
+            {t("nav.novelDiscover")}
+          </Link>
+          <Link
+            href={withLocalePath("/comic/discover", locale)}
+            className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
+          >
+            {t("nav.comicDiscover")}
+          </Link>
+          <Link
+            href={withLocalePath("/studio", locale)}
+            className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
+          >
+            {t("nav.studio")}
+          </Link>
+        </div>
       </div>
     </div>
   );

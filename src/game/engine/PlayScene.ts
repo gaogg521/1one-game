@@ -13,6 +13,8 @@ import {
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import { gameEventTitle, platformerFinalSprint, playSceneBossBanner } from "@/lib/i18n/game-event-labels";
+import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import {
   bannerActStage,
   bannerBossDefeated,
@@ -47,6 +49,7 @@ import {
   hudControlsPlayCollector,
   hudControlsPlayAvoider,
   hudControlsShiftSuffix,
+  hudDefaultSkill,
   playStageMessage,
 } from "@/lib/i18n/game-hud-labels";
 
@@ -123,6 +126,8 @@ export class PlayScene extends Phaser.Scene {
   private winScore = 40;
 
   private intensity = 0.58;
+
+  private runtimeRng!: () => number;
 
   private actIndex = 0;
 
@@ -231,6 +236,7 @@ export class PlayScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     this.pad = this.spec.gameplay.arenaPadding ?? 40;
     this.winScore = this.spec.gameplay.winScore ?? 40;
     this.lives = this.spec.gameplay.lives ?? 3;
@@ -605,7 +611,7 @@ export class PlayScene extends Phaser.Scene {
       callback: () => this.spawnPowerup(),
     });
 
-    const skillName = this.spec.systems?.skill?.name ?? "技能";
+    const skillName = this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale);
     this.skillText = this.add
       .text(18, height - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
@@ -639,6 +645,7 @@ export class PlayScene extends Phaser.Scene {
     this.dangerVignette.setAlpha(0);
     this.dangerVignette.fillStyle(0xff2233, 1);
     this.dangerVignette.fillRect(0, 0, width, height);
+    schedulePhaserPlayReady(this, 450);
   }
 
   private addStarfield() {
@@ -647,10 +654,10 @@ export class PlayScene extends Phaser.Scene {
     const parsed = parseInt(raw, 16);
     const tint = Number.isFinite(parsed) ? parsed : 0xa78bfa;
     for (let i = 0; i < 96; i += 1) {
-      const x = Phaser.Math.Between(4, width - 4);
-      const y = Phaser.Math.Between(4, height - 4);
-      const s = Phaser.Math.FloatBetween(1, 2.4);
-      const a = Phaser.Math.FloatBetween(0.06, 0.35);
+      const x = seededIntBetween(this.runtimeRng, 4, width - 4);
+      const y = seededIntBetween(this.runtimeRng, 4, height - 4);
+      const s = seededFloatBetween(this.runtimeRng, 1, 2.4);
+      const a = seededFloatBetween(this.runtimeRng, 0.06, 0.35);
       const dot = this.add.rectangle(x, y, s, s, tint, a);
       dot.setDepth(-12);
     }
@@ -1548,7 +1555,7 @@ export class PlayScene extends Phaser.Scene {
 
     // Boss attack cycle: every 2-3 seconds
     this.bossAttackTimer = this.time.addEvent({
-      delay: 2000 + Math.random() * 1000,
+      delay: seededFloatBetween(this.runtimeRng, 2000, 3000),
       callback: () => this.bossAttack(),
       loop: true,
     });
@@ -1604,7 +1611,10 @@ export class PlayScene extends Phaser.Scene {
     if (this.bossAttackTimer) {
       this.bossAttackTimer.remove();
     }
-    const delay = this.bossPhase === 2 ? 1200 + Math.random() * 600 : 2000 + Math.random() * 1000;
+    const delay =
+      this.bossPhase === 2
+        ? seededFloatBetween(this.runtimeRng, 1200, 1800)
+        : seededFloatBetween(this.runtimeRng, 2000, 3000);
     this.bossAttackTimer = this.time.addEvent({
       delay,
       callback: () => this.bossAttack(),

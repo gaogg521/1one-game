@@ -14,6 +14,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { attachAgenticModuleIfEnabled } from "@/lib/agentic/generate-game-module";
 import { PRODUCT } from "@/lib/product-config";
+import { localizedApiErrorPayload, localizedJsonError } from "@/lib/api/localized-error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 

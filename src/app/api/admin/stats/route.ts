@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/admin";
+import { requireAdmin, canManageRuntimeConfig, canPromoteSuperAdmin } from "@/lib/auth/admin";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
@@ -42,5 +42,8 @@ export async function GET(req: Request) {
     shares24h,
     moderation: { pendingReview, hidden },
     viaLegacySuperAdmin: gate.viaLegacy,
+    canManageRuntimeConfig: canManageRuntimeConfig(gate.user, gate.viaLegacy),
+    canPromoteSuperAdmin: canPromoteSuperAdmin(gate.user),
+    actorRole: gate.user?.role ?? (gate.viaLegacy ? "super_admin" : null),
   });
 }

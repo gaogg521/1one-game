@@ -1,6 +1,109 @@
 # DECISIONS
 
-更新时间：**2026-05-23**
+更新时间：**2026-06-13**
+
+## 2026-06-13 — 全局 canonical spec（Spec/资产/运行时同源）
+
+**背景**：用户要求全面对标 Astrocade，非逐款 patch；样品 seed / 用户 POST / duplicate / 试玩须同效果。
+
+**决策**：
+1. **`buildCanonicalAstrocadeSpec`** 为唯一 spec 入口：已知样品 prompt 忽略 POST body 差异，始终同 mock 元数据 + enrich。
+2. **`resolveAssetProjectId`**：有 `samplePlayProfile.variantId` 时，背景/精灵走 `sample-{id}`，不绑用户 projectId。
+3. **`runtimeSeedFromSpec`** + **`schedulePhaserPlayReady`**：全 Phaser Scene（除 AgenticScene）确定性 RNG + QA 稳定截图帧；TD 首波 ≥1600ms。
+4. **全局 canvas 阈值**（`GLOBAL_CANVAS_PARITY` / `GLOBAL_CLONE_PARITY`），不再 per-sample 分档。
+5. **`qa:spec-canonical-parity`** 17/17 离线断言；**`COMPETITOR_PARITY_STRICT=1`** 为 gates/nightly/CI bundle-e2e 默认。
+
+**产物**：`src/lib/astrocade-canonical-spec.ts` · `src/lib/runtime-seed.ts` · `qa-output/competitor-parity/`
+
+**用户感知（2026-06-13 补）**：
+- `SampleParityTrustBadge`：试玩页 / 创作预览告知「与样品馆同款」
+- 样品馆「用此 prompt 创作」→ `buildCreatePrefillPath` / `/create?prefill=`
+- 创作台 `sample-intent-hint` + 生成中同款文案；结果页 `parityTitle`
+- `GamePlayerInner` loading 至 `__PHASER_PLAY_READY__`
+- `qa:user-journey-parity`：PM 四条用户故事（含 prefill 深链）
+
+**文学线用户感知（2026-06-13）**：
+- `LiteraryAdaptationTrustBadge`：小说→漫画改编承诺（Brief + 对白绑定 + 题材视觉）
+- 小说完成页 / `?adaptComic=1`：一键进改编面板
+- `qa:literary-user-journey`：6 条 PM 故事（完整性 · 题材 · 8宫格 · 分镜策略 · 对白回填 · 按章进度）
+- `qa:platform-user-journey`：汇总游戏+文学+`/start` 离线 QA；E2E 6 条（含 `/start` 分流）
+
+**小说→漫画改编流水线（2026-06-13）**：
+- 用户建议：先通读全书剧情 → 锁定人物/场景一致性 → 按章提炼关键情节 → 再用精简 beats 生成分镜。
+- **`fetchComicAdaptationBlueprint`**：全书 `consistencyLock` + 每章 4–8 条 `keyBeats` + `sceneAnchor`。
+- **`comic-pipeline`**：始终全书 preread，再拉 blueprint；light 分镜优先用章级 beats（`selectBlueprintBeatsForChunk`）。
+- comic doc 持久化 `adaptationBlueprint`；进度文案 `blueprintStart` / `blueprintDone`。
+- QA：`qa:comic-novel-product-rules` 含 blueprint 切片断言。
+
+---
+
+## 2026-06-13 — 独立运营控制台（非 /admin 单页）
+
+**背景**：产品/安全/UX 要求运营面与用户面隔离；`/admin` 不应是挂在 C 端导航上的简单页。
+
+**决策**：
+1. 默认路径 **`/console`**（`ADMIN_CONSOLE_PATH` / `NEXT_PUBLIC_ADMIN_CONSOLE_PATH` 可自定义；可选 `ADMIN_CONSOLE_HOST` 子域）。
+2. **`/admin` → 308 `/console`**；控制台**无 locale 前缀**；`noindex` + `Referrer-Policy` + `X-Frame-Options`。
+3. **`AdminConsoleShell`**：深色侧栏 + 模块导航，去掉 `SiteHeader`。
+4. 新增 **审计日志 Tab** + `GET /api/admin/audit-log`。
+5. 文档：`docs/admin-console.md`；E2E 入口改为 `/console`。
+
+**后续**：计费治理、SSO/2FA、子域 Cookie 隔离、内容安全策略。
+
+---
+
+**背景**：用户定义两条验收路径——(1) 同样提示词做出同样效果；(2) 随机克隆竞品样品后试玩效果一致。
+
+**决策**：
+1. 新增 **`qa:competitor-parity-validation`** + `src/lib/qa/canvas-image-parity.ts`：17 款同 prompt 截图对标 + 每日 seed 随机 5 款 duplicate 对标。
+2. **硬门禁**：同 prompt 路由+profile 17/17；克隆结构（profile/Scene/无 Agentic）5/5。
+3. **视觉门禁**：全局 canvas 阈值；**`COMPETITOR_PARITY_STRICT=1`** 为 gates / nightly / CI bundle-e2e 默认（本地单跑 parity 脚本默认 warn）。
+4. 竞品矩阵新增支柱：**同 prompt 效果 parity**、**随机克隆效果 parity**；`qa:competitor-gates` 挂双验证。
+
+**产物**：`qa-output/competitor-parity/` · `qa-output/astrocade-random-pick.json`
+
+---
+
+## 2026-06-13 — samplePlayProfile（Astrocade 式 per-game 定制）
+
+**背景**：纯 template 族 polish 与竞品逐款独立 JS 仍有差距；用户确认可设计每款独立定制逻辑。
+
+**决策**：
+1. 新增 **`samplePlayProfile`** 烘焙进 `specJson`（`src/lib/sample-play-profiles/`），duplicate 可继承。
+2. **seed / enrich** 时按 `sampleId` 写入；试玩时按 `variantId` 或 `projectId=sample-*` 重新套用 registry（代码升级无需改 DB）。
+3. Scene 读 **`spec.samplePlayProfile`** 特征字段，**禁止** blueprint 内 `SAMPLE_MODES[sampleId]` 运行时查表。
+4. 门禁：`npm run qa:sample-profiles`（17/17）。
+
+**与 template 族关系**：template 族 = 默认；samplePlayProfile = 竞品样品/克隆的增量定制层。
+
+---
+
+## 2026-06-13 — 平台架构对齐 Astrocade（非单游戏补丁）
+
+**背景**：逐款克隆竞品并加 `SAMPLE_MODES` / 单游戏 QA 不可扩展，与 Astrocade「统一生成→试玩→克隆」平台模型不符。
+
+**决策**：
+1. 建立 **`astrocade-architecture.ts`**：三层运行时（Primary Phaser / Secondary Godot / Advanced Agentic）+ 平台不变量 + `resolveAstrocadePlayRoute` / `checkAstrocadeParity`。
+2. 玩法变体仅通过 **GameSpec 蓝图 + prompt 语义** 写入 specJson；**禁止** blueprint 运行时 `SAMPLE_MODES[sampleId]`。
+3. QA 主门禁改为 **`qa:architecture-parity`**（全模板）；`qa:competitor-clone-compare` 降级为薄包装。
+4. 文档：`docs/astrocade-architecture-parity-cn.md`。
+
+**影响**：`*-blueprint.ts`、QA 流水线、PROJECT_MEMORY 优先级。
+
+---
+
+## 2026-06-13 — 用户生成路由专用 Scene（Astrocade 竞对对齐）
+
+**背景**：样品馆走 PhysicsScene / CoasterScene 等专用运行时，polish 明显高于用户路径的 AgenticScene + template fallback。
+
+**决策**：
+1. 新增 `dedicatedSceneForTemplateFirst`（默认 `true`）：当模板在 `agenticTemplateFirst` 列表内时，**不 attach `agenticModule`**，路由与样品馆相同的专用 Scene。
+2. `AGENTIC_FORCE_LLM=1` 或 `DEDICATED_SCENE_FOR_TEMPLATE_FIRST=0` 可回退旧 Agentic 路径（LLM 定制玩法）。
+3. template fallback 模块仍保留，供 `qa:agentic-template-matrix` 与 LLM repair 沙箱使用。
+
+**影响文件**：`product-config.ts`、`game-module.ts`、`generate-game-module.ts`、`projects/route.ts`、QA/E2E 全套。
+
+---
 
 ## 2026-05-23 — AI 精灵分类策略
 
@@ -77,6 +180,15 @@
 - **长篇漫画创建**：`panelCount > 4` 时 **不在 `POST /api/comic/generate` 内联配图**，状态 `pending_images`，由 **`POST /api/comic/[id]/panels/stream`** 流式补图（避免平台超时）。  
 - **小说广场删除**：列表 API 返回 **`isOwner`**（不暴露 `ownerKey`）；仅作者在广场卡片可删；关联漫画 **级联删除**（Prisma `onDelete: Cascade`）。  
 - **客户端耗时文案**：`formatImageGenElapsed` 放在 **`src/lib/format-duration.ts`**，禁止详情页从 `comic-panel-render` 导入（会拖入 `image-generation` → `fs`）。
+
+## 2026-06-14 — 文学生产链 vs 单点生成
+
+- **产品定位**：Operone 小说/漫画目标是 **长期连载的内容生产链**（对标 [轻灵AI 创作流程](https://www.qinglingdesign.cn/#features)），而非一次性随机生成。
+- **五步工作链（MVP UI）**：`LiteraryProductionChain` — ① 大纲与情节推进 → ② 章节扩写 → ③ 角色一致性（资料+参考图）→ ④ 分镜结构化 → ⑤ 漫画生成与修正（项目内重绘/迭代）。
+- **已有能力映射**：Brief/续写/章节规划（①②）、`characterRoster`+参考图生成（③）、导演包/light 分镜（④）、单格重绘+panels SSE（⑤）。
+- **P1 缺口（2026-06-14 已闭合）**：工作室/详情页按项目状态高亮当前步 ✅；独立「角色资产库」UI ✅；可视化分镜编辑器 ✅；roster 服务端 Prisma ✅。
+- **P1 仍待**：生产 SMTP；四档小说+漫画全量实机 QA（无 skip env）；Console SSO 生产 IdP。
+- **账号**：邮箱注册 MVP（验证码 10 分钟、60s 冷却）；生产需 SMTP；dev 用 `EMAIL_AUTH_DEV_EXPOSE=1`。
 
 ## 架构决策
 

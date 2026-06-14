@@ -1,0 +1,802 @@
+{
+  "config": {
+    "configFile": "D:\\game\\playwright.godot-matrix.config.ts",
+    "rootDir": "D:/game/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "D:\\game\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/game/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "D:/game/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "qa-output/godot-matrix/playwright-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://127.0.0.1:8888",
+      "reuseExistingServer": true,
+      "timeout": 300000,
+      "env": {
+        "ADMIN_CONSOLE_OIDC_STUB": "1",
+        "ALLUSERSPROFILE": "C:\\ProgramData",
+        "ANTHROPIC_AUTH_TOKEN": "sk-7K1tiKZr7F0Ymzt6AJVQhmOfw3N0M19CV2E8hMD9WkLQ7dOd",
+        "ANTHROPIC_BASE_URL": "https://gpt-agent.cc/v1/chat/completions",
+        "APPDATA": "C:\\Users\\allenzhao\\AppData\\Roaming",
+        "BROWSERSLIST_IGNORE_OLD_DATA": "true",
+        "CHROME_CRASHPAD_PIPE_NAME": "\\\\.\\pipe\\crashpad_18852_KXRDNTSSTJEOPCAY",
+        "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+        "CLAUDE_CODE_GIT_BASH_PATH": "C:\\Program Files\\Git\\bin\\bash.exe",
+        "CMDER_HOME": "D:\\cmder\\Cmder.exe",
+        "COLOR": "0",
+        "CommonProgramFiles": "C:\\Program Files\\Common Files",
+        "CommonProgramFiles(x86)": "C:\\Program Files (x86)\\Common Files",
+        "CommonProgramW6432": "C:\\Program Files\\Common Files",
+        "COMPUTERNAME": "LT00278-ZG",
+        "ComSpec": "C:\\Windows\\system32\\cmd.exe",
+        "CURSOR_AGENT": "1",
+        "CURSOR_EXTENSION_HOST_ROLE": "agent-exec",
+        "CURSOR_LAYOUT": "unifiedAgent",
+        "CURSOR_WORKSPACE_LABEL": "game",
+        "DATABASE_URL": "file:./prisma/ci.sqlite",
+        "DEV_SUPER_ADMIN": "1",
+        "DriverData": "C:\\Windows\\System32\\Drivers\\DriverData",
+        "E2E_AGENTIC_FALLBACK_ONLY": "1",
+        "E2E_COMIC_STUB": "1",
+        "E2E_REFINE_STUB": "1",
+        "EDITOR": "C:\\Windows\\notepad.exe",
+        "EFC_7780_1262719628": "1",
+        "EFC_7780_1592913036": "1",
+        "EFC_7780_2283032206": "1",
+        "EFC_7780_2775293581": "1",
+        "EFC_7780_3789132940": "1",
+        "EFC_7780_4126798990": "1",
+        "FORCE_COLOR": "0",
+        "FPS_BROWSER_APP_PROFILE_STRING": "Internet Explorer",
+        "FPS_BROWSER_USER_PROFILE_STRING": "Default",
+        "GOPATH": "C:\\Users\\allenzhao\\go",
+        "HOME": "C:\\Users\\allenzhao",
+        "HOMEDRIVE": "C:",
+        "HOMEPATH": "\\Users\\allenzhao",
+        "INIT_CWD": "D:\\game",
+        "JAVA_HOME": "C:\\Program Files\\Microsoft\\jdk-17.0.18.8-hotspot\\",
+        "LOCALAPPDATA": "C:\\Users\\allenzhao\\AppData\\Local",
+        "LOGONSERVER": "\\\\LT00278-ZG",
+        "NEXT_PUBLIC_DEV_SUPER_ADMIN": "1",
+        "NODE": "C:\\Program Files\\nodejs\\node.exe",
+        "NODE_EXE": "C:\\Program Files\\nodejs\\\\node.exe",
+        "NO_COLOR": "1",
+        "NPM_CLI_JS": "C:\\Program Files\\nodejs\\\\node_modules\\npm\\bin\\npm-cli.js",
+        "npm_command": "exec",
+        "npm_config_cache": "C:\\Users\\allenzhao\\AppData\\Local\\npm-cache",
+        "npm_config_globalconfig": "C:\\Users\\allenzhao\\AppData\\Roaming\\npm\\etc\\npmrc",
+        "npm_config_global_prefix": "C:\\Users\\allenzhao\\AppData\\Roaming\\npm",
+        "npm_config_init_module": "C:\\Users\\allenzhao\\.npm-init.js",
+        "npm_config_local_prefix": "D:\\game",
+        "npm_config_node_gyp": "C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\node-gyp\\bin\\node-gyp.js",
+        "npm_config_noproxy": "",
+        "npm_config_npm_version": "11.6.2",
+        "npm_config_prefix": "C:\\Users\\allenzhao\\AppData\\Roaming\\npm",
+        "npm_config_userconfig": "C:\\Users\\allenzhao\\.npmrc",
+        "npm_config_user_agent": "npm/11.6.2 node/v24.13.0 win32 x64 workspaces/false",
+        "npm_execpath": "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+        "npm_lifecycle_event": "npx",
+        "npm_lifecycle_script": "playwright",
+        "npm_node_execpath": "C:\\Program Files\\nodejs\\node.exe",
+        "npm_package_json": "D:\\game\\package.json",
+        "npm_package_name": "game",
+        "npm_package_version": "0.1.0",
+        "NPM_PREFIX_JS": "C:\\Program Files\\nodejs\\\\node_modules\\npm\\bin\\npm-prefix.js",
+        "NPM_PREFIX_NPM_CLI_JS": "C:\\Users\\allenzhao\\AppData\\Roaming\\npm\\node_modules\\npm\\bin\\npm-cli.js",
+        "NPM_PREFIX_NPX_CLI_JS": "C:\\Users\\allenzhao\\AppData\\Roaming\\npm\\node_modules\\npm\\bin\\npx-cli.js",
+        "NPX_CLI_JS": "C:\\Program Files\\nodejs\\\\node_modules\\npm\\bin\\npx-cli.js",
+        "NUMBER_OF_PROCESSORS": "22",
+        "OneDrive": "C:\\Users\\allenzhao\\OneDrive",
+        "OPENAI_API_KEY": "sk-e9fc7e6748a2a2aa204a1c488257e4ad",
+        "OPENAI_BASE_URL": "https://litellm-internal.123u.com",
+        "OPENAI_EXTRA_HEADERS_JSON": "{\"x-openclaw-timeout-ms\":\"600000\"}",
+        "OPENAI_MODEL": "gpt-5.2",
+        "OPENAI_MODEL_FALLBACKS": "kimi-k2-6,gemini-3.1-pro-preview,doubao-seed-2-pro,gpt-5-4-mini,qwen-3-6-plus,glm-5-1",
+        "OS": "Windows_NT",
+        "Path": "D:\\game\\node_modules\\.bin;D:\\game\\node_modules\\.bin;D:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;D:\\game\\node_modules\\.bin;D:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;D:\\game\\node_modules\\.bin;D:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;D:\\game\\node_modules\\.bin;D:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;c:\\Users\\allenzhao\\AppData\\Local\\Programs\\cursor\\_\\resources\\app\\resources\\helpers;C:\\Program Files\\Microsoft\\jdk-17.0.18.8-hotspot\\bin;C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NetSarang\\Xshell 8\\;C:\\Program Files\\MySQL\\MySQL Server 9.3\\bin\\;C:\\Users\\allenzhao\\AppData\\Roaming\\npm\\;C:\\Program Files\\Redis\\;D:\\cmder\\Cmder.exe;D:\\cmder\\私服cmd\\Cmder_up.exe;C:\\;rogram Files\\nodejs\\;C:\\Users\\allenzhao\\AppData\\Local\\pnpm;C:\\Program Files\\Go\\bin;C:\\Program Files\\Git\\cmd;C:\\Program Files\\GitHub CLI\\;C:\\Program Files\\Microsoft\\jdk-17.0.18.8-hotspot\\bin;C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NetSarang\\Xshell 8\\;C:\\Program Files\\MySQL\\MySQL Server 9.3\\bin\\;C:\\Users\\allenzhao\\AppData\\Roaming\\npm\\;C:\\Program Files\\Redis\\;D:\\cmder\\Cmder.exe;D:\\cmder\\私服cmd\\Cmder_up.exe;C:\\;rogram Files\\nodejs\\;C:\\Users\\allenzhao\\AppData\\Local\\pnpm;C:\\Program Files\\Go\\bin;C:\\Program Files\\Git\\cmd;C:\\Program Files\\nodejs;C:\\Program Files\\Go\\bin;C:\\Users\\allenzhao\\AppData\\Local\\pnpm;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\Python\\Python311\\;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\Python\\Python37\\Scripts\\;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\Python\\Python37\\;C:\\Users\\allenzhao\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\JetBrains\\PyCharm Community Edition 2024.3\\bin;C:\\Users\\allenzhao\\AppData\\Roaming\\npm;C:\\Users\\allenzhao\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin;C:\\Users\\allenzhao\\.openclaw\\workspace\\tools\\ffmpeg\\ffmpeg-8.0.1-full_build\\bin;C:\\Users\\allenzhao\\AppData\\Local\\pnpm;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin;C:\\Users\\allenzhao\\AppData\\Local\\cursor-agent;C:\\Users\\allenzhao\\.local\\binC:\\Users\\allenzhao\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Schniz.fnm_Microsoft.Winget.Source_8wekyb3d8bbwe;C:\\Users\\allenzhao\\go\\bin;C:\\Users\\allenzhao\\AppData\\Local\\OfficeCli;C:\\Users\\allenzhao\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\allenzhao\\.local\\bin;C:\\Users\\allenzhao\\AppData\\Local\\Microsoft\\WinGet\\Packages\\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe;",
+        "PATHEXT": ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL",
+        "PNPM_HOME": "C:\\Users\\allenzhao\\AppData\\Local\\pnpm",
+        "PORT": "8888",
+        "PRISMA_CLIENT_ENGINE_TYPE": "binary",
+        "PROCESSOR_ARCHITECTURE": "AMD64",
+        "PROCESSOR_IDENTIFIER": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+        "PROCESSOR_LEVEL": "6",
+        "PROCESSOR_REVISION": "aa04",
+        "ProgramData": "C:\\ProgramData",
+        "ProgramFiles": "C:\\Program Files",
+        "ProgramFiles(x86)": "C:\\Program Files (x86)",
+        "ProgramW6432": "C:\\Program Files",
+        "PROMPT": "$P$G",
+        "PSExecutionPolicyPreference": "Bypass",
+        "PSModulePath": "C:\\Users\\allenzhao\\Documents\\WindowsPowerShell\\Modules;C:\\Program Files\\WindowsPowerShell\\Modules;C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\Modules",
+        "PUBLIC": "C:\\Users\\Public",
+        "PW_REUSE_SERVER": "1",
+        "PyCharm Community Edition": "C:\\Program Files\\JetBrains\\PyCharm Community Edition 2024.3\\bin;",
+        "SESSIONNAME": "Console",
+        "SUPER_ADMIN_SECRET": "admin",
+        "SystemDrive": "C:",
+        "SystemRoot": "C:\\Windows",
+        "TAVILY_API_KEY": "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",
+        "TEMP": "C:\\Users\\allenzhao\\AppData\\Local\\Temp",
+        "TERM": "dumb",
+        "TMP": "C:\\Users\\allenzhao\\AppData\\Local\\Temp",
+        "USERDOMAIN": "LT00278-ZG",
+        "USERDOMAIN_ROAMINGPROFILE": "LT00278-ZG",
+        "USERNAME": "allenzhao",
+        "USERPROFILE": "C:\\Users\\allenzhao",
+        "VOLC_TTS_ACCESS_KEY": "_RC0GaTUSq5LVYnTXedCVLGxGUL0BxVr",
+        "VOLC_TTS_ACCESS_TOKEN": "_RC0GaTUSq5LVYnTXedCVLGxGUL0BxVr",
+        "VOLC_TTS_APP_ID": "4653469308",
+        "VOLC_TTS_VOICE_TYPE": "BV701_streaming",
+        "VSCODE_CODE_CACHE_PATH": "C:\\Users\\allenzhao\\AppData\\Roaming\\Cursor\\CachedData\\009bb5a3600dd98fe1c1f25798f767f686e14750",
+        "VSCODE_CRASH_REPORTER_PROCESS_TYPE": "extensionHost",
+        "VSCODE_CWD": "C:\\Users\\allenzhao\\AppData\\Local\\Programs\\cursor",
+        "VSCODE_ESM_ENTRYPOINT": "vs/workbench/api/node/extensionHostProcess",
+        "VSCODE_HANDLES_UNCAUGHT_ERRORS": "true",
+        "VSCODE_IPC_HOOK": "\\\\.\\pipe\\1b7c9e1a-3.5.38-main-sock",
+        "VSCODE_NLS_CONFIG": "{\"userLocale\":\"zh-cn\",\"osLocale\":\"zh-cn\",\"resolvedLanguage\":\"zh-cn\",\"defaultMessagesFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Local\\\\Programs\\\\cursor\\\\_\\\\resources\\\\app\\\\out\\\\nls.messages.json\",\"languagePack\":{\"translationsConfigFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\tcf.json\",\"messagesFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\009bb5a3600dd98fe1c1f25798f767f686e14750\\\\nls.messages.json\",\"corruptMarkerFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\corrupted.info\"},\"locale\":\"zh-cn\",\"availableLanguages\":{\"*\":\"zh-cn\"},\"_languagePackId\":\"3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\",\"_languagePackSupport\":true,\"_translationsConfigFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\tcf.json\",\"_cacheRoot\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\",\"_resolvedLanguagePackCoreLocation\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\009bb5a3600dd98fe1c1f25798f767f686e14750\",\"_corruptedFile\":\"C:\\\\Users\\\\allenzhao\\\\AppData\\\\Roaming\\\\Cursor\\\\clp\\\\3bfb7f1471a52e527cfc1587dd57c7c1.zh-cn\\\\corrupted.info\"}",
+        "VSCODE_PID": "18852",
+        "VSCODE_PROCESS_TITLE": "extension-host (agent-exec) game [1-8]",
+        "windir": "C:\\Windows",
+        "ZES_ENABLE_SYSMAN": "1",
+        "_ZO_DOCTOR": "0",
+        "RUNTIME_CONFIG_SECRET": "e2e-runtime-config-secret",
+        "ADMIN_CONSOLE_OIDC_STUB_EMAIL": "console-sso-e2e@example.com",
+        "E2E_CONSOLE_SSO_STUB": "1"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "godot-runtime.smoke.spec.ts",
+      "file": "godot-runtime.smoke.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "试玩页可切换到 Godot 引擎标签",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 31509,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:02:07.226Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1089906d47423e93b7a0-b46890542e3479e59e3c",
+          "file": "godot-runtime.smoke.spec.ts",
+          "line": 10,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "godot-templates-matrix.spec.ts",
+      "file": "godot-templates-matrix.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Godot 标签 · towerDefense",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23989,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:02:39.011Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-3a2e8ea474992197b19a",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · coaster",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23695,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:03:03.016Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-7a660f5dccd64e4a6b5b",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · racing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23820,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:03:26.729Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-dc50e49ef7bbac1924db",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · shooter",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 22664,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:03:50.565Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-236e17d807bcfd0f97e3",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · sniper",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 27036,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:04:13.246Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-aedeb1d5d01e6befac14",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · platformer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 25708,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:04:40.302Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-2a8ce9344202973d4e5b",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · stealth",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24281,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:05:06.026Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-57eac1ee734a8c28d9c1",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · strategy",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24096,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:05:30.325Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-9abb04566f0d1834a131",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · farming",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 25231,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:05:54.440Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-0a5f91bc548a969ce69a",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · puzzle",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23856,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:06:19.686Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-e11bbd06282abf1520aa",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · chess",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:06:43.557Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-d96382a9b847a4758cc8",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · customization",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24971,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:07:08.350Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-bed19b7fa57fb50eb5a1",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · physics",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23842,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:07:33.338Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-a9bfe5155642de075d7c",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · survivor",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23790,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:07:57.193Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-f251063990c7cb61490e",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · collector",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24785,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:08:21.001Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-b20df383017defc7dcbf",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        },
+        {
+          "title": "Godot 标签 · avoider",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 23295,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-13T18:08:45.803Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "53abda0074be423780d1-ff7c162e71a8c0634e7a",
+          "file": "godot-templates-matrix.spec.ts",
+          "line": 44,
+          "column": 7
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-13T18:02:01.976Z",
+    "duration": 427339.63300000003,
+    "expected": 17,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

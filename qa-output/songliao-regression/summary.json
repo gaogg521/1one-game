@@ -1,0 +1,30 @@
+{
+  "at": "2026-06-14T15:18:41.075Z",
+  "title": "我穿越到了宋辽之战的战场",
+  "owner": "qa-songliao-regression",
+  "model": "deepseek-v4-pro",
+  "skipPanels": true,
+  "skipCharSheets": false,
+  "charSheetTimeoutMs": 120000,
+  "comicTimeoutMs": 900000,
+  "comicPages": 8,
+  "novels": [
+    {
+      "tier": "medium",
+      "ok": true,
+      "novelId": "cmqdub6vx0001t1ctchwz59rc"
+    }
+  ],
+  "comic": {
+    "comicId": "cmqdxen0v0001qw2n2h57uj6c",
+    "pages": 8,
+    "panels": 32,
+    "withImage": 0,
+    "ms": 314372
+  },
+  "urls": {
+    "mediumNovel": "/comic/create?novelId=cmqdub6vx0001t1ctchwz59rc",
+    "comic": "/comic/cmqdxen0v0001qw2n2h57uj6c"
+  },
+  "pass": true
+}

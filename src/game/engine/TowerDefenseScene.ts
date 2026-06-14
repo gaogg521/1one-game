@@ -11,11 +11,18 @@ import {
   bannerTdHoldFail,
   bannerTdHoldSuccess,
   hudCooldown,
+  hudDefaultCollectible,
+  hudDefaultFoeLabel,
+  hudDefaultSkill,
+  hudDefaultTowerLabel,
   hudReady,
   hudTdBase,
+  hudTdDefaultBase,
+  hudTdEnemyName,
   hudTdKills,
   hudTdLose,
   hudTdNextWave,
+  hudTdTowerName,
   hudTdWave,
   hudTdWin,
   hudTdGoalTag,
@@ -33,7 +40,9 @@ import {
   classifyTdReferenceTextureKeys,
   tdRuntimeTextureKey,
 } from "@/lib/reference-classify";
-import { juiceBurst, juiceFlash, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -371,6 +380,16 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
+  private mergeGridEnabled = false;
+
+  private mergeBonusCoins = 25;
+
+  private mergeCells: number[] = [];
+
+  private mergeSelected: number | null = null;
+
+  private mergeCellGfx: Phaser.GameObjects.Container[] = [];
+
   /** Performance monitoring */
   private fpsHistory: number[] = [];
   private lastFpsCheck = 0;
@@ -454,6 +473,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   /** true 仅在 resumeCreateAfterReferences（含 HudBanner）跑完后置位；create 异步完成前禁止 update 跑游戏逻辑 */
   private bootstrapComplete = false;
+  private runtimeRng!: () => number;
 
   private eventIndex = 0;
 
@@ -643,6 +663,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.userMonsterCycle = 0;
 
     this.bp = this.spec.towerDefense ?? null;
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     this.leakDamage = this.bp?.leakDamage ?? 12;
     this.intensity = this.spec.director?.intensity ?? 0.62;
 
@@ -767,9 +788,10 @@ export class TowerDefenseScene extends Phaser.Scene {
       // Label under the goal
       // Short label: use title-derived name or generic base
       const rawLabel = this.spec.labels.collectible ?? "";
-      const goalLabel = (rawLabel !== "—" && rawLabel !== "无" && rawLabel.length > 0)
-        ? rawLabel.split(/[（(,，]/)[0]!.trim().slice(0, 6) || "基地"
-        : "基地";
+      const goalLabel =
+        rawLabel !== "—" && rawLabel !== "无" && rawLabel.length > 0
+          ? rawLabel.split(/[（(,，]/)[0]!.trim().slice(0, 6) || hudTdDefaultBase(this.uiLocale)
+          : hudTdDefaultBase(this.uiLocale);
       this.add.text(goal.x, goal.y + 34, goalLabel, {
         fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#fef3c7",
         stroke: "#000000", strokeThickness: 2,
@@ -816,14 +838,14 @@ export class TowerDefenseScene extends Phaser.Scene {
       }));
       this.enemyById.set("grunt", {
         id: "grunt",
-        name: "杂兵",
+        name: hudTdEnemyName(this.uiLocale, "grunt"),
         hp: 20,
         speed: 95,
         reward: 8,
       });
       this.enemyById.set("tank", {
         id: "tank",
-        name: "装甲怪",
+        name: hudTdEnemyName(this.uiLocale, "tank"),
         hp: 60,
         speed: 72,
         reward: 14,
@@ -831,7 +853,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       });
       this.towerById.set("dart", {
         id: "dart",
-        name: "箭塔",
+        name: hudTdTowerName(this.uiLocale, "dart"),
         buildCost: 52,
         upgradeCosts: [58, 74, 96],
         damage: 11,
@@ -840,7 +862,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       });
       this.towerById.set("splash", {
         id: "splash",
-        name: "炸弹塔",
+        name: hudTdTowerName(this.uiLocale, "splash"),
         buildCost: 78,
         upgradeCosts: [86, 110, 140],
         damage: 22,
@@ -940,7 +962,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     // Shift 全局法术
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-    const skillName = this.spec.systems?.skill?.name ?? "法术";
+    const skillName = this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale);
     this.skillText = this.add
       .text(16, h - 56, `Shift · ${skillName}`, {
         fontFamily: "system-ui, sans-serif",
@@ -956,8 +978,8 @@ export class TowerDefenseScene extends Phaser.Scene {
       })
       .setDepth(36);
 
-    const towerLabel = this.spec.labels.player ?? "防御塔";
-    const foeLabel = this.spec.labels.hazard ?? "敌军";
+    const towerLabel = this.spec.labels.player ?? hudDefaultTowerLabel(this.uiLocale);
+    const foeLabel = this.spec.labels.hazard ?? hudDefaultFoeLabel(this.uiLocale);
     this.hintText = this.add
       .text(
         w / 2,
@@ -1001,6 +1023,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     this.towerTimers = this.slots.map(() => 0);
     this.buildTowerPickerUI();
+    const tdPf = this.spec.samplePlayProfile?.towerDefense;
+    if (tdPf?.mergeGrid) {
+      this.buildMergeGridUI(tdPf.mergeBonusCoins ?? 25);
+    }
     this.refreshHud();
 
     this.banner = new HudBanner(this, ui.banner);
@@ -1020,8 +1046,10 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
 
     this.bootstrapComplete = true;
+    schedulePhaserPlayReady(this, 500);
 
-    const lead = this.waveDefs[0]?.leadInMs ?? 650;
+    /** 首波延后，保证 QA 对标截图在静态布局帧（平台级 parity，非 per-game） */
+    const lead = Math.max(this.waveDefs[0]?.leadInMs ?? 650, 1600);
     this.time.delayedCall(lead, () => this.startWave(0));
   }
 
@@ -1052,7 +1080,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         fontSize: "12px",
         color: u.hud.body,
       });
-      const coinLabel = this.spec.labels.collectible ?? "金币";
+      const coinLabel = this.spec.labels.collectible ?? hudDefaultCollectible(this.uiLocale);
       const cost = this.add.text(-bw / 2 + 10, 6, `${coinLabel} ${t.buildCost}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "10px",
@@ -1073,6 +1101,132 @@ export class TowerDefenseScene extends Phaser.Scene {
       x += bw + gap;
     }
     this.refreshPickerUI();
+  }
+
+  private buildMergeGridUI(bonusCoins: number) {
+    this.mergeGridEnabled = true;
+    this.mergeBonusCoins = bonusCoins;
+    const cols = 3;
+    const rows = 2;
+    const cell = 40;
+    this.mergeCells = Array.from({ length: cols * rows }, () => 0);
+    for (const slot of [0, 1, 3, 4]) {
+      this.mergeCells[slot] = 1;
+    }
+
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const ox = w - 16 - cols * cell;
+    const oy = h - 118;
+
+    const variantId = this.spec.samplePlayProfile?.variantId;
+    const mergeHint =
+      variantId === "blade-defender-merge"
+        ? this.uiLocale === "zh-Hans"
+          ? "合成剑塔 · 获金币"
+          : "Merge blades · earn coins"
+        : this.uiLocale === "zh-Hans"
+          ? "合成同阶枪械 · 获金币"
+          : "Merge guns · earn coins";
+    this.add
+      .text(w - 16, oy - 20, mergeHint, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "10px",
+        color: "#94a3b8",
+      })
+      .setOrigin(1, 0)
+      .setDepth(45);
+
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const idx = r * cols + c;
+        const cx = ox + c * cell + cell / 2;
+        const cy = oy + r * cell + cell / 2;
+        const box = this.add.rectangle(0, 0, cell - 4, cell - 4, 0x1e293b, 0.85);
+        box.setStrokeStyle(1, 0x475569, 0.9);
+        const label = this.add
+          .text(0, 0, "", { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#fff" })
+          .setOrigin(0.5);
+        const container = this.add.container(cx, cy, [box, label]);
+        container.setDepth(45);
+        container.setScrollFactor(0);
+        container.setSize(cell - 4, cell - 4);
+        container.setInteractive(
+          new Phaser.Geom.Rectangle(-(cell - 4) / 2, -(cell - 4) / 2, cell - 4, cell - 4),
+          Phaser.Geom.Rectangle.Contains,
+        );
+        container.on("pointerdown", () => this.onMergeCellClick(idx));
+        this.mergeCellGfx[idx] = container;
+      }
+    }
+    this.refreshMergeGridUI();
+  }
+
+  private mergeCellsAdjacent(a: number, b: number): boolean {
+    const cols = 3;
+    if (a === b) return false;
+    const ar = Math.floor(a / cols);
+    const ac = a % cols;
+    const br = Math.floor(b / cols);
+    const bc = b % cols;
+    return (ar === br && Math.abs(ac - bc) === 1) || (ac === bc && Math.abs(ar - br) === 1);
+  }
+
+  private refreshMergeGridUI() {
+    const tierColors = [0, 0x64748b, 0x38bdf8, 0xa78bfa, 0xfbbf24];
+    for (let i = 0; i < this.mergeCellGfx.length; i += 1) {
+      const tier = this.mergeCells[i] ?? 0;
+      const container = this.mergeCellGfx[i];
+      if (!container) continue;
+      const box = container.list[0] as Phaser.GameObjects.Rectangle;
+      const label = container.list[1] as Phaser.GameObjects.Text;
+      box.setFillStyle(tier > 0 ? tierColors[tier]! : 0x1e293b, tier > 0 ? 0.78 : 0.85);
+      label.setText(tier > 0 ? `${tier}` : "");
+      box.setStrokeStyle(this.mergeSelected === i ? 2 : 1, this.mergeSelected === i ? 0x4ade80 : 0x475569, 1);
+    }
+  }
+
+  private onMergeCellClick(idx: number) {
+    if (this.finished || !this.mergeGridEnabled) return;
+    const tier = this.mergeCells[idx] ?? 0;
+    if (this.mergeSelected === null) {
+      if (tier <= 0) return;
+      this.mergeSelected = idx;
+      playBleep("pickup");
+      this.refreshMergeGridUI();
+      return;
+    }
+    if (this.mergeSelected === idx) {
+      this.mergeSelected = null;
+      this.refreshMergeGridUI();
+      return;
+    }
+    const from = this.mergeSelected;
+    const fromTier = this.mergeCells[from] ?? 0;
+    const toTier = this.mergeCells[idx] ?? 0;
+    if (this.mergeCellsAdjacent(from, idx) && fromTier > 0 && fromTier === toTier && fromTier < 4) {
+      this.mergeCells[from] = 0;
+      this.mergeCells[idx] = fromTier + 1;
+      this.coins += this.mergeBonusCoins;
+      const merged = this.mergeCellGfx[idx];
+      if (merged) {
+        juiceBurst(this, merged.x, merged.y, themeParticleHex(this.spec), 10);
+        juiceFloater(this, merged.x, merged.y - 14, `+${this.mergeBonusCoins}`, this.cohesion.hud.accent);
+        juiceShake(this, { durationMs: 80, intensity: 0.003 });
+      }
+      playBleep("pickup");
+      if (fromTier + 1 >= 4) {
+        this.coins += this.mergeBonusCoins * 2;
+        this.banner.show({
+          title: this.uiLocale === "zh-Hans" ? "满阶合成" : "Max merge",
+          message: `+${this.mergeBonusCoins * 2}`,
+          ms: 1400,
+        });
+      }
+      this.refreshHud();
+    }
+    this.mergeSelected = null;
+    this.refreshMergeGridUI();
   }
 
   private refreshPickerUI() {
@@ -1602,7 +1756,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   private refreshHud() {
-    const coinLabel = this.spec.labels.collectible ?? "金币";
+    const coinLabel = this.spec.labels.collectible ?? hudDefaultCollectible(this.uiLocale);
     this.coinsText.setText(`${coinLabel} ${this.coins}`);
     const shieldOn = this.time.now < this.baseShieldUntil;
     const goalOn = this.time.now < this.goalShiftUntil;
@@ -1917,9 +2071,10 @@ export class TowerDefenseScene extends Phaser.Scene {
     // Burst particles
     const count = 8;
     for (let i = 0; i < count; i += 1) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-      const dist2 = 18 + Math.random() * 22;
-      const r2 = 2 + Math.random() * 2.5;
+      const rnd = this.runtimeRng;
+      const angle = (i / count) * Math.PI * 2 + rnd() * 0.4;
+      const dist2 = 18 + rnd() * 22;
+      const r2 = 2 + rnd() * 2.5;
       const dot = this.add.circle(x, y, r2, i % 2 === 0 ? hazardColor : 0xffffff, 0.9);
       dot.setDepth(20);
       this.tweens.add({
@@ -1929,13 +2084,13 @@ export class TowerDefenseScene extends Phaser.Scene {
         alpha: 0,
         scaleX: 0.1,
         scaleY: 0.1,
-        duration: 280 + Math.random() * 140,
+        duration: 280 + rnd() * 140,
         ease: "Quad.easeOut",
         onComplete: () => dot.destroy(),
       });
     }
     // Reward coin label
-    const coinLabel = this.spec.labels.collectible ?? "金币";
+    const coinLabel = this.spec.labels.collectible ?? hudDefaultCollectible(this.uiLocale);
     const txt = this.add
       .text(x, y - 6, `+${reward} ${coinLabel}`, {
         fontFamily: "system-ui, sans-serif",

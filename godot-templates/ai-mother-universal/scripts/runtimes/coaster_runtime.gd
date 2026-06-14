@@ -17,6 +17,7 @@ var _brake := 0.0
 var _third_person := true
 var _hud := GameHud.new()
 var _v_was_down := false
+var _boost_was_low := true
 
 
 func _ready() -> void:
@@ -25,6 +26,10 @@ func _ready() -> void:
 	_hud.apply_meta()
 	_base_speed = 20.0 + float(GameSpecData.director().get("intensity", 0.6)) * 14.0
 	_max_speed = 55.0 + GameSpecData.gameplay_f("playerSpeed", 320) * 0.06
+	var cp := GameSpecData.sample_play_profile().get("coaster", {})
+	if cp is Dictionary:
+		_base_speed *= float(cp.get("speedBoost", 1.0))
+		_max_speed *= float(cp.get("speedBoost", 1.0))
 	_speed = _base_speed * 0.55
 	_build_track()
 	_hint_mode()
@@ -33,7 +38,13 @@ func _ready() -> void:
 
 
 func _hint_mode() -> void:
-	_hud.set_extra("Boost · 空格/→ · Brake · ←/Shift · 视角 · V · 目标：跑完全程")
+	var coaster := GameSpecData.coaster()
+	var mode := str(coaster.get("mode", "coaster"))
+	if mode == "endlessRoad":
+		var goal := int(coaster.get("distanceGoal", 750))
+		_hud.set_extra("←/→ 换道 · 目标 %dm · 躲避障碍" % goal)
+	else:
+		_hud.set_extra("Boost · 空格/→ · Brake · ←/Shift · 视角 · V · 目标：跑完全程")
 
 
 func _build_track() -> void:
@@ -188,6 +199,10 @@ func _physics_process(delta: float) -> void:
 	var brake_on := Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_SHIFT)
 	_boost = lerpf(_boost, 1.0 if boost_on else 0.0, delta * 4.0)
 	_brake = lerpf(_brake, 1.0 if brake_on else 0.0, delta * 5.0)
+	if _boost > 0.55 and _boost_was_low:
+		GameJuice.shake_node(self, 4.5, 0.1)
+		GameJuice.flash_background(self, GameSpecData.theme_color("collectibleColor", Color.GOLD), 0.18)
+	_boost_was_low = _boost <= 0.55
 	if Input.is_key_pressed(KEY_V):
 		if not _v_was_down:
 			_third_person = not _third_person
@@ -225,6 +240,9 @@ func _finish(won: bool) -> void:
 	_ended = true
 	var title := "完赛！" if won else "脱轨"
 	var msg := "用时 %.2fs" % _elapsed if won else GameSpecData.labels("hazard", "脱轨")
+	if won:
+		GameJuice.flash_background(self, Color(0.55, 1, 0.65), 0.32)
+		GameJuice.shake_node(self, 5.0, 0.12)
 	_hud.show_banner(title, msg)
 	GameAudio.play_bleep(GameBleeps.Kind.WIN if won else GameBleeps.Kind.HIT)
 

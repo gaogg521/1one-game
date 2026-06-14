@@ -3,6 +3,8 @@ import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { buildCoasterBlueprint } from "@/lib/coaster-blueprint";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
+import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
@@ -289,14 +291,20 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
       collectibleColor: "#fde047",
       particleTint: "#ffffff",
     };
-    spec.coaster = buildCoasterBlueprint({ prompt, spec });
+    spec.coaster = buildCoasterBlueprint({ prompt, spec, sampleId: opts.sampleId });
     spec.presentation = { musicProfile: "pulse" };
   }
   if (rt.blueprint === "puzzle" && !spec.puzzle) {
     spec.puzzle = buildPuzzleBlueprint({ prompt, spec, sampleId: opts.sampleId });
   }
+  if (rt.phaser === "platformer" && !spec.platformer) {
+    spec.platformer = buildPlatformerBlueprint({ prompt, spec });
+  }
   if (rt.blueprint === "farming" && !spec.farming) {
     spec.farming = buildFarmingBlueprint({ prompt, spec });
+  }
+  if (templateId === "customization" && !spec.customization) {
+    spec.customization = buildCustomizationBlueprint({ prompt, spec, sampleId: opts.sampleId });
   }
   if (!spec.director) {
     spec.director = buildDirector({ prompt, spec });

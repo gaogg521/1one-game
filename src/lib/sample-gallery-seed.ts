@@ -1,4 +1,4 @@
-import { specForSample } from "@/lib/sample-specs";
+import { buildCanonicalAstrocadeSpec } from "@/lib/astrocade-canonical-spec";
 import { prisma } from "@/lib/prisma";
 import { SAMPLES } from "@/lib/samples";
 import {
@@ -14,7 +14,7 @@ export async function seedSampleGalleryProjects(): Promise<{ upserted: number; i
   for (const s of SAMPLES) {
     const id = sampleProjectId(s.id);
     ids.push(id);
-    const spec = specForSample(s);
+    const spec = buildCanonicalAstrocadeSpec(s.prompt, "zh-Hans", { sampleId: s.id });
     spec.title = s.title;
 
     await prisma.project.upsert({

@@ -1,23 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { createProjectViaApi, ensureOwnerSession } from "./helpers/owner";
+import { gotoPlay } from "./helpers/play";
 
 /**
  * Godot 试玩引擎切换冒烟：创建塔防项目 → 试玩页 → 切 Godot 标签。
  * 导出可能较慢；仅断言 UI 状态可达（loading / ready / error），不等待 wasm 完全加载。
  */
 test("试玩页可切换到 Godot 引擎标签", async ({ page }) => {
+  test.setTimeout(120_000);
   const prompt = "保卫萝卜塔防冒烟";
   const spec = mockSpecFromPrompt(prompt);
   spec.templateId = "towerDefense";
 
-  const create = await page.request.post("/api/projects", {
-    data: { prompt, spec },
-  });
-  expect(create.ok()).toBeTruthy();
-  const { project } = (await create.json()) as { project?: { id?: string } };
-  expect(project?.id).toBeTruthy();
+  const api = await ensureOwnerSession(page);
+  const { id: projectId } = await createProjectViaApi(api, prompt, spec);
 
-  await page.goto(`/play/${project!.id}`);
+  await gotoPlay(page, projectId);
   await expect(page.getByTestId("runtime-tab-phaser")).toBeVisible({ timeout: 15_000 });
 
   await page.getByTestId("runtime-tab-godot").click();
