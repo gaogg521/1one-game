@@ -30,7 +30,7 @@ jobs:
         run: npm run qa:orch-smoke
 
       - name: Director & refinement unit smokes
-        run: npm run qa:director-spec && npm run qa:refinement-log && npm run qa:template-matrix && npm run qa:comic-storyboard-resilience && npm run qa:database-url && npm run qa:comic-director-pipeline && npm run qa:competitor-clone-checks-offline
+        run: npm run qa:director-spec && npm run qa:refinement-log && npm run qa:template-matrix && npm run qa:comic-storyboard-resilience && npm run qa:database-url && npm run qa:comic-director-pipeline && npm run qa:competitor-clone-checks-offline && npm run qa:sample-gameplay-interaction:offline
 
       - name: Astrocade architecture parity (offline)
         run: |
@@ -183,6 +183,20 @@ jobs:
           npm run qa:competitor-gates
           npm run qa:astrocade-competitor-matrix
 
+      - name: Sample gameplay interaction E2E (17 samples)
+        env:
+          CI: true
+          PW_EXTERNAL: "1"
+        run: |
+          npm run start &
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:8888/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8888/api/health
+          npm run seed:samples
+          npx playwright test e2e/sample-gameplay-interaction.spec.ts --workers=1 --reporter=line
+
       - name: Upload competitor parity artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -191,6 +205,8 @@ jobs:
           if-no-files-found: warn
           path: |
             qa-output/competitor-gates.json
+            qa-output/sample-gameplay-interaction/REPORT.md
+            qa-output/sample-gameplay-interaction/summary.json
             qa-output/competitor-parity/REPORT.md
             qa-output/competitor-parity/summary.json
             qa-output/competitor-parity/prompt/**

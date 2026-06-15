@@ -149,7 +149,15 @@ curl -s http://127.0.0.1:6666/api/health
 
 ### 2. 修改端口
 
-**默认端口为 `6666`**。Next.js 16 的 `next start -p 6666` 会报「reserved for ircu」；本项目 `scripts/run-start.mjs` 使用 programmatic server 监听 6666，可正常启动。
+**默认端口为 `3000`**（新部署推荐；旧环境可能仍为 `6666`）。Next.js 16 的 `next start -p 6666` 会报「reserved for ircu」；本项目 `scripts/run-start.mjs` 使用 programmatic server 可监听任意端口。
+
+> **重要：浏览器试玩与 6666 端口**
+>
+> Chrome / Edge 将 **6666** 视为「不安全端口」（`net::ERR_UNSAFE_PORT`），用户若直接访问 `http://你的IP:6666` **无法打开试玩页**。
+>
+> **生产环境务必二选一：**
+> 1. **推荐**：使用默认 **3000** 端口，或 Nginx 反代到 **80/443**
+> 2. 已有 `PORT=6666` 的实例：必须配 Nginx，禁止让用户直连 `:6666`
 
 若需改为其他端口（如 `3000`），需改两处：
 

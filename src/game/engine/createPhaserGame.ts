@@ -2,7 +2,12 @@ import Phaser from "phaser";
 import type { GameSpec } from "@/lib/game-spec";
 import type { AppLocale } from "@/i18n/routing";
 import { canonicalSpecForPlay, resolveAssetProjectId } from "@/lib/astrocade-canonical-spec";
-import { markPhaserPlayReady, resetPhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import {
+  clearPhaserQaGame,
+  markPhaserPlayReady,
+  registerPhaserQaGame,
+  resetPhaserPlayReady,
+} from "@/game/engine/phaser-play-ready";
 import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft-franchise";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { CoasterScene } from "@/game/engine/CoasterScene";
@@ -130,10 +135,14 @@ export function createPhaserGame(
   } as Phaser.Types.Core.GameConfig;
 
   const game = new Phaser.Game(config);
+  registerPhaserQaGame(game);
 
   /** 同步 Scene 兜底；异步 Scene 在 bootstrap 完成后会再次 mark */
   const fallbackReady = window.setTimeout(() => markPhaserPlayReady(), 4200);
-  game.events.once(Phaser.Core.Events.DESTROY, () => window.clearTimeout(fallbackReady));
+  game.events.once(Phaser.Core.Events.DESTROY, () => {
+    window.clearTimeout(fallbackReady);
+    clearPhaserQaGame();
+  });
 
   const bootAudio = () => {
     void soundscape.startInteractive();
@@ -160,6 +169,17 @@ export function createPhaserGame(
     detachAudioGestures();
     soundscape.dispose();
   });
+
+  const kb = game.input.keyboard;
+  if (kb) {
+    kb.addCapture([
+      Phaser.Input.Keyboard.KeyCodes.LEFT,
+      Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      Phaser.Input.Keyboard.KeyCodes.UP,
+      Phaser.Input.Keyboard.KeyCodes.DOWN,
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+    ]);
+  }
 
   return { game, bootAudio };
 }

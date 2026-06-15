@@ -145,6 +145,11 @@ export default function GamePlayerInner({
   }, [spec, session, locale, projectId, promptHint]);
 
   useEffect(() => {
+    if (!playReady) return;
+    hostRef.current?.focus({ preventScroll: true });
+  }, [playReady, spec, session, locale, projectId, promptHint]);
+
+  useEffect(() => {
     if (!audioHint) return;
     const hide = () => setAudioHint(false);
     const el = hostRef.current;

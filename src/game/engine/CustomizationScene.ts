@@ -160,6 +160,21 @@ export class CustomizationScene extends Phaser.Scene {
 
     if (this.mode === "pottery") this.drawPottery();
     else this.drawCar();
+
+    const bodyY = this.mode === "pottery" ? h * 0.46 : h * 0.42;
+    this.add
+      .rectangle(w / 2, bodyY, 220, 170, 0x000000, 0)
+      .setDepth(100)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => {
+        if (this.mode === "pottery") {
+          this.pullPotteryWheel();
+        } else {
+          const hex = this.palette[this.edits % this.palette.length] ?? this.palette[0] ?? this.bodyColor;
+          this.applyColor(hex);
+        }
+      });
+
     schedulePhaserPlayReady(this, 400);
   }
 
@@ -222,6 +237,7 @@ export class CustomizationScene extends Phaser.Scene {
     const cx = this.scale.width / 2;
     const cy = this.scale.height * 0.46;
     juiceBurst(this, cx, cy - 20, this.glazeColor, 12, this.runtimeRng);
+    juiceFlash(this, { r: 250, g: 220, b: 120 }, { durationMs: 120 });
     this.drawPottery();
   }
 

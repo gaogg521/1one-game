@@ -9,7 +9,7 @@
 : "${GIT_BRANCH:=main}"
 : "${OPERONE_DOMAIN:=}"
 : "${CERTBOT_EMAIL:=}"
-: "${OPERONE_PORT:=6666}"
+: "${OPERONE_PORT:=3000}"
 : "${SKIP_SEED:=0}"
 : "${SKIP_PREFLIGHT:=1}"
 : "${NODE_MAJOR:=22}"

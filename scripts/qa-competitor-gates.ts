@@ -101,6 +101,7 @@ function main() {
   const cloneBatchOk = run("npm run qa:competitor-clone-batch", {
     COMPETITOR_CLONE_BATCH: "all",
   });
+  const gameplayInteractionOk = run("npm run qa:sample-gameplay-interaction");
 
   const snap = {
     at: new Date().toISOString(),
@@ -111,6 +112,7 @@ function main() {
     specCanonicalOk,
     parityValidationOk,
     cloneBatchOk,
+    gameplayInteractionOk,
     godotMatrix: {
       templates: [...PRODUCT.godot.supportedTemplates],
       templateCount: PRODUCT.godot.supportedTemplates.length,
@@ -125,7 +127,8 @@ function main() {
       e2eSamplesEnOk &&
       specCanonicalOk &&
       parityValidationOk &&
-      cloneBatchOk,
+      cloneBatchOk &&
+      gameplayInteractionOk,
   };
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });

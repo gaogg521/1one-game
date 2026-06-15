@@ -146,6 +146,18 @@ export class FarmingScene extends Phaser.Scene {
       const crop = this.bp.crops[this.selectedCrop]!;
       this.hintText.setText(hudFarmingCropSelected(this.uiLocale, crop.name, crop.seedCost));
     });
+
+    if (this.tiles[0]) {
+      this.tweens.add({
+        targets: this.tiles[0]!.rect,
+        scaleX: 1.06,
+        scaleY: 1.06,
+        yoyo: true,
+        repeat: 2,
+        duration: 280,
+      });
+    }
+
     schedulePhaserPlayReady(this, 400);
   }
 
