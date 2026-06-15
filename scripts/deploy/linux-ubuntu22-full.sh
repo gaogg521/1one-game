@@ -217,6 +217,7 @@ run_update() {
   npm_install_deps
   prisma_migrate_deploy 0
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+  centos7_stub_parcel_watcher
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
   systemctl restart operone
   wait_for_health 30 || true

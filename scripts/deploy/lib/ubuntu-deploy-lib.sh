@@ -72,6 +72,24 @@ npm_install_deps() {
   fi
 }
 
+# CentOS 7 libstdc++ 过旧，@parcel/watcher 原生模块需 GLIBCXX_3.4.20+；生产 build 不用文件监听
+centos7_stub_parcel_watcher() {
+  is_centos7 || return 0
+  local w="$OPERONE_DIR/node_modules/@parcel/watcher/index.js"
+  [[ -f "$w" ]] || return 0
+  log "CentOS 7：@parcel/watcher 替换为 noop 桩（跳过 GLIBCXX_3.4.20 native 依赖）"
+  cat > "$w" << 'STUB'
+"use strict";
+const noop = async () => {};
+const emptySub = async () => ({ unsubscribe: noop });
+exports.subscribe = emptySub;
+exports.unsubscribe = noop;
+exports.writeSnapshot = async () => "";
+exports.getEventsSince = async () => [];
+STUB
+  chown "$OPERONE_USER:$OPERONE_USER" "$w" 2>/dev/null || true
+}
+
 prisma_migrate_deploy() {
   local allow_reset="${1:-0}"
   log "prisma migrate deploy …"
@@ -273,6 +291,7 @@ phase_app() {
   fi
 
   log "npm run build …"
+  centos7_stub_parcel_watcher
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
 
   mkdir -p "$OPERONE_DIR/public/covers" "$OPERONE_DIR/public/comic-panels" "$OPERONE_DIR/public/game-bg"
