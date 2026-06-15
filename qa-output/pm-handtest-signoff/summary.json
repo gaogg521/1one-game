@@ -1,0 +1,32 @@
+{
+  "at": "2026-06-14T18:50:41.256Z",
+  "passCount": 6,
+  "total": 6,
+  "pass": true,
+  "rows": [
+    {
+      "name": "六模板 mock + director + systems",
+      "ok": true
+    },
+    {
+      "name": "Director 保底事件",
+      "ok": true
+    },
+    {
+      "name": "Refinement 日志",
+      "ok": true
+    },
+    {
+      "name": "共创闭环",
+      "ok": true
+    },
+    {
+      "name": "17 款竞品 clone 断言",
+      "ok": true
+    },
+    {
+      "name": "B 档 smoke",
+      "ok": true
+    }
+  ]
+}

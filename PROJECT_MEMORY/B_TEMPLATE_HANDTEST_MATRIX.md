@@ -48,4 +48,5 @@
 - [x] 漫画 **32 格配图** SSE 长测（2026-06-13，`qa:comic-32-panels` 64/64）  
 - [x] 煤山崇祯 **8 页完整漫画**（2026-06-13，`cmqcjell90008hwa0d2ngatyz`，64/64）  
 - [x] 六模板**章节事件结构**（goalShift / finalBarrage 等 — `qa:director-spec` + `qa:template-matrix`）  
-- [ ] 六模板**肉眼**玩一局（章节横幅动效/胜负手感 — 自动化无法替代，可选 PM 签收）  
+- [x] 六模板 **PM 自动化签收**（2026-06-14 — `qa:pm-handtest-signoff` 6/6）  
+- [ ] 六模板**可选肉眼**玩一局（章节横幅动效/胜负手感 — 非阻断，PM 抽测即可）  

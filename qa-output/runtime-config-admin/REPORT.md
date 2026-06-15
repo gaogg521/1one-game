@@ -1,12 +1,12 @@
 # Runtime Config Admin QA
 
-- 时间：2026-06-14T15:35:54.855Z
-- 库：`file:./prisma/ci.sqlite`
-- 结果：**PASS** (11/11)
+- 时间：2026-06-15T01:52:40.259Z
+- 库：`file:./dev.db`
+- 结果：**PASS** (17/17)
 
 ## Checks
 
-- [x] prisma migrate deploy — file:./prisma/ci.sqlite
+- [x] prisma migrate deploy — file:./dev.db
 - [x] crypto roundtrip
 - [x] defaults.gamePrimary
 - [x] defaults.novelTextPrimary
@@ -16,4 +16,10 @@
 - [x] persist imageGemini
 - [x] public view has productDefaults
 - [x] modelSources.gamePrimary is db after seed — db
-- [x] HTTP dev server reachable — skipped — DATABASE_URL=file:./prisma/ci.sqlite PORT=8888 npm run dev
+- [x] HTTP dev server reachable — http://127.0.0.1:8888
+- [x] HTTP GET /api/admin/runtime-config — status=200
+- [x] HTTP models.gamePrimary
+- [x] HTTP PATCH /api/admin/runtime-config — status=200
+- [x] HTTP PATCH novelTextPrimary applied
+- [x] HTTP GET after PATCH
+- [x] HTTP PATCH restore novelTextPrimary

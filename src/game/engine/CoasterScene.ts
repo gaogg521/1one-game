@@ -71,6 +71,8 @@ export class CoasterScene extends Phaser.Scene {
   private keyBoost!: Phaser.Input.Keyboard.Key;
   private keyBrake!: Phaser.Input.Keyboard.Key;
   private keyV!: Phaser.Input.Keyboard.Key;
+  private keyLaneLeft!: Phaser.Input.Keyboard.Key;
+  private keyLaneRight!: Phaser.Input.Keyboard.Key;
 
   private endlessMode = false;
   private distanceGoal = 600;
@@ -80,6 +82,7 @@ export class CoasterScene extends Phaser.Scene {
   private roadObstacles: Array<{ lane: number; z: number; w: number; h: number }> = [];
   private obstacleSpawnCd = 0;
   private roadLives = 3;
+  private pointerDownX = 0;
 
   private lastMilestone = 0;
 
@@ -148,6 +151,10 @@ export class CoasterScene extends Phaser.Scene {
       this.keyBoost = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyBrake = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
       this.keyV = kb.addKey(Phaser.Input.Keyboard.KeyCodes.V);
+      if (this.endlessMode) {
+        this.keyLaneLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.keyLaneRight = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+      }
       kb.addCapture([
         Phaser.Input.Keyboard.KeyCodes.SPACE,
         Phaser.Input.Keyboard.KeyCodes.E,
@@ -162,6 +169,32 @@ export class CoasterScene extends Phaser.Scene {
       ms: 2200,
     });
     schedulePhaserPlayReady(this, 500);
+
+    if (this.endlessMode) {
+      this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        this.pointerDownX = p.x;
+      });
+      this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+        if (this.finished) return;
+        const w = this.scale.width;
+        const dx = p.x - this.pointerDownX;
+        if (Math.abs(dx) > 36) {
+          this.shiftLane(dx > 0 ? 1 : -1);
+        } else if (p.x < w * 0.42) {
+          this.shiftLane(-1);
+        } else if (p.x > w * 0.58) {
+          this.shiftLane(1);
+        }
+      });
+    }
+  }
+
+  private shiftLane(delta: -1 | 1) {
+    const next = Phaser.Math.Clamp(this.targetLane + delta, -1, 1);
+    if (next === this.targetLane) return;
+    this.targetLane = next;
+    playBleep("pickup");
+    juiceShake(this, { intensity: 0.004, durationMs: 50 });
   }
 
   update(_time: number, deltaMs: number) {
@@ -299,28 +332,30 @@ export class CoasterScene extends Phaser.Scene {
     const dt = deltaMs / 1000;
     this.elapsed += dt;
     const cursors = this.input.keyboard?.createCursorKeys();
-    if (cursors?.left?.isDown && Phaser.Input.Keyboard.JustDown(cursors.left)) {
-      this.targetLane = Math.max(-1, this.targetLane - 1);
-    }
-    if (cursors?.right?.isDown && Phaser.Input.Keyboard.JustDown(cursors.right)) {
-      this.targetLane = Math.min(1, this.targetLane + 1);
-    }
-    this.lane = Phaser.Math.Linear(this.lane, this.targetLane, dt * 8);
-    this.speed = Phaser.Math.Linear(this.speed, this.baseSpeed + 20, dt * 0.8);
-    this.distanceM += this.speed * dt * 0.35;
+    if (cursors?.left && Phaser.Input.Keyboard.JustDown(cursors.left)) this.shiftLane(-1);
+    if (cursors?.right && Phaser.Input.Keyboard.JustDown(cursors.right)) this.shiftLane(1);
+    if (this.keyLaneLeft && Phaser.Input.Keyboard.JustDown(this.keyLaneLeft)) this.shiftLane(-1);
+    if (this.keyLaneRight && Phaser.Input.Keyboard.JustDown(this.keyLaneRight)) this.shiftLane(1);
+
+    this.lane = Phaser.Math.Linear(this.lane, this.targetLane, dt * 10);
+    const ramp = this.baseSpeed + 16 + this.distanceM * 0.055 + this.elapsed * 0.35;
+    const targetSpeed = Math.min(this.maxSpeed + 28, ramp);
+    this.speed = Phaser.Math.Linear(this.speed, targetSpeed, dt * 1.1);
+    this.distanceM += this.speed * dt * 0.38;
     this.trackProgress = Math.min(1, this.distanceM / this.distanceGoal);
 
     this.obstacleSpawnCd -= dt;
     if (this.obstacleSpawnCd <= 0) {
-      this.obstacleSpawnCd = Math.max(0.55, 1.4 - this.trackProgress);
+      const density = 1.35 - this.trackProgress * 0.45;
+      this.obstacleSpawnCd = Math.max(0.42, density);
       this.roadObstacles.push({
         lane: Phaser.Math.Between(-1, 1),
-        z: 1.1,
-        w: 36 + Phaser.Math.Between(0, 18),
-        h: 28 + Phaser.Math.Between(0, 16),
+        z: 1.12,
+        w: 36 + Phaser.Math.Between(0, 22),
+        h: 28 + Phaser.Math.Between(0, 18),
       });
     }
-    for (const o of this.roadObstacles) o.z -= dt * (0.55 + this.speed * 0.012);
+    for (const o of this.roadObstacles) o.z -= dt * (0.62 + this.speed * 0.014);
     this.roadObstacles = this.roadObstacles.filter((o) => o.z > -0.05);
 
     this.nearMissCd = Math.max(0, this.nearMissCd - dt);
@@ -328,7 +363,8 @@ export class CoasterScene extends Phaser.Scene {
       if (o.z < 0.12 && o.z > 0.02 && Math.abs(o.lane - this.lane) < 0.55) {
         this.roadLives -= 1;
         o.z = -1;
-        juiceShake(this, { intensity: 0.018, durationMs: 180 });
+        juiceShake(this, { intensity: 0.022, durationMs: 220 });
+        juiceFlash(this, { r: 239, g: 68, b: 68 }, { durationMs: 120 });
         playBleep("hit");
         if (this.roadLives <= 0) {
           this.finish(false);
@@ -363,7 +399,9 @@ export class CoasterScene extends Phaser.Scene {
 
     this.drawEndlessRoad();
     this.timerText.setText(formatTime(this.elapsed));
-    this.speedText.setText(hudCoasterSpeed(this.uiLocale, Math.round(this.speed * 3.2)));
+    this.speedText.setText(
+      `${this.uiLocale === "zh-Hans" ? "生命" : "Lives"} ${this.roadLives}  ·  ${hudCoasterSpeed(this.uiLocale, Math.round(this.speed * 3.2))}`,
+    );
     this.scoreText.setText(hudEndlessRoadDistance(this.uiLocale, Math.round(this.distanceM)));
 
     if (this.distanceM >= this.distanceGoal) this.finish(true);
@@ -412,11 +450,31 @@ export class CoasterScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    const score = won ? Math.max(1, Math.round(10000 / Math.max(this.elapsed, 1))) : 0;
+    const score = this.endlessMode
+      ? Math.round(this.distanceM * (won ? 14 : 6))
+      : won
+        ? Math.max(1, Math.round(10000 / Math.max(this.elapsed, 1)))
+        : 0;
     this.banner.show({
       ...(won
-        ? bannerCoasterFinishWin(this.uiLocale, formatTime(this.elapsed))
-        : bannerCoasterFinishLose(this.uiLocale, this.spec.labels.hazard)),
+        ? this.endlessMode
+          ? {
+              title: this.uiLocale === "zh-Hans" ? "公路征服!" : "Road cleared!",
+              message:
+                this.uiLocale === "zh-Hans"
+                  ? `距离 ${Math.round(this.distanceM)} m · 得分 ${score}`
+                  : `${Math.round(this.distanceM)} m · score ${score}`,
+            }
+          : bannerCoasterFinishWin(this.uiLocale, formatTime(this.elapsed))
+        : this.endlessMode
+          ? {
+              title: this.uiLocale === "zh-Hans" ? "撞车了!" : "Crashed!",
+              message:
+                this.uiLocale === "zh-Hans"
+                  ? `跑了 ${Math.round(this.distanceM)} m · 得分 ${score}`
+                  : `${Math.round(this.distanceM)} m · score ${score}`,
+            }
+          : bannerCoasterFinishLose(this.uiLocale, this.spec.labels.hazard)),
       ms: 3200,
     });
     playBleep(won ? "win" : "hit");

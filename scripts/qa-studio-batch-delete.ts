@@ -3,9 +3,10 @@
  * npm run qa:studio-batch-delete
  */
 import { execSync } from "node:child_process";
+import { applyQaOfflineDatabaseUrl } from "@/lib/database-url";
 import { prisma } from "@/lib/prisma";
 
-process.env.DATABASE_URL = process.env.DATABASE_URL ?? "file:./prisma/ci.sqlite";
+applyQaOfflineDatabaseUrl();
 
 const base = process.env.BENCHMARK_BASE_URL ?? "http://127.0.0.1:8888";
 const ownerKey = "qa-batch-del";

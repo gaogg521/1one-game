@@ -1,0 +1,48 @@
+{
+  "at": "2026-06-15T02:32:37.030Z",
+  "pass": true,
+  "lines": [
+    {
+      "at": "2026-06-15T02:32:37.025Z",
+      "line": "comic",
+      "label": "漫画",
+      "pass": true,
+      "offlineSteps": 7,
+      "e2eRan": true,
+      "results": [
+        {
+          "cmd": "npm run qa:database-url",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:songliao:artifacts",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-novel-product-rules",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-director-pipeline",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-storyboard-resilience",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-panel-eta",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-featured:offline",
+          "ok": true
+        },
+        {
+          "cmd": "npx playwright test e2e/novel-comic.smoke.spec.ts --grep \"漫画模块\" --workers=1",
+          "ok": true
+        }
+      ]
+    }
+  ]
+}

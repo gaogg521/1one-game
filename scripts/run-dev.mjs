@@ -6,7 +6,18 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-if (!process.env.DATABASE_URL?.trim()) {
+const rawDbUrl = process.env.DATABASE_URL?.trim();
+if (rawDbUrl && /ci\.sqlite/i.test(rawDbUrl) && process.env.DEV_ALLOW_CI_DB !== "1") {
+  console.warn(
+    "[dev] DATABASE_URL 指向 ci.sqlite，已改为 file:./dev.db（E2E 请单独起进程；或 DEV_ALLOW_CI_DB=1）",
+  );
+  process.env.DATABASE_URL = "file:./dev.db";
+} else if (!rawDbUrl) {
+  process.env.DATABASE_URL = "file:./dev.db";
+} else if (/prisma\/dev\.db/i.test(rawDbUrl) || /prisma\/prisma\//i.test(rawDbUrl)) {
+  console.warn(
+    `[dev] DATABASE_URL="${rawDbUrl}" 可能指向错误路径，已改为 file:./dev.db`,
+  );
   process.env.DATABASE_URL = "file:./dev.db";
 }
 

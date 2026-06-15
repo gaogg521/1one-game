@@ -22,7 +22,7 @@
 
 ## 当前进行中
 
-- **P2** — 肉眼扫一眼六模板章节/事件（自动化手测已模拟完成；E2E 24/24）
+- （无阻断项 — 自动化门禁已全绿）
 
 ## B 档产品线目标（周级，用户确认纳入范围）
 
@@ -46,4 +46,6 @@
 11. **P2** — 漫画发现精选位 — ✅ `featured=1` API + 发现页/首页 + `seed:comic-featured-meishan`
 12. **P2** — 文学生产链 P1（工作链/roster/单格重绘/邮箱注册） — ✅ 2026-06-14
 13. **P2** — 中篇 8 页漫画轻量分镜根因 — ✅ `mediumDirectorMinPages=12` + `qa:comic-director-pipeline`
-14. **P2** — 四档小说+漫画全量实机 QA — ⬜ 需 API Key + 长时 LLM（`npm run qa:songliao-literary-regression`）
+14. **P2** — 四档小说+漫画全量实机 QA — ✅ 2026-06-14
+15. **P2** — 17 款竞品 clone 可玩度 batch — ✅ 2026-06-14
+16. **P2** — PM 手测自动化签收 — ✅ `qa:pm-handtest-signoff`

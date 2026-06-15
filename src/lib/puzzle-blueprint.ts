@@ -20,7 +20,18 @@ function hashSeed(s: string): number {
 }
 
 export function inferPuzzleMode(opts: { prompt?: string; sampleId?: string }): PuzzleMode {
-  void opts.sampleId;
+  switch (opts.sampleId) {
+    case "whimsy-differences":
+      return "spotDifference";
+    case "memory-match-mania":
+      return "memoryMatch";
+    case "kids-puzzle":
+      return "jigsaw";
+    case "color-bloom":
+      return "match3";
+    default:
+      break;
+  }
   const blob = (opts.prompt ?? "").toLowerCase();
   if (/找不同|spot the difference|whimsy/i.test(blob)) return "spotDifference";
   if (/记忆|翻牌|memory match/i.test(blob)) return "memoryMatch";

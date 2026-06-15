@@ -130,6 +130,11 @@ export class CustomizationScene extends Phaser.Scene {
           color: "#cbd5e1",
         }).setOrigin(0.5),
       );
+      const wheelY = h * 0.46 + 70;
+      this.add
+        .circle(w / 2, wheelY, 76, 0xffffff, 0.01)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.pullPotteryWheel());
       this.carGfx.setVisible(false);
     } else {
       (["body", "wheel", "bg"] as const).forEach((part, i) => {
@@ -208,6 +213,16 @@ export class CustomizationScene extends Phaser.Scene {
       const a = this.spinAngle + (i / 6) * Math.PI * 2;
       g.lineBetween(cx, cy - vh * 0.1, cx + Math.cos(a) * gw * 0.45, cy - vh * 0.1 + Math.sin(a) * 8);
     }
+  }
+
+  private pullPotteryWheel() {
+    this.vaseHeight = Math.min(1, this.vaseHeight + 0.07);
+    this.potterySpinRate = Math.min(0.0035, this.potterySpinRate + 0.00018);
+    playBleep("pickup");
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height * 0.46;
+    juiceBurst(this, cx, cy - 20, this.glazeColor, 12, this.runtimeRng);
+    this.drawPottery();
   }
 
   private applyColor(hex: string) {

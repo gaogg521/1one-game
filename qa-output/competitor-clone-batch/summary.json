@@ -1,0 +1,362 @@
+{
+  "at": "2026-06-14T18:37:32.817Z",
+  "batch": "all",
+  "total": 17,
+  "passCount": 17,
+  "pass": true,
+  "rows": [
+    {
+      "sampleId": "smash-the-dummy",
+      "title": "Smash the Dummy",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PhysicsScene",
+      "cloneId": "cmqe4hh8h006sm6tlj2iiajrl",
+      "playabilityChecks": {
+        "physicsCombo": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00213623046875
+      }
+    },
+    {
+      "sampleId": "rail-in-air",
+      "title": "Rail in Air",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "CoasterScene",
+      "cloneId": "cmqe4htm3006vm6tl12zlwpsc",
+      "playabilityChecks": {
+        "coasterMode": true,
+        "speedBoost": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 1,
+        "diffRatio": 0.0223388671875
+      }
+    },
+    {
+      "sampleId": "grow-a-garden",
+      "title": "Grow a Garden",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "FarmingScene",
+      "cloneId": "cmqe4i6u5006ym6tlde9kc0zw",
+      "playabilityChecks": {
+        "farmingGrid": true,
+        "autoWater": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00177001953125
+      }
+    },
+    {
+      "sampleId": "color-bloom",
+      "title": "Color Bloom",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PuzzleScene",
+      "cloneId": "cmqe4ie610071m6tlptpl56mh",
+      "playabilityChecks": {
+        "match3Mode": true,
+        "bloomScale": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0113525390625
+      }
+    },
+    {
+      "sampleId": "whimsy-differences",
+      "title": "Whimsy Differences",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PuzzleScene",
+      "cloneId": "cmqe4ilne0074m6tl3ua7uvvw",
+      "playabilityChecks": {
+        "spotDifference": true,
+        "whimsicalPanels": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.002197265625
+      }
+    },
+    {
+      "sampleId": "gun-merge-3d-zombie-apocalypse",
+      "title": "Gun Merge 3D: Zombie Apocalypse",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "TowerDefenseScene",
+      "cloneId": "cmqe4it1h0077m6tlfqa7wnoh",
+      "playabilityChecks": {
+        "mergeGrid": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0045166015625
+      }
+    },
+    {
+      "sampleId": "ultimate-3d-chess",
+      "title": "Ultimate 3D Chess",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "ChessScene",
+      "cloneId": "cmqe4j8e9007am6tl8h6hgmfb",
+      "playabilityChecks": {
+        "legalMoves": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 1.4142135623730951,
+        "diffRatio": 0.01141357421875
+      }
+    },
+    {
+      "sampleId": "elastic-thief-2",
+      "title": "Elastic Thief 2",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PlatformerScene",
+      "cloneId": "cmqe4jfvy007dm6tlfzhl6oky",
+      "playabilityChecks": {
+        "stealthMode": true,
+        "grappleEnabled": true,
+        "treasureHeist": true,
+        "laserSentries": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0081787109375
+      }
+    },
+    {
+      "sampleId": "state-conquest",
+      "title": "State Conquest",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "StrategyScene",
+      "cloneId": "cmqe4jv9t007gm6tl97bt8yq1",
+      "playabilityChecks": {
+        "strategyNodes": true,
+        "rushMode": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00244140625
+      }
+    },
+    {
+      "sampleId": "tiny-planet-chopper",
+      "title": "Tiny Planet Chopper",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "ShooterScene",
+      "cloneId": "cmqe4k2qy007jm6tld83du74o",
+      "playabilityChecks": {
+        "orbitChopper": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00262451171875
+      }
+    },
+    {
+      "sampleId": "blade-defender-merge",
+      "title": "Blade Defender Merge",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "TowerDefenseScene",
+      "cloneId": "cmqe4khv5007mm6tlip7nsi74",
+      "playabilityChecks": {
+        "mergeGrid": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0020751953125
+      }
+    },
+    {
+      "sampleId": "car-color-palette",
+      "title": "Car Color Palette",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "CustomizationScene",
+      "cloneId": "cmqe4ky8y007pm6tlnnufsfkq",
+      "playabilityChecks": {
+        "carPaintMode": true,
+        "editGoal": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0028076171875
+      }
+    },
+    {
+      "sampleId": "blocky-sniper-hunter",
+      "title": "BLOCKY SNIPER HUNTER",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "ShooterScene",
+      "cloneId": "cmqe4l5xb007sm6tll4kd1xgu",
+      "playabilityChecks": {
+        "sniperScope": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00799560546875
+      }
+    },
+    {
+      "sampleId": "memory-match-mania",
+      "title": "Memory Match Mania",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PuzzleScene",
+      "cloneId": "cmqe4lmf4007vm6tl2ce7utxm",
+      "playabilityChecks": {
+        "memoryMatch": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 1,
+        "diffRatio": 0.0054931640625
+      }
+    },
+    {
+      "sampleId": "kids-puzzle",
+      "title": "KIDS PUZZLE",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "PuzzleScene",
+      "cloneId": "cmqe4ltq7007ym6tl0f41aypd",
+      "playabilityChecks": {
+        "jigsawMode": true,
+        "kidsJigsaw": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.0030517578125
+      }
+    },
+    {
+      "sampleId": "pottery-master-3d",
+      "title": "Pottery Master 3D",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "CustomizationScene",
+      "cloneId": "cmqe4m18l0081m6tlglyj5uqe",
+      "playabilityChecks": {
+        "potteryMode": true,
+        "editGoal": true,
+        "potterySpin": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00201416015625
+      }
+    },
+    {
+      "sampleId": "crashy-roads",
+      "title": "Crashy Roads",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "CoasterScene",
+      "cloneId": "cmqe4m9ey0084m6tlcimkpnsz",
+      "playabilityChecks": {
+        "endlessRoad": true,
+        "distanceGoal": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 1,
+        "diffRatio": 0.0020751953125
+      }
+    }
+  ]
+}

@@ -24,6 +24,7 @@ async function main() {
     run("qa:console-sso-config", "npm run qa:console-sso-config"),
     run("qa:console-sso-production-preflight", "npm run qa:console-sso-production-preflight"),
     run("qa:comic-novel-product-rules", "npm run qa:comic-novel-product-rules"),
+    run("qa:database-url", "npm run qa:database-url"),
     run("qa:comic-director-pipeline", "npm run qa:comic-director-pipeline"),
     run("qa:comic-featured:offline", "npm run qa:comic-featured:offline"),
     run("npm run build", "npm run build"),

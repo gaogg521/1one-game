@@ -64,8 +64,35 @@ npx prisma migrate deploy
 
 若 `8888` 上的 dev 读 **`dev.db`**，而 QA 脚本写 **`ci.sqlite`**，会出现「API 看不到刚 seed 的数据」。对齐方式：
 
-- 开发：`DATABASE_URL=file:./dev.db PORT=8888 npm run dev`
-- QA 同库：`QA_USE_DEV_DB=1 npm run qa:runtime-config-admin`（仍建议 HTTP 段用 ci + 独立 dev 进程）
+- 开发：`npm run dev`（`run-dev.mjs` 会自动把 shell 残留的 `ci.sqlite` 改回 `dev.db`，除非 `DEV_ALLOW_CI_DB=1`）
+- QA 同库：`QA_USE_DEV_DB=1 npm run qa:runtime-config-admin`
+- **勿用** `file:./prisma/dev.db`（会落到错误路径）；文学实机 QA 用 `file:./dev.db`
+
+### 文学实机回归（宋辽）
+
+```powershell
+# 四档小说（跳过漫画）
+npm run qa:songliao:novels
+
+# 中篇 8 页 + 全量配图（默认 lib 直调，与 dev.db 同源）
+npm run qa:songliao:comic-full
+
+# 仅分镜（跳过配图，~5min；自动复用缓存中篇 novelId）
+npm run qa:songliao:storyboard
+
+# 分镜 → 配图 链式（~12min）
+npm run qa:songliao:medium-chain
+
+# 仅补配图（自动复用缓存 comicId）
+npm run qa:songliao:panels-resume
+
+# 仅补配图
+$env:QA_COMIC_RESUME_ID="<comicId>"
+$env:QA_PANEL_RENDER_MODE="lib"
+npm run qa:songliao-literary-regression
+```
+
+`QA_PANEL_RENDER_MODE=lib`（默认）直接调用 `renderComicPanels`，无需 dev 进程；`http` 模式需 dev 与 QA **同一 `DATABASE_URL`**。
 
 ## 部署前检查（migrate deploy + generate）
 

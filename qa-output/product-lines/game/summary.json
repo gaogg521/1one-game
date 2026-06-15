@@ -1,0 +1,38 @@
+{
+  "at": "2026-06-14T16:09:14.393Z",
+  "line": "game",
+  "label": "游戏",
+  "pass": true,
+  "offlineSteps": 6,
+  "e2eRan": true,
+  "results": [
+    {
+      "cmd": "npm run qa:user-journey-parity",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:template-matrix",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:architecture-parity",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:director-spec",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:co-create-loop",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:generate-stream-agentic",
+      "ok": true
+    },
+    {
+      "cmd": "npx playwright test e2e/create.smoke.spec.ts e2e/create-play.smoke.spec.ts e2e/templates-handtest.spec.ts --workers=1",
+      "ok": true
+    }
+  ]
+}

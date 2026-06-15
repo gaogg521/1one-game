@@ -1,0 +1,26 @@
+{
+  "at": "2026-06-15T02:32:05.455Z",
+  "line": "novel",
+  "label": "小说",
+  "pass": true,
+  "offlineSteps": 3,
+  "e2eRan": true,
+  "results": [
+    {
+      "cmd": "npm run qa:literary-user-journey",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:novel-comic-smoke",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:novel-locale",
+      "ok": true
+    },
+    {
+      "cmd": "npx playwright test e2e/novel-comic.smoke.spec.ts --grep \"小说模块\" --workers=1",
+      "ok": true
+    }
+  ]
+}

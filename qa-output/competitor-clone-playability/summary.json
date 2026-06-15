@@ -1,0 +1,30 @@
+{
+  "at": "2026-06-15T01:46:01.046Z",
+  "sampleId": "crashy-roads",
+  "title": "Crashy Roads",
+  "competitorPrompt": "做一个无尽公路驾驶小游戏：车辆自动前进，玩家用左右键换道躲避障碍与抛锚车辆，强调距离得分与碰撞减命；伪 3D 透视公路，节奏越来越快。",
+  "sourceId": "sample-crashy-roads",
+  "cloneId": "cmqejwu3f0002kgl4zmvrl48b",
+  "cloneTitle": "Crashy Roads（副本）",
+  "scene": "CoasterScene",
+  "playabilityChecks": {
+    "endlessRoad": true,
+    "distanceGoal": true,
+    "profilePreserved": true,
+    "dedicatedScene": true,
+    "noAgenticFallback": true,
+    "expectedScene": true
+  },
+  "visual": {
+    "colorDist": 1,
+    "diffRatio": 0.00140380859375,
+    "width": 128,
+    "height": 128
+  },
+  "visualOk": true,
+  "pass": true,
+  "urls": {
+    "source": "/play/sample-crashy-roads",
+    "clone": "/play/cmqejwu3f0002kgl4zmvrl48b"
+  }
+}

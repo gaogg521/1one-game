@@ -30,7 +30,7 @@ jobs:
         run: npm run qa:orch-smoke
 
       - name: Director & refinement unit smokes
-        run: npm run qa:director-spec && npm run qa:refinement-log && npm run qa:template-matrix && npm run qa:comic-storyboard-resilience
+        run: npm run qa:director-spec && npm run qa:refinement-log && npm run qa:template-matrix && npm run qa:comic-storyboard-resilience && npm run qa:database-url && npm run qa:comic-director-pipeline && npm run qa:competitor-clone-checks-offline
 
       - name: Astrocade architecture parity (offline)
         run: |

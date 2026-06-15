@@ -204,6 +204,8 @@ export class PlatformerScene extends Phaser.Scene {
 
   private laserGfx!: Phaser.GameObjects.Graphics;
 
+  private laserHitCd = 0;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlatformerScene");
     this.spec = spec;
@@ -753,6 +755,27 @@ export class PlatformerScene extends Phaser.Scene {
     }
   }
 
+  /** 激光束命中（不仅是 sentry 本体碰撞） */
+  private checkLaserBeamHits() {
+    if (!this.laserSentries || this.finished || this.laserHitCd > 0) return;
+    const px = this.player.x;
+    const py = this.player.y;
+    for (const child of this.sentryHazards.getChildren()) {
+      const s = child as Phaser.Physics.Arcade.Image;
+      if (!s?.active) continue;
+      const ox = (s.getData("laserOriginX") as number) ?? s.x;
+      const oy = (s.getData("laserOriginY") as number) ?? s.y;
+      const range = (s.getData("laserRange") as number) ?? 60;
+      const ex = ox + range * (s.x >= ox ? 1 : -1);
+      if (Math.abs(px - ex) < 16 && py >= oy - 8 && py <= oy + 128) {
+        this.laserHitCd = 700;
+        juiceFlash(this, { r: 239, g: 68, b: 68 }, { durationMs: 100 });
+        this.onHitHazard();
+        return;
+      }
+    }
+  }
+
   private addStarfield() {
     const raw = this.spec.theme.particleTint?.replace("#", "") ?? "6b7f78";
     const parsed = parseInt(raw, 16);
@@ -1039,6 +1062,10 @@ export class PlatformerScene extends Phaser.Scene {
     }
 
     this.drawLaserSentries();
+    this.checkLaserBeamHits();
+    if (this.laserHitCd > 0) {
+      this.laserHitCd = Math.max(0, this.laserHitCd - this.game.loop.delta);
+    }
 
     if (this.time.now < this.magnetUntil) {
       const items = this.gems.getChildren();

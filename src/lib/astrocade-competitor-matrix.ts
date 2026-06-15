@@ -295,7 +295,7 @@ export function buildCompetitorArchitectureRows(): CompetitorArchitectureRow[] {
         parityValidation !== null
           ? `结构 ${parityValidation.method2StructuralOk}/${parityValidation.method2Total} · 全过 ${parityValidation.method2AllOk}/${parityValidation.method2Total} · astrocade-random-pick.json`
           : "duplicate API · e2e/competitor-clone.smoke",
-      qa: "qa:competitor-parity-validation · e2e/competitor-clone.smoke",
+      qa: "qa:competitor-parity-validation · qa:competitor-clone-batch · e2e/competitor-clone.smoke",
     },
     {
       pillar: "Godot Secondary",

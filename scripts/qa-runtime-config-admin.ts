@@ -9,12 +9,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
+import { applyQaOfflineDatabaseUrl } from "@/lib/database-url";
 import { PRODUCT } from "../src/lib/product-config";
 
 loadEnv();
-if (process.env.QA_USE_DEV_DB !== "1") {
-  process.env.DATABASE_URL = "file:./prisma/ci.sqlite";
-}
+applyQaOfflineDatabaseUrl();
 
 const requireHttp = process.argv.includes("--require-http") || process.env.QA_REQUIRE_HTTP === "1";
 

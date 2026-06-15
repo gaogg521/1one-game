@@ -8,9 +8,9 @@ export type CustomizationBlueprint = {
 };
 
 export function inferCustomizationMode(opts: { prompt?: string; sampleId?: string }): CustomizationMode {
-  void opts.sampleId;
+  if (opts.sampleId === "pottery-master-3d") return "pottery";
   const blob = (opts.prompt ?? "").toLowerCase();
-  if (/pottery|陶|拉坯|釉|potter/i.test(blob)) return "pottery";
+  if (/pottery|陶|拉坯|釉|potter|陶艺|转盘/i.test(blob)) return "pottery";
   return "carPaint";
 }
 

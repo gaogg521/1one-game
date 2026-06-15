@@ -75,6 +75,8 @@ jobs:
           path: |
             qa-output/competitor-gates.json
             qa-output/astrocade-competitor-matrix.md
+            qa-output/competitor-clone-batch/REPORT.md
+            qa-output/competitor-clone-batch/summary.json
             qa-output/competitor-parity/REPORT.md
             qa-output/competitor-parity/summary.json
             qa-output/competitor-parity/prompt/**

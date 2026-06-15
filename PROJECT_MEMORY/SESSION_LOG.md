@@ -1,6 +1,51 @@
-## 2026-06-14 — 今日 MD 审计收尾（roster Prisma + 漫画流水线离线门禁）
+## 2026-06-15 — 迭代三十 · 宋辽满格+精选 ✅
+
+- 分镜 **396s** + lib 配图 **775s** → **32/32** · comicId `cmqekk1ft000113f3f5y8qke8`
+- `seed:comic-featured-songliao` → 发现页精选（与煤山并列）
+- `qa:product-lines:novel` / `:comic` 离线+E2E 全绿（`PW_EXTERNAL=1`）
+- 产物：`full-medium-summary.json` · `panels-resume-summary.json`
+
+---
+
+- **`qa:competitor-clone-checks-offline`**：17/17 样品 Scene + profile 离线断言 · 接入 CI + b-tier **20/20**
+- **`qa:competitor-clone-batch`**：实机 smoke 8/8 · 全量 **17/17**（动画 burst 截图）
+- **`qa:pm-handtest-signoff`**：六模板 + 竞品 PM 自动化签收 6/6 → `qa-output/pm-handtest-signoff/`
+- **`qa:competitor-gates`**：接入 batch all=17 · nightly artifact 含 batch 报告
+- **文档**：HISTORICAL #27–29 · CURRENT_STATUS · TASK_QUEUE 清空阻断项
+
+仍须用户：**git commit** · **Console SSO 生产 IdP 密钥** · 可选肉眼抽测
+
+---
+
+## 2026-06-14 — 四档小说 + 中篇 8 页全量实机 ✅
 
 Completed:
+
+- **四档小说**（~32min）：short 2709字 · medium 11662字 · long 87423字 · children 671字
+- **中篇 8 页漫画**：light 分镜 267s · **lib 配图 32/32**（~7.7min）
+- **`qa-songliao-literary-regression`**：补 `QA_PANEL_RENDER_MODE=lib`（与 DATABASE_URL 同源，不依赖 dev HTTP）
+- **根因**：`DATABASE_URL` 须 `file:./dev.db`（勿 `file:./prisma/dev.db`）；dev 若绑 `ci.sqlite` 则 HTTP panels/stream 404
+- **roster**：raw SQL 优先，消除 Prisma Client 滞后噪音
+
+---
+
+
+- **`qa:product-lines`**：游戏 / 小说 / 漫画 离线 + E2E 独立验收（报告 `qa-output/product-lines/`）
+- **`qa:literary-user-journey`**：中篇四宫格断言对齐迭代十八
+- **`qa-novel-comic-smoke`**：补 `prisma.$disconnect()` 防挂起
+- **`fix-dev-db-migrations`**：缺 User 表时 `db push` + failed migration rollback
+- **`novel-character-roster-db`**：Prisma 优先 + raw SQL 回退（Client 未 generate 时）
+- **实机**：短篇宋辽小说 3343 字 + 漫画 light 4 页 252s ✅
+
+Test Results:
+
+- 游戏：离线 6/6 + E2E **15/15**
+- 小说：离线 3/3 + E2E **3/3**
+- 漫画：离线 5/5 + E2E **4/4**
+- `npm run qa:product-lines`：**全绿**
+
+---
+
 
 - **`novel-character-roster-db.ts`**：移除 raw SQL，统一 Prisma `characterRosterJson`
 - **`qa:comic-director-pipeline`**：断言中篇 8 页轻量 / Brief 跳过 / 蓝图阈值；接入 `qa:b-tier-smoke` + `qa:deploy-preflight`

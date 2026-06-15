@@ -29,7 +29,14 @@
 | 19 | 配图 ETA 与 Studio 分镜续跑 | ✅ | `comic-panel-eta` + 改编摘要 `resumeComic` 深链 |
 | 20 | 中篇 8 页误走导演包 ~15min | ✅ | `mediumDirectorMinPages=12` + `qa:comic-director-pipeline` |
 | 21 | from_novel 多一轮 Brief LLM | ✅ | `shouldSkipComicBriefExpand` |
-| 22 | roster 迁移后仍 raw SQL | ✅ | `novel-character-roster-db.ts` 改 Prisma Client |
+| 22 | roster 迁移后仍 raw SQL 优先 | ✅ | **Prisma 优先** + Unknown field 时 raw 回退 · `qa:novel-character-roster-db` |
+| 23 | shell 残留 QA env 误跑 resume/4 页 | ✅ | `clearLeakedLiteraryQaEnv` + wrapper 强制 8 页 |
+| 24 | panels-resume 误选已满格旧 comic | ✅ | `resolveCachedComicId({ ignoreEnv })` 优先缺配图 |
+| 25 | DATABASE_URL 误配 dev/ci | ✅ | `database-url.ts` + `run-dev.mjs` |
+| 26 | 宋辽实机产物难追溯 | ✅ | `songliao-regression-artifacts` + medium-chain |
+| 27 | 17 款竞品 clone 可玩度 + 视觉 batch | ✅ | `qa:competitor-clone-batch` smoke 8/8 · all 17/17 |
+| 28 | 竞品 clone 离线断言 + CI/nightly | ✅ | `qa:competitor-clone-checks-offline` · gates 接入 |
+| 29 | 六模板 PM 自动化签收 | ✅ | `qa:pm-handtest-signoff`（结构/事件；肉眼可选） |
 
 ## 仍属产品差距（非阻断 bug）
 
@@ -42,8 +49,10 @@
 ## 命令
 
 ```bash
-npm run qa:historical-closure          # 历史问题总验（~90s，需 dev @8888）
-npm run qa:full                        # 全量（含 migrate/build/E2E/handtest）
-RUN_REAL_IMAGE_GEN=1 npm run qa:cover-play-alignment
-AGENTIC_MONITOR=1 npm run qa:llm-agentic:monitor
+npm run qa:historical-closure          # 历史问题总验（Astrocade + 文学离线）
+npm run qa:b-tier-smoke                # 含 roster-db / songliao:artifacts / clone-checks
+npm run qa:competitor-clone-batch      # dev @8888 · smoke 或 all=17
+npm run qa:competitor-clone-checks-offline  # 17 款离线断言（CI）
+npm run qa:pm-handtest-signoff         # 六模板 + 竞品 PM 自动化签收
+npm run qa:songliao:medium-chain       # 宋辽中篇分镜+配图实机
 ```

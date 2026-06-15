@@ -16,17 +16,23 @@ export type PlatformerBlueprint = {
   suggestedWinScore: number;
 };
 
-export function inferPlatformerMode(opts: { prompt?: string; spec?: GameSpec }): PlatformerMode {
+export function inferPlatformerMode(opts: {
+  prompt?: string;
+  spec?: GameSpec;
+  sampleId?: string;
+}): PlatformerMode {
+  if (opts.sampleId === "elastic-thief-2") return "stealth";
   const tid = opts.spec?.templateId;
   if (tid === "stealth") return "stealth";
   const blob = (opts.prompt ?? opts.spec?.title ?? "").toLowerCase();
-  if (/潜行|elastic thief|偷取|守卫.*激光|摆荡|grapple|swing steal/i.test(blob)) return "stealth";
+  if (/潜行|elastic thief|偷取|守卫.*激光|摆荡|grapple|swing steal|伸缩/i.test(blob)) return "stealth";
   return "standard";
 }
 
 export function buildPlatformerBlueprint(opts: {
   prompt?: string;
   spec?: GameSpec;
+  sampleId?: string;
 }): PlatformerBlueprint {
   const mode = inferPlatformerMode(opts);
   const intensity = opts.spec?.director?.intensity ?? 0.62;

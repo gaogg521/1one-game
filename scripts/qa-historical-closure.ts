@@ -32,6 +32,10 @@ async function main() {
   run("npm run qa:game-hud-locale-dedicated");
   run("npm run qa:architecture-parity");
   run("npm run qa:b-tier-smoke");
+  run("npm run qa:database-url");
+  run("npm run qa:comic-director-pipeline");
+  run("npm run qa:songliao:artifacts");
+  run("npm run qa:novel-character-roster-db");
   run("npm run qa:comic-storyboard-resilience");
   run("npm run qa:console-sso-config");
   run("npm run qa:admin-console");
@@ -72,11 +76,17 @@ async function main() {
       "npx playwright test e2e/astrocade-agentic.smoke.spec.ts e2e/astrocade-duplicate-phaser.smoke.spec.ts e2e/create-generate-stream-agentic.spec.ts e2e/samples-en-matrix.smoke.spec.ts e2e/competitor-clone.smoke.spec.ts --workers=1 --reporter=line",
     );
     run("npm run qa:game-effect-compare");
+    console.log("\n→ npm run qa:competitor-clone-batch (COMPETITOR_CLONE_BATCH=smoke)");
+    execSync("npm run qa:competitor-clone-batch", {
+      stdio: "inherit",
+      cwd: process.cwd(),
+      env: { ...process.env, COMPETITOR_CLONE_BATCH: "smoke" },
+    });
   } else {
-    console.warn("[skip] Playwright + game-effect — start dev first");
+    console.warn("[skip] Playwright + game-effect + competitor-clone-batch — start dev first");
   }
 
-  console.log("\n[OK] qa:historical-closure complete — 历史 Astrocade 链路已验");
+  console.log("\n[OK] qa:historical-closure complete — 历史 Astrocade + 文学链路已验");
 }
 
 main().catch((e) => {

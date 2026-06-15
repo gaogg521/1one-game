@@ -7,11 +7,10 @@
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
+import { applyQaOfflineDatabaseUrl } from "@/lib/database-url";
 
 loadEnv();
-if (process.env.QA_USE_DEV_DB !== "1") {
-  process.env.DATABASE_URL = "file:./prisma/ci.sqlite";
-}
+applyQaOfflineDatabaseUrl();
 
 async function main(): Promise<void> {
   const dbUrl = process.env.DATABASE_URL?.trim() || "file:./prisma/ci.sqlite";

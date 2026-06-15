@@ -2,9 +2,10 @@
  * Studio 复制 API 冒烟（需 8888，DATABASE_URL 与服务一致）
  * DATABASE_URL=file:./prisma/ci.sqlite npx tsx scripts/qa-studio-duplicate.ts
  */
+import { applyQaOfflineDatabaseUrl } from "@/lib/database-url";
 import { prisma } from "@/lib/prisma";
 
-process.env.DATABASE_URL = process.env.DATABASE_URL ?? "file:./prisma/ci.sqlite";
+applyQaOfflineDatabaseUrl();
 
 const base = process.env.BENCHMARK_BASE_URL ?? "http://127.0.0.1:8888";
 const ownerKey = "qa-dup-test";

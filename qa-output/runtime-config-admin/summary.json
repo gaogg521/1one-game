@@ -1,12 +1,12 @@
 {
-  "at": "2026-06-14T15:35:54.855Z",
+  "at": "2026-06-15T01:52:40.259Z",
   "pass": true,
-  "dbUrl": "file:./prisma/ci.sqlite",
+  "dbUrl": "file:./dev.db",
   "checks": [
     {
       "name": "prisma migrate deploy",
       "ok": true,
-      "detail": "file:./prisma/ci.sqlite"
+      "detail": "file:./dev.db"
     },
     {
       "name": "crypto roundtrip",
@@ -48,7 +48,33 @@
     {
       "name": "HTTP dev server reachable",
       "ok": true,
-      "detail": "skipped — DATABASE_URL=file:./prisma/ci.sqlite PORT=8888 npm run dev"
+      "detail": "http://127.0.0.1:8888"
+    },
+    {
+      "name": "HTTP GET /api/admin/runtime-config",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "HTTP models.gamePrimary",
+      "ok": true
+    },
+    {
+      "name": "HTTP PATCH /api/admin/runtime-config",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "HTTP PATCH novelTextPrimary applied",
+      "ok": true
+    },
+    {
+      "name": "HTTP GET after PATCH",
+      "ok": true
+    },
+    {
+      "name": "HTTP PATCH restore novelTextPrimary",
+      "ok": true
     }
   ],
   "seededModels": {

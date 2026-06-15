@@ -42,7 +42,7 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
-          coaster: buildCoasterBlueprint({ prompt, spec }),
+          coaster: buildCoasterBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
         { variantId: "rail-in-air", coaster: { speedBoost: 1.12, bankIntensity: 1.35 } },
@@ -136,7 +136,7 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
   "elastic-thief-2": {
     variantId: "elastic-thief-2",
     apply: (spec, sample, prompt) => {
-      const plat = buildPlatformerBlueprint({ prompt, spec });
+      const plat = buildPlatformerBlueprint({ prompt, spec, sampleId: sample.id });
       return withProfile(
         {
           ...spec,

@@ -12,11 +12,19 @@ const STEPS = [
   "npm run qa:comic-novel-product-rules",
   "npm run qa:comic-storyboard-resilience",
   "npm run qa:comic-director-pipeline",
+  "npm run qa:database-url",
+  "npm run qa:songliao:artifacts",
+  "npm run qa:novel-character-roster-db",
+  "npm run qa:coaster-endless-mode",
+  "npm run qa:platformer-stealth-mode",
+  "npm run qa:pottery-mode",
+  "npm run qa:puzzle-mode",
   "npm run qa:comic-panel-eta",
   "npm run qa:comic-featured:offline",
   "npm run qa:comic-director-chunk-stats",
   "npm run qa:runtime-config-admin",
   "npm run qa:architecture-parity",
+  "npm run qa:competitor-clone-checks-offline",
 ] as const;
 
 function run(cmd: string): { ok: boolean; detail?: string } {

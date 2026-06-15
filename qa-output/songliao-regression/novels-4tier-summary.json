@@ -1,0 +1,51 @@
+{
+  "at": "2026-06-14T16:58:47.000Z",
+  "title": "我穿越到了宋辽之战的战场",
+  "owner": "qa-songliao-regression",
+  "model": "deepseek-v4-pro",
+  "pass": true,
+  "novels": [
+    {
+      "tier": "short",
+      "ok": true,
+      "novelId": "cmqe019r5000096xqgv81pszq",
+      "chars": 2709,
+      "chapters": 3,
+      "genre": "historical",
+      "ms": 131000
+    },
+    {
+      "tier": "medium",
+      "ok": true,
+      "novelId": "cmqe0agxy000196xqbl6egxe2",
+      "chars": 11662,
+      "chapters": 5,
+      "genre": "historical",
+      "ms": 429000
+    },
+    {
+      "tier": "long",
+      "ok": true,
+      "novelId": "cmqe1382q000296xq3ts6v2dh",
+      "chars": 87423,
+      "chapters": 17,
+      "genre": "historical",
+      "ms": 1342000
+    },
+    {
+      "tier": "children",
+      "ok": true,
+      "novelId": "cmqe13nbr000396xqdjsi65zj",
+      "chars": 671,
+      "chapters": 2,
+      "genre": "transmigration",
+      "ms": 20000
+    }
+  ],
+  "urls": {
+    "short": "/novel/cmqe019r5000096xqgv81pszq",
+    "medium": "/novel/cmqe0agxy000196xqbl6egxe2",
+    "long": "/novel/cmqe1382q000296xq3ts6v2dh",
+    "children": "/novel/cmqe13nbr000396xqdjsi65zj"
+  }
+}

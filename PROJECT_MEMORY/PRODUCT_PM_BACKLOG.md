@@ -21,7 +21,7 @@
 |----|------|----------|
 | 导演包成功路径监控 | director chunk 成功率仪表盘 | ✅ SSE 统计 + QA 门禁 |
 | SSO 生产 IdP | Azure / 飞书 + `ADMIN_CONSOLE_HOST` | Console 企业登录可用 |
-| 六模板章节感肉眼验收 | handtest 矩阵最后一项 | PM sign-off |
+| 六模板章节感肉眼验收 | handtest 矩阵 | ✅ `qa:pm-handtest-signoff`；肉眼可选 |
 
 ## P1 — 体验 polish
 

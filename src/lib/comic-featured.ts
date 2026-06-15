@@ -7,6 +7,17 @@ export function resolveMeishanFeaturedComicId(): string {
   return process.env.COMIC_FEATURED_MEISHAN_ID?.trim() || DEFAULT_MEISHAN_FEATURED_COMIC_ID;
 }
 
+/** 将指定漫画标记为公开精选（幂等） */
+export async function seedFeaturedComic(comicId: string): Promise<{ id: string; updated: boolean }> {
+  const row = await prisma.comic.findUnique({ where: { id: comicId }, select: { id: true } });
+  if (!row) return { id: comicId, updated: false };
+  await prisma.comic.update({
+    where: { id: comicId },
+    data: { featured: true, visibility: "public" },
+  });
+  return { id: comicId, updated: true };
+}
+
 /** 将煤山 8 页漫画标记为公开精选（幂等；找不到则跳过） */
 export async function seedMeishanFeaturedComic(): Promise<{ id: string | null; updated: boolean }> {
   const preferredId = resolveMeishanFeaturedComicId();

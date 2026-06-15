@@ -98,6 +98,9 @@ function main() {
   const parityValidationOk = run("npm run qa:competitor-parity-validation", {
     COMPETITOR_PARITY_STRICT: "1",
   });
+  const cloneBatchOk = run("npm run qa:competitor-clone-batch", {
+    COMPETITOR_CLONE_BATCH: "all",
+  });
 
   const snap = {
     at: new Date().toISOString(),
@@ -107,6 +110,7 @@ function main() {
     e2eSamplesEnOk,
     specCanonicalOk,
     parityValidationOk,
+    cloneBatchOk,
     godotMatrix: {
       templates: [...PRODUCT.godot.supportedTemplates],
       templateCount: PRODUCT.godot.supportedTemplates.length,
@@ -120,7 +124,8 @@ function main() {
       e2eGodotOk &&
       e2eSamplesEnOk &&
       specCanonicalOk &&
-      parityValidationOk,
+      parityValidationOk &&
+      cloneBatchOk,
   };
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
