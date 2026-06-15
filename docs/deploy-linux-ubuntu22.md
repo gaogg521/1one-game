@@ -1,8 +1,10 @@
 # Linux 一键部署
 
+支持 **Ubuntu / Debian / CentOS / RHEL / Rocky / AlmaLinux**。
+
 ## 一键安装
 
-在 **Ubuntu 22.04 / Debian 12** 服务器上执行：
+在 **Ubuntu 22.04 / Debian 12 / CentOS 7+ / RHEL 8+** 服务器上执行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
@@ -81,7 +83,10 @@ sudo nano /opt/operone/.env
 PORT=3000
 ```
 
-#### ② 若已配置 Nginx 反代 — `/etc/nginx/sites-available/operone`
+#### ② 若已配置 Nginx 反代
+
+- **Ubuntu/Debian**：`/etc/nginx/sites-available/operone`
+- **CentOS/RHEL**：`/etc/nginx/conf.d/operone.conf`
 
 域名访问时，Nginx 需把流量转到应用实际端口：
 
@@ -185,7 +190,8 @@ sudo certbot --nginx -d app.example.com
 | 环境变量 / API Key / 端口 | `/opt/operone/.env` |
 | systemd 服务 | `systemctl status operone` |
 | 服务日志 | `journalctl -u operone -f` |
-| Nginx 站点 | `/etc/nginx/sites-available/operone` |
+| Nginx 站点（Debian） | `/etc/nginx/sites-available/operone` |
+| Nginx 站点（RHEL/CentOS） | `/etc/nginx/conf.d/operone.conf` |
 | 健康检查 | `curl -s http://127.0.0.1:6666/api/health` |
 | 更新版本 | 再次执行 `install.sh`，或 `sudo bash /opt/operone/scripts/deploy/linux-ubuntu22-full.sh --update` |
 

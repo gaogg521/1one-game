@@ -448,7 +448,7 @@ Schema：`prisma/schema.prisma` · 迁移：`prisma/migrations/`。
 | 游戏 | Phaser 4 · Godot 4.4 Web · Agentic JS 模块 |
 | AI | OpenAI 兼容 SDK · 多模型 cascade · 文生图 |
 | 测试 | Playwright E2E · tsx QA 脚本 · GitHub Actions |
-| 部署 | Docker Compose（8888） |
+| 部署 | Linux 一键脚本（**6666**）· Docker Compose · systemd |
 
 ---
 
@@ -468,6 +468,47 @@ npm run dev
 未配置 `OPENAI_API_KEY` 时，部分链路走 mock / 规则推断（以运行时提示为准）。
 
 **局域网多端**：`.env.local` 设置 `NEXT_PUBLIC_DEV_CANONICAL_ORIGIN=http://你的局域网IP:8888`。
+
+---
+
+## 生产部署（Linux 一键）
+
+在 **Ubuntu / Debian / CentOS / RHEL** 空服务器上，**一条命令**完成拉代码、装依赖、构建与启动（无需事先 clone、无需填 API Key）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+| 项 | 默认值 |
+|----|--------|
+| 安装目录 | `/opt/operone` |
+| 监听端口 | **6666**（内网 `http://服务器IP:6666`） |
+| 再次执行 | 自动更新版本 |
+
+**有域名 + HTTPS**（DNS 已指向本机，可选）：
+
+```bash
+export OPERONE_DOMAIN='app.example.com'
+export CERTBOT_EMAIL='ops@example.com'
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+**装完后再配**（改 `.env` 后 `sudo systemctl restart operone`）：
+
+| 需求 | 位置 |
+|------|------|
+| API Key / 网关 | `/opt/operone/.env` → `OPENAI_API_KEY`、`OPENAI_BASE_URL` |
+| 改端口 | `/opt/operone/.env` → `PORT`；若绑域名还需改 `/etc/nginx/sites-available/operone` |
+| 绑域名 / HTTPS | 见完整文档 |
+
+完整说明（端口、Nginx、Certbot、运维速查）：**[`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md)**
+
+| 脚本 | 说明 |
+|------|------|
+| [`scripts/deploy/install.sh`](scripts/deploy/install.sh) | 用户入口 · `curl \| bash` |
+| [`scripts/deploy/linux-ubuntu22-full.sh`](scripts/deploy/linux-ubuntu22-full.sh) | 完整安装 / 更新 / 绑域名 |
+| [`scripts/deploy/linux-ubuntu22-sqlite.sh`](scripts/deploy/linux-ubuntu22-sqlite.sh) | 分阶段部署（高级） |
+| [`scripts/deploy/linux-docker-sqlite.sh`](scripts/deploy/linux-docker-sqlite.sh) | Docker 单机 SQLite |
 
 ---
 
@@ -594,7 +635,7 @@ game/
 |------|------|
 | [`docs/ai-handoff-architecture-cn.md`](docs/ai-handoff-architecture-cn.md) | 给其他 AI：架构总览 + 源码索引 |
 | [`docs/architecture-orchestration.md`](docs/architecture-orchestration.md) | 编排 Phase 0～4 |
-| [`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md) | **Linux 新服务器部署**（Ubuntu 22 · SQLite · systemd） |
+| [`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md) | **Linux 生产一键部署**（Ubuntu 22 · 端口 6666 · API Key · 绑域名） |
 | [`docs/local-database.md`](docs/local-database.md) | 本地库与迁移 |
 | [`docs/admin-super-admin.md`](docs/admin-super-admin.md) | 超级管理员与 `/console` |
 | [`PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md`](PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md) | 历史问题闭环清单 |
@@ -623,6 +664,13 @@ npm ci && cp .env.example .env && npx prisma migrate dev && npm run dev
 ```
 
 Product models and pipeline thresholds: **`src/lib/product-config.ts`**. Secrets only in **`.env`**.
+
+**Production (Linux one-click):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+# → http://<server-ip>:6666 · see docs/deploy-linux-ubuntu22.md
+```
 
 See [`docs/ai-handoff-architecture-cn.md`](docs/ai-handoff-architecture-cn.md) for the full handoff guide.
 

@@ -37,9 +37,12 @@ bootstrap_if_standalone() {
   fi
 
   printf '\033[1;34m[operone-deploy]\033[0m 独立模式：从 %s 拉取仓库 …\n' "$GIT_REPO"
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y curl ca-certificates git
+  local _os_lib _raw="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
+  _os_lib="$(mktemp /tmp/operone-os-lib.XXXXXX.sh)"
+  curl -fsSL "${_raw}/lib/os-lib.sh" -o "$_os_lib"
+  # shellcheck source=/dev/null
+  source "$_os_lib"
+  install_bootstrap_pkgs
   mkdir -p "$(dirname "$OPERONE_DIR")"
   git clone --branch "$GIT_BRANCH" --depth 1 "$GIT_REPO" "$OPERONE_DIR"
   export OPERONE_BOOTSTRAPPED=1
@@ -148,8 +151,8 @@ detect_os() {
         warn "推荐 Debian 12+，当前 $PRETTY_NAME"
       fi
       ;;
-    *)
-      warn "未在 Ubuntu/Debian 上测试，当前: ${ID:-unknown}"
+    centos|rhel|rocky|almalinux|ol|fedora|amzn|tencentos|opencloudos|anolis)
+      log "系统: ${PRETTY_NAME:-unknown} · 内核 $(uname -r) · $(uname -m)"
       ;;
   esac
 }

@@ -18,6 +18,11 @@
 if [[ -z "${SCRIPT_DIR:-}" ]]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=os-lib.sh
+source "$_LIB_DIR/os-lib.sh"
+os_detect
+
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 log() { printf '\033[1;34m[operone-deploy]\033[0m %s\n' "$*"; }
@@ -60,12 +65,8 @@ wait_for_health() {
 
 phase_deps() {
   need_root
-  log "[1/5] 安装系统依赖 …"
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y \
-    curl ca-certificates git build-essential openssl rsync \
-    procps dnsutils
+  log "[1/5] 安装系统依赖 … ($(os_pretty_name))"
+  install_build_deps
 
   # 内存不足时自动加 2G swap，避免 npm build OOM
   local mem_mb swap_mb
@@ -91,8 +92,7 @@ phase_deps() {
   fi
 
   log "安装 Node.js ${NODE_MAJOR}.x (NodeSource) …"
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
-  apt-get install -y nodejs
+  install_nodejs "$NODE_MAJOR"
   log "Node $(node -v) · npm $(npm -v)"
 }
 
@@ -201,7 +201,7 @@ merge_env_key() {
 phase_app() {
   need_root
   log "[2/5] 拉取代码并构建 …"
-  id "$OPERONE_USER" &>/dev/null || useradd --system --home "$OPERONE_DIR" --shell /usr/sbin/nologin "$OPERONE_USER" || true
+  ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"
 
   clone_or_update_repo
   write_env_if_missing
@@ -290,7 +290,7 @@ ensure_nginx_installed() {
     return 0
   fi
   log "安装 Nginx …"
-  apt-get install -y nginx
+  install_nginx_pkg
 }
 
 phase_nginx() {
@@ -304,12 +304,8 @@ phase_nginx() {
   ensure_nginx_installed
   systemctl enable nginx 2>/dev/null || true
 
-  local conf="/etc/nginx/sites-available/operone"
-  sed -e "s/__DOMAIN__/${OPERONE_DOMAIN}/g" -e "s/__PORT__/${OPERONE_PORT}/g" "$template" > "$conf"
-  ln -sf "$conf" /etc/nginx/sites-enabled/operone
-
-  # 仅当 default 占用 80 且无自定义需求时移除；已有 Nginx 多站点不受影响
-  if [[ -f /etc/nginx/sites-enabled/default ]]; then
+  nginx_write_operone_site "$template" "$OPERONE_DOMAIN" "$OPERONE_PORT"
+  if [[ "$OS_FAMILY" == debian && -f /etc/nginx/sites-enabled/default ]]; then
     warn "移除 Nginx default 站点（避免与 operone 冲突）"
     rm -f /etc/nginx/sites-enabled/default
   fi
@@ -344,34 +340,24 @@ phase_ssl() {
 
   check_domain_points_here "$OPERONE_DOMAIN" || true
 
-  apt-get install -y certbot python3-certbot-nginx
+  install_certbot_pkgs
   certbot --nginx -d "$OPERONE_DOMAIN" --non-interactive --agree-tos -m "$CERTBOT_EMAIL" --redirect
   ok "HTTPS: https://${OPERONE_DOMAIN}"
 }
 
 configure_firewall_if_needed() {
   need_root
-  command -v ufw >/dev/null 2>&1 || {
-    apt-get install -y ufw 2>/dev/null || {
-      warn "未安装 ufw，跳过防火墙"
-      return 0
-    }
-  }
-
-  if ufw status | grep -qi "Status: active"; then
-    log "ufw 已启用，放行 80/443 …"
+  local with_http=0
+  [[ -n "${OPERONE_DOMAIN:-}" ]] && with_http=1
+  if configure_firewall_ports "$OPERONE_PORT" "$with_http"; then
+    ok "防火墙规则已更新"
   else
-    log "启用 ufw（放行 SSH + 80 + 443）…"
-    ufw allow OpenSSH >/dev/null 2>&1 || ufw allow 22/tcp
-    ufw --force enable
+    if [[ "$OS_FAMILY" == debian ]]; then
+      pkg_install ufw 2>/dev/null && configure_firewall_ports "$OPERONE_PORT" "$with_http" || warn "未配置防火墙，请手动放行 ${OPERONE_PORT}/tcp"
+    else
+      warn "未检测到 ufw/firewalld，请手动放行 ${OPERONE_PORT}/tcp"
+    fi
   fi
-
-  ufw allow 80/tcp
-  ufw allow 443/tcp
-  if [[ -z "$OPERONE_DOMAIN" ]]; then
-    ufw allow "${OPERONE_PORT}/tcp" || true
-  fi
-  ok "防火墙规则已更新"
 }
 
 server_primary_ip() {
