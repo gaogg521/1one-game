@@ -53,8 +53,10 @@ export function depthChangePasses(
   after: number | undefined,
   expect: GameplayDepthExpect,
 ): boolean {
-  if (before == null || after == null || !Number.isFinite(before) || !Number.isFinite(after)) return false;
-  const delta = after - before;
+  const a = after != null && Number.isFinite(after) ? after : undefined;
+  if (a == null) return false;
+  const b = before != null && Number.isFinite(before) ? before : 0;
+  const delta = a - b;
   const min = expect.minDelta ?? 1;
   switch (expect.change) {
     case "increased":

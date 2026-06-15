@@ -174,6 +174,7 @@ export async function performInteraction(
         position: { x: box.width * 0.5, y: box.height * 0.5 },
         force: true,
       });
+      await canvas.focus();
       break;
     default:
       break;

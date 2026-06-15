@@ -708,6 +708,7 @@ export class ShooterScene extends Phaser.Scene {
     if (this.finished) return;
     if (this.shotsFired % 4 === 0) playBleep("fire");
     this.shotsFired += 1;
+    setPhaserQaState({ qaTouches: this.shotsFired });
     const isBurst = this.currentFireDelay <= 140;
     const spread = this.time.now < this.supportWingUntil ? [-18, 0, 18] : isBurst ? [-12, 0, 12] : [0];
     if (isBurst) {

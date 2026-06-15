@@ -882,6 +882,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       if (this.finished) return;
       this.tdQaTouches += 1;
       bumpQaTouch();
+      setPhaserQaState({ qaTouches: this.tdQaTouches });
       this.tryBuildOrUpgrade(pointer.x, pointer.y);
     });
 
@@ -1200,6 +1201,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     if (this.finished || !this.mergeGridEnabled) return;
     this.tdQaTouches += 1;
     bumpQaTouch();
+    setPhaserQaState({ qaTouches: this.tdQaTouches });
     const tier = this.mergeCells[idx] ?? 0;
     if (this.mergeSelected === null) {
       if (tier <= 0) return;
