@@ -79,7 +79,20 @@ else
   ensure_root_privileges_piped "$OPERONE_INSTALL_URL" "$@"
 fi
 
-# CentOS 7：默认与 Ubuntu 相同走源码 install.sh；仅 OPERONE_USE_DOCKER=1 时用 Docker
+# curl | bash 可能拿到 CDN 缓存的旧 install.sh；已有仓库时优先 re-exec 本地最新脚本
+LOCAL_INSTALL="$OPERONE_DIR/scripts/deploy/install.sh"
+if [[ -f "$LOCAL_INSTALL" ]]; then
+  _self="${BASH_SOURCE[0]:-}"
+  if [[ "$_self" != "$LOCAL_INSTALL" ]] && [[ -d "$OPERONE_DIR/.git" ]]; then
+    log "检测到已有仓库，同步后使用本地 install.sh（避免 CDN 旧脚本）…"
+    (cd "$OPERONE_DIR" && git fetch origin && git checkout "$GIT_BRANCH" && git pull --ff-only origin "$GIT_BRANCH" 2>/dev/null) || true
+    if [[ -f "$LOCAL_INSTALL" ]]; then
+      exec bash "$LOCAL_INSTALL" "$@"
+    fi
+  fi
+fi
+
+# 仅显式 OPERONE_USE_DOCKER=1 时走 Docker（绝不自动切换）
 os_detect 2>/dev/null || true
 if type is_centos7 >/dev/null 2>&1 && is_centos7 && [[ "${OPERONE_USE_DOCKER:-0}" == "1" ]]; then
   log "CentOS 7：Docker 部署（OPERONE_USE_DOCKER=1）"
