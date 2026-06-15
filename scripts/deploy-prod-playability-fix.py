@@ -47,8 +47,7 @@ def main() -> int:
     client.connect(HOST, 22, USER, pw, timeout=30, allow_agent=False, look_for_keys=False)
 
     steps = [
-        f"cd {REPO} && git fetch origin main",
-        f"cd {REPO} && git reset --hard origin/main",
+        f"cd {REPO} && git fetch origin && git reset --hard origin/main && git log -1 --oneline",
         f"cd {REPO} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT=3000|' .env || echo 'PORT=3000' >> .env)",
         f"cd {REPO} && HOME={REPO} NPM_CONFIG_CACHE={REPO}/.npm-cache npm install --no-audit --no-fund --ignore-scripts",
         f"cd {REPO} && HOME={REPO} npx prisma generate",

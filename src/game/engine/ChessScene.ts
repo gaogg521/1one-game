@@ -66,6 +66,7 @@ export class ChessScene extends Phaser.Scene {
     this.isometricHints = chessPf?.isometricHints ?? false;
 
     const w = this.scale.width;
+    const h = this.scale.height;
     this.cell = Math.min(52, (w - 60) / 8);
     this.ox = (w - this.cell * 8) / 2;
     this.boardGfx = this.add.graphics();
