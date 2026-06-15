@@ -11,6 +11,11 @@ function normalizeBaseURL(url: string): string {
   return u;
 }
 
+/** OpenAI 兼容网关 Base URL 规范化（与 SDK 路径一致，自动补 /v1） */
+export function normalizeOpenAIBaseURL(url: string): string {
+  return normalizeBaseURL(url);
+}
+
 function mergeDefaultHeaders(override?: Record<string, string>): Record<string, string> | undefined {
   const h: Record<string, string> = {};
   const ua = process.env.OPENAI_USER_AGENT?.trim();

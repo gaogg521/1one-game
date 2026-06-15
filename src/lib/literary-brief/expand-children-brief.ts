@@ -1,5 +1,6 @@
 import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { sanitizeChildrenBriefForTier } from "@/lib/children-brief-sanitize";
+import { extractChildrenParentInputFromSeed } from "@/lib/children-source-fidelity";
 import { parseChildrenTargetAge } from "@/lib/children-age-length";
 import {
   buildChildrenPipelinePrompt,
@@ -29,17 +30,17 @@ export { parseChildrenCreativeBrief, isChildrenCreativeBrief } from "@/lib/liter
 export async function expandChildrenCreativeBrief(
   params: ExpandChildrenBriefOptions,
 ): Promise<ExpandChildrenBriefResult> {
-  const userPrompt = params.prompt.trim();
+  const userLine = extractChildrenParentInputFromSeed(params.prompt.trim());
   const age = parseChildrenTargetAge(params.childrenTargetAge);
   const title = params.title?.trim();
 
-  let brief = seedChildrenCreativeBrief(userPrompt, title, age);
+  let brief = seedChildrenCreativeBrief(userLine, title, age);
   if (params.userRevision) {
     brief = mergeChildrenBriefRevision(brief, params.userRevision);
   }
 
   if (!params.skipLlm) {
-    brief = await llmExpandChildrenBriefFromSeed(brief);
+    brief = await llmExpandChildrenBriefFromSeed(brief, params.userRevision);
   }
 
   brief = sanitizeChildrenBriefForTier(brief, age);
@@ -51,7 +52,7 @@ export async function expandChildrenCreativeBrief(
 
   return {
     brief,
-    augmentedPrompt: buildChildrenPipelinePrompt(userPrompt, brief, params.userRevision),
+    augmentedPrompt: buildChildrenPipelinePrompt(userLine, brief, params.userRevision),
     oneLineSummary: formatChildrenBriefOneLineSummary(brief),
   };
 }

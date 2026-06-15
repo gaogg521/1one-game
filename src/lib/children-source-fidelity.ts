@@ -14,8 +14,45 @@ export function normalizeChildrenNarrativeMode(raw: string | undefined): Childre
   return raw === "retelling" || raw === "listener_extension" ? raw : null;
 }
 
+/** 从 buildChildrenBriefSeed / buildNovelBriefSeed 提取家长原话 */
+export function extractChildrenParentInputFromSeed(prompt: string): string {
+  const trimmed = prompt.trim();
+  if (!trimmed) return "";
+  for (const line of trimmed.split(/\n/)) {
+    const parentMatch = line.match(/^家长输入(?:[（(][^）)]*[）)])?[：:]\s*(.+)$/);
+    if (parentMatch?.[1]) return parentMatch[1].trim();
+    const enMatch = line.match(/^Parent input:\s*(.+)$/i);
+    if (enMatch?.[1]) return enMatch[1].trim();
+    const msMatch = line.match(/^Input ibu bapa:\s*(.+)$/i);
+    if (msMatch?.[1]) return msMatch[1].trim();
+    const thMatch = line.match(/^ข้อมูลจากผู้ปกครอง:\s*(.+)$/);
+    if (thMatch?.[1]) return thMatch[1].trim();
+  }
+  if (!/^(书名|Title|类型|Genre|读者|Target readers|Sasaran pembaca|กลุ่มผู้อ่าน)[：:]/m.test(trimmed)) {
+    return trimmed;
+  }
+  const lastLine = trimmed.split(/\n/).pop()?.trim();
+  return lastLine || trimmed;
+}
+
+/** 家长输入是否像完整故事梗概（而非一句日常话/成语/典故名） */
+export function looksLikeDirectStoryConcept(userLine: string): boolean {
+  const t = userLine.trim();
+  if (t.length < 10) return false;
+  if (/的故事$|童话$|寓言$/.test(t)) return true;
+  const hasCharacter = /小(?:白)?兔|大灰狼|小(?:熊|猫|狗|狐|松鼠|象|猴|鸭|鸟|猪|羊)|(?:狼|狐狸|老虎|狮子)(?:想|要|在)/.test(
+    t,
+  );
+  const hasPlot =
+    /遇见|碰到|遇到|脱险|机智|聪明|打败|逃跑|冒险|采|找|帮助|分享|吵架|和好|想吃|抓住|逃脱/.test(t);
+  if (hasCharacter && hasPlot) return true;
+  if (hasPlot && t.split(/[，,。；;]/).filter(Boolean).length >= 2) return true;
+  return false;
+}
+
 /**
  * 源材料类：3 岁及以上默认复述；0-3 与日常口语用听后延伸。
+ * 完整故事梗概（如「小白兔遇大灰狼脱险」）走直接复述，不用「孩子听完再学」模板。
  */
 export function resolveChildrenNarrativeMode(
   userLine: string,
@@ -25,7 +62,9 @@ export function resolveChildrenNarrativeMode(
 ): ChildrenNarrativeMode {
   const fromBrief = normalizeChildrenNarrativeMode(explicit);
   if (fromBrief) return fromBrief;
-  if (!requiresChildrenSourceFidelity(kind)) return "listener_extension";
+  if (!requiresChildrenSourceFidelity(kind)) {
+    return looksLikeDirectStoryConcept(userLine) ? "retelling" : "listener_extension";
+  }
   const tier = getChildrenAgeTier(parseChildrenTargetAge(targetAge));
   if (tier.tierId === "infant_0_3") return "listener_extension";
   return "retelling";
@@ -34,6 +73,10 @@ export function resolveChildrenNarrativeMode(
 /** 从输入推断典故主人公称呼（通用，非典故白名单） */
 export function childrenProtagonistHintFromUserPrompt(userLine: string): string | undefined {
   const t = userLine.trim();
+  const animalMatch = t.match(
+    /(小(?:白)?兔(?:子|兔)?|大灰狼|小(?:熊|猫|狗|狐|松鼠|象|猴|鸭|鸟|猪|羊)(?:子|子|宝宝)?|(?:狼|狐狸|老虎|狮子)(?:想|要|在|把)?)/,
+  );
+  if (animalMatch?.[1]) return animalMatch[1].replace(/(?:想|要|在|把)$/, "");
   const verbLead = t.match(
     /([\u4e00-\u9fff]{2,4})(?:移山|尝百草|让梨|填海|补天|射日|治水|奔月|磨针|学步|射箭|画蛇|负荆|完璧)/,
   );
@@ -85,6 +128,9 @@ export function inferChildrenInputKind(userLine: string): ChildrenInputKind {
   const t = userLine.trim();
   if (!t) return "daily_phrase";
 
+  // 完整故事梗概（小白兔遇狼等）是家长原创情节，不是成语/典故名
+  if (looksLikeDirectStoryConcept(t)) return "daily_phrase";
+
   if (/神话|传说|典故|古代|传统|经典|名著|寓言|民间故事|历史人物|史传|演义/.test(t)) {
     return "classic_allusion";
   }
@@ -107,7 +153,8 @@ export function resolveChildrenInputKind(
 export function looksLikeNamedClassicSubject(text: string): boolean {
   const s = text.trim().replace(/\s+/g, "");
   if (s.length < 3 || s.length > 28) return false;
-  if (/我|你|不想|幼儿园|玩具|妈妈|爸爸|宝贝|今天|明天|分享|吵架|害怕/.test(s)) {
+  if (looksLikeDirectStoryConcept(s)) return false;
+  if (/我|你|不想|幼儿园|玩具|妈妈|爸爸|宝贝|今天|明天|分享|吵架|害怕|遇见|碰到|遇到|脱险|机智|采|躲|逃/.test(s)) {
     return false;
   }
   if (/神话|传说|典故|成语|故事|古代|经典|传统/.test(s)) return true;
@@ -209,6 +256,35 @@ export function childrenSourceFidelityBlock(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** 日常口语中的完整故事梗概：三拍直接讲家长描述的情节 */
+export function defaultStoryBeatsForDirectPlot(
+  userLine: string,
+  beatCount: number,
+  infant: boolean,
+): string[] {
+  const who = childrenProtagonistHintFromUserPrompt(userLine) || "小动物";
+  const clauses = userLine
+    .trim()
+    .replace(/的故事$|童话$|寓言$/, "")
+    .split(/[，,。；;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (clauses.length >= 2) {
+    const beats = clauses.map((c) => (c.length <= 28 ? c : c.slice(0, 28)));
+    while (beats.length < beatCount) beats.push(beats[beats.length - 1]!);
+    return beats.slice(0, beatCount);
+  }
+  if (infant) {
+    return [`${who}出门做一件事`, `${who}遇到小麻烦`, `${who}安全回家`].slice(0, beatCount);
+  }
+  const beats = [
+    `${who}开始一段小冒险`,
+    `${who}遇到难题或对手`,
+    `${who}想办法解决并平安`,
+  ];
+  return beats.slice(0, beatCount);
 }
 
 /** 典故复述：三拍直接讲源故事线 */

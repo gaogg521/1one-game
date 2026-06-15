@@ -6,7 +6,9 @@ import { apiErrorMessage, clientErrorMessage } from "@/lib/i18n/progress-message
 import {
   CHILDREN_CREATIVE_BRIEF_SCHEMA,
   NOVEL_CREATIVE_BRIEF_SCHEMA,
+  type ChildrenBriefUserRevision,
   type ChildrenCreativeBrief,
+  type NovelBriefUserRevision,
   type NovelCreativeBrief,
 } from "@/lib/literary-brief";
 import { isChildrenGenreTag } from "@/lib/novel-genre-tags";
@@ -27,6 +29,7 @@ export async function fetchCreativeBriefPreview(
     childrenTargetAge?: number;
     inputLocale?: BriefInputLocale;
     uiLocale?: AppLocale;
+    briefRevision?: NovelBriefUserRevision | ChildrenBriefUserRevision | null;
   },
 ): Promise<BriefPreviewResult> {
   const locale = options?.uiLocale ?? "zh-Hans";
@@ -51,6 +54,7 @@ export async function fetchCreativeBriefPreview(
       title: options?.title,
       childrenTargetAge: options?.childrenTargetAge,
       inputLocale: options?.inputLocale,
+      ...(options?.briefRevision ? { briefRevision: options.briefRevision } : {}),
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {

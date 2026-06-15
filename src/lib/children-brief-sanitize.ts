@@ -1,6 +1,8 @@
 import {
   coerceBriefToNarrativeMode,
+  defaultStoryBeatsForDirectPlot,
   defaultStoryBeatsForSourceFidelity,
+  looksLikeDirectStoryConcept,
   resolveChildrenInputKind,
   resolveChildrenNarrativeMode,
   requiresChildrenSourceFidelity,
@@ -93,9 +95,15 @@ export function sanitizeChildrenBriefForTier(
         tier.tierId === "infant_0_3",
         narrativeMode,
       )
-    : tier.tierId === "infant_0_3"
-      ? ["暖暖阳光下摸叶子", "和伙伴笑着说晚安"]
-      : ["和伙伴完成一件小事", "感受到小小的善意", "遇到困难问大人"];
+    : looksLikeDirectStoryConcept(brief.userPrompt)
+      ? defaultStoryBeatsForDirectPlot(
+          brief.userPrompt,
+          maxBeats,
+          tier.tierId === "infant_0_3",
+        )
+      : tier.tierId === "infant_0_3"
+        ? ["暖暖阳光下摸叶子", "和伙伴笑着说晚安"]
+        : ["和伙伴完成一件小事", "感受到小小的善意", "遇到困难问大人"];
 
   while (storyBeats.length < maxBeats) {
     storyBeats.push(defaultBeats[storyBeats.length]!);

@@ -9,6 +9,8 @@ import {
   CHILDREN_CREATIVE_BRIEF_SCHEMA,
   NOVEL_CREATIVE_BRIEF_SCHEMA,
   isChildrenBriefExpandRequest,
+  type ChildrenBriefUserRevision,
+  type NovelBriefUserRevision,
 } from "@/lib/literary-brief";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
@@ -82,6 +84,11 @@ export async function POST(req: Request) {
       ? inputLocaleRaw
       : undefined;
 
+  const briefRevisionRaw =
+    typeof body === "object" && body !== null && "briefRevision" in body
+      ? (body as { briefRevision?: ChildrenBriefUserRevision | NovelBriefUserRevision }).briefRevision
+      : undefined;
+
   try {
     if (medium === "novel" || medium === "comic") {
       if (medium === "novel" && !PRODUCT.novel.creativeBriefExpand) {
@@ -96,6 +103,7 @@ export async function POST(req: Request) {
           title,
           skipLlm,
           childrenTargetAge: Number.isFinite(childrenTargetAge) ? childrenTargetAge : undefined,
+          userRevision: briefRevisionRaw as ChildrenBriefUserRevision | undefined,
         });
         const checked = CHILDREN_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
         if (!checked.success) {
@@ -115,6 +123,7 @@ export async function POST(req: Request) {
         genreId: novelGenreId,
         inputLocale: inputLocale ?? detectBriefInputLocale(prompt),
         skipLlm,
+        userRevision: briefRevisionRaw as NovelBriefUserRevision | undefined,
       });
       const checked = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(result.brief);
       if (!checked.success) {

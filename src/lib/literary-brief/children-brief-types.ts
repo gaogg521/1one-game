@@ -4,8 +4,11 @@ import {
   childrenCoreSubjectFromUserPrompt,
   childrenProtagonistHintFromUserPrompt,
   defaultCastForNarrativeMode,
+  defaultStoryBeatsForDirectPlot,
   defaultStoryBeatsForSourceFidelity,
+  extractChildrenParentInputFromSeed,
   inferChildrenInputKind,
+  looksLikeDirectStoryConcept,
   requiresChildrenSourceFidelity,
   resolveChildrenNarrativeMode,
 } from "@/lib/children-source-fidelity";
@@ -165,48 +168,53 @@ export function seedChildrenCreativeBrief(
   const age = parseChildrenTargetAge(targetAge);
   const tier = getChildrenAgeTier(age);
   const beatCount = tier.tierId === "infant_0_3" ? 2 : 3;
-  const inputKind = inferChildrenInputKind(userPrompt);
-  const fidelity = requiresChildrenSourceFidelity(inputKind);
-  const narrativeMode = resolveChildrenNarrativeMode(userPrompt, inputKind, age);
+  const userLine = extractChildrenParentInputFromSeed(userPrompt);
+  const inputKind = inferChildrenInputKind(userLine);
+  const directPlot = looksLikeDirectStoryConcept(userLine);
+  const fidelity = requiresChildrenSourceFidelity(inputKind) && !directPlot;
+  const narrativeMode = resolveChildrenNarrativeMode(userLine, inputKind, age);
+  const infant = tier.tierId === "infant_0_3";
   const beats = fidelity
-    ? defaultStoryBeatsForSourceFidelity(
-        userPrompt,
-        beatCount,
-        tier.tierId === "infant_0_3",
-        narrativeMode,
-      )
-    : tier.tierId === "infant_0_3"
-      ? ["暖暖的阳光下，轻轻摸一摸小叶子", "笑着和伙伴说晚安"]
-      : [
-          "和伙伴完成一件小事",
-          "感受到小小的善意",
-          "遇到困难问大人",
-        ].slice(0, beatCount);
+    ? defaultStoryBeatsForSourceFidelity(userLine, beatCount, infant, narrativeMode)
+    : directPlot || narrativeMode === "retelling"
+      ? defaultStoryBeatsForDirectPlot(userLine, beatCount, infant)
+      : infant
+        ? ["暖暖的阳光下，轻轻摸一摸小叶子", "笑着和伙伴说晚安"]
+        : ["和伙伴完成一件小事", "感受到小小的善意", "遇到困难问大人"].slice(0, beatCount);
 
-  const core = childrenCoreSubjectFromUserPrompt(userPrompt);
+  const core = childrenCoreSubjectFromUserPrompt(userLine);
+  const who = childrenProtagonistHintFromUserPrompt(userLine);
 
   return CHILDREN_CREATIVE_BRIEF_SCHEMA.parse({
     kind: "children",
     version: 1,
-    userPrompt: userPrompt.trim(),
+    userPrompt: userLine.trim(),
     title: title?.trim() || (core.length >= 2 ? core.slice(0, 12) : undefined),
     genreLabel: "儿童短篇",
     targetAge: age,
     inputKind,
     narrativeMode,
-    interpretation: fidelity ? "源材料（典故/成语/名句），待 AI 童趣解读" : "家长输入待 AI 解读",
-    cast: defaultCastForNarrativeMode(
-      userPrompt,
-      fidelity ? narrativeMode : "listener_extension",
-    ),
+    interpretation: fidelity
+      ? "源材料（典故/成语/名句），待 AI 童趣解读"
+      : directPlot
+        ? `家长描述的故事：${core || userLine.slice(0, 40)}`
+        : "家长输入待 AI 解读",
+    cast: directPlot || narrativeMode === "retelling"
+      ? who
+        ? `${who}和故事里的其他角色`
+        : defaultCastForNarrativeMode(userLine, "retelling")
+      : defaultCastForNarrativeMode(userLine, "listener_extension"),
     storyBeats: beats,
     scene:
       fidelity && narrativeMode === "retelling" && core
-        ? `${childrenProtagonistHintFromUserPrompt(userPrompt) ?? "主人公"}遇到难题的地方`
+        ? `${childrenProtagonistHintFromUserPrompt(userLine) ?? "主人公"}遇到难题的地方`
         : fidelity && core
           ? `围绕「${core}」讲故事`
-          : "温馨日常场景",
-    moral: fidelity ? "领会寓意，遇事问大人" : "温柔探索，遇到困难问大人",
+          : directPlot
+            ? userLine.match(/森林|幼儿园|家里|草地|河边|山上|田野|花园|厨房|房间|学校/)?.[0] ??
+              `${who ?? "小动物"}活动的地方`
+            : "温馨日常场景",
+    moral: fidelity ? "领会寓意，遇事问大人" : directPlot ? "机智应对，遇事问大人" : "温柔探索，遇到困难问大人",
     avoid: [...CHILDREN_FORBIDDEN_PRESETS.slice(0, 4)],
     expandSource: "seed",
   });

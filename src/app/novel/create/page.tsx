@@ -218,12 +218,14 @@ export default function NovelCreatePage() {
       const seed = isChildrenGenre
         ? buildChildrenBriefSeed(title, addonNotes || title, childrenTargetAge)
         : buildNovelBriefSeed(title, genre, addonNotes, undefined, briefLocale);
+      const activeRevision = isChildrenGenre ? childrenBriefRevision : novelBriefRevision;
       const r = await fetchCreativeBriefPreview(seed, "novel", {
         novelGenreId: genre.id,
         title: title.trim(),
         childrenTargetAge: isChildrenGenre ? childrenTargetAge : undefined,
         inputLocale: briefLocale,
         uiLocale: locale,
+        briefRevision: activeRevision,
       });
       if (!r.ok) {
         setError(r.error);
@@ -240,7 +242,16 @@ export default function NovelCreatePage() {
     } finally {
       setBriefPreviewBusy(false);
     }
-  }, [title, genre, addonNotes, isChildrenGenre, childrenTargetAge]);
+  }, [
+    title,
+    genre,
+    addonNotes,
+    isChildrenGenre,
+    childrenTargetAge,
+    locale,
+    childrenBriefRevision,
+    novelBriefRevision,
+  ]);
 
   useEffect(() => {
     const hasBrief = isChildrenGenre ? childrenCreativeBrief : novelCreativeBrief;
