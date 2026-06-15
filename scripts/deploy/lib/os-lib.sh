@@ -1,52 +1,209 @@
 #!/usr/bin/env bash
-# Operone 部署 — 跨发行版包管理（Ubuntu/Debian + CentOS/RHEL/Rocky/Alma）
-# 由 install.sh / ubuntu-deploy-lib.sh 引用
+# Operone 部署 — Linux 发行版识别、版本校验与差异化包管理
+# 支持：Ubuntu · Debian · CentOS · RHEL · Rocky · AlmaLinux · Oracle Linux · Amazon Linux 等
+#
+# 暴露变量（os_detect 之后）：
+#   OS_ID OS_VERSION_ID OS_VERSION_MAJOR OS_PRETTY_NAME OS_FAMILY PKG_MGR OS_ID_LIKE
 
-OS_FAMILY="${OS_FAMILY:-}"   # debian | rhel
-PKG_MGR="${PKG_MGR:-}"       # apt | dnf | yum
+OS_ID="${OS_ID:-}"
+OS_VERSION_ID="${OS_VERSION_ID:-}"
+OS_VERSION_MAJOR="${OS_VERSION_MAJOR:-0}"
+OS_PRETTY_NAME="${OS_PRETTY_NAME:-unknown}"
+OS_FAMILY="${OS_FAMILY:-}"       # debian | rhel
+OS_ID_LIKE="${OS_ID_LIKE:-}"
+PKG_MGR="${PKG_MGR:-}"           # apt | dnf | yum
 
-os_detect() {
-  [[ -n "$OS_FAMILY" && -n "$PKG_MGR" ]] && return 0
+os_die() {
+  printf '\033[1;31m[operone-deploy]\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
-  if [[ -f /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    case "${ID:-}" in
-      ubuntu|debian)
-        OS_FAMILY=debian
-        PKG_MGR=apt
-        ;;
-      centos|rhel|rocky|almalinux|ol|fedora|amzn|tencentos|opencloudos|anolis)
-        OS_FAMILY=rhel
-        ;;
-    esac
+os_warn() {
+  printf '\033[1;33m[operone-deploy]\033[0m %s\n' "$*"
+}
+
+os_load_release() {
+  OS_ID="" OS_VERSION_ID="" OS_PRETTY_NAME="unknown" OS_ID_LIKE=""
+  [[ -f /etc/os-release ]] || return 1
+  # shellcheck source=/dev/null
+  . /etc/os-release
+  OS_ID="${ID:-}"
+  OS_VERSION_ID="${VERSION_ID:-}"
+  OS_PRETTY_NAME="${PRETTY_NAME:-unknown}"
+  OS_ID_LIKE="${ID_LIKE:-}"
+  # VERSION_ID 可能是 "22.04" / "12" / "8" / "2023"
+  OS_VERSION_MAJOR="${OS_VERSION_ID%%.*}"
+  [[ "$OS_VERSION_MAJOR" =~ ^[0-9]+$ ]] || OS_VERSION_MAJOR=0
+  return 0
+}
+
+# 将 ID / ID_LIKE 映射到 debian 或 rhel 族
+os_resolve_family() {
+  case "$OS_ID" in
+    ubuntu|debian|linuxmint|pop)
+      OS_FAMILY=debian
+      PKG_MGR=apt
+      return 0
+      ;;
+    centos|rhel|rocky|almalinux|ol|fedora|amzn|tencentos|opencloudos|anolis|virtuozzo|eurolinux)
+      OS_FAMILY=rhel
+      return 0
+      ;;
+  esac
+  # 衍生版回退 ID_LIKE
+  if [[ "$OS_ID_LIKE" == *debian* || "$OS_ID_LIKE" == *ubuntu* ]]; then
+    OS_FAMILY=debian
+    PKG_MGR=apt
+    return 0
   fi
+  if [[ "$OS_ID_LIKE" == *rhel* || "$OS_ID_LIKE" == *fedora* || "$OS_ID_LIKE" == *centos* ]]; then
+    OS_FAMILY=rhel
+    return 0
+  fi
+  return 1
+}
 
-  if [[ -z "$OS_FAMILY" ]]; then
-    command -v apt-get >/dev/null 2>&1 && OS_FAMILY=debian PKG_MGR=apt
-    command -v dnf >/dev/null 2>&1 && OS_FAMILY=rhel PKG_MGR=dnf
-    command -v yum >/dev/null 2>&1 && OS_FAMILY=rhel PKG_MGR=yum
-  elif [[ "$OS_FAMILY" == rhel && -z "$PKG_MGR" ]]; then
+os_resolve_pkg_mgr() {
+  if [[ "$OS_FAMILY" == debian ]]; then
+    PKG_MGR=apt
+    command -v apt-get >/dev/null 2>&1 || os_die "未找到 apt-get"
+    return 0
+  fi
+  if [[ "$OS_FAMILY" == rhel ]]; then
     if command -v dnf >/dev/null 2>&1; then PKG_MGR=dnf
     elif command -v yum >/dev/null 2>&1; then PKG_MGR=yum
+    else os_die "未找到 dnf/yum"
+    fi
+    return 0
+  fi
+  return 1
+}
+
+os_detect() {
+  if [[ -n "$OS_FAMILY" && -n "$PKG_MGR" && -n "$OS_ID" ]]; then
+    return 0
+  fi
+
+  os_load_release || true
+
+  if ! os_resolve_family; then
+    # 最后兜底：按包管理器猜测
+    if command -v apt-get >/dev/null 2>&1; then
+      OS_FAMILY=debian
+      [[ -z "$OS_ID" ]] && OS_ID=debian
+    elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+      OS_FAMILY=rhel
+      [[ -z "$OS_ID" ]] && OS_ID=rhel
+    else
+      os_die "不支持的系统。请使用 Ubuntu/Debian/CentOS/RHEL/Rocky/AlmaLinux"
     fi
   fi
 
-  [[ -n "$OS_FAMILY" && -n "$PKG_MGR" ]] || {
-    printf '\033[1;31m[operone-deploy]\033[0m 不支持的系统，请使用 Ubuntu/Debian 或 CentOS/RHEL 系\n' >&2
-    exit 1
-  }
+  os_resolve_pkg_mgr
 }
 
 os_pretty_name() {
-  if [[ -f /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    echo "${PRETTY_NAME:-unknown}"
+  os_detect
+  echo "$OS_PRETTY_NAME"
+}
+
+# 各发行版最低版本要求（未列出的 rhel/debian 衍生版仅警告）
+os_validate() {
+  os_detect
+  local min_ok=1
+
+  case "$OS_ID" in
+    ubuntu)
+      if [[ "$OS_VERSION_MAJOR" -lt 20 ]]; then
+        os_die "Ubuntu 版本过低 ($OS_VERSION_ID)，需要 20.04+"
+      fi
+      if [[ "$OS_VERSION_MAJOR" -lt 22 ]]; then
+        os_warn "推荐 Ubuntu 22.04+，当前 $OS_PRETTY_NAME"
+      fi
+      ;;
+    debian)
+      if [[ "$OS_VERSION_MAJOR" -gt 0 && "$OS_VERSION_MAJOR" -lt 11 ]]; then
+        os_die "Debian 版本过低 ($OS_VERSION_ID)，需要 11+"
+      fi
+      ;;
+    centos)
+      if [[ "$OS_VERSION_MAJOR" -lt 7 ]]; then
+        os_die "CentOS 版本过低 ($OS_VERSION_ID)，需要 7+"
+      fi
+      if [[ "$OS_VERSION_MAJOR" -eq 7 ]]; then
+        os_warn "CentOS 7 已 EOL，建议升级到 Rocky/Alma 8+ 或 Ubuntu 22.04"
+      fi
+      ;;
+    rocky|almalinux)
+      if [[ "$OS_VERSION_MAJOR" -lt 8 ]]; then
+        os_die "$OS_ID 版本过低 ($OS_VERSION_ID)，需要 8+"
+      fi
+      ;;
+    rhel|ol)
+      if [[ "$OS_VERSION_MAJOR" -gt 0 && "$OS_VERSION_MAJOR" -lt 8 ]]; then
+        os_die "$OS_ID 版本过低 ($OS_VERSION_ID)，需要 8+"
+      fi
+      ;;
+    amzn)
+      # Amazon Linux 2 (VERSION_ID=2) 或 AL2023 (VERSION_ID=2023)
+      if [[ "$OS_VERSION_ID" == "2" ]]; then
+        os_warn "Amazon Linux 2 可用，推荐 Amazon Linux 2023"
+      fi
+      ;;
+    fedora)
+      if [[ "$OS_VERSION_MAJOR" -gt 0 && "$OS_VERSION_MAJOR" -lt 38 ]]; then
+        os_warn "Fedora $OS_VERSION_ID 未充分测试，推荐 38+"
+      fi
+      ;;
+    tencentos|opencloudos|anolis)
+      os_warn "$OS_PRETTY_NAME 按 RHEL 兼容路径安装，如有问题请反馈"
+      ;;
+    *)
+      if [[ "$OS_FAMILY" == debian ]]; then
+        os_warn "未在清单中的 Debian 系发行版 ($OS_ID)，将尝试 apt 安装"
+      elif [[ "$OS_FAMILY" == rhel ]]; then
+        os_warn "未在清单中的 RHEL 系发行版 ($OS_ID)，将尝试 dnf/yum 安装"
+      else
+        min_ok=0
+      fi
+      ;;
+  esac
+
+  [[ "$min_ok" -eq 1 ]] || os_die "无法在此系统上部署: $OS_PRETTY_NAME ($OS_ID)"
+}
+
+os_print_info() {
+  os_detect
+  echo "────────────────────────────────────────"
+  printf "  发行版:     %s\n" "$OS_PRETTY_NAME"
+  printf "  ID:         %s %s\n" "$OS_ID" "$OS_VERSION_ID"
+  printf "  族/包管理:  %s / %s\n" "$OS_FAMILY" "$PKG_MGR"
+  printf "  内核/架构:  %s / %s\n" "$(uname -r)" "$(uname -m)"
+  echo "────────────────────────────────────────"
+}
+
+os_nginx_conf_path() {
+  os_detect
+  if [[ "$OS_FAMILY" == debian ]]; then
+    echo "/etc/nginx/sites-available/operone"
   else
-    echo "unknown"
+    echo "/etc/nginx/conf.d/operone.conf"
   fi
 }
+
+os_check_network() {
+  os_detect
+  local url
+  if [[ "$OS_FAMILY" == debian ]]; then
+    url="https://deb.nodesource.com"
+  else
+    url="https://rpm.nodesource.com"
+  fi
+  curl -fsSL --max-time 15 "$url" >/dev/null 2>&1 \
+    || os_die "无法访问 $url，请检查网络/DNS/防火墙"
+}
+
+# ── 包管理 ──────────────────────────────────────────────
 
 pkg_update() {
   os_detect
@@ -56,7 +213,7 @@ pkg_update() {
       apt-get update -qq
       ;;
     dnf) dnf makecache -q ;;
-    yum) yum makecache -q || yum check-update -q || true ;;
+    yum) yum makecache -q 2>/dev/null || yum check-update -q 2>/dev/null || true ;;
   esac
 }
 
@@ -72,27 +229,86 @@ pkg_install() {
   esac
 }
 
+# RHEL 8+ 编译依赖常在 PowerTools/CRB 仓库
+ensure_rhel_build_repos() {
+  os_detect
+  [[ "$OS_FAMILY" == rhel ]] || return 0
+  [[ "$PKG_MGR" == dnf ]] || return 0
+
+  dnf install -y dnf-plugins-core 2>/dev/null || true
+  case "$OS_ID" in
+    rocky|almalinux)
+      dnf config-manager --set-enabled powertools 2>/dev/null \
+        || dnf config-manager --set-enabled crb 2>/dev/null \
+        || true
+      ;;
+    centos)
+      if [[ "$OS_VERSION_MAJOR" -ge 8 ]]; then
+        dnf config-manager --set-enabled powertools 2>/dev/null \
+          || dnf config-manager --set-enabled crb 2>/dev/null \
+          || true
+      fi
+      ;;
+    rhel|ol)
+      subscription-manager repos --enable "codeready-builder-for-rhel-${OS_VERSION_MAJOR}-$(uname -m)-rpms" 2>/dev/null || true
+      ;;
+  esac
+}
+
 ensure_epel() {
   os_detect
   [[ "$OS_FAMILY" == rhel ]] || return 0
-  pkg_install epel-release 2>/dev/null || true
+
+  case "$OS_ID" in
+    amzn)
+      if [[ "$OS_VERSION_ID" == "2" ]]; then
+        amazon-linux-extras install epel -y 2>/dev/null \
+          || pkg_install epel-release 2>/dev/null \
+          || true
+      else
+        pkg_install epel-release 2>/dev/null || true
+      fi
+      ;;
+    rhel)
+      # RHEL 需先启用 EPEL，部分镜像已预装
+      pkg_install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_VERSION_MAJOR}.noarch.rpm" 2>/dev/null \
+        || pkg_install epel-release 2>/dev/null \
+        || true
+      ;;
+    *)
+      pkg_install epel-release 2>/dev/null || true
+      ;;
+  esac
 }
 
 install_bootstrap_pkgs() {
   os_detect
   pkg_update
-  pkg_install curl ca-certificates git
+  case "$OS_FAMILY" in
+    debian) pkg_install curl ca-certificates git ;;
+    rhel)   pkg_install curl ca-certificates git ;;
+  esac
 }
 
 install_build_deps() {
   os_detect
   pkg_update
-  if [[ "$OS_FAMILY" == debian ]]; then
-    pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils
-  else
-    ensure_epel
-    pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils
-  fi
+
+  case "$OS_FAMILY" in
+    debian)
+      pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils
+      ;;
+    rhel)
+      ensure_epel
+      ensure_rhel_build_repos
+      # CentOS 7 无 gcc-c++ 包名差异
+      if [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]; then
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils
+      else
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils
+      fi
+      ;;
+  esac
 }
 
 install_nodejs() {
@@ -107,35 +323,52 @@ install_nodejs() {
     fi
   fi
 
-  if [[ "$OS_FAMILY" == debian ]]; then
-    curl -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
-    pkg_install nodejs
-  else
-    curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
-    pkg_install nodejs
-  fi
+  case "$OS_FAMILY" in
+    debian)
+      curl -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
+      pkg_install nodejs
+      ;;
+    rhel)
+      curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
+      pkg_install nodejs
+      ;;
+  esac
 }
 
 install_nginx_pkg() {
   os_detect
-  if command -v nginx >/dev/null 2>&1; then
-    return 0
-  fi
-  if [[ "$OS_FAMILY" == rhel ]]; then
-    ensure_epel
-  fi
-  pkg_install nginx
+  command -v nginx >/dev/null 2>&1 && return 0
+
+  case "$OS_ID" in
+    amzn)
+      if [[ "$OS_VERSION_ID" == "2" ]]; then
+        amazon-linux-extras install nginx1 -y 2>/dev/null || pkg_install nginx
+      else
+        pkg_install nginx
+      fi
+      ;;
+    *)
+      if [[ "$OS_FAMILY" == rhel ]]; then
+        ensure_epel
+      fi
+      pkg_install nginx
+      ;;
+  esac
 }
 
 install_certbot_pkgs() {
   os_detect
-  if [[ "$OS_FAMILY" == debian ]]; then
-    pkg_install certbot python3-certbot-nginx
-  else
-    ensure_epel
-    pkg_install certbot python3-certbot-nginx 2>/dev/null \
-      || pkg_install certbot python-certbot-nginx
-  fi
+  case "$OS_FAMILY" in
+    debian)
+      pkg_install certbot python3-certbot-nginx
+      ;;
+    rhel)
+      ensure_epel
+      pkg_install certbot python3-certbot-nginx 2>/dev/null \
+        || pkg_install certbot python-certbot-nginx 2>/dev/null \
+        || os_die "无法安装 certbot，请手动: $PKG_MGR install certbot python3-certbot-nginx"
+      ;;
+  esac
 }
 
 nginx_write_operone_site() {
@@ -147,15 +380,12 @@ nginx_write_operone_site() {
     sed -e "s/__DOMAIN__/${domain}/g" -e "s/__PORT__/${port}/g" "$template" > "$conf"
     mkdir -p /etc/nginx/sites-enabled
     ln -sf "$conf" /etc/nginx/sites-enabled/operone
-    if [[ -f /etc/nginx/sites-enabled/default ]]; then
-      rm -f /etc/nginx/sites-enabled/default
-    fi
+    [[ -f /etc/nginx/sites-enabled/default ]] && rm -f /etc/nginx/sites-enabled/default
   else
     local conf="/etc/nginx/conf.d/operone.conf"
     sed -e "s/__DOMAIN__/${domain}/g" -e "s/__PORT__/${port}/g" "$template" > "$conf"
-    if [[ -f /etc/nginx/conf.d/default.conf ]]; then
+    [[ -f /etc/nginx/conf.d/default.conf ]] && \
       mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak.operone 2>/dev/null || true
-    fi
   fi
 }
 
@@ -163,24 +393,31 @@ configure_firewall_ports() {
   local port="${1:-6666}" with_http="${2:-0}"
   os_detect
 
-  if command -v ufw >/dev/null 2>&1; then
-    if ufw status 2>/dev/null | grep -qi "Status: active"; then
-      :
-    else
+  # Debian/Ubuntu 优先 ufw
+  if [[ "$OS_FAMILY" == debian ]] && command -v ufw >/dev/null 2>&1; then
+    ufw status 2>/dev/null | grep -qi "Status: active" || {
       ufw allow OpenSSH >/dev/null 2>&1 || ufw allow 22/tcp
       ufw --force enable
-    fi
+    }
     [[ "$with_http" == "1" ]] && ufw allow 80/tcp && ufw allow 443/tcp
     ufw allow "${port}/tcp" || true
     return 0
   fi
 
+  # RHEL 系默认 firewalld
   if systemctl is-active firewalld >/dev/null 2>&1; then
     firewall-cmd --permanent --add-port="${port}/tcp" || true
-    if [[ "$with_http" == "1" ]]; then
+    [[ "$with_http" == "1" ]] && {
       firewall-cmd --permanent --add-service=http || true
       firewall-cmd --permanent --add-service=https || true
-    fi
+    }
+    firewall-cmd --reload || true
+    return 0
+  fi
+
+  # Ubuntu 无 ufw 时尝试 firewalld
+  if [[ "$OS_FAMILY" == debian ]] && systemctl is-active firewalld >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port="${port}/tcp" || true
     firewall-cmd --reload || true
     return 0
   fi
@@ -190,16 +427,21 @@ configure_firewall_ports() {
 
 ensure_app_user() {
   local user="${1:-www-data}" home="${2:-/opt/operone}"
-  if id "$user" &>/dev/null; then
-    return 0
-  fi
+  id "$user" &>/dev/null && return 0
   os_detect
-  if [[ "$OS_FAMILY" == rhel && "$user" == "www-data" ]]; then
-    # CentOS 上创建与 Debian 一致的运行用户
-    useradd --system --home-dir "$home" --shell /sbin/nologin "$user" 2>/dev/null \
-      || useradd --system -d "$home" --shell /sbin/nologin "$user"
-  else
-    useradd --system --home "$home" --shell /usr/sbin/nologin "$user" 2>/dev/null \
-      || useradd --system --home-dir "$home" --shell /sbin/nologin "$user"
-  fi
+
+  local shell="/sbin/nologin"
+  [[ "$OS_FAMILY" == debian ]] && shell="/usr/sbin/nologin"
+
+  useradd --system --home-dir "$home" --shell "$shell" "$user" 2>/dev/null \
+    || useradd --system -d "$home" --shell "$shell" "$user" 2>/dev/null \
+    || useradd --system --home "$home" --shell "$shell" "$user"
+}
+
+# 预检入口（install / full 共用）
+os_preflight() {
+  os_detect
+  os_validate
+  os_print_info
+  os_check_network
 }

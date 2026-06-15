@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Operone Ubuntu/Debian 部署共享库 — 由 linux-ubuntu22-sqlite.sh / linux-ubuntu22-full.sh 引用
+# Operone 多发行版部署共享库 — install.sh / linux-ubuntu22-full.sh 引用
 # shellcheck disable=SC2034
 
 : "${OPERONE_DIR:=/opt/operone}"
@@ -65,7 +65,8 @@ wait_for_health() {
 
 phase_deps() {
   need_root
-  log "[1/5] 安装系统依赖 … ($(os_pretty_name))"
+  os_validate
+  log "[1/5] 安装系统依赖 …"
   install_build_deps
 
   # 内存不足时自动加 2G swap，避免 npm build OOM

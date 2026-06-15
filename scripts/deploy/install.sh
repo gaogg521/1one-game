@@ -34,17 +34,21 @@ load_os_lib() {
     if ! curl -fsSL "${OPERONE_RAW_BASE}/lib/os-lib.sh" -o "$lib_path" 2>/dev/null; then
       # 仓库尚未同步 os-lib 时的最小兜底（CentOS/Ubuntu 装 git/curl）
       cat > "$lib_path" <<'FALLBACK'
+os_die() { printf '[operone-deploy] ERROR: %s\n' "$*" >&2; exit 1; }
+os_load_release() { [[ -f /etc/os-release ]] && . /etc/os-release; OS_ID=${ID:-}; OS_VERSION_ID=${VERSION_ID:-}; OS_PRETTY_NAME=${PRETTY_NAME:-unknown}; OS_VERSION_MAJOR=${VERSION_ID%%.*}; }
 os_detect() {
   OS_FAMILY=""; PKG_MGR=""
-  if [[ -f /etc/os-release ]]; then . /etc/os-release
-    case "${ID:-}" in ubuntu|debian) OS_FAMILY=debian; PKG_MGR=apt ;; centos|rhel|rocky|almalinux|ol|fedora|amzn) OS_FAMILY=rhel ;; esac
-  fi
+  os_load_release
+  case "${OS_ID:-}" in ubuntu|debian) OS_FAMILY=debian; PKG_MGR=apt ;; centos|rhel|rocky|almalinux|ol|fedora|amzn) OS_FAMILY=rhel ;; esac
   command -v apt-get >/dev/null 2>&1 && OS_FAMILY=debian PKG_MGR=apt
   command -v dnf >/dev/null 2>&1 && OS_FAMILY=rhel PKG_MGR=dnf
   command -v yum >/dev/null 2>&1 && OS_FAMILY=rhel PKG_MGR=yum
-  [[ -n "$OS_FAMILY" ]] || { echo "不支持的系统" >&2; exit 1; }
+  [[ -n "$OS_FAMILY" ]] || os_die "不支持的系统"
 }
-os_pretty_name() { . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-unknown}"; }
+os_validate() { os_detect; }
+os_print_info() { os_detect; echo "  发行版: $OS_PRETTY_NAME ($OS_ID $OS_VERSION_ID) · $PKG_MGR"; }
+os_check_network() { curl -fsSL --max-time 15 https://github.com >/dev/null || os_die "网络不可用"; }
+os_preflight() { os_validate; os_print_info; os_check_network; }
 pkg_update() { case "$PKG_MGR" in apt) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;; dnf) dnf makecache -q ;; yum) yum makecache -q || true ;; esac; }
 pkg_install() { case "$PKG_MGR" in apt) DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ;; dnf) dnf install -y "$@" ;; yum) yum install -y "$@" ;; esac; }
 install_bootstrap_pkgs() { os_detect; pkg_update; pkg_install curl ca-certificates git; }
@@ -96,8 +100,7 @@ log "Operone 一键部署开始"
 log "拉取代码: $GIT_REPO → $OPERONE_DIR"
 
 load_os_lib
-os_detect
-log "系统: $(os_pretty_name) · 包管理: $PKG_MGR"
+os_preflight
 install_bootstrap_pkgs
 ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"
 

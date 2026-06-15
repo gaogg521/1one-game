@@ -505,6 +505,7 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 
 | 脚本 | 说明 |
 |------|------|
+| [`scripts/deploy/lib/os-lib.sh`](scripts/deploy/lib/os-lib.sh) | 发行版识别与 apt/dnf/yum 适配 |
 | [`scripts/deploy/install.sh`](scripts/deploy/install.sh) | 用户入口 · `curl \| bash` |
 | [`scripts/deploy/linux-ubuntu22-full.sh`](scripts/deploy/linux-ubuntu22-full.sh) | 完整安装 / 更新 / 绑域名 |
 | [`scripts/deploy/linux-ubuntu22-sqlite.sh`](scripts/deploy/linux-ubuntu22-sqlite.sh) | 分阶段部署（高级） |

@@ -1,6 +1,21 @@
 # Linux 一键部署
 
-支持 **Ubuntu / Debian / CentOS / RHEL / Rocky / AlmaLinux**。
+脚本会读取 `/etc/os-release`，识别发行版与版本，并自动选择 **apt / dnf / yum** 及对应安装路径。
+
+## 支持的系统
+
+| 发行版 | 最低版本 | 包管理 | Nginx 配置路径 |
+|--------|----------|--------|----------------|
+| Ubuntu | 20.04（推荐 22.04+） | apt | `/etc/nginx/sites-available/operone` |
+| Debian | 11+ | apt | 同上 |
+| CentOS | 7+（7 已 EOL，建议迁移） | yum/dnf | `/etc/nginx/conf.d/operone.conf` |
+| RHEL | 8+ | dnf/yum | 同上 |
+| Rocky Linux | 8+ | dnf | 同上 |
+| AlmaLinux | 8+ | dnf | 同上 |
+| Oracle Linux | 8+ | dnf/yum | 同上 |
+| Amazon Linux | 2 / 2023 | yum/dnf | 同上 |
+
+未在表内的 **Debian 系 / RHEL 系** 衍生版会按 `ID_LIKE` 尝试兼容安装；无法识别时会提前报错退出。
 
 ## 一键安装
 
@@ -201,6 +216,7 @@ sudo certbot --nginx -d app.example.com
 
 | 文件 | 说明 |
 |------|------|
+| `scripts/deploy/lib/os-lib.sh` | 发行版识别、版本校验、apt/dnf/yum 差异化安装 |
 | `scripts/deploy/install.sh` | 用户入口，一键部署 |
 | `scripts/deploy/linux-ubuntu22-full.sh` | 完整安装 / 更新 / 绑域名 |
 | `scripts/deploy/linux-ubuntu22-sqlite.sh` | 分阶段部署（高级） |

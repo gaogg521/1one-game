@@ -129,32 +129,19 @@ prompt_if_empty() {
   printf -v "$var_name" '%s' "$input"
 }
 
-detect_os() {
-  if [[ ! -f /etc/os-release ]]; then
-    warn "无法识别发行版，将按 Debian 系继续（可能失败）"
-    return 0
-  fi
-  # shellcheck source=/dev/null
-  source /etc/os-release
-  log "系统: ${PRETTY_NAME:-unknown} · 内核 $(uname -r) · $(uname -m)"
+preflight() {
+  log "════════ 环境预检 ════════"
+  need_root
+  os_preflight
+  check_resources
+  check_port_available
+  check_source_available
 
-  case "${ID:-}" in
-    ubuntu)
-      local ver="${VERSION_ID:-0}"
-      if [[ "${ver%%.*}" -lt 20 ]]; then
-        warn "推荐 Ubuntu 22.04+，当前 $PRETTY_NAME"
-      fi
-      ;;
-    debian)
-      local ver="${VERSION_ID:-0}"
-      if [[ "${ver%%.*}" -lt 11 ]]; then
-        warn "推荐 Debian 12+，当前 $PRETTY_NAME"
-      fi
-      ;;
-    centos|rhel|rocky|almalinux|ol|fedora|amzn|tencentos|opencloudos|anolis)
-      log "系统: ${PRETTY_NAME:-unknown} · 内核 $(uname -r) · $(uname -m)"
-      ;;
-  esac
+  local template="$SCRIPT_DIR/templates/nginx-operone.conf"
+  if [[ "$ENABLE_NGINX" != "0" && -n "${OPERONE_DOMAIN:-}" && ! -f "$template" ]]; then
+    die "缺少 $template — 请使用完整仓库（含 scripts/deploy/templates/）"
+  fi
+  ok "预检通过 ($OS_ID $OS_VERSION_ID · $PKG_MGR)"
 }
 
 check_resources() {
@@ -169,15 +156,6 @@ check_resources() {
   fi
   if [[ "$mem_mb" -gt 0 && "$mem_mb" -lt 1800 ]]; then
     warn "内存 < 2GB，build 可能 OOM，建议加 swap"
-  fi
-}
-
-check_network() {
-  log "检测外网连通性 …"
-  if curl -fsSL --max-time 15 https://deb.nodesource.com >/dev/null 2>&1; then
-    ok "外网 OK"
-  else
-    die "无法访问 deb.nodesource.com，请检查网络/DNS/代理"
   fi
 }
 
@@ -201,22 +179,6 @@ check_source_available() {
     return 0
   fi
   ok "将从 Git 拉取: ${GIT_REPO:-$OPERONE_DEFAULT_GIT_REPO}"
-}
-
-preflight() {
-  log "════════ 环境预检 ════════"
-  need_root
-  detect_os
-  check_resources
-  check_network
-  check_port_available
-  check_source_available
-
-  local template="$SCRIPT_DIR/templates/nginx-operone.conf"
-  if [[ "$ENABLE_NGINX" != "0" && -n "${OPERONE_DOMAIN:-}" && ! -f "$template" ]]; then
-    die "缺少 $template — 请上传完整仓库（含 scripts/deploy/templates/）"
-  fi
-  ok "预检通过"
 }
 
 collect_config() {
