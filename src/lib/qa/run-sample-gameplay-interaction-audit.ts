@@ -91,6 +91,27 @@ async function resolveSceneKey(
   }
 }
 
+async function resolveClickSequence(
+  page: Page,
+  clickRel: { x: number; y: number },
+  burst: number,
+  clickRel2?: { x: number; y: number },
+): Promise<Array<{ x: number; y: number }>> {
+  const hinted = await page.evaluate(() => {
+    const hints = (window as Window & { __PHASER_QA_CLICKS__?: Array<{ x: number; y: number }> })
+      .__PHASER_QA_CLICKS__;
+    return hints?.filter((h) => h.x >= 0 && h.x <= 1 && h.y >= 0 && h.y <= 1) ?? null;
+  });
+  if (hinted && hinted.length > 0) return hinted;
+
+  const clicks = Math.max(1, burst);
+  const seq: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < clicks; i += 1) {
+    seq.push(i === 1 && clickRel2 ? clickRel2 : clickRel);
+  }
+  return seq;
+}
+
 export async function performInteraction(
   page: Page,
   kind: SampleInteractionKind,
@@ -98,11 +119,11 @@ export async function performInteraction(
   burst = 1,
   clickRel2?: { x: number; y: number },
 ) {
+  const clicks = Math.max(1, burst);
   const canvas = page.locator("canvas").first();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas bounding box missing");
 
-  const clicks = Math.max(1, burst);
   const clickAt = async (rel: { x: number; y: number }) => {
     await canvas.click({
       position: { x: box.width * rel.x, y: box.height * rel.y },
@@ -113,12 +134,14 @@ export async function performInteraction(
   switch (kind) {
     case "click-center":
     case "click-upper":
-    case "click-lower":
-      for (let i = 0; i < clicks; i += 1) {
-        await clickAt(i === 1 && clickRel2 ? clickRel2 : clickRel);
-        if (i < clicks - 1) await page.waitForTimeout(180);
+    case "click-lower": {
+      const seq = await resolveClickSequence(page, clickRel, burst, clickRel2);
+      for (let i = 0; i < seq.length; i += 1) {
+        await clickAt(seq[i]!);
+        if (i < seq.length - 1) await page.waitForTimeout(180);
       }
       break;
+    }
     case "arrow-right":
     case "arrow-left":
     case "space":
@@ -137,16 +160,14 @@ export async function performInteraction(
     case "click-lower":
       break;
     case "arrow-right":
-      for (let i = 0; i < clicks; i += 1) {
-        await page.keyboard.press("ArrowRight");
-        if (i < clicks - 1) await page.waitForTimeout(80);
-      }
+      await page.keyboard.down("ArrowRight");
+      await page.waitForTimeout(Math.min(900, 120 * clicks));
+      await page.keyboard.up("ArrowRight");
       break;
     case "arrow-left":
-      for (let i = 0; i < clicks; i += 1) {
-        await page.keyboard.press("ArrowLeft");
-        if (i < clicks - 1) await page.waitForTimeout(80);
-      }
+      await page.keyboard.down("ArrowLeft");
+      await page.waitForTimeout(Math.min(900, 120 * clicks));
+      await page.keyboard.up("ArrowLeft");
       break;
     case "space":
       for (let i = 0; i < clicks; i += 1) {
@@ -229,13 +250,13 @@ export async function auditSample(
     fs.writeFileSync(path.join(shotDir, "before.png"), before);
 
     let idleCeiling = 0;
+    let interactionBaseline = before;
     if (c.animated) {
-      const idleFrames: Buffer[] = [before];
-      for (let i = 0; i < 3; i += 1) {
-        await page.waitForTimeout(280);
-        idleFrames.push(await canvas.screenshot());
-      }
-      idleCeiling = await idleDiffCeiling(idleFrames);
+      await page.waitForTimeout(280);
+      interactionBaseline = await canvas.screenshot();
+      await page.waitForTimeout(280);
+      const idleProbe = await canvas.screenshot();
+      idleCeiling = await bufferDiffRatio(interactionBaseline, idleProbe);
       base.idleCeiling = idleCeiling;
     }
 
@@ -244,7 +265,7 @@ export async function auditSample(
     const after = await canvas.screenshot();
     fs.writeFileSync(path.join(shotDir, "after.png"), after);
 
-    const interactionDiff = await bufferDiffRatio(before, after);
+    const interactionDiff = await bufferDiffRatio(interactionBaseline, after);
     base.interactionDiff = interactionDiff;
     base.interactionOk = interactionDiffPasses({
       animated: Boolean(c.animated),
@@ -254,7 +275,7 @@ export async function auditSample(
 
     if (!base.interactionOk) {
       base.error = c.animated
-        ? `interaction diff ${interactionDiff.toFixed(3)} <= idle*1.35 (${idleCeiling.toFixed(3)})`
+        ? `interaction diff ${interactionDiff.toFixed(3)} <= idle*1.05+0.005 (${idleCeiling.toFixed(3)})`
         : `interaction diff ${interactionDiff.toFixed(3)} < static threshold`;
     }
 

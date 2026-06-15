@@ -1041,6 +1041,10 @@ export class PlatformerScene extends Phaser.Scene {
     if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
     const dashOn = this.time.now < this.dashUntil;
     this.player.setVelocityX(vx * speed * (dashOn ? 1.22 : 1));
+    if (this.stealthMode && vx !== 0) {
+      juiceBurst(this, this.player.x, this.player.y + 16, "#38bdf8", 8);
+      juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 60 });
+    }
 
     const jumpPressed =
       Phaser.Input.Keyboard.JustDown(this.keySpace) ||

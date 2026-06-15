@@ -19,7 +19,7 @@ import {
   hudReady,
 } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 type CarPart = "body" | "wheel" | "bg";
@@ -73,6 +73,7 @@ export class CustomizationScene extends Phaser.Scene {
   }
 
   create() {
+    setPhaserQaClickHints([]);
     const cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(cohesive.bleepTemperament);
     this.cohesive = cohesive;
@@ -231,8 +232,8 @@ export class CustomizationScene extends Phaser.Scene {
   }
 
   private pullPotteryWheel() {
-    this.vaseHeight = Math.min(1, this.vaseHeight + 0.07);
-    this.potterySpinRate = Math.min(0.0035, this.potterySpinRate + 0.00018);
+    this.vaseHeight = Math.min(1, this.vaseHeight + 0.12);
+    this.potterySpinRate = Math.min(0.0045, this.potterySpinRate + 0.00035);
     playBleep("pickup");
     const cx = this.scale.width / 2;
     const cy = this.scale.height * 0.46;

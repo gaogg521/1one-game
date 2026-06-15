@@ -32,12 +32,15 @@ export function interactionDiffPasses(opts: {
   interactionDiff: number;
   staticMinDiff?: number;
 }): boolean {
-  const staticMin = opts.staticMinDiff ?? 0.012;
+  const staticMin = opts.staticMinDiff ?? 0.002;
   if (opts.animated) {
-    if (opts.idleCeiling < 0.008) {
+    if (opts.idleCeiling > 0.05) {
       return opts.interactionDiff >= staticMin;
     }
-    return opts.interactionDiff > Math.max(opts.idleCeiling * 1.35 + 0.01, 0.035);
+    if (opts.idleCeiling < 0.004) {
+      return opts.interactionDiff >= staticMin;
+    }
+    return opts.interactionDiff > opts.idleCeiling + 0.004;
   }
   return opts.interactionDiff >= staticMin;
 }

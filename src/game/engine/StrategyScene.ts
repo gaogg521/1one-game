@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
@@ -10,7 +10,7 @@ import { buildStrategyBlueprint, type StrategyNode } from "@/lib/strategy-bluepr
 import type { GameSpec } from "@/lib/game-spec";
 import { bannerStrategyFinish, hudReady, hudScore, hudStrategyControls } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -48,6 +48,7 @@ export class StrategyScene extends Phaser.Scene {
   }
 
   create() {
+    setPhaserQaClickHints([]);
     this.cohesive = buildCohesivePresentation(this.spec);
     setBleepTemperament(this.cohesive.bleepTemperament);
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
@@ -84,6 +85,17 @@ export class StrategyScene extends Phaser.Scene {
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onTap(p));
     this.redraw();
     schedulePhaserPlayReady(this, 400);
+    const playerNode = this.nodes.find((n) => n.owner === "player");
+    const linked = playerNode
+      ? this.nodes.filter((n) => n.id !== playerNode.id && this.linked(playerNode, n))
+      : [];
+    const target = linked.find((n) => n.owner !== "player") ?? linked[0];
+    if (playerNode && target) {
+      setPhaserQaClickHints([
+        { x: playerNode.x, y: playerNode.y },
+        { x: target.x, y: target.y },
+      ]);
+    }
   }
 
   private nodeAt(x: number, y: number): StrategyNode | null {
@@ -108,6 +120,8 @@ export class StrategyScene extends Phaser.Scene {
 
     if (!this.selected && hit.owner === "player") {
       this.selected = hit.id;
+      juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 130 });
+      this.redraw();
       return;
     }
     if (this.selected) {
@@ -130,14 +144,17 @@ export class StrategyScene extends Phaser.Scene {
       } else hit.troops -= send;
 
       if (prevOwner !== "player" && hit.owner === "player") {
-        juiceBurst(this, nx, ny, this.spec.theme.playerColor, 12, this.runtimeRng);
-        juiceFlash(this, { r: 90, g: 210, b: 130 }, { durationMs: 130 });
+        juiceBurst(this, nx, ny, this.spec.theme.playerColor, 18, this.runtimeRng);
+        juiceFlash(this, { r: 90, g: 210, b: 130 }, { durationMs: 180 });
+        juiceShake(this, { durationMs: 120, intensity: 0.006 });
       }
 
       this.selected = null;
       this.score += 15;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
       playBleep("pickup");
+      juiceFlash(this, { r: 74, g: 222, b: 128 }, { durationMs: 140 });
+      juiceShake(this, { durationMs: 100, intensity: 0.005 });
       this.playerTurn = false;
       this.redraw();
       const playerNodes = this.nodes.filter((n) => n.owner === "player").length;

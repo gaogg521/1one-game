@@ -15,7 +15,8 @@ import {
   hudReady,
 } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { juiceFlash } from "@/game/engine/gameJuice";
 
 type EndPayload = { score: number; won: boolean };
 type Piece = { color: "w" | "b"; type: "K" | "P"; row: number; col: number };
@@ -94,6 +95,19 @@ export class ChessScene extends Phaser.Scene {
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onBoardClick(p));
     this.redraw();
     schedulePhaserPlayReady(this, 400);
+    const pawn = this.pieces.find((p) => p.color === "w" && p.type === "P");
+    if (pawn) {
+      setPhaserQaClickHints([
+        {
+          x: (this.ox + (pawn.col + 0.5) * this.cell) / w,
+          y: (this.oy + (pawn.row + 0.5) * this.cell) / h,
+        },
+        {
+          x: (this.ox + (pawn.col + 0.5) * this.cell) / w,
+          y: (this.oy + (pawn.row - 0.5) * this.cell) / h,
+        },
+      ]);
+    }
   }
 
   private pieceGlyph(p: Piece): string {
@@ -174,6 +188,8 @@ export class ChessScene extends Phaser.Scene {
     if (!this.selected && hit?.color === "w") {
       this.selected = hit;
       this.statusText.setText(hudChessPieceSelected(this.uiLocale));
+      juiceFlash(this, { r: 74, g: 222, b: 128 }, { durationMs: 120 });
+      this.redraw();
       return;
     }
     if (this.selected) {
@@ -187,6 +203,7 @@ export class ChessScene extends Phaser.Scene {
       this.whiteTurn = false;
       this.statusText.setText(hudChessThinkingBlack(this.uiLocale));
       this.redraw();
+      juiceFlash(this, { r: 250, g: 250, b: 250 }, { durationMs: 150 });
       this.time.delayedCall(500, () => this.blackMove());
     }
   }

@@ -41,7 +41,7 @@ import {
   tdRuntimeTextureKey,
 } from "@/lib/reference-classify";
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
@@ -1160,6 +1160,10 @@ export class TowerDefenseScene extends Phaser.Scene {
       }
     }
     this.refreshMergeGridUI();
+    setPhaserQaClickHints([
+      { x: (ox + cell / 2) / w, y: (oy + cell / 2) / h },
+      { x: (ox + cell + cell / 2) / w, y: (oy + cell / 2) / h },
+    ]);
   }
 
   private mergeCellsAdjacent(a: number, b: number): boolean {
@@ -1193,6 +1197,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       if (tier <= 0) return;
       this.mergeSelected = idx;
       playBleep("pickup");
+      juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 100 });
       this.refreshMergeGridUI();
       return;
     }
