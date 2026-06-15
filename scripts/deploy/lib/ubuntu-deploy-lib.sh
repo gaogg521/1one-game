@@ -9,7 +9,7 @@
 : "${GIT_BRANCH:=main}"
 : "${OPERONE_DOMAIN:=}"
 : "${CERTBOT_EMAIL:=}"
-: "${OPERONE_PORT:=8888}"
+: "${OPERONE_PORT:=6666}"
 : "${SKIP_SEED:=0}"
 : "${SKIP_PREFLIGHT:=1}"
 : "${NODE_MAJOR:=22}"
@@ -259,7 +259,6 @@ Group=${OPERONE_USER}
 WorkingDirectory=${OPERONE_DIR}
 EnvironmentFile=-${OPERONE_DIR}/.env
 Environment=NODE_ENV=production
-Environment=PORT=${OPERONE_PORT}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=${npm_bin} run start
 Restart=always
@@ -306,7 +305,7 @@ phase_nginx() {
   systemctl enable nginx 2>/dev/null || true
 
   local conf="/etc/nginx/sites-available/operone"
-  sed "s/__DOMAIN__/${OPERONE_DOMAIN}/g" "$template" > "$conf"
+  sed -e "s/__DOMAIN__/${OPERONE_DOMAIN}/g" -e "s/__PORT__/${OPERONE_PORT}/g" "$template" > "$conf"
   ln -sf "$conf" /etc/nginx/sites-enabled/operone
 
   # 仅当 default 占用 80 且无自定义需求时移除；已有 Nginx 多站点不受影响

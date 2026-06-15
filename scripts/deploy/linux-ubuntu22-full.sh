@@ -217,7 +217,7 @@ preflight() {
 }
 
 collect_config() {
-  # 默认全自动：不设域名 = 内网 8888；设域名 = 自动 Nginx/HTTPS
+  # 默认全自动：不设域名 = 内网 6666；设域名 = 自动 Nginx/HTTPS
   if [[ -n "$OPERONE_DOMAIN" && "$ENABLE_NGINX" == "auto" ]]; then
     ENABLE_NGINX=1
   fi

@@ -41,6 +41,6 @@ fi
 
 docker compose up -d --build
 docker compose ps
-log "访问 http://$(hostname -I | awk '{print $1}'):8888"
+log "访问 http://$(hostname -I | awk '{print $1}'):6666"
 log "样品馆: docker compose exec web npm run seed:samples"
 log "日志:   docker compose logs -f web"
