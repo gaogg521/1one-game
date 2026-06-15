@@ -214,7 +214,7 @@ run_update() {
     git_as_user_in_repo "$OPERONE_USER" pull --ff-only origin "$GIT_BRANCH" || true
   fi
 
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
+  npm_install_deps
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"

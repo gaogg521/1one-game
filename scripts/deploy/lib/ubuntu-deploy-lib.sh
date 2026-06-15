@@ -51,6 +51,14 @@ git_as_user_in_repo() {
   run_as_app_user "$user" bash -lc "cd $(printf '%q' "$OPERONE_DIR") && git $*"
 }
 
+npm_install_deps() {
+  log "npm ci …"
+  if ! run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"; then
+    warn "npm ci 失败（lock 与 package.json 不同步），改用 npm install …"
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm install --no-audit --no-fund"
+  fi
+}
+
 port_in_use() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -224,8 +232,7 @@ phase_app() {
   merge_env_key "OPENAI_BASE_URL" "${OPENAI_BASE_URL:-}"
   merge_env_key "SUPER_ADMIN_SECRET" "${SUPER_ADMIN_SECRET:-}"
 
-  log "npm ci …"
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
+  npm_install_deps
 
   log "prisma migrate deploy …"
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
