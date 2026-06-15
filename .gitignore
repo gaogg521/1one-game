@@ -60,6 +60,10 @@ next-env.d.ts
 /prisma/*.db
 /prisma/*.db-journal
 
+# 本地样例导出包（直接 scp 上传，不入库）
+/data/literary-samples-bundle/
+/data/literary-samples-bundle.zip
+
 # 封面目录：勿用 public/covers/*.jpg 整段忽略——Next.js dev 不会提供被 gitignore 的 public 文件，会导致广场封面全 404
 # 仅忽略明确临时文件；作品封面 cmp*.jpg/png 与 openai-*.png 可提交或仅本地保留
 public/covers/composed-*.jpg

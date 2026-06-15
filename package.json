@@ -101,6 +101,8 @@
     "qa:deploy-preflight": "tsx scripts/qa-deploy-preflight.ts",
     "qa:en-path": "tsx scripts/qa-en-path-acceptance.ts",
     "seed:samples": "tsx scripts/seed-sample-gallery.ts",
+    "export:literary-samples": "tsx scripts/export-literary-samples.ts",
+    "import:literary-samples": "tsx scripts/import-literary-samples.ts",
     "seed:comic-featured-meishan": "tsx scripts/seed-comic-featured-meishan.ts",
     "seed:comic-featured-songliao": "tsx scripts/seed-comic-featured-songliao.ts",
     "qa:seed-en-fixtures": "tsx scripts/qa-seed-public-en-fixtures.ts",

@@ -126,6 +126,38 @@ centos7_configure_selinux() {
   fi
 }
 
+# Godot 4.4.1 + Web 导出模板（服务端 Godot 试玩 / HTML5 导出）
+install_godot_production() {
+  [[ "${SKIP_GODOT_INSTALL:-0}" == "1" ]] && return 0
+  local godot_bin="$OPERONE_DIR/tools/godot/Godot_v4.4.1-stable_linux.x86_64"
+  local templates_mark="$OPERONE_DIR/.local/share/godot/export_templates/4.4.1.stable/web_nothreads_release.zip"
+
+  if [[ -x "$godot_bin" && -f "$templates_mark" ]]; then
+    log "Godot 已就绪: $godot_bin"
+    return 0
+  fi
+
+  log "安装 Godot（游戏试玩 / 导出，首次约 1–3 分钟 + 模板 ~1.1GB）…"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && bash scripts/godot-install-linux.sh" \
+    || warn "Godot 二进制安装失败，Godot 试玩不可用"
+
+  if [[ ! -f "$templates_mark" ]]; then
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && XDG_DATA_HOME='$OPERONE_DIR/.local/share' bash scripts/godot-install-templates-linux.sh" \
+      || warn "Godot 导出模板安装失败（可稍后手动: cd $OPERONE_DIR && XDG_DATA_HOME=$OPERONE_DIR/.local/share bash scripts/godot-install-templates-linux.sh）"
+  fi
+
+  if [[ -x "$godot_bin" ]]; then
+    ok "Godot: $godot_bin"
+  fi
+}
+
+godot_systemd_env_block() {
+  local godot_bin="$OPERONE_DIR/tools/godot/Godot_v4.4.1-stable_linux.x86_64"
+  [[ -x "$godot_bin" ]] || return 0
+  echo "Environment=GODOT_BIN=${godot_bin}
+Environment=XDG_DATA_HOME=${OPERONE_DIR}/.local/share"
+}
+
 prisma_migrate_deploy() {
   local allow_reset="${1:-0}"
   log "prisma migrate deploy …"
@@ -361,6 +393,7 @@ phase_app() {
   fi
 
   log "app 阶段完成 → $OPERONE_DIR"
+  install_godot_production || true
 }
 
 install_systemd_unit() {
@@ -380,6 +413,10 @@ install_systemd_unit() {
     [[ -n "$ld_ds" ]] && extra_env="Environment=LD_LIBRARY_PATH=${ld_ds}
 "
   fi
+  local godot_env
+  godot_env="$(godot_systemd_env_block)"
+  [[ -n "$godot_env" ]] && extra_env="${extra_env}${godot_env}
+"
 
   # 用 node 直接跑 run-start.mjs，避免 systemd 下 npm/npx/shell 问题
   cat > "$unit" <<EOF

@@ -319,16 +319,16 @@ install_build_deps() {
 
   case "$OS_FAMILY" in
     debian)
-      pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils
+      pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils unzip
       ;;
     rhel)
       ensure_epel
       ensure_rhel_build_repos
       # CentOS 7 无 gcc-c++ 包名差异
       if [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]; then
-        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip
       else
-        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip
       fi
       ;;
   esac

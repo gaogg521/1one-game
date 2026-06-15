@@ -234,7 +234,8 @@ run_update() {
   centos7_prepare_build
   build_cmd="$(centos7_build_cmd "cd '$OPERONE_DIR' && npm run build")"
   run_as_app_user "$OPERONE_USER" bash -lc "$build_cmd"
-  systemctl restart operone
+  install_godot_production || true
+  install_systemd_unit
   wait_for_health 30 || true
   ok "更新完成"
   print_deploy_summary

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentAuthUser, ensureUserForOwnerKey, getOwnerKeyFromCookies } from "@/lib/auth/user";
+import { ensureUserForOwnerKey, getOwnerKeyFromCookies, getSessionAuthUser } from "@/lib/auth/user";
 import { listOAuthProviders } from "@/lib/auth/oauth/providers";
 import { getQuotaSummary } from "@/lib/commerce/quota";
 import { isWechatJssdkConfigured } from "@/lib/wechat/jssdk";
@@ -7,7 +7,8 @@ import { isWechatJssdkConfigured } from "@/lib/wechat/jssdk";
 export async function GET() {
   const ownerKey = await getOwnerKeyFromCookies();
   if (ownerKey) await ensureUserForOwnerKey(ownerKey);
-  const user = await getCurrentAuthUser();
+  // 仅 OAuth / 邮箱登录会话对外展示为「已登录」；匿名 ownerKey 懒创建 User 不暴露给前端
+  const user = await getSessionAuthUser();
   const providers = listOAuthProviders();
 
   const quota = user ? await getQuotaSummary(user.id) : null;
