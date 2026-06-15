@@ -594,6 +594,7 @@ game/
 |------|------|
 | [`docs/ai-handoff-architecture-cn.md`](docs/ai-handoff-architecture-cn.md) | 给其他 AI：架构总览 + 源码索引 |
 | [`docs/architecture-orchestration.md`](docs/architecture-orchestration.md) | 编排 Phase 0～4 |
+| [`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md) | **Linux 新服务器部署**（Ubuntu 22 · SQLite · systemd） |
 | [`docs/local-database.md`](docs/local-database.md) | 本地库与迁移 |
 | [`docs/admin-super-admin.md`](docs/admin-super-admin.md) | 超级管理员与 `/console` |
 | [`PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md`](PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md) | 历史问题闭环清单 |

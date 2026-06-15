@@ -1,5 +1,5 @@
 {
-  "at": "2026-06-15T02:25:23.536Z",
+  "at": "2026-06-15T04:42:38.310Z",
   "title": "我穿越到了宋辽之战的战场",
   "owner": "qa-songliao-regression",
   "model": "deepseek-v4-pro",
@@ -13,8 +13,8 @@
     "pages": 8,
     "panels": 32,
     "withImage": 32,
-    "ms": 775306,
-    "panelStreamMs": 775306,
+    "ms": 23,
+    "panelStreamMs": 23,
     "pipeline": "resume_panels"
   },
   "pass": true

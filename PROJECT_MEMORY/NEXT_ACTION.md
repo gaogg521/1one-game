@@ -147,6 +147,6 @@ npm run qa:comic-director-pipeline
 | ✅ | 分镜+配图链 238s+528s=32/32 · `cmqe2cos2000167xc8zuy9c86` |
 | ✅ | 17 款竞品 clone batch + 离线断言 + CI |
 | ✅ | 六模板 PM 自动化签收 `qa:pm-handtest-signoff` |
-| ⬜ | git commit（需用户明确要求） |
+| ✅ | git commit `e098313` — 文学链路 + 竞品 clone 门禁 |
 | ⬜ | Console SSO 生产 IdP 联调（需企业 Azure/飞书配置 · 文档已齐） |
 | ⬜ | 六模板章节感 **可选** PM 肉眼抽测（自动化已签收） |
