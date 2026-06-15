@@ -18,6 +18,34 @@
 
 更新时间：**2026-06-15**（迭代三十三 · Platformer+Coaster 视觉 ✅）
 
+更新时间：**2026-06-15**（迭代三十五 · AI patch QA + 竞品基线 ✅）
+
+更新时间：**2026-06-15**（迭代三十四 · 生产上线 cb03358 ✅）
+
+## 迭代三十五：AI patch 实机 + 竞品截图基线
+
+| 项 | 交付 |
+|----|------|
+| `qa:sample-ai-patch-audit` | 健康 / 拉规格 / POST patch / 试玩页 UI 四步验收 |
+| 生产 patch | API 改 `gameplay.startingCoins=200` · UI 清空输入无报错 |
+| 种田同步缺口 | LLM 未改 `farming.startingCoins` · 本地 `syncFarmingStartingCoins` 已补 |
+| 竞品 batch @prod | **17/17 PASS** · `COMPETITOR_CLONE_BATCH=all` |
+| 脚本 | `competitor-clone-batch` IPv4 health + 6666 Playwright + 远程跳过 seed |
+
+**下一步**：`git commit` + `push main` → `deploy-prod-playability-fix.py` → 重跑 `qa:sample-ai-patch-audit` 全绿
+
+## 迭代三十四：提交 + 生产部署
+
+| 项 | 交付 |
+|----|------|
+| commit | `cb03358` feat(playability): 17 款样品视觉与手感全面升级 |
+| 生产 | http://43.163.105.71:6666 · health ok · PORT=6666 |
+| prod QA | `qa:prod-sample-play-audit` **17/17** |
+
+生产试玩：`/play/sample-grow-a-garden` · `/play/sample-color-bloom` · `/play/sample-elastic-thief-2`
+
+**下一步**：AI 修改链路实机验收 · 竞品截图基线更新 · 用户肉眼抽测
+
 ## 迭代三十三：Elastic Thief + 过山车/公路强化
 
 | 项 | 交付 |
@@ -28,8 +56,6 @@
 | QA | **17/17** |
 
 试玩：`/play/sample-elastic-thief-2` · `/play/sample-rail-in-air` · `/play/sample-crashy-roads`
-
-**下一步**：本地验收满意 → commit + push → `deploy-prod-playability-fix.py`
 
 ## 迭代三十二：action-visual 全覆盖剩余样品
 
@@ -193,4 +219,6 @@ npm run qa:comic-director-pipeline
 | ✅ | 六模板 PM 自动化签收 `qa:pm-handtest-signoff` |
 | ✅ | git commit `e098313` — 文学链路 + 竞品 clone 门禁 |
 | ⬜ | Console SSO 生产 IdP 联调（需企业 Azure/飞书配置 · 文档已齐） |
+| ⬜ | 种田 patch 金币同步上线（commit `spec-patch` + deploy） |
+| ⬜ | `qa:sample-ai-patch-audit` 生产四步全绿（deploy 后） |
 | ⬜ | 六模板章节感 **可选** PM 肉眼抽测（自动化已签收） |

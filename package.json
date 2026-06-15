@@ -76,6 +76,7 @@
     "qa:sample-gameplay-interaction": "tsx scripts/qa-sample-gameplay-interaction.ts",
     "qa:sample-gameplay-interaction:offline": "tsx scripts/qa-sample-gameplay-interaction-offline.ts",
     "qa:prod-sample-play-audit": "tsx scripts/qa-prod-sample-play-audit.ts",
+    "qa:sample-ai-patch-audit": "tsx scripts/qa-sample-ai-patch-audit.ts",
     "ensure:dev-playable": "tsx scripts/ensure-dev-playable.ts",
     "qa:astrocade-pipeline": "tsx scripts/qa-astrocade-pipeline.ts",
     "qa:astrocade-user-path": "tsx scripts/qa-astrocade-user-path.ts",

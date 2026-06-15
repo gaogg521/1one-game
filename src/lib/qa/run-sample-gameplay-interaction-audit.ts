@@ -320,7 +320,7 @@ function writeReport(results: SampleGameplayResult[], baseUrl: string, outDir: s
   );
 }
 
-function chromiumLaunchOptions(baseUrl: string): { args: string[] } {
+export function chromiumLaunchOptions(baseUrl: string): { args: string[] } {
   try {
     const port = new URL(baseUrl).port;
     if (port) return { args: [`--explicitly-allowed-ports=${port}`] };

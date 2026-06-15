@@ -1,6 +1,8 @@
 # CURRENT_STATUS
 
-更新时间：**2026-06-14**
+更新时间：**2026-06-15**（迭代三十五 · AI patch + 竞品基线 ✅）
+
+更新时间：**2026-06-15**（迭代三十四 · 生产上线 cb03358 ✅）
 
 ## 架构对齐（Astrocade 平台）
 
@@ -13,6 +15,18 @@
 **入口**：`src/lib/astrocade-architecture.ts`  
 **门禁**：`npm run qa:architecture-parity`
 
+## 迭代三十五：AI 修改链路 + 生产竞品截图基线
+
+| 能力 | 状态 |
+|------|------|
+| `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
+| 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
+| 种田金币同步 | ⬜ 本地已加 `syncFarmingStartingCoins` · **待 commit+deploy** |
+| `qa:competitor-clone-batch` all@prod | ✅ **17/17** · diff 0.4%–4.4% |
+| 脚本修复 | `competitor-clone-batch` IPv4 health · 远程跳过本地 seed |
+
+报告：`qa-output/sample-ai-patch-audit/` · `qa-output/competitor-clone-batch/`
+
 ## 竞品克隆可玩度（2026-06-15 迭代三十二）
 
 | 能力 | 状态 |
@@ -21,7 +35,7 @@
 | Smash / State Conquest / Chess / Sniper / Orbit | ✅ 场景接入 + 17 款 theme 配色齐 |
 | 累计视觉层 | `farming-visual` + `puzzle-visual` + `action-visual` |
 | 实机玩法交互 QA | ✅ **17/17** |
-| 生产部署 | ⬜ 需 commit + push → `deploy-prod-playability-fix.py` |
+| 生产部署 | ✅ `cb03358` @ http://43.163.105.71:6666 · prod QA **17/17** |
 
 ## 竞品克隆可玩度（2026-06-15 迭代三十一）
 

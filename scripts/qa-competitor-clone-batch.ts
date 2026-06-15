@@ -20,6 +20,7 @@ import {
   playabilityChecksPass,
 } from "../src/lib/qa/competitor-clone-playability-checks";
 import { compareCloneVisualParity } from "../src/lib/qa/competitor-clone-screenshots";
+import { chromiumLaunchOptions, healthOk } from "../src/lib/qa/run-sample-gameplay-interaction-audit";
 import { ensureSampleGalleryProjects } from "../src/lib/sample-gallery-seed";
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8888";
@@ -49,15 +50,6 @@ function pickSamples(): Sample[] {
   const batch = (process.env.COMPETITOR_CLONE_BATCH ?? "smoke").trim().toLowerCase();
   if (batch === "all") return [...SAMPLES];
   return SAMPLES.filter((s) => (SMOKE_SAMPLE_IDS as readonly string[]).includes(s.id));
-}
-
-async function healthOk() {
-  try {
-    const r = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(5000) });
-    return r.ok;
-  } catch {
-    return false;
-  }
 }
 
 async function runOne(
@@ -114,16 +106,19 @@ async function runOne(
 }
 
 async function main() {
-  if (!(await healthOk())) {
-    console.error(`[FAIL] dev 未启动 @ ${BASE}`);
+  if (!(await healthOk(BASE))) {
+    console.error(`[FAIL] 服务未就绪 @ ${BASE}`);
     process.exit(1);
   }
 
   const samples = pickSamples();
   fs.mkdirSync(path.join(OUT, "shots"), { recursive: true });
-  await ensureSampleGalleryProjects();
+  const isLocal = /^(localhost|127\.0\.0\.1)$/i.test(new URL(BASE).hostname);
+  if (isLocal) {
+    await ensureSampleGalleryProjects();
+  }
 
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(chromiumLaunchOptions(BASE));
 
   const rows = [];
   for (const sample of samples) {
