@@ -1,7 +1,7 @@
 export type QaClickHint = { x: number; y: number };
 
 export type { PhaserQaState } from "@/game/engine/phaser-qa-state";
-import { clearPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { clearPhaserQaState, initQaState, type PhaserQaState } from "@/game/engine/phaser-qa-state";
 
 declare global {
   interface Window {
@@ -19,6 +19,10 @@ declare global {
 export function markPhaserPlayReady(): void {
   if (typeof window !== "undefined") {
     window.__PHASER_PLAY_READY__ = true;
+    // 确保 QA 状态对象存在（Scene create 与 ready 标记之间的竞态）
+    if (!window.__PHASER_QA_STATE__) {
+      window.__PHASER_QA_STATE__ = { qaTouches: 0 };
+    }
   }
 }
 
@@ -49,6 +53,9 @@ export function clearPhaserQaGame(): void {
   }
 }
 
-export function schedulePhaserPlayReady(scene: Phaser.Scene, delayMs = 1500): void {
-  scene.time.delayedCall(delayMs, () => markPhaserPlayReady());
+export function schedulePhaserPlayReady(scene: Phaser.Scene, delayMs = 1500, qaPatch?: PhaserQaState): void {
+  scene.time.delayedCall(delayMs, () => {
+    if (qaPatch) initQaState(qaPatch);
+    markPhaserPlayReady();
+  });
 }

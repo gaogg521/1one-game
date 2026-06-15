@@ -20,6 +20,7 @@ import {
   hudReady,
 } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { bumpQaTouch, initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
@@ -177,10 +178,21 @@ export class CustomizationScene extends Phaser.Scene {
         }
       });
 
-    schedulePhaserPlayReady(this, 400);
+    const qaInit: Record<string, number> = { potteryHeight: 0 };
+    if (this.mode !== "pottery") qaInit.qaTouches = 0;
+    setPhaserQaState(qaInit);
+    schedulePhaserPlayReady(this, 400, qaInit);
+  }
+
+  private publishQaState() {
+    setPhaserQaState({
+      qaTouches: this.edits,
+      potteryHeight: Math.round(this.vaseHeight * 100),
+    });
   }
 
   update(_time: number, deltaMs: number) {
+    this.publishQaState();
     if (this.mode !== "pottery") return;
     this.spinAngle += deltaMs * this.potterySpinRate;
     this.drawPottery();
@@ -210,6 +222,8 @@ export class CustomizationScene extends Phaser.Scene {
   private pullPotteryWheel() {
     this.vaseHeight = Math.min(1, this.vaseHeight + 0.12);
     this.potterySpinRate = Math.min(0.0045, this.potterySpinRate + 0.00035);
+    bumpQaTouch();
+    this.publishQaState();
     playBleep("pickup");
     const cx = this.scale.width / 2;
     const cy = this.scale.height * 0.46;
@@ -235,6 +249,8 @@ export class CustomizationScene extends Phaser.Scene {
       this.drawCar();
     }
     this.edits += 1;
+    bumpQaTouch();
+    this.publishQaState();
     playBleep("pickup");
     this.soundscape?.triggerEvent("restore");
     const cx = this.scale.width / 2;

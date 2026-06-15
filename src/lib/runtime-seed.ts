@@ -12,11 +12,11 @@ export function hashString(s: string): number {
 
 /** 同 prompt + profile + template → 全 Scene 共用确定性 seed（Astrocade 对标） */
 export function runtimeSeedFromSpec(spec: GameSpec, promptHint = ""): number {
-  const blob = [
-    spec.templateId,
-    spec.samplePlayProfile?.variantId ?? "",
-    promptHint.trim() || spec.labels?.subtitle || spec.title,
-  ].join("|");
+  const variant = spec.samplePlayProfile?.variantId?.trim() ?? "";
+  // 样品馆：仅 variantId 决定 seed，duplicate 改 title 不会换局
+  const blob = variant
+    ? `${spec.templateId}|${variant}`
+    : [spec.templateId, promptHint.trim() || spec.labels?.subtitle || spec.title].join("|");
   return hashString(blob);
 }
 

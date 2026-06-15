@@ -12,6 +12,17 @@ export function setPhaserQaState(patch: PhaserQaState): void {
   window.__PHASER_QA_STATE__ = { ...(window.__PHASER_QA_STATE__ ?? {}), ...patch };
 }
 
+export function initQaState(patch: PhaserQaState = {}): void {
+  setPhaserQaState({ qaTouches: 0, ...patch });
+}
+
+export function bumpQaTouch(delta = 1): void {
+  if (typeof window === "undefined") return;
+  const prev = window.__PHASER_QA_STATE__?.qaTouches;
+  const n = (typeof prev === "number" ? prev : 0) + delta;
+  setPhaserQaState({ qaTouches: n });
+}
+
 export function clearPhaserQaState(): void {
   if (typeof window === "undefined") return;
   delete window.__PHASER_QA_STATE__;

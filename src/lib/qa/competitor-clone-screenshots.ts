@@ -5,32 +5,32 @@ import {
   passesCanvasParity,
   type CanvasParityMetrics,
 } from "@/lib/qa/canvas-image-parity";
+import { ANIMATED_GAMEPLAY_SAMPLES } from "@/lib/qa/sample-gameplay-interaction";
 
-/** 持续动画场景：单帧截图易错位，需 burst 采样取最佳匹配 */
-export const ANIMATED_CLONE_SAMPLES = new Set([
-  "crashy-roads",
-  "rail-in-air",
-  "tiny-planet-chopper",
-  "elastic-thief-2",
-  "gun-merge-3d-zombie-apocalypse",
-  "blade-defender-merge",
-  "blocky-sniper-hunter",
-  "smash-the-dummy",
-  "memory-match-mania",
-]);
+const BURST_FRAMES = Number(process.env.CLONE_VISUAL_BURST ?? "5");
+const BURST_FRAMES_ANIMATED = Number(process.env.CLONE_VISUAL_BURST_ANIMATED ?? "12");
+const BURST_GAP_MS = Number(process.env.CLONE_VISUAL_BURST_GAP_MS ?? "280");
 
-export async function waitForPlayCanvas(page: import("@playwright/test").Page, projectId: string, baseUrl: string) {
+export async function waitForPlayCanvas(
+  page: import("@playwright/test").Page,
+  projectId: string,
+  baseUrl: string,
+) {
   await page.goto(`${baseUrl}/play/${projectId}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
-  await page.waitForTimeout(2200);
+  await page.waitForFunction(
+    () => (window as Window & { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__ === true,
+    { timeout: 35_000 },
+  );
+  await page.waitForTimeout(350);
 }
 
 export async function captureCanvasBurst(
   page: import("@playwright/test").Page,
   outDir: string,
   prefix: string,
-  count = 5,
-  gapMs = 320,
+  count = BURST_FRAMES,
+  gapMs = BURST_GAP_MS,
 ): Promise<string[]> {
   const paths: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -56,6 +56,7 @@ export async function bestCloneVisualMatch(
   return best!;
 }
 
+/** 17 款统一 burst 对标：消除单帧/HUD 时序差 */
 export async function compareCloneVisualParity(opts: {
   page: import("@playwright/test").Page;
   baseUrl: string;
@@ -65,24 +66,12 @@ export async function compareCloneVisualParity(opts: {
   shotsDir: string;
 }): Promise<{ metrics: CanvasParityMetrics; visualOk: boolean }> {
   const thresholds = cloneVisualThresholdsForSample(opts.sampleId);
-  const animated = ANIMATED_CLONE_SAMPLES.has(opts.sampleId);
-
-  if (!animated) {
-    const sourceShot = path.join(opts.shotsDir, `source-${opts.sampleId}.png`);
-    const cloneShot = path.join(opts.shotsDir, `clone-${opts.sampleId}.png`);
-    await waitForPlayCanvas(opts.page, opts.sourceId, opts.baseUrl);
-    await opts.page.locator("canvas").first().screenshot({ path: sourceShot });
-    await waitForPlayCanvas(opts.page, opts.cloneId, opts.baseUrl);
-    await opts.page.waitForTimeout(700);
-    await opts.page.locator("canvas").first().screenshot({ path: cloneShot });
-    const metrics = await compareCanvasImages(sourceShot, cloneShot);
-    return { metrics, visualOk: passesCanvasParity(metrics, thresholds) };
-  }
+  const burstCount = ANIMATED_GAMEPLAY_SAMPLES.has(opts.sampleId) ? BURST_FRAMES_ANIMATED : BURST_FRAMES;
 
   await waitForPlayCanvas(opts.page, opts.sourceId, opts.baseUrl);
-  const sourcePaths = await captureCanvasBurst(opts.page, opts.shotsDir, `source-${opts.sampleId}`);
+  const sourcePaths = await captureCanvasBurst(opts.page, opts.shotsDir, `source-${opts.sampleId}`, burstCount);
   await waitForPlayCanvas(opts.page, opts.cloneId, opts.baseUrl);
-  const clonePaths = await captureCanvasBurst(opts.page, opts.shotsDir, `clone-${opts.sampleId}`);
+  const clonePaths = await captureCanvasBurst(opts.page, opts.shotsDir, `clone-${opts.sampleId}`, burstCount);
   const metrics = await bestCloneVisualMatch(sourcePaths, clonePaths);
   return { metrics, visualOk: passesCanvasParity(metrics, thresholds) };
 }

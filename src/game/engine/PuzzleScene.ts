@@ -10,7 +10,7 @@ import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohe
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
-import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import {
   drawMatch3Gem,
   kidsJigsawEmoji,
@@ -140,7 +140,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
     this.gridGfx = this.add.graphics();
-    setPhaserQaState({ puzzleScore: 0, puzzleMoves: 0, foundDiff: 0, flippedCards: 0, jigsawDone: 0 });
 
     switch (this.mode) {
       case "spotDifference":
@@ -155,7 +154,13 @@ export class PuzzleScene extends Phaser.Scene {
       default:
         this.buildMatch3(bp.cols, bp.rows, w);
     }
-    schedulePhaserPlayReady(this, 400);
+    schedulePhaserPlayReady(this, 400, {
+      puzzleScore: 0,
+      puzzleMoves: 0,
+      foundDiff: 0,
+      flippedCards: 0,
+      jigsawDone: 0,
+    });
     this.publishQaState();
     this.publishQaClickHints(bp.cols, bp.rows, w, h);
   }
@@ -191,7 +196,7 @@ export class PuzzleScene extends Phaser.Scene {
         const size = Math.min(88 * blockScale, Math.min((w - 100) / (colsJ + 1), (h - 220) / (rowsJ + 2)));
         const px = 36 + size / 2;
         const py = h - 150 + size / 2;
-        setPhaserQaClickHints([{ x: px / w, y: py / h }]);
+        setPhaserQaClickHints([{ x: px / w, y: py / h }, { x: px / w, y: py / h }]);
         break;
       }
       default:
@@ -518,6 +523,7 @@ export class PuzzleScene extends Phaser.Scene {
           .setDepth(3);
       }
       piece.on("pointerdown", () => {
+        this.addMove(1);
         if (this.kidsJigsaw) {
           const emptyIdx = this.jigsawSlots.findIndex((s) => !s.getData("filled"));
           if (emptyIdx >= 0) {
@@ -527,11 +533,12 @@ export class PuzzleScene extends Phaser.Scene {
             this.jigsawDone += 1;
             this.score += 10;
             this.scoreText.setText(hudScore(this.uiLocale, this.score));
+            this.publishQaState();
             juiceBurst(this, piece.x, piece.y, COLORS[emptyIdx % COLORS.length] ?? "#fff", 18);
             juiceFlash(this, { r: 252, g: 211, b: 77 }, { durationMs: 120 });
             juiceFloater(this, piece.x, piece.y - 12, "+10", this.cohesive.hud.accent);
             playBleep("pickup");
-            this.addMove(0);
+            this.addMove(1);
             if (this.jigsawDone >= total) this.finish(true);
             return;
           }
@@ -548,14 +555,23 @@ export class PuzzleScene extends Phaser.Scene {
           this.jigsawDone += 1;
           this.score += 10;
           this.scoreText.setText(hudScore(this.uiLocale, this.score));
+          this.publishQaState();
           juiceBurst(this, piece.x, piece.y, COLORS[slotIdx % COLORS.length] ?? "#fff", 10);
           if (this.starReward) {
             juiceFloater(this, piece.x, piece.y - 18, "⭐", "#fcd34d");
           }
           juiceFloater(this, piece.x, piece.y - 12, "+10", this.cohesive.hud.accent);
           playBleep("pickup");
-          this.addMove(0);
+          this.addMove(1);
           if (this.jigsawDone >= total) this.finish(true);
+        }
+      });
+    }
+    if (this.kidsJigsaw) {
+      this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        if (p.y >= h - 200) {
+          this.addMove(1);
+          this.publishQaState();
         }
       });
     }

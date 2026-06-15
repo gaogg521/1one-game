@@ -10,6 +10,7 @@ import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohe
 import type { GameSpec } from "@/lib/game-spec";
 import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
@@ -128,9 +129,10 @@ export class PhysicsScene extends Phaser.Scene {
       });
     }
 
+    setPhaserQaState({ qaTouches: 0 });
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
     setPhaserQaClickHints([{ x: dummyX / w, y: dummyY / h }]);
-    schedulePhaserPlayReady(this, 400);
+    schedulePhaserPlayReady(this, 400, {});
   }
 
   private refreshProgressBar() {
@@ -164,6 +166,7 @@ export class PhysicsScene extends Phaser.Scene {
     const gain = Math.round((20 + this.combo * 8) * this.comboMultiplier);
     this.score += gain;
     this.hits += 1;
+    bumpQaTouch();
     this.scoreText.setText(hudScore(this.uiLocale, this.score));
     this.comboText.setText(floaterCombo(this.uiLocale, this.combo));
     this.refreshProgressBar();
@@ -183,6 +186,7 @@ export class PhysicsScene extends Phaser.Scene {
 
   update(_t: number, dt: number) {
     this.banner.tick();
+    setPhaserQaState({ qaTouches: this.hits, hits: this.hits });
     if (this.finished) return;
     if (this.time.now > this.comboUntil && this.combo > 0) {
       this.combo = 0;

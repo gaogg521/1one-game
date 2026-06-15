@@ -30,7 +30,7 @@ import {
 } from "@/game/engine/gameJuice";
 import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
@@ -395,6 +395,11 @@ export class ShooterScene extends Phaser.Scene {
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on("down", () => {
+      if (this.finished) return;
+      bumpQaTouch();
+      this.firePlayerBullet();
+    });
 
     // Collisions
     this.physics.add.overlap(this.playerBullets, this.enemies, (b, e) => {
@@ -437,7 +442,8 @@ export class ShooterScene extends Phaser.Scene {
     this.dangerVignette.setAlpha(0);
     this.dangerVignette.fillStyle(0xff2233, 1);
     this.dangerVignette.fillRect(0, 0, width, height);
-    schedulePhaserPlayReady(this, 500);
+    setPhaserQaState({ qaTouches: 0 });
+    schedulePhaserPlayReady(this, 500, {});
   }
 
   // ─── Recursive fire schedulers ─────────────────────────────────────────────
@@ -1032,6 +1038,7 @@ export class ShooterScene extends Phaser.Scene {
 
   update(time: number) {
     if (this.finished || !this.bootstrapDone) return;
+    setPhaserQaState({ qaTouches: this.shotsFired });
 
     if (this.keyShift && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
       this.tryCastSkill();

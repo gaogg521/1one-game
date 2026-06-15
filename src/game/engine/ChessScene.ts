@@ -16,6 +16,7 @@ import {
 } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { paintChessStudioBackdrop } from "@/game/engine/action-visual";
+import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { juiceFlash } from "@/game/engine/gameJuice";
 
@@ -103,9 +104,10 @@ export class ChessScene extends Phaser.Scene {
       );
     }
 
+    setPhaserQaState({ qaTouches: 0 });
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onBoardClick(p));
     this.redraw();
-    schedulePhaserPlayReady(this, 400);
+    schedulePhaserPlayReady(this, 400, {});
     const pawn = this.pieces.find((p) => p.color === "w" && p.type === "P");
     if (pawn) {
       setPhaserQaClickHints([
@@ -217,6 +219,8 @@ export class ChessScene extends Phaser.Scene {
       this.selected.col = col;
       this.selected = null;
       this.moves += 1;
+      setPhaserQaState({ moves: this.moves, qaTouches: this.moves });
+      bumpQaTouch();
       playBleep("pickup");
       this.whiteTurn = false;
       this.statusText.setText(hudChessThinkingBlack(this.uiLocale));
@@ -224,6 +228,11 @@ export class ChessScene extends Phaser.Scene {
       juiceFlash(this, { r: 250, g: 250, b: 250 }, { durationMs: 150 });
       this.time.delayedCall(500, () => this.blackMove());
     }
+  }
+
+  update() {
+    this.banner.tick();
+    setPhaserQaState({ moves: this.moves, qaTouches: this.moves });
   }
 
   private blackMove() {

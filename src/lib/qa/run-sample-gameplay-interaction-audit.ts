@@ -58,6 +58,7 @@ export async function waitPlayReady(page: Page, timeoutMs = 30_000): Promise<boo
       () => (window as Window & { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__ === true,
       { timeout: timeoutMs },
     );
+    await page.waitForTimeout(200);
     return true;
   } catch {
     return false;
@@ -397,18 +398,24 @@ export async function runSampleGameplayInteractionAudit(
 ): Promise<SampleGameplayResult[]> {
   const shots = path.join(outDir, "shots");
   const browser = await chromium.launch(chromiumLaunchOptions(baseUrl));
-  const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
   const results: SampleGameplayResult[] = [];
 
-  for (let i = 0; i < SAMPLES.length; i += 1) {
-    const sample = SAMPLES[i]!;
+  const filterIds = process.env.SAMPLE_AUDIT_IDS?.split(",").map((s) => s.trim()).filter(Boolean);
+  const samples = filterIds?.length
+    ? SAMPLES.filter((s) => filterIds.includes(s.id))
+    : SAMPLES;
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = samples[i]!;
+    const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
     console.log(`→ ${sample.id}`);
     const r = await auditSample(page, sample.id, sample.title, baseUrl, shots);
     results.push(r);
     console.log(
       `  ${r.pass ? "[OK]" : "[FAIL]"} api=${r.apiOk} canvas=${r.canvasOk} scene=${r.actualScene} interaction=${r.interactionOk} depth=${r.gameplayDepthField ? r.gameplayDepthOk : "n/a"}${r.error ? ` · ${r.error}` : ""}`,
     );
-    if (i < SAMPLES.length - 1) await page.waitForTimeout(450);
+    await page.close();
+    if (i < samples.length - 1) await new Promise((r) => setTimeout(r, 200));
   }
 
   await browser.close();

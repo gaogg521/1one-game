@@ -11,6 +11,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { drawStrategyNode, paintStrategyMapBackdrop } from "@/game/engine/action-visual";
 import { bannerStrategyFinish, hudReady, hudScore, hudStrategyControls } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
@@ -89,9 +90,10 @@ export class StrategyScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
+    setPhaserQaState({ qaTouches: 0 });
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onTap(p));
     this.redraw();
-    schedulePhaserPlayReady(this, 400);
+    schedulePhaserPlayReady(this, 400, {});
     const playerNode = this.nodes.find((n) => n.owner === "player");
     const linked = playerNode
       ? this.nodes.filter((n) => n.id !== playerNode.id && this.linked(playerNode, n))
@@ -127,6 +129,8 @@ export class StrategyScene extends Phaser.Scene {
 
     if (!this.selected && hit.owner === "player") {
       this.selected = hit.id;
+      bumpQaTouch();
+      this.qaActions += 1;
       juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 130 });
       this.redraw();
       return;
@@ -158,6 +162,8 @@ export class StrategyScene extends Phaser.Scene {
 
       this.selected = null;
       this.score += 15;
+      bumpQaTouch();
+      this.qaActions += 1;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
       playBleep("pickup");
       juiceFlash(this, { r: 74, g: 222, b: 128 }, { durationMs: 140 });
@@ -238,8 +244,11 @@ export class StrategyScene extends Phaser.Scene {
     }
   }
 
+  private qaActions = 0;
+
   update() {
     this.banner.tick();
+    setPhaserQaState({ qaTouches: this.qaActions });
   }
 
   private finish(won: boolean) {

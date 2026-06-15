@@ -3,7 +3,7 @@
  * npm run qa:sample-gameplay-interaction
  */
 import "dotenv/config";
-import { healthOk, runSampleGameplayInteractionAudit } from "@/lib/qa/run-sample-gameplay-interaction-audit";
+import { healthOk, runSampleGameplayInteractionAudit } from "../src/lib/qa/run-sample-gameplay-interaction-audit";
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8888";
 

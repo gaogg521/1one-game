@@ -21,6 +21,22 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
+更新时间：**2026-06-15**（迭代三十七 · 17/17 全样品玩法深度 + 本地克隆 17/17 ✅）
+
+## 迭代三十七：全 17 款玩法深度 + 克隆视觉修复
+
+| 能力 | 状态 |
+|------|------|
+| `GAMEPLAY_DEPTH_BY_SAMPLE` | ✅ **17/17** 字段映射 |
+| 各 Phaser Scene | `__PHASER_QA_STATE__` 持续发布（update/交互） |
+| `runtime-seed.ts` | duplicate 改 title 不漂移 RNG（variantId 锚定） |
+| `qa:sample-gameplay-interaction` | ✅ 本地 **17/17**（独立进程跑，避免并行 Playwright 抢 dev） |
+| `qa:competitor-clone-batch` all@local | ✅ **17/17** · animated 样品 12 帧 burst |
+| 塔防 merge | `onMergeCellClick` 计入 QA 深度 |
+| 审计稳定性 | 每样品独立 browser page · `SAMPLE_AUDIT_IDS` 过滤 |
+
+报告：`qa-output/sample-gameplay-interaction/` · `qa-output/competitor-clone-batch/`
+
 更新时间：**2026-06-15**（迭代三十六 · QA 深度 + 阈值收紧 ✅）
 
 ## 迭代三十六：玩法深度断言 + 视觉阈值收紧

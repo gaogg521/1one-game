@@ -49,6 +49,7 @@ import {
   type CohesivePresentation,
 } from "@/lib/cohesive-presentation";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
+import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
@@ -563,7 +564,8 @@ export class PlatformerScene extends Phaser.Scene {
     this.dangerVignette.fillRect(0, 0, viewW * 4, viewH);
 
     this.cameras.main.setScroll(Math.max(0, this.player.x - viewW / 2), 0);
-    schedulePhaserPlayReady(this, 350);
+    setPhaserQaState({ playerX: Math.round(this.player.x) });
+    schedulePhaserPlayReady(this, 350, { playerX: Math.round(this.player.x) });
   }
 
   private buildLevel(viewH: number) {
@@ -1050,6 +1052,8 @@ export class PlatformerScene extends Phaser.Scene {
       this.physics.world.timeScale = wanted;
       this.time.timeScale = slowOn ? 0.92 : 1;
     }
+
+    setPhaserQaState({ playerX: Math.round(this.player.x) });
 
     let vx = 0;
     if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;

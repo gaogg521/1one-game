@@ -1,3 +1,12 @@
+更新时间：**2026-06-15**（迭代三十七 · 本地 17/17 玩法+克隆 ✅）
+
+## 迭代三十七（当前）
+
+1. **本地验收**：`qa:sample-gameplay-interaction` **17/17** · `qa:competitor-clone-batch` all **17/17**
+2. **部署生产**后重跑 `qa:prod-sample-play-audit` + `COMPETITOR_CLONE_BATCH=all` @6666
+3. **注意**：勿并行多个 Playwright 审计抢同一 dev 端口（会导致 QA 状态 ∅ 假失败）
+4. P2：旗舰 sprite 贴图 · `competitor-gates` 全绿
+
 更新时间：**2026-06-15**（迭代三十一 · 样品可玩性视觉升级 ✅）
 
 更新时间：**2026-06-15**（迭代三十 · 宋辽满格+精选 ✅）

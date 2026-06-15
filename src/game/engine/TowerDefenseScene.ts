@@ -42,7 +42,7 @@ import {
 } from "@/lib/reference-classify";
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
-import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
@@ -879,6 +879,8 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.finished) return;
+      this.tdQaTouches += 1;
+      bumpQaTouch();
       this.tryBuildOrUpgrade(pointer.x, pointer.y);
     });
 
@@ -1047,7 +1049,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
 
     this.bootstrapComplete = true;
-    schedulePhaserPlayReady(this, 500);
+    setPhaserQaState({ qaTouches: 0 });
+    schedulePhaserPlayReady(this, 500, {});
 
     /** 首波延后，保证 QA 对标截图在静态布局帧（平台级 parity，非 per-game） */
     const lead = Math.max(this.waveDefs[0]?.leadInMs ?? 650, 1600);
@@ -1194,6 +1197,8 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private onMergeCellClick(idx: number) {
     if (this.finished || !this.mergeGridEnabled) return;
+    this.tdQaTouches += 1;
+    bumpQaTouch();
     const tier = this.mergeCells[idx] ?? 0;
     if (this.mergeSelected === null) {
       if (tier <= 0) return;
@@ -2239,8 +2244,11 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.onEnd(payload);
   }
 
+  private tdQaTouches = 0;
+
   update(time: number) {
     if (!this.bootstrapComplete || this.finished) return;
+    setPhaserQaState({ qaTouches: this.tdQaTouches });
 
     this.tickDirectorEvents();
     this.tickEventLoops();

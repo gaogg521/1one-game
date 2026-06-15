@@ -31,7 +31,7 @@ import {
 } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -177,8 +177,8 @@ export class CoasterScene extends Phaser.Scene {
       message: this.spec.labels.subtitle ?? hudReady(this.uiLocale),
       ms: 2200,
     });
-    schedulePhaserPlayReady(this, 500);
     setPhaserQaState({ coasterDistance: 0, coasterLives: this.roadLives });
+    schedulePhaserPlayReady(this, 500, { coasterDistance: 0, coasterLives: this.roadLives });
 
     if (this.endlessMode) {
       this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
@@ -249,6 +249,11 @@ export class CoasterScene extends Phaser.Scene {
     this.timerText.setText(formatTime(this.elapsed));
     this.speedText.setText(hudCoasterSpeed(this.uiLocale, Math.round(this.speed * 3.2)));
     this.scoreText.setText(hudScore(this.uiLocale, Math.round(this.trackProgress * 100)));
+
+    setPhaserQaState({
+      coasterDistance: Math.max(0, Math.round(this.trackProgress * 10_000 + this.elapsed * 10)),
+      coasterLives: this.roadLives,
+    });
 
     if (this.trackProgress >= 1) {
       this.finish(true);
