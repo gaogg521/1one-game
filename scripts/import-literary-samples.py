@@ -15,13 +15,17 @@ def main():
     c.row_factory = sqlite3.Row
 
     def upsert(table, row, pk="id"):
-        cols = [k for k in row.keys() if k != pk]
-        placeholders = ",".join("?" * (len(cols) + 1))
-        col_names = pk + "," + ",".join(cols)
-        updates = ",".join(f"{k}=excluded.{k}" for k in cols)
-        vals = [row[pk]] + [row[k] for k in cols]
+        cols = list(row.keys())
+        placeholders = ",".join("?" * len(cols))
+        col_names = ",".join(cols)
+        vals = []
+        for k in cols:
+            v = row[k]
+            if isinstance(v, bool):
+                v = 1 if v else 0
+            vals.append(v)
         c.execute(
-            f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) ON CONFLICT({pk}) DO UPDATE SET {updates}",
+            f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})",
             vals,
         )
 
