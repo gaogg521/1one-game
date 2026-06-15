@@ -31,7 +31,13 @@ die() { printf '\033[1;31m[operone-deploy]\033[0m %s\n' "$*" >&2; exit 1; }
 ok()  { printf '\033[1;32m[operone-deploy]\033[0m %s\n' "$*"; }
 
 need_root() {
-  [[ "$(id -u)" -eq 0 ]] || die "此步骤需要 root：sudo bash $0 $*"
+  if is_root; then
+    return 0
+  fi
+  if [[ -n "${OPERONE_DEPLOY_SCRIPT:-}" && -f "${OPERONE_DEPLOY_SCRIPT}" ]]; then
+    ensure_root_privileges "${OPERONE_DEPLOY_SCRIPT}"
+  fi
+  die "需要 root 权限。请执行: sudo bash ${OPERONE_DEPLOY_SCRIPT:-$0}"
 }
 
 generate_secret() {
@@ -110,9 +116,9 @@ clone_or_update_repo() {
   ensure_operone_dir
   if [[ -d "$OPERONE_DIR/.git" ]]; then
     log "仓库已存在，git pull …"
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
     return 0
   fi
 
@@ -157,8 +163,8 @@ write_env_if_missing() {
   [[ -f "$OPERONE_DIR/.env.example" ]] || die "缺少 $OPERONE_DIR/.env.example"
 
   log "从 .env.example 生成 .env"
-  sudo -u "$OPERONE_USER" cp "$OPERONE_DIR/.env.example" "$env_file"
-  sudo -u "$OPERONE_USER" sed -i 's|^DATABASE_URL=.*|DATABASE_URL="file:./prod.db"|' "$env_file"
+  run_as_app_user "$OPERONE_USER" cp "$OPERONE_DIR/.env.example" "$env_file"
+  run_as_app_user "$OPERONE_USER" sed -i 's|^DATABASE_URL=.*|DATABASE_URL="file:./prod.db"|' "$env_file"
 
   if [[ -z "${SUPER_ADMIN_SECRET:-}" ]]; then
     SUPER_ADMIN_SECRET="$(generate_secret)"
@@ -169,7 +175,7 @@ write_env_if_missing() {
     local key="$1" val="$2"
     [[ -z "$val" ]] && return 0
     if grep -q "^${key}=" "$env_file"; then
-      sudo -u "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+      run_as_app_user "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
     else
       echo "${key}=${val}" >> "$env_file"
     fi
@@ -193,7 +199,7 @@ merge_env_key() {
   [[ -z "$val" ]] && return 0
   [[ -f "$env_file" ]] || return 0
   if grep -q "^${key}=" "$env_file"; then
-    sudo -u "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+    run_as_app_user "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
   else
     echo "${key}=${val}" >> "$env_file"
   fi
@@ -212,27 +218,27 @@ phase_app() {
   merge_env_key "SUPER_ADMIN_SECRET" "${SUPER_ADMIN_SECRET:-}"
 
   log "npm ci …"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
 
   log "prisma migrate deploy …"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
 
   if [[ "$SKIP_PREFLIGHT" != "1" ]]; then
     log "qa:deploy-preflight …"
-    sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run qa:deploy-preflight" \
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run qa:deploy-preflight" \
       || warn "预检未全过，请查看日志后决定是否继续"
   fi
 
   log "npm run build …"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
 
   mkdir -p "$OPERONE_DIR/public/covers" "$OPERONE_DIR/public/comic-panels" "$OPERONE_DIR/public/game-bg"
   chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
 
   if [[ "$SKIP_SEED" != "1" ]]; then
     log "seed:samples（样品馆）…"
-    sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run seed:samples" \
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run seed:samples" \
       || warn "seed 失败（可稍后手动 npm run seed:samples）"
   fi
 

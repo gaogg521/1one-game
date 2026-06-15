@@ -17,6 +17,22 @@
 
 未在表内的 **Debian 系 / RHEL 系** 衍生版会按 `ID_LIKE` 尝试兼容安装；无法识别时会提前报错退出。
 
+## 运行权限
+
+| 登录方式 | 脚本行为 |
+|----------|----------|
+| **root 用户** | 直接安装，无需 sudo |
+| **普通用户** | 自动 `sudo` 提权（首次会提示输入密码） |
+| **curl \| bash** | 同上，非 root 时下载脚本后 `sudo` 执行 |
+
+无需手动写 `sudo bash ...`，一条命令即可：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+若系统未安装 sudo 且非 root，脚本会明确报错并提示用 root 登录。
+
 ## 一键安装
 
 在 **Ubuntu 22.04 / Debian 12 / CentOS 7+ / RHEL 8+** 服务器上执行：

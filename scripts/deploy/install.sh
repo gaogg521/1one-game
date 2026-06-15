@@ -2,10 +2,10 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Operone 一键部署 — 空机只需一条命令，装完改 .env 即可
 #
-#    curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+#    curl -fsSL .../install.sh | bash
 #
+#  权限：已是 root 直接装；普通用户自动 sudo（会提示输入密码）
 #  支持：Ubuntu / Debian / CentOS / RHEL / Rocky / AlmaLinux
-#  已部署过再次执行 = 自动更新版本
 # ═══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -32,9 +32,9 @@ load_os_lib() {
   if [[ -z "$lib_path" ]]; then
     lib_path="$(mktemp /tmp/operone-os-lib.XXXXXX.sh)"
     if ! curl -fsSL "${OPERONE_RAW_BASE}/lib/os-lib.sh" -o "$lib_path" 2>/dev/null; then
-      # 仓库尚未同步 os-lib 时的最小兜底（CentOS/Ubuntu 装 git/curl）
       cat > "$lib_path" <<'FALLBACK'
 os_die() { printf '[operone-deploy] ERROR: %s\n' "$*" >&2; exit 1; }
+is_root() { [[ "$(id -u)" -eq 0 ]]; }
 os_load_release() { [[ -f /etc/os-release ]] && . /etc/os-release; OS_ID=${ID:-}; OS_VERSION_ID=${VERSION_ID:-}; OS_PRETTY_NAME=${PRETTY_NAME:-unknown}; OS_VERSION_MAJOR=${VERSION_ID%%.*}; }
 os_detect() {
   OS_FAMILY=""; PKG_MGR=""
@@ -46,9 +46,11 @@ os_detect() {
   [[ -n "$OS_FAMILY" ]] || os_die "不支持的系统"
 }
 os_validate() { os_detect; }
-os_print_info() { os_detect; echo "  发行版: $OS_PRETTY_NAME ($OS_ID $OS_VERSION_ID) · $PKG_MGR"; }
+os_print_info() { os_detect; echo "  发行版: $OS_PRETTY_NAME ($OS_ID) · 用户: $(id -un)"; }
 os_check_network() { curl -fsSL --max-time 15 https://github.com >/dev/null || os_die "网络不可用"; }
 os_preflight() { os_validate; os_print_info; os_check_network; }
+ensure_root_privileges() { local s="$1"; shift; is_root && return 0; [[ "${OPERONE_ROOT_REEXEC:-0}" == 1 ]] && os_die "提权失败"; command -v sudo >/dev/null || os_die "需要 root 或 sudo"; export OPERONE_ROOT_REEXEC=1; exec sudo -E env OPERONE_ROOT_REEXEC=1 bash "$s" "$@"; }
+ensure_root_privileges_piped() { local u="$1"; shift; is_root && return 0; local t; t="$(mktemp /tmp/operone-install.XXXXXX.sh)"; curl -fsSL "$u" -o "$t"; chmod +x "$t"; export OPERONE_ROOT_REEXEC=1; exec sudo -E env OPERONE_ROOT_REEXEC=1 bash "$t" "$@"; }
 pkg_update() { case "$PKG_MGR" in apt) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;; dnf) dnf makecache -q ;; yum) yum makecache -q || true ;; esac; }
 pkg_install() { case "$PKG_MGR" in apt) DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ;; dnf) dnf install -y "$@" ;; yum) yum install -y "$@" ;; esac; }
 install_bootstrap_pkgs() { os_detect; pkg_update; pkg_install curl ca-certificates git; }
@@ -64,28 +66,22 @@ FALLBACK
   source "$lib_path"
 }
 
-# curl | bash 时 BASH_SOURCE 不可用，需重新下载自身再 sudo 执行
-ensure_root() {
-  [[ "$(id -u)" -eq 0 ]] && return 0
-  local src="${BASH_SOURCE[0]:-}"
-  if [[ -n "$src" && -f "$src" ]]; then
-    exec sudo -E bash "$src" "$@"
-  fi
-  log "需要 root 权限，正在提权 …"
-  local tmp
-  tmp="$(mktemp /tmp/operone-install.XXXXXX.sh)"
-  curl -fsSL "$OPERONE_INSTALL_URL" -o "$tmp"
-  chmod +x "$tmp"
-  exec sudo -E bash "$tmp" "$@"
-}
+load_os_lib
 
-ensure_root "$@"
+# root 直接继续；非 root 自动 sudo（curl | bash 时下载脚本再 sudo）
+_install_script=""
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  _install_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  export OPERONE_DEPLOY_SCRIPT="$_install_script"
+  ensure_root_privileges "$_install_script" "$@"
+else
+  ensure_root_privileges_piped "$OPERONE_INSTALL_URL" "$@"
+fi
 
 FULL_SH="$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh"
 export NON_INTERACTIVE=1
 export OPERONE_BOOTSTRAPPED=1
 
-# 已部署 → 自动更新
 if [[ -f "$FULL_SH" ]] && systemctl is-active --quiet operone 2>/dev/null; then
   log "检测到已有运行中的服务，自动更新 …"
   exec bash "$FULL_SH" --update "$@"
@@ -98,8 +94,8 @@ fi
 
 log "Operone 一键部署开始"
 log "拉取代码: $GIT_REPO → $OPERONE_DIR"
+[[ "$(id -u)" -eq 0 ]] && log "运行权限: root" || log "运行权限: $(id -un)"
 
-load_os_lib
 os_preflight
 install_bootstrap_pkgs
 ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"

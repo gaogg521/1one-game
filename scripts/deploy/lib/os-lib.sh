@@ -179,6 +179,11 @@ os_print_info() {
   printf "  ID:         %s %s\n" "$OS_ID" "$OS_VERSION_ID"
   printf "  族/包管理:  %s / %s\n" "$OS_FAMILY" "$PKG_MGR"
   printf "  内核/架构:  %s / %s\n" "$(uname -r)" "$(uname -m)"
+  if is_root; then
+    printf "  运行权限:   root（无需 sudo）\n"
+  else
+    printf "  运行权限:   %s（将自动 sudo 提权）\n" "$(id -un)"
+  fi
   echo "────────────────────────────────────────"
 }
 
@@ -436,6 +441,81 @@ ensure_app_user() {
   useradd --system --home-dir "$home" --shell "$shell" "$user" 2>/dev/null \
     || useradd --system -d "$home" --shell "$shell" "$user" 2>/dev/null \
     || useradd --system --home "$home" --shell "$shell" "$user"
+}
+
+# ── 权限：root 直接执行，非 root 自动 sudo ─────────────────
+
+is_root() {
+  [[ "$(id -u)" -eq 0 ]]
+}
+
+# 已是 root → 直接返回；非 root → sudo 重新执行本脚本（exec，不返回）
+# 用法：ensure_root_privileges /path/to/script.sh "$@"
+ensure_root_privileges() {
+  local script="${1:?缺少脚本路径}"
+  shift || true
+
+  if is_root; then
+    return 0
+  fi
+
+  if [[ "${OPERONE_ROOT_REEXEC:-0}" == "1" ]]; then
+    os_die "提权失败：sudo 后仍非 root，请直接用 root 登录执行"
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    os_die "需要 root 权限。当前用户: $(id -un)（uid=$(id -u)），系统未安装 sudo，请 root 登录后重试"
+  fi
+
+  if sudo -n true 2>/dev/null; then
+    os_warn "当前用户 $(id -un) → 使用 sudo 继续（已缓存密码）"
+  else
+    os_warn "当前用户 $(id -un) → 需要管理员权限，请输入 sudo 密码 …"
+  fi
+
+  export OPERONE_ROOT_REEXEC=1
+  exec sudo -E env OPERONE_ROOT_REEXEC=1 bash "$script" "$@"
+}
+
+# curl | bash 管道执行时无本地脚本文件，下载后 sudo
+ensure_root_privileges_piped() {
+  local install_url="${1:?缺少 install.sh URL}"
+  shift || true
+
+  is_root && return 0
+
+  if [[ "${OPERONE_ROOT_REEXEC:-0}" == "1" ]]; then
+    os_die "提权失败，请 root 登录后重试"
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    os_die "需要 root 权限。请 root 登录，或安装 sudo"
+  fi
+
+  os_warn "当前用户 $(id -un) → 下载脚本并以 sudo 执行 …"
+  local tmp
+  tmp="$(mktemp /tmp/operone-install.XXXXXX.sh)"
+  curl -fsSL "$install_url" -o "$tmp"
+  chmod +x "$tmp"
+  export OPERONE_ROOT_REEXEC=1
+  exec sudo -E env OPERONE_ROOT_REEXEC=1 bash "$tmp" "$@"
+}
+
+# 以应用用户执行命令；已是 root 时优先 runuser/sudo -u
+run_as_app_user() {
+  local user="$1"
+  shift
+  if is_root; then
+    if command -v runuser >/dev/null 2>&1; then
+      runuser -u "$user" -- "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+      sudo -u "$user" "$@"
+    else
+      su -s /bin/bash "$user" -c "$(printf '%q ' "$@")"
+    fi
+  else
+    sudo -u "$user" "$@"
+  fi
 }
 
 # 预检入口（install / full 共用）

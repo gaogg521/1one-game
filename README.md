@@ -473,7 +473,7 @@ npm run dev
 
 ## 生产部署（Linux 一键）
 
-在 **Ubuntu / Debian / CentOS / RHEL** 空服务器上，**一条命令**完成拉代码、装依赖、构建与启动（无需事先 clone、无需填 API Key）：
+在 **Ubuntu / Debian / CentOS / RHEL** 空服务器上，**一条命令**即可（**已是 root 无需 sudo；普通用户会自动 sudo 提权**）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash

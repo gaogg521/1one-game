@@ -32,16 +32,14 @@ bootstrap_if_standalone() {
     exec bash "$install_sh" "$@"
   fi
 
-  if [[ "$(id -u)" -ne 0 ]]; then
-    exec sudo -E bash "$self" "$@"
-  fi
-
-  printf '\033[1;34m[operone-deploy]\033[0m 独立模式：从 %s 拉取仓库 …\n' "$GIT_REPO"
   local _os_lib _raw="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
   _os_lib="$(mktemp /tmp/operone-os-lib.XXXXXX.sh)"
   curl -fsSL "${_raw}/lib/os-lib.sh" -o "$_os_lib"
   # shellcheck source=/dev/null
   source "$_os_lib"
+  ensure_root_privileges "$self" "$@"
+
+  printf '\033[1;34m[operone-deploy]\033[0m 独立模式：从 %s 拉取仓库 …\n' "$GIT_REPO"
   install_bootstrap_pkgs
   mkdir -p "$(dirname "$OPERONE_DIR")"
   git clone --branch "$GIT_BRANCH" --depth 1 "$GIT_REPO" "$OPERONE_DIR"
@@ -53,8 +51,12 @@ bootstrap_if_standalone() {
 bootstrap_if_standalone "$@"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export OPERONE_DEPLOY_SCRIPT="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 # shellcheck source=lib/ubuntu-deploy-lib.sh
 source "$SCRIPT_DIR/lib/ubuntu-deploy-lib.sh"
+
+# 非 root 自动 sudo；已是 root 则跳过
+ensure_root_privileges "$OPERONE_DEPLOY_SCRIPT" "$@"
 
 NON_INTERACTIVE="${NON_INTERACTIVE:-1}"
 ENABLE_NGINX="${ENABLE_NGINX:-auto}"
@@ -207,15 +209,15 @@ run_update() {
   phase_deps
 
   if [[ -d "$OPERONE_DIR/.git" ]]; then
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
-    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
+    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
   fi
 
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
-  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
   systemctl restart operone
   wait_for_health 30 || true
   ok "更新完成"
