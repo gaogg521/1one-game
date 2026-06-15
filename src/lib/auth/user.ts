@@ -9,6 +9,7 @@ const SESSION_DAYS = 30;
 
 function toAuthUser(row: {
   id: string;
+  username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   email: string | null;
@@ -19,6 +20,7 @@ function toAuthUser(row: {
 }): AuthUser {
   return {
     id: row.id,
+    username: row.username,
     displayName: row.displayName,
     avatarUrl: row.avatarUrl,
     email: row.email,

@@ -30,10 +30,10 @@ export default function LoginPage() {
   });
   const [providers, setProviders] = useState<Provider[]>([]);
   const [user, setUser] = useState<{ displayName: string | null } | null>(null);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const inputCls =
     "w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)]";
@@ -47,25 +47,25 @@ export default function LoginPage() {
       });
   }, []);
 
-  async function handleEmailLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setEmailError(null);
-    setEmailBusy(true);
+    setLoginError(null);
+    setLoginBusy(true);
     try {
-      const res = await fetch("/api/auth/login/email", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ account: username, password }),
       });
       const data = (await res.json()) as { errorKey?: string; error?: string };
       if (!res.ok) {
-        setEmailError(resolveClientApiError(locale, data, "loginInvalidCredentials"));
+        setLoginError(resolveClientApiError(locale, data, "loginInvalidCredentials"));
         return;
       }
       router.push(returnPath ?? withLocalePath("/studio", locale));
       router.refresh();
     } finally {
-      setEmailBusy(false);
+      setLoginBusy(false);
     }
   }
 
@@ -97,17 +97,18 @@ export default function LoginPage() {
           </div>
         ) : (
           <>
-            <form className="mt-6 space-y-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4" onSubmit={(e) => void handleEmailLogin(e)}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gc-muted)]">{t("emailSectionTitle")}</p>
-              {emailError ? <p className="text-sm text-red-300">{emailError}</p> : null}
+            <form className="mt-6 space-y-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4" onSubmit={(e) => void handleLogin(e)}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gc-muted)]">{t("accountSectionTitle")}</p>
+              {loginError ? <p className="text-sm text-red-300">{loginError}</p> : null}
               <input
-                type="email"
+                type="text"
                 className={inputCls}
-                placeholder={t("emailPlaceholder")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("loginIdentifierPlaceholder")}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="username"
+                data-testid="login-username"
               />
               <input
                 type="password"
@@ -117,13 +118,15 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
+                data-testid="login-password"
               />
               <button
                 type="submit"
-                disabled={emailBusy}
+                disabled={loginBusy}
                 className="gc-theme-cta w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50"
+                data-testid="login-submit"
               >
-                {emailBusy ? t("emailLoginSubmitting") : t("emailLoginSubmit")}
+                {loginBusy ? t("loginSubmitting") : t("loginSubmit")}
               </button>
               <p className="text-center text-xs text-[var(--gc-muted)]">
                 {t("noAccount")}{" "}

@@ -17,12 +17,14 @@ const DRIFT_CHECKS: Array<
   { kind: "column", migration: "20260521101000_comic_cover_path", table: "Comic", column: "coverPath" },
   { kind: "table", migration: "20260612120000_platform_runtime_config", table: "PlatformRuntimeConfig" },
   { kind: "column", migration: "20260614120000_novel_character_roster", table: "Novel", column: "characterRosterJson" },
+  { kind: "table", migration: "20260614090000_user_auth_foundation", table: "User" },
   { kind: "table", migration: "20260614100000_email_auth", table: "EmailVerification" },
   { kind: "column", migration: "20260614100000_email_auth", table: "User", column: "passwordHash" },
   { kind: "table", migration: "20260614180000_platform_email_config", table: "PlatformEmailConfig" },
+  { kind: "column", migration: "20260615100000_username_auth", table: "User", column: "username" },
 ];
 
-const FAILED_MIGRATIONS_TO_ROLLBACK = ["20260614100000_email_auth"];
+const FAILED_MIGRATIONS_TO_ROLLBACK = ["20260614100000_email_auth", "20260614090000_user_auth_foundation"];
 
 async function tableExists(table: string): Promise<boolean> {
   const { PrismaClient } = await import("@prisma/client");

@@ -4,6 +4,7 @@ export type OAuthProviderId = "wechat" | "qq" | "feishu" | "line" | "douyin" | "
 
 export type AuthUser = {
   id: string;
+  username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   email: string | null;

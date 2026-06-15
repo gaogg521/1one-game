@@ -15,59 +15,23 @@ export default function RegisterPage() {
   const t = useTranslations("account");
   const locale = useLocale() as AppLocale;
   const router = useRouter();
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
-  const [sendBusy, setSendBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cooldown, setCooldown] = useState(0);
 
   const inputCls =
     "w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)]";
-
-  async function sendCode() {
-    setError(null);
-    setDevCodeHint(null);
-    setSendBusy(true);
-    try {
-      const res = await fetch("/api/auth/register/send-code", {
-        method: "POST",
-        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ email }),
-      });
-      const data = (await res.json()) as { devCode?: string; errorKey?: string; error?: string };
-      if (!res.ok) {
-        setError(resolveClientApiError(locale, data, "registerSendFailed"));
-        return;
-      }
-      if (data.devCode) setDevCodeHint(data.devCode);
-      setCooldown(60);
-      const timer = window.setInterval(() => {
-        setCooldown((c) => {
-          if (c <= 1) {
-            window.clearInterval(timer);
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
-    } finally {
-      setSendBusy(false);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitBusy(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/register/username", {
         method: "POST",
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ displayName, email, password, code }),
+        body: JSON.stringify({ username, password }),
       });
       const data = (await res.json()) as { errorKey?: string; error?: string };
       if (!res.ok) {
@@ -111,26 +75,17 @@ export default function RegisterPage() {
                 <span className="text-xs font-medium text-[var(--gc-muted)]">{t("registerUsername")}</span>
                 <input
                   className={inputCls}
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
                   required
-                  minLength={2}
+                  minLength={3}
                   maxLength={32}
+                  pattern="[A-Za-z][A-Za-z0-9_]{2,31}"
+                  title={t("registerUsernameHint")}
                   data-testid="register-username"
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-[var(--gc-muted)]">{t("registerEmail")}</span>
-                <input
-                  type="email"
-                  className={inputCls}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  data-testid="register-email"
-                />
+                <p className="text-[11px] text-[var(--gc-text-faint)]">{t("registerUsernameHint")}</p>
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-[var(--gc-muted)]">{t("registerPassword")}</span>
@@ -145,34 +100,6 @@ export default function RegisterPage() {
                   data-testid="register-password"
                 />
               </label>
-              <div className="space-y-1.5">
-                <span className="text-xs font-medium text-[var(--gc-muted)]">{t("registerCode")}</span>
-                <div className="flex gap-2">
-                  <input
-                    className={`${inputCls} flex-1`}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder={t("registerCodePlaceholder")}
-                    inputMode="numeric"
-                    required
-                    data-testid="register-code"
-                  />
-                  <button
-                    type="button"
-                    disabled={sendBusy || cooldown > 0 || !email.trim()}
-                    onClick={() => void sendCode()}
-                    className="shrink-0 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,var(--gc-border))] px-3 py-2 text-xs font-medium text-[var(--gc-text)] disabled:opacity-45"
-                    data-testid="register-send-code"
-                  >
-                    {cooldown > 0 ? t("registerResendIn", { sec: cooldown }) : t("registerSendCode")}
-                  </button>
-                </div>
-                {devCodeHint ? (
-                  <p className="text-[11px] text-amber-200/90" data-testid="register-dev-code">
-                    {t("registerDevCodeHint", { code: devCodeHint })}
-                  </p>
-                ) : null}
-              </div>
               <button
                 type="submit"
                 disabled={submitBusy}

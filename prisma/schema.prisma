@@ -7,15 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// 注册用户（OAuth / 邮箱）；legacyOwnerKey 桥接匿名 Cookie 作品。
+/// 注册用户（OAuth / 邮箱 / 用户名）；legacyOwnerKey 桥接匿名 Cookie 作品。
 model User {
   id              String   @id @default(cuid())
   legacyOwnerKey  String?  @unique
+  /// 登录用户名（小写存储，唯一）
+  username        String?  @unique
   email           String?  @unique
   phone           String?  @unique
   displayName     String?
   avatarUrl       String?
-  /// scrypt 哈希（邮箱注册/登录）；OAuth 用户可为空
+  /// scrypt 哈希（用户名/邮箱注册）；OAuth 用户可为空
   passwordHash    String?
   /// user | admin | super_admin
   role            String   @default("user")

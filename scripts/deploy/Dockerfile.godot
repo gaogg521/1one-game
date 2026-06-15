@@ -3,6 +3,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y curl ca-certificates unzip \
+    libfontconfig1 libdbus-1-3 libx11-6 libxext6 libxrender1 libxi6 libgl1-mesa-glx libasound2 \
   && rm -rf /var/lib/apt/lists/*
 
 ENV GODOT_VERSION=4.4.1
