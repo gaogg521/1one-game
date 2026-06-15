@@ -1,66 +1,72 @@
 # Linux 一键部署
 
-脚本会读取 `/etc/os-release`，识别发行版与版本，并自动选择 **apt / dnf / yum** 及对应安装路径。
+就四步：**拉代码 → 装环境 → 数据库 migrate → 启动**。装完改 `.env` 里的 API Key 即可。
+
+## 选哪条命令？
+
+| 你的系统 | 命令 | 说明 |
+|----------|------|------|
+| **CentOS 7**（以及坚持不换机的老 Linux） | 见下方 Docker | `install.sh` 会**自动**走 Docker，不在宿主机编译 |
+| **Ubuntu 22.04 / Debian 12 / Rocky 9+** 等 | `install.sh` | 宿主机源码部署，一条命令 |
+| **任意有 Docker 的 Linux** | `install-docker.sh` | 与 CentOS 7 相同，最省心 |
+
+### CentOS 7 / 老系统 — 用 Docker（推荐，一条命令）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+检测到 CentOS 7 后会**自动**改为 Docker 流程（无需另记命令）：
+
+1. 安装 Docker  
+2. `git clone` 到 `/opt/operone`  
+3. 生成 `.env`  
+4. **在容器内** `npm ci` → `next build` → `prisma migrate deploy` → 启动  
+
+构建跑在 `node:22-bookworm` 镜像里，**与宿主机 glibc 2.17 无关**，不会再踩 Node/sharp/GLIBCXX 的坑。
+
+也可显式：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install-docker.sh | bash
+```
+
+装完后：
+
+```bash
+nano /opt/operone/.env          # 填 OPENAI_API_KEY
+cd /opt/operone && docker compose up -d --build
+curl -s http://127.0.0.1:6666/api/health
+```
+
+### 现代 Linux — 宿主机源码部署
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+适用于 Ubuntu 22.04+、Debian 12+、Rocky/Alma/RHEL 8+ 等。流程同样是：拉代码 → Node 22 → `npm ci` → migrate → build → systemd。
+
+**不要在 CentOS 7 上强制源码安装**（除非你知道后果）：
+
+```bash
+OPERONE_FORCE_SOURCE=1 curl -fsSL .../install.sh | bash   # 不推荐
+```
+
+---
 
 ## 支持的系统
 
-| 发行版 | 最低版本 | 包管理 | Nginx 配置路径 |
-|--------|----------|--------|----------------|
-| Ubuntu | 20.04（推荐 22.04+） | apt | `/etc/nginx/sites-available/operone` |
-| Debian | 11+ | apt | 同上 |
-| CentOS | 7+（7 已 EOL，建议迁移） | yum/dnf | `/etc/nginx/conf.d/operone.conf` |
-| RHEL | 8+ | dnf/yum | 同上 |
-| Rocky Linux | 8+ | dnf | 同上 |
-| AlmaLinux | 8+ | dnf | 同上 |
-| Oracle Linux | 8+ | dnf/yum | 同上 |
-| Amazon Linux | 2 / 2023 | yum/dnf | 同上 |
+| 发行版 | 推荐方式 | 最低版本 |
+|--------|----------|----------|
+| CentOS 7 | **Docker 自动** | 7 |
+| Ubuntu | 源码 `install.sh` | 20.04（推荐 22.04+） |
+| Debian | 源码 | 11+ |
+| Rocky / Alma / RHEL / Oracle | 源码 | 8+ |
+| Amazon Linux | 源码或 Docker | 2 / 2023 |
+| 任意 Linux + Docker | `install-docker.sh` | 有 Docker 即可 |
 
-未在表内的 **Debian 系 / RHEL 系** 衍生版会按 `ID_LIKE` 尝试兼容安装；无法识别时会提前报错退出。
-
-### CentOS 7 特别说明
-
-系统 glibc 2.17 **无法** 使用 NodeSource/yum 安装 Node 22+（会报 `GLIBC_2.28 not found`）。一键脚本会**自动**从 [unofficial-builds](https://unofficial-builds.nodejs.org/) 安装 `glibc-217` 包；若你已手动安装可跳过。
-
-手动安装（与脚本相同来源，v22.21.0）：
-
-```bash
-cd /opt
-wget https://unofficial-builds.nodejs.org/download/release/v22.21.0/node-v22.21.0-linux-x64-glibc-217.tar.gz
-tar -zxvf node-v22.21.0-linux-x64-glibc-217.tar.gz
-ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/node /usr/local/bin/node
-ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/npm /usr/local/bin/npm
-ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/npx /usr/local/bin/npx
-node -v   # v22.21.0
-npm -v
-```
-
-CentOS 7 自带 git 1.8.3 **不支持** `git -C`。若 `/opt/operone` 是旧 clone，再次 `curl | bash` 会先 `git pull` 或从 GitHub 拉最新 deploy 脚本；也可手动：
-
-```bash
-cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
-```
-
-**native 模块（better-sqlite3 / node-gyp）**：CentOS 7 的 glibc 2.17 与 Python 3.6 无法编译 `better-sqlite3`（需 glibc ≥ 2.29、Python ≥ 3.8）。一键脚本在 CentOS 7 上使用 `npm ci --ignore-scripts` 跳过 dev 工具的原生编译（生产运行不依赖 `better-sqlite3`），并单独补装 `sharp` 预编译包。若仍失败，建议迁移到 Rocky/Alma 8+ 或 Ubuntu 22.04。
-
-**Prisma 迁移 `no such table: User`**：已在 `20260614090000_user_auth_foundation` 补建 User 等表。若此前首次安装迁移失败，脚本会自动 resolve 失败记录并重试；也可手动 `rm -f /opt/operone/prod.db` 后重新部署。
-
-**`next build` 报 GLIBCXX_3.4.20 / `@parcel/watcher` / `sharp`**：CentOS 7 的 libstdc++ 过旧。脚本会安装 **devtoolset-7** 并在 build/运行时设置 `LD_LIBRARY_PATH`；`@parcel/watcher` 替换为 noop 桩；`sharp` 改为延迟加载以免 build 阶段失败。
-
-**内存 / OOM**：约 3.7GB 内存的机器 `next build` 可能 OOM。脚本在内存 < 4GB 且无 swap 时会自动创建 2G swap，并设置 `NODE_OPTIONS=--max-old-space-size=2560`。
-
-**SELinux / 防火墙**：若启用 SELinux 且使用 Nginx 反代，脚本会执行 `setsebool httpd_can_network_connect 1`。仅内网访问 `6666` 时，需手动放行：`firewall-cmd --permanent --add-port=6666/tcp && firewall-cmd --reload`。
-
-**已知限制（CentOS 7 可跑但不推荐长期生产）**：
-
-| 环节 | 状态 | 说明 |
-|------|------|------|
-| Node 22 | 需 glibc-217 非官方包 | 已支持 |
-| npm ci | `--ignore-scripts` | dev 工具 native 模块跳过 |
-| Prisma 迁移 | 已补 User 表 | 失败时自动 resolve |
-| next build | devtoolset-7 + parcel 桩 + swap | sharp 延迟加载 |
-| sharp 封面图 | devtoolset-7 LD_LIBRARY_PATH | 运行时合成封面 |
-| seed:samples | 可选 | 无 API Key 可能部分失败，不影响主服务 |
-| Certbot HTTPS | 不推荐 | CentOS 7 EOL，证书工具易过期 |
+未在表内的 Debian/RHEL 衍生版会按 `ID_LIKE` 尝试兼容；CentOS 7 一律 Docker。
 
 ## 运行权限
 
@@ -70,27 +76,13 @@ cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 | **普通用户** | 自动 `sudo` 提权（首次会提示输入密码） |
 | **curl \| bash** | 同上，非 root 时下载脚本后 `sudo` 执行 |
 
-无需手动写 `sudo bash ...`，一条命令即可：
+## 一键安装（Ubuntu / Rocky 等现代系统）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-若系统未安装 sudo 且非 root，脚本会明确报错并提示用 root 登录。
-
-## 一键安装
-
-在 **Ubuntu 22.04 / Debian 12 / CentOS 7+ / RHEL 8+** 服务器上执行：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
-```
-
-脚本会自动：从 GitHub 拉代码 → 安装依赖 → 构建 → 启动服务。
-
-- **默认安装目录**：`/opt/operone`
-- **默认监听端口**：`6666`（内网访问 `http://服务器IP:6666`）
-- **再次执行同一条命令** = 自动更新版本
+- **目录**：`/opt/operone` · **端口**：`6666` · **再执行同命令** = 更新
 
 ---
 

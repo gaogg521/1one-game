@@ -13,13 +13,13 @@ RUN npm ci
 COPY . .
 
 ENV NODE_ENV=production
-ENV DATABASE_URL=file:/app/data/app.sqlite
+ENV DATABASE_URL=file:/app/data/prod.db
 
-RUN mkdir -p data \
+RUN mkdir -p data public/covers public/comic-panels public/game-bg \
   && npx prisma generate \
   && npm run build
 
-ENV PORT=8888
-EXPOSE 8888
+ENV PORT=6666
+EXPOSE 6666
 
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

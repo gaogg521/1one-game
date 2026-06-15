@@ -427,7 +427,7 @@ refresh_deploy_scripts() {
   os_warn "从 GitHub 同步最新 deploy 脚本 → $dest"
   mkdir -p "$dest/lib" "$dest/templates"
   local f
-  for f in install.sh linux-ubuntu22-full.sh linux-ubuntu22-sqlite.sh; do
+  for f in install.sh install-docker.sh linux-ubuntu22-full.sh linux-ubuntu22-sqlite.sh; do
     curl -fsSL "$base/$f" -o "$dest/$f" || os_warn "无法下载 $f"
   done
   curl -fsSL "$base/lib/os-lib.sh" -o "$dest/lib/os-lib.sh"

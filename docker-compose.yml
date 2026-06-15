@@ -1,17 +1,19 @@
 services:
   web:
     build: .
+    restart: unless-stopped
     ports:
-      - "8888:8888"
+      - "${OPERONE_PORT:-6666}:6666"
+    env_file:
+      - .env
     environment:
-      PORT: "8888"
-      DATABASE_URL: file:/app/data/app.sqlite
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      OPENAI_USER_AGENT: ${OPENAI_USER_AGENT:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PORT: "6666"
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/prod.db
     volumes:
-      - sqlite_data:/app/data
+      - operone_data:/app/data
+      - operone_public:/app/public/covers
 
 volumes:
-  sqlite_data:
+  operone_data:
+  operone_public:
