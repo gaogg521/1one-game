@@ -131,7 +131,17 @@ os_validate() {
         os_die "CentOS 版本过低 ($OS_VERSION_ID)，需要 7+"
       fi
       if [[ "$OS_VERSION_MAJOR" -eq 7 ]]; then
-        os_warn "CentOS 7 已 EOL，建议升级到 Rocky/Alma 8+ 或 Ubuntu 22.04"
+        if command -v node >/dev/null 2>&1; then
+          local nv
+          nv="$(node -v | sed 's/v//' | cut -d. -f1)"
+          if [[ "$nv" -ge 20 ]]; then
+            os_warn "CentOS 7 + 自装 Node $(node -v) — 可用；yum 无法装 Node 20+，请勿删除 /usr/local/bin/node"
+          else
+            os_warn "CentOS 7 需手动安装 node-v*-linux-x64-glibc-217（Node 20+），见部署文档"
+          fi
+        else
+          os_warn "CentOS 7 已 EOL：请先手动安装 node-v*-linux-x64-glibc-217 到 /opt 并 ln -s 到 /usr/local/bin"
+        fi
       fi
       ;;
     rocky|almalinux)
@@ -334,6 +344,9 @@ install_nodejs() {
       pkg_install nodejs
       ;;
     rhel)
+      if [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]; then
+        os_die "CentOS 7 无法用 yum 安装 Node ${major}.x（glibc 过旧）。请使用 node-v${major}*-linux-x64-glibc-217 自解压包并 ln -s 到 /usr/local/bin"
+      fi
       curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
       pkg_install nodejs
       ;;

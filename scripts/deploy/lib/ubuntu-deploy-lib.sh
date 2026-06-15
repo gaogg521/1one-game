@@ -44,6 +44,13 @@ generate_secret() {
   openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 64
 }
 
+# 兼容 CentOS 7 等旧 git（1.8.3 不支持 git -C）
+git_as_user_in_repo() {
+  local user="$1"
+  shift
+  run_as_app_user "$user" bash -lc "cd $(printf '%q' "$OPERONE_DIR") && git $*"
+}
+
 port_in_use() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -116,9 +123,9 @@ clone_or_update_repo() {
   ensure_operone_dir
   if [[ -d "$OPERONE_DIR/.git" ]]; then
     log "仓库已存在，git pull …"
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
+    git_as_user_in_repo "$OPERONE_USER" fetch origin
+    git_as_user_in_repo "$OPERONE_USER" checkout "$GIT_BRANCH"
+    git_as_user_in_repo "$OPERONE_USER" pull --ff-only origin "$GIT_BRANCH" || true
     return 0
   fi
 

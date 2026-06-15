@@ -209,9 +209,9 @@ run_update() {
   phase_deps
 
   if [[ -d "$OPERONE_DIR/.git" ]]; then
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
-    run_as_app_user "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
+    git_as_user_in_repo "$OPERONE_USER" fetch origin
+    git_as_user_in_repo "$OPERONE_USER" checkout "$GIT_BRANCH"
+    git_as_user_in_repo "$OPERONE_USER" pull --ff-only origin "$GIT_BRANCH" || true
   fi
 
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"

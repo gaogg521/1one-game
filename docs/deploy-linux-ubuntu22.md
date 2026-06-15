@@ -17,6 +17,21 @@
 
 未在表内的 **Debian 系 / RHEL 系** 衍生版会按 `ID_LIKE` 尝试兼容安装；无法识别时会提前报错退出。
 
+### CentOS 7 特别说明
+
+系统 glibc 2.17 **无法** `yum install nodejs 22`，需**事先**自装 Node（glibc-217 专用构建）：
+
+```bash
+# 示例：解压到 /opt 并加入 PATH
+tar -xf node-v22.*-linux-x64-glibc-217.tar.xz -C /opt
+ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/node /usr/local/bin/node
+ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/npm /usr/local/bin/npm
+ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/npx /usr/local/bin/npx
+node -v   # 确认 ≥ v20.9
+```
+
+然后再执行一键安装脚本。脚本检测到 Node 已满足时会**跳过** yum 装 Node。
+
 ## 运行权限
 
 | 登录方式 | 脚本行为 |
