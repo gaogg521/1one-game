@@ -9,6 +9,7 @@ def main():
     manifest = json.loads((in_dir / "manifest.json").read_text(encoding="utf-8"))
     db_path = os.environ.get("DATABASE_URL", "file:./prod.db").replace("file:", "").strip("./")
     db = repo / db_path
+    db = str(db)
 
     c = sqlite3.connect(db)
     c.row_factory = sqlite3.Row

@@ -132,30 +132,52 @@ install_godot_production() {
   local godot_bin="$OPERONE_DIR/tools/godot/Godot_v4.4.1-stable_linux.x86_64"
   local templates_mark="$OPERONE_DIR/.local/share/godot/export_templates/4.4.1.stable/web_nothreads_release.zip"
 
-  if [[ -x "$godot_bin" && -f "$templates_mark" ]]; then
-    log "Godot 已就绪: $godot_bin"
-    return 0
+  if is_centos7; then
+    install_godot_docker_image || warn "CentOS 7 需 Docker 才能 Godot 导出"
+    if id "$OPERONE_USER" &>/dev/null && getent group docker &>/dev/null; then
+      usermod -aG docker "$OPERONE_USER" 2>/dev/null || true
+    fi
+  elif [[ ! -x "$godot_bin" ]]; then
+    log "安装 Godot 二进制 …"
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && bash scripts/godot-install-linux.sh" \
+      || warn "Godot 二进制安装失败"
   fi
-
-  log "安装 Godot（游戏试玩 / 导出，首次约 1–3 分钟 + 模板 ~1.1GB）…"
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && bash scripts/godot-install-linux.sh" \
-    || warn "Godot 二进制安装失败，Godot 试玩不可用"
 
   if [[ ! -f "$templates_mark" ]]; then
+    log "安装 Godot Web 导出模板（~1.1GB，首次较慢）…"
     run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && XDG_DATA_HOME='$OPERONE_DIR/.local/share' bash scripts/godot-install-templates-linux.sh" \
-      || warn "Godot 导出模板安装失败（可稍后手动: cd $OPERONE_DIR && XDG_DATA_HOME=$OPERONE_DIR/.local/share bash scripts/godot-install-templates-linux.sh）"
+      || warn "Godot 导出模板安装失败"
   fi
 
-  if [[ -x "$godot_bin" ]]; then
+  if is_centos7 && command -v docker >/dev/null 2>&1; then
+    ok "Godot: Docker 模式 (operone-godot:4.4.1)"
+  elif [[ -x "$godot_bin" ]]; then
     ok "Godot: $godot_bin"
   fi
 }
 
 godot_systemd_env_block() {
+  if is_centos7 && command -v docker >/dev/null 2>&1; then
+    echo "Environment=GODOT_USE_DOCKER=1"
+    return 0
+  fi
   local godot_bin="$OPERONE_DIR/tools/godot/Godot_v4.4.1-stable_linux.x86_64"
   [[ -x "$godot_bin" ]] || return 0
   echo "Environment=GODOT_BIN=${godot_bin}
 Environment=XDG_DATA_HOME=${OPERONE_DIR}/.local/share"
+}
+
+install_godot_docker_image() {
+  command -v docker >/dev/null 2>&1 || return 1
+  local image="${GODOT_DOCKER_IMAGE:-operone-godot:4.4.1}"
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    log "Godot Docker 镜像已存在: $image"
+    return 0
+  fi
+  log "构建 Godot Docker 镜像（CentOS 7 等 glibc 过旧时用于导出）…"
+  docker build -f "$OPERONE_DIR/scripts/deploy/Dockerfile.godot" -t "$image" "$OPERONE_DIR" \
+    || { warn "Godot Docker 镜像构建失败"; return 1; }
+  ok "Godot Docker 镜像: $image"
 }
 
 prisma_migrate_deploy() {

@@ -12,6 +12,7 @@ import {
   writeArtifactZip,
   zipDirectoryToBuffer,
 } from "@/lib/godot-export-workspace";
+import { godotRuntimeAvailable, repoRoot, runGodot } from "@/lib/godot-run";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,41 +28,6 @@ export type GodotPlatformExportResult =
       downloadUrl?: string;
     }
   | { ok: false; errorKey?: string; errorParams?: Record<string, string>; error?: string; code: "unsupported" | "godot_missing" | "export_failed" | "platform_unavailable" };
-
-function repoRoot(): string {
-  return process.cwd();
-}
-
-function godotBinPath(): string {
-  const root = repoRoot();
-  if (process.env.GODOT_BIN) return process.env.GODOT_BIN;
-  if (process.platform === "win32") {
-    return path.join(root, "tools", "godot", "Godot_v4.4.1-stable_win64_console.exe");
-  }
-  if (process.platform === "darwin") {
-    return path.join(root, "tools", "godot", "Godot.app", "Contents", "MacOS", "Godot");
-  }
-  return path.join(root, "tools", "godot", "Godot_v4.4.1-stable_linux.x86_64");
-}
-
-async function godotExists(bin: string): Promise<boolean> {
-  try {
-    await fs.access(bin);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function runGodot(args: string[], cwd: string, timeoutMs: number): Promise<void> {
-  const bin = godotBinPath();
-  await execFileAsync(bin, args, {
-    cwd,
-    timeout: timeoutMs,
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-}
 
 function safeExeBase(title: string): string {
   const t = title.replace(/[^\w\u4e00-\u9fa5-]+/g, "_").slice(0, 32) || "game";
@@ -124,8 +90,7 @@ export async function exportGodotWindowsDesktop(params: {
     };
   }
 
-  const bin = godotBinPath();
-  if (!(await godotExists(bin))) {
+  if (!(await godotRuntimeAvailable())) {
     return {
       ok: false,
       errorKey: "godotNotInstalled",
@@ -193,8 +158,7 @@ export async function exportGodotAndroidApk(params: {
     return { ok: false, errorKey: "godotUnsupportedGeneric", code: "unsupported" };
   }
 
-  const bin = godotBinPath();
-  if (!(await godotExists(bin))) {
+  if (!(await godotRuntimeAvailable())) {
     return {
       ok: false,
       errorKey: "godotNotInstalled",
