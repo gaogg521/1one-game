@@ -82,13 +82,39 @@ FULL_SH="$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh"
 export NON_INTERACTIVE=1
 export OPERONE_BOOTSTRAPPED=1
 
+# 已有 /opt/operone 时会 exec 本地脚本；必须先同步，否则会跑旧版（如 git -C 报错）
+sync_before_continue() {
+  local dest="$OPERONE_DIR/scripts/deploy"
+  local base="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
+
+  if [[ -d "$OPERONE_DIR/.git" ]]; then
+    log "同步最新代码（含部署脚本）…"
+    if (cd "$OPERONE_DIR" && git fetch origin && git checkout "$GIT_BRANCH" && git pull --ff-only origin "$GIT_BRANCH" 2>/dev/null); then
+      chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR" 2>/dev/null || true
+      return 0
+    fi
+    log "git pull 未成功，从 GitHub 拉取最新 deploy 脚本 …"
+  fi
+
+  mkdir -p "$dest/lib" "$dest/templates"
+  for f in install.sh linux-ubuntu22-full.sh linux-ubuntu22-sqlite.sh; do
+    curl -fsSL "$base/$f" -o "$dest/$f" || log "警告: 无法下载 $f"
+  done
+  curl -fsSL "$base/lib/os-lib.sh" -o "$dest/lib/os-lib.sh"
+  curl -fsSL "$base/lib/ubuntu-deploy-lib.sh" -o "$dest/lib/ubuntu-deploy-lib.sh"
+  curl -fsSL "$base/templates/nginx-operone.conf" -o "$dest/templates/nginx-operone.conf" 2>/dev/null || true
+  chmod +x "$dest"/install.sh "$dest"/linux-ubuntu22-full.sh "$dest"/linux-ubuntu22-sqlite.sh 2>/dev/null || true
+}
+
 if [[ -f "$FULL_SH" ]] && systemctl is-active --quiet operone 2>/dev/null; then
   log "检测到已有运行中的服务，自动更新 …"
+  sync_before_continue
   exec bash "$FULL_SH" --update "$@"
 fi
 
 if [[ -f "$FULL_SH" ]]; then
   log "继续安装 …"
+  sync_before_continue
   exec bash "$FULL_SH" "$@"
 fi
 

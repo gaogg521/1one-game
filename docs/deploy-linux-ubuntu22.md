@@ -19,18 +19,26 @@
 
 ### CentOS 7 特别说明
 
-系统 glibc 2.17 **无法** `yum install nodejs 22`，需**事先**自装 Node（glibc-217 专用构建）：
+系统 glibc 2.17 **无法** 使用 NodeSource/yum 安装 Node 22+（会报 `GLIBC_2.28 not found`）。一键脚本会**自动**从 [unofficial-builds](https://unofficial-builds.nodejs.org/) 安装 `glibc-217` 包；若你已手动安装可跳过。
+
+手动安装（与脚本相同来源，v22.21.0）：
 
 ```bash
-# 示例：解压到 /opt 并加入 PATH
-tar -xf node-v22.*-linux-x64-glibc-217.tar.xz -C /opt
-ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/node /usr/local/bin/node
-ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/npm /usr/local/bin/npm
-ln -sf /opt/node-v22.*-linux-x64-glibc-217/bin/npx /usr/local/bin/npx
-node -v   # 确认 ≥ v20.9
+cd /opt
+wget https://unofficial-builds.nodejs.org/download/release/v22.21.0/node-v22.21.0-linux-x64-glibc-217.tar.gz
+tar -zxvf node-v22.21.0-linux-x64-glibc-217.tar.gz
+ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/node /usr/local/bin/node
+ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/npm /usr/local/bin/npm
+ln -sf /opt/node-v22.21.0-linux-x64-glibc-217/bin/npx /usr/local/bin/npx
+node -v   # v22.21.0
+npm -v
 ```
 
-然后再执行一键安装脚本。脚本检测到 Node 已满足时会**跳过** yum 装 Node。
+CentOS 7 自带 git 1.8.3 **不支持** `git -C`。若 `/opt/operone` 是旧 clone，再次 `curl | bash` 会先 `git pull` 或从 GitHub 拉最新 deploy 脚本；也可手动：
+
+```bash
+cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
+```
 
 ## 运行权限
 

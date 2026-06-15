@@ -131,16 +131,24 @@ os_validate() {
         os_die "CentOS 版本过低 ($OS_VERSION_ID)，需要 7+"
       fi
       if [[ "$OS_VERSION_MAJOR" -eq 7 ]]; then
+        os_warn "CentOS 7 已 EOL，建议迁移 Rocky/Alma 8+ 或 Ubuntu 22.04"
         if command -v node >/dev/null 2>&1; then
           local nv
           nv="$(node -v | sed 's/v//' | cut -d. -f1)"
           if [[ "$nv" -ge 20 ]]; then
-            os_warn "CentOS 7 + 自装 Node $(node -v) — 可用；yum 无法装 Node 20+，请勿删除 /usr/local/bin/node"
+            os_warn "已检测到 Node $(node -v)（glibc-217 包）；勿用 yum/NodeSource 官方 Node"
           else
-            os_warn "CentOS 7 需手动安装 node-v*-linux-x64-glibc-217（Node 20+），见部署文档"
+            os_warn "Node 版本过低，脚本将自动安装 unofficial-builds glibc-217 包"
           fi
         else
-          os_warn "CentOS 7 已 EOL：请先手动安装 node-v*-linux-x64-glibc-217 到 /opt 并 ln -s 到 /usr/local/bin"
+          os_warn "无 Node：脚本将自动从 unofficial-builds 安装 glibc-217 版 Node 22"
+        fi
+        if command -v git >/dev/null 2>&1; then
+          local gv
+          gv="$(git --version | awk '{print $3}' | cut -d. -f1,2)"
+          if [[ "${gv%%.*}" -lt 2 ]] || { [[ "${gv%%.*}" -eq 1 ]] && [[ "${gv#*.}" -lt 9 ]]; }; then
+            os_warn "git ${gv} 较旧（不支持 git -C），脚本已改用 cd && git"
+          fi
         fi
       fi
       ;;
@@ -326,6 +334,45 @@ install_build_deps() {
   esac
 }
 
+is_centos7() {
+  os_detect
+  [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]
+}
+
+# CentOS 7（glibc 2.17）无法用官方 Node 22+，须用 unofficial-builds glibc-217 包
+install_nodejs_glibc217() {
+  local major="${1:-22}"
+  is_centos7 || os_die "glibc-217 Node 安装仅用于 CentOS 7"
+
+  local version
+  case "$major" in
+    22) version="v22.21.0" ;;
+    20) version="v20.18.1" ;;
+    *)  version="v${major}.21.0" ;;
+  esac
+
+  local tarball="node-${version}-linux-x64-glibc-217.tar.gz"
+  local url="https://unofficial-builds.nodejs.org/download/release/${version}/${tarball}"
+  local dir="/opt/node-${version}-linux-x64-glibc-217"
+
+  if [[ ! -x "$dir/bin/node" ]]; then
+    os_warn "CentOS 7：安装 unofficial-builds Node ${version} (glibc-217)，勿用 NodeSource 官方包"
+    mkdir -p /opt
+    curl -fsSL "$url" -o "/opt/${tarball}" \
+      || os_die "下载 ${tarball} 失败，请检查网络或手动安装，见 docs/deploy-linux-ubuntu22.md"
+    tar -xzf "/opt/${tarball}" -C /opt
+    rm -f "/opt/${tarball}"
+  fi
+
+  ln -sf "$dir/bin/node" /usr/local/bin/node
+  ln -sf "$dir/bin/npm" /usr/local/bin/npm
+  ln -sf "$dir/bin/npx" /usr/local/bin/npx
+
+  local ver
+  ver="$(node -v | sed 's/v//' | cut -d. -f1)"
+  [[ "$ver" -ge "$major" ]] || os_die "Node 安装后版本 $(node -v) 仍低于 ${major}.x"
+}
+
 install_nodejs() {
   local major="${1:-22}"
   os_detect
@@ -344,13 +391,46 @@ install_nodejs() {
       pkg_install nodejs
       ;;
     rhel)
-      if [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]; then
-        os_die "CentOS 7 无法用 yum 安装 Node ${major}.x（glibc 过旧）。请使用 node-v${major}*-linux-x64-glibc-217 自解压包并 ln -s 到 /usr/local/bin"
+      if is_centos7; then
+        install_nodejs_glibc217 "$major"
+        return 0
       fi
       curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
       pkg_install nodejs
       ;;
   esac
+}
+
+# 从 GitHub raw 覆盖 deploy 脚本（解决 /opt/operone 内脚本落后于 main 的问题）
+refresh_deploy_scripts() {
+  local dest="${1:-/opt/operone/scripts/deploy}"
+  local base="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
+
+  os_warn "从 GitHub 同步最新 deploy 脚本 → $dest"
+  mkdir -p "$dest/lib" "$dest/templates"
+  local f
+  for f in install.sh linux-ubuntu22-full.sh linux-ubuntu22-sqlite.sh; do
+    curl -fsSL "$base/$f" -o "$dest/$f" || os_warn "无法下载 $f"
+  done
+  curl -fsSL "$base/lib/os-lib.sh" -o "$dest/lib/os-lib.sh"
+  curl -fsSL "$base/lib/ubuntu-deploy-lib.sh" -o "$dest/lib/ubuntu-deploy-lib.sh"
+  curl -fsSL "$base/templates/nginx-operone.conf" -o "$dest/templates/nginx-operone.conf" 2>/dev/null || true
+  chmod +x "$dest"/install.sh "$dest"/linux-ubuntu22-full.sh "$dest"/linux-ubuntu22-sqlite.sh 2>/dev/null || true
+}
+
+# 继续安装前同步仓库；旧 git 用 cd && git，不用 git -C
+sync_operone_repo() {
+  local dir="${1:-/opt/operone}" branch="${2:-main}" user="${3:-www-data}"
+
+  if [[ -d "$dir/.git" ]]; then
+    os_warn "同步最新代码（含部署脚本）…"
+    if (cd "$dir" && git fetch origin && git checkout "$branch" && git pull --ff-only origin "$branch" 2>/dev/null); then
+      chown -R "$user:$user" "$dir" 2>/dev/null || true
+      return 0
+    fi
+    os_warn "git pull 未成功，改从 GitHub 拉取 deploy 脚本 …"
+  fi
+  refresh_deploy_scripts "$dir/scripts/deploy"
 }
 
 install_nginx_pkg() {
