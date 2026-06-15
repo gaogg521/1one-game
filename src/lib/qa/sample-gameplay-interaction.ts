@@ -1,3 +1,4 @@
+import { GAMEPLAY_DEPTH_BY_SAMPLE } from "@/lib/qa/gameplay-depth";
 import { EXPECTED_SCENE_BY_SAMPLE } from "@/lib/qa/competitor-clone-playability-checks";
 import { SAMPLES } from "@/lib/samples";
 
@@ -84,6 +85,9 @@ export function validateSampleGameplayCasesOffline(): string[] {
     if (ANIMATED_GAMEPLAY_SAMPLES.has(c.sampleId) && !c.animated) {
       failures.push(`${c.sampleId}: should be animated`);
     }
+    if (GAMEPLAY_DEPTH_BY_SAMPLE[c.sampleId] && !c.clickBurst && c.interaction.startsWith("click")) {
+      failures.push(`${c.sampleId}: depth case needs clickBurst >= 1`);
+    }
   }
   return failures;
 }
@@ -99,6 +103,8 @@ export type SampleGameplayResult = {
   actualScene: string | null;
   interactionOk: boolean;
   interactionDiff: number;
+  gameplayDepthOk: boolean;
+  gameplayDepthField?: string;
   idleCeiling: number;
   error?: string;
   pass: boolean;

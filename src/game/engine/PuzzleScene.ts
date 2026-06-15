@@ -10,6 +10,7 @@ import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohe
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import {
   drawMatch3Gem,
   kidsJigsawEmoji,
@@ -139,6 +140,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
     this.gridGfx = this.add.graphics();
+    setPhaserQaState({ puzzleScore: 0, puzzleMoves: 0, foundDiff: 0, flippedCards: 0, jigsawDone: 0 });
 
     switch (this.mode) {
       case "spotDifference":
@@ -154,6 +156,7 @@ export class PuzzleScene extends Phaser.Scene {
         this.buildMatch3(bp.cols, bp.rows, w);
     }
     schedulePhaserPlayReady(this, 400);
+    this.publishQaState();
     this.publishQaClickHints(bp.cols, bp.rows, w, h);
   }
 
@@ -162,9 +165,11 @@ export class PuzzleScene extends Phaser.Scene {
       case "match3": {
         const cr = Math.floor(rows / 2);
         const cc = Math.floor(cols / 2);
-        setPhaserQaClickHints([
-          { x: (this.ox + (cc + 0.5) * this.cell) / w, y: (this.oy + (cr + 0.5) * this.cell) / h },
-        ]);
+        const hint = {
+          x: (this.ox + (cc + 0.5) * this.cell) / w,
+          y: (this.oy + (cr + 0.5) * this.cell) / h,
+        };
+        setPhaserQaClickHints([hint, hint]);
         break;
       }
       case "spotDifference": {
@@ -232,7 +237,19 @@ export class PuzzleScene extends Phaser.Scene {
   private addMove(cost = 1) {
     this.moves += cost;
     this.moveText.setText(hudPuzzleMoves(this.uiLocale, this.moves, this.moveLimit));
+    this.publishQaState();
     if (this.moves >= this.moveLimit && this.score < this.target) this.finish(false);
+  }
+
+  private publishQaState() {
+    const flippedCards = this.cards.filter((c) => c.face && !c.matched).length;
+    setPhaserQaState({
+      puzzleScore: this.score,
+      puzzleMoves: this.moves,
+      foundDiff: this.foundDiff,
+      flippedCards,
+      jigsawDone: this.jigsawDone,
+    });
   }
 
   private buildMatch3(cols: number, rows: number, w: number) {
@@ -273,6 +290,7 @@ export class PuzzleScene extends Phaser.Scene {
       const gain = group.size * group.size * 3;
       this.score += gain;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
+      this.publishQaState();
       const burstN = Math.min(22, Math.round(group.size * bloomScale));
       juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", burstN);
       if (this.richMatch3 && group.size >= 4) {
@@ -391,6 +409,7 @@ export class PuzzleScene extends Phaser.Scene {
           juiceShake(this, { durationMs: 90, intensity: 0.004 });
           this.addMove();
           playBleep("pickup");
+          this.publishQaState();
           if (this.foundDiff >= diffCount) this.finish(true);
         });
     }
@@ -405,11 +424,15 @@ export class PuzzleScene extends Phaser.Scene {
     this.ox = (w - this.cell * cols) / 2;
     paintPuzzleBoardFrame(this, this.spec, this.ox - 4, this.oy - 4, this.cell * cols + 8, this.cell * rows + 8);
     const timed = this.memoryTimerSec > 0;
+    const h = this.scale.height;
     deck.forEach((id, i) => {
       const c = i % cols;
       const r = Math.floor(i / cols);
       const x = this.ox + c * this.cell + this.cell / 2;
       const y = this.oy + r * this.cell + this.cell / 2;
+      if (i === 0) {
+        setPhaserQaClickHints([{ x: x / w, y: y / h }]);
+      }
       const rect = this.add
         .rectangle(x, y, this.cell - 8, this.cell - 8, timed ? 0x581c87 : 0x4c1d95)
         .setStrokeStyle(2, timed ? 0xf472b6 : 0xc4b5fd)
@@ -430,6 +453,7 @@ export class PuzzleScene extends Phaser.Scene {
     card.label.setText(card.faceText);
       card.rect.setFillStyle(Phaser.Display.Color.HexStringToColor(COLORS[card.id % COLORS.length]!).color);
     this.flipped.push(card);
+    this.publishQaState();
     if (this.flipped.length === 2) {
       this.addMove();
       const [a, b] = this.flipped;

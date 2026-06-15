@@ -1,5 +1,8 @@
 export type QaClickHint = { x: number; y: number };
 
+export type { PhaserQaState } from "@/game/engine/phaser-qa-state";
+import { clearPhaserQaState } from "@/game/engine/phaser-qa-state";
+
 declare global {
   interface Window {
     __PHASER_PLAY_READY__?: boolean;
@@ -7,6 +10,8 @@ declare global {
     __PHASER_QA_GAME__?: import("phaser").Game;
     /** QA：Scene 提供的相对点击坐标（0–1），优先于静态用例坐标 */
     __PHASER_QA_CLICKS__?: QaClickHint[];
+    /** QA：运行时状态（金币/分数等），用于玩法深度断言 */
+    __PHASER_QA_STATE__?: import("@/game/engine/phaser-qa-state").PhaserQaState;
   }
 }
 
@@ -22,6 +27,7 @@ export function resetPhaserPlayReady(): void {
     window.__PHASER_PLAY_READY__ = false;
     delete window.__PHASER_QA_GAME__;
     delete window.__PHASER_QA_CLICKS__;
+    clearPhaserQaState();
   }
 }
 

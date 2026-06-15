@@ -21,7 +21,8 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
-| 种田金币同步 | ⬜ 本地已加 `syncFarmingStartingCoins` · **待 commit+deploy** |
+| 种田金币同步 | ✅ `syncFarmingStartingCoins` · `271dd39` 已部署 |
+| `qa:sample-ai-patch-audit` @prod | ✅ **4/4** |
 | `qa:competitor-clone-batch` all@prod | ✅ **17/17** · diff 0.4%–4.4% |
 | 脚本修复 | `competitor-clone-batch` IPv4 health · 远程跳过本地 seed |
 

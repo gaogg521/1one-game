@@ -108,6 +108,9 @@ export function buildCompetitorClonePlayabilityChecks(
     case "grow-a-garden":
       perSample.farmingGrid = (cloneSpec.farming?.cols ?? 0) >= 4;
       perSample.autoWater = samplePf?.farming?.autoWater === true;
+      perSample.decorativeFence = samplePf?.farming?.decorativeFence === true;
+      perSample.richCrops = (cloneSpec.farming?.crops?.length ?? 0) >= 4;
+      perSample.startingCoins = (cloneSpec.farming?.startingCoins ?? 0) >= 50;
       break;
     case "smash-the-dummy":
       perSample.physicsCombo = (samplePf?.physics?.comboMultiplier ?? 0) >= 1.5;

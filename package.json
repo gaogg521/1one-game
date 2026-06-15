@@ -75,6 +75,7 @@
     "qa:sample-play-extended": "tsx scripts/qa-sample-play-extended.ts",
     "qa:sample-gameplay-interaction": "tsx scripts/qa-sample-gameplay-interaction.ts",
     "qa:sample-gameplay-interaction:offline": "tsx scripts/qa-sample-gameplay-interaction-offline.ts",
+    "qa:gameplay-depth-offline": "tsx scripts/qa-gameplay-depth-offline.ts",
     "qa:prod-sample-play-audit": "tsx scripts/qa-prod-sample-play-audit.ts",
     "qa:sample-ai-patch-audit": "tsx scripts/qa-sample-ai-patch-audit.ts",
     "ensure:dev-playable": "tsx scripts/ensure-dev-playable.ts",

@@ -20,7 +20,7 @@ function run(cmd: string, extraEnv?: Record<string, string>): boolean {
     execSync(cmd, {
       stdio: "inherit",
       cwd: process.cwd(),
-      env: { ...process.env, ...extraEnv },
+      env: { ...process.env, PW_REUSE_SERVER: "1", ...extraEnv },
     });
     return true;
   } catch {

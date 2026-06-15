@@ -15,14 +15,29 @@ export type CanvasParityThresholds = {
 
 /** 全局对标阈值（不按样品分档 — Astrocade 平台级 parity） */
 export const GLOBAL_CANVAS_PARITY: CanvasParityThresholds = {
-  maxColorDist: 45,
-  maxDiffRatio: 0.22,
+  maxColorDist: 40,
+  maxDiffRatio: 0.18,
 };
 
+/** 克隆对标默认阈值（较 GLOBAL 更严） */
 export const GLOBAL_CLONE_PARITY: CanvasParityThresholds = {
-  maxColorDist: 35,
-  maxDiffRatio: 0.12,
+  maxColorDist: 32,
+  maxDiffRatio: 0.08,
 };
+
+/** 旗舰样品：人眼敏感款，进一步收紧 */
+export const STRICT_CLONE_PARITY: CanvasParityThresholds = {
+  maxColorDist: 28,
+  maxDiffRatio: 0.05,
+};
+
+export const STRICT_VISUAL_SAMPLE_IDS = new Set([
+  "grow-a-garden",
+  "color-bloom",
+  "whimsy-differences",
+  "elastic-thief-2",
+  "crashy-roads",
+]);
 
 export async function avgRgb(buf: Buffer): Promise<[number, number, number]> {
   const { data, info } = await sharp(buf).resize(64, 64, { fit: "cover" }).raw().toBuffer({ resolveWithObject: true });
@@ -79,6 +94,6 @@ export function visualThresholdsForSample(_sampleId: string): CanvasParityThresh
   return GLOBAL_CANVAS_PARITY;
 }
 
-export function cloneVisualThresholdsForSample(_sampleId: string): CanvasParityThresholds {
-  return GLOBAL_CLONE_PARITY;
+export function cloneVisualThresholdsForSample(sampleId: string): CanvasParityThresholds {
+  return STRICT_VISUAL_SAMPLE_IDS.has(sampleId) ? STRICT_CLONE_PARITY : GLOBAL_CLONE_PARITY;
 }

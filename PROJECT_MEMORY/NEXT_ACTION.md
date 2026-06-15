@@ -32,7 +32,16 @@
 | 竞品 batch @prod | **17/17 PASS** · `COMPETITOR_CLONE_BATCH=all` |
 | 脚本 | `competitor-clone-batch` IPv4 health + 6666 Playwright + 远程跳过 seed |
 
-**下一步**：`git commit` + `push main` → `deploy-prod-playability-fix.py` → 重跑 `qa:sample-ai-patch-audit` 全绿
+**下一步**：主人 refine 链路生产抽测 · 用户肉眼抽测
+
+## 迭代三十五（闭环）：deploy `271dd39` + patch 全绿
+
+| 项 | 交付 |
+|----|------|
+| commit | `271dd39` fix(patch): 种田金币同步 + AI patch 生产验收脚本 |
+| 生产 | http://43.163.105.71:6666 · health ok |
+| `qa:sample-ai-patch-audit` | **4/4** · `farming.startingCoins=200` |
+| `qa:competitor-clone-batch` all | **17/17** @ prod（上轮已验） |
 
 ## 迭代三十四：提交 + 生产部署
 
@@ -219,6 +228,6 @@ npm run qa:comic-director-pipeline
 | ✅ | 六模板 PM 自动化签收 `qa:pm-handtest-signoff` |
 | ✅ | git commit `e098313` — 文学链路 + 竞品 clone 门禁 |
 | ⬜ | Console SSO 生产 IdP 联调（需企业 Azure/飞书配置 · 文档已齐） |
-| ⬜ | 种田 patch 金币同步上线（commit `spec-patch` + deploy） |
-| ⬜ | `qa:sample-ai-patch-audit` 生产四步全绿（deploy 后） |
+| ✅ | 种田 patch 金币同步上线 `271dd39` |
+| ✅ | `qa:sample-ai-patch-audit` 生产四步全绿 |
 | ⬜ | 六模板章节感 **可选** PM 肉眼抽测（自动化已签收） |

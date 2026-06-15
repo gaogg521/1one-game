@@ -24,6 +24,7 @@ import {
   hudScore,
 } from "@/lib/i18n/game-hud-labels";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 
 type EndPayload = { score: number; won: boolean };
 type TileState = "empty" | "seeded" | "growing" | "ready";
@@ -99,6 +100,7 @@ export class FarmingScene extends Phaser.Scene {
     this.autoWater = farmPf?.autoWater ?? false;
     this.harvestGoal = this.bp.harvestGoal;
     this.coins = this.bp.startingCoins;
+    setPhaserQaState({ coins: this.coins, harvests: 0, plantedTiles: 0, startingCoins: this.bp.startingCoins });
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -168,6 +170,7 @@ export class FarmingScene extends Phaser.Scene {
 
     this.pulseTutorialTile();
     this.refreshCropSelector();
+    this.publishQaState();
     schedulePhaserPlayReady(this, 400);
     if (this.tiles[0]) {
       setPhaserQaClickHints([
@@ -354,6 +357,17 @@ export class FarmingScene extends Phaser.Scene {
 
     this.refreshTileVisual(tile);
     this.coinText.setText(hudFarmingCoins(this.uiLocale, this.coins));
+    this.publishQaState();
+  }
+
+  private publishQaState() {
+    const plantedTiles = this.tiles.filter((t) => t.state !== "empty").length;
+    setPhaserQaState({
+      coins: this.coins,
+      harvests: this.harvests,
+      plantedTiles,
+      startingCoins: this.bp.startingCoins,
+    });
   }
 
   update(_t: number, dt: number) {

@@ -10,9 +10,36 @@ applyQaOfflineDatabaseUrl();
 
 const OWNER = "qa-roster-db";
 const NOVEL_ID = "qa-roster-novel-fixture";
+const STUCK_MIGRATION = "20260614090000_user_auth_foundation";
+
+function ensureMigrations(): void {
+  try {
+    execSync("npx prisma migrate deploy", { stdio: "pipe", env: process.env });
+  } catch (e) {
+    const msg = (e as { stderr?: string; stdout?: string }).stderr
+      ?? (e as { stderr?: string; stdout?: string }).stdout
+      ?? String(e);
+    if (/P3018|P3009|already exists/i.test(msg)) {
+      try {
+        execSync(`npx prisma migrate resolve --rolled-back ${STUCK_MIGRATION}`, {
+          stdio: "pipe",
+          env: process.env,
+        });
+      } catch {
+        /* table may already exist */
+      }
+      execSync(`npx prisma migrate resolve --applied ${STUCK_MIGRATION}`, {
+        stdio: "pipe",
+        env: process.env,
+      });
+      return;
+    }
+    throw e;
+  }
+}
 
 async function main() {
-  execSync("npx prisma migrate deploy", { stdio: "pipe", env: process.env });
+  ensureMigrations();
 
   const { prisma } = await import("@/lib/prisma");
   const { loadNovelCharacterRoster, saveNovelCharacterRoster, novelCharacterRosterUsesRawFallback } =

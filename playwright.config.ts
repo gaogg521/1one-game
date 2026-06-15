@@ -40,7 +40,7 @@ const webServer = useExternalServer
     : {
         command: "npm run dev",
         url: "http://127.0.0.1:8888",
-        reuseExistingServer: process.env.PW_REUSE_SERVER === "1" && !process.env.CI,
+        reuseExistingServer: process.env.PW_REUSE_SERVER === "1" || (!process.env.CI && !useProdServer),
         timeout: 300_000,
         env: serverEnv,
       };

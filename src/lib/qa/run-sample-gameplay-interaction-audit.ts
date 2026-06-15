@@ -11,6 +11,11 @@ import {
   interactionDiffPasses,
 } from "@/lib/qa/canvas-interaction-diff";
 import {
+  depthChangePasses,
+  gameplayDepthForCase,
+  type GameplayDepthExpect,
+} from "@/lib/qa/gameplay-depth";
+import {
   defaultClickRel,
   SAMPLE_GAMEPLAY_CASES,
   type SampleGameplayResult,
@@ -68,6 +73,25 @@ export async function readSceneKey(page: Page): Promise<string | null> {
   });
 }
 
+async function requestGetWithRetry(
+  page: Page,
+  url: string,
+  attempts = 3,
+): Promise<Awaited<ReturnType<Page["request"]["get"]>>> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await page.request.get(url);
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/socket hang up|ECONNRESET|ETIMEDOUT/i.test(msg) || i === attempts - 1) throw e;
+      await page.waitForTimeout(800 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 async function resolveSceneKey(
   page: Page,
   baseUrl: string,
@@ -80,7 +104,7 @@ async function resolveSceneKey(
   }
 
   try {
-    const apiRes = await page.request.get(`${baseUrl}/api/projects/${projectId}`);
+    const apiRes = await requestGetWithRetry(page, `${baseUrl}/api/projects/${projectId}`);
     if (!apiRes.ok()) return { actualScene: null, sceneOk: false, sceneSource: "none" };
     const data = (await apiRes.json()) as { spec?: GameSpec };
     const specScene = data.spec ? expectedPhaserSceneName(data.spec) : null;
@@ -180,6 +204,23 @@ export async function performInteraction(
   }
 }
 
+async function readQaStateField(page: Page, field: string): Promise<number | undefined> {
+  const v = await page.evaluate((f) => {
+    const st = (window as Window & { __PHASER_QA_STATE__?: Record<string, unknown> }).__PHASER_QA_STATE__;
+    const raw = st?.[f];
+    return typeof raw === "number" ? raw : undefined;
+  }, field);
+  return v;
+}
+
+function checkGameplayDepth(
+  before: number | undefined,
+  after: number | undefined,
+  expect: GameplayDepthExpect,
+): boolean {
+  return depthChangePasses(before, after, expect);
+}
+
 export async function auditSample(
   page: Page,
   sampleId: string,
@@ -200,12 +241,13 @@ export async function auditSample(
     actualScene: null,
     interactionOk: false,
     interactionDiff: 0,
+    gameplayDepthOk: true,
     idleCeiling: 0,
     pass: false,
   };
 
   try {
-    const apiRes = await page.request.get(`${baseUrl}/api/projects/${projectId}`);
+    const apiRes = await requestGetWithRetry(page, `${baseUrl}/api/projects/${projectId}`);
     base.apiOk = apiRes.ok();
     if (!apiRes.ok()) {
       base.error = `API HTTP ${apiRes.status()}`;
@@ -260,10 +302,22 @@ export async function auditSample(
       base.idleCeiling = idleCeiling;
     }
 
+    const depthExpect = gameplayDepthForCase(c);
+    const depthBefore = depthExpect ? await readQaStateField(page, depthExpect.field) : undefined;
+
     await performInteraction(page, c.interaction, clickRel, c.clickBurst ?? 1, c.clickRel2);
     await page.waitForTimeout(c.animated ? 520 : 380);
     const after = await canvas.screenshot();
     fs.writeFileSync(path.join(shotDir, "after.png"), after);
+
+    if (depthExpect) {
+      const depthAfter = await readQaStateField(page, depthExpect.field);
+      base.gameplayDepthField = depthExpect.field;
+      base.gameplayDepthOk = checkGameplayDepth(depthBefore, depthAfter, depthExpect);
+      if (!base.gameplayDepthOk) {
+        base.error = `gameplay depth ${depthExpect.field}: ${depthBefore ?? "∅"} → ${depthAfter ?? "∅"} (${depthExpect.change})`;
+      }
+    }
 
     const interactionDiff = await bufferDiffRatio(interactionBaseline, after);
     base.interactionDiff = interactionDiff;
@@ -279,7 +333,13 @@ export async function auditSample(
         : `interaction diff ${interactionDiff.toFixed(3)} < static threshold`;
     }
 
-    base.pass = base.apiOk && base.canvasOk && base.playReadyOk && base.sceneOk && base.interactionOk;
+    base.pass =
+      base.apiOk &&
+      base.canvasOk &&
+      base.playReadyOk &&
+      base.sceneOk &&
+      base.interactionOk &&
+      base.gameplayDepthOk;
     return base;
   } catch (e) {
     base.error = e instanceof Error ? e.message : String(e);
@@ -296,14 +356,15 @@ function writeReport(results: SampleGameplayResult[], baseUrl: string, outDir: s
     `- 目标：${baseUrl}`,
     `- 结果：**${passed}/${results.length} PASS**`,
     "",
-    "| 样品 | API | Canvas | Scene | 交互 | diff | 说明 |",
-    "|------|-----|--------|-------|------|------|------|",
+    "| 样品 | API | Canvas | Scene | 交互 | 深度 | diff | 说明 |",
+    "|------|-----|--------|-------|------|------|------|------|",
   ];
 
   for (const r of results) {
     const note = r.error ?? (r.pass ? "OK" : "FAIL");
+    const depth = r.gameplayDepthField ? (r.gameplayDepthOk ? "✅" : "❌") : "—";
     lines.push(
-      `| ${r.title} | ${r.apiOk ? "✅" : "❌"} | ${r.canvasOk ? "✅" : "❌"} | ${r.sceneOk ? r.actualScene : "❌"} | ${r.interactionOk ? "✅" : "❌"} | ${r.interactionDiff.toFixed(3)} | ${note} |`,
+      `| ${r.title} | ${r.apiOk ? "✅" : "❌"} | ${r.canvasOk ? "✅" : "❌"} | ${r.sceneOk ? r.actualScene : "❌"} | ${r.interactionOk ? "✅" : "❌"} | ${depth} | ${r.interactionDiff.toFixed(3)} | ${note} |`,
     );
   }
 
@@ -339,13 +400,15 @@ export async function runSampleGameplayInteractionAudit(
   const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
   const results: SampleGameplayResult[] = [];
 
-  for (const sample of SAMPLES) {
+  for (let i = 0; i < SAMPLES.length; i += 1) {
+    const sample = SAMPLES[i]!;
     console.log(`→ ${sample.id}`);
     const r = await auditSample(page, sample.id, sample.title, baseUrl, shots);
     results.push(r);
     console.log(
-      `  ${r.pass ? "[OK]" : "[FAIL]"} api=${r.apiOk} canvas=${r.canvasOk} scene=${r.actualScene} interaction=${r.interactionOk}${r.error ? ` · ${r.error}` : ""}`,
+      `  ${r.pass ? "[OK]" : "[FAIL]"} api=${r.apiOk} canvas=${r.canvasOk} scene=${r.actualScene} interaction=${r.interactionOk} depth=${r.gameplayDepthField ? r.gameplayDepthOk : "n/a"}${r.error ? ` · ${r.error}` : ""}`,
     );
+    if (i < SAMPLES.length - 1) await page.waitForTimeout(450);
   }
 
   await browser.close();

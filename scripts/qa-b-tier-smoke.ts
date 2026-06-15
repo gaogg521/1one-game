@@ -25,6 +25,7 @@ const STEPS = [
   "npm run qa:runtime-config-admin",
   "npm run qa:architecture-parity",
   "npm run qa:competitor-clone-checks-offline",
+  "npm run qa:gameplay-depth-offline",
   "npm run qa:sample-gameplay-interaction:offline",
 ] as const;
 
