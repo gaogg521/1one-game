@@ -1,78 +1,58 @@
-# Linux 部署指南（Ubuntu 22.04 · 单机 SQLite）
+# Linux 一键部署
 
-## 最快路径：一键脚本
+## 用户只需这一条命令
 
-在**新 Ubuntu 22.04 服务器**上：
+在 **Ubuntu 22.04 / Debian 12** 服务器上：
 
 ```bash
-# 1. 克隆（或上传源码后 cd 到仓库根目录）
-git clone <你的仓库> /opt/operone
-cd /opt/operone
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
 
-# 2. 配置密钥（必填项）
-export OPENAI_API_KEY='sk-...'
-export OPENAI_BASE_URL='https://你的-litellm-网关'
-export SUPER_ADMIN_SECRET='强密码-控制台与升权'
-export RUNTIME_CONFIG_SECRET='另一强密码-可选'
+无需事先 clone、无需配置环境变量、无需手动 `sudo`（脚本会自动提权）。
 
-# 3. 安装依赖 + 构建 + systemd（内网 8888）
-sudo -E bash scripts/deploy/linux-ubuntu22-sqlite.sh --all
+脚本全自动完成：拉代码 → 装依赖 → 构建 → 启动服务 → 输出访问地址。
 
-# 4. 对外域名 + HTTPS（DNS 已指向本机）
+**再次执行同一条命令 = 自动更新版本。**
+
+---
+
+## 装完后（可选）
+
+编辑 API Key，然后重启：
+
+```bash
+nano /opt/operone/.env
+systemctl restart operone
+```
+
+---
+
+## 有域名时（可选，执行前 export）
+
+```bash
 export OPERONE_DOMAIN='app.example.com'
 export CERTBOT_EMAIL='ops@example.com'
-sudo -E bash scripts/deploy/linux-ubuntu22-sqlite.sh --phase nginx
-sudo -E bash scripts/deploy/linux-ubuntu22-sqlite.sh --phase ssl
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-或从空机器只设 `GIT_REPO`：
+---
 
-```bash
-export GIT_REPO='https://github.com/you/game.git'
-export OPENAI_API_KEY='...'
-export SUPER_ADMIN_SECRET='...'
-curl -fsSL .../raw/main/scripts/deploy/linux-ubuntu22-sqlite.sh | sudo -E bash -s -- --all
-```
+## 脚本文件
 
-## Docker 路径（更简单）
-
-```bash
-export GIT_REPO='https://github.com/you/game.git'
-export OPENAI_API_KEY='...'
-sudo -E bash scripts/deploy/linux-docker-sqlite.sh
-```
-
-## 脚本分阶段
-
-| 阶段 | 命令 | 说明 |
-|------|------|------|
-| 系统依赖 | `--phase deps` | Node 22、git、build-essential |
-| 应用 | `--phase app` | npm ci、migrate、build、seed |
-| 常驻 | `--phase systemd` | `operone.service` @8888 |
-| 反代 | `--phase nginx` | 需 `OPERONE_DOMAIN` |
-| HTTPS | `--phase ssl` | Certbot，需域名 + 邮箱 |
-
-## 更新版本
-
-```bash
-cd /opt/operone
-sudo -u www-data git pull
-sudo -u www-data npm ci
-sudo -u www-data npx prisma migrate deploy
-sudo -u www-data npm run build
-sudo systemctl restart operone
-```
+| 文件 | 说明 |
+|------|------|
+| `scripts/deploy/install.sh` | **用户入口**，一键部署 |
+| `scripts/deploy/linux-ubuntu22-full.sh` | 内部完整流程 |
+| `scripts/deploy/linux-ubuntu22-sqlite.sh` | 分阶段（运维高级用法） |
 
 ## 验收
 
 ```bash
 curl -s http://127.0.0.1:8888/api/health
-cd /opt/operone && npm run qa:b-tier-smoke
+systemctl status operone
 ```
 
 ## 相关文档
 
-- 环境变量：根目录 `.env.example`
+- 环境变量：`.env.example`
 - 数据库：`docs/local-database.md`
-- 运营控制台：`docs/admin-console.md`、`docs/admin-console-sso.md`
-- Godot Web 导出（可选）：`docs/godot-quickstart-cn.md`

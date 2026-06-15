@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+# Operone Ubuntu/Debian 部署共享库 — 由 linux-ubuntu22-sqlite.sh / linux-ubuntu22-full.sh 引用
+# shellcheck disable=SC2034
+
+: "${OPERONE_DIR:=/opt/operone}"
+: "${OPERONE_USER:=www-data}"
+: "${OPERONE_DEFAULT_GIT_REPO:=https://github.com/gaogg521/1one-game.git}"
+: "${GIT_REPO:=${OPERONE_DEFAULT_GIT_REPO}}"
+: "${GIT_BRANCH:=main}"
+: "${OPERONE_DOMAIN:=}"
+: "${CERTBOT_EMAIL:=}"
+: "${OPERONE_PORT:=8888}"
+: "${SKIP_SEED:=0}"
+: "${SKIP_PREFLIGHT:=1}"
+: "${NODE_MAJOR:=22}"
+
+# 由调用方设置 SCRIPT_DIR；未设置时按 lib 位置推断
+if [[ -z "${SCRIPT_DIR:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+log() { printf '\033[1;34m[operone-deploy]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[operone-deploy]\033[0m %s\n' "$*"; }
+die() { printf '\033[1;31m[operone-deploy]\033[0m %s\n' "$*" >&2; exit 1; }
+ok()  { printf '\033[1;32m[operone-deploy]\033[0m %s\n' "$*"; }
+
+need_root() {
+  [[ "$(id -u)" -eq 0 ]] || die "此步骤需要 root：sudo bash $0 $*"
+}
+
+generate_secret() {
+  openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 64
+}
+
+port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln | grep -q ":${port} "
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -tln | grep -q ":${port} "
+  else
+    return 1
+  fi
+}
+
+wait_for_health() {
+  local url="http://127.0.0.1:${OPERONE_PORT}/api/health"
+  local i max="${1:-30}"
+  for ((i = 1; i <= max; i++)); do
+    if curl -sf "$url" >/dev/null 2>&1; then
+      ok "健康检查通过: $url"
+      return 0
+    fi
+    sleep 2
+  done
+  warn "健康检查超时（${max} 次），请手动: curl -v $url"
+  return 1
+}
+
+phase_deps() {
+  need_root
+  log "[1/5] 安装系统依赖 …"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y \
+    curl ca-certificates git build-essential openssl rsync \
+    procps dnsutils
+
+  # 内存不足时自动加 2G swap，避免 npm build OOM
+  local mem_mb swap_mb
+  mem_mb="$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}' || echo 4096)"
+  swap_mb="$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}' || echo 0)"
+  if [[ "$mem_mb" -lt 2500 && "$swap_mb" -lt 512 ]] && [[ ! -f /swapfile ]]; then
+    log "内存偏低，自动创建 2G swap …"
+    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    local ver
+    ver="$(node -v | sed 's/v//' | cut -d. -f1)"
+    if [[ "$ver" -ge "$NODE_MAJOR" ]]; then
+      log "Node 已满足: $(node -v)"
+      return 0
+    fi
+    warn "Node $(node -v) 版本偏低，将安装 Node ${NODE_MAJOR}.x"
+  fi
+
+  log "安装 Node.js ${NODE_MAJOR}.x (NodeSource) …"
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+  apt-get install -y nodejs
+  log "Node $(node -v) · npm $(npm -v)"
+}
+
+ensure_operone_dir() {
+  if [[ ! -d "$OPERONE_DIR" ]]; then
+    mkdir -p "$OPERONE_DIR"
+  fi
+  if id "$OPERONE_USER" &>/dev/null; then
+    chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+  fi
+}
+
+clone_or_update_repo() {
+  ensure_operone_dir
+  if [[ -d "$OPERONE_DIR/.git" ]]; then
+    log "仓库已存在，git pull …"
+    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" fetch origin
+    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" checkout "$GIT_BRANCH"
+    sudo -u "$OPERONE_USER" git -C "$OPERONE_DIR" pull --ff-only origin "$GIT_BRANCH" || true
+    return 0
+  fi
+
+  if [[ -n "$GIT_REPO" ]]; then
+    log "克隆 $GIT_REPO → $OPERONE_DIR"
+    if [[ -d "$OPERONE_DIR" ]]; then
+      if [[ -n "$(ls -A "$OPERONE_DIR" 2>/dev/null)" ]]; then
+        die "$OPERONE_DIR 非空，无法克隆（请清空或换 OPERONE_DIR）"
+      fi
+      rmdir "$OPERONE_DIR" 2>/dev/null || rm -rf "$OPERONE_DIR"
+    fi
+    mkdir -p "$(dirname "$OPERONE_DIR")"
+    git clone --branch "$GIT_BRANCH" --depth 1 "$GIT_REPO" "$OPERONE_DIR"
+    chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+    return 0
+  fi
+
+  if [[ -f "$REPO_ROOT/package.json" ]] && [[ "$REPO_ROOT" != "$OPERONE_DIR" ]]; then
+    log "从当前仓库复制到 $OPERONE_DIR（未设 GIT_REPO）"
+    rsync -a --exclude node_modules --exclude .next --exclude '*.db' --exclude '.git' \
+      "$REPO_ROOT/" "$OPERONE_DIR/" 2>/dev/null \
+      || cp -a "$REPO_ROOT/." "$OPERONE_DIR/"
+    chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+    return 0
+  fi
+
+  if [[ -f "$OPERONE_DIR/package.json" ]]; then
+    log "使用已有目录 $OPERONE_DIR"
+    return 0
+  fi
+
+  die "无法获取源码：请设置 GIT_REPO=... 或在仓库根目录执行本脚本"
+}
+
+write_env_if_missing() {
+  local env_file="$OPERONE_DIR/.env"
+  if [[ -f "$env_file" ]]; then
+    log ".env 已存在，跳过生成"
+    return 0
+  fi
+
+  [[ -f "$OPERONE_DIR/.env.example" ]] || die "缺少 $OPERONE_DIR/.env.example"
+
+  log "从 .env.example 生成 .env"
+  sudo -u "$OPERONE_USER" cp "$OPERONE_DIR/.env.example" "$env_file"
+  sudo -u "$OPERONE_USER" sed -i 's|^DATABASE_URL=.*|DATABASE_URL="file:./prod.db"|' "$env_file"
+
+  if [[ -z "${SUPER_ADMIN_SECRET:-}" ]]; then
+    SUPER_ADMIN_SECRET="$(generate_secret)"
+    warn "已自动生成 SUPER_ADMIN_SECRET（请妥善保存）"
+  fi
+
+  append_env() {
+    local key="$1" val="$2"
+    [[ -z "$val" ]] && return 0
+    if grep -q "^${key}=" "$env_file"; then
+      sudo -u "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+    else
+      echo "${key}=${val}" >> "$env_file"
+    fi
+  }
+
+  append_env "NODE_ENV" "production"
+  append_env "PORT" "${OPERONE_PORT}"
+  append_env "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+  append_env "OPENAI_BASE_URL" "${OPENAI_BASE_URL:-https://litellm-internal.123u.com}"
+  append_env "SUPER_ADMIN_SECRET" "${SUPER_ADMIN_SECRET:-}"
+  append_env "RUNTIME_CONFIG_SECRET" "${RUNTIME_CONFIG_SECRET:-${SUPER_ADMIN_SECRET:-}}"
+
+  if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+    warn "OPENAI_API_KEY 未填 — 服务可启动，LLM 走 mock；装完后编辑 $env_file 并 systemctl restart operone"
+  fi
+}
+
+merge_env_key() {
+  local key="$1" val="$2"
+  local env_file="$OPERONE_DIR/.env"
+  [[ -z "$val" ]] && return 0
+  [[ -f "$env_file" ]] || return 0
+  if grep -q "^${key}=" "$env_file"; then
+    sudo -u "$OPERONE_USER" sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+  else
+    echo "${key}=${val}" >> "$env_file"
+  fi
+}
+
+phase_app() {
+  need_root
+  log "[2/5] 拉取代码并构建 …"
+  id "$OPERONE_USER" &>/dev/null || useradd --system --home "$OPERONE_DIR" --shell /usr/sbin/nologin "$OPERONE_USER" || true
+
+  clone_or_update_repo
+  write_env_if_missing
+
+  merge_env_key "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+  merge_env_key "OPENAI_BASE_URL" "${OPENAI_BASE_URL:-}"
+  merge_env_key "SUPER_ADMIN_SECRET" "${SUPER_ADMIN_SECRET:-}"
+
+  log "npm ci …"
+  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"
+
+  log "prisma migrate deploy …"
+  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+
+  if [[ "$SKIP_PREFLIGHT" != "1" ]]; then
+    log "qa:deploy-preflight …"
+    sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run qa:deploy-preflight" \
+      || warn "预检未全过，请查看日志后决定是否继续"
+  fi
+
+  log "npm run build …"
+  sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
+
+  mkdir -p "$OPERONE_DIR/public/covers" "$OPERONE_DIR/public/comic-panels" "$OPERONE_DIR/public/game-bg"
+  chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+
+  if [[ "$SKIP_SEED" != "1" ]]; then
+    log "seed:samples（样品馆）…"
+    sudo -u "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run seed:samples" \
+      || warn "seed 失败（可稍后手动 npm run seed:samples）"
+  fi
+
+  log "app 阶段完成 → $OPERONE_DIR"
+}
+
+install_systemd_unit() {
+  need_root
+  log "[3/5] 启动服务 …"
+  local unit="/etc/systemd/system/operone.service"
+  local npm_bin
+  npm_bin="$(command -v npm)"
+
+  cat > "$unit" <<EOF
+[Unit]
+Description=Operone 创作平台
+Documentation=file://${OPERONE_DIR}/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${OPERONE_USER}
+Group=${OPERONE_USER}
+WorkingDirectory=${OPERONE_DIR}
+EnvironmentFile=-${OPERONE_DIR}/.env
+Environment=NODE_ENV=production
+Environment=PORT=${OPERONE_PORT}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=${npm_bin} run start
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable operone
+  systemctl restart operone
+  sleep 2
+
+  if systemctl is-active --quiet operone; then
+    ok "operone.service 已启动"
+  else
+    systemctl status operone --no-pager || true
+    die "operone 启动失败: journalctl -u operone -n 80 --no-pager"
+  fi
+
+  wait_for_health 30 || true
+}
+
+ensure_nginx_installed() {
+  if command -v nginx >/dev/null 2>&1; then
+    log "Nginx 已安装: $(nginx -v 2>&1)"
+    return 0
+  fi
+  log "安装 Nginx …"
+  apt-get install -y nginx
+}
+
+phase_nginx() {
+  need_root
+  log "[4/5] 配置 Nginx …"
+  [[ -n "$OPERONE_DOMAIN" ]] || die "请设置 OPERONE_DOMAIN=app.example.com"
+
+  local template="$SCRIPT_DIR/templates/nginx-operone.conf"
+  [[ -f "$template" ]] || die "缺少 Nginx 模板: $template（请使用完整仓库，勿只复制单个 .sh）"
+
+  ensure_nginx_installed
+  systemctl enable nginx 2>/dev/null || true
+
+  local conf="/etc/nginx/sites-available/operone"
+  sed "s/__DOMAIN__/${OPERONE_DOMAIN}/g" "$template" > "$conf"
+  ln -sf "$conf" /etc/nginx/sites-enabled/operone
+
+  # 仅当 default 占用 80 且无自定义需求时移除；已有 Nginx 多站点不受影响
+  if [[ -f /etc/nginx/sites-enabled/default ]]; then
+    warn "移除 Nginx default 站点（避免与 operone 冲突）"
+    rm -f /etc/nginx/sites-enabled/default
+  fi
+
+  nginx -t
+  systemctl reload nginx || systemctl start nginx
+  ok "Nginx 反代: http://${OPERONE_DOMAIN} → 127.0.0.1:${OPERONE_PORT}"
+}
+
+check_domain_points_here() {
+  local domain="$1"
+  local my_ip resolved
+  my_ip="$(curl -4 -sf --max-time 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+  resolved="$(dig +short "$domain" A 2>/dev/null | tail -1)"
+  if [[ -z "$resolved" ]]; then
+    warn "DNS 未解析 $domain，HTTPS 可能失败"
+    return 1
+  fi
+  if [[ -n "$my_ip" && "$resolved" != "$my_ip" ]]; then
+    warn "DNS $domain → $resolved，本机公网 IP ≈ $my_ip（不一致时 Certbot 会失败）"
+    return 1
+  fi
+  ok "DNS 检查: $domain → $resolved"
+  return 0
+}
+
+phase_ssl() {
+  need_root
+  log "[5/5] 申请 HTTPS …"
+  [[ -n "$OPERONE_DOMAIN" ]] || die "请设置 OPERONE_DOMAIN"
+  [[ -n "$CERTBOT_EMAIL" ]] || die "请设置 CERTBOT_EMAIL"
+
+  check_domain_points_here "$OPERONE_DOMAIN" || true
+
+  apt-get install -y certbot python3-certbot-nginx
+  certbot --nginx -d "$OPERONE_DOMAIN" --non-interactive --agree-tos -m "$CERTBOT_EMAIL" --redirect
+  ok "HTTPS: https://${OPERONE_DOMAIN}"
+}
+
+configure_firewall_if_needed() {
+  need_root
+  command -v ufw >/dev/null 2>&1 || {
+    apt-get install -y ufw 2>/dev/null || {
+      warn "未安装 ufw，跳过防火墙"
+      return 0
+    }
+  }
+
+  if ufw status | grep -qi "Status: active"; then
+    log "ufw 已启用，放行 80/443 …"
+  else
+    log "启用 ufw（放行 SSH + 80 + 443）…"
+    ufw allow OpenSSH >/dev/null 2>&1 || ufw allow 22/tcp
+    ufw --force enable
+  fi
+
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+  if [[ -z "$OPERONE_DOMAIN" ]]; then
+    ufw allow "${OPERONE_PORT}/tcp" || true
+  fi
+  ok "防火墙规则已更新"
+}
+
+server_primary_ip() {
+  hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+print_deploy_summary() {
+  local ip access_url env_file="$OPERONE_DIR/.env"
+  ip="$(server_primary_ip)"
+
+  if [[ -n "$OPERONE_DOMAIN" ]]; then
+    if [[ -n "$CERTBOT_EMAIL" ]]; then
+      access_url="https://${OPERONE_DOMAIN}"
+    else
+      access_url="http://${OPERONE_DOMAIN}"
+    fi
+  else
+    access_url="http://${ip:-127.0.0.1}:${OPERONE_PORT}"
+  fi
+
+  echo ""
+  echo "╔══════════════════════════════════════════════════════╗"
+  echo "║          Operone 部署成功 — 可以访问了               ║"
+  echo "╠══════════════════════════════════════════════════════╣"
+  printf "║  访问地址:  %-40s ║\n" "$access_url"
+  printf "║  健康检查:  %-40s ║\n" "curl -s http://127.0.0.1:${OPERONE_PORT}/api/health"
+  echo "╠══════════════════════════════════════════════════════╣"
+  echo "║  下一步（可选）：编辑 API Key 后重启                  ║"
+  printf "║    nano %s\n" "$env_file"
+  echo "║    systemctl restart operone"
+  echo "╠══════════════════════════════════════════════════════╣"
+  echo "║  再次执行 install.sh = 自动更新版本                  ║"
+  echo "╚══════════════════════════════════════════════════════╝"
+  echo ""
+}
