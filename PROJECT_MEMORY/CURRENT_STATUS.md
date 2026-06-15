@@ -21,8 +21,17 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
-| 种田金币同步 | ✅ `syncFarmingStartingCoins` · `271dd39` 已部署 |
-| `qa:sample-ai-patch-audit` @prod | ✅ **4/4** |
+更新时间：**2026-06-15**（迭代三十六 · QA 深度 + 阈值收紧 ✅）
+
+## 迭代三十六：玩法深度断言 + 视觉阈值收紧
+
+| 能力 | 状态 |
+|------|------|
+| `__PHASER_QA_STATE__` | 旗舰 5 款暴露金币/分数/距离等运行时状态 |
+| `qa:gameplay-depth-offline` | 深度字段与用例对齐离线门禁 |
+| 视觉阈值 | 克隆默认 diff≤8% · 旗舰 5 款 ≤5% |
+| 稳定性 | API 重试 · 样品间隔 450ms · migration P3009 自愈 |
+| commit | `fd15084` 已 push + 部署 |
 | `qa:competitor-clone-batch` all@prod | ✅ **17/17** · diff 0.4%–4.4% |
 | 脚本修复 | `competitor-clone-batch` IPv4 health · 远程跳过本地 seed |
 

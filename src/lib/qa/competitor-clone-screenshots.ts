@@ -16,6 +16,7 @@ export const ANIMATED_CLONE_SAMPLES = new Set([
   "blade-defender-merge",
   "blocky-sniper-hunter",
   "smash-the-dummy",
+  "memory-match-mania",
 ]);
 
 export async function waitForPlayCanvas(page: import("@playwright/test").Page, projectId: string, baseUrl: string) {
