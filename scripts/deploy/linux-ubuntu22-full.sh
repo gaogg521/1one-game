@@ -215,7 +215,7 @@ run_update() {
   fi
 
   npm_install_deps
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  prisma_migrate_deploy 0
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
   systemctl restart operone

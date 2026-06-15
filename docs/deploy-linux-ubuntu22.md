@@ -42,6 +42,8 @@ cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 
 **native 模块（better-sqlite3 / node-gyp）**：CentOS 7 的 glibc 2.17 与 Python 3.6 无法编译 `better-sqlite3`（需 glibc ≥ 2.29、Python ≥ 3.8）。一键脚本在 CentOS 7 上使用 `npm ci --ignore-scripts` 跳过 dev 工具的原生编译（生产运行不依赖 `better-sqlite3`），并单独补装 `sharp` 预编译包。若仍失败，建议迁移到 Rocky/Alma 8+ 或 Ubuntu 22.04。
 
+**Prisma 迁移 `no such table: User`**：已在 `20260614090000_user_auth_foundation` 补建 User 等表。若此前首次安装迁移失败，脚本会自动删除空 `prod.db` 并重试；也可手动 `rm -f /opt/operone/prod.db` 后重新部署。
+
 ## 运行权限
 
 | 登录方式 | 脚本行为 |

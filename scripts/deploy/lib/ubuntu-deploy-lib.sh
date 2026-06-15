@@ -72,6 +72,22 @@ npm_install_deps() {
   fi
 }
 
+prisma_migrate_deploy() {
+  local allow_reset="${1:-0}"
+  log "prisma migrate deploy …"
+  local cmd="cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  if run_as_app_user "$OPERONE_USER" bash -lc "$cmd"; then
+    return 0
+  fi
+  if [[ "$allow_reset" != "1" ]]; then
+    die "prisma migrate deploy 失败（更新模式不自动删库，请手动排查）"
+  fi
+  warn "Prisma 迁移失败，清理失败状态并重建 SQLite（首次安装空库）…"
+  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate resolve --rolled-back '20260614100000_email_auth' 2>/dev/null || true"
+  rm -f "$OPERONE_DIR/prod.db" "$OPERONE_DIR/prod.db-journal" "$OPERONE_DIR/prod.db-wal" 2>/dev/null || true
+  run_as_app_user "$OPERONE_USER" bash -lc "$cmd" || die "prisma migrate deploy 仍失败，请查看上方日志"
+}
+
 port_in_use() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -247,8 +263,7 @@ phase_app() {
 
   npm_install_deps
 
-  log "prisma migrate deploy …"
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  prisma_migrate_deploy 1
   run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
 
   if [[ "$SKIP_PREFLIGHT" != "1" ]]; then
