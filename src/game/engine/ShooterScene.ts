@@ -31,6 +31,7 @@ import {
 import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };

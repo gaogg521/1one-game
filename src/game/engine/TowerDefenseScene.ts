@@ -43,6 +43,7 @@ import {
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
