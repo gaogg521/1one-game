@@ -13,6 +13,11 @@ import {
 } from "@/lib/coaster-blueprint";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { paintCoasterSkyBackdrop } from "@/game/engine/template-theme-visual";
+import {
+  drawCoasterCartRich,
+  drawEndlessRoadObstacle,
+  paintCoasterSkyGradient,
+} from "@/game/engine/action-visual";
 import type { GameSpec } from "@/lib/game-spec";
 import {
   bannerCoasterFinishLose,
@@ -89,6 +94,7 @@ export class CoasterScene extends Phaser.Scene {
   private nearMissCd = 0;
 
   private bankIntensity = 1;
+  private richVisuals = false;
   private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
@@ -110,6 +116,8 @@ export class CoasterScene extends Phaser.Scene {
     const coasterPf = this.spec.samplePlayProfile?.coaster;
     const speedBoost = coasterPf?.speedBoost ?? 1;
     this.bankIntensity = coasterPf?.bankIntensity ?? 1;
+    const variantId = this.spec.samplePlayProfile?.variantId;
+    this.richVisuals = variantId === "rail-in-air" || variantId === "crashy-roads";
     this.baseSpeed = (38 + (this.spec.director?.intensity ?? 0.55) * 22) * speedBoost;
     this.maxSpeed = this.endlessMode ? 95 : 95 + (this.spec.gameplay.playerSpeed - 300) * 0.15;
     this.speed = this.baseSpeed * 0.6;
@@ -252,8 +260,12 @@ export class CoasterScene extends Phaser.Scene {
     const cam = sampleCoasterPath(this.path, this.trackProgress);
 
     this.decorGfx.clear();
-    this.decorGfx.fillGradientStyle(0x38bdf8, 0x38bdf8, 0x7dd3fc, 0xbae6fd, 1);
-    this.decorGfx.fillRect(0, 0, w, h);
+    if (this.richVisuals) {
+      paintCoasterSkyGradient(this.decorGfx, this.spec, w, h, false);
+    } else {
+      this.decorGfx.fillGradientStyle(0x38bdf8, 0x38bdf8, 0x7dd3fc, 0xbae6fd, 1);
+      this.decorGfx.fillRect(0, 0, w, h);
+    }
 
     for (const c of this.clouds) {
       c.x += c.sp;
@@ -295,9 +307,14 @@ export class CoasterScene extends Phaser.Scene {
       this.trackGfx.lineBetween(cx - half, screenY + lift + 5, cx + half, screenY + lift + 5);
 
       if (i % 4 === 0 && depth > 0.35) {
-        this.trackGfx.fillStyle(0xfde047, 0.35 + depth * 0.4);
+        const starCol = this.richVisuals ? 0xfde047 : 0xfde047;
+        this.trackGfx.fillStyle(starCol, 0.35 + depth * 0.4);
         const starX = cx + Math.sin(i * 1.7) * half * 1.4;
         this.trackGfx.fillCircle(starX, screenY + lift - 30 * depth, 4 + depth * 5);
+      }
+      if (this.richVisuals && i % 2 === 0 && depth > 0.5) {
+        this.trackGfx.lineStyle(1, 0xffffff, 0.15 * depth);
+        this.trackGfx.lineBetween(cx, screenY + lift + 8, cx, screenY + lift + 28 * depth);
       }
     }
 
@@ -309,17 +326,21 @@ export class CoasterScene extends Phaser.Scene {
     const cartW = this.thirdPerson ? 54 : 72;
     const cartH = this.thirdPerson ? 28 : 36;
 
-    this.cartGfx.fillStyle(pc.color, 1);
-    this.cartGfx.fillRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
-    this.cartGfx.fillStyle(0x1f2937, 1);
-    this.cartGfx.fillCircle(cartX - cartW * 0.32, cartY + 4, 7);
-    this.cartGfx.fillCircle(cartX + cartW * 0.32, cartY + 4, 7);
-    if (this.thirdPerson) {
-      this.cartGfx.fillStyle(0xfbbf24, 1);
-      this.cartGfx.fillRect(cartX - 8, cartY - cartH - 14, 16, 14);
+    if (this.richVisuals) {
+      drawCoasterCartRich(this.cartGfx, cartX, cartY, cartW, cartH, pc.color, this.thirdPerson);
+    } else {
+      this.cartGfx.fillStyle(pc.color, 1);
+      this.cartGfx.fillRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
+      this.cartGfx.fillStyle(0x1f2937, 1);
+      this.cartGfx.fillCircle(cartX - cartW * 0.32, cartY + 4, 7);
+      this.cartGfx.fillCircle(cartX + cartW * 0.32, cartY + 4, 7);
+      if (this.thirdPerson) {
+        this.cartGfx.fillStyle(0xfbbf24, 1);
+        this.cartGfx.fillRect(cartX - 8, cartY - cartH - 14, 16, 14);
+      }
+      this.cartGfx.lineStyle(2, 0xffffff, 0.25);
+      this.cartGfx.strokeRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
     }
-    this.cartGfx.lineStyle(2, 0xffffff, 0.25);
-    this.cartGfx.strokeRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
 
     if (Math.abs(bank) > 0.05) {
       this.cameras.main.setRotation(bank * 0.08 * this.bankIntensity);
@@ -412,18 +433,29 @@ export class CoasterScene extends Phaser.Scene {
     const h = this.scale.height;
     const horizon = h * 0.3;
     this.decorGfx.clear();
-    this.decorGfx.fillGradientStyle(0x7dd3fc, 0x7dd3fc, 0xbae6fd, 0xe0f2fe, 1);
-    this.decorGfx.fillRect(0, 0, w, h);
+    if (this.richVisuals) {
+      paintCoasterSkyGradient(this.decorGfx, this.spec, w, h, true);
+    } else {
+      this.decorGfx.fillGradientStyle(0x7dd3fc, 0x7dd3fc, 0xbae6fd, 0xe0f2fe, 1);
+      this.decorGfx.fillRect(0, 0, w, h);
+    }
 
     this.trackGfx.clear();
     const laneW = 110;
+    const roadCol = Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color;
     for (let lane = -1; lane <= 1; lane += 1) {
       const cx = w / 2 + lane * laneW + this.lane * -laneW * 0.15;
-      this.trackGfx.fillStyle(0x334155, 0.85);
+      this.trackGfx.fillStyle(roadCol, this.richVisuals ? 0.92 : 0.85);
       this.trackGfx.fillRect(cx - laneW * 0.42, horizon, laneW * 0.84, h - horizon - 40);
-      this.trackGfx.lineStyle(2, 0xfde047, 0.35);
+      this.trackGfx.lineStyle(2, 0xfde047, this.richVisuals ? 0.45 : 0.35);
       this.trackGfx.lineBetween(cx - laneW * 0.42, horizon, cx - laneW * 0.42, h - 40);
       this.trackGfx.lineBetween(cx + laneW * 0.42, horizon, cx + laneW * 0.42, h - 40);
+      if (this.richVisuals) {
+        for (let dash = horizon + 20; dash < h - 50; dash += 48) {
+          this.trackGfx.fillStyle(0xffffff, 0.25);
+          this.trackGfx.fillRect(cx - 3, dash, 6, 18);
+        }
+      }
     }
 
     for (const o of this.roadObstacles) {
@@ -432,19 +464,29 @@ export class CoasterScene extends Phaser.Scene {
       const cx = w / 2 + o.lane * laneW;
       const y = horizon + (1 - depth) * (h - horizon - 120);
       const scale = 0.25 + depth * 0.85;
-      this.trackGfx.fillStyle(0xef4444, 0.55 + depth * 0.4);
-      this.trackGfx.fillRoundedRect(cx - (o.w * scale) / 2, y, o.w * scale, o.h * scale, 6);
+      const ow = o.w * scale;
+      const oh = o.h * scale;
+      if (this.richVisuals) {
+        drawEndlessRoadObstacle(this.trackGfx, cx, y, ow, oh);
+      } else {
+        this.trackGfx.fillStyle(0xef4444, 0.55 + depth * 0.4);
+        this.trackGfx.fillRoundedRect(cx - ow / 2, y, ow, oh, 6);
+      }
     }
 
     this.cartGfx.clear();
     const cartX = w / 2 + this.lane * laneW;
     const cartY = h - 108;
     const pc = Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor);
-    this.cartGfx.fillStyle(pc.color, 1);
-    this.cartGfx.fillRoundedRect(cartX - 28, cartY - 22, 56, 28, 6);
-    this.cartGfx.fillStyle(0x1f2937, 1);
-    this.cartGfx.fillCircle(cartX - 18, cartY + 8, 7);
-    this.cartGfx.fillCircle(cartX + 18, cartY + 8, 7);
+    if (this.richVisuals) {
+      drawCoasterCartRich(this.cartGfx, cartX, cartY, 56, 28, pc.color, true);
+    } else {
+      this.cartGfx.fillStyle(pc.color, 1);
+      this.cartGfx.fillRoundedRect(cartX - 28, cartY - 22, 56, 28, 6);
+      this.cartGfx.fillStyle(0x1f2937, 1);
+      this.cartGfx.fillCircle(cartX - 18, cartY + 8, 7);
+      this.cartGfx.fillCircle(cartX + 18, cartY + 8, 7);
+    }
   }
 
   private finish(won: boolean) {

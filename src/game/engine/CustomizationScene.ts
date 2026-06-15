@@ -9,6 +9,7 @@ import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohe
 import { buildCustomizationBlueprint, type CustomizationMode } from "@/lib/customization-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
 import { paintCustomizationStudio } from "@/game/engine/template-theme-visual";
+import { drawStyledCar, drawStyledPottery } from "@/game/engine/action-visual";
 import {
   bannerCustomizationFinish,
   customizationPartLabel,
@@ -188,47 +189,22 @@ export class CustomizationScene extends Phaser.Scene {
   private drawCar() {
     const w = this.scale.width;
     const h = this.scale.height;
-    const cx = w / 2;
-    const cy = h * 0.42;
-    this.carGfx.clear();
-    this.carGfx.fillStyle(Phaser.Display.Color.HexStringToColor(this.bodyColor).color, 1);
-    this.carGfx.fillRoundedRect(cx - 90, cy - 30, 180, 50, 10);
-    this.carGfx.fillStyle(Phaser.Display.Color.HexStringToColor(this.wheelColor).color, 1);
-    this.carGfx.fillCircle(cx - 55, cy + 28, 18);
-    this.carGfx.fillCircle(cx + 55, cy + 28, 18);
-    this.carGfx.fillStyle(0xbae6fd, 0.9);
-    this.carGfx.fillRoundedRect(cx - 20, cy - 22, 50, 22, 4);
+    drawStyledCar(this.carGfx, w / 2, h * 0.42, this.bodyColor, this.wheelColor);
   }
 
   private drawPottery() {
     const w = this.scale.width;
     const h = this.scale.height;
-    const cx = w / 2;
-    const cy = h * 0.46;
-    const g = this.potteryGfx;
-    g.clear();
-
-    g.lineStyle(3, 0x78716c, 0.5);
-    g.strokeCircle(cx, cy + 70, 72);
-    g.fillStyle(0x57534e, 0.35);
-    g.fillCircle(cx, cy + 70, 72);
-
-    const vh = 40 + this.vaseHeight * 120;
-    const gw = 28 + this.vaseHeight * 18;
-    const topW = gw * 0.72;
-    g.fillStyle(Phaser.Display.Color.HexStringToColor(this.glazeColor).color, 1);
-    g.fillEllipse(cx, cy - vh * 0.35, topW, 18);
-    g.fillRoundedRect(cx - gw / 2, cy - vh * 0.25, gw, vh * 0.55, 12);
-    g.fillStyle(Phaser.Display.Color.HexStringToColor(this.rimColor).color, 1);
-    g.fillEllipse(cx, cy - vh * 0.28, topW + 8, 10);
-    g.fillStyle(Phaser.Display.Color.HexStringToColor(this.baseColor).color, 1);
-    g.fillRoundedRect(cx - gw * 0.55, cy + vh * 0.22, gw * 1.1, 16, 4);
-
-    g.lineStyle(2, 0xffffff, 0.15);
-    for (let i = 0; i < 6; i += 1) {
-      const a = this.spinAngle + (i / 6) * Math.PI * 2;
-      g.lineBetween(cx, cy - vh * 0.1, cx + Math.cos(a) * gw * 0.45, cy - vh * 0.1 + Math.sin(a) * 8);
-    }
+    drawStyledPottery(
+      this.potteryGfx,
+      w / 2,
+      h * 0.46,
+      this.vaseHeight,
+      this.glazeColor,
+      this.rimColor,
+      this.baseColor,
+      this.spinAngle,
+    );
   }
 
   private pullPotteryWheel() {

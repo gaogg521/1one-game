@@ -11,6 +11,13 @@ import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import {
+  drawMatch3Gem,
+  kidsJigsawEmoji,
+  memoryCardEmoji,
+  paintColorBloomBackdrop,
+  paintWhimsyPanelScene,
+} from "@/game/engine/puzzle-visual";
+import {
   paintPuzzleBoardFrame,
   paintPuzzleThemeBackdrop,
   paintSpotDiffPanels,
@@ -57,7 +64,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   private diffMarks: boolean[] = [];
   private foundDiff = 0;
-  private cards: Array<{ id: number; face: boolean; matched: boolean; x: number; y: number; rect: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
+  private cards: Array<{ id: number; face: boolean; matched: boolean; x: number; y: number; rect: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; faceText: string }> = [];
   private flipped: typeof this.cards = [];
   private jigsawSlots: Phaser.GameObjects.Rectangle[] = [];
   private jigsawDone = 0;
@@ -70,6 +77,8 @@ export class PuzzleScene extends Phaser.Scene {
   private kidsJigsaw = false;
   private starReward = false;
   private jigsawLargeBlocks = false;
+  private richMatch3 = false;
+  private memoryEmoji = false;
   private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
@@ -104,10 +113,17 @@ export class PuzzleScene extends Phaser.Scene {
       this.starReward = puzzlePf.starReward ?? true;
       this.jigsawLargeBlocks = puzzlePf.jigsawLargeBlocks ?? true;
     }
+    const variantId = this.spec.samplePlayProfile?.variantId;
+    this.richMatch3 = variantId === "color-bloom" || (puzzlePf?.match3BloomScale ?? 1) > 1.2;
+    this.memoryEmoji = variantId === "memory-match-mania";
 
     const w = this.scale.width;
     const h = this.scale.height;
-    paintPuzzleThemeBackdrop(this, this.spec, w, h, this.mode);
+    if (variantId === "color-bloom" && this.mode === "match3") {
+      paintColorBloomBackdrop(this, this.spec, w, h);
+    } else {
+      paintPuzzleThemeBackdrop(this, this.spec, w, h, this.mode);
+    }
 
     this.scoreText = styleHudText(
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
@@ -257,7 +273,13 @@ export class PuzzleScene extends Phaser.Scene {
       const gain = group.size * group.size * 3;
       this.score += gain;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
-      juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", Math.min(18, Math.round(group.size * bloomScale)));
+      const burstN = Math.min(22, Math.round(group.size * bloomScale));
+      juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", burstN);
+      if (this.richMatch3 && group.size >= 4) {
+        juiceFlash(this, { r: 244, g: 114, b: 182 }, { durationMs: 100 });
+        juiceShake(this, { durationMs: 120, intensity: 0.005 });
+        juiceFloater(this, p.x, p.y - 28, this.uiLocale === "zh-Hans" ? "Bloom!" : "Bloom!", "#f472b6");
+      }
       juiceFloater(this, p.x, p.y - 12, `+${gain}`, this.cohesive.hud.accent);
       playBleep("pickup");
       this.addMove();
@@ -297,8 +319,14 @@ export class PuzzleScene extends Phaser.Scene {
       for (let c = 0; c < cols; c += 1) {
         const v = this.grid[r]![c]!;
         if (v < 0) continue;
-        this.gridGfx.fillStyle(Phaser.Display.Color.HexStringToColor(COLORS[v]!).color, 1);
-        this.gridGfx.fillRoundedRect(this.ox + c * this.cell + 2, this.oy + r * this.cell + 2, this.cell - 4, this.cell - 4, 6);
+        const x = this.ox + c * this.cell;
+        const y = this.oy + r * this.cell;
+        if (this.richMatch3) {
+          drawMatch3Gem(this.gridGfx, COLORS[v]!, x, y, this.cell, true);
+        } else {
+          this.gridGfx.fillStyle(Phaser.Display.Color.HexStringToColor(COLORS[v]!).color, 1);
+          this.gridGfx.fillRoundedRect(x + 2, y + 2, this.cell - 4, this.cell - 4, 6);
+        }
       }
     }
   }
@@ -313,8 +341,15 @@ export class PuzzleScene extends Phaser.Scene {
     const panelA = whimsical ? 0xa78bfa : 0x6366f1;
     const panelB = whimsical ? 0xf472b6 : 0x6366f1;
     paintSpotDiffPanels(this, this.spec, lx, rx, y, pw, ph);
-    this.add.rectangle(lx + pw / 2, y + ph / 2, pw, ph, panelA, whimsical ? 0.22 : 0.35);
-    this.add.rectangle(rx + pw / 2, y + ph / 2, pw, ph, panelB, whimsical ? 0.22 : 0.35);
+    const panelGfxL = this.add.graphics().setDepth(2);
+    const panelGfxR = this.add.graphics().setDepth(2);
+    if (whimsical) {
+      paintWhimsyPanelScene(panelGfxL, lx, y, pw, ph, runtimeSeedFromSpec(this.spec), "left");
+      paintWhimsyPanelScene(panelGfxR, rx, y, pw, ph, runtimeSeedFromSpec(this.spec) + 3, "right");
+    } else {
+      this.add.rectangle(lx + pw / 2, y + ph / 2, pw, ph, panelA, 0.35);
+      this.add.rectangle(rx + pw / 2, y + ph / 2, pw, ph, panelB, 0.35);
+    }
     if (whimsical) {
       for (const pt of [
         { x: lx + 12, y: y + 12 },
@@ -379,8 +414,11 @@ export class PuzzleScene extends Phaser.Scene {
         .rectangle(x, y, this.cell - 8, this.cell - 8, timed ? 0x581c87 : 0x4c1d95)
         .setStrokeStyle(2, timed ? 0xf472b6 : 0xc4b5fd)
         .setInteractive({ useHandCursor: true });
-      const label = this.add.text(x, y, "?", { fontSize: "20px", color: "#fff" }).setOrigin(0.5);
-      const card = { id, face: false, matched: false, x, y, rect, label };
+      const faceText = this.memoryEmoji ? memoryCardEmoji(id) : String(id + 1);
+      const label = this.add
+        .text(x, y, "?", { fontSize: this.memoryEmoji ? "26px" : "20px", color: "#fff" })
+        .setOrigin(0.5);
+      const card = { id, face: false, matched: false, x, y, rect, label, faceText };
       this.cards.push(card);
       rect.on("pointerdown", () => this.flipCard(card));
     });
@@ -389,7 +427,7 @@ export class PuzzleScene extends Phaser.Scene {
   private flipCard(card: (typeof this.cards)[number]) {
     if (this.finished || card.face || card.matched || this.flipped.length >= 2) return;
     card.face = true;
-    card.label.setText(String(card.id + 1));
+    card.label.setText(card.faceText);
       card.rect.setFillStyle(Phaser.Display.Color.HexStringToColor(COLORS[card.id % COLORS.length]!).color);
     this.flipped.push(card);
     if (this.flipped.length === 2) {
@@ -449,6 +487,12 @@ export class PuzzleScene extends Phaser.Scene {
       const piece = this.add
         .rectangle(px, py, size - 8, size - 8, Phaser.Display.Color.HexStringToColor(COLORS[i % COLORS.length]!).color)
         .setInteractive({ useHandCursor: true, draggable: true });
+      if (this.kidsJigsaw) {
+        this.add
+          .text(px, py, kidsJigsawEmoji(i), { fontSize: `${Math.floor(size * 0.38)}px` })
+          .setOrigin(0.5)
+          .setDepth(3);
+      }
       piece.on("pointerdown", () => {
         if (this.kidsJigsaw) {
           const emptyIdx = this.jigsawSlots.findIndex((s) => !s.getData("filled"));

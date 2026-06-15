@@ -28,8 +28,10 @@ import {
   juiceShake,
   themeParticleHex,
 } from "@/game/engine/gameJuice";
+import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -135,6 +137,7 @@ export class ShooterScene extends Phaser.Scene {
   private planetRx = 0;
 
   private planetRy = 0;
+  private runtimeRng!: () => number;
 
   constructor(
     spec: GameSpec,
@@ -236,6 +239,7 @@ export class ShooterScene extends Phaser.Scene {
   private bootstrapPlay() {
     if (this.bootstrapDone) return;
     this.bootstrapDone = true;
+    this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     const { width, height } = this.scale;
 
     this.playerSpeed = this.spec.gameplay.playerSpeed ?? 280;
@@ -329,11 +333,7 @@ export class ShooterScene extends Phaser.Scene {
 
     const shooterPf = this.spec.samplePlayProfile?.shooter;
     if (shooterPf?.sniperScope) {
-      this.add
-        .circle(width / 2, height / 2, Math.min(width, height) * 0.32, 0x000000, 0)
-        .setStrokeStyle(3, 0x4ade80, 0.55)
-        .setDepth(4);
-      this.add.circle(width / 2, height / 2, 4, 0xef4444, 0.9).setDepth(5);
+      paintSniperScopeOverlay(this, width, height);
     }
     if (shooterPf?.orbitChopper) {
       this.orbitMode = true;
@@ -562,19 +562,7 @@ export class ShooterScene extends Phaser.Scene {
     this.planetRx = Math.min(w, h) * 0.28;
     this.planetRy = this.planetRx * 0.62;
     const g = this.add.graphics().setDepth(1);
-    g.fillStyle(0x22c55e, 1);
-    g.fillEllipse(this.planetCx, this.planetCy, this.planetRx * 2, this.planetRy * 2);
-    g.fillStyle(0x15803d, 0.92);
-    for (let i = 0; i < 10; i += 1) {
-      const a = (i / 10) * Math.PI * 2 + 0.2;
-      g.fillCircle(
-        this.planetCx + Math.cos(a) * this.planetRx * Phaser.Math.FloatBetween(0.25, 0.75),
-        this.planetCy + Math.sin(a) * this.planetRy * Phaser.Math.FloatBetween(0.25, 0.75),
-        Phaser.Math.Between(5, 11),
-      );
-    }
-    g.lineStyle(2, 0x14532d, 0.55);
-    g.strokeEllipse(this.planetCx, this.planetCy, this.planetRx * 2, this.planetRy * 2);
+    paintOrbitPlanetRich(g, this.planetCx, this.planetCy, this.planetRx, this.planetRy, this.runtimeRng);
   }
 
   private syncOrbitPlayerPosition() {

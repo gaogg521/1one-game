@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceShake } from "@/game/engine/gameJuice";
+import { juiceBurst, juiceFlash, juiceFloater, juiceShake } from "@/game/engine/gameJuice";
+import { generateRichDummyTexture, paintSmashDummyArena } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
@@ -9,7 +10,7 @@ import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohe
 import type { GameSpec } from "@/lib/game-spec";
 import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
-import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -41,6 +42,8 @@ export class PhysicsScene extends Phaser.Scene {
   private hitImpulse = 1;
 
   private comboMultiplier = 1;
+  private richArena = false;
+  private progressGfx!: Phaser.GameObjects.Graphics;
   private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
@@ -60,26 +63,39 @@ export class PhysicsScene extends Phaser.Scene {
     this.comboWindowMs = physPf?.comboWindowMs ?? 900;
     this.hitImpulse = physPf?.hitImpulse ?? 1;
     this.comboMultiplier = physPf?.comboMultiplier ?? 1;
+    this.richArena = this.spec.samplePlayProfile?.variantId === "smash-the-dummy" || (physPf?.hitImpulse ?? 1) > 1.1;
 
     const w = this.scale.width;
     const h = this.scale.height;
-    this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+    const dummyX = w / 2;
+    const dummyY = h * 0.48;
+
+    if (this.richArena) {
+      paintSmashDummyArena(this, this.spec, w, h, dummyX, dummyY);
+    } else {
+      this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+    }
 
     this.physics.world.setBounds(0, 0, w, h);
-    this.dummy = this.physics.add.image(w / 2, h * 0.48, "dummyBody");
-    if (!this.textures.exists("dummyBody")) {
+    const texKey = this.richArena ? "dummyBodyRich" : "dummyBody";
+    if (this.richArena) {
+      generateRichDummyTexture(this, texKey, this.spec.theme.playerColor, this.spec.theme.particleTint ?? "#f97316");
+    }
+    this.dummy = this.physics.add.image(dummyX, dummyY, texKey);
+    if (!this.textures.exists(texKey)) {
       const g = this.make.graphics({ x: 0, y: 0 }, false);
       g.fillStyle(Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 1);
       g.fillRoundedRect(0, 0, 72, 120, 12);
       g.fillStyle(0xffffff, 1);
       g.fillCircle(36, 28, 18);
-      g.generateTexture("dummyBody", 72, 120);
+      g.generateTexture(texKey, this.richArena ? 88 : 72, this.richArena ? 136 : 120);
       g.destroy();
-      this.dummy.setTexture("dummyBody");
+      this.dummy.setTexture(texKey);
     }
     this.dummy.setCollideWorldBounds(true).setBounce(0.35).setDrag(80).setMass(2.2);
+    if (this.richArena) this.dummy.setScale(1.05);
 
-    const floor = this.add.rectangle(w / 2, h - 24, w, 48, 0x334155);
+    const floor = this.add.rectangle(w / 2, h - 24, w, 48, 0x334155, this.richArena ? 0.6 : 1);
     this.physics.add.existing(floor, true);
 
     this.scoreText = styleHudText(
@@ -97,8 +113,35 @@ export class PhysicsScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
+    if (this.richArena) {
+      this.progressGfx = this.add.graphics().setDepth(18);
+      this.refreshProgressBar();
+      this.hintText.setText(
+        this.uiLocale === "zh-Hans" ? "连击越高得分越多 · 猛击沙袋！" : "Combo bonus · Smash the dummy!",
+      );
+      this.tweens.add({
+        targets: this.dummy,
+        angle: { from: -2, to: 2 },
+        yoyo: true,
+        repeat: -1,
+        duration: 1200,
+      });
+    }
+
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
+    setPhaserQaClickHints([{ x: dummyX / w, y: dummyY / h }]);
     schedulePhaserPlayReady(this, 400);
+  }
+
+  private refreshProgressBar() {
+    if (!this.progressGfx) return;
+    const w = this.scale.width;
+    const pct = Phaser.Math.Clamp(this.score / this.winScore, 0, 1);
+    this.progressGfx.clear();
+    this.progressGfx.fillStyle(0x1e293b, 0.7);
+    this.progressGfx.fillRoundedRect(w - 136, 12, 120, 10, 4);
+    this.progressGfx.fillStyle(0xf97316, 1);
+    this.progressGfx.fillRoundedRect(w - 136, 12, 120 * pct, 10, 4);
   }
 
   private hitDummy(p: Phaser.Input.Pointer) {
@@ -123,8 +166,12 @@ export class PhysicsScene extends Phaser.Scene {
     this.hits += 1;
     this.scoreText.setText(hudScore(this.uiLocale, this.score));
     this.comboText.setText(floaterCombo(this.uiLocale, this.combo));
+    this.refreshProgressBar();
     juiceShake(this, { intensityScale: 0.8 + this.combo * 0.15 });
     juiceBurst(this, this.dummy.x, this.dummy.y, this.spec.theme.particleTint ?? "#f97316", 6 + this.combo, this.runtimeRng);
+    if (this.combo >= 3) {
+      juiceFloater(this, this.dummy.x, this.dummy.y - 40, `x${this.combo}`, "#fbbf24");
+    }
     if (this.combo >= 4) {
       juiceFlash(this, { r: 255, g: 190, b: 70 }, { durationMs: 90 });
     }

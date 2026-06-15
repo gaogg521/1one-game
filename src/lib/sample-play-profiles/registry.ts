@@ -26,6 +26,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#1e1b4b",
+            playerColor: "#f97316",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#fb923c",
+          },
           gameplay: { ...spec.gameplay, winScore: Math.min(spec.gameplay.winScore ?? 100, 200) },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -42,6 +50,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#0c4a6e",
+            playerColor: "#38bdf8",
+            hazardColor: "#f97316",
+            collectibleColor: "#fde047",
+            particleTint: "#7dd3fc",
+          },
           coaster: buildCoasterBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -56,12 +72,26 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#166534",
+            playerColor: "#fef08a",
+            hazardColor: "#854d0e",
+            collectibleColor: "#facc15",
+            particleTint: "#86efac",
+          },
           farming: {
             ...farm,
             cols: Math.min(farm.cols + 1, 6),
             rows: Math.min(farm.rows + 1, 6),
             harvestGoal: Math.round(farm.harvestGoal * 1.15),
             startingCoins: farm.startingCoins + 15,
+            crops: [
+              { id: "carrot", name: "胡萝卜", growSec: 3.5, seedCost: 4, sellPrice: 11, color: "#f97316" },
+              { id: "tomato", name: "番茄", growSec: 5, seedCost: 7, sellPrice: 16, color: "#ef4444" },
+              { id: "corn", name: "玉米", growSec: 6.5, seedCost: 10, sellPrice: 24, color: "#eab308" },
+              { id: "sunflower", name: "向日葵", growSec: 4.5, seedCost: 6, sellPrice: 14, color: "#facc15" },
+            ],
           },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -79,6 +109,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#fdf2f8",
+            playerColor: "#f472b6",
+            hazardColor: "#a78bfa",
+            collectibleColor: "#fb7185",
+            particleTint: "#f9a8d4",
+          },
           puzzle: buildPuzzleBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -92,6 +130,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#312e81",
+            playerColor: "#c4b5fd",
+            hazardColor: "#f472b6",
+            collectibleColor: "#fde047",
+            particleTint: "#a78bfa",
+          },
           puzzle: { ...buildPuzzleBlueprint({ prompt, spec, sampleId: sample.id }), targetScore: 8, moveLimit: 120 },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -105,6 +151,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#14532d",
+            playerColor: "#4ade80",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#86efac",
+          },
           labels: { ...spec.labels, subtitle: sample.subtitle },
           gameplay: {
             ...spec.gameplay,
@@ -124,6 +178,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#292524",
+            playerColor: "#fafaf9",
+            hazardColor: "#1c1917",
+            collectibleColor: "#fbbf24",
+            particleTint: "#d6d3d1",
+          },
           gameplay: { ...spec.gameplay, winScore: 10 },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -140,6 +202,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
       return withProfile(
         {
           ...spec,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#0f172a",
+            playerColor: "#a78bfa",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#818cf8",
+          },
           title: sample.title,
           templateId: "stealth",
           platformer: {
@@ -173,6 +243,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#1c1917",
+            playerColor: "#38bdf8",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#0ea5e9",
+          },
           strategy: { ...strat, winNodes: 3 },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -187,7 +265,19 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
     variantId: "tiny-planet-chopper",
     apply: (spec, sample) =>
       withProfile(
-        { ...spec, title: sample.title, labels: { ...spec.labels, subtitle: sample.subtitle } },
+        {
+          ...spec,
+          title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#0f172a",
+            playerColor: "#38bdf8",
+            hazardColor: "#f472b6",
+            collectibleColor: "#4ade80",
+            particleTint: "#818cf8",
+          },
+          labels: { ...spec.labels, subtitle: sample.subtitle },
+        },
         { variantId: "tiny-planet-chopper", shooter: { orbitChopper: true } },
       ),
   },
@@ -198,6 +288,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#1e1b4b",
+            playerColor: "#a78bfa",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#c4b5fd",
+          },
           labels: { ...spec.labels, subtitle: sample.subtitle },
           gameplay: {
             ...spec.gameplay,
@@ -214,6 +312,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#18181b",
+            playerColor: "#ef4444",
+            hazardColor: "#1e293b",
+            collectibleColor: "#38bdf8",
+            particleTint: "#f97316",
+          },
           customization: buildCustomizationBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -224,7 +330,19 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
     variantId: "blocky-sniper-hunter",
     apply: (spec, sample) =>
       withProfile(
-        { ...spec, title: sample.title, labels: { ...spec.labels, subtitle: sample.subtitle } },
+        {
+          ...spec,
+          title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#052e16",
+            playerColor: "#4ade80",
+            hazardColor: "#ef4444",
+            collectibleColor: "#fbbf24",
+            particleTint: "#86efac",
+          },
+          labels: { ...spec.labels, subtitle: sample.subtitle },
+        },
         { variantId: "blocky-sniper-hunter", shooter: { sniperScope: true } },
       ),
   },
@@ -235,6 +353,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#3b0764",
+            playerColor: "#e879f9",
+            hazardColor: "#f472b6",
+            collectibleColor: "#fbbf24",
+            particleTint: "#c084fc",
+          },
           puzzle: { ...buildPuzzleBlueprint({ prompt, spec, sampleId: sample.id }), moveLimit: 48 },
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -248,6 +374,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#0c4a6e",
+            playerColor: "#38bdf8",
+            hazardColor: "#fcd34d",
+            collectibleColor: "#f472b6",
+            particleTint: "#7dd3fc",
+          },
           puzzle: {
             ...buildPuzzleBlueprint({ prompt, spec, sampleId: sample.id }),
             mode: "jigsaw",
@@ -271,6 +405,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#44403c",
+            playerColor: "#d6d3d1",
+            hazardColor: "#78716c",
+            collectibleColor: "#fbbf24",
+            particleTint: "#a8a29e",
+          },
           customization: buildCustomizationBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },
@@ -284,6 +426,14 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         {
           ...spec,
           title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#713f12",
+            playerColor: "#fde047",
+            hazardColor: "#ef4444",
+            collectibleColor: "#f97316",
+            particleTint: "#fcd34d",
+          },
           coaster: buildCoasterBlueprint({ prompt, spec, sampleId: sample.id }),
           labels: { ...spec.labels, subtitle: sample.subtitle },
         },

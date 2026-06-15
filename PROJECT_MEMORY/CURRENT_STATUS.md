@@ -13,6 +13,26 @@
 **入口**：`src/lib/astrocade-architecture.ts`  
 **门禁**：`npm run qa:architecture-parity`
 
+## 竞品克隆可玩度（2026-06-15 迭代三十二）
+
+| 能力 | 状态 |
+|------|------|
+| `action-visual.ts` | Physics/Strategy/Chess/定制/射击视觉层 |
+| Smash / State Conquest / Chess / Sniper / Orbit | ✅ 场景接入 + 17 款 theme 配色齐 |
+| 累计视觉层 | `farming-visual` + `puzzle-visual` + `action-visual` |
+| 实机玩法交互 QA | ✅ **17/17** |
+| 生产部署 | ⬜ 需 commit + push → `deploy-prod-playability-fix.py` |
+
+## 竞品克隆可玩度（2026-06-15 迭代三十一）
+
+| 能力 | 状态 |
+|------|------|
+| Grow a Garden 田园视觉 + 种子栏 + 连收 | ✅ `farming-visual.ts` + `FarmingScene` |
+| Color Bloom / Whimsy / Memory / Kids 益智强化 | ✅ `puzzle-visual.ts` + `PuzzleScene` |
+| 塔防合成枪械/剑塔图标 | ✅ `TowerDefenseScene` merge tier |
+| 实机玩法交互 QA | ✅ **17/17** @ localhost:8888 |
+| 生产部署 | ⬜ 需 **commit + push main** 后跑 `deploy-prod-playability-fix.py` |
+
 ## 竞品克隆可玩度（2026-06-14）
 
 | 能力 | 状态 |

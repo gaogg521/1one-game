@@ -41,6 +41,7 @@ import {
   tdRuntimeTextureKey,
 } from "@/lib/reference-classify";
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
@@ -1177,15 +1178,16 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   private refreshMergeGridUI() {
-    const tierColors = [0, 0x64748b, 0x38bdf8, 0xa78bfa, 0xfbbf24];
+    const variantId = this.spec.samplePlayProfile?.variantId;
     for (let i = 0; i < this.mergeCellGfx.length; i += 1) {
       const tier = this.mergeCells[i] ?? 0;
       const container = this.mergeCellGfx[i];
       if (!container) continue;
       const box = container.list[0] as Phaser.GameObjects.Rectangle;
       const label = container.list[1] as Phaser.GameObjects.Text;
-      box.setFillStyle(tier > 0 ? tierColors[tier]! : 0x1e293b, tier > 0 ? 0.78 : 0.85);
-      label.setText(tier > 0 ? `${tier}` : "");
+      box.setFillStyle(tier > 0 ? mergeTierColor(tier) : 0x1e293b, tier > 0 ? 0.82 : 0.85);
+      label.setText(mergeTierLabel(tier, variantId));
+      label.setFontSize(tier >= 3 ? "16px" : "14px");
       box.setStrokeStyle(this.mergeSelected === i ? 2 : 1, this.mergeSelected === i ? 0x4ade80 : 0x475569, 1);
     }
   }

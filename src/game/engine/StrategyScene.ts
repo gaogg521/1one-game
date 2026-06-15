@@ -8,6 +8,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildStrategyBlueprint, type StrategyNode } from "@/lib/strategy-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
+import { drawStrategyNode, paintStrategyMapBackdrop } from "@/game/engine/action-visual";
 import { bannerStrategyFinish, hudReady, hudScore, hudStrategyControls } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
@@ -38,6 +39,7 @@ export class StrategyScene extends Phaser.Scene {
   private winNodes = 4;
   private aiAggression = 1;
   private rushMode = false;
+  private richMap = false;
   private runtimeRng!: () => number;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
@@ -60,10 +62,15 @@ export class StrategyScene extends Phaser.Scene {
     this.winNodes = stratPf?.winNodes ?? this.spec.strategy?.winNodes ?? 4;
     this.aiAggression = stratPf?.aiAggression ?? 1;
     this.rushMode = stratPf?.rushMode ?? false;
+    this.richMap = this.spec.samplePlayProfile?.variantId === "state-conquest" || this.rushMode;
 
     const w = this.scale.width;
     const h = this.scale.height;
-    this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+    if (this.richMap) {
+      paintStrategyMapBackdrop(this, this.spec, w, h);
+    } else {
+      this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+    }
     this.gfx = this.add.graphics();
 
     this.scoreText = styleHudText(
@@ -199,7 +206,8 @@ export class StrategyScene extends Phaser.Scene {
       for (const lid of n.links) {
         const other = this.nodes.find((x) => x.id === lid);
         if (!other || n.id > other.id) continue;
-        this.gfx.lineStyle(2, 0x64748b, 0.8);
+        const pulse = n.owner === "player" || other.owner === "player";
+        this.gfx.lineStyle(pulse ? 3 : 2, pulse ? 0x38bdf8 : 0x64748b, pulse ? 0.55 : 0.8);
         this.gfx.lineBetween(n.x * w, n.y * h, other.x * w, other.y * h);
       }
     }
@@ -212,12 +220,17 @@ export class StrategyScene extends Phaser.Scene {
             : "#64748b";
       const nx = n.x * w;
       const ny = n.y * h;
-      if (n.owner === "player") {
-        this.gfx.lineStyle(3, Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 0.35);
-        this.gfx.strokeCircle(nx, ny, 34);
+      const radius = n.id === this.selected ? 30 : 26;
+      if (this.richMap) {
+        drawStrategyNode(this.gfx, nx, ny, radius, col, n.id === this.selected, n.owner);
+      } else {
+        if (n.owner === "player") {
+          this.gfx.lineStyle(3, Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 0.35);
+          this.gfx.strokeCircle(nx, ny, 34);
+        }
+        this.gfx.fillStyle(Phaser.Display.Color.HexStringToColor(col).color, 1);
+        this.gfx.fillCircle(nx, ny, radius);
       }
-      this.gfx.fillStyle(Phaser.Display.Color.HexStringToColor(col).color, 1);
-      this.gfx.fillCircle(nx, ny, n.id === this.selected ? 30 : 26);
       const t = styleHudText(
         this.add.text(nx, ny, String(Math.round(n.troops)), { fontSize: "13px", color: "#fff" }).setOrigin(0.5),
       );

@@ -15,6 +15,7 @@ import {
   hudReady,
 } from "@/lib/i18n/game-hud-labels";
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { paintChessStudioBackdrop } from "@/game/engine/action-visual";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { juiceFlash } from "@/game/engine/gameJuice";
 
@@ -69,6 +70,15 @@ export class ChessScene extends Phaser.Scene {
     const h = this.scale.height;
     this.cell = Math.min(52, (w - 60) / 8);
     this.ox = (w - this.cell * 8) / 2;
+    this.oy = this.isometricHints ? 88 : 80;
+
+    if (this.isometricHints) {
+      paintChessStudioBackdrop(this, this.spec, w, h);
+    } else {
+      this.add
+        .rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color)
+        .setDepth(-1);
+    }
     this.boardGfx = this.add.graphics();
     this.legalGfx = this.add.graphics().setDepth(3);
 
@@ -122,11 +132,18 @@ export class ChessScene extends Phaser.Scene {
     for (let r = 0; r < 8; r += 1) {
       for (let c = 0; c < 8; c += 1) {
         const light = (r + c) % 2 === 0;
-        const skew = this.isometricHints ? (r - 3.5) * 2 : 0;
-        this.boardGfx.fillStyle(light ? 0xd6d3d1 : 0x57534e, 1);
+        const skew = this.isometricHints ? (r - 3.5) * 2.5 : 0;
+        const tileColor = this.isometricHints
+          ? light
+            ? 0xe7e5e4
+            : 0x78716c
+          : light
+            ? 0xd6d3d1
+            : 0x57534e;
+        this.boardGfx.fillStyle(tileColor, 1);
         this.boardGfx.fillRect(this.ox + c * this.cell + skew * 0.15, this.oy + r * this.cell, this.cell, this.cell);
         if (this.isometricHints && light) {
-          this.boardGfx.lineStyle(1, 0xfafafa, 0.25);
+          this.boardGfx.lineStyle(1, 0xfafafa, 0.35);
           this.boardGfx.strokeRect(this.ox + c * this.cell + skew * 0.15, this.oy + r * this.cell, this.cell, this.cell);
         }
       }

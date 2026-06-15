@@ -3,6 +3,10 @@ import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
 import {
+  drawStealthLaserBeam,
+  paintStealthVaultBackdrop,
+} from "@/game/engine/action-visual";
+import {
   addMinecraftPlatformerBackdrop,
   ensureMinecraftPlatformerTextures,
   isMinecraftLikeSpec,
@@ -205,6 +209,8 @@ export class PlatformerScene extends Phaser.Scene {
   private laserGfx!: Phaser.GameObjects.Graphics;
 
   private laserHitCd = 0;
+  private laserPulse = 0;
+  private treasureGlow?: Phaser.GameObjects.Arc;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlatformerScene");
@@ -264,7 +270,9 @@ export class PlatformerScene extends Phaser.Scene {
     this.cohesive = ui;
 
     const blockyWorld = isMinecraftLikeSpec(this.spec);
-    if (blockyWorld) {
+    if (this.treasureHeist) {
+      paintStealthVaultBackdrop(this, this.spec, this.worldW, viewH);
+    } else if (blockyWorld) {
       addMinecraftPlatformerBackdrop(this, this.worldW);
     } else {
       this.addStarfield();
@@ -716,6 +724,15 @@ export class PlatformerScene extends Phaser.Scene {
     this.treasureSprite.setDepth(14).setScale(1.35).setTint(0xfbbf24);
     const tb = this.treasureSprite.body as Phaser.Physics.Arcade.Body | null;
     if (tb) tb.setAllowGravity(false);
+    this.treasureGlow = this.add.circle(tx, ty, 42, 0xfbbf24, 0).setDepth(13);
+    this.tweens.add({
+      targets: this.treasureGlow,
+      alpha: { from: 0.12, to: 0.38 },
+      scale: { from: 0.9, to: 1.15 },
+      yoyo: true,
+      repeat: -1,
+      duration: 800,
+    });
     this.tweens.add({
       targets: this.treasureSprite,
       y: ty - 8,
@@ -740,6 +757,7 @@ export class PlatformerScene extends Phaser.Scene {
   private drawLaserSentries() {
     if (!this.laserSentries) return;
     this.laserGfx.clear();
+    this.laserPulse = 0.5 + Math.sin(this.time.now * 0.008) * 0.5;
     const children = this.sentryHazards.getChildren();
     for (let i = 0; i < children.length; i += 1) {
       const s = children[i] as Phaser.Physics.Arcade.Image;
@@ -748,10 +766,7 @@ export class PlatformerScene extends Phaser.Scene {
       const oy = (s.getData("laserOriginY") as number) ?? s.y;
       const range = (s.getData("laserRange") as number) ?? 60;
       const ex = ox + range * (s.x >= ox ? 1 : -1);
-      this.laserGfx.lineStyle(2, 0xef4444, 0.55);
-      this.laserGfx.lineBetween(ox, oy, ex, oy + 120);
-      this.laserGfx.fillStyle(0xef4444, 0.25);
-      this.laserGfx.fillCircle(ex, oy + 120, 6);
+      drawStealthLaserBeam(this.laserGfx, ox, oy, ex, oy + 120, this.laserPulse);
     }
   }
 

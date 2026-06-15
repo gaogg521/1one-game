@@ -1,3 +1,5 @@
+更新时间：**2026-06-15**（迭代三十一 · 样品可玩性视觉升级 ✅）
+
 更新时间：**2026-06-15**（迭代三十 · 宋辽满格+精选 ✅）
 
 更新时间：**2026-06-14**（迭代二十九 · 全链路收口 ✅）
@@ -11,6 +13,48 @@
 更新时间：**2026-06-14**（迭代二十一 · 宋辽 QA 产物链 ✅）
 
 更新时间：**2026-06-14**（迭代二十二 · 缓存解析 + 链式 QA ✅）
+
+更新时间：**2026-06-15**（迭代三十二 · 全 17 款 action 视觉层 ✅）
+
+更新时间：**2026-06-15**（迭代三十三 · Platformer+Coaster 视觉 ✅）
+
+## 迭代三十三：Elastic Thief + 过山车/公路强化
+
+| 项 | 交付 |
+|----|------|
+| `action-visual` 扩展 | 金库潜行背景、脉冲激光、主题天空、立体车厢、公路障碍车 |
+| `PlatformerScene` | Elastic Thief 金库场景 + 宝藏光晕 + 激光脉冲 |
+| `CoasterScene` | Rail in Air / Crashy Roads 主题渐变 + 立体车厢 + 公路虚线/障碍车 |
+| QA | **17/17** |
+
+试玩：`/play/sample-elastic-thief-2` · `/play/sample-rail-in-air` · `/play/sample-crashy-roads`
+
+**下一步**：本地验收满意 → commit + push → `deploy-prod-playability-fix.py`
+
+## 迭代三十二：action-visual 全覆盖剩余样品
+
+| 项 | 交付 |
+|----|------|
+| `action-visual.ts` | 沙袋场、策略地图、象棋演播室、汽车/陶艺、环绕星球、狙击镜 |
+| Scene 接入 | Physics / Strategy / Chess / Customization / Shooter |
+| `registry.ts` | **17/17** 样品独立 theme 配色 |
+| QA | `qa:sample-gameplay-interaction` **17/17** |
+
+试玩：`/play/sample-smash-the-dummy` · `/play/sample-state-conquest` · `/play/sample-blocky-sniper-hunter`
+
+## 迭代三十一：17 款样品可玩性视觉升级（本地 ✅）
+
+| 项 | 交付 |
+|----|------|
+| `farming-visual.ts` | 田园背景、分阶段作物、Grow a Garden 种子栏/连收 |
+| `puzzle-visual.ts` | Color Bloom 宝石块、Whimsy 插画找不同、Memory emoji、Kids 动物拼图 |
+| `TowerDefenseScene` | 合成格 🔫/🗡️ tier 图标 |
+| `registry.ts` | 6 款样品主题色 + 作物/经济参数 |
+| QA | `qa:sample-gameplay-interaction` **17/17** · `qa:sample-profiles` OK |
+
+试玩：`/play/sample-grow-a-garden` · `/play/sample-color-bloom` · `/play/sample-whimsy-differences`
+
+**下一步**：`git commit` + `push main` → `python scripts/deploy-prod-playability-fix.py`（PORT=6666）
 
 ## 迭代三十：宋辽中篇实机复跑 + 发现页精选
 
