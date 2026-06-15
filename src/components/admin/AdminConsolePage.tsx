@@ -20,9 +20,16 @@ import {
 import { RuntimeConfigPanel } from "@/components/admin/RuntimeConfigPanel";
 import { EmailConfigPanel } from "@/components/admin/EmailConfigPanel";
 import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
+import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
+import {
+  buildConsoleNavSections,
+  defaultConsoleTab,
+  isAdminConsoleTab,
+  type ConsoleTab,
+} from "@/lib/console-nav";
 
-type Tab = "overview" | "pending" | "works" | "shares" | "users" | "billing" | "runtime" | "email" | "audit";
+type Tab = ConsoleTab;
 
 const AUDIT_ACTION_FILTERS = [
   "",
@@ -115,11 +122,14 @@ const ADMIN_PAGE_SIZE = 12;
 export default function AdminConsolePage({
   consolePath = "/console",
   showSsoLogout = false,
+  canViewAdminSection = false,
 }: {
   consolePath?: string;
   showSsoLogout?: boolean;
+  canViewAdminSection?: boolean;
 }) {
   const t = useTranslations("adminPage");
+  const tu = useTranslations("userConsole");
   const locale = useLocale() as AppLocale;
   const shareChannelLabel = useCallback(
     (channel: string) => {
@@ -128,7 +138,7 @@ export default function AdminConsolePage({
     },
     [t],
   );
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(defaultConsoleTab());
   const [stats, setStats] = useState<Stats | null>(null);
   const [works, setWorks] = useState<WorkRow[]>([]);
   const [pending, setPending] = useState<WorkRow[]>([]);
@@ -161,22 +171,39 @@ export default function AdminConsolePage({
   const [auditSinceDays, setAuditSinceDays] = useState(30);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
 
-  const tabs = useMemo((): { id: Tab; label: string }[] => {
-    const base: { id: Tab; label: string }[] = [
-      { id: "overview", label: t("tabOverview") },
-      { id: "pending", label: t("tabPending") },
-      { id: "works", label: t("tabWorks") },
-      { id: "shares", label: t("tabShares") },
-      { id: "users", label: t("tabUsers") },
-      { id: "billing", label: t("tabBilling") },
-      { id: "audit", label: t("tabAudit") },
-    ];
-    if (stats?.canManageRuntimeConfig) {
-      base.push({ id: "runtime", label: t("tabRuntime") });
-      base.push({ id: "email", label: t("tabEmail") });
+  const navSections = useMemo(() => {
+    const sections = buildConsoleNavSections(canViewAdminSection);
+    if (!stats?.canManageRuntimeConfig) {
+      return sections.map((section) =>
+        section.id === "administrator"
+          ? {
+              ...section,
+              items: section.items.filter((item) => item.id !== "runtime" && item.id !== "email"),
+            }
+          : section,
+      );
     }
-    return base;
-  }, [stats?.canManageRuntimeConfig, t]);
+    return sections;
+  }, [canViewAdminSection, stats?.canManageRuntimeConfig]);
+
+  const flatNavItems = useMemo(
+    () =>
+      navSections.flatMap((section) =>
+        section.items.map((item) => ({
+          id: item.id,
+          label: section.superAdminOnly
+            ? t(item.labelKey as "tabOverview")
+            : tu(item.labelKey as "tabAccount"),
+        })),
+      ),
+    [navSections, t, tu],
+  );
+
+  useEffect(() => {
+    if (!canViewAdminSection && isAdminConsoleTab(tab)) {
+      setTab(defaultConsoleTab());
+    }
+  }, [canViewAdminSection, tab]);
 
   const headers = useCallback((): HeadersInit => {
     const h = mergeLocaleHeaders(locale) as Record<string, string>;
@@ -260,6 +287,16 @@ export default function AdminConsolePage({
   }, [analyticsDays, headers, t]);
 
   const load = useCallback(async () => {
+    if (!isAdminConsoleTab(tab)) {
+      setLoading(false);
+      setError("");
+      return;
+    }
+    if (!canViewAdminSection) {
+      setLoading(false);
+      setError("");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -279,19 +316,20 @@ export default function AdminConsolePage({
     } finally {
       setLoading(false);
     }
-  }, [tab, loadAnalytics, loadAudit, loadOverview, loadPending, loadShares, loadUsers]);
+  }, [tab, canViewAdminSection, loadAnalytics, loadAudit, loadOverview, loadPending, loadShares, loadUsers, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
+    if (!canViewAdminSection) return;
     void fetch("/api/admin/stats", { headers: headers() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d) setStats(d as Stats);
       });
-  }, [headers]);
+  }, [canViewAdminSection, headers]);
 
   useEffect(() => {
     setPage(1);
@@ -371,7 +409,7 @@ export default function AdminConsolePage({
 
   return (
     <AdminConsoleShell
-      navItems={tabs}
+      navSections={navSections}
       activeNavId={tab}
       onNavChange={(id) => setTab(id as Tab)}
       actorRole={stats?.actorRole}
@@ -405,10 +443,14 @@ export default function AdminConsolePage({
           <header className="sticky top-0 z-20 border-b border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,transparent)] px-4 py-5 backdrop-blur-md sm:px-6 lg:px-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-text-faint)]">Operations</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-3xl">{t("pageTitle")}</h1>
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-text-faint)]">
+                  {isAdminConsoleTab(tab) ? "Operations" : tu("consoleTitle")}
+                </p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-3xl">
+                  {isAdminConsoleTab(tab) ? t("pageTitle") : tu("pageTitle")}
+                </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-[15px]">
-                  {t("pageDesc")}
+                  {isAdminConsoleTab(tab) ? t("pageDesc") : tu("pageDesc")}
                 </p>
               </div>
               <Link
@@ -419,7 +461,7 @@ export default function AdminConsolePage({
               </Link>
             </div>
 
-            {stats && !error ? (
+            {stats && !error && isAdminConsoleTab(tab) ? (
               <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
                 <MiniStat label={t("statUsers")} value={stats.users} />
                 <MiniStat
@@ -432,20 +474,20 @@ export default function AdminConsolePage({
             ) : null}
 
             <nav className="gc-mobile-nav-scroll mt-5 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label={t("navAria")}>
-              {tabs.map((t) => (
+              {flatNavItems.map((item) => (
                 <button
-                  key={t.id}
+                  key={item.id}
                   type="button"
-                  onClick={() => setTab(t.id)}
-                  data-testid={`admin-tab-${t.id}`}
+                  onClick={() => setTab(item.id)}
+                  data-testid={`admin-tab-${item.id}`}
                   className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-                    tab === t.id
+                    tab === item.id
                       ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] text-[var(--gc-text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
                       : "border border-[color:var(--gc-border)] text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
                   }`}
                 >
-                  {t.label}
-                  {t.id === "pending" && stats?.moderation.pendingReview ? ` · ${stats.moderation.pendingReview}` : ""}
+                  {item.label}
+                  {item.id === "pending" && stats?.moderation.pendingReview ? ` · ${stats.moderation.pendingReview}` : ""}
                 </button>
               ))}
             </nav>
@@ -473,13 +515,17 @@ export default function AdminConsolePage({
               </div>
             ) : null}
 
-            {loading && tab !== "runtime" ? (
+            {tab === "account" ? <UserAccountOverview /> : null}
+            {tab === "wallet" ? <UserWalletPanel /> : null}
+            {tab === "profile" ? <UserProfilePanel /> : null}
+
+            {loading && isAdminConsoleTab(tab) && tab !== "runtime" ? (
               <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-6 py-12 text-center text-sm text-[var(--gc-muted)]">
                 {t("loading")}
               </div>
             ) : null}
 
-            {!loading && !error && (tab === "pending" || tab === "works" || tab === "users") ? (
+            {!loading && !error && isAdminConsoleTab(tab) && (tab === "pending" || tab === "works" || tab === "users") ? (
               <AdminToolbar
                 tab={tab}
                 query={query}
@@ -492,7 +538,7 @@ export default function AdminConsolePage({
               />
             ) : null}
 
-            {!loading && !error && (tab === "overview" || tab === "shares" || tab === "billing") ? (
+            {!loading && !error && isAdminConsoleTab(tab) && (tab === "overview" || tab === "shares" || tab === "billing") ? (
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-[var(--gc-muted)]">{t("chartWindow")}</p>
                 <div className="flex gap-2">
@@ -514,7 +560,7 @@ export default function AdminConsolePage({
               </div>
             ) : null}
 
-            {!loading && !error && tab === "overview" && stats && analytics ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "overview" && stats && analytics ? (
               <div className="space-y-5">
                 <AdminKpiStrip
                   items={[
@@ -671,7 +717,7 @@ export default function AdminConsolePage({
               </div>
             ) : null}
 
-            {!loading && !error && tab === "overview" && stats && !analytics ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "overview" && stats && !analytics ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label={t("kpiRegisteredUsers")} value={stats.users} />
                 <StatCard
@@ -692,7 +738,7 @@ export default function AdminConsolePage({
               </div>
             ) : null}
 
-            {!loading && !error && tab === "pending" ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "pending" ? (
               <section className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("pendingTitle")}</h2>
@@ -733,7 +779,7 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!loading && !error && tab === "works" ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "works" ? (
               <section className="space-y-4">
                 <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("recentWorksTitle")}</h2>
                 {visibleWorks.length === 0 ? (
@@ -751,7 +797,7 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!loading && !error && tab === "shares" && shares ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "shares" && shares ? (
               <section className="space-y-6">
                 {analytics ? (
                   <AdminKpiStrip
@@ -858,7 +904,7 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!loading && !error && tab === "users" ? (
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "users" ? (
               <section className="space-y-4">
                 <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("usersTitle")}</h2>
                 {visibleUsers.length === 0 ? (
@@ -879,7 +925,7 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!error && tab === "billing" && analytics ? (
+            {!error && isAdminConsoleTab(tab) && tab === "billing" && analytics ? (
               <section className="space-y-5">
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
@@ -950,11 +996,11 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!error && tab === "billing" && !loading && !analytics ? (
+            {!error && isAdminConsoleTab(tab) && tab === "billing" && !loading && !analytics ? (
               <EmptyCard title={t("tabBilling")} body={t("loading")} />
             ) : null}
 
-            {!error && tab === "audit" ? (
+            {!error && isAdminConsoleTab(tab) && tab === "audit" ? (
               <section className="space-y-4">
                 <ChartPanel title={t("tabAudit")} subtitle={t("auditSubtitle")}>
                   <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -1068,11 +1114,11 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
-            {!error && tab === "runtime" ? (
+            {!error && isAdminConsoleTab(tab) && tab === "runtime" ? (
               <RuntimeConfigPanel headers={headers} onNotice={setNotice} />
             ) : null}
 
-            {!error && tab === "email" ? (
+            {!error && isAdminConsoleTab(tab) && tab === "email" ? (
               <EmailConfigPanel headers={headers} onNotice={setNotice} />
             ) : null}
           </div>

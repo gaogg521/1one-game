@@ -7,6 +7,9 @@
 #  权限：已是 root 直接装；普通用户自动 sudo（会提示输入密码）
 #  支持：Ubuntu / Debian / Rocky / Alma / RHEL / CentOS 7（均默认源码 install.sh）
 #  Docker 可选：OPERONE_USE_DOCKER=1 或 install-docker.sh
+#
+#  自定义目录（默认 /opt/operone）：
+#    OPERONE_DIR=/data/operone curl -fsSL .../install.sh | bash
 # ═══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -57,8 +60,13 @@ pkg_install() { case "$PKG_MGR" in apt) DEBIAN_FRONTEND=noninteractive apt-get i
 install_bootstrap_pkgs() { os_detect; pkg_update; pkg_install curl ca-certificates git; }
 ensure_app_user() {
   local user="$1" home="$2"
-  id "$user" &>/dev/null && return 0
-  useradd --system -d "$home" --shell /sbin/nologin "$user" 2>/dev/null || useradd --system --home-dir "$home" --shell /sbin/nologin "$user"
+  mkdir -p "$home" "$home/.npm-cache"
+  if id "$user" &>/dev/null; then
+    usermod -d "$home" "$user" 2>/dev/null || true
+  else
+    useradd --system -d "$home" --shell /sbin/nologin "$user" 2>/dev/null || useradd --system --home-dir "$home" --shell /sbin/nologin "$user"
+  fi
+  chown -R "$user:$user" "$home" 2>/dev/null || true
 }
 FALLBACK
     fi
@@ -112,7 +120,7 @@ FULL_SH="$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh"
 export NON_INTERACTIVE=1
 export OPERONE_BOOTSTRAPPED=1
 
-# 已有 /opt/operone 时会 exec 本地脚本；必须先同步，否则会跑旧版（如 git -C 报错）
+# 已有仓库时会 exec 本地脚本；必须先同步，否则会跑旧版（如 git -C 报错）
 sync_before_continue() {
   local dest="$OPERONE_DIR/scripts/deploy"
   local base="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
@@ -149,6 +157,7 @@ if [[ -f "$FULL_SH" ]]; then
 fi
 
 log "Operone 一键部署开始"
+log "安装目录: ${OPERONE_DIR}（可改环境变量 OPERONE_DIR）"
 log "拉取代码: $GIT_REPO → $OPERONE_DIR"
 [[ "$(id -u)" -eq 0 ]] && log "运行权限: root" || log "运行权限: $(id -un)"
 

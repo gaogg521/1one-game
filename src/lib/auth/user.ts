@@ -125,11 +125,36 @@ export function sessionCookieOptions(secure: boolean) {
 export async function linkOwnerKeyToUser(userId: string, ownerKey: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return;
+  if (user.legacyOwnerKey === ownerKey) return;
+
   if (!user.legacyOwnerKey) {
-    await prisma.user.update({ where: { id: userId }, data: { legacyOwnerKey: ownerKey } });
+    const conflicting = await prisma.user.findUnique({ where: { legacyOwnerKey: ownerKey } });
+    if (conflicting && conflicting.id !== userId) {
+      // 匿名 lazy User 已占用该 cookie ownerKey：把作品迁到账号专属 key，避免 unique 冲突
+      const targetKey = `user:${userId}`;
+      await prisma.$transaction([
+        prisma.project.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.novel.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.comic.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.user.update({ where: { id: userId }, data: { legacyOwnerKey: targetKey } }),
+      ]);
+      return;
+    }
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { legacyOwnerKey: ownerKey } });
+    } catch (e) {
+      if (!isPrismaUniqueViolation(e)) throw e;
+      const targetKey = `user:${userId}`;
+      await prisma.$transaction([
+        prisma.project.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.novel.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.comic.updateMany({ where: { ownerKey }, data: { ownerKey: targetKey } }),
+        prisma.user.update({ where: { id: userId }, data: { legacyOwnerKey: targetKey } }),
+      ]);
+    }
     return;
   }
-  if (user.legacyOwnerKey === ownerKey) return;
+
   // 已有不同 legacyOwnerKey：将当前 ownerKey 作品迁移到主 key
   await prisma.$transaction([
     prisma.project.updateMany({ where: { ownerKey }, data: { ownerKey: user.legacyOwnerKey } }),

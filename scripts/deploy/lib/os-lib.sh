@@ -462,9 +462,9 @@ install_nodejs() {
   esac
 }
 
-# 从 GitHub raw 覆盖 deploy 脚本（解决 /opt/operone 内脚本落后于 main 的问题）
+# 从 GitHub raw 覆盖 deploy 脚本（解决仓库内脚本落后于 main 的问题）
 refresh_deploy_scripts() {
-  local dest="${1:-/opt/operone/scripts/deploy}"
+  local dest="${1:-${OPERONE_DIR:-/opt/operone}/scripts/deploy}"
   local base="${OPERONE_RAW_BASE:-https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy}"
 
   os_warn "从 GitHub 同步最新 deploy 脚本 → $dest"
@@ -481,7 +481,7 @@ refresh_deploy_scripts() {
 
 # 继续安装前同步仓库；旧 git 用 cd && git，不用 git -C
 sync_operone_repo() {
-  local dir="${1:-/opt/operone}" branch="${2:-main}" user="${3:-www-data}"
+  local dir="${1:-${OPERONE_DIR:-/opt/operone}}" branch="${2:-main}" user="${3:-${OPERONE_USER:-www-data}}"
 
   if [[ -d "$dir/.git" ]]; then
     os_warn "同步最新代码（含部署脚本）…"
@@ -585,16 +585,27 @@ configure_firewall_ports() {
 }
 
 ensure_app_user() {
-  local user="${1:-www-data}" home="${2:-/opt/operone}"
-  id "$user" &>/dev/null && return 0
+  local user="${1:-www-data}" home="${2:-${OPERONE_DIR:-/opt/operone}}"
   os_detect
 
   local shell="/sbin/nologin"
   [[ "$OS_FAMILY" == debian ]] && shell="/usr/sbin/nologin"
 
-  useradd --system --home-dir "$home" --shell "$shell" "$user" 2>/dev/null \
-    || useradd --system -d "$home" --shell "$shell" "$user" 2>/dev/null \
-    || useradd --system --home "$home" --shell "$shell" "$user"
+  mkdir -p "$home" "$home/.npm-cache" "$home/.config"
+
+  if id "$user" &>/dev/null; then
+    local cur_home
+    cur_home="$(getent passwd "$user" | cut -d: -f6)"
+    if [[ -n "$cur_home" && "$cur_home" != "$home" ]]; then
+      usermod -d "$home" "$user" 2>/dev/null || true
+    fi
+  else
+    useradd --system --home-dir "$home" --shell "$shell" "$user" 2>/dev/null \
+      || useradd --system -d "$home" --shell "$shell" "$user" 2>/dev/null \
+      || useradd --system --home "$home" --shell "$shell" "$user"
+  fi
+
+  chown -R "$user:$user" "$home" 2>/dev/null || true
 }
 
 # ── 权限：root 直接执行，非 root 自动 sudo ─────────────────

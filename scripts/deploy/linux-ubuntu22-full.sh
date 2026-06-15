@@ -70,6 +70,12 @@ Operone 一键部署（内部脚本，用户请用 install.sh）
 
   curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 
+环境变量（可选）：
+  OPERONE_DIR     安装目录，默认 /opt/operone
+  OPERONE_PORT    监听端口，默认 6666
+  OPERONE_USER    运行用户，默认 www-data
+  GIT_REPO        源码仓库地址
+
 高级选项：--update  --systemd-only  --no-nginx  --no-ssl  --interactive  -h
 EOF
 }
@@ -230,10 +236,10 @@ run_update() {
 
   npm_install_deps
   prisma_migrate_deploy 0
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+  run_app_shell_as_user "npx prisma generate"
   centos7_prepare_build
-  build_cmd="$(centos7_build_cmd "cd '$OPERONE_DIR' && npm run build")"
-  run_as_app_user "$OPERONE_USER" bash -lc "$build_cmd"
+  build_cmd="$(centos7_build_cmd "npm run build")"
+  run_app_shell_as_user "$build_cmd"
   install_godot_production || true
   install_systemd_unit
   wait_for_health 30 || true

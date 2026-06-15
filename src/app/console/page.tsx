@@ -7,6 +7,7 @@ export default async function ConsolePage() {
     <AdminConsolePage
       consolePath={access.consolePath}
       showSsoLogout={access.canSsoLogout}
+      canViewAdminSection={access.canViewAdminSection}
     />
   );
 }

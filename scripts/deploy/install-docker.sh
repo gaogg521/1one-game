@@ -108,9 +108,9 @@ main() {
   printf "║  访问: http://%-38s ║\n" "${ip:-127.0.0.1}:${OPERONE_PORT}"
   printf "║  健康: curl -s http://127.0.0.1:%-5s/api/health       ║\n" "$OPERONE_PORT"
   echo "╠══════════════════════════════════════════════════════╣"
-  echo "║  改 API Key: nano /opt/operone/.env                  ║"
-  echo "║  重启:      cd /opt/operone && docker compose up -d  ║"
-  echo "║  日志:      cd /opt/operone && docker compose logs -f ║"
+  printf "║  改 API Key: nano %-34s ║\n" "$OPERONE_DIR/.env"
+  printf "║  重启:      cd %-34s ║\n" "$OPERONE_DIR && docker compose up -d"
+  printf "║  日志:      cd %-34s ║\n" "$OPERONE_DIR && docker compose logs -f"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
 }

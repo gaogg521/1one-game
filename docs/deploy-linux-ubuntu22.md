@@ -65,7 +65,36 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-- **目录**：`/opt/operone` · **端口**：`6666` · **再执行同命令** = 更新
+- **默认目录**：`/opt/operone` · **端口**：`6666` · **再执行同命令** = 更新
+
+### 自定义安装目录
+
+默认装到 `/opt/operone`；如需其他路径，安装前设置环境变量 **`OPERONE_DIR`**（全程生效，脚本内不写死路径）：
+
+```bash
+# 示例：装到 /data/operone
+export OPERONE_DIR=/data/operone
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+一行写法：
+
+```bash
+OPERONE_DIR=/data/operone curl -fsSL .../install.sh | bash
+```
+
+Docker 版同样支持：
+
+```bash
+OPERONE_DIR=/data/operone curl -fsSL .../install-docker.sh | bash
+```
+
+后续运维命令把 `/opt/operone` 换成你的 `$OPERONE_DIR` 即可，例如：
+
+```bash
+sudo nano "$OPERONE_DIR/.env"
+sudo bash "$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh" --update
+```
 
 ---
 
@@ -235,18 +264,69 @@ sudo certbot --nginx -d app.example.com
 
 ---
 
+## Rocky Linux 9 / Alma 9 / RHEL 9
+
+与 Ubuntu 相同，一条命令即可（脚本会用 **dnf** 装依赖、**rpm.nodesource.com** 装 Node 22）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+安装前可确认系统：
+
+```bash
+cat /etc/os-release   # 应看到 ID=rocky 或 almalinux，VERSION_ID=9.x
+```
+
+若日志里出现 `apt-get`、`jammy` 字样，说明实际跑在 **Ubuntu/Debian** 上，不是 Rocky。
+
+---
+
+## 常见安装失败
+
+### `npm error EACCES: mkdir '/var/www'`
+
+**原因**：`www-data` 系统用户默认家目录是 `/var/www`，npm 缓存要写该目录但没有权限。
+
+**处理**（将 `$OPERONE_DIR` 换成你的安装目录，默认 `/opt/operone`）：
+
+```bash
+OPERONE_DIR="${OPERONE_DIR:-/opt/operone}"
+sudo usermod -d "$OPERONE_DIR" www-data
+sudo mkdir -p "$OPERONE_DIR/.npm-cache"
+sudo chown -R www-data:www-data "$OPERONE_DIR"
+sudo rm -rf "$OPERONE_DIR/node_modules"
+sudo -u www-data env HOME="$OPERONE_DIR" NPM_CONFIG_CACHE="$OPERONE_DIR/.npm-cache" \
+  bash -lc "cd '$OPERONE_DIR' && npm install --no-audit --no-fund && npm run build"
+sudo bash "$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh" --systemd-only
+```
+
+或拉最新脚本后重装：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
+```
+
+最新版 deploy 脚本会自动修正家目录并设置 `HOME` / `NPM_CONFIG_CACHE`。
+
+### `npm ci` 报 `ENOTEMPTY` / 半成品 `node_modules`
+
+同上，先 `rm -rf "$OPERONE_DIR/node_modules"` 再 `npm install`。
+
+---
+
 ## 运维速查
 
 | 项目 | 路径 / 命令 |
 |------|-------------|
-| 应用目录 | `/opt/operone` |
-| 环境变量 / API Key / 端口 | `/opt/operone/.env` |
+| 应用目录 | `$OPERONE_DIR`（默认 `/opt/operone`） |
+| 环境变量 / API Key / 端口 | `$OPERONE_DIR/.env` |
 | systemd 服务 | `systemctl status operone` |
 | 服务日志 | `journalctl -u operone -f` |
 | Nginx 站点（Debian） | `/etc/nginx/sites-available/operone` |
 | Nginx 站点（RHEL/CentOS） | `/etc/nginx/conf.d/operone.conf` |
 | 健康检查 | `curl -s http://127.0.0.1:6666/api/health` |
-| 更新版本 | 再次执行 `install.sh`，或 `sudo bash /opt/operone/scripts/deploy/linux-ubuntu22-full.sh --update` |
+| 更新版本 | 再次执行 `install.sh`，或 `sudo bash "$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh" --update` |
 
 ---
 

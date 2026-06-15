@@ -57,13 +57,21 @@ export default function LoginPage() {
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
         body: JSON.stringify({ account: username, password }),
       });
-      const data = (await res.json()) as { errorKey?: string; error?: string };
+      let data: { errorKey?: string; error?: string } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        setLoginError(t("loginFailed", { error: `HTTP ${res.status}` }));
+        return;
+      }
       if (!res.ok) {
         setLoginError(resolveClientApiError(locale, data, "loginInvalidCredentials"));
         return;
       }
       router.push(returnPath ?? withLocalePath("/studio", locale));
       router.refresh();
+    } catch {
+      setLoginError(t("loginFailed", { error: "network" }));
     } finally {
       setLoginBusy(false);
     }

@@ -51,7 +51,39 @@ git_as_user_in_repo() {
   run_as_app_user "$user" bash -lc "cd $(printf '%q' "$OPERONE_DIR") && git $*"
 }
 
+# www-data/nginx 等系统用户默认家目录常为 /var/www（不可写）→ npm 报 EACCES
+app_user_bash_env() {
+  printf 'export HOME=%q NPM_CONFIG_CACHE=%q npm_config_cache=%q PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' \
+    "$OPERONE_DIR" "$OPERONE_DIR/.npm-cache" "$OPERONE_DIR/.npm-cache"
+}
+
+run_npm_as_app_user() {
+  run_app_shell_as_user "$1"
+}
+
+run_app_shell_as_user() {
+  local inner="$1"
+  run_as_app_user "$OPERONE_USER" bash -lc "$(app_user_bash_env) cd $(printf '%q' "$OPERONE_DIR") && ${inner}"
+}
+
+prepare_app_user_home() {
+  need_root
+  ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"
+  mkdir -p "$OPERONE_DIR/.npm-cache" "$OPERONE_DIR/.config"
+  local cur_home=""
+  if id "$OPERONE_USER" &>/dev/null; then
+    cur_home="$(getent passwd "$OPERONE_USER" | cut -d: -f6)"
+    if [[ -n "$cur_home" && "$cur_home" != "$OPERONE_DIR" ]]; then
+      log "修正 ${OPERONE_USER} 家目录 ${cur_home} → ${OPERONE_DIR}（避免 npm 写 /var/www 失败）"
+      usermod -d "$OPERONE_DIR" "$OPERONE_USER" 2>/dev/null || warn "usermod 家目录失败，已用 HOME= 环境变量兜底"
+    fi
+  fi
+  chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+}
+
 npm_install_deps() {
+  prepare_app_user_home
+
   local npm_flags=()
   if is_centos7; then
     npm_flags=(--ignore-scripts)
@@ -60,9 +92,12 @@ npm_install_deps() {
     log "npm ci …"
   fi
 
-  if ! run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci ${npm_flags[*]}"; then
-    warn "npm ci 失败，改用 npm install …"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm install --no-audit --no-fund ${npm_flags[*]}"
+  if ! run_npm_as_app_user "npm ci ${npm_flags[*]}"; then
+    warn "npm ci 失败，清理 node_modules 后改用 npm install …"
+    rm -rf "$OPERONE_DIR/node_modules"
+    chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+    run_npm_as_app_user "npm install --no-audit --no-fund ${npm_flags[*]}" \
+      || die "npm install 失败（常见原因：磁盘满、网络、权限；请确认 ${OPERONE_USER} 可写 ${OPERONE_DIR}）"
   fi
 
   if is_centos7; then
@@ -70,10 +105,10 @@ npm_install_deps() {
     local ld_ds
     ld_ds="$(centos7_libstdcxx_ld_path)"
     if [[ -n "$ld_ds" ]]; then
-      run_as_app_user "$OPERONE_USER" bash -lc "export LD_LIBRARY_PATH='${ld_ds}':\${LD_LIBRARY_PATH:-}; cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
+      run_npm_as_app_user "export LD_LIBRARY_PATH='${ld_ds}':\${LD_LIBRARY_PATH:-}; node node_modules/sharp/install/check.js" \
         || warn "sharp 预编译包未就绪，封面图处理可能受影响"
     else
-      run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
+      run_npm_as_app_user "node node_modules/sharp/install/check.js" \
         || warn "sharp 预编译包未就绪（建议安装 devtoolset-7）"
     fi
   fi
@@ -139,13 +174,13 @@ install_godot_production() {
     fi
   elif [[ ! -x "$godot_bin" ]]; then
     log "安装 Godot 二进制 …"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && bash scripts/godot-install-linux.sh" \
+    run_app_shell_as_user "bash scripts/godot-install-linux.sh" \
       || warn "Godot 二进制安装失败"
   fi
 
   if [[ ! -f "$templates_mark" ]]; then
     log "安装 Godot Web 导出模板（~1.1GB，首次较慢）…"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && XDG_DATA_HOME='$OPERONE_DIR/.local/share' bash scripts/godot-install-templates-linux.sh" \
+    run_app_shell_as_user "XDG_DATA_HOME='$OPERONE_DIR/.local/share' bash scripts/godot-install-templates-linux.sh" \
       || warn "Godot 导出模板安装失败"
   fi
 
@@ -183,25 +218,25 @@ install_godot_docker_image() {
 prisma_migrate_deploy() {
   local allow_reset="${1:-0}"
   log "prisma migrate deploy …"
-  local cmd="cd '$OPERONE_DIR' && npx prisma migrate deploy"
+  local cmd="npx prisma migrate deploy"
 
   resolve_prisma_failed_migrations() {
     local out line
-    out="$(run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate status" 2>&1 || true)"
+    out="$(run_app_shell_as_user "npx prisma migrate status" 2>&1 || true)"
     while IFS= read -r line; do
       [[ "$line" =~ ^[0-9]{8,}_ ]] || continue
       warn "标记失败迁移为 rolled-back: $line"
-      run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate resolve --rolled-back '$line'" 2>/dev/null || true
+      run_app_shell_as_user "npx prisma migrate resolve --rolled-back '$line'" 2>/dev/null || true
     done <<< "$(echo "$out" | grep -E '^[0-9]{8,}_' || true)"
   }
 
-  if run_as_app_user "$OPERONE_USER" bash -lc "$cmd"; then
+  if run_app_shell_as_user "$cmd"; then
     return 0
   fi
 
   warn "Prisma 迁移失败，尝试 resolve 失败记录 …"
   resolve_prisma_failed_migrations
-  if run_as_app_user "$OPERONE_USER" bash -lc "$cmd"; then
+  if run_app_shell_as_user "$cmd"; then
     return 0
   fi
 
@@ -210,7 +245,7 @@ prisma_migrate_deploy() {
   fi
   warn "仍失败，删除 prod.db 并重试（首次安装空库）…"
   rm -f "$OPERONE_DIR/prod.db" "$OPERONE_DIR/prod.db-journal" "$OPERONE_DIR/prod.db-wal" 2>/dev/null || true
-  run_as_app_user "$OPERONE_USER" bash -lc "$cmd" || die "prisma migrate deploy 仍失败，请查看上方日志"
+  run_app_shell_as_user "$cmd" || die "prisma migrate deploy 仍失败，请查看上方日志"
 }
 
 port_in_use() {
@@ -391,26 +426,26 @@ phase_app() {
   npm_install_deps
 
   prisma_migrate_deploy 1
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma generate"
+  run_app_shell_as_user "npx prisma generate"
 
   if [[ "$SKIP_PREFLIGHT" != "1" ]]; then
     log "qa:deploy-preflight …"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run qa:deploy-preflight" \
+    run_app_shell_as_user "npm run qa:deploy-preflight" \
       || warn "预检未全过，请查看日志后决定是否继续"
   fi
 
   log "npm run build …"
   centos7_prepare_build
   local build_cmd
-  build_cmd="$(centos7_build_cmd "cd '$OPERONE_DIR' && npm run build")"
-  run_as_app_user "$OPERONE_USER" bash -lc "$build_cmd"
+  build_cmd="$(centos7_build_cmd "npm run build")"
+  run_app_shell_as_user "$build_cmd"
 
   mkdir -p "$OPERONE_DIR/public/covers" "$OPERONE_DIR/public/comic-panels" "$OPERONE_DIR/public/game-bg"
   chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
 
   if [[ "$SKIP_SEED" != "1" ]]; then
     log "seed:samples（样品馆）…"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run seed:samples" \
+    run_app_shell_as_user "npm run seed:samples" \
       || warn "seed 失败（可稍后手动 npm run seed:samples）"
   fi
 
@@ -423,8 +458,8 @@ install_systemd_unit() {
   log "[3/5] 启动服务 …"
   local unit="/etc/systemd/system/operone.service"
   local npm_bin node_bin
-  npm_bin="$(run_as_app_user "$OPERONE_USER" bash -lc 'command -v npm' 2>/dev/null || command -v npm)"
-  node_bin="$(run_as_app_user "$OPERONE_USER" bash -lc 'command -v node' 2>/dev/null || command -v node)"
+  npm_bin="$(run_app_shell_as_user 'command -v npm' 2>/dev/null || command -v npm)"
+  node_bin="$(run_app_shell_as_user 'command -v node' 2>/dev/null || command -v node)"
   [[ -n "$npm_bin" ]] || die "未找到 npm"
   [[ -n "$node_bin" ]] || die "未找到 node"
 

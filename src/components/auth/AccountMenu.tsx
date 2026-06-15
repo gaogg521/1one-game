@@ -129,7 +129,6 @@ export function AccountMenu({
     );
   }
 
-  const isAdmin = user.role === "admin" || user.role === "super_admin";
   const accountMenu =
     open && menuStyle
       ? createPortal(
@@ -170,16 +169,14 @@ export function AccountMenu({
           <Link href={withLocalePath("/studio", locale)} className="block px-3 py-2 text-xs hover:bg-[var(--gc-surface-glass)]" onClick={() => setOpen(false)} role="menuitem">
             {t("account.workspace")}
           </Link>
-          {isAdmin ? (
-            <Link
-              href={getAdminConsolePathClient()}
-              className="block px-3 py-2 text-xs text-[var(--gc-accent)] hover:bg-[var(--gc-surface-glass)]"
-              onClick={() => setOpen(false)}
-              role="menuitem"
-            >
-              {t("account.admin")}
-            </Link>
-          ) : null}
+          <Link
+            href={getAdminConsolePathClient()}
+            className="block px-3 py-2 text-xs hover:bg-[var(--gc-surface-glass)]"
+            onClick={() => setOpen(false)}
+            role="menuitem"
+          >
+            {t("account.console")}
+          </Link>
           <button type="button" className="block w-full px-3 py-2 text-left text-xs text-[var(--gc-muted)] hover:bg-[var(--gc-surface-glass)]" onClick={() => void logout()} role="menuitem">
             {t("account.logout")}
           </button>

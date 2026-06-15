@@ -76,6 +76,10 @@ export function isAdminRole(role: UserRole): boolean {
   return role === "admin" || role === "super_admin";
 }
 
+export function isSuperAdminRole(role: UserRole | string | null | undefined): boolean {
+  return role === "super_admin";
+}
+
 /** 仅 super_admin 账号或 SUPER_ADMIN_SECRET 可管理运行时密钥/模型。 */
 export async function requireSuperAdmin(req: Request): Promise<
   | { ok: true; user: AuthUser | null; ownerKey: string | undefined; viaLegacy: boolean }
