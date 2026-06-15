@@ -5,8 +5,8 @@
 #    curl -fsSL .../install.sh | bash
 #
 #  权限：已是 root 直接装；普通用户自动 sudo（会提示输入密码）
-#  支持：Ubuntu / Debian / Rocky / Alma / RHEL（源码）
-#  CentOS 7 → 自动转 install-docker.sh（容器内构建，勿在宿主机编译）
+#  支持：Ubuntu / Debian / Rocky / Alma / RHEL / CentOS 7（均默认源码 install.sh）
+#  Docker 可选：OPERONE_USE_DOCKER=1 或 install-docker.sh
 # ═══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -79,12 +79,10 @@ else
   ensure_root_privileges_piped "$OPERONE_INSTALL_URL" "$@"
 fi
 
-# CentOS 7 等旧系统：宿主机源码构建必踩 glibc/libstdc++ 坑 → 默认 Docker（构建在容器内完成）
+# CentOS 7：默认与 Ubuntu 相同走源码 install.sh；仅 OPERONE_USE_DOCKER=1 时用 Docker
 os_detect 2>/dev/null || true
-if [[ "${OPERONE_FORCE_SOURCE:-0}" != "1" ]] && type is_centos7 >/dev/null 2>&1 && is_centos7; then
-  log "CentOS 7 不支持宿主机源码构建（Node22/Next/sharp 需新 glibc/libstdc++）"
-  log "自动切换 Docker 部署 — 仅拉代码、容器内 build、migrate、启动"
-  log "若坚持源码安装: OPERONE_FORCE_SOURCE=1 curl ... | bash"
+if type is_centos7 >/dev/null 2>&1 && is_centos7 && [[ "${OPERONE_USE_DOCKER:-0}" == "1" ]]; then
+  log "CentOS 7：Docker 部署（OPERONE_USE_DOCKER=1）"
   _docker_sh=""
   if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
     _docker_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-docker.sh"
@@ -122,7 +120,7 @@ sync_before_continue() {
   curl -fsSL "$base/lib/os-lib.sh" -o "$dest/lib/os-lib.sh"
   curl -fsSL "$base/lib/ubuntu-deploy-lib.sh" -o "$dest/lib/ubuntu-deploy-lib.sh"
   curl -fsSL "$base/templates/nginx-operone.conf" -o "$dest/templates/nginx-operone.conf" 2>/dev/null || true
-  chmod +x "$dest"/install.sh "$dest"/linux-ubuntu22-full.sh "$dest"/linux-ubuntu22-sqlite.sh 2>/dev/null || true
+  chmod +x "$dest"/install.sh "$dest"/install-docker.sh "$dest"/linux-ubuntu22-full.sh "$dest"/linux-ubuntu22-sqlite.sh 2>/dev/null || true
 }
 
 if [[ -f "$FULL_SH" ]] && systemctl is-active --quiet operone 2>/dev/null; then

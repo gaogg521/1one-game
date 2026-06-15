@@ -70,7 +70,7 @@ Operone 一键部署（内部脚本，用户请用 install.sh）
 
   curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 
-高级选项：--update  --no-nginx  --no-ssl  --interactive  -h
+高级选项：--update  --systemd-only  --no-nginx  --no-ssl  --interactive  -h
 EOF
 }
 
@@ -107,6 +107,10 @@ parse_args() {
         ;;
       --skip-preflight)
         SKIP_PREFLIGHT=1
+        shift
+        ;;
+      --systemd-only)
+        MODE="systemd-only"
         shift
         ;;
       -h|--help)
@@ -201,6 +205,16 @@ collect_config() {
   fi
 }
 
+run_systemd_only() {
+  need_root
+  os_detect 2>/dev/null || true
+  [[ -d "$OPERONE_DIR/.next" ]] || warn "未找到 $OPERONE_DIR/.next，请先完成 build"
+  log "════════ 仅重装 systemd ════════"
+  install_centos7_devtoolset || true
+  install_systemd_unit
+  print_deploy_summary
+}
+
 run_update() {
   need_root
   [[ -d "$OPERONE_DIR" ]] || die "未找到 $OPERONE_DIR，请先完整部署"
@@ -254,11 +268,11 @@ run_full_install() {
 
 main() {
   parse_args "$@"
-  if [[ "$MODE" == "update" ]]; then
-    run_update
-  else
-    run_full_install
-  fi
+  case "$MODE" in
+    update) run_update ;;
+    systemd-only) run_systemd_only ;;
+    *) run_full_install ;;
+  esac
 }
 
 main "$@"

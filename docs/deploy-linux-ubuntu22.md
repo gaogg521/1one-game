@@ -6,38 +6,27 @@
 
 | 你的系统 | 命令 | 说明 |
 |----------|------|------|
-| **CentOS 7**（以及坚持不换机的老 Linux） | 见下方 Docker | `install.sh` 会**自动**走 Docker，不在宿主机编译 |
+| **CentOS 7** | `install.sh`（同 Ubuntu） | 可选 `OPERONE_USE_DOCKER=1` |
 | **Ubuntu 22.04 / Debian 12 / Rocky 9+** 等 | `install.sh` | 宿主机源码部署，一条命令 |
-| **任意有 Docker 的 Linux** | `install-docker.sh` | 与 CentOS 7 相同，最省心 |
+| **任意有 Docker 的 Linux** | `install-docker.sh` | 容器内 build，最省心 |
 
-### CentOS 7 / 老系统 — 用 Docker（推荐，一条命令）
+### CentOS 7
+
+与 Ubuntu 相同，**默认一条命令源码部署**：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-检测到 CentOS 7 后会**自动**改为 Docker 流程（无需另记命令）：
-
-1. 安装 Docker  
-2. `git clone` 到 `/opt/operone`  
-3. 生成 `.env`  
-4. **在容器内** `npm ci` → `next build` → `prisma migrate deploy` → 启动  
-
-构建跑在 `node:22-bookworm` 镜像里，**与宿主机 glibc 2.17 无关**，不会再踩 Node/sharp/GLIBCXX 的坑。
-
-也可显式：
+可选 Docker（需显式加环境变量，不会自动切换）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install-docker.sh | bash
+OPERONE_USE_DOCKER=1 curl -fsSL .../install.sh | bash
+# 或
+curl -fsSL .../install-docker.sh | bash
 ```
 
-装完后：
-
-```bash
-nano /opt/operone/.env          # 填 OPENAI_API_KEY
-cd /opt/operone && docker compose up -d --build
-curl -s http://127.0.0.1:6666/api/health
-```
+CentOS 7 已做适配：glibc-217 非官方 Node、sharp 延迟加载、vault yum 源、6666 端口 programmatic 启动等。
 
 ### 现代 Linux — 宿主机源码部署
 
@@ -47,26 +36,20 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 
 适用于 Ubuntu 22.04+、Debian 12+、Rocky/Alma/RHEL 8+ 等。流程同样是：拉代码 → Node 22 → `npm ci` → migrate → build → systemd。
 
-**不要在 CentOS 7 上强制源码安装**（除非你知道后果）：
-
-```bash
-OPERONE_FORCE_SOURCE=1 curl -fsSL .../install.sh | bash   # 不推荐
-```
-
 ---
 
 ## 支持的系统
 
 | 发行版 | 推荐方式 | 最低版本 |
 |--------|----------|----------|
-| CentOS 7 | **Docker 自动** | 7 |
+| CentOS 7 | **源码 `install.sh`**（默认同 Ubuntu） | 7 |
 | Ubuntu | 源码 `install.sh` | 20.04（推荐 22.04+） |
 | Debian | 源码 | 11+ |
 | Rocky / Alma / RHEL / Oracle | 源码 | 8+ |
 | Amazon Linux | 源码或 Docker | 2 / 2023 |
 | 任意 Linux + Docker | `install-docker.sh` | 有 Docker 即可 |
 
-未在表内的 Debian/RHEL 衍生版会按 `ID_LIKE` 尝试兼容；CentOS 7 一律 Docker。
+未在表内的 Debian/RHEL 衍生版会按 `ID_LIKE` 尝试兼容。
 
 ## 运行权限
 
@@ -137,7 +120,9 @@ curl -s http://127.0.0.1:6666/api/health
 
 ### 2. 修改端口
 
-**默认端口为 `6666`**。若需改为其他端口（如 `3000`），需改两处：
+**默认端口为 `6666`**。Next.js 16 的 `next start -p 6666` 会报「reserved for ircu」；本项目 `scripts/run-start.mjs` 使用 programmatic server 监听 6666，可正常启动。
+
+若需改为其他端口（如 `3000`），需改两处：
 
 #### ① 应用端口 — `/opt/operone/.env`
 

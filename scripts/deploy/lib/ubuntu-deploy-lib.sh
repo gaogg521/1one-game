@@ -188,6 +188,7 @@ phase_deps() {
   need_root
   os_validate
   log "[1/5] 安装系统依赖 …"
+  is_centos7 && fix_centos7_vault_repos
   install_build_deps
   install_centos7_devtoolset || true
 
@@ -380,6 +381,7 @@ install_systemd_unit() {
 "
   fi
 
+  # 用 node 直接跑 run-start.mjs，避免 systemd 下 npm/npx/shell 问题
   cat > "$unit" <<EOF
 [Unit]
 Description=Operone 创作平台
@@ -396,7 +398,7 @@ EnvironmentFile=-${OPERONE_DIR}/.env
 Environment=NODE_ENV=production
 Environment=HOME=${OPERONE_DIR}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-${extra_env}ExecStart=${npm_bin} run start
+${extra_env}ExecStart=${node_bin} ${OPERONE_DIR}/scripts/run-start.mjs
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
@@ -405,16 +407,20 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
+  chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+
   systemctl daemon-reload
   systemctl enable operone
   systemctl restart operone
-  sleep 2
+  sleep 3
 
   if systemctl is-active --quiet operone; then
     ok "operone.service 已启动"
   else
     systemctl status operone --no-pager || true
-    die "operone 启动失败: journalctl -u operone -n 80 --no-pager"
+    echo ""
+    journalctl -u operone -n 50 --no-pager || true
+    die "operone 启动失败（见上方 journal）"
   fi
 
   wait_for_health 30 || true

@@ -7,7 +7,9 @@ RUN apt-get update \
   && apt-get install -y openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+# postinstall 会跑 prisma generate，须先 COPY prisma/
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
@@ -22,4 +24,5 @@ RUN mkdir -p data public/covers public/comic-panels public/game-bg \
 ENV PORT=6666
 EXPOSE 6666
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+# run-start.mjs 用 programmatic server，6666 不会被 next start CLI 拦截
+CMD ["sh", "-c", "npx prisma migrate deploy && node scripts/run-start.mjs"]

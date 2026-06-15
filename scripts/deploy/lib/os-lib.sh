@@ -339,12 +339,55 @@ is_centos7() {
   [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]
 }
 
+# CentOS 7 已 EOL，mirrorlist.centos.org 不可用 → vault.centos.org
+fix_centos7_vault_repos() {
+  is_centos7 || return 0
+  local repo fixed=0
+  for repo in /etc/yum.repos.d/*.repo; do
+    [[ -f "$repo" ]] || continue
+    if grep -qE 'mirrorlist\.centos\.org|mirror\.centos\.org' "$repo" 2>/dev/null; then
+      sed -i.bak \
+        -e 's/^mirrorlist=/#mirrorlist=/I' \
+        -e 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|I' \
+        -e 's|^baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|I' \
+        "$repo"
+      fixed=1
+    fi
+  done
+  # SCL 源（devtoolset-7）单独写 vault baseurl，避免 mirrorlist 解析失败
+  if [[ -f /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo ]] || [[ -f /etc/yum.repos.d/CentOS-SCLo-scl.repo ]]; then
+    cat > /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo <<'EOF'
+[centos-sclo-rh]
+name=CentOS-7 - SCLo rh
+baseurl=http://vault.centos.org/7.9.2009/sclo/$basearch/rh/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+EOF
+    cat > /etc/yum.repos.d/CentOS-SCLo-scl.repo <<'EOF'
+[centos-sclo-sclo]
+name=CentOS-7 - SCLo sclo
+baseurl=http://vault.centos.org/7.9.2009/sclo/$basearch/sclo/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+EOF
+    fixed=1
+  fi
+  if [[ "$fixed" == 1 ]]; then
+    os_warn "CentOS 7 EOL：yum 源已切换至 vault.centos.org"
+    yum clean all >/dev/null 2>&1 || true
+  fi
+}
+
 # CentOS 7 默认 libstdc++ 无 GLIBCXX_3.4.20+，sharp / 部分 native 模块需 devtoolset-7
 install_centos7_devtoolset() {
   is_centos7 || return 0
   [[ -d /opt/rh/devtoolset-7/root/usr/lib64 ]] && return 0
+  fix_centos7_vault_repos
   os_warn "CentOS 7：安装 devtoolset-7（提供 GLIBCXX_3.4.20+，供 sharp 等 native 模块）…"
   pkg_install centos-release-scl 2>/dev/null || true
+  fix_centos7_vault_repos
   pkg_install devtoolset-7-gcc-c++ || {
     os_warn "devtoolset-7 安装失败，封面图 sharp 可能不可用"
     return 1
