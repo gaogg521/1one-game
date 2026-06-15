@@ -44,7 +44,7 @@ cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 
 **Prisma 迁移 `no such table: User`**：已在 `20260614090000_user_auth_foundation` 补建 User 等表。若此前首次安装迁移失败，脚本会自动 resolve 失败记录并重试；也可手动 `rm -f /opt/operone/prod.db` 后重新部署。
 
-**`next build` 报 GLIBCXX_3.4.20 / `@parcel/watcher`**：CentOS 7 的 libstdc++ 过旧。脚本会在 build 前将 `@parcel/watcher` 替换为 noop 桩（生产不需要 i18n 文件监听）。若仍有 native 模块报错，建议迁移 Rocky/Alma 8+ 或 Ubuntu 22.04。
+**`next build` 报 GLIBCXX_3.4.20 / `@parcel/watcher` / `sharp`**：CentOS 7 的 libstdc++ 过旧。脚本会安装 **devtoolset-7** 并在 build/运行时设置 `LD_LIBRARY_PATH`；`@parcel/watcher` 替换为 noop 桩；`sharp` 改为延迟加载以免 build 阶段失败。
 
 **内存 / OOM**：约 3.7GB 内存的机器 `next build` 可能 OOM。脚本在内存 < 4GB 且无 swap 时会自动创建 2G swap，并设置 `NODE_OPTIONS=--max-old-space-size=2560`。
 
@@ -57,8 +57,8 @@ cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 | Node 22 | 需 glibc-217 非官方包 | 已支持 |
 | npm ci | `--ignore-scripts` | dev 工具 native 模块跳过 |
 | Prisma 迁移 | 已补 User 表 | 失败时自动 resolve |
-| next build | parcel watcher 桩 + swap | 约 5–15 分钟 |
-| sharp 封面图 | 预编译包 | 若 check.js 失败，封面合成可能不可用 |
+| next build | devtoolset-7 + parcel 桩 + swap | sharp 延迟加载 |
+| sharp 封面图 | devtoolset-7 LD_LIBRARY_PATH | 运行时合成封面 |
 | seed:samples | 可选 | 无 API Key 可能部分失败，不影响主服务 |
 | Certbot HTTPS | 不推荐 | CentOS 7 EOL，证书工具易过期 |
 

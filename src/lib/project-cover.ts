@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import sharp from "sharp";
 import { ApiKeyedError } from "@/lib/api/api-keyed-error";
+import { loadSharp } from "@/lib/sharp-loader";
 import { getBlobStore } from "@/lib/storage/blob-store";
 
 const MAX_BYTES = 320_000;
@@ -48,6 +48,7 @@ export async function saveProjectCoverFromBuffer(projectId: string, raw: Buffer)
   }
   let jpeg: Buffer;
   try {
+    const sharp = await loadSharp();
     jpeg = await sharp(raw).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
   } catch {
     throw new ApiKeyedError("coverImageProcessFailed");

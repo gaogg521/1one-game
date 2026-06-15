@@ -339,6 +339,24 @@ is_centos7() {
   [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]
 }
 
+# CentOS 7 默认 libstdc++ 无 GLIBCXX_3.4.20+，sharp / 部分 native 模块需 devtoolset-7
+install_centos7_devtoolset() {
+  is_centos7 || return 0
+  [[ -d /opt/rh/devtoolset-7/root/usr/lib64 ]] && return 0
+  os_warn "CentOS 7：安装 devtoolset-7（提供 GLIBCXX_3.4.20+，供 sharp 等 native 模块）…"
+  pkg_install centos-release-scl 2>/dev/null || true
+  pkg_install devtoolset-7-gcc-c++ || {
+    os_warn "devtoolset-7 安装失败，封面图 sharp 可能不可用"
+    return 1
+  }
+}
+
+centos7_libstdcxx_ld_path() {
+  if [[ -d /opt/rh/devtoolset-7/root/usr/lib64 ]]; then
+    echo "/opt/rh/devtoolset-7/root/usr/lib64"
+  fi
+}
+
 # CentOS 7（glibc 2.17）无法用官方 Node 22+，须用 unofficial-builds glibc-217 包
 install_nodejs_glibc217() {
   local major="${1:-22}"

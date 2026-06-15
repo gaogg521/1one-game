@@ -3,7 +3,7 @@ import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { untitledShortLabel } from "@/lib/i18n/chapter-labels";
 import fs from "node:fs/promises";
 import path from "node:path";
-import sharp from "sharp";
+import { loadSharp } from "@/lib/sharp-loader";
 import { COVER_GENRE_STYLES, type CoverGenre } from "@/lib/cover-genre";
 
 const COVER_W = 600;
@@ -123,6 +123,7 @@ export async function compositeNovelCover(
   const fontB64 = await loadCoverFontBase64();
   const uiLocale = opts.uiLocale ?? "zh-Hans";
   const svg = Buffer.from(buildOverlaySvg(opts.title, opts.genre, fontB64, uiLocale));
+  const sharp = await loadSharp();
 
   const bg = await sharp(background)
     .resize(COVER_W, COVER_H, { fit: "cover", position: "centre" })

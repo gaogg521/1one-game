@@ -67,8 +67,15 @@ npm_install_deps() {
 
   if is_centos7; then
     log "补装 sharp 预编译包 …"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
-      || warn "sharp 预编译包未就绪，封面图处理可能受影响"
+    local ld_ds
+    ld_ds="$(centos7_libstdcxx_ld_path)"
+    if [[ -n "$ld_ds" ]]; then
+      run_as_app_user "$OPERONE_USER" bash -lc "export LD_LIBRARY_PATH='${ld_ds}':\${LD_LIBRARY_PATH:-}; cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
+        || warn "sharp 预编译包未就绪，封面图处理可能受影响"
+    else
+      run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
+        || warn "sharp 预编译包未就绪（建议安装 devtoolset-7）"
+    fi
   fi
 }
 
@@ -100,7 +107,10 @@ centos7_prepare_build() {
 centos7_build_cmd() {
   local inner="$1"
   if is_centos7; then
-    echo "export NODE_OPTIONS=\"\${NODE_OPTIONS:-} ${OPERONE_NODE_BUILD_OPTS:---max-old-space-size=2560}\"; ${inner}"
+    local ld_ds ds_env=""
+    ld_ds="$(centos7_libstdcxx_ld_path)"
+    [[ -n "$ld_ds" ]] && ds_env="export LD_LIBRARY_PATH='${ld_ds}':\${LD_LIBRARY_PATH:-}; "
+    echo "${ds_env}export NODE_OPTIONS=\"\${NODE_OPTIONS:-} ${OPERONE_NODE_BUILD_OPTS:---max-old-space-size=2560}\"; ${inner}"
   else
     echo "$inner"
   fi
@@ -179,6 +189,7 @@ phase_deps() {
   os_validate
   log "[1/5] 安装系统依赖 …"
   install_build_deps
+  install_centos7_devtoolset || true
 
   # 内存 < 4GB 且 swap 不足时加 2G swap，避免 next build OOM（CentOS 7 常见 3.7GB）
   local mem_mb swap_mb
@@ -361,6 +372,14 @@ install_systemd_unit() {
   [[ -n "$npm_bin" ]] || die "未找到 npm"
   [[ -n "$node_bin" ]] || die "未找到 node"
 
+  local extra_env=""
+  if is_centos7; then
+    local ld_ds
+    ld_ds="$(centos7_libstdcxx_ld_path)"
+    [[ -n "$ld_ds" ]] && extra_env="Environment=LD_LIBRARY_PATH=${ld_ds}
+"
+  fi
+
   cat > "$unit" <<EOF
 [Unit]
 Description=Operone 创作平台
@@ -377,7 +396,7 @@ EnvironmentFile=-${OPERONE_DIR}/.env
 Environment=NODE_ENV=production
 Environment=HOME=${OPERONE_DIR}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=${npm_bin} run start
+${extra_env}ExecStart=${npm_bin} run start
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
