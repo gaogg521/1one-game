@@ -40,6 +40,8 @@ CentOS 7 自带 git 1.8.3 **不支持** `git -C`。若 `/opt/operone` 是旧 clo
 cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 ```
 
+**native 模块（better-sqlite3 / node-gyp）**：CentOS 7 的 glibc 2.17 与 Python 3.6 无法编译 `better-sqlite3`（需 glibc ≥ 2.29、Python ≥ 3.8）。一键脚本在 CentOS 7 上使用 `npm ci --ignore-scripts` 跳过 dev 工具的原生编译（生产运行不依赖 `better-sqlite3`），并单独补装 `sharp` 预编译包。若仍失败，建议迁移到 Rocky/Alma 8+ 或 Ubuntu 22.04。
+
 ## 运行权限
 
 | 登录方式 | 脚本行为 |

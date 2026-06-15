@@ -52,10 +52,23 @@ git_as_user_in_repo() {
 }
 
 npm_install_deps() {
-  log "npm ci …"
-  if ! run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci"; then
-    warn "npm ci 失败（lock 与 package.json 不同步），改用 npm install …"
-    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm install --no-audit --no-fund"
+  local npm_flags=()
+  if is_centos7; then
+    npm_flags=(--ignore-scripts)
+    log "CentOS 7：npm ci --ignore-scripts（跳过 better-sqlite3 等 native 编译）…"
+  else
+    log "npm ci …"
+  fi
+
+  if ! run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm ci ${npm_flags[*]}"; then
+    warn "npm ci 失败，改用 npm install …"
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm install --no-audit --no-fund ${npm_flags[*]}"
+  fi
+
+  if is_centos7; then
+    log "补装 sharp 预编译包 …"
+    run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && node node_modules/sharp/install/check.js" \
+      || warn "sharp 预编译包未就绪，封面图处理可能受影响"
   fi
 }
 
