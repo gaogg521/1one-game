@@ -46,6 +46,22 @@ cd /opt/operone && git pull origin main && bash scripts/deploy/install.sh
 
 **`next build` 报 GLIBCXX_3.4.20 / `@parcel/watcher`**：CentOS 7 的 libstdc++ 过旧。脚本会在 build 前将 `@parcel/watcher` 替换为 noop 桩（生产不需要 i18n 文件监听）。若仍有 native 模块报错，建议迁移 Rocky/Alma 8+ 或 Ubuntu 22.04。
 
+**内存 / OOM**：约 3.7GB 内存的机器 `next build` 可能 OOM。脚本在内存 < 4GB 且无 swap 时会自动创建 2G swap，并设置 `NODE_OPTIONS=--max-old-space-size=2560`。
+
+**SELinux / 防火墙**：若启用 SELinux 且使用 Nginx 反代，脚本会执行 `setsebool httpd_can_network_connect 1`。仅内网访问 `6666` 时，需手动放行：`firewall-cmd --permanent --add-port=6666/tcp && firewall-cmd --reload`。
+
+**已知限制（CentOS 7 可跑但不推荐长期生产）**：
+
+| 环节 | 状态 | 说明 |
+|------|------|------|
+| Node 22 | 需 glibc-217 非官方包 | 已支持 |
+| npm ci | `--ignore-scripts` | dev 工具 native 模块跳过 |
+| Prisma 迁移 | 已补 User 表 | 失败时自动 resolve |
+| next build | parcel watcher 桩 + swap | 约 5–15 分钟 |
+| sharp 封面图 | 预编译包 | 若 check.js 失败，封面合成可能不可用 |
+| seed:samples | 可选 | 无 API Key 可能部分失败，不影响主服务 |
+| Certbot HTTPS | 不推荐 | CentOS 7 EOL，证书工具易过期 |
+
 ## 运行权限
 
 | 登录方式 | 脚本行为 |

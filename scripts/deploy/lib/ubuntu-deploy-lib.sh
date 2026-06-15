@@ -90,18 +90,61 @@ STUB
   chown "$OPERONE_USER:$OPERONE_USER" "$w" 2>/dev/null || true
 }
 
+# CentOS 7 build：限制 Node 堆 + 确保 swap（~3.7GB 内存 next build 易 OOM）
+centos7_prepare_build() {
+  is_centos7 || return 0
+  centos7_stub_parcel_watcher
+  export OPERONE_NODE_BUILD_OPTS="${OPERONE_NODE_BUILD_OPTS:---max-old-space-size=2560}"
+}
+
+centos7_build_cmd() {
+  local inner="$1"
+  if is_centos7; then
+    echo "export NODE_OPTIONS=\"\${NODE_OPTIONS:-} ${OPERONE_NODE_BUILD_OPTS:---max-old-space-size=2560}\"; ${inner}"
+  else
+    echo "$inner"
+  fi
+}
+
+centos7_configure_selinux() {
+  is_centos7 || return 0
+  command -v getenforce >/dev/null 2>&1 || return 0
+  [[ "$(getenforce 2>/dev/null)" == "Disabled" ]] && return 0
+  if command -v setsebool >/dev/null 2>&1; then
+    log "CentOS 7：允许 Nginx 反代 (httpd_can_network_connect) …"
+    setsebool -P httpd_can_network_connect 1 2>/dev/null || warn "setsebool 失败，Nginx 反代可能被 SELinux 拦截"
+  fi
+}
+
 prisma_migrate_deploy() {
   local allow_reset="${1:-0}"
   log "prisma migrate deploy …"
   local cmd="cd '$OPERONE_DIR' && npx prisma migrate deploy"
+
+  resolve_prisma_failed_migrations() {
+    local out line
+    out="$(run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate status" 2>&1 || true)"
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[0-9]{8,}_ ]] || continue
+      warn "标记失败迁移为 rolled-back: $line"
+      run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate resolve --rolled-back '$line'" 2>/dev/null || true
+    done <<< "$(echo "$out" | grep -E '^[0-9]{8,}_' || true)"
+  }
+
   if run_as_app_user "$OPERONE_USER" bash -lc "$cmd"; then
     return 0
   fi
+
+  warn "Prisma 迁移失败，尝试 resolve 失败记录 …"
+  resolve_prisma_failed_migrations
+  if run_as_app_user "$OPERONE_USER" bash -lc "$cmd"; then
+    return 0
+  fi
+
   if [[ "$allow_reset" != "1" ]]; then
     die "prisma migrate deploy 失败（更新模式不自动删库，请手动排查）"
   fi
-  warn "Prisma 迁移失败，清理失败状态并重建 SQLite（首次安装空库）…"
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npx prisma migrate resolve --rolled-back '20260614100000_email_auth' 2>/dev/null || true"
+  warn "仍失败，删除 prod.db 并重试（首次安装空库）…"
   rm -f "$OPERONE_DIR/prod.db" "$OPERONE_DIR/prod.db-journal" "$OPERONE_DIR/prod.db-wal" 2>/dev/null || true
   run_as_app_user "$OPERONE_USER" bash -lc "$cmd" || die "prisma migrate deploy 仍失败，请查看上方日志"
 }
@@ -137,11 +180,11 @@ phase_deps() {
   log "[1/5] 安装系统依赖 …"
   install_build_deps
 
-  # 内存不足时自动加 2G swap，避免 npm build OOM
+  # 内存 < 4GB 且 swap 不足时加 2G swap，避免 next build OOM（CentOS 7 常见 3.7GB）
   local mem_mb swap_mb
   mem_mb="$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}' || echo 4096)"
   swap_mb="$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}' || echo 0)"
-  if [[ "$mem_mb" -lt 2500 && "$swap_mb" -lt 512 ]] && [[ ! -f /swapfile ]]; then
+  if [[ "$mem_mb" -lt 4096 && "$swap_mb" -lt 512 ]] && [[ ! -f /swapfile ]]; then
     log "内存偏低，自动创建 2G swap …"
     fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
     chmod 600 /swapfile
@@ -291,8 +334,10 @@ phase_app() {
   fi
 
   log "npm run build …"
-  centos7_stub_parcel_watcher
-  run_as_app_user "$OPERONE_USER" bash -lc "cd '$OPERONE_DIR' && npm run build"
+  centos7_prepare_build
+  local build_cmd
+  build_cmd="$(centos7_build_cmd "cd '$OPERONE_DIR' && npm run build")"
+  run_as_app_user "$OPERONE_USER" bash -lc "$build_cmd"
 
   mkdir -p "$OPERONE_DIR/public/covers" "$OPERONE_DIR/public/comic-panels" "$OPERONE_DIR/public/game-bg"
   chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
@@ -310,8 +355,11 @@ install_systemd_unit() {
   need_root
   log "[3/5] 启动服务 …"
   local unit="/etc/systemd/system/operone.service"
-  local npm_bin
-  npm_bin="$(command -v npm)"
+  local npm_bin node_bin
+  npm_bin="$(run_as_app_user "$OPERONE_USER" bash -lc 'command -v npm' 2>/dev/null || command -v npm)"
+  node_bin="$(run_as_app_user "$OPERONE_USER" bash -lc 'command -v node' 2>/dev/null || command -v node)"
+  [[ -n "$npm_bin" ]] || die "未找到 npm"
+  [[ -n "$node_bin" ]] || die "未找到 node"
 
   cat > "$unit" <<EOF
 [Unit]
@@ -327,6 +375,7 @@ Group=${OPERONE_USER}
 WorkingDirectory=${OPERONE_DIR}
 EnvironmentFile=-${OPERONE_DIR}/.env
 Environment=NODE_ENV=production
+Environment=HOME=${OPERONE_DIR}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=${npm_bin} run start
 Restart=always
@@ -370,6 +419,7 @@ phase_nginx() {
   [[ -f "$template" ]] || die "缺少 Nginx 模板: $template（请使用完整仓库，勿只复制单个 .sh）"
 
   ensure_nginx_installed
+  centos7_configure_selinux
   systemctl enable nginx 2>/dev/null || true
 
   nginx_write_operone_site "$template" "$OPERONE_DOMAIN" "$OPERONE_PORT"
