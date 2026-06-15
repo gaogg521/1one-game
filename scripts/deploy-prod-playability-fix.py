@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Pull latest + set PORT=3000 + run --update on production."""
+"""Pull latest + set PORT + build + restart on production."""
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -11,11 +12,10 @@ import paramiko
 HOST = "43.163.105.71"
 USER = "root"
 REPO = "/opt/operone"
+DEFAULT_PORT = os.environ.get("OPERONE_PORT", "6666")
 
 
 def load_password() -> str:
-    import os
-
     if os.environ.get("OPERONE_DEPLOY_PASSWORD"):
         return os.environ["OPERONE_DEPLOY_PASSWORD"]
     p = Path(__file__).parent / "upload-literary-samples-to-server.py"
@@ -41,6 +41,7 @@ def run(client: paramiko.SSHClient, cmd: str, timeout: int = 3600) -> int:
 
 
 def main() -> int:
+    port = DEFAULT_PORT
     pw = load_password()
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -48,7 +49,7 @@ def main() -> int:
 
     steps = [
         f"cd {REPO} && git fetch origin && git reset --hard origin/main && git log -1 --oneline",
-        f"cd {REPO} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT=3000|' .env || echo 'PORT=3000' >> .env)",
+        f"cd {REPO} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT={port}|' .env || echo 'PORT={port}' >> .env)",
         f"cd {REPO} && HOME={REPO} NPM_CONFIG_CACHE={REPO}/.npm-cache npm install --no-audit --no-fund --ignore-scripts",
         f"cd {REPO} && HOME={REPO} npx prisma generate",
         (
@@ -67,7 +68,7 @@ def main() -> int:
         f"cd {REPO} && HOME={REPO} NODE_OPTIONS='--max-old-space-size=2560' npm run build",
         "systemctl restart operone || true",
         "sleep 5",
-        "curl -sf http://127.0.0.1:3000/api/health",
+        f"curl -sf http://127.0.0.1:{port}/api/health",
     ]
     for i, cmd in enumerate(steps):
         code = run(client, cmd)
@@ -76,7 +77,7 @@ def main() -> int:
             return code if i < len(steps) - 1 else 1
 
     client.close()
-    print("\nDEPLOY_OK @ http://43.163.105.71:3000")
+    print(f"\nDEPLOY_OK @ http://{HOST}:{port}")
     return 0
 
 
