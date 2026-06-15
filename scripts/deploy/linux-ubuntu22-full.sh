@@ -225,6 +225,18 @@ run_update() {
   need_root
   [[ -d "$OPERONE_DIR" ]] || die "未找到 $OPERONE_DIR，请先完整部署"
 
+  # 先同步代码/部署脚本再装依赖，避免旧版 os-lib 在 phase_deps 里失败
+  if [[ "${OPERONE_UPDATE_SYNCED:-0}" != "1" ]]; then
+    log "════════ 更新部署 ════════"
+    if [[ -d "$OPERONE_DIR/.git" ]]; then
+      sync_operone_repo "$OPERONE_DIR" "$GIT_BRANCH" "$OPERONE_USER"
+    else
+      refresh_deploy_scripts "$OPERONE_DIR/scripts/deploy"
+    fi
+    export OPERONE_UPDATE_SYNCED=1
+    exec bash "${OPERONE_DEPLOY_SCRIPT:-$SCRIPT_DIR/linux-ubuntu22-full.sh}" --update
+  fi
+
   log "════════ 更新部署 ════════"
   phase_deps
 

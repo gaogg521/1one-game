@@ -3,6 +3,10 @@
 # shellcheck disable=SC2034
 
 : "${OPERONE_DIR:=/opt/operone}"
+OPERONE_DIR="${OPERONE_DIR//$'\r'/}"
+OPERONE_DIR="${OPERONE_DIR//$'\n'/}"
+OPERONE_DIR="${OPERONE_DIR#"${OPERONE_DIR%%[![:space:]]*}"}"
+OPERONE_DIR="${OPERONE_DIR%"${OPERONE_DIR##*[![:space:]]}"}"
 : "${OPERONE_USER:=www-data}"
 : "${OPERONE_DEFAULT_GIT_REPO:=https://github.com/gaogg521/1one-game.git}"
 : "${GIT_REPO:=${OPERONE_DEFAULT_GIT_REPO}}"
@@ -276,6 +280,7 @@ wait_for_health() {
 phase_deps() {
   need_root
   os_validate
+  export PATH="/usr/local/bin:/usr/local/sbin:${PATH:-/usr/sbin:/usr/bin:/sbin:/bin}"
   log "[1/5] 安装系统依赖 …"
   is_centos7 && fix_centos7_vault_repos
   install_build_deps
@@ -304,7 +309,11 @@ phase_deps() {
     warn "Node $(node -v) 版本偏低，将安装 Node ${NODE_MAJOR}.x"
   fi
 
-  log "安装 Node.js ${NODE_MAJOR}.x (NodeSource) …"
+  if is_centos7; then
+    log "安装 Node.js ${NODE_MAJOR}.x（CentOS 7 · unofficial-builds glibc-217）…"
+  else
+    log "安装 Node.js ${NODE_MAJOR}.x (NodeSource) …"
+  fi
   install_nodejs "$NODE_MAJOR"
   log "Node $(node -v) · npm $(npm -v)"
 }

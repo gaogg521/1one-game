@@ -400,6 +400,22 @@ centos7_libstdcxx_ld_path() {
   fi
 }
 
+# 查找已手动/历史安装的 glibc-217 Node 目录
+find_glibc217_node_install_dir() {
+  local preferred="${1:-}"
+  if [[ -n "$preferred" && -x "$preferred/bin/node" ]]; then
+    echo "$preferred"
+    return 0
+  fi
+  local d
+  for d in /opt/node-v*-linux-x64-glibc-217; do
+    [[ -d "$d" && -x "$d/bin/node" ]] || continue
+    echo "$d"
+    return 0
+  done
+  return 1
+}
+
 # CentOS 7（glibc 2.17）无法用官方 Node 22+，须用 unofficial-builds glibc-217 包
 install_nodejs_glibc217() {
   local major="${1:-22}"
@@ -414,24 +430,35 @@ install_nodejs_glibc217() {
 
   local tarball="node-${version}-linux-x64-glibc-217.tar.gz"
   local url="https://unofficial-builds.nodejs.org/download/release/${version}/${tarball}"
-  local dir="/opt/node-${version}-linux-x64-glibc-217"
+  local default_dir="/opt/node-${version}-linux-x64-glibc-217"
+  local dir
+  dir="$(find_glibc217_node_install_dir "$default_dir" 2>/dev/null || true)"
 
-  if [[ ! -x "$dir/bin/node" ]]; then
-    os_warn "CentOS 7：安装 unofficial-builds Node ${version} (glibc-217)，勿用 NodeSource 官方包"
+  if [[ -z "$dir" ]]; then
+    os_warn "CentOS 7：安装 unofficial-builds Node ${version} (glibc-217)，勿用 NodeSource/yum 官方包"
     mkdir -p /opt
     curl -fsSL "$url" -o "/opt/${tarball}" \
       || os_die "下载 ${tarball} 失败，请检查网络或手动安装，见 docs/deploy-linux-ubuntu22.md"
     tar -xzf "/opt/${tarball}" -C /opt
     rm -f "/opt/${tarball}"
+    dir="$(find_glibc217_node_install_dir "$default_dir" 2>/dev/null || true)"
+  else
+    os_warn "CentOS 7：复用已有 glibc-217 Node → $dir"
   fi
+
+  [[ -n "$dir" && -f "$dir/bin/node" ]] || os_die "未找到 Node 可执行文件（期望 ${default_dir}/bin/node）"
+  chmod +x "$dir/bin/node" "$dir/bin/npm" "$dir/bin/npx" 2>/dev/null || true
 
   ln -sf "$dir/bin/node" /usr/local/bin/node
   ln -sf "$dir/bin/npm" /usr/local/bin/npm
   ln -sf "$dir/bin/npx" /usr/local/bin/npx
+  hash -r 2>/dev/null || true
 
+  local node_bin="/usr/local/bin/node"
+  [[ -x "$node_bin" ]] || node_bin="$dir/bin/node"
   local ver
-  ver="$(node -v | sed 's/v//' | cut -d. -f1)"
-  [[ "$ver" -ge "$major" ]] || os_die "Node 安装后版本 $(node -v) 仍低于 ${major}.x"
+  ver="$("$node_bin" -v | sed 's/v//' | cut -d. -f1)"
+  [[ "$ver" -ge "$major" ]] || os_die "Node 安装后版本 $("$node_bin" -v) 仍低于 ${major}.x"
 }
 
 install_nodejs() {
@@ -442,6 +469,16 @@ install_nodejs() {
     local ver
     ver="$(node -v | sed 's/v//' | cut -d. -f1)"
     if [[ "$ver" -ge "$major" ]]; then
+      return 0
+    fi
+  fi
+
+  # 已解压但未入 PATH 的 glibc-217 包（CentOS 7 常见）
+  if is_centos7; then
+    local existing
+    existing="$(find_glibc217_node_install_dir 2>/dev/null || true)"
+    if [[ -n "$existing" ]]; then
+      install_nodejs_glibc217 "$major"
       return 0
     fi
   fi
