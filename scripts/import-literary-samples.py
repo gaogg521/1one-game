@@ -3,13 +3,24 @@
 import json, os, shutil, sqlite3, sys
 from pathlib import Path
 
+def resolve_sqlite_db(repo: Path) -> str:
+    url = os.environ.get("DATABASE_URL", "file:./prod.db").strip().strip('"').strip("'")
+    if url.startswith("file:"):
+        url = url[5:]
+    p = Path(url.lstrip("./"))
+    if not p.is_absolute():
+        # Prisma：相对路径相对于 prisma/schema.prisma 所在目录
+        candidate = repo / "prisma" / p
+        if candidate.is_file():
+            return str(candidate)
+        return str(repo / p)
+    return str(p)
+
 def main():
     in_dir = Path(sys.argv[sys.argv.index("--in") + 1]) if "--in" in sys.argv else Path("data/literary-samples-bundle")
     repo = Path.cwd()
     manifest = json.loads((in_dir / "manifest.json").read_text(encoding="utf-8"))
-    db_path = os.environ.get("DATABASE_URL", "file:./prod.db").replace("file:", "").strip("./")
-    db = repo / db_path
-    db = str(db)
+    db = resolve_sqlite_db(repo)
 
     c = sqlite3.connect(db)
     c.row_factory = sqlite3.Row
