@@ -71,8 +71,8 @@ async function main() {
         role: "super_admin",
         passwordHash,
         username: existing.username ?? username,
-        email: existing.email ?? email || null,
-        displayName: existing.username ?? usernameRaw,
+        email: existing.email ?? (email || null),
+        displayName: existing.displayName ?? usernameRaw,
       },
     });
     userId = existing.id;
