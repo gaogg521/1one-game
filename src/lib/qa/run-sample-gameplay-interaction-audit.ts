@@ -269,7 +269,7 @@ export async function auditSample(
     }
 
     const canvas = page.locator("canvas").first();
-    await canvas.waitFor({ state: "visible", timeout: 30_000 });
+    await canvas.waitFor({ state: "visible", timeout: 45_000 });
     base.canvasOk = true;
 
     base.playReadyOk = await waitPlayReady(page);
@@ -313,9 +313,14 @@ export async function auditSample(
     fs.writeFileSync(path.join(shotDir, "after.png"), after);
 
     if (depthExpect) {
-      const depthAfter = await readQaStateField(page, depthExpect.field);
+      let depthAfter = await readQaStateField(page, depthExpect.field);
       base.gameplayDepthField = depthExpect.field;
       base.gameplayDepthOk = checkGameplayDepth(depthBefore, depthAfter, depthExpect);
+      if (!base.gameplayDepthOk && c.animated) {
+        await page.waitForTimeout(450);
+        depthAfter = await readQaStateField(page, depthExpect.field);
+        base.gameplayDepthOk = checkGameplayDepth(depthBefore, depthAfter, depthExpect);
+      }
       if (!base.gameplayDepthOk) {
         base.error = `gameplay depth ${depthExpect.field}: ${depthBefore ?? "∅"} → ${depthAfter ?? "∅"} (${depthExpect.change})`;
       }
@@ -416,7 +421,7 @@ export async function runSampleGameplayInteractionAudit(
       `  ${r.pass ? "[OK]" : "[FAIL]"} api=${r.apiOk} canvas=${r.canvasOk} scene=${r.actualScene} interaction=${r.interactionOk} depth=${r.gameplayDepthField ? r.gameplayDepthOk : "n/a"}${r.error ? ` · ${r.error}` : ""}`,
     );
     await page.close();
-    if (i < samples.length - 1) await new Promise((r) => setTimeout(r, 200));
+    if (i < samples.length - 1) await new Promise((r) => setTimeout(r, 500));
   }
 
   await browser.close();

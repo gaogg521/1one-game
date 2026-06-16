@@ -22,6 +22,7 @@ function main() {
 
   run("npm run fix:dev-db-migrations");
   run("npm run seed:samples");
+  run("npm run seed:sample-assets");
   console.log("[ensure:dev-playable] ok — 可 npm run dev @8888");
 }
 

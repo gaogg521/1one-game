@@ -21,6 +21,31 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
+更新时间：**2026-06-15**（迭代三十八 · 样品程序化贴图 + competitor-gates ✅）
+
+## 迭代三十八：旗舰 sprite 贴图 + 门禁稳定性
+
+| 能力 | 状态 |
+|------|------|
+| `procedural-game-assets.ts` | sharp 离线生成 player/hazard/gem/power/boss + 背景 |
+| `npm run seed:sample-assets` | 17 款 + stub · 旗舰 5 款 rich 细节 |
+| `qa:competitor-gates` | ✅ 本地全绿（Godot 17/17 · parity · clone · gameplay 17/17） |
+| 审计稳定性 | 样品间隔 500ms · canvas 45s · 动画深度二次采样 |
+| 门禁修复 | `competitor-gates` 强制 `PLAYWRIGHT_BASE_URL=8888`（避免 6666 ERR_UNSAFE_PORT） |
+
+更新时间：**2026-06-15**（迭代三十七 · 生产 17/17 玩法+克隆 ✅）
+
+## 迭代三十七（生产闭环）：`451cee8` @6666
+
+| 能力 | 状态 |
+|------|------|
+| commit | `451cee8` fix(qa): QA 状态即时发布 + depthChangePasses undefined→0 |
+| 生产 | http://43.163.105.71:6666 · health ok |
+| `qa:prod-sample-play-audit` | ✅ **17/17** |
+| `qa:competitor-clone-batch` all@prod | ✅ **17/17** |
+
+报告：`qa-output/prod-sample-play-audit/` · `qa-output/competitor-clone-batch/`
+
 更新时间：**2026-06-15**（迭代三十七 · 17/17 全样品玩法深度 + 本地克隆 17/17 ✅）
 
 ## 迭代三十七：全 17 款玩法深度 + 克隆视觉修复

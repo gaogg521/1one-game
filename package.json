@@ -109,6 +109,7 @@
     "qa:username-auth": "tsx scripts/qa-username-auth.ts",
     "qa:en-path": "tsx scripts/qa-en-path-acceptance.ts",
     "seed:samples": "tsx scripts/seed-sample-gallery.ts",
+    "seed:sample-assets": "tsx scripts/seed-sample-assets.ts",
     "export:literary-samples": "tsx scripts/export-literary-samples.ts",
     "import:literary-samples": "tsx scripts/import-literary-samples.ts",
     "seed:comic-featured-meishan": "tsx scripts/seed-comic-featured-meishan.ts",
