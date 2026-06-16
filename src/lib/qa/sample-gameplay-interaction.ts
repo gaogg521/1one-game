@@ -51,7 +51,7 @@ export const SAMPLE_GAMEPLAY_CASES: SampleGameplayCase[] = [
   { sampleId: "tiny-planet-chopper", expectedScene: "ShooterScene", interaction: "space", animated: true, clickBurst: 3 },
   { sampleId: "blade-defender-merge", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
   { sampleId: "car-color-palette", expectedScene: "CustomizationScene", interaction: "click-center", clickRel: { x: 0.5, y: 0.42 }, clickBurst: 2 },
-  { sampleId: "blocky-sniper-hunter", expectedScene: "ShooterScene", interaction: "space", animated: true, clickBurst: 3 },
+  { sampleId: "blocky-sniper-hunter", expectedScene: "ShooterScene", interaction: "space", animated: true, clickBurst: 5 },
   { sampleId: "memory-match-mania", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.35, y: 0.5 }, clickBurst: 2 },
   { sampleId: "kids-puzzle", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.4, y: 0.48 }, clickBurst: 2 },
   { sampleId: "pottery-master-3d", expectedScene: "CustomizationScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },

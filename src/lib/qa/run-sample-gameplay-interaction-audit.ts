@@ -336,7 +336,7 @@ export async function auditSample(
 
     if (!base.interactionOk) {
       base.error = c.animated
-        ? `interaction diff ${interactionDiff.toFixed(3)} <= idle*1.05+0.005 (${idleCeiling.toFixed(3)})`
+        ? `interaction diff ${interactionDiff.toFixed(3)} <= idle+0.004 (${idleCeiling.toFixed(3)})`
         : `interaction diff ${interactionDiff.toFixed(3)} < static threshold`;
     }
 
