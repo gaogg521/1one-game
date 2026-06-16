@@ -21,6 +21,15 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
+更新时间：**2026-06-16**（迭代三十八 · 生产闭环 ✅）
+
+## 迭代三十八（生产闭环）
+
+1. ✅ `ad87851` 部署 @6666 — 17 款程序化 sprite/bg
+2. ✅ `qa:prod-sample-play-audit` **17/17**（`e8e9cee` 修 blocky-sniper Space×5）
+3. ✅ `COMPETITOR_CLONE_BATCH=all` @prod **17/17**
+4. 本地：`npm run qa:competitor-gates`（~25min · 勿设 PLAYWRIGHT_BASE_URL=6666）
+
 更新时间：**2026-06-15**（迭代三十八 · 样品程序化贴图 + competitor-gates ✅）
 
 ## 迭代三十八：旗舰 sprite 贴图 + 门禁稳定性

@@ -1,3 +1,12 @@
+更新时间：**2026-06-16**（迭代三十八 · 生产 sprite + 17/17 ✅）
+
+## 迭代三十八（当前）
+
+1. ✅ `ad87851` + `e8e9cee` — 程序化贴图 · blocky-sniper QA 边界
+2. ✅ 生产 `qa:prod-sample-play-audit` **17/17**
+3. ✅ 生产 clone batch **17/17** · 本地 `qa:competitor-gates` 待跑
+4. P3：Console SSO · 旗舰文生图贴图（可选 RUN_REAL_IMAGE_GEN）
+
 更新时间：**2026-06-15**（迭代三十七 · 生产 17/17 ✅）
 
 ## 迭代三十七（生产闭环）
