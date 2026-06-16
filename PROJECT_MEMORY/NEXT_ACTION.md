@@ -3,7 +3,7 @@
 ## 迭代三十九（当前）
 
 1. ✅ Shooter/TD/Platformer 真正使用样品 PNG sprite + 背景可见度提升
-2. ⬜ 提交部署后生产 17/17 复验
+2. ✅ 生产 `qa:prod-sample-play-audit` **17/17** @ `d36e71c`
 3. ⬜ 本地 `qa:competitor-gates` 全绿
 4. P3：文生图旗舰贴图 · Console SSO
 
