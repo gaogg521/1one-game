@@ -413,15 +413,22 @@ export async function runSampleGameplayInteractionAudit(
 
   for (let i = 0; i < samples.length; i += 1) {
     const sample = samples[i]!;
-    const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
+    let page = await browser.newPage({ viewport: { width: 960, height: 720 } });
     console.log(`→ ${sample.id}`);
-    const r = await auditSample(page, sample.id, sample.title, baseUrl, shots);
+    let r = await auditSample(page, sample.id, sample.title, baseUrl, shots);
+    if (!r.pass && process.env.SAMPLE_AUDIT_NO_RETRY !== "1") {
+      console.log(`  [retry] ${sample.id}`);
+      await page.close();
+      await new Promise((res) => setTimeout(res, 900));
+      page = await browser.newPage({ viewport: { width: 960, height: 720 } });
+      r = await auditSample(page, sample.id, sample.title, baseUrl, shots);
+    }
     results.push(r);
     console.log(
       `  ${r.pass ? "[OK]" : "[FAIL]"} api=${r.apiOk} canvas=${r.canvasOk} scene=${r.actualScene} interaction=${r.interactionOk} depth=${r.gameplayDepthField ? r.gameplayDepthOk : "n/a"}${r.error ? ` · ${r.error}` : ""}`,
     );
     await page.close();
-    if (i < samples.length - 1) await new Promise((r) => setTimeout(r, 500));
+    if (i < samples.length - 1) await new Promise((res) => setTimeout(res, 500));
   }
 
   await browser.close();

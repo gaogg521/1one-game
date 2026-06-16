@@ -31,6 +31,11 @@ import {
 import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import {
+  fitSpriteDisplay,
+  firstExistingTexture,
+  sampleBackgroundAlpha,
+} from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 
@@ -259,7 +264,10 @@ export class ShooterScene extends Phaser.Scene {
 
     // 文生图背景
     if (this.backgroundUrl && this.textures.exists("bgTex")) {
-      this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(0.1);
+      this.add
+        .image(width / 2, height / 2, "bgTex")
+        .setDepth(-10)
+        .setAlpha(sampleBackgroundAlpha(this.projectId));
     }
 
     // Title + subtitle（章节标签单独一行，避免与标题 y 重叠发糊）
@@ -345,20 +353,27 @@ export class ShooterScene extends Phaser.Scene {
 
     this.banner = new HudBanner(this, ui.banner);
 
-    // 射击模板默认星舰造型；有参考图则贴主角/敌舰
+    // 射击模板：优先使用 preload 的 texPlayer/texHazard，其次参考图 ref*，最后程序化星舰
+    const loadedPlayerKey = firstExistingTexture(this, ["texPlayer"]);
     const playerTex =
-      this.playerTextureKey && this.textures.exists(this.playerTextureKey)
+      loadedPlayerKey ??
+      (this.playerTextureKey && this.textures.exists(this.playerTextureKey)
         ? this.playerTextureKey
-        : (this.makeStarshipTexture("texPlayer", 48, 52, this.spec.theme.playerColor), "texPlayer");
+        : (this.makeStarshipTexture("texPlayer", 48, 52, this.spec.theme.playerColor), "texPlayer"));
+
+    const loadedEnemyKey = firstExistingTexture(this, ["texHazard"]);
     const enemyTex =
-      this.enemyTextureKey && this.textures.exists(this.enemyTextureKey)
+      loadedEnemyKey ??
+      (this.enemyTextureKey && this.textures.exists(this.enemyTextureKey)
         ? this.enemyTextureKey
-        : (this.makeInterceptorTexture("texEnemy", 36, 32, this.spec.theme.hazardColor, false), "texEnemy");
+        : (this.makeInterceptorTexture("texEnemy", 36, 32, this.spec.theme.hazardColor, false), "texEnemy"));
     this.enemySpriteKey = enemyTex;
     if (!this.textures.exists("texElite")) {
       this.makeInterceptorTexture("texElite", 42, 36, this.spec.theme.hazardColor, true);
     }
-    this.makeBossTexture("texBoss", 64, 52, this.spec.theme.hazardColor);
+    if (!this.textures.exists("texBoss")) {
+      this.makeBossTexture("texBoss", 64, 52, this.spec.theme.hazardColor);
+    }
     this.makeRectTexture("texPlayerBullet", 5, 14, this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
     this.makeRectTexture("texEnemyBullet", 5, 12, this.spec.theme.hazardColor);
 
@@ -375,6 +390,7 @@ export class ShooterScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(!this.orbitMode);
     this.player.body.setSize(28, 32);
     this.player.setDepth(8);
+    if (loadedPlayerKey) fitSpriteDisplay(this.player, this.orbitMode ? 44 : 52);
     if (this.orbitMode) {
       this.syncOrbitPlayerPosition();
     }
@@ -647,6 +663,7 @@ export class ShooterScene extends Phaser.Scene {
         const hp = elite ? 2 : 1;
         const e = this.enemies.create(x, y, key) as Phaser.Physics.Arcade.Image;
         e.setDepth(5);
+        if (key === "texHazard") fitSpriteDisplay(e, elite ? 36 : 30);
         e.setScale(0.85);
         e.setData("hp", hp);
         e.setData("maxHp", hp);
@@ -672,6 +689,7 @@ export class ShooterScene extends Phaser.Scene {
         const hp = elite ? 2 : 1;
         const e = this.enemies.create(x, y, key) as Phaser.Physics.Arcade.Image;
         e.setDepth(5);
+        if (key === "texHazard") fitSpriteDisplay(e, elite ? 36 : 30);
         e.setData("hp", hp);
         e.setData("maxHp", hp);
         e.setData("driftPhase", Phaser.Math.FloatBetween(0, Math.PI * 2));
@@ -689,6 +707,7 @@ export class ShooterScene extends Phaser.Scene {
     const x = width / 2;
     const boss = this.enemies.create(x, -80, "texBoss") as Phaser.Physics.Arcade.Image;
     boss.setDepth(5);
+    if (boss.width > 80) fitSpriteDisplay(boss, 68);
     boss.setScale(1.2);
     const hp = 10 + Math.floor(this.wave * 1.5);
     boss.setData("hp", hp);

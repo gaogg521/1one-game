@@ -44,6 +44,7 @@ import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } fr
 import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { fitSpriteDisplay, sampleBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
@@ -710,7 +711,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     // 文生图背景
     if (!bgKey && this.backgroundUrl && this.textures.exists("bgTex")) {
-      const amb = this.add.image(w / 2, h / 2, "bgTex").setDepth(-17).setAlpha(0.12);
+      const amb = this.add
+        .image(w / 2, h / 2, "bgTex")
+        .setDepth(-17)
+        .setAlpha(sampleBackgroundAlpha(this.projectId) + 0.04);
       amb.setScale(Math.max(w / amb.width, h / amb.height));
     }
 
@@ -1736,6 +1740,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
     const spr = this.add.image(0, 0, this.textures.exists(tex) ? tex : texDefault);
     spr.setDepth(8);
+    if (tex === "texHazard") fitSpriteDisplay(spr, enemyId === "tank" ? 44 : 38);
+    else if (tex === "texBoss") fitSpriteDisplay(spr, 46);
     spr.setAlpha(enemyId === "tank" ? 0.95 : 0.9);
     let enemyRing: Phaser.GameObjects.Graphics | null = null;
     const maskRadius = enemyId === "tank" ? 23 : 20;

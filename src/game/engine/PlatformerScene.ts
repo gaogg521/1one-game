@@ -50,6 +50,7 @@ import {
 } from "@/lib/cohesive-presentation";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { fitSpriteDisplay, sampleBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 
 type EndPayload = { score: number; won: boolean };
@@ -282,7 +283,10 @@ export class PlatformerScene extends Phaser.Scene {
 
     // 文生图背景
     if (this.backgroundUrl && this.textures.exists("bgTex")) {
-      this.add.image(this.worldW / 2, viewH / 2, "bgTex").setDepth(-10).setAlpha(0.1);
+      this.add
+        .image(this.worldW / 2, viewH / 2, "bgTex")
+        .setDepth(-10)
+        .setAlpha(sampleBackgroundAlpha(this.projectId));
     }
 
     this.add
@@ -438,6 +442,8 @@ export class PlatformerScene extends Phaser.Scene {
       g.generateTexture(key, 64, 40); g.destroy();
     };
 
+    const hadLoadedPlayer = !blockyWorld && this.textures.exists("texPlayer");
+
     if (blockyWorld) {
       ensureMinecraftPlatformerTextures(this, this.spec);
     } else {
@@ -460,6 +466,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.buildLevel(viewH);
 
     this.player = this.physics.add.image(140, viewH - 200, "texPlayer");
+    if (hadLoadedPlayer) fitSpriteDisplay(this.player, 42);
     this.player.setCollideWorldBounds(true);
     this.player.body.setSize(28, 36);
     this.player.setDepth(10);

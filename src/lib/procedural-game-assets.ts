@@ -38,10 +38,29 @@ function spriteSvg(kind: ProceduralSpriteKind, spec: GameSpec, size: number, ric
   const cx = size / 2;
   const cy = size / 2;
   const pad = Math.round(size * 0.08);
+  const template = spec.templateId;
 
   const body = (() => {
     switch (kind) {
       case "player": {
+        if (template === "shooter" || template === "sniper" || template === "survivor") {
+          const hull = rgbCss(player);
+          const wing = rgbCss(lighten(player, 0.2));
+          return `
+            <polygon points="${cx},${cy - size * 0.28} ${cx - size * 0.22},${cy + size * 0.2} ${cx},${cy + size * 0.12} ${cx + size * 0.22},${cy + size * 0.2}" fill="${hull}"/>
+            <polygon points="${cx - size * 0.08},${cy + size * 0.1} ${cx - size * 0.2},${cy + size * 0.26} ${cx - size * 0.06},${cy + size * 0.18}" fill="${wing}"/>
+            <polygon points="${cx + size * 0.08},${cy + size * 0.1} ${cx + size * 0.2},${cy + size * 0.26} ${cx + size * 0.06},${cy + size * 0.18}" fill="${wing}"/>
+            <circle cx="${cx}" cy="${cy - size * 0.08}" r="${size * 0.06}" fill="${rgbCss(lighten(player, 0.45))}"/>
+          `;
+        }
+        if (template === "towerDefense") {
+          const base = rgbCss(player);
+          return `
+            <rect x="${cx - size * 0.18}" y="${cy + size * 0.02}" width="${size * 0.36}" height="${size * 0.22}" rx="4" fill="${rgbCss(lighten(player, -0.15))}"/>
+            <rect x="${cx - size * 0.12}" y="${cy - size * 0.18}" width="${size * 0.24}" height="${size * 0.22}" rx="6" fill="${base}"/>
+            <circle cx="${cx}" cy="${cy - size * 0.08}" r="${size * 0.08}" fill="${rgbCss(lighten(player, 0.35))}"/>
+          `;
+        }
         const headR = size * 0.14;
         const bodyW = size * 0.34;
         const bodyH = size * 0.36;

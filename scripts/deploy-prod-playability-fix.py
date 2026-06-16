@@ -49,6 +49,7 @@ def main() -> int:
 
     steps = [
         f"cd {REPO} && git fetch origin && git reset --hard origin/main && git log -1 --oneline",
+        f"cd {REPO} && HOME={REPO} npm run seed:sample-assets",
         f"cd {REPO} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT={port}|' .env || echo 'PORT={port}' >> .env)",
         f"cd {REPO} && HOME={REPO} NPM_CONFIG_CACHE={REPO}/.npm-cache npm install --no-audit --no-fund --ignore-scripts",
         f"cd {REPO} && HOME={REPO} npx prisma generate",
