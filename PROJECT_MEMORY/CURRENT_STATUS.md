@@ -21,6 +21,18 @@
 |------|------|
 | `qa:sample-ai-patch-audit` | 新增 · IPv4 HTTP + Playwright 6666 端口白名单 |
 | 生产 patch API | ✅ LLM ~5s 返回 · UI 试玩页 patch 无报错 |
+更新时间：**2026-06-16**（迭代三十九 · sprite 深度渲染 ✅）
+
+## 迭代三十九：玩法视觉深度优化
+
+| 能力 | 状态 |
+|------|------|
+| `ShooterScene` | 修复 preload `texPlayer/texHazard` 未被使用的 bug |
+| `phaser-loaded-sprites.ts` | 统一缩放 · 样品背景 alpha 0.24 |
+| 模板化程序化贴图 | shooter=星舰 · towerDefense=炮塔造型 |
+| 玩法审计 | 失败样品自动重试 1 次 |
+| 部署 | `seed:sample-assets` 写入生产 deploy 流水线 |
+
 更新时间：**2026-06-16**（迭代三十八 · 生产闭环 ✅）
 
 ## 迭代三十八（生产闭环）
