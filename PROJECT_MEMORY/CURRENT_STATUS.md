@@ -1,5 +1,80 @@
 # CURRENT_STATUS
 
+更新时间：**2026-06-17**（迭代四十五 · 语义化 Juice 横向推广 ✅）
+
+## 迭代四十五：Platformer / Farming / Puzzle 语义反馈接入
+
+| 项 | 结果 | 验证 |
+|----|------|------|
+| Platformer 横向推广 | 收集、受伤、护盾、boss/炸弹技能、章节切换、胜负结算走语义 feedback；宝箱胜利用 finish 统一反馈 | `qa:platformer-semantic-juice` ✅ |
+| Farming 横向推广 | 播种/浇水/金币不足/收获连击/丰收结算收敛到 pickup / hit / combo / win | `qa:farming-semantic-juice` ✅ |
+| Puzzle 横向推广 | match3、找不同、记忆翻牌、拼图落位、胜负结算接入 pickup / hit / combo / win / fail | `qa:puzzle-semantic-juice` ✅ |
+| B-tier / build | 新增三个语义反馈 contract 后全绿 | `qa:b-tier-smoke` **37/37**、`npm run build` ✅ |
+
+**交付状态**：第二阶段横向推广完成大半；尚未 commit / push / deploy。下一步单独处理 `TowerDefenseScene`，随后进入统一 HUD/目标引导层。
+
+---
+
+更新时间：**2026-06-17**（迭代四十四 · 语义化 Juice 试点 ✅）
+
+## 迭代四十四：语义化反馈接入首批 Scene
+
+| 项 | 结果 | 验证 |
+|----|------|------|
+| 反馈 preset | `gameJuice.ts` 新增 pickup / hit / combo / boss / win / fail 语义 preset 与封装 | `qa:juice-semantic-presets` ✅ |
+| Physics 试点 | 命中、连击、胜利改走语义反馈 | `qa:physics-semantic-juice` ✅ |
+| Play 试点 | 收集、受伤、护盾、boss 生命周期、胜负结算改走语义反馈 | `qa:play-scene-semantic-juice` ✅ |
+| Shooter 试点 | 敌人受击/爆炸、玩家受伤、护盾/炸弹技能、胜负结算改走语义反馈 | `qa:shooter-semantic-juice` ✅ |
+| B-tier / build | 新增四个语义反馈 contract 后全绿 | `qa:b-tier-smoke` **34/34**、`npm run build` ✅ |
+
+**交付状态**：第二阶段试点本地验证通过；尚未 commit / push / deploy。下一步横向推广到 Platformer / TowerDefense / Farming / Puzzle，并开始统一 HUD/目标引导层。
+
+---
+
+更新时间：**2026-06-17**（迭代四十三 · 游戏质量跃迁第一阶段 ✅）
+
+## 迭代四十三：用户非样品生成质量下限
+
+| 项 | 结果 | 验证 |
+|----|------|------|
+| 非样品质量门禁 | 新增 `qa:non-sample-game-quality`，五类普通用户 prompt 必须具备 director / systems / powerups / presentation tier | `qa:non-sample-game-quality` ✅ |
+| 商业表现档 | `GameSpec.presentation.qualityTier` 默认 `standard`，开发态共享体验摘要显示 tier | `npm run build` ✅ |
+| 硬质量兜底 | `game-quality.ts` 为非样品补至少 3 个可观察运行时事件；`systems.ts` 保底 4 个 powerup | `qa:game-quality-contracts` ✅ |
+| Juice 表现档 | `gameJuice.ts` 按 `minimal/standard/showcase` 调整 shake / burst / floater / flash 强度 | `qa:juice-quality-tier` ✅ |
+| B-tier | 新增两个游戏质量 contract 后全绿 | `qa:b-tier-smoke` **30/30** ✅ |
+
+**交付状态**：第一阶段本地验证通过；尚未 commit / push / deploy。下一阶段应把语义化 hit/pickup/combo/boss/win feedback 接入试点 Scene，并继续做 HUD/目标引导统一层。
+
+---
+
+更新时间：**2026-06-17**（迭代四十二 · 构建追踪治理 ✅）
+
+## 迭代四十二：提交前构建追踪与运行时资产路径治理
+
+| 项 | 结果 | 验证 |
+|----|------|------|
+| 本地 public 资产路径 | 新增 `repoPublicPath()`，收口封面、漫画、游戏 sprite/bg、Godot 导出、blob-store 等直接 `process.cwd()/public` 拼接 | `qa:public-path-contracts` ✅ |
+| Next server trace | `next.config.ts` 排除 `public/**/*`、`qa-output/**/*`、`workspaces/**/*`、`data/**/*.log`，避免运行时/QA 产物进入输出追踪 | `qa:next-trace-config` ✅ |
+| b-tier 门禁 | 新增两个构建治理契约并接入 b-tier | `qa:b-tier-smoke` **28/28** ✅ |
+| build | 通过；Turbopack broad-pattern warnings 从 39 → 19 → **0**，构建输出不再出现 broad-pattern 警告 | `npm run build` ✅ |
+
+**交付状态**：本地验证通过；尚未 commit / push / deploy。提交前仍需筛选大体积 QA 产物、截图、贴图和源码改动。
+
+---
+
+更新时间：**2026-06-17**（迭代四十一 · 三线风险修复 ✅）
+
+## 迭代四十一：游戏 / 小说 / 漫画风险收敛
+
+| 产品线 | 修复 | 验证 |
+|------|------|------|
+| 游戏 | `competitor-gates` 读取 clone batch 子报告兜底；farming `gameplay.startingCoins` ↔ `farming.startingCoins` 同步 | `qa:game-quality-contracts`、`qa:product-lines:game`、`qa:b-tier-smoke`、`npm run build` ✅ |
+| 小说 | 公开列表/详情只读 `public+ready`；生成中草稿默认 hidden；resume 不重复扣首次生成额度 | `qa:literary-safety-contracts`、`qa:product-lines:novel`、`qa:b-tier-smoke`、`npm run build` ✅ |
+| 漫画 | panels API 补 quota 且在 owner/no-op 后扣费；emergency 分镜返回 warning；部分配图返回 resumeHint | `qa:comic-safety-contracts`、`qa:product-lines:comic`、`qa:b-tier-smoke`、`npm run build` ✅ |
+| QA 报告 | 单线 product-lines 不再覆盖三线总汇总；全量 `qa:product-lines` 才写 aggregate summary | `qa:product-lines-summary-contracts`、`qa:product-lines`、`qa:b-tier-smoke` ✅ |
+
+**交付状态**：本地验证通过；`qa:b-tier-smoke` **26/26**、`qa:product-lines` 三线全绿、`npm run build` ✅。尚未 commit / push / deploy。工作区仍包含迭代四十的旗舰贴图、共享表现层、Scene 收口与 QA 产物。
+
 更新时间：**2026-06-15**（迭代三十五 · AI patch + 竞品基线 ✅）
 
 更新时间：**2026-06-15**（迭代三十四 · 生产上线 cb03358 ✅）

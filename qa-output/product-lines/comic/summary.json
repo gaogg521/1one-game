@@ -1,9 +1,9 @@
 {
-  "at": "2026-06-15T02:32:37.025Z",
+  "at": "2026-06-16T16:59:10.660Z",
   "line": "comic",
   "label": "漫画",
   "pass": true,
-  "offlineSteps": 7,
+  "offlineSteps": 8,
   "e2eRan": true,
   "results": [
     {
@@ -16,6 +16,10 @@
     },
     {
       "cmd": "npm run qa:comic-novel-product-rules",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:comic-safety-contracts",
       "ok": true
     },
     {

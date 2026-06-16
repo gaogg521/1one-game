@@ -1,12 +1,21 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import {
+  juiceBurst,
+  juiceCombo,
+  juiceFail,
+  juiceHit,
+  juicePickup,
+  juiceWin,
+  themeParticleHex,
+} from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
@@ -90,8 +99,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   create() {
-    const cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(cohesive.bleepTemperament);
+    const cohesive = buildSceneCohesion(this.spec);
     this.cohesive = cohesive;
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     const bp = this.spec.puzzle ?? buildPuzzleBlueprint({ spec: this.spec });
@@ -216,8 +224,13 @@ export class PuzzleScene extends Phaser.Scene {
         this.timerText.setColor("#fb7185");
         if (!this.memoryTimerWarned) {
           this.memoryTimerWarned = true;
-          juiceFlash(this, { r: 251, g: 113, b: 133 }, { durationMs: 120 });
-          juiceShake(this, { durationMs: 140, intensity: 0.004 });
+          juiceHit(this, {
+            x: this.scale.width / 2,
+            y: 86,
+            colorHex: this.cohesive.hud.danger,
+            text: this.uiLocale === "zh-Hans" ? "快一点" : "Hurry",
+            textColorCss: this.cohesive.hud.danger,
+          });
         }
       }
     }
@@ -231,10 +244,21 @@ export class PuzzleScene extends Phaser.Scene {
     this.finished = true;
     this.banner.show({ ...bannerPuzzleFinish(this.uiLocale, won), ms: 2000 });
     if (won) {
-      juiceShake(this, { durationMs: 220, intensity: 0.012 });
-      juiceFlash(this, { r: 140, g: 200, b: 255 }, { durationMs: 140 });
+      juiceWin(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.44,
+        colorHex: themeParticleHex(this.spec),
+        text: this.uiLocale === "zh-Hans" ? "解开了" : "Solved",
+        textColorCss: this.cohesive.hud.accent,
+      });
     } else {
-      juiceShake(this, { durationMs: 180, intensity: 0.008 });
+      juiceFail(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.44,
+        colorHex: this.cohesive.hud.danger,
+        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        textColorCss: this.cohesive.hud.danger,
+      });
     }
     this.time.delayedCall(2200, () => this.onEnd({ score: this.score, won }));
   }
@@ -283,8 +307,13 @@ export class PuzzleScene extends Phaser.Scene {
       const color = this.grid[r]![c]!;
       const group = this.floodMatch3(r, c, color, new Set());
       if (group.size < 2) {
-        juiceFlash(this, { r: 255, g: 255, b: 255 }, { durationMs: 80 });
-        juiceFloater(this, p.x, p.y - 10, this.uiLocale === "zh-Hans" ? "再试" : "Try again", "#e2e8f0");
+        juiceHit(this, {
+          x: p.x,
+          y: p.y,
+          colorHex: "#e2e8f0",
+          text: this.uiLocale === "zh-Hans" ? "再试" : "Try again",
+          textColorCss: "#e2e8f0",
+        });
         return;
       }
       for (const key of group) {
@@ -296,14 +325,16 @@ export class PuzzleScene extends Phaser.Scene {
       this.score += gain;
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
       this.publishQaState();
-      const burstN = Math.min(22, Math.round(group.size * bloomScale));
-      juiceBurst(this, p.x, p.y, COLORS[color] ?? "#fff", burstN);
-      if (this.richMatch3 && group.size >= 4) {
-        juiceFlash(this, { r: 244, g: 114, b: 182 }, { durationMs: 100 });
-        juiceShake(this, { durationMs: 120, intensity: 0.005 });
-        juiceFloater(this, p.x, p.y - 28, this.uiLocale === "zh-Hans" ? "Bloom!" : "Bloom!", "#f472b6");
-      }
-      juiceFloater(this, p.x, p.y - 12, `+${gain}`, this.cohesive.hud.accent);
+      const combo = Math.max(group.size, Math.round(group.size * bloomScale));
+      juiceCombo(this, {
+        x: p.x,
+        y: p.y,
+        colorHex: COLORS[color] ?? "#fff",
+        text: this.richMatch3 && group.size >= 4 ? `${this.uiLocale === "zh-Hans" ? "绽放" : "Bloom"} +${gain}` : `+${gain}`,
+        textColorCss: this.richMatch3 && group.size >= 4 ? "#f472b6" : this.cohesive.hud.accent,
+        combo,
+        large: group.size >= 5,
+      });
       playBleep("pickup");
       this.addMove();
       this.redrawMatch3(cols, rows);
@@ -409,9 +440,14 @@ export class PuzzleScene extends Phaser.Scene {
           this.foundDiff += 1;
           this.score += 20;
           this.scoreText.setText(hudScore(this.uiLocale, this.score));
-          juiceBurst(this, pt.x, pt.y, whimsical ? "#f472b6" : themeParticleHex(this.spec), 14);
-          juiceFloater(this, pt.x, pt.y - 16, "+20", this.cohesive.hud.accent);
-          juiceShake(this, { durationMs: 90, intensity: 0.004 });
+          juicePickup(this, {
+            x: pt.x,
+            y: pt.y,
+            colorHex: whimsical ? "#f472b6" : themeParticleHex(this.spec),
+            text: "+20",
+            textColorCss: this.cohesive.hud.accent,
+            large: this.foundDiff >= diffCount,
+          });
           this.addMove();
           playBleep("pickup");
           this.publishQaState();
@@ -467,12 +503,21 @@ export class PuzzleScene extends Phaser.Scene {
         this.score += 15;
         this.flipped = [];
         this.scoreText.setText(hudScore(this.uiLocale, this.score));
-        juiceBurst(this, a!.x, a!.y, COLORS[a!.id % COLORS.length] ?? "#fff", 12);
-        juiceFloater(this, a!.x, a!.y - 14, "+15", this.cohesive.hud.accent);
+        juicePickup(this, {
+          x: a!.x,
+          y: a!.y,
+          colorHex: COLORS[a!.id % COLORS.length] ?? "#fff",
+          text: "+15",
+          textColorCss: this.cohesive.hud.accent,
+        });
         playBleep("pickup");
         if (this.cards.every((c) => c.matched)) this.finish(true);
       } else {
-        juiceShake(this, { durationMs: 100, intensity: 0.003 });
+        juiceHit(this, {
+          x: (a!.x + b!.x) / 2,
+          y: (a!.y + b!.y) / 2,
+          colorHex: this.cohesive.hud.danger,
+        });
         this.time.delayedCall(600, () => {
           a!.face = b!.face = false;
           a!.label.setText("?");
@@ -534,9 +579,15 @@ export class PuzzleScene extends Phaser.Scene {
             this.score += 10;
             this.scoreText.setText(hudScore(this.uiLocale, this.score));
             this.publishQaState();
-            juiceBurst(this, piece.x, piece.y, COLORS[emptyIdx % COLORS.length] ?? "#fff", 18);
-            juiceFlash(this, { r: 252, g: 211, b: 77 }, { durationMs: 120 });
-            juiceFloater(this, piece.x, piece.y - 12, "+10", this.cohesive.hud.accent);
+            juiceCombo(this, {
+              x: piece.x,
+              y: piece.y,
+              colorHex: COLORS[emptyIdx % COLORS.length] ?? "#fff",
+              text: "+10",
+              textColorCss: this.cohesive.hud.accent,
+              combo: this.jigsawDone,
+              large: this.jigsawDone >= total,
+            });
             playBleep("pickup");
             this.addMove(1);
             if (this.jigsawDone >= total) this.finish(true);
@@ -556,11 +607,14 @@ export class PuzzleScene extends Phaser.Scene {
           this.score += 10;
           this.scoreText.setText(hudScore(this.uiLocale, this.score));
           this.publishQaState();
-          juiceBurst(this, piece.x, piece.y, COLORS[slotIdx % COLORS.length] ?? "#fff", 10);
-          if (this.starReward) {
-            juiceFloater(this, piece.x, piece.y - 18, "⭐", "#fcd34d");
-          }
-          juiceFloater(this, piece.x, piece.y - 12, "+10", this.cohesive.hud.accent);
+          juicePickup(this, {
+            x: piece.x,
+            y: piece.y,
+            colorHex: COLORS[slotIdx % COLORS.length] ?? "#fff",
+            text: this.starReward ? "⭐ +10" : "+10",
+            textColorCss: this.starReward ? "#fcd34d" : this.cohesive.hud.accent,
+            large: this.jigsawDone >= total,
+          });
           playBleep("pickup");
           this.addMove(1);
           if (this.jigsawDone >= total) this.finish(true);

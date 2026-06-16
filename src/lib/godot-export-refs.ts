@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import { repoPublicPath } from "@/lib/public-path";
 import { classifyReferencePayloads } from "@/lib/reference-classify";
 
 const AI_SPRITE_ORDINAL_BASE = 100; // 与用户上传参考图（0-99）错开，避免文件名冲突
@@ -25,11 +26,8 @@ export function adjustAiSpritePurposesForTemplate(
 }
 
 /** 将已生成的 AI sprite（public/game-sprites/{projectId}）转为 Godot 可用的 RuntimeReferencePayload */
-export async function readAiSpritesAsReferencePayloads(
-  projectId: string,
-  repoRoot: string,
-): Promise<RuntimeReferencePayload[]> {
-  const spriteDir = path.join(repoRoot, "public", "game-sprites", projectId);
+export async function readAiSpritesAsReferencePayloads(projectId: string): Promise<RuntimeReferencePayload[]> {
+  const spriteDir = repoPublicPath("game-sprites", projectId);
   try {
     await fs.access(spriteDir);
   } catch {
@@ -46,9 +44,9 @@ export async function readAiSpritesAsReferencePayloads(
   };
 
   for (const [fileName, meta] of Object.entries(fileMap)) {
-    const filePath = path.join(spriteDir, fileName);
+    const filePath = path.join(/*turbopackIgnore: true*/ spriteDir, fileName);
     try {
-      const buf = await fs.readFile(filePath);
+      const buf = await fs.readFile(/*turbopackIgnore: true*/ filePath);
       const dataUrl = `data:image/png;base64,${buf.toString("base64")}`;
       payloads.push({ ordinal: meta.ordinal, purpose: meta.purpose, dataUrl });
     } catch {

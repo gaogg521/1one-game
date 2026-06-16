@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
-import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
+import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { createProjectRecord } from "@/lib/project-create";
 import { copyProjectCoverFile } from "@/lib/project-cover";
 import { fetchCreativeBriefJson, saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
@@ -38,9 +38,10 @@ export async function POST(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "sourceCorrupt", 500);
   }
 
-  const normalizedSpec = normalizeAstrocadePlaySpec(sourceSpec);
+  const locale = resolveRequestLocaleSync(req);
+  const canonicalSpec = prepareGameSpecForPersist(sourceSpec, source.prompt, locale);
 
-  const title = duplicateTitle(source.title, resolveRequestLocaleSync(req), 80);
+  const title = duplicateTitle(source.title, locale, 80);
 
   let clone;
   try {
@@ -48,7 +49,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       ownerKey,
       title,
       prompt: source.prompt,
-      specJson: JSON.stringify(normalizedSpec),
+      specJson: JSON.stringify(canonicalSpec),
       status: source.status,
     });
   } catch (e) {

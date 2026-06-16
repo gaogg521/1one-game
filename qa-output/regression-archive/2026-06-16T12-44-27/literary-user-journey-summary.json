@@ -1,0 +1,45 @@
+{
+  "at": "2026-06-15T02:31:46.185Z",
+  "pass": true,
+  "failures": [],
+  "rows": [
+    {
+      "story": "短篇拒绝悬念截断",
+      "ok": true,
+      "detail": "正文长度明显不足，仍像半成品"
+    },
+    {
+      "story": "历史题材视觉路由",
+      "ok": true,
+      "detail": "historical"
+    },
+    {
+      "story": "中篇四宫格 / 长篇八宫格",
+      "ok": true,
+      "detail": "medium=grid_4 long=grid_8"
+    },
+    {
+      "story": "分镜策略=关键情节",
+      "ok": true,
+      "detail": "key moments"
+    },
+    {
+      "story": "正文对白/旁白回填分镜",
+      "ok": true,
+      "detail": "朕不能亡于此。 | 他终于改写了亡国结局，天下重归太平。"
+    },
+    {
+      "story": "按章改编进度",
+      "ok": true,
+      "detail": "adapted=1 next=2"
+    }
+  ],
+  "stories": [
+    "用户写短篇 → 必须收束才入库",
+    "用户改编历史小说 → 视觉题材不错判都市",
+    "用户中篇改编 → 四宫格（轻量分镜）；长篇 → 八宫格",
+    "分镜 LLM → 抽关键情节而非逐段铺格",
+    "LLM 占位格 → 正文对白/旁白自动回填",
+    "长篇按章 → 改编进度与下一章可续"
+  ]
+}

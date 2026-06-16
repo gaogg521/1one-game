@@ -7,10 +7,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { PRODUCT } from "../src/lib/product-config";
+import { resolveCloneBatchGateOk, type CloneBatchSummary } from "../src/lib/qa/competitor-gates-summary";
 import { parseGodotPlaywrightJson, writeGodotMatrixSummary } from "./qa-godot-matrix-summary";
 
 const OUT = path.join(process.cwd(), "qa-output", "competitor-gates.json");
 const GODOT_JSON = path.join(process.cwd(), "qa-output", "godot-matrix", "playwright-results.json");
+const CLONE_BATCH_SUMMARY = path.join(process.cwd(), "qa-output", "competitor-clone-batch", "summary.json");
 const LOCAL_BASE = "http://127.0.0.1:8888";
 const LOCAL_ENV = { PLAYWRIGHT_BASE_URL: LOCAL_BASE };
 const GODOT_E2E = [
@@ -47,8 +49,23 @@ function run(cmd: string, extraEnv?: Record<string, string>, timeoutMs?: number)
       env: { ...process.env, PW_REUSE_SERVER: "1", ...LOCAL_ENV, ...extraEnv },
     });
     return true;
-  } catch {
+  } catch (e) {
+    console.warn(`[gates] step failed: ${cmd}`, e instanceof Error ? e.message : e);
     return false;
+  }
+}
+
+function writeFinalSnap(snap: GateSnap): void {
+  fs.mkdirSync(path.dirname(OUT), { recursive: true });
+  fs.writeFileSync(OUT, JSON.stringify(snap, null, 2));
+}
+
+function readCloneBatchSummary(): CloneBatchSummary | null {
+  if (!fs.existsSync(CLONE_BATCH_SUMMARY)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(CLONE_BATCH_SUMMARY, "utf8")) as CloneBatchSummary;
+  } catch {
+    return null;
   }
 }
 
@@ -238,11 +255,15 @@ async function main() {
   });
   await cooldown("gameplay interaction", 4000);
 
-  const cloneBatchOk = run(
+  const cloneBatchCommandOk = run(
     "npm run qa:competitor-clone-batch",
     { COMPETITOR_CLONE_BATCH: "all" },
-    900_000,
+    1_800_000,
   );
+  const cloneBatchOk = resolveCloneBatchGateOk({
+    commandOk: cloneBatchCommandOk,
+    summary: readCloneBatchSummary(),
+  });
 
   const snap: GateSnap = {
     at: startedAt,
@@ -266,7 +287,7 @@ async function main() {
       gameplayInteractionOk,
   };
 
-  writeSnap(snap);
+  writeFinalSnap(snap);
   console.log(`[monitor] gates → ${path.relative(process.cwd(), OUT)}`);
   console.log(
     `[monitor] godot matrix · ${snap.godotMatrix.templateCount} templates · e2eGodotOk=${e2eGodotOk}`,

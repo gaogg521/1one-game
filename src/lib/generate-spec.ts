@@ -12,6 +12,7 @@ import { isGameTemplateId } from "@/lib/game-templates/registry";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
+import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { fetchUrlPlainText } from "@/lib/fetch-url-text";
 import { tavilySearch } from "@/lib/web-search/tavily";
@@ -267,7 +268,7 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
-  return withPresentationDefaults(applyMinecraftThemeOverlay(next));
+  return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt);
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {

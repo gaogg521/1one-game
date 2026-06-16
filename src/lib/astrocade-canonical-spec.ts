@@ -24,10 +24,12 @@ export function buildCanonicalAstrocadeSpec(
   opts: CanonicalSpecOptions = {},
 ): GameSpec {
   const trimmed = prompt.trim();
-  const inferredId = opts.sampleId ?? inferSampleIdFromPrompt(trimmed);
+  const persistedVariantId = opts.persistedSpec?.samplePlayProfile?.variantId;
+  const inferredId =
+    opts.sampleId ?? inferSampleIdFromPrompt(trimmed) ?? persistedVariantId;
   const sample = inferredId ? SAMPLES.find((s) => s.id === inferredId) : undefined;
 
-  /** 已知样品 prompt：始终用同一份 mock 元数据起跑（POST/seed/clone 全局一致） */
+  /** 已知样品 prompt / variant：mock 起跑；否则沿用 persisted */
   const base: GameSpec = sample
     ? mockSpecFromPrompt(trimmed, {
         sampleId: sample.id,

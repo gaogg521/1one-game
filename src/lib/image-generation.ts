@@ -13,6 +13,7 @@ import { createOpenAIClient } from "@/lib/openai-client";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
 import { resolveSceneRoute } from "@/lib/runtime-providers";
+import { repoPublicPath } from "@/lib/public-path";
 import fs from "fs";
 import path from "path";
 
@@ -107,10 +108,10 @@ function imageItemToResult(
   if (item.b64_json) {
     const buf = Buffer.from(item.b64_json, "base64");
     const filename = `openai-${fileStem ?? Date.now()}.png`;
-    const dir = path.join(process.cwd(), "public", "covers");
+    const dir = repoPublicPath("covers");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const localPath = path.join(dir, filename);
-    fs.writeFileSync(localPath, buf);
+    const localPath = path.join(/*turbopackIgnore: true*/ dir, filename);
+    fs.writeFileSync(/*turbopackIgnore: true*/ localPath, buf);
     return { url: `/covers/${filename}`, localPath };
   }
   return null;
@@ -380,7 +381,7 @@ export async function generateImageWithGemini(
     // 保存到 public/comics/
     const buf = Buffer.from(imagePart.inlineData.data, "base64");
     const filename = `gemini-${Date.now()}.png`;
-    const dir = path.join(process.cwd(), "public", "comics");
+    const dir = repoPublicPath("comics");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const localPath = path.join(dir, filename);
     fs.writeFileSync(localPath, buf);

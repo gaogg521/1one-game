@@ -1,0 +1,129 @@
+{
+  "at": "2026-06-16T03:26:13.026Z",
+  "suiteOk": true,
+  "passCount": 17,
+  "total": 17,
+  "runtimeSmoke": {
+    "testId": "试玩页可切换到-Godot-引擎标签",
+    "title": "试玩页可切换到 Godot 引擎标签",
+    "templateId": "runtime-smoke",
+    "ok": true,
+    "durationMs": 42424
+  },
+  "templates": [
+    {
+      "templateId": "towerDefense",
+      "ok": true,
+      "durationMs": 32651,
+      "title": "Godot 标签 · towerDefense"
+    },
+    {
+      "templateId": "coaster",
+      "ok": true,
+      "durationMs": 36111,
+      "title": "Godot 标签 · coaster"
+    },
+    {
+      "templateId": "racing",
+      "ok": true,
+      "durationMs": 34085,
+      "title": "Godot 标签 · racing"
+    },
+    {
+      "templateId": "shooter",
+      "ok": true,
+      "durationMs": 31235,
+      "title": "Godot 标签 · shooter"
+    },
+    {
+      "templateId": "sniper",
+      "ok": true,
+      "durationMs": 31013,
+      "title": "Godot 标签 · sniper"
+    },
+    {
+      "templateId": "platformer",
+      "ok": true,
+      "durationMs": 33374,
+      "title": "Godot 标签 · platformer"
+    },
+    {
+      "templateId": "stealth",
+      "ok": true,
+      "durationMs": 32873,
+      "title": "Godot 标签 · stealth"
+    },
+    {
+      "templateId": "strategy",
+      "ok": true,
+      "durationMs": 32524,
+      "title": "Godot 标签 · strategy"
+    },
+    {
+      "templateId": "farming",
+      "ok": true,
+      "durationMs": 43399,
+      "title": "Godot 标签 · farming"
+    },
+    {
+      "templateId": "puzzle",
+      "ok": true,
+      "durationMs": 43994,
+      "title": "Godot 标签 · puzzle"
+    },
+    {
+      "templateId": "chess",
+      "ok": true,
+      "durationMs": 47927,
+      "title": "Godot 标签 · chess"
+    },
+    {
+      "templateId": "customization",
+      "ok": true,
+      "durationMs": 38900,
+      "title": "Godot 标签 · customization"
+    },
+    {
+      "templateId": "physics",
+      "ok": true,
+      "durationMs": 35287,
+      "title": "Godot 标签 · physics"
+    },
+    {
+      "templateId": "survivor",
+      "ok": true,
+      "durationMs": 38965,
+      "title": "Godot 标签 · survivor"
+    },
+    {
+      "templateId": "collector",
+      "ok": true,
+      "durationMs": 43067,
+      "title": "Godot 标签 · collector"
+    },
+    {
+      "templateId": "avoider",
+      "ok": true,
+      "durationMs": 52913,
+      "title": "Godot 标签 · avoider"
+    }
+  ],
+  "supportedTemplates": [
+    "towerDefense",
+    "coaster",
+    "racing",
+    "shooter",
+    "sniper",
+    "platformer",
+    "stealth",
+    "strategy",
+    "farming",
+    "puzzle",
+    "chess",
+    "customization",
+    "physics",
+    "survivor",
+    "collector",
+    "avoider"
+  ]
+}

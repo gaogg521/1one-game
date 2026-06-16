@@ -10,6 +10,7 @@ import { withGodotWebExportLock } from "@/lib/godot-export-lock";
 import type { GodotReferenceBuildSummary } from "@/lib/godot-export-refs";
 import { clearGodotDotCache, prepareGodotWorkspace } from "@/lib/godot-export-workspace";
 import { godotRuntimeAvailable, repoRoot, runGodot } from "@/lib/godot-run";
+import { repoPublicPath } from "@/lib/public-path";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +58,7 @@ export async function exportGameSpecToGodotWeb(params: {
   }
 
   return withGodotWebExportLock(exportId, async () => {
-    const publicOut = path.join(repoRoot(), "public", "godot-builds", exportId);
+    const publicOut = repoPublicPath("godot-builds", exportId);
     const indexHtml = path.join(publicOut, "index.html");
     const metaPath = path.join(publicOut, ".spec-hash.json");
 

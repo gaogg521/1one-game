@@ -26,10 +26,8 @@ import { createPhaserSceneForSpec } from "@/lib/game-templates/runtime";
 import { resolveRuntimeAssets } from "@/lib/assets/asset-runtime-resolver";
 import { readAssetManifestFromSession } from "@/lib/assets/asset-manifest-session.client";
 import { GameSoundscape } from "@/game/audio/gameSoundscape";
-import {
-  buildCohesivePresentation,
-  thematicRootFrequencyHz,
-} from "@/lib/cohesive-presentation";
+import { thematicRootFrequencyHz } from "@/lib/cohesive-presentation";
+import { bindAudioBootGestures, buildSceneCohesion } from "@/lib/scene-experience";
 
 export type CreatePhaserGameOptions = {
   /** 创作台解析后写入 sessionStorage 的参考图 data URL（仅会话） */
@@ -70,7 +68,7 @@ export function createPhaserGame(
   );
   const assetProjectId = resolveAssetProjectId(specPlay, opts?.projectId);
   const canonicalBackgroundUrl = assetProjectId ? `/game-bg/${assetProjectId}.png` : null;
-  const presentation = buildCohesivePresentation(specPlay);
+  const presentation = buildSceneCohesion(specPlay);
   const assets = resolveRuntimeAssets({
     projectId: assetProjectId,
     /** 样品 profile 优先：忽略 GamePlayer 传入的 raw projectId 背景 */
@@ -148,22 +146,10 @@ export function createPhaserGame(
     void soundscape.startInteractive();
   };
 
-  let audioArmed = true;
-  const onUserGesture = () => {
-    if (!audioArmed) return;
-    bootAudio();
-    detachAudioGestures();
-  };
-  const detachAudioGestures = () => {
-    audioArmed = false;
-    parent.removeEventListener("pointerdown", onUserGesture);
-    parent.removeEventListener("keydown", onUserGesture);
-    window.removeEventListener("keydown", onUserGesture, true);
-  };
-
-  parent.addEventListener("pointerdown", onUserGesture, { passive: true });
-  parent.addEventListener("keydown", onUserGesture);
-  window.addEventListener("keydown", onUserGesture, true);
+  const detachAudioGestures = bindAudioBootGestures({
+    parent,
+    bootAudio,
+  });
 
   game.events.once(Phaser.Core.Events.DESTROY, () => {
     detachAudioGestures();

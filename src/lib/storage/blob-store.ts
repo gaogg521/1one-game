@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
+import { repoPublicPath } from "@/lib/public-path";
 
 export type BlobStore = {
   put(key: string, data: Buffer, contentType?: string): Promise<string>;
@@ -7,7 +8,7 @@ export type BlobStore = {
 };
 
 function localRoot(): string {
-  return process.env.BLOB_LOCAL_ROOT?.trim() || path.join(process.cwd(), "public");
+  return process.env.BLOB_LOCAL_ROOT?.trim() || repoPublicPath();
 }
 
 function publicBaseUrl(): string {

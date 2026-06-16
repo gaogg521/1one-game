@@ -1,11 +1,12 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { juiceBurst, juiceFlash, themeParticleHex } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildCustomizationBlueprint, type CustomizationMode } from "@/lib/customization-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
 import { paintCustomizationStudio } from "@/game/engine/template-theme-visual";
@@ -76,8 +77,7 @@ export class CustomizationScene extends Phaser.Scene {
 
   create() {
     setPhaserQaClickHints([]);
-    const cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(cohesive.bleepTemperament);
+    const cohesive = buildSceneCohesion(this.spec);
     this.cohesive = cohesive;
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
 

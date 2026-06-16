@@ -1,0 +1,39 @@
+{
+  "at": "2026-06-15T18:27:43.561Z",
+  "e2eAstrocadeOk": false,
+  "e2eCloneOk": false,
+  "e2eGodotOk": false,
+  "e2eSamplesEnOk": false,
+  "specCanonicalOk": true,
+  "parityValidationOk": false,
+  "cloneBatchOk": true,
+  "gameplayInteractionOk": false,
+  "godotMatrix": {
+    "templates": [
+      "towerDefense",
+      "coaster",
+      "racing",
+      "shooter",
+      "sniper",
+      "platformer",
+      "stealth",
+      "strategy",
+      "farming",
+      "puzzle",
+      "chess",
+      "customization",
+      "physics",
+      "survivor",
+      "collector",
+      "avoider"
+    ],
+    "templateCount": 16,
+    "e2eSpecs": [
+      "e2e/godot-runtime.smoke.spec.ts",
+      "e2e/godot-templates-matrix.spec.ts"
+    ],
+    "e2eGodotOk": false,
+    "playSummaryPath": "qa-output/godot-matrix/summary.json"
+  },
+  "e2eAllOk": false
+}

@@ -1,9 +1,21 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import {
+  juiceBoss,
+  juiceBurst,
+  juiceFail,
+  juiceFlash,
+  juiceFloater,
+  juiceHit,
+  juicePickup,
+  juiceShake,
+  juiceWin,
+  themeParticleHex,
+} from "@/game/engine/gameJuice";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import {
   addMinecraftBackdrop,
   ensureMinecraftEntityTextures,
@@ -242,8 +254,7 @@ export class PlayScene extends Phaser.Scene {
     this.lives = this.spec.gameplay.lives ?? 3;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
-    const ui = buildCohesivePresentation(this.spec);
-    setBleepTemperament(ui.bleepTemperament);
+    const ui = buildSceneCohesion(this.spec);
     this.cohesive = ui;
 
     const blockyWorld = isMinecraftLikeSpec(this.spec);
@@ -699,21 +710,37 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private fxCollect(x: number, y: number) {
-    juiceBurst(this, x, y, themeParticleHex(this.spec), 14);
-    juiceFloater(this, x, y - 14, "+1", this.cohesive.hud.body);
-    juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 120 });
+    juicePickup(this, {
+      x,
+      y,
+      colorHex: themeParticleHex(this.spec),
+      text: "+1",
+      textColorCss: this.cohesive.hud.body,
+      rng: this.runtimeRng,
+    });
     playBleep("pickup");
     this.soundscape?.triggerKillStinger();
   }
 
   private fxDamage() {
-    juiceShake(this, { durationMs: 140, intensity: 0.0045 });
-    juiceFlash(this, { r: 255, g: 90, b: 90 }, { durationMs: 160 });
+    juiceHit(this, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      colorHex: this.spec.theme.hazardColor,
+      rng: this.runtimeRng,
+    });
     playBleep("hit");
   }
 
   private fxShield() {
-    juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 120 });
+    juicePickup(this, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      colorHex: this.cohesive.hud.accent2,
+      text: this.spec.systems?.skill?.name ?? "shield",
+      textColorCss: this.cohesive.hud.accent,
+      rng: this.runtimeRng,
+    });
     playBleep("pickup");
   }
 
@@ -1214,9 +1241,7 @@ export class PlayScene extends Phaser.Scene {
       this.survivorDodgeStreak = 0;
       this.invulnUntil = this.time.now + 720;
       this.lives -= 1;
-      juiceShake(this, { durationMs: 180, intensity: 0.009 });
-      juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 130 });
-      playBleep("hit");
+      this.fxDamage();
       this.player.setAlpha(0.35);
       this.time.delayedCall(200, () => this.player.setAlpha(1));
       if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
@@ -1234,9 +1259,7 @@ export class PlayScene extends Phaser.Scene {
       this.collectorCombo = 0;
       this.lastCollectorPickupAt = 0;
       this.lives -= 1;
-      juiceShake(this, { durationMs: 160, intensity: 0.008 });
-      juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 120 });
-      playBleep("hit");
+      this.fxDamage();
       if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
       if (this.lives === 1) {
         this.soundscape?.triggerEvent("danger");
@@ -1248,9 +1271,7 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    juiceShake(this, { durationMs: 200, intensity: 0.012 });
-    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 150 });
-    playBleep("hit");
+    this.fxDamage();
     this.finish({ score: this.score, won: false });
   }
 
@@ -1278,8 +1299,25 @@ export class PlayScene extends Phaser.Scene {
     this.physics.pause();
     this.hintText.setText(playFinishText(this.uiLocale, this.spec.templateId, payload.won));
     if (payload.won) {
+      juiceWin(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: themeParticleHex(this.spec),
+        text: this.uiLocale === "zh-Hans" ? "胜利" : "Win",
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
+    } else {
+      juiceFail(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.spec.theme.hazardColor,
+        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        textColorCss: this.cohesive.hud.danger,
+        rng: this.runtimeRng,
+      });
     }
     this.onEnd(payload);
   }
@@ -1533,7 +1571,15 @@ export class PlayScene extends Phaser.Scene {
     this.bossPhase = 0;
 
     this.soundscape?.triggerEvent("boss");
-    juiceShake(this, { durationMs: 500, intensity: 0.025 });
+    juiceBoss(this, {
+      x: this.scale.width / 2,
+      y: this.scale.height * 0.22,
+      colorHex: this.spec.theme.hazardColor,
+      text: this.uiLocale === "zh-Hans" ? "BOSS" : "BOSS",
+      textColorCss: this.cohesive.hud.danger,
+      rng: this.runtimeRng,
+      large: true,
+    });
     this.startDangerVignette();
 
     const x = Phaser.Math.Between(120, width - 120);
@@ -1637,8 +1683,14 @@ export class PlayScene extends Phaser.Scene {
     const newPhase = ratio > 0.6 ? 0 : ratio > 0.3 ? 1 : 2;
     if (newPhase !== this.bossPhase) {
       this.bossPhase = newPhase;
-      juiceShake(this, { durationMs: 350, intensity: 0.02 });
-      juiceFlash(this, { r: 255, g: 80, b: 80 }, { durationMs: 150 });
+      juiceBoss(this, {
+        x: this.bossSprite.x,
+        y: this.bossSprite.y,
+        colorHex: this.spec.theme.hazardColor,
+        text: bossPhaseLabel(this.uiLocale, newPhase === 1 ? 1 : 2),
+        textColorCss: this.cohesive.hud.danger,
+        rng: this.runtimeRng,
+      });
       (this.bossSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
       const label = bossPhaseLabel(this.uiLocale, newPhase === 1 ? 1 : 2);
       this.banner.show({ ...bannerEliteAssault(this.uiLocale, label), ms: 1400 });
@@ -1649,8 +1701,13 @@ export class PlayScene extends Phaser.Scene {
     }
 
     // Damage feedback
-    juiceFlash(this, { r: 255, g: 200, b: 50 }, { durationMs: 80 });
-    juiceShake(this, { durationMs: 100, intensity: 0.008 });
+    juiceHit(this, {
+      x: this.bossSprite.x,
+      y: this.bossSprite.y,
+      colorHex: themeParticleHex(this.spec),
+      rng: this.runtimeRng,
+      large: this.bossPhase >= 2,
+    });
     this.bossSprite.setTint(0xffffff);
     this.time.delayedCall(80, () => {
       if (this.bossSprite?.active) {
@@ -1681,9 +1738,15 @@ export class PlayScene extends Phaser.Scene {
     const bx = this.bossSprite.x, by = this.bossSprite.y;
 
     // Death explosion
-    juiceShake(this, { durationMs: 600, intensity: 0.035 });
-    juiceFlash(this, { r: 255, g: 150, b: 50 }, { durationMs: 300 });
-    juiceBurst(this, bx, by, "#ff6600", 24);
+    juiceBoss(this, {
+      x: bx,
+      y: by,
+      colorHex: "#ff6600",
+      text: floaterBossKill(this.uiLocale, 15 + this.bossMaxHp * 5),
+      textColorCss: "#ffcc00",
+      rng: this.runtimeRng,
+      large: true,
+    });
     playBleep("pickup");
 
     this.bossSprite.destroy();
@@ -1702,17 +1765,6 @@ export class PlayScene extends Phaser.Scene {
     // Big score reward
     const bonus = 15 + this.bossMaxHp * 5;
     this.score += bonus;
-    const floater = this.add.text(bx, by - 50, floaterBossKill(this.uiLocale, bonus), {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: "20px",
-      color: "#ffcc00",
-      fontStyle: "bold",
-    }).setOrigin(0.5).setDepth(35);
-    this.tweens.add({
-      targets: floater, y: floater.y - 40, alpha: 0, duration: 1200, ease: "Quad.Out",
-      onComplete: () => floater.destroy(),
-    });
-
     this.banner.show({ ...bannerBossDefeated(this.uiLocale, bonus), ms: 2200 });
     this.refreshHud();
 

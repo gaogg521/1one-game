@@ -11,6 +11,7 @@ import {
 import { normalizeNovelTitle } from "./novel-display";
 import { compositeNovelCover } from "./cover-composite";
 import type { AppLocale } from "@/i18n/routing";
+import { repoPublicPath } from "@/lib/public-path";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -31,7 +32,7 @@ export interface CoverGenOptions {
 async function readImageBuffer(imageUrl: string): Promise<Buffer | null> {
   try {
     if (imageUrl.startsWith("/")) {
-      const abs = path.join(process.cwd(), "public", imageUrl.replace(/^\//, ""));
+      const abs = repoPublicPath(imageUrl.replace(/^\//, ""));
       return await fs.readFile(abs);
     }
     if (/^https?:\/\//i.test(imageUrl)) {
@@ -137,7 +138,7 @@ export async function generateCover(opts: CoverGenOptions): Promise<string | nul
     const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre, uiLocale });
     const tmpName = `composed-${Date.now()}.jpg`;
     const tmpRel = `/covers/${tmpName}`;
-    const tmpAbs = path.join(process.cwd(), "public", "covers", tmpName);
+    const tmpAbs = repoPublicPath("covers", tmpName);
     await fs.mkdir(path.dirname(tmpAbs), { recursive: true });
     await fs.writeFile(tmpAbs, composed);
     return tmpRel;

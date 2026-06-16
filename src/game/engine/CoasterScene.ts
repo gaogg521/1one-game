@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { juiceBurst, juiceFlash, juiceFloater, juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
@@ -11,7 +11,8 @@ import {
   sampleCoasterPath,
   type CoasterPathPoint,
 } from "@/lib/coaster-blueprint";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { paintCoasterSkyBackdrop } from "@/game/engine/template-theme-visual";
 import {
   drawCoasterCartRich,
@@ -106,8 +107,7 @@ export class CoasterScene extends Phaser.Scene {
   }
 
   create() {
-    this.cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(this.cohesive.bleepTemperament);
+    this.cohesive = buildSceneCohesion(this.spec);
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
 
     const bp = this.spec.coaster ?? buildCoasterBlueprint({ spec: this.spec });

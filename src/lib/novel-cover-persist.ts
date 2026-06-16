@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { repoPublicPath } from "@/lib/public-path";
 
-const COVERS_DIR = path.join(process.cwd(), "public", "covers");
+const COVERS_DIR = repoPublicPath("covers");
 
 function extFromBuffer(buf: Buffer): "jpg" | "png" | "webp" {
   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return "jpg";
@@ -15,7 +16,7 @@ export async function persistNovelCoverFile(novelId: string, imageUrl: string): 
   try {
     let buf: Buffer;
     if (imageUrl.startsWith("/")) {
-      const abs = path.join(process.cwd(), "public", imageUrl.replace(/^\//, ""));
+      const abs = repoPublicPath(imageUrl.replace(/^\//, ""));
       buf = await fs.readFile(abs);
     } else if (/^https?:\/\//i.test(imageUrl)) {
       const res = await fetch(imageUrl, { signal: AbortSignal.timeout(60_000) });
@@ -29,7 +30,7 @@ export async function persistNovelCoverFile(novelId: string, imageUrl: string): 
     const ext = extFromBuffer(buf);
     await fs.mkdir(COVERS_DIR, { recursive: true });
     const rel = `/covers/${novelId}.${ext}`;
-    const abs = path.join(COVERS_DIR, `${novelId}.${ext}`);
+    const abs = path.join(/*turbopackIgnore: true*/ COVERS_DIR, `${novelId}.${ext}`);
     await fs.writeFile(abs, buf, { mode: 0o644 });
     return rel;
   } catch {
@@ -43,7 +44,7 @@ export async function persistNovelCoverBuffer(novelId: string, buf: Buffer): Pro
     if (buf.length < 512) return null;
     await fs.mkdir(COVERS_DIR, { recursive: true });
     const rel = `/covers/${novelId}.jpg`;
-    const abs = path.join(COVERS_DIR, `${novelId}.jpg`);
+    const abs = path.join(/*turbopackIgnore: true*/ COVERS_DIR, `${novelId}.jpg`);
     await fs.writeFile(abs, buf, { mode: 0o644 });
     return rel;
   } catch {
@@ -53,7 +54,7 @@ export async function persistNovelCoverBuffer(novelId: string, buf: Buffer): Pro
 
 export async function deleteNovelCoverFile(novelId: string): Promise<void> {
   for (const ext of ["jpg", "png", "webp"] as const) {
-    const abs = path.join(COVERS_DIR, `${novelId}.${ext}`);
+    const abs = path.join(/*turbopackIgnore: true*/ COVERS_DIR, `${novelId}.${ext}`);
     try {
       await fs.unlink(abs);
     } catch {

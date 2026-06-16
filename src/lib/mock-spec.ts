@@ -8,6 +8,7 @@ import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
+import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { inferTemplateFromPrompt, type GameTemplateId } from "@/lib/game-templates";
 import { getTemplateDefinition, resolveTemplateRuntime } from "@/lib/game-templates/registry";
 import {
@@ -313,5 +314,5 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
     spec.systems = buildSystems({ prompt, spec });
   }
 
-  return withPresentationDefaults(applyMinecraftThemeOverlay(spec));
+  return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(spec)), prompt);
 }

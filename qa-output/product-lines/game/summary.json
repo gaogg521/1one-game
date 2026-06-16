@@ -1,9 +1,9 @@
 {
-  "at": "2026-06-14T16:09:14.393Z",
+  "at": "2026-06-16T16:58:01.450Z",
   "line": "game",
   "label": "游戏",
   "pass": true,
-  "offlineSteps": 6,
+  "offlineSteps": 7,
   "e2eRan": true,
   "results": [
     {
@@ -16,6 +16,10 @@
     },
     {
       "cmd": "npm run qa:architecture-parity",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:game-quality-contracts",
       "ok": true
     },
     {

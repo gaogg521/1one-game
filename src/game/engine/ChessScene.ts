@@ -1,10 +1,11 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import type { GameSpec } from "@/lib/game-spec";
 import {
   bannerChessFinish,
@@ -58,8 +59,7 @@ export class ChessScene extends Phaser.Scene {
   }
 
   create() {
-    const cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(cohesive.bleepTemperament);
+    const cohesive = buildSceneCohesion(this.spec);
     this.cohesive = cohesive;
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
 

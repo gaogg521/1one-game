@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import type { GameSpec } from "@/lib/game-spec";
+import { repoPublicPath } from "@/lib/public-path";
 
 export type ProceduralSpriteKind = "player" | "hazard" | "gem" | "power" | "boss";
 
@@ -178,7 +179,7 @@ export async function writeSampleProceduralAssets(
   spec: GameSpec,
   opts?: { rich?: boolean; rootDir?: string },
 ): Promise<WriteSampleAssetsResult> {
-  const root = opts?.rootDir ?? path.join(process.cwd(), "public");
+  const root = opts?.rootDir ?? repoPublicPath();
   const rich = Boolean(opts?.rich);
   const spriteDir = path.join(root, "game-sprites", projectId);
   const bgDir = path.join(root, "game-bg");

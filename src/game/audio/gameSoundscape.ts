@@ -469,26 +469,33 @@ export class GameSoundscape {
 
     const t = ctx.currentTime;
     const scale = getScaleForProfile(this.profile);
-    // 随机选一个高音符做 stinger
-    const idx = Math.floor(Math.random() * 3) + 3; // 选较高音
-    const freq = this.rootHz * (scale[idx] ?? 2);
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = this.profile === "neon" ? "sawtooth" : "sine";
-    osc.frequency.setValueAtTime(freq, t);
-    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.08);
-    gain.gain.setValueAtTime(0.08, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.16);
-
-    this.cleanups.push(() => {
-      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
-    });
+    const tension = Math.max(0, Math.min(1, this.currentTension));
+    const burstCount = tension > 0.72 ? 3 : tension > 0.35 ? 2 : 1;
+    const baseIdx = tension > 0.72 ? 4 : 3;
+    const interval = this.profile === "minimal" ? 0.07 : this.profile === "neon" ? 0.06 : 0.08;
+    for (let i = 0; i < burstCount; i += 1) {
+      const idx = baseIdx + i;
+      const freq = this.rootHz * (scale[idx] ?? scale[scale.length - 1] ?? 2);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = this.profile === "neon" ? "sawtooth" : tension > 0.7 ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(freq, t + i * interval);
+      osc.frequency.exponentialRampToValueAtTime(freq * (1.24 + tension * 0.28), t + i * interval + 0.08);
+      gain.gain.setValueAtTime(0.075 + tension * 0.018, t + i * interval);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * interval + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t + i * interval);
+      osc.stop(t + i * interval + 0.16);
+      this.cleanups.push(() => {
+        try {
+          osc.disconnect();
+          gain.disconnect();
+        } catch {
+          /* ignore */
+        }
+      });
+    }
   }
 
   /** 波次/关卡开始时升级音乐 */

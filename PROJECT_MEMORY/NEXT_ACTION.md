@@ -1,11 +1,185 @@
+更新时间：**2026-06-17**（迭代四十五 · 语义化 Juice 横向推广 ✅）
+
+## 迭代四十五（当前）
+
+1. ✅ **Platformer / Farming / Puzzle 接入语义 feedback**
+   - `PlatformerScene`：收集、受伤、护盾、胜负结算、boss/炸弹技能、章节切换改走 `juicePickup` / `juiceHit` / `juiceBoss` / `juiceWin` / `juiceFail`。
+   - `FarmingScene`：播种、浇水、收获连击、丰收结算改走 `juicePickup` / `juiceCombo` / `juiceWin`，金币不足走 `juiceHit`。
+   - `PuzzleScene`：match3 命中/错误、找不同、记忆翻牌、拼图落位、胜负结算改走语义 feedback。
+2. ✅ **新增防回退契约**
+   - 新增 `qa:platformer-semantic-juice`
+   - 新增 `qa:farming-semantic-juice`
+   - 新增 `qa:puzzle-semantic-juice`
+   - 全部接入 `qa:b-tier-smoke`。
+3. ✅ **验证**
+   - `npm run qa:platformer-semantic-juice` ✅
+   - `npm run qa:farming-semantic-juice` ✅
+   - `npm run qa:puzzle-semantic-juice` ✅
+   - `npm run qa:b-tier-smoke` ✅ **37/37**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+4. ⬜ **下一步**
+   - 阶段二剩余：单独处理 `TowerDefenseScene`，把造塔、击杀、漏怪、波次、胜负反馈收敛到语义 feedback。
+   - 阶段三：统一 HUD/目标引导层，解决“看起来像调试模板”的问题。
+
+---
+
+更新时间：**2026-06-17**（迭代四十四 · 语义化 Juice 试点 ✅）
+
+## 迭代四十四（当前）
+
+1. ✅ **语义化反馈 preset**
+   - `gameJuice.ts` 新增 `resolveJuicePreset()` 与语义封装：`juicePickup` / `juiceHit` / `juiceCombo` / `juiceBoss` / `juiceWin` / `juiceFail`。
+   - preset 区分 pickup、hit、combo、boss、win、fail 的粒子数、shake 强度、flash 时长、floater 前缀。
+   - 新增 `qa:juice-semantic-presets`，断言语义反馈层级不退化。
+2. ✅ **Scene 试点接入**
+   - `PhysicsScene`：点击命中、连击、胜利改走 `juiceHit` / `juiceCombo` / `juiceWin`。
+   - `PlayScene`：收集、受伤、护盾、boss 入场/阶段/受击/击杀、胜负结算接入 `juicePickup` / `juiceHit` / `juiceBoss` / `juiceWin` / `juiceFail`。
+   - `ShooterScene`：敌人受击、爆炸、玩家受伤、护盾、炸弹技能、胜负结算接入语义反馈。
+3. ✅ **防回退契约**
+   - 新增 `qa:physics-semantic-juice`
+   - 新增 `qa:play-scene-semantic-juice`
+   - 新增 `qa:shooter-semantic-juice`
+   - 全部接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:juice-semantic-presets` ✅
+   - `npm run qa:physics-semantic-juice` ✅
+   - `npm run qa:play-scene-semantic-juice` ✅
+   - `npm run qa:shooter-semantic-juice` ✅
+   - `npm run qa:b-tier-smoke` ✅ **34/34**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ⬜ **下一步**
+   - 继续阶段二横向推广：`PlatformerScene` / `TowerDefenseScene` / `FarmingScene` / `PuzzleScene` 接入语义 feedback。
+   - 阶段三：统一 HUD/目标引导层，解决“看起来像调试模板”的问题。
+
+---
+
+更新时间：**2026-06-17**（迭代四十三 · 游戏质量跃迁第一阶段 ✅）
+
+## 迭代四十三（当前）
+
+1. ✅ **非样品用户生成质量门禁**
+   - 新增 `qa:non-sample-game-quality`：覆盖 collector / shooter / towerDefense / physics / farming 五类普通用户 prompt。
+   - 断言非样品 spec 经 `applyHardQualityDefaults()` 后必须通过 orchestration lint，且至少有 4 幕、3 个运行时事件、主动技能、4 个 powerup、商业表现档。
+   - 已接入 `qa:b-tier-smoke`。
+2. ✅ **商业表现档进入 GameSpec**
+   - `GameSpec.presentation` 新增 `qualityTier: minimal | standard | showcase`。
+   - `withPresentationDefaults()` 对用户新建默认补 `qualityTier=standard`，避免非样品路径继续落到“低配模板”。
+   - `describeCohesiveExperience()` 展示 tier，方便开发态一眼确认共享体验层是否生效。
+3. ✅ **非样品硬质量兜底加强**
+   - `game-quality.ts` 新增 commercial director 兜底：非样品路径至少具备奖励窗 / 限时目标 / 高压段这类可观察事件。
+   - `systems.ts` 保底 4 个 powerup，避免局内道具密度太低。
+4. ✅ **juice 反馈按表现档放大**
+   - `gameJuice.ts` 新增 `resolveSharedJuiceStyle()`，由 `qualityTier` 分级影响 shake / burst / floater / flash。
+   - 新增 `qa:juice-quality-tier`，断言 `showcase > standard > minimal` 的反馈强度阶梯。
+   - 已接入 `qa:b-tier-smoke`。
+5. ✅ **验证**
+   - `npm run qa:non-sample-game-quality` ✅
+   - `npm run qa:juice-quality-tier` ✅
+   - `npm run qa:game-quality-contracts` ✅
+   - `npm run qa:b-tier-smoke` ✅ **30/30**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+6. ⬜ **下一步**
+   - 继续阶段二：把语义化 juice preset（hit / pickup / combo / boss / win / fail）接入 `PlayScene` / `PhysicsScene` / `ShooterScene` 试点。
+   - 之后做统一 HUD/目标引导层，避免用户打开后仍像调试模板。
+
+---
+
+更新时间：**2026-06-17**（迭代四十二 · 构建追踪治理 + 提交前整理 ✅）
+
+## 迭代四十二（当前）
+
+1. ✅ **构建追踪治理**
+   - 新增 `src/lib/public-path.ts`，统一本地 `public/` 运行时资产路径，避免服务端模块到处直接 `path.join(process.cwd(), "public", ...)`。
+   - `next.config.ts` 增加 `outputFileTracingExcludes`，排除 `public/**/*`、`qa-output/**/*`、`workspaces/**/*`、`data/**/*.log` 这类运行时/QA 产物进入 server trace。
+   - 覆盖封面、小说封面、漫画角色参考、游戏背景/sprite、Godot 导出、blob-store 等直接 public 路径。
+2. ✅ **QA 契约**
+   - 新增 `qa:next-trace-config`：断言 Next output tracing 排除项存在。
+   - 新增 `qa:public-path-contracts`：断言 `src/` 内不再直接拼 `process.cwd()/public` 或 `repoRoot()/public`。
+   - 两个契约均纳入 `qa:b-tier-smoke`。
+3. ✅ **验证**
+   - `npm run qa:next-trace-config` ✅
+   - `npm run qa:public-path-contracts` ✅
+   - `npm run qa:b-tier-smoke` ✅ **28/28**
+   - `npm run build` ✅（Turbopack broad-pattern warnings 从 39 → 19 → **0**）
+   - Edited-file lints：无错误
+4. ⚠️ **已知验证限制**
+   - `npx tsc --noEmit` 仍被既有 `e2e/*.spec.ts` 类型问题挡住（agenticModule / Page / APIRequestContext 等），非本轮 public-path 改动引入。
+   - `npm run lint` 在本地扫描长期无输出，已停止；本轮依赖 `ReadLints` + build + 契约验证。
+   - 为消除 Turbopack 误追踪，对运行时动态文件访问补充 `/*turbopackIgnore: true*/`：封面字体读取、小说/漫画/游戏生成资产、Godot workspace、AI sprite 引用读取。
+5. ⬜ **未收口**
+   - 工作区 `git status` 输出已超过 1MB；提交前仍需筛选源码、QA 报告、截图/PNG 等哪些纳入 commit。
+   - 尚未 commit / push / deploy，生产 6666 尚未复验。
+
+**下一步**：做一次提交前审阅，优先纳入源码、脚本、项目记忆与必要 QA summary；谨慎筛选大体积截图/贴图/报告，然后 commit → push → deploy → 生产 `qa:prod-sample-play-audit` + `COMPETITOR_CLONE_BATCH=all` + 文学/漫画冒烟。
+
+---
+
+更新时间：**2026-06-17**（迭代四十一 · 三线风险修复 + 验证 ✅）
+
+## 迭代四十一（当前）
+
+1. ✅ **游戏线风险修复**
+   - `qa:competitor-gates` 的 clone batch 结果改为结合子报告 `qa-output/competitor-clone-batch/summary.json` 判定，避免 Windows `execSync`/Playwright 假挂误杀。
+   - `game-quality.ts` 同步 farming 双轨经济：硬质量底座抬高 `gameplay.startingCoins` 后同步 `farming.startingCoins`，避免用户新生成 farming 游戏规格与运行时开局金币不一致。
+   - 新增 `qa:game-quality-contracts` 并纳入 `qa:product-lines:game` / `qa:b-tier-smoke`。
+2. ✅ **小说线风险修复**
+   - 新增 `literary-safety`：公开列表/详情统一只允许非 owner 读取 `visibility=public && status=ready`。
+   - 长篇生成中草稿默认 `hidden`，避免 `draft_generating` 空壳泄漏到发现页。
+   - `resumeNovelId` 续跑不再重复消耗首次小说生成额度。
+   - 新增 `qa:literary-safety-contracts` 并纳入 `qa:product-lines:novel` / `qa:b-tier-smoke`。
+3. ✅ **漫画线风险修复**
+   - 同步 `POST /api/comic/[id]/panels` 补齐 `comicPanels` quota gate，与 SSE stream 路由一致。
+   - 复审发现 quota gate 不能早于归属校验/完成态 no-op；已调整 sync + stream 路由顺序，避免不存在/非本人/已满格请求误扣额度。
+   - `storyboardSource=emergency` 返回 `storyboardWarning`，不再静默低质降级。
+   - panels stream / sync API 对部分完成返回 `resumeHint`，明确长篇配图可续跑。
+   - 新增 `qa:comic-safety-contracts` 并纳入 `qa:product-lines:comic` / `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:game-quality-contracts` ✅
+   - `npm run qa:literary-safety-contracts` ✅
+   - `npm run qa:comic-safety-contracts` ✅
+   - `npm run qa:product-lines:game` ✅（含 E2E）
+   - `npm run qa:product-lines:novel` ✅（含 E2E）
+   - `npm run qa:product-lines:comic` ✅（含 E2E）
+   - `npm run qa:product-lines` ✅（三线汇总包含 game / novel / comic）
+   - `npm run qa:b-tier-smoke` ✅ **26/26**
+   - `npm run build` ✅
+6. ✅ **报告收口**
+   - 修复单线 `qa:product-lines:comic|novel|game` 覆盖三线总汇总的问题；现在只有全量 `qa:product-lines` 写 `qa-output/product-lines/summary.json`。
+   - 新增 `qa:product-lines-summary-contracts` 并纳入 `qa:b-tier-smoke`。
+7. ⬜ **未收口**
+   - 工作区仍包含迭代四十的旗舰 AI PNG、共享表现层、Scene 收口、QA 产物及本轮三线修复；尚未 commit / push / deploy。
+   - 生产 6666 尚未复验迭代四十/四十一改动。
+
+**下一步**：做一次代码审阅/选择要纳入提交的 QA 产物，然后 commit → push → deploy → 生产 `qa:prod-sample-play-audit` + `COMPETITOR_CLONE_BATCH=all` + 文学/漫画冒烟。
+
+更新时间：**2026-06-16**（迭代四十 · 本地调试优先）
+
+## 迭代四十（当前）
+
+1. ✅ 旗舰 5 款 AI 贴图本地生成（`seed:flagship-ai-sprites`，未 commit / 未推生产）
+2. ✅ **parity / 克隆根因修复**（重启后 strict **17/17 + 克隆 5/5** 复验通过）：
+   - `variantId` 回退 + `GamePlayerInner` canonical prompt
+   - `duplicate` 走 `prepareGameSpecForPersist` 持久化 canonical spec
+   - parity 每款独立 Playwright page + session 清理（防页面污染）
+   - `ShooterScene` orbit 障碍确定性 seed（已移除 physics.pause，不影响试玩）
+   - `seed:sample-assets` 跳过已有旗舰 5 款 AI 贴图
+3. ✅ gameplay interaction **17/17**
+4. ✅ 本地 `qa:competitor-gates` 实质全绿（parity/clone/gameplay/Godot 均 PASS；`cloneBatchOk` 曾误报 false → 已修 `execSync` 15min 超时 + `writeFinalSnap`）
+5. ✅ **硬质量底座**：`game-quality.ts` + 生成 / 保存 / 补丁 / enrich 四条链路兜底，未来用户生成游戏也会自动补齐主题、节奏、技能与数值底线
+6. ✅ **共享表现层可见化**：`cohesive-presentation` 状态带 + `gameJuice` 全局强化 + `gameSoundscape`/`webBleeps` 默认音画反馈升级 + 启动 banner 摘要
+7. ✅ **Scene 收口**：12 个主要 Scene 统一接入 `buildSceneCohesion()`，不再各自手写共享气质与短反馈音色初始化
+8. ✅ **启动链收口**：`createPhaserGame` 改为统一入口，启动 banner / 共享气质 / 短反馈音色均走同一协议
+9. ✅ 关键回归：`qa:sample-gameplay-interaction` **17/17**、`qa:competitor-parity-validation` **17/17+克隆5/5**、`qa:competitor-clone-batch` **all 17/17**（2026-06-16T15:51）；Windows 子进程假挂 → `process.exit(0)` 收口
+10. ✅ `qa:competitor-gates` 全量 wrapper **全绿**（2026-06-16T16:27 · `e2eAllOk=true` · 约 33min）
+11. ⬜ **一轮** commit（含旗舰 AI PNG + 上述修复 + 硬质量底座 + 共享表现层升级 + Scene / 启动链收口 + QA 退出收口）+ push + deploy
+11. P3：Console SSO
+
+**下一步**：如果你要，我可以继续把 `HudBanner` / `gameSoundscape` 再收薄一点，或者直接做 commit 收口。
+
 更新时间：**2026-06-16**（迭代三十九 · sprite 深度渲染）
-
-## 迭代三十九（当前）
-
-1. ✅ Shooter/TD/Platformer 真正使用样品 PNG sprite + 背景可见度提升
-2. ✅ 生产 `qa:prod-sample-play-audit` **17/17** @ `d36e71c`
-3. ⬜ 本地 `qa:competitor-gates` 全绿
-4. P3：文生图旗舰贴图 · Console SSO
 
 更新时间：**2026-06-16**（迭代三十八 · 生产 sprite + 17/17 ✅）
 

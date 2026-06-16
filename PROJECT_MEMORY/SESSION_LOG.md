@@ -1,3 +1,151 @@
+## 2026-06-17 — 迭代四十五 · 语义化 Juice 横向推广 ✅
+
+Completed:
+
+- 新增 `qa:platformer-semantic-juice`、`qa:farming-semantic-juice`、`qa:puzzle-semantic-juice`，先红灯确认 Platformer / Farming / Puzzle 尚未接入语义 feedback，再实施替换。
+- `PlatformerScene`：收集、受伤、护盾、boss/炸弹技能、章节切换、胜负结算接入 `juicePickup` / `juiceHit` / `juiceBoss` / `juiceWin` / `juiceFail`；宝箱胜利交给 `finish()` 统一反馈，避免重复爆屏。
+- `FarmingScene`：播种、浇水、金币不足、收获连击、丰收结算改走 pickup / hit / combo / win 语义反馈，保留 harvest streak 对连击强度的影响。
+- `PuzzleScene`：match3、找不同、记忆翻牌、拼图落位、胜负结算改走语义反馈；找不同开场装饰粒子仍保留为纯视觉装饰。
+- 三个新 contract 已接入 `package.json` 与 `qa:b-tier-smoke`。
+
+Test Results:
+
+- `npm run qa:platformer-semantic-juice`：通过
+- `npm run qa:farming-semantic-juice`：通过
+- `npm run qa:puzzle-semantic-juice`：通过
+- Edited-file lints：无错误
+- `npm run qa:b-tier-smoke`：通过 **37/37**
+- `npm run build`：通过
+
+Next:
+
+- 阶段二剩余：单独处理 `TowerDefenseScene`，把造塔、击杀、漏怪、波次、胜负反馈收敛到语义 feedback。
+- 阶段三：统一 HUD/目标引导层，解决“看起来像调试模板”的问题。
+
+---
+
+## 2026-06-17 — 迭代四十四 · 语义化 Juice 试点 ✅
+
+Completed:
+
+- `gameJuice.ts` 新增 `resolveJuicePreset()`，定义 pickup / hit / combo / boss / win / fail 的语义化反馈参数。
+- 新增 `juicePickup`、`juiceHit`、`juiceCombo`、`juiceBoss`、`juiceWin`、`juiceFail` 封装，Scene 只表达事件语义，不再手填一组 shake/burst/flash 数字。
+- `PhysicsScene`：命中、连击、胜利接入语义反馈。
+- `PlayScene`：收集、受伤、护盾、boss 入场/阶段/受击/击杀、胜负结算接入语义反馈。
+- `ShooterScene`：敌人受击、爆炸、玩家受伤、护盾、炸弹技能、胜负结算接入语义反馈。
+- 新增并接入 b-tier：`qa:juice-semantic-presets`、`qa:physics-semantic-juice`、`qa:play-scene-semantic-juice`、`qa:shooter-semantic-juice`。
+
+Verification:
+
+- `npx tsx scripts/qa-juice-semantic-presets.ts` RED：`resolveJuicePreset` 不存在 ✅
+- `npm run qa:juice-semantic-presets` ✅
+- `npm run qa:physics-semantic-juice` ✅
+- `npm run qa:play-scene-semantic-juice` ✅
+- `npm run qa:shooter-semantic-juice` ✅
+- `npm run qa:b-tier-smoke` ✅ 34/34
+- `npm run build` ✅
+- Edited-file lints：无错误。
+
+Notes:
+
+- 这轮解决“反馈是参数拼装，不是语义事件”的问题，首批覆盖 Physics / Play / Shooter 三个高频体验入口。
+- 下一轮建议横向迁移 Platformer / TowerDefense / Farming / Puzzle，并开始抽统一 HUD/目标引导层。
+- 未 commit / push / deploy。
+
+---
+
+## 2026-06-17 — 迭代四十三 · 游戏质量跃迁第一阶段 ✅
+
+Completed:
+
+- 确认核心问题：现有 QA 强在样品 parity 和工程闭环，弱在非样品用户 prompt 的商业小游戏体验。
+- 新增 `qa:non-sample-game-quality`，用五类普通用户 prompt 断言非样品 spec 的质量下限：orchestration lint、4 幕、3 个运行时事件、主动技能、4 个 powerup、商业表现档。
+- `GameSpec.presentation` 增加 `qualityTier: minimal | standard | showcase`。
+- `withPresentationDefaults()` 对用户新建默认 `qualityTier=standard`；`describeCohesiveExperience()` 展示 tier。
+- `game-quality.ts` 增加 commercial director 兜底，确保非样品路径至少有奖励窗 / 限时目标 / 高压段这类运行时事件。
+- `systems.ts` 保底 4 个 powerup，避免非样品局内道具密度太低。
+- `gameJuice.ts` 新增 `resolveSharedJuiceStyle()`，将 `qualityTier` 映射到 shake / burst / floater / flash 强度。
+- 新增 `qa:juice-quality-tier`，并把 `qa:non-sample-game-quality`、`qa:juice-quality-tier` 接入 `qa:b-tier-smoke`。
+
+Verification:
+
+- `npx tsx scripts/qa-non-sample-game-quality.ts` RED：缺少 commercial presentation tier ✅
+- `npm run qa:non-sample-game-quality` ✅
+- `npx tsx scripts/qa-juice-quality-tier.ts` RED：`resolveSharedJuiceStyle` 不存在 ✅
+- `npm run qa:juice-quality-tier` ✅
+- `npm run qa:game-quality-contracts` ✅
+- `npm run qa:b-tier-smoke` ✅ 30/30
+- `npm run build` ✅
+- Edited-file lints：无错误。
+
+Notes:
+
+- 这轮先解决“非样品生成也必须有成品质量底线”和“表现档真正影响 juice 参数”。
+- 尚未进入 Scene 内语义化反馈接入；下一轮优先做 `hit/pickup/combo/boss/win/fail` preset 并接入 `PlayScene` / `PhysicsScene` / `ShooterScene` 试点。
+- 未 commit / push / deploy。
+
+---
+
+## 2026-06-17 — 迭代四十二 · 构建追踪治理 ✅
+
+Completed:
+
+- 新增 `src/lib/public-path.ts`，统一本地 `public/` 运行时资产路径。
+- 替换封面、小说封面、漫画角色参考、漫画资源 GC、游戏背景/sprite、程序化资产、Godot 导出、blob-store 等模块里的直接 `process.cwd()/public` / `repoRoot()/public` 拼接。
+- `next.config.ts` 增加 `outputFileTracingExcludes`，排除运行时/QA 大目录：`public/**/*`、`qa-output/**/*`、`workspaces/**/*`、`data/**/*.log`。
+- 新增 `qa:next-trace-config` 与 `qa:public-path-contracts`，并接入 `qa:b-tier-smoke`。
+- 继续补充 `/*turbopackIgnore: true*/` 到运行时动态文件访问：封面字体读取、小说/漫画/游戏生成资产、Godot workspace、AI sprite 引用读取。
+
+Verification:
+
+- `npm run qa:next-trace-config` ✅
+- `npm run qa:public-path-contracts` ✅
+- `npm run qa:b-tier-smoke` ✅ 28/28
+- `npm run build` ✅；Turbopack broad-pattern warnings 从 39 → 19 → **0**。
+- `npm run qa:next-trace-config` ✅（复验）
+- `npm run qa:public-path-contracts` ✅（复验）
+- `npm run qa:b-tier-smoke` ✅ 28/28（复验）
+- Edited-file lints：无错误。
+
+Notes:
+
+- `npx tsc --noEmit` 仍被既有 `e2e/*.spec.ts` 类型问题挡住（agenticModule / Page / APIRequestContext 等），非本轮改动引入。
+- `npm run lint` 长时间无输出，已停止；后续建议单独治理 ESLint 扫描范围或 ignore 本地生成产物。
+- 工作区仍未 commit / push / deploy，`git status` 输出超过 1MB；下一步应先筛选提交范围。
+
+---
+
+## 2026-06-17 — 迭代四十一 · 三线风险修复 ✅
+
+Completed:
+
+- **游戏线**：新增 `qa:game-quality-contracts`；修复 `game-quality.ts` farming 经济双轨同步；`qa:competitor-gates` 改为结合 clone batch `summary.json` 兜底，避免 Windows 子进程假失败。
+- **小说线**：新增 `literary-safety` 与 `qa:literary-safety-contracts`；公开列表/详情仅暴露 `public+ready`；生成中草稿默认 hidden；`resumeNovelId` 不重复扣首次生成额度。
+- **漫画线**：新增 `comic-safety` 与 `qa:comic-safety-contracts`；同步 panels API 补 `comicPanels` quota；emergency 分镜返回 warning；部分配图返回 resumeHint。
+- **复审修复**：只读复审发现 panels quota gate 早于归属校验/完成态 no-op，已移动到 owner + no-op 之后；契约测试补顺序断言。
+- **报告收口**：修复单线 `qa:product-lines:*` 覆盖三线 `summary.json` 的误导性行为；新增 `qa:product-lines-summary-contracts`，仅全量 `qa:product-lines` 写 aggregate summary。
+- **门禁接入**：三个契约 QA 已加入 `package.json`、`qa:b-tier-smoke`、`qa:product-lines` 三线步骤。
+
+Verification:
+
+- `npm run qa:game-quality-contracts` ✅
+- `npm run qa:literary-safety-contracts` ✅
+- `npm run qa:comic-safety-contracts` ✅
+- `npm run qa:product-lines:game` ✅（含 E2E）
+- `npm run qa:product-lines:novel` ✅（含 E2E）
+- `npm run qa:product-lines:comic` ✅（含 E2E）
+- `npm run qa:product-lines` ✅（game/novel/comic 三线全绿，summary 包含三条线）
+- `npm run qa:b-tier-smoke` ✅ 26/26
+- `npm run build` ✅
+- Edited-file lints：无错误
+
+Notes:
+
+- 未 commit / push / deploy。
+- 工作区仍包含迭代四十的大量贴图、Scene/表现层、QA 产物与本轮改动；提交前需确认哪些 QA 截图/报告要纳入。
+
+---
+
 ## 2026-06-15 — 迭代三十 · 宋辽满格+精选 ✅
 
 - 分镜 **396s** + lib 配图 **775s** → **32/32** · comicId `cmqekk1ft000113f3f5y8qke8`

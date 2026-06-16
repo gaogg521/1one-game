@@ -124,14 +124,16 @@ export function saturateHex(hex: string, delta: number): string {
 /** 补齐 presentation.musicProfile（仅当缺失时）；不改变模型已输出的合法取值。 */
 export function withPresentationDefaults(spec: GameSpec): GameSpec {
   const cur = spec.presentation?.musicProfile;
-  if (cur === "organic" || cur === "pulse" || cur === "minimal" || cur === "neon") {
+  const tier = spec.presentation?.qualityTier;
+  if ((cur === "organic" || cur === "pulse" || cur === "minimal" || cur === "neon") && tier) {
     return spec;
   }
   return {
     ...spec,
     presentation: {
       ...spec.presentation,
-      musicProfile: inferMusicProfile(spec.theme),
+      musicProfile: cur === "organic" || cur === "pulse" || cur === "minimal" || cur === "neon" ? cur : inferMusicProfile(spec.theme),
+      qualityTier: tier ?? "standard",
     },
   };
 }
@@ -223,7 +225,9 @@ export interface CohesivePresentation {
   hud: CohesiveHud;
   banner: CohesiveHudBannerStyle;
   bleepTemperament: number;
+  contrastLevel: "low" | "medium" | "high";
   musicProfile: MusicProfile;
+  qualityTier: "minimal" | "standard" | "showcase";
   panelFill: number;
   panelFillAlpha: number;
   panelStroke: number;
@@ -232,6 +236,29 @@ export interface CohesivePresentation {
   platformMid: number;
   platformHi: number;
   platformGround: number;
+}
+
+export type CohesiveExperienceSnapshot = {
+  label: string;
+  detail: string;
+  chips: string[];
+};
+
+function contrastRatio(a: string, b: string): number {
+  const A = hexToRgb(a);
+  const B = hexToRgb(b);
+  if (!A || !B) return 1;
+  const lumA = relativeLuminance(A);
+  const lumB = relativeLuminance(B);
+  const hi = Math.max(lumA, lumB);
+  const lo = Math.min(lumA, lumB);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function classifyContrast(ratio: number): "low" | "medium" | "high" {
+  if (ratio >= 5.5) return "high";
+  if (ratio >= 3.5) return "medium";
+  return "low";
 }
 
 /** 依据 GameSpec.theme 推导 HUD / 横幅 / React 外壳 / 程序化音频气质。 */
@@ -254,8 +281,10 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
   const prPlayer = hexToRgb(th.playerColor);
   const meanHue = prPlayer ? rgbToHsl(prPlayer.r, prPlayer.g, prPlayer.b).h : 180;
   const bleepTemperament = clamp(0.82 + (meanHue / 360) * 0.34, 0.76, 1.24);
+  const contrastLevel = classifyContrast(contrastRatio(bg, fg));
 
   const musicProfile = resolveMusicProfile(specW);
+  const qualityTier = specW.presentation?.qualityTier ?? "standard";
 
   const panelHex = mixHex(bg, "#070b10", 0.52);
   const fillInt = hexToPhaserUint(panelHex) ?? 0x0b1220;
@@ -317,7 +346,9 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
     hud,
     banner,
     bleepTemperament,
+    contrastLevel,
     musicProfile,
+    qualityTier,
     panelFill,
     panelFillAlpha: 0.56,
     panelStroke,
@@ -326,5 +357,22 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
     platformMid: platMid,
     platformHi: platHi,
     platformGround: platGround,
+  };
+}
+
+/**
+ * 给试玩页/调试视图使用的可见摘要：
+ * 让“共享体验层”是否生效一眼可见，而不是只埋在数据里。
+ */
+export function describeCohesiveExperience(p: CohesivePresentation): CohesiveExperienceSnapshot {
+  return {
+    label: "共享体验层",
+    detail: `音乐 ${p.musicProfile} · 表现 ${p.qualityTier} · 打击 ${p.bleepTemperament.toFixed(2)}x · 对比 ${p.contrastLevel}`,
+    chips: [
+      `music:${p.musicProfile}`,
+      `tier:${p.qualityTier}`,
+      `juice:${p.bleepTemperament.toFixed(2)}x`,
+      `contrast:${p.contrastLevel}`,
+    ],
   };
 }

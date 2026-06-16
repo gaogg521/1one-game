@@ -3,6 +3,7 @@ import { resolveNovelCoverFallbackUrls } from "@/lib/novel-cover-resolve";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { isSuperAdmin } from "@/lib/super-admin";
+import { publicReadyWorkWhere } from "@/lib/literary-safety";
 
 const VALID_SORTS = new Set(["playCount", "likeCount", "createdAt"]);
 
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ novels: [], total: 0, page, limit });
   }
 
-  const where = mine && ownerKey ? { ownerKey } : { visibility: "public" };
+  const where = mine && ownerKey ? { ownerKey } : publicReadyWorkWhere();
 
   const orderBy =
     sort === "likeCount"

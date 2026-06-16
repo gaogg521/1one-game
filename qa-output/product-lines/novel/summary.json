@@ -1,13 +1,17 @@
 {
-  "at": "2026-06-15T02:32:05.455Z",
+  "at": "2026-06-16T16:58:38.321Z",
   "line": "novel",
   "label": "小说",
   "pass": true,
-  "offlineSteps": 3,
+  "offlineSteps": 4,
   "e2eRan": true,
   "results": [
     {
       "cmd": "npm run qa:literary-user-journey",
+      "ok": true
+    },
+    {
+      "cmd": "npm run qa:literary-safety-contracts",
       "ok": true
     },
     {

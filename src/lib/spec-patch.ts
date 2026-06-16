@@ -9,6 +9,7 @@ import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
+import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { applyMinecraftThemeOverlay } from "@/lib/minecraft-franchise";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
 
@@ -58,7 +59,7 @@ export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
-  return withPresentationDefaults(applyMinecraftThemeOverlay(next));
+  return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt);
 }
 
 /** 种田模板：LLM 常只改 gameplay.startingCoins，运行时读 farming.startingCoins */

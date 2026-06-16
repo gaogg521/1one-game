@@ -1,13 +1,85 @@
 {
-  "at": "2026-06-15T02:32:37.030Z",
+  "at": "2026-06-16T16:59:10.662Z",
   "pass": true,
   "lines": [
     {
-      "at": "2026-06-15T02:32:37.025Z",
+      "at": "2026-06-16T16:58:01.450Z",
+      "line": "game",
+      "label": "游戏",
+      "pass": true,
+      "offlineSteps": 7,
+      "e2eRan": true,
+      "results": [
+        {
+          "cmd": "npm run qa:user-journey-parity",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:template-matrix",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:architecture-parity",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:game-quality-contracts",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:director-spec",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:co-create-loop",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:generate-stream-agentic",
+          "ok": true
+        },
+        {
+          "cmd": "npx playwright test e2e/create.smoke.spec.ts e2e/create-play.smoke.spec.ts e2e/templates-handtest.spec.ts --workers=1",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "at": "2026-06-16T16:58:38.321Z",
+      "line": "novel",
+      "label": "小说",
+      "pass": true,
+      "offlineSteps": 4,
+      "e2eRan": true,
+      "results": [
+        {
+          "cmd": "npm run qa:literary-user-journey",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:literary-safety-contracts",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:novel-comic-smoke",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:novel-locale",
+          "ok": true
+        },
+        {
+          "cmd": "npx playwright test e2e/novel-comic.smoke.spec.ts --grep \"小说模块\" --workers=1",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "at": "2026-06-16T16:59:10.660Z",
       "line": "comic",
       "label": "漫画",
       "pass": true,
-      "offlineSteps": 7,
+      "offlineSteps": 8,
       "e2eRan": true,
       "results": [
         {
@@ -20,6 +92,10 @@
         },
         {
           "cmd": "npm run qa:comic-novel-product-rules",
+          "ok": true
+        },
+        {
+          "cmd": "npm run qa:comic-safety-contracts",
           "ok": true
         },
         {

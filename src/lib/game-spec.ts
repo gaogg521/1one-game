@@ -258,6 +258,8 @@ export const GameSpecSchema = z.object({
   presentation: z
     .object({
       musicProfile: z.enum(["organic", "pulse", "minimal", "neon"]).optional(),
+      /** 运行时表现档：用户新建默认 standard；样品/精选可升 showcase；CI/低端环境可降 minimal。 */
+      qualityTier: z.enum(["minimal", "standard", "showcase"]).optional(),
     })
     .optional(),
   labels: z.object({

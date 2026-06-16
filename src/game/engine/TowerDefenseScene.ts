@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
@@ -30,12 +30,12 @@ import {
   tdWaveStartBanner,
 } from "@/lib/i18n/game-hud-labels";
 import {
-  buildCohesivePresentation,
   hexToPhaserUint,
   mixHex,
   phaserUintToCssHex,
   type CohesivePresentation,
 } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import {
   classifyTdReferenceTextureKeys,
   tdRuntimeTextureKey,
@@ -673,9 +673,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.baseHp = this.spec.gameplay.baseHealth ?? 42;
     this.coins = this.spec.gameplay.startingCoins ?? 120;
 
-    const ui = buildCohesivePresentation(this.spec);
+    const ui = buildSceneCohesion(this.spec);
     this.cohesion = ui;
-    setBleepTemperament(ui.bleepTemperament);
 
     const relPath =
       this.bp?.path ?? [

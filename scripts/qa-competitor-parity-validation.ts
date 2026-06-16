@@ -71,18 +71,33 @@ async function healthOk(): Promise<boolean> {
   }
 }
 
+async function resetPlayIsolation(page: import("@playwright/test").Page): Promise<void> {
+  await page.evaluate(() => {
+    try {
+      sessionStorage.removeItem("gc:assetManifest:v1");
+      sessionStorage.removeItem("gc:refImagePayloads:v1");
+      sessionStorage.removeItem("gc:referenceImageHandles:v1");
+    } catch {
+      /* ignore */
+    }
+    (window as unknown as { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__ = false;
+  });
+}
+
 async function screenshotPlay(page: import("@playwright/test").Page, projectId: string, shotPath: string): Promise<void> {
-  await page.goto(`${BASE}/play/${projectId}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await resetPlayIsolation(page);
+  await page.goto(`${BASE}/play/${projectId}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.getByText("继续共创").waitFor({ timeout: 15_000 }).catch(() => {});
   const phaserTab = page.getByTestId("runtime-tab-phaser");
   if (await phaserTab.isVisible().catch(() => false)) await phaserTab.click();
-  await page.locator("canvas").first().waitFor({ timeout: 25_000 });
+  await page.locator("canvas").first().waitFor({ timeout: 30_000 });
   await page
     .waitForFunction(() => (window as unknown as { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__ === true, null, {
-      timeout: 20_000,
+      timeout: 25_000,
     })
     .catch(() => {});
-  await page.waitForTimeout(400);
+  /** 等 orbit 波次 spawn（400ms）+ 确定性帧稳定 */
+  await page.waitForTimeout(900);
   fs.mkdirSync(path.dirname(shotPath), { recursive: true });
   await page.locator("canvas").first().screenshot({ path: shotPath });
 }
@@ -112,6 +127,19 @@ function pickRandomSamples(count: number): typeof SAMPLES {
   return picked.slice(0, count);
 }
 
+async function withIsolatedPlayPage<T>(
+  browser: import("@playwright/test").Browser,
+  fn: (page: import("@playwright/test").Page) => Promise<T>,
+): Promise<T> {
+  const playPage = await browser.newPage({ viewport: { width: 900, height: 640 } });
+  try {
+    await ensureOwnerSession(playPage);
+    return await fn(playPage);
+  } finally {
+    await playPage.close();
+  }
+}
+
 async function ensureOwnerSession(page: import("@playwright/test").Page): Promise<void> {
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 }
@@ -125,8 +153,8 @@ async function main() {
   fs.mkdirSync(OUT, { recursive: true });
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 900, height: 640 } });
-  await ensureOwnerSession(page);
+  const apiPage = await browser.newPage();
+  await ensureOwnerSession(apiPage);
 
   const promptRows: PromptRow[] = [];
 
@@ -136,7 +164,7 @@ async function main() {
     const sampleSpec = buildCanonicalAstrocadeSpec(s.prompt, "zh-Hans", { sampleId: s.id });
     const sampleScene = expectedPhaserSceneName(sampleSpec);
 
-    const create = await page.request.post(`${BASE}/api/projects`, {
+    const create = await apiPage.request.post(`${BASE}/api/projects`, {
       data: { prompt: s.prompt, spec: mockSpecFromPrompt(s.prompt) },
     });
     if (!create.ok()) {
@@ -150,7 +178,7 @@ async function main() {
       process.exit(1);
     }
 
-    const get = await page.request.get(`${BASE}/api/projects/${userId}`);
+    const get = await apiPage.request.get(`${BASE}/api/projects/${userId}`);
     const saved = (await get.json()) as { spec?: typeof sampleSpec };
     const userSpec = saved.spec!;
     const userScene = expectedPhaserSceneName(userSpec);
@@ -159,8 +187,8 @@ async function main() {
 
     const sampleShot = path.join(OUT, "prompt", `sample-${s.id}.png`);
     const userShot = path.join(OUT, "prompt", `user-${s.id}.png`);
-    await screenshotPlay(page, sampleProjectId(s.id), sampleShot);
-    await screenshotPlay(page, userId, userShot);
+    await withIsolatedPlayPage(browser, (playPage) => screenshotPlay(playPage, sampleProjectId(s.id), sampleShot));
+    await withIsolatedPlayPage(browser, (playPage) => screenshotPlay(playPage, userId, userShot));
 
     const metrics = await compareCanvasImages(sampleShot, userShot);
     const thresholds = visualThresholdsForSample(s.id);
@@ -198,7 +226,7 @@ async function main() {
 
   for (const s of clonePick) {
     const sourceId = sampleProjectId(s.id);
-    const sourceGet = await page.request.get(`${BASE}/api/projects/${sourceId}`);
+    const sourceGet = await apiPage.request.get(`${BASE}/api/projects/${sourceId}`);
     if (!sourceGet.ok()) {
       console.error(`[FAIL] GET source ${s.id}`, await sourceGet.text());
       process.exit(1);
@@ -207,7 +235,7 @@ async function main() {
     const sourceSpec = sourceBody.spec!;
     const sourceScene = expectedPhaserSceneName(sourceSpec);
 
-    const dup = await page.request.post(`${BASE}/api/projects/${sourceId}/duplicate`);
+    const dup = await apiPage.request.post(`${BASE}/api/projects/${sourceId}/duplicate`);
     if (!dup.ok()) {
       console.error(`[FAIL] duplicate ${s.id}`, await dup.text());
       process.exit(1);
@@ -219,7 +247,7 @@ async function main() {
       process.exit(1);
     }
 
-    const get = await page.request.get(`${BASE}/api/projects/${cloneId}`);
+    const get = await apiPage.request.get(`${BASE}/api/projects/${cloneId}`);
     const body = (await get.json()) as { spec?: typeof sourceSpec };
     const cloneSpec = body.spec!;
     const cloneScene = expectedPhaserSceneName(cloneSpec);
@@ -228,8 +256,8 @@ async function main() {
 
     const sourceShot = path.join(OUT, "clone", `source-${s.id}.png`);
     const cloneShot = path.join(OUT, "clone", `clone-${s.id}.png`);
-    await screenshotPlay(page, sourceId, sourceShot);
-    await screenshotPlay(page, cloneId, cloneShot);
+    await withIsolatedPlayPage(browser, (playPage) => screenshotPlay(playPage, sourceId, sourceShot));
+    await withIsolatedPlayPage(browser, (playPage) => screenshotPlay(playPage, cloneId, cloneShot));
 
     const metrics = await compareCanvasImages(sourceShot, cloneShot);
     const thresholds = cloneVisualThresholdsForSample(s.id);
@@ -366,6 +394,7 @@ async function main() {
   } catch {
     console.warn("[warn] qa:regression-archive skipped after parity validation");
   }
+  process.exit(0);
 }
 
 main()

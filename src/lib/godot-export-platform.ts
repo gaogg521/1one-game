@@ -13,6 +13,7 @@ import {
   zipDirectoryToBuffer,
 } from "@/lib/godot-export-workspace";
 import { godotRuntimeAvailable, repoRoot, runGodot } from "@/lib/godot-run";
+import { repoPublicPath } from "@/lib/public-path";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,7 +46,7 @@ export async function exportGodotProjectZip(params: {
   }
   try {
     const { exportId, spec, workRoot } = await prepareGodotWorkspace(params);
-    const artifactPath = path.join(repoRoot(), "public", "godot-artifacts", exportId, "project.zip");
+    const artifactPath = repoPublicPath("godot-artifacts", exportId, "project.zip");
     try {
       await fs.access(artifactPath);
       return {
@@ -100,7 +101,7 @@ export async function exportGodotWindowsDesktop(params: {
 
   try {
     const { exportId, spec, workRoot } = await prepareGodotWorkspace(params);
-    const artifactPath = path.join(repoRoot(), "public", "godot-artifacts", exportId, "windows.zip");
+    const artifactPath = repoPublicPath("godot-artifacts", exportId, "windows.zip");
     try {
       await fs.access(artifactPath);
       return {
@@ -114,7 +115,7 @@ export async function exportGodotWindowsDesktop(params: {
       /* export */
     }
 
-    const desktopOut = path.join(repoRoot(), "public", "godot-builds", exportId, "desktop");
+    const desktopOut = repoPublicPath("godot-builds", exportId, "desktop");
     await fs.rm(desktopOut, { recursive: true, force: true });
     await fs.mkdir(desktopOut, { recursive: true });
 
@@ -168,7 +169,7 @@ export async function exportGodotAndroidApk(params: {
 
   try {
     const { exportId, spec, workRoot } = await prepareGodotWorkspace(params);
-    const apkOut = path.join(repoRoot(), "public", "godot-builds", exportId, "android", "game.apk");
+    const apkOut = repoPublicPath("godot-builds", exportId, "android", "game.apk");
     await fs.mkdir(path.dirname(apkOut), { recursive: true });
 
     const importMs = PRODUCT.godot.importTimeoutMs;

@@ -9,6 +9,7 @@ import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
 import { buildStrategyBlueprint } from "@/lib/strategy-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
+import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
 import {
   applySamplePlayProfile,
@@ -146,12 +147,15 @@ export function enrichGameSpecForRuntime(
   }
 
   const sampleId =
-    opts.sampleId ?? sampleIdFromProjectId(opts.projectId) ?? inferSampleIdFromPrompt(hint);
+    opts.sampleId ??
+    sampleIdFromProjectId(opts.projectId) ??
+    inferSampleIdFromPrompt(hint) ??
+    spec.samplePlayProfile?.variantId;
   if (sampleId) {
     next = applySamplePlayProfile(next, sampleId, hint);
   } else if (next.samplePlayProfile?.variantId) {
     next = reapplySamplePlayProfileByVariant(next, hint);
   }
 
-  return next;
+  return applyHardQualityDefaults(next, hint, locale);
 }

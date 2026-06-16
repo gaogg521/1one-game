@@ -14,6 +14,7 @@ import {
 } from "@/lib/reference-ingest-server-cache";
 import { generateGameSprites } from "@/lib/game-sprite-gen";
 import { generateGameBackground } from "@/lib/game-background-gen";
+import { repoPublicPath } from "@/lib/public-path";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
 
   // 若带 projectId 且精灵尚未生成，后台静默触发（不阻塞导出）
   if (parsed.data.projectId) {
-    const spriteDir = path.join(process.cwd(), "public", "game-sprites", parsed.data.projectId);
+    const spriteDir = repoPublicPath("game-sprites", parsed.data.projectId);
     const hasSprites = fs.existsSync(path.join(spriteDir, "player.png"));
     if (!hasSprites) {
       console.info(`[godot-export] 项目 ${parsed.data.projectId} 精灵未生成，后台触发…`);

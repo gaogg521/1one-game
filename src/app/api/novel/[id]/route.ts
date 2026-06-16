@@ -21,6 +21,7 @@ import type { NovelLengthTier } from "@/lib/novel-length";
 import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
+import { canReadWorkPublicly } from "@/lib/literary-safety";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -43,6 +44,9 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
+  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
+    return localizedJsonError(req, "notFound", 404);
+  }
   const pipelineMeta = await loadNovelGenerationMeta(id);
   const creativeBrief = isOwner ? await loadCreativeBriefForNovel(id) : null;
   const briefKind =

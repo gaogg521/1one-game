@@ -75,6 +75,7 @@ import {
 } from "@/lib/novel-generate-checkpoint";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
+import { shouldChargeNovelStreamQuota } from "@/lib/literary-safety";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-message";
 
@@ -166,11 +167,13 @@ export async function POST(req: Request) {
     lengthTier = resumeState.checkpoint.lengthTier;
   }
 
-  const quotaBlock = await gateGenerationQuota("novel", {
-    long: usesSegmentedLongGeneration(lengthTier),
-    uiLocale,
-  });
-  if (quotaBlock) return quotaBlock;
+  if (shouldChargeNovelStreamQuota(resumeNovelId)) {
+    const quotaBlock = await gateGenerationQuota("novel", {
+      long: usesSegmentedLongGeneration(lengthTier),
+      uiLocale,
+    });
+    if (quotaBlock) return quotaBlock;
+  }
 
   const lengthOpts: NovelLengthOptions | undefined = isChildrenNovelTier(lengthTier)
     ? {

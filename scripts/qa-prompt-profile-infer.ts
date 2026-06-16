@@ -3,8 +3,10 @@
  * npm run qa:prompt-profile-infer
  */
 import { SAMPLES } from "../src/lib/samples";
+import { canonicalSpecForPlay } from "../src/lib/astrocade-canonical-spec";
 import { enrichGameSpecForRuntime } from "../src/lib/enrich-game-spec";
 import { mockSpecFromPrompt } from "../src/lib/mock-spec";
+import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { inferSampleIdFromPrompt } from "../src/lib/sample-play-profiles";
 
 function main() {
@@ -34,6 +36,21 @@ function main() {
     throw new Error(`generic prompt should not get profile: ${generic.samplePlayProfile.variantId}`);
   }
   console.log("[OK] generic prompt → no profile");
+
+  const orbit = SAMPLES.find((s) => s.id === "tiny-planet-chopper")!;
+  const persisted = prepareGameSpecForPersist(mockSpecFromPrompt(orbit.prompt), orbit.prompt);
+  const subtitleHint = orbit.subtitle;
+  const play = canonicalSpecForPlay(persisted, subtitleHint, "zh-Hans", "cmqa-user-project-id");
+  if (play.samplePlayProfile?.variantId !== orbit.id) {
+    throw new Error(`variantId fallback failed: ${play.samplePlayProfile?.variantId ?? "none"}`);
+  }
+  if (play.samplePlayProfile?.shooter?.orbitChopper !== true) {
+    throw new Error("orbitChopper missing after variantId fallback");
+  }
+  if (play.theme.backgroundColor !== "#0f172a") {
+    throw new Error(`theme not from profile: ${play.theme.backgroundColor}`);
+  }
+  console.log("[OK] variantId fallback · subtitle hint → orbitChopper profile");
 
   console.log(`\n✓ prompt profile infer gate passed (${ok}/${SAMPLES.length})`);
 }

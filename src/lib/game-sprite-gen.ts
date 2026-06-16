@@ -7,16 +7,17 @@
 import fs from "fs";
 import path from "path";
 import type { GameSpec } from "@/lib/game-spec";
+import { repoPublicPath } from "@/lib/public-path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import type { AppLocale } from "@/i18n/routing";
 import { assetGenMessage } from "@/lib/i18n/progress-message";
 import { templateVisualStyle, buildAssetMoodLine } from "@/lib/assets/template-visual-styles";
 
-const SPRITE_DIR = path.join(process.cwd(), "public", "game-sprites");
+const SPRITE_DIR = repoPublicPath("game-sprites");
 
 function ensureDir(projectId: string) {
-  const dir = path.join(SPRITE_DIR, projectId);
+  const dir = path.join(/*turbopackIgnore: true*/ SPRITE_DIR, projectId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -271,11 +272,11 @@ export async function generateGameSprites(
   const results: SpriteGenResult[] = [];
 
   for (const kind of ["player", "hazard", "gem", "power", "boss"] as SpriteKind[]) {
-    const filePath = path.join(dir, `${kind}.png`);
+    const filePath = path.join(/*turbopackIgnore: true*/ dir, `${kind}.png`);
     const publicUrl = `/game-sprites/${projectId}/${kind}.png`;
 
     // 已有缓存则跳过
-    if (fs.existsSync(filePath)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
       console.info(`[game-sprite] 复用缓存 ${projectId}/${kind}`);
       results.push({ kind, url: publicUrl });
       continue;
@@ -308,7 +309,7 @@ export async function generateGameSprites(
         buf = Buffer.from(await res.arrayBuffer());
       }
 
-      fs.writeFileSync(filePath, buf);
+      fs.writeFileSync(/*turbopackIgnore: true*/ filePath, buf);
       console.info(`[game-sprite] ${projectId}/${kind} 已保存`);
       results.push({ kind, url: publicUrl });
     } catch (e) {

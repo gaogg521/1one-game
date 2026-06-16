@@ -5,10 +5,8 @@ import { juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import {
-  buildCohesivePresentation,
-  type CohesivePresentation,
-} from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import {
   buildFallbackAgenticModule,
   runAgenticModule,
@@ -61,7 +59,7 @@ export class AgenticScene extends Phaser.Scene {
   }
 
   create() {
-    this.cohesive = buildCohesivePresentation(this.spec);
+    this.cohesive = buildSceneCohesion(this.spec);
     const w = this.scale.width;
     const h = this.scale.height;
     const mod = this.spec.agenticModule ?? buildFallbackAgenticModule(this.spec.title, this.spec);

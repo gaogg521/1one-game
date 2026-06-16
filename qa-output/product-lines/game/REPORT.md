@@ -1,14 +1,15 @@
 # 游戏线独立验收
 
-- 时间：2026-06-14T16:09:14.393Z
+- 时间：2026-06-16T16:58:01.450Z
 - 结果：**PASS**
-- 离线步骤：6 + E2E
+- 离线步骤：7 + E2E
 
 ## 步骤
 
 - [x] `npm run qa:user-journey-parity`
 - [x] `npm run qa:template-matrix`
 - [x] `npm run qa:architecture-parity`
+- [x] `npm run qa:game-quality-contracts`
 - [x] `npm run qa:director-spec`
 - [x] `npm run qa:co-create-loop`
 - [x] `npm run qa:generate-stream-agentic`

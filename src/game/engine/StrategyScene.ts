@@ -1,11 +1,12 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { juiceBurst, juiceFlash, juiceShake } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildStrategyBlueprint, type StrategyNode } from "@/lib/strategy-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
 import { drawStrategyNode, paintStrategyMapBackdrop } from "@/game/engine/action-visual";
@@ -52,8 +53,7 @@ export class StrategyScene extends Phaser.Scene {
 
   create() {
     setPhaserQaClickHints([]);
-    this.cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(this.cohesive.bleepTemperament);
+    this.cohesive = buildSceneCohesion(this.spec);
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     this.nodes = JSON.parse(
       JSON.stringify(this.spec.strategy?.nodes ?? buildStrategyBlueprint({ spec: this.spec }).nodes),

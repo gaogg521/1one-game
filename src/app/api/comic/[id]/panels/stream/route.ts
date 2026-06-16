@@ -15,6 +15,7 @@ import { apiErrorTextForLocale, localizedStreamError } from "@/lib/api/localized
 import { coverGenreLabel } from "@/lib/i18n/cover-genre-label";
 import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { comicPanelResumeHint } from "@/lib/comic-safety";
 
 export const maxDuration = 600;
 
@@ -45,8 +46,6 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const { id } = await ctx.params;
 
-  const quotaBlock = await gateGenerationQuota("comicPanels", { refId: id });
-  if (quotaBlock) return quotaBlock;
   const row = await prisma.comic.findUnique({ where: { id } });
   if (!row || row.ownerKey !== ownerKey) {
     return localizedStreamError(req, "notFound", 404);
@@ -66,6 +65,32 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (doc.pages.length === 0) {
     return localizedStreamError(req, "noStoryboard", 400);
   }
+
+  const before = countPanelsWithImages(doc);
+  if (!body.regenerate && before.withImage >= before.total) {
+    return new Response(
+      sseData({
+        type: "done",
+        ok: true,
+        comic: { id, imageUrls: row.imageUrls },
+        rendered: 0,
+        withImage: before.withImage,
+        total: before.total,
+        imageSource: "none",
+        message: pm("panelsComplete"),
+      }),
+      {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      },
+    );
+  }
+
+  const quotaBlock = await gateGenerationQuota("comicPanels", { refId: id });
+  if (quotaBlock) return quotaBlock;
 
   const availability = getImageGenAvailability();
   const encoder = new TextEncoder();
@@ -188,6 +213,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           total: after.total,
           imageSource: result.imageSource,
           errors: result.errors.length ? result.errors : undefined,
+          resumeHint: comicPanelResumeHint({ withImage: after.withImage, total: after.total, uiLocale }),
           message:
             after.withImage === 0
               ? result.errors.join("；") || pm("noneGenerated")

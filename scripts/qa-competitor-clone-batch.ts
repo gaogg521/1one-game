@@ -198,6 +198,8 @@ async function main() {
 
   if (!summary.pass) process.exit(1);
   console.log("\nqa:competitor-clone-batch: ok");
+  /** Windows 上 Playwright 偶发保留句柄，显式退出避免 gates wrapper execSync 假挂 */
+  process.exit(0);
 }
 
 main().catch((e) => {

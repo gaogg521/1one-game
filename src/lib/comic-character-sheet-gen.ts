@@ -11,6 +11,7 @@ import { getComicPanelGenConcurrency } from "@/lib/model-config";
 import { PRODUCT } from "@/lib/product-config";
 import type { AppLocale } from "@/i18n/routing";
 import { assetGenMessage } from "@/lib/i18n/progress-message";
+import { repoPublicPath } from "@/lib/public-path";
 import {
   applyCharacterSheetUrlsToRoster,
   collectCharacterSheetUrls,
@@ -44,7 +45,7 @@ export type CharSheetSubject = {
   visualDesc: string;
 };
 
-const SHEET_DIR = path.join(process.cwd(), "public", "comic-char-sheets");
+const SHEET_DIR = repoPublicPath("comic-char-sheets");
 
 function ensureDir() {
   if (!fs.existsSync(SHEET_DIR)) fs.mkdirSync(SHEET_DIR, { recursive: true });
@@ -126,9 +127,9 @@ export async function generateCharacterSheets(params: {
   ensureDir();
 
   return mapWithConcurrency(chars, concurrency, async (char) => {
-    const sheetPath = path.join(SHEET_DIR, `${params.comicKey}-${char.id}.png`);
+    const sheetPath = path.join(/*turbopackIgnore: true*/ SHEET_DIR, `${params.comicKey}-${char.id}.png`);
     const publicUrl = `/comic-char-sheets/${params.comicKey}-${char.id}.png`;
-    if (fs.existsSync(sheetPath)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ sheetPath)) {
       console.info(`[char-sheet] 复用缓存 ${char.id}`);
       return { characterId: char.id, name: char.name, url: publicUrl };
     }

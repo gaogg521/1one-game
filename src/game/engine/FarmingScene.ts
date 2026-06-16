@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import {
   cropEmoji,
@@ -7,11 +7,12 @@ import {
   paintFarmingGardenBackdrop,
   soilFillForState,
 } from "@/game/engine/farming-visual";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake } from "@/game/engine/gameJuice";
+import { juiceCombo, juiceFail, juiceHit, juicePickup, juiceWin } from "@/game/engine/gameJuice";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildFarmingBlueprint, type FarmingCrop } from "@/lib/farming-blueprint";
 import type { GameSpec } from "@/lib/game-spec";
 import {
@@ -80,8 +81,7 @@ export class FarmingScene extends Phaser.Scene {
   }
 
   create() {
-    const cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(cohesive.bleepTemperament);
+    const cohesive = buildSceneCohesion(this.spec);
     this.cohesive = cohesive;
     this.bp = this.spec.farming ?? buildFarmingBlueprint({ spec: this.spec });
     const farmPf = this.spec.samplePlayProfile?.farming;
@@ -319,14 +319,24 @@ export class FarmingScene extends Phaser.Scene {
     if (tile.state === "empty") {
       if (this.coins < crop.seedCost) {
         this.banner.show({ ...bannerFarmingInsufficientCoins(this.uiLocale), ms: 800 });
-        juiceShake(this, { durationMs: 80, intensity: 0.003 });
+        juiceHit(this, {
+          x: tile.rect.x,
+          y: tile.rect.y,
+          colorHex: this.cohesive.hud.danger,
+        });
         return;
       }
       this.coins -= crop.seedCost;
       tile.state = "seeded";
       tile.cropId = crop.id;
       tile.progress = 0;
-      juiceBurst(this, tile.rect.x, tile.rect.y, crop.color, 8);
+      juicePickup(this, {
+        x: tile.rect.x,
+        y: tile.rect.y,
+        colorHex: crop.color,
+        text: crop.name,
+        textColorCss: this.cohesive.hud.accent,
+      });
       playBleep("pickup");
       if (idx === 0) this.tweens.killTweensOf(tile.rect);
     } else if (tile.state === "ready") {
@@ -343,17 +353,26 @@ export class FarmingScene extends Phaser.Scene {
       tile.cropId = "";
       tile.progress = 0;
       if (tile.readyGlow) tile.readyGlow.setVisible(false);
-      juiceBurst(this, tile.rect.x, tile.rect.y, c.color, 14);
-      juiceFlash(this, { r: 250, g: 220, b: 80 }, { durationMs: 120 });
       const floater = streakBonus > 0 ? `+${gain} 🔥${this.harvestStreak}` : `+${gain}`;
-      juiceFloater(this, tile.rect.x, tile.rect.y - 14, floater, this.cohesive.hud.accent);
+      juiceCombo(this, {
+        x: tile.rect.x,
+        y: tile.rect.y,
+        colorHex: c.color,
+        text: floater,
+        textColorCss: this.cohesive.hud.accent,
+        combo: this.harvestStreak,
+      });
       this.scoreText.setText(hudScore(this.uiLocale, this.harvests * 10));
       this.goalText.setText(this.goalLabel());
       this.soundscape?.triggerEvent("restore");
       if (this.harvests >= this.bp.harvestGoal) this.finish(true);
     } else if (tile.state === "growing" && !this.autoWater) {
       tile.progress = Math.min(1, tile.progress + 0.4);
-      juiceBurst(this, tile.rect.x, tile.rect.y, "#38bdf8", 6);
+      juicePickup(this, {
+        x: tile.rect.x,
+        y: tile.rect.y,
+        colorHex: "#38bdf8",
+      });
       if (tile.progress >= 1) tile.state = "ready";
     } else if (tile.state === "seeded" && !this.autoWater) {
       tile.state = "growing";
@@ -397,8 +416,21 @@ export class FarmingScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     if (won) {
-      juiceFlash(this, { r: 120, g: 220, b: 140 }, { durationMs: 160 });
-      juiceShake(this, { durationMs: 200, intensity: 0.008 });
+      juiceWin(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.42,
+        colorHex: this.cohesive.hud.accent,
+        text: this.uiLocale === "zh-Hans" ? "丰收" : "Harvest",
+        textColorCss: this.cohesive.hud.accent,
+      });
+    } else {
+      juiceFail(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.42,
+        colorHex: this.cohesive.hud.danger,
+        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        textColorCss: this.cohesive.hud.danger,
+      });
     }
     this.banner.show({ ...bannerFarmingFinish(this.uiLocale, won), ms: 2000 });
     this.time.delayedCall(2200, () => this.onEnd({ score: this.harvests * 10 + this.coins, won }));

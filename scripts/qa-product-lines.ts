@@ -8,6 +8,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { shouldWriteProductLinesAggregate } from "../src/lib/qa/product-lines-summary";
 
 type Line = "game" | "novel" | "comic";
 type StepResult = { cmd: string; ok: boolean; detail?: string };
@@ -25,6 +26,7 @@ const LINES: Record<
       "npm run qa:user-journey-parity",
       "npm run qa:template-matrix",
       "npm run qa:architecture-parity",
+      "npm run qa:game-quality-contracts",
       "npm run qa:director-spec",
       "npm run qa:co-create-loop",
       "npm run qa:generate-stream-agentic",
@@ -35,6 +37,7 @@ const LINES: Record<
     label: "小说",
     steps: [
       "npm run qa:literary-user-journey",
+      "npm run qa:literary-safety-contracts",
       "npm run qa:novel-comic-smoke",
       "npm run qa:novel-locale",
     ],
@@ -46,6 +49,7 @@ const LINES: Record<
       "npm run qa:database-url",
       "npm run qa:songliao:artifacts",
       "npm run qa:comic-novel-product-rules",
+      "npm run qa:comic-safety-contracts",
       "npm run qa:comic-director-pipeline",
       "npm run qa:comic-storyboard-resilience",
       "npm run qa:comic-panel-eta",
@@ -141,10 +145,12 @@ async function main() {
 
   fs.mkdirSync(OUT_ROOT, { recursive: true });
   const allPass = summaries.every((s) => s.pass);
-  fs.writeFileSync(
-    path.join(OUT_ROOT, "summary.json"),
-    JSON.stringify({ at: new Date().toISOString(), pass: allPass, lines: summaries }, null, 2),
-  );
+  if (shouldWriteProductLinesAggregate(filter)) {
+    fs.writeFileSync(
+      path.join(OUT_ROOT, "summary.json"),
+      JSON.stringify({ at: new Date().toISOString(), pass: allPass, lines: summaries }, null, 2),
+    );
+  }
 
   console.log("\n--- 三线汇总 ---");
   for (const s of summaries) {

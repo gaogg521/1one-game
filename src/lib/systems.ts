@@ -120,6 +120,15 @@ export function buildSystems(params: { prompt: string; spec: GameSpec }): System
     });
   }
 
+  if (!powerups.some((p) => p.type === "heal")) {
+    powerups.push({
+      id: "heal",
+      name: cyber ? "修复包" : fantasy ? "治疗药水" : cute ? "小饼干" : "回复",
+      type: "heal",
+      strength: 0.3,
+    });
+  }
+
   return { skill, powerups };
 }
 

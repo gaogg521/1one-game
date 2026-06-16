@@ -28,7 +28,7 @@ async function loadCoverFontBase64(): Promise<string> {
 
   for (const p of localCandidates) {
     try {
-      const buf = await fs.readFile(p);
+      const buf = await fs.readFile(/*turbopackIgnore: true*/ p);
       cachedFontB64 = buf.toString("base64");
       return cachedFontB64;
     } catch {

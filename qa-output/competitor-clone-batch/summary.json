@@ -1,5 +1,5 @@
 {
-  "at": "2026-06-14T18:37:32.817Z",
+  "at": "2026-06-16T16:27:48.865Z",
   "batch": "all",
   "total": 17,
   "passCount": 17,
@@ -12,7 +12,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PhysicsScene",
-      "cloneId": "cmqe4hh8h006sm6tlj2iiajrl",
+      "cloneId": "cmqgufp8q0094e3ldkc04tll7",
       "playabilityChecks": {
         "physicsCombo": true,
         "profilePreserved": true,
@@ -22,7 +22,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.00213623046875
+        "diffRatio": 0.00225830078125
       }
     },
     {
@@ -32,7 +32,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "CoasterScene",
-      "cloneId": "cmqe4htm3006vm6tl12zlwpsc",
+      "cloneId": "cmqgugy310097e3ldfqksxy2g",
       "playabilityChecks": {
         "coasterMode": true,
         "speedBoost": true,
@@ -42,8 +42,8 @@
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 1,
-        "diffRatio": 0.0223388671875
+        "colorDist": 0,
+        "diffRatio": 0.00762939453125
       }
     },
     {
@@ -53,18 +53,21 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "FarmingScene",
-      "cloneId": "cmqe4i6u5006ym6tlde9kc0zw",
+      "cloneId": "cmqgui506009ae3ldgbujqoto",
       "playabilityChecks": {
         "farmingGrid": true,
         "autoWater": true,
+        "decorativeFence": true,
+        "richCrops": true,
+        "startingCoins": true,
         "profilePreserved": true,
         "dedicatedScene": true,
         "noAgenticFallback": true,
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 0,
-        "diffRatio": 0.00177001953125
+        "colorDist": 1,
+        "diffRatio": 0.0091552734375
       }
     },
     {
@@ -74,7 +77,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PuzzleScene",
-      "cloneId": "cmqe4ie610071m6tlptpl56mh",
+      "cloneId": "cmqguimou009de3ld6izgshxf",
       "playabilityChecks": {
         "match3Mode": true,
         "bloomScale": true,
@@ -85,7 +88,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.0113525390625
+        "diffRatio": 0.01092529296875
       }
     },
     {
@@ -95,7 +98,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PuzzleScene",
-      "cloneId": "cmqe4ilne0074m6tl3ua7uvvw",
+      "cloneId": "cmqguj9d4009ge3ld6nhww34p",
       "playabilityChecks": {
         "spotDifference": true,
         "whimsicalPanels": true,
@@ -106,7 +109,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.002197265625
+        "diffRatio": 0.009521484375
       }
     },
     {
@@ -116,7 +119,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "TowerDefenseScene",
-      "cloneId": "cmqe4it1h0077m6tlfqa7wnoh",
+      "cloneId": "cmqgujvb5009je3ld7gmuxtdu",
       "playabilityChecks": {
         "mergeGrid": true,
         "profilePreserved": true,
@@ -126,7 +129,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.0045166015625
+        "diffRatio": 0.00689697265625
       }
     },
     {
@@ -136,7 +139,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "ChessScene",
-      "cloneId": "cmqe4j8e9007am6tl8h6hgmfb",
+      "cloneId": "cmqguljnt009me3ldsf57qexm",
       "playabilityChecks": {
         "legalMoves": true,
         "profilePreserved": true,
@@ -145,8 +148,8 @@
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 1.4142135623730951,
-        "diffRatio": 0.01141357421875
+        "colorDist": 1,
+        "diffRatio": 0.00970458984375
       }
     },
     {
@@ -156,7 +159,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PlatformerScene",
-      "cloneId": "cmqe4jfvy007dm6tlfzhl6oky",
+      "cloneId": "cmqgum23r009pe3ldq2mo81lc",
       "playabilityChecks": {
         "stealthMode": true,
         "grappleEnabled": true,
@@ -168,8 +171,8 @@
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 0,
-        "diffRatio": 0.0081787109375
+        "colorDist": 1,
+        "diffRatio": 0.00152587890625
       }
     },
     {
@@ -179,50 +182,10 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "StrategyScene",
-      "cloneId": "cmqe4jv9t007gm6tl97bt8yq1",
+      "cloneId": "cmqgunmps009se3ldwiv55xrc",
       "playabilityChecks": {
         "strategyNodes": true,
         "rushMode": true,
-        "profilePreserved": true,
-        "dedicatedScene": true,
-        "noAgenticFallback": true,
-        "expectedScene": true
-      },
-      "visual": {
-        "colorDist": 0,
-        "diffRatio": 0.00244140625
-      }
-    },
-    {
-      "sampleId": "tiny-planet-chopper",
-      "title": "Tiny Planet Chopper",
-      "pass": true,
-      "playabilityOk": true,
-      "visualOk": true,
-      "scene": "ShooterScene",
-      "cloneId": "cmqe4k2qy007jm6tld83du74o",
-      "playabilityChecks": {
-        "orbitChopper": true,
-        "profilePreserved": true,
-        "dedicatedScene": true,
-        "noAgenticFallback": true,
-        "expectedScene": true
-      },
-      "visual": {
-        "colorDist": 0,
-        "diffRatio": 0.00262451171875
-      }
-    },
-    {
-      "sampleId": "blade-defender-merge",
-      "title": "Blade Defender Merge",
-      "pass": true,
-      "playabilityOk": true,
-      "visualOk": true,
-      "scene": "TowerDefenseScene",
-      "cloneId": "cmqe4khv5007mm6tlip7nsi74",
-      "playabilityChecks": {
-        "mergeGrid": true,
         "profilePreserved": true,
         "dedicatedScene": true,
         "noAgenticFallback": true,
@@ -234,13 +197,53 @@
       }
     },
     {
+      "sampleId": "tiny-planet-chopper",
+      "title": "Tiny Planet Chopper",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "ShooterScene",
+      "cloneId": "cmqguo4qt009ve3ld29iys6c2",
+      "playabilityChecks": {
+        "orbitChopper": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 0,
+        "diffRatio": 0.00347900390625
+      }
+    },
+    {
+      "sampleId": "blade-defender-merge",
+      "title": "Blade Defender Merge",
+      "pass": true,
+      "playabilityOk": true,
+      "visualOk": true,
+      "scene": "TowerDefenseScene",
+      "cloneId": "cmqguphjt009ye3ldfg8jcfyz",
+      "playabilityChecks": {
+        "mergeGrid": true,
+        "profilePreserved": true,
+        "dedicatedScene": true,
+        "noAgenticFallback": true,
+        "expectedScene": true
+      },
+      "visual": {
+        "colorDist": 1,
+        "diffRatio": 0.00140380859375
+      }
+    },
+    {
       "sampleId": "car-color-palette",
       "title": "Car Color Palette",
       "pass": true,
       "playabilityOk": true,
       "visualOk": true,
       "scene": "CustomizationScene",
-      "cloneId": "cmqe4ky8y007pm6tlnnufsfkq",
+      "cloneId": "cmqguqts600a1e3lddfo0gqc5",
       "playabilityChecks": {
         "carPaintMode": true,
         "editGoal": true,
@@ -251,7 +254,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.0028076171875
+        "diffRatio": 0.0023193359375
       }
     },
     {
@@ -261,7 +264,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "ShooterScene",
-      "cloneId": "cmqe4l5xb007sm6tll4kd1xgu",
+      "cloneId": "cmqgur98a00a4e3ldj0lasvp2",
       "playabilityChecks": {
         "sniperScope": true,
         "profilePreserved": true,
@@ -271,7 +274,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.00799560546875
+        "diffRatio": 0.00189208984375
       }
     },
     {
@@ -281,7 +284,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PuzzleScene",
-      "cloneId": "cmqe4lmf4007vm6tl2ce7utxm",
+      "cloneId": "cmqgusdl700a7e3ld44w97l02",
       "playabilityChecks": {
         "memoryMatch": true,
         "profilePreserved": true,
@@ -290,8 +293,8 @@
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 1,
-        "diffRatio": 0.0054931640625
+        "colorDist": 0,
+        "diffRatio": 0.0018310546875
       }
     },
     {
@@ -301,7 +304,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "PuzzleScene",
-      "cloneId": "cmqe4ltq7007ym6tl0f41aypd",
+      "cloneId": "cmqgusto100aae3ldipgpuulz",
       "playabilityChecks": {
         "jigsawMode": true,
         "kidsJigsaw": true,
@@ -311,8 +314,8 @@
         "expectedScene": true
       },
       "visual": {
-        "colorDist": 0,
-        "diffRatio": 0.0030517578125
+        "colorDist": 1,
+        "diffRatio": 0.0037841796875
       }
     },
     {
@@ -322,7 +325,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "CustomizationScene",
-      "cloneId": "cmqe4m18l0081m6tlglyj5uqe",
+      "cloneId": "cmqgut9v700ade3ld73i8ukne",
       "playabilityChecks": {
         "potteryMode": true,
         "editGoal": true,
@@ -334,7 +337,7 @@
       },
       "visual": {
         "colorDist": 0,
-        "diffRatio": 0.00201416015625
+        "diffRatio": 0.0018310546875
       }
     },
     {
@@ -344,7 +347,7 @@
       "playabilityOk": true,
       "visualOk": true,
       "scene": "CoasterScene",
-      "cloneId": "cmqe4m9ey0084m6tlcimkpnsz",
+      "cloneId": "cmqguudnm00age3ld4128x2jg",
       "playabilityChecks": {
         "endlessRoad": true,
         "distanceGoal": true,
@@ -355,7 +358,7 @@
       },
       "visual": {
         "colorDist": 1,
-        "diffRatio": 0.0020751953125
+        "diffRatio": 0.00201416015625
       }
     }
   ]

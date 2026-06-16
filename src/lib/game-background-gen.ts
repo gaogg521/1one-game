@@ -5,6 +5,7 @@
 import fs from "fs";
 import path from "path";
 import type { GameSpec } from "@/lib/game-spec";
+import { repoPublicPath } from "@/lib/public-path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import {
@@ -13,7 +14,7 @@ import {
   templateVisualStyle,
 } from "@/lib/assets/template-visual-styles";
 
-const BG_DIR = path.join(process.cwd(), "public", "game-bg");
+const BG_DIR = repoPublicPath("game-bg");
 
 function ensureDir() {
   if (!fs.existsSync(BG_DIR)) {
@@ -84,7 +85,7 @@ export async function generateGameBackground(
       }
       buffer = Buffer.from(await res.arrayBuffer());
     }
-    const destPath = path.join(BG_DIR, `${projectId}.png`);
+    const destPath = path.join(/*turbopackIgnore: true*/ BG_DIR, `${projectId}.png`);
     fs.writeFileSync(destPath, buffer);
     console.info(`[game-bg] 背景已保存 ${destPath}`);
 

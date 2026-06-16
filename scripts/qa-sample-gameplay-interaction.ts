@@ -20,6 +20,7 @@ async function main() {
     process.exit(1);
   }
   console.log(`qa:sample-gameplay-interaction: ok (${results.length}/${results.length})`);
+  process.exit(0);
 }
 
 main().catch((e) => {

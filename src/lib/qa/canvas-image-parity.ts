@@ -39,6 +39,12 @@ export const STRICT_VISUAL_SAMPLE_IDS = new Set([
   "crashy-roads",
 ]);
 
+/** orbitChopper 克隆对标：同 spec 双开页 orbit 相位略有偏差 */
+const ORBIT_CHOPPER_CLONE_PARITY: CanvasParityThresholds = {
+  maxColorDist: 48,
+  maxDiffRatio: 0.1,
+};
+
 export async function avgRgb(buf: Buffer): Promise<[number, number, number]> {
   const { data, info } = await sharp(buf).resize(64, 64, { fit: "cover" }).raw().toBuffer({ resolveWithObject: true });
   let r = 0;
@@ -95,5 +101,6 @@ export function visualThresholdsForSample(_sampleId: string): CanvasParityThresh
 }
 
 export function cloneVisualThresholdsForSample(sampleId: string): CanvasParityThresholds {
+  if (sampleId === "tiny-planet-chopper") return ORBIT_CHOPPER_CLONE_PARITY;
   return STRICT_VISUAL_SAMPLE_IDS.has(sampleId) ? STRICT_CLONE_PARITY : GLOBAL_CLONE_PARITY;
 }

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -21,13 +21,17 @@ import {
 import { tMessage } from "@/lib/i18n/messages";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { classifyReferencePayloads } from "@/lib/reference-classify";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
 import {
-  juiceBurst,
-  juiceFlash,
+  juiceBoss,
+  juiceFail,
+  juiceHit,
+  juicePickup,
   juiceShake,
+  juiceWin,
   themeParticleHex,
 } from "@/game/engine/gameJuice";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
@@ -37,7 +41,7 @@ import {
   sampleBackgroundAlpha,
 } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
+import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -256,8 +260,7 @@ export class ShooterScene extends Phaser.Scene {
     this.lives = this.spec.gameplay.lives ?? 3;
     this.intensity = this.spec.director?.intensity ?? 0.55;
 
-    const ui = buildCohesivePresentation(this.spec);
-    setBleepTemperament(ui.bleepTemperament);
+    const ui = buildSceneCohesion(this.spec);
     this.cohesive = ui;
 
     this.addStarfield();
@@ -459,7 +462,11 @@ export class ShooterScene extends Phaser.Scene {
     this.dangerVignette.setAlpha(0);
     this.dangerVignette.fillStyle(0xff2233, 1);
     this.dangerVignette.fillRect(0, 0, width, height);
-    setPhaserQaState({ qaTouches: 0 });
+    setPhaserQaState({
+      qaTouches: 0,
+      orbitChopper: this.orbitMode,
+      shooterBg: this.spec.theme.backgroundColor,
+    });
     schedulePhaserPlayReady(this, 500, {});
   }
 
@@ -655,8 +662,8 @@ export class ShooterScene extends Phaser.Scene {
     if (this.orbitMode) {
       const count = cols * rows;
       for (let i = 0; i < count; i += 1) {
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const dist = Phaser.Math.FloatBetween(0.35, 0.88);
+        const angle = seededFloatBetween(this.runtimeRng, 0, Math.PI * 2);
+        const dist = seededFloatBetween(this.runtimeRng, 0.35, 0.88);
         const x = this.planetCx + Math.cos(angle) * this.planetRx * dist;
         const y = this.planetCy + Math.sin(angle) * this.planetRy * dist;
         const key = elite ? "texElite" : this.enemySpriteKey;
@@ -790,7 +797,13 @@ export class ShooterScene extends Phaser.Scene {
 
     bullet.destroy();
     const hp = (enemy.getData("hp") as number) - 1;
-    juiceFlash(this, { r: 220, g: 160, b: 60 }, { durationMs: 60 });
+    juiceHit(this, {
+      x: enemy.x,
+      y: enemy.y,
+      colorHex: themeParticleHex(this.spec),
+      rng: this.runtimeRng,
+      large: Boolean(enemy.getData("isBoss")),
+    });
 
     if (hp <= 0) {
       const isBoss = Boolean(enemy.getData("isBoss"));
@@ -821,14 +834,26 @@ export class ShooterScene extends Phaser.Scene {
 
   private onPlayerHit() {
     if (this.time.now < this.shieldUntil) {
-      juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 80 });
+      juicePickup(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.cohesive.hud.accent2,
+        text: this.uiLocale === "zh-Hans" ? "护盾" : "Shield",
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
       playBleep("pickup");
       return;
     }
     this.lives -= 1;
     this.invulnUntil = this.time.now + 1200;
-    juiceShake(this, { durationMs: 180, intensity: 0.006 });
-    juiceFlash(this, { r: 255, g: 80, b: 80 }, { durationMs: 180 });
+    juiceHit(this, {
+      x: this.player.x,
+      y: this.player.y,
+      colorHex: this.spec.theme.hazardColor,
+      rng: this.runtimeRng,
+      large: this.lives <= 1,
+    });
     playBleep("hit");
     this.player.setAlpha(0.3);
     this.time.delayedCall(300, () => {
@@ -847,13 +872,15 @@ export class ShooterScene extends Phaser.Scene {
   // ─── Effects ───────────────────────────────────────────────────────────────
 
   private fxExplosion(x: number, y: number, large = false) {
-    juiceBurst(this, x, y, themeParticleHex(this.spec), large ? 22 : 10);
-    if (large) {
-      juiceFlash(this, { r: 255, g: 180, b: 60 }, { durationMs: 220 });
-      juiceShake(this, { durationMs: 200, intensity: 0.005 });
-    } else if (this.spec.samplePlayProfile?.shooter?.sniperScope) {
-      juiceFlash(this, { r: 90, g: 255, b: 130 }, { durationMs: 110 });
-    }
+    const common = {
+      x,
+      y,
+      colorHex: large ? "#ff6600" : themeParticleHex(this.spec),
+      rng: this.runtimeRng,
+      large,
+    };
+    if (large) juiceBoss(this, common);
+    else juiceHit(this, common);
   }
 
   private addStarfield() {
@@ -955,7 +982,14 @@ export class ShooterScene extends Phaser.Scene {
 
     if (skill.effect === "shield") {
       this.shieldUntil = this.time.now + dur;
-      juiceFlash(this, { r: 140, g: 220, b: 255 }, { durationMs: 80 });
+      juicePickup(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.cohesive.hud.accent2,
+        text: skill.name,
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -986,7 +1020,14 @@ export class ShooterScene extends Phaser.Scene {
         this.totalKills += 1;
         this.score += 2 * this.scoreMult;
       }
-      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
+      juiceBoss(this, {
+        x: this.player.x,
+        y: this.player.y - 40,
+        colorHex: themeParticleHex(this.spec),
+        text: skill.name,
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -1049,8 +1090,25 @@ export class ShooterScene extends Phaser.Scene {
     this.physics.pause();
     this.hintText.setText(shooterFinishText(this.uiLocale, payload.won));
     if (payload.won) {
+      juiceWin(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: themeParticleHex(this.spec),
+        text: this.uiLocale === "zh-Hans" ? "胜利" : "Win",
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
+    } else {
+      juiceFail(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.spec.theme.hazardColor,
+        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        textColorCss: this.cohesive.hud.danger,
+        rng: this.runtimeRng,
+      });
     }
     this.onEnd(payload);
   }

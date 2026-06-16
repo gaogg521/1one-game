@@ -14,6 +14,8 @@ import { getImageGenAvailability } from "@/lib/image-generation";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
+import { comicPanelResumeHint } from "@/lib/comic-safety";
 
 /** 漫画分镜配图：每格经网关文生图约 1～6 分钟，4 格顺序生成。 */
 export const maxDuration = 600;
@@ -79,6 +81,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     });
   }
 
+  const quotaBlock = await gateGenerationQuota("comicPanels", { refId: id });
+  if (quotaBlock) return quotaBlock;
+
   const availability = getImageGenAvailability();
   const { title: storyTitle, summary: storySummary, genre: storyGenre } =
     await resolveComicStoryContext(row, uiLocale);
@@ -143,6 +148,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       imageSource,
       imageGenModel: availability.openaiModel,
       imageGenHint,
+      resumeHint: comicPanelResumeHint({ withImage: after.withImage, total: after.total, uiLocale }),
       errors: errors.length ? errors : undefined,
       message:
         after.withImage === 0

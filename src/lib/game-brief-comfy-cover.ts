@@ -9,6 +9,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { getComfyBaseUrl } from "@/lib/orchestration/comfy-gateway";
 import { prisma } from "@/lib/prisma";
 import { saveProjectCoverFromBuffer } from "@/lib/project-cover";
+import { repoPublicPath } from "@/lib/public-path";
 
 function briefNegativePrompt(brief: CreativeBrief): string {
   const base = "blurry, low quality, worst quality, text, watermark, logo, UI mockup";
@@ -69,10 +70,7 @@ export async function generateGameCoverFromBrief(
 
   try {
     const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    const src = url.startsWith("/")
-      ? path.join(process.cwd(), "public", url.replace(/^\//, ""))
-      : null;
+    const src = url.startsWith("/") ? repoPublicPath(url.replace(/^\//, "")) : null;
     if (src) {
       const buf = await fs.readFile(src);
       const rel = await saveProjectCoverFromBuffer(projectId, buf);

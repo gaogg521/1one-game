@@ -9,6 +9,7 @@ import { isComicGenerateStubEnabled, stubComicGenerateResponse } from "@/lib/com
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { getOwnerKey } from "@/lib/owner";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
+import { comicStoryboardQualityWarning } from "@/lib/comic-safety";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { NextResponse } from "next/server";
@@ -121,6 +122,7 @@ export async function POST(req: Request) {
         model: result.model,
         imageSource: result.imageSource,
         consistencyWarnings: result.consistencyWarnings,
+        storyboardWarning: comicStoryboardQualityWarning(result.storyboardSource, uiLocale),
         imagesWarning: result.imagesWarning,
       },
       { headers: ridHeaders(requestId) },

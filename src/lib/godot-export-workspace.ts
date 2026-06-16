@@ -15,6 +15,7 @@ import { specJsonForGodotExport } from "@/lib/game-templates/runtime";
 import { referencePayloadsDigest } from "@/lib/reference-payloads-digest";
 import { safeJsonStringify } from "@/lib/safe-json";
 import { withGodotPrepareLock } from "@/lib/godot-export-lock";
+import { repoPublicPath } from "@/lib/public-path";
 import {
   GODOT_BRIDGE_REL,
   GODOT_MOTHER_UNIVERSAL_DIR,
@@ -41,9 +42,9 @@ function repoRoot(): string {
 
 /** Godot 缓存目录；并发或半成品工程时先清掉再 --import */
 export async function clearGodotDotCache(workRoot: string): Promise<void> {
-  const dot = path.join(workRoot, ".godot");
+  const dot = path.join(/*turbopackIgnore: true*/ workRoot, ".godot");
   try {
-    const st = await fs.stat(dot);
+    const st = await fs.stat(/*turbopackIgnore: true*/ dot);
     if (st.isDirectory()) {
       await fs.rm(dot, { recursive: true, force: true });
     } else {
@@ -72,7 +73,7 @@ async function assertShooterRuntimeSafe(workRoot: string): Promise<void> {
 }
 
 async function copyMotherTemplate(dest: string): Promise<void> {
-  const src = path.join(repoRoot(), GODOT_MOTHER_UNIVERSAL_DIR);
+  const src = path.join(/* turbopackIgnore: true */ repoRoot(), GODOT_MOTHER_UNIVERSAL_DIR);
   await clearGodotDotCache(dest);
   await fs.mkdir(dest, { recursive: true });
   await fs.cp(src, dest, {
@@ -101,10 +102,11 @@ export async function prepareGodotWorkspace(params: {
     // 读取 AI sprites 状态并纳入 specHash，确保精灵生成后缓存能失效
     const aiSpriteStateParts: string[] = [];
     if (params.projectId) {
-      const spriteDir = path.join(repoRoot(), "public", "game-sprites", params.projectId);
+      const spriteDir = repoPublicPath("game-sprites", params.projectId);
       for (const kind of ["player", "hazard", "gem", "power", "boss"]) {
         try {
-          const stats = await fs.stat(path.join(spriteDir, `${kind}.png`));
+          const spritePath = path.join(/*turbopackIgnore: true*/ spriteDir, `${kind}.png`);
+          const stats = await fs.stat(/*turbopackIgnore: true*/ spritePath);
           aiSpriteStateParts.push(`${kind}:${stats.size}`);
         } catch {
           aiSpriteStateParts.push(`${kind}:none`);
@@ -116,7 +118,7 @@ export async function prepareGodotWorkspace(params: {
     const specHash = createHash("sha256")
       .update(safeJsonStringify({ spec, rev: GODOT_RUNTIME_BUILD_REV, refDigest, aiSpriteState }))
       .digest("hex");
-    const workRoot = path.join(repoRoot(), "workspaces", "godot-exports", exportId);
+    const workRoot = path.join(/* turbopackIgnore: true */ repoRoot(), "workspaces", "godot-exports", exportId);
     const metaPath = path.join(workRoot, ".1one-spec-hash.json");
 
     if (!params.forceRefresh) {
@@ -140,15 +142,13 @@ export async function prepareGodotWorkspace(params: {
     await fs.rm(workRoot, { recursive: true, force: true });
     await copyMotherTemplate(workRoot);
 
-    const bridgePath = path.join(workRoot, GODOT_BRIDGE_REL);
-    const specJsonPath = path.join(workRoot, GODOT_SPEC_JSON_REL);
-    const bridgeSrc = await fs.readFile(bridgePath, "utf8");
+    const bridgePath = path.join(/*turbopackIgnore: true*/ workRoot, GODOT_BRIDGE_REL);
+    const specJsonPath = path.join(/*turbopackIgnore: true*/ workRoot, GODOT_SPEC_JSON_REL);
+    const bridgeSrc = await fs.readFile(/*turbopackIgnore: true*/ bridgePath, "utf8");
     await fs.writeFile(bridgePath, patchGameSpecBridgeGdSource(bridgeSrc, spec), "utf8");
     await fs.mkdir(path.dirname(specJsonPath), { recursive: true });
     await fs.writeFile(specJsonPath, JSON.stringify(specJsonForGodotExport(spec), null, 2), "utf8");
-    const aiSprites = params.projectId
-      ? await readAiSpritesAsReferencePayloads(params.projectId, process.cwd())
-      : [];
+    const aiSprites = params.projectId ? await readAiSpritesAsReferencePayloads(params.projectId) : [];
     const adjustedSprites = adjustAiSpritePurposesForTemplate(aiSprites, spec.templateId);
     const allPayloads = [...(params.referencePayloads ?? []), ...adjustedSprites];
     const manifest = await writeGodotReferenceAssets(workRoot, allPayloads);
@@ -191,7 +191,7 @@ export async function zipDirectoryToBuffer(
 }
 
 export function artifactDir(exportId: string): string {
-  return path.join(repoRoot(), "public", "godot-artifacts", exportId);
+  return repoPublicPath("godot-artifacts", exportId);
 }
 
 export async function writeArtifactZip(exportId: string, kind: string, data: Buffer): Promise<string> {

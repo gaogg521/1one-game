@@ -1,12 +1,13 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake } from "@/game/engine/gameJuice";
+import { juiceCombo, juiceHit, juiceWin } from "@/game/engine/gameJuice";
 import { generateRichDummyTexture, paintSmashDummyArena } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
-import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import type { GameSpec } from "@/lib/game-spec";
 import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
@@ -55,8 +56,7 @@ export class PhysicsScene extends Phaser.Scene {
   }
 
   create() {
-    const cohesive = buildCohesivePresentation(this.spec);
-    setBleepTemperament(cohesive.bleepTemperament);
+    const cohesive = buildSceneCohesion(this.spec);
     this.cohesive = cohesive;
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     const physPf = this.spec.samplePlayProfile?.physics;
@@ -170,13 +170,24 @@ export class PhysicsScene extends Phaser.Scene {
     this.scoreText.setText(hudScore(this.uiLocale, this.score));
     this.comboText.setText(floaterCombo(this.uiLocale, this.combo));
     this.refreshProgressBar();
-    juiceShake(this, { intensityScale: 0.8 + this.combo * 0.15 });
-    juiceBurst(this, this.dummy.x, this.dummy.y, this.spec.theme.particleTint ?? "#f97316", 6 + this.combo, this.runtimeRng);
+    const particle = this.spec.theme.particleTint ?? "#f97316";
     if (this.combo >= 3) {
-      juiceFloater(this, this.dummy.x, this.dummy.y - 40, `x${this.combo}`, "#fbbf24");
-    }
-    if (this.combo >= 4) {
-      juiceFlash(this, { r: 255, g: 190, b: 70 }, { durationMs: 90 });
+      juiceCombo(this, {
+        x: this.dummy.x,
+        y: this.dummy.y,
+        colorHex: particle,
+        text: String(this.combo),
+        textColorCss: "#fbbf24",
+        combo: this.combo,
+        rng: this.runtimeRng,
+      });
+    } else {
+      juiceHit(this, {
+        x: this.dummy.x,
+        y: this.dummy.y,
+        colorHex: particle,
+        rng: this.runtimeRng,
+      });
     }
     playBleep("hit");
     this.soundscape?.triggerEvent("restore");
@@ -199,7 +210,16 @@ export class PhysicsScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
-    if (won) juiceFlash(this, { r: 180, g: 140, b: 255 }, { durationMs: 160 });
+    if (won) {
+      juiceWin(this, {
+        x: this.dummy.x,
+        y: this.dummy.y,
+        colorHex: this.spec.theme.particleTint ?? "#a78bfa",
+        text: this.uiLocale === "zh-Hans" ? "完成" : "Win",
+        textColorCss: this.cohesive.hud.accent,
+        rng: this.runtimeRng,
+      });
+    }
     this.banner.show({ ...bannerPhysicsFinish(this.uiLocale, won), ms: 2200 });
     this.time.delayedCall(2400, () => this.onEnd({ score: this.score, won }));
   }

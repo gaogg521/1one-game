@@ -21,6 +21,8 @@ export function playBleep(kind: BleepKind): void {
 
   const t = bleepTemperament;
   const now = ctx.currentTime;
+  const pitchSpread = 0.94 + (t - 1) * 0.26;
+  const envScale = 0.94 + (1 - Math.min(1.2, t)) * 0.08;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
@@ -28,10 +30,10 @@ export function playBleep(kind: BleepKind): void {
 
   if (kind === "fire") {
     osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(920 * t, now);
-    osc.frequency.exponentialRampToValueAtTime(420 * t, now + 0.05);
-    gain.gain.setValueAtTime(0.028, now);
-    gain.gain.exponentialRampToValueAtTime(0.0006, now + 0.07);
+    osc.frequency.setValueAtTime(920 * pitchSpread, now);
+    osc.frequency.exponentialRampToValueAtTime(420 * pitchSpread, now + 0.05);
+    gain.gain.setValueAtTime(0.028 * envScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0006, now + 0.07 * envScale);
     osc.start(now);
     osc.stop(now + 0.075);
     return;
@@ -71,25 +73,25 @@ export function playBleep(kind: BleepKind): void {
 
   if (kind === "pickup") {
     osc.type = "sine";
-    osc.frequency.setValueAtTime(740 * t, now);
-    osc.frequency.exponentialRampToValueAtTime(1180 * t, now + 0.07);
-    gain.gain.setValueAtTime(0.055, now);
-    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.11);
+    osc.frequency.setValueAtTime(740 * pitchSpread, now);
+    osc.frequency.exponentialRampToValueAtTime(1180 * pitchSpread, now + 0.07);
+    gain.gain.setValueAtTime(0.055 * envScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.11 * envScale);
     osc.start(now);
     osc.stop(now + 0.12);
   } else if (kind === "hit") {
     osc.type = "square";
-    osc.frequency.setValueAtTime(180 * t, now);
-    osc.frequency.exponentialRampToValueAtTime(55 * t, now + 0.16);
-    gain.gain.setValueAtTime(0.065, now);
-    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.22);
+    osc.frequency.setValueAtTime(180 * pitchSpread, now);
+    osc.frequency.exponentialRampToValueAtTime(55 * pitchSpread, now + 0.16);
+    gain.gain.setValueAtTime(0.065 * envScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.22 * envScale);
     const osc2 = ctx.createOscillator();
     const g2 = ctx.createGain();
     osc2.type = "triangle";
-    osc2.frequency.setValueAtTime(320 * t, now);
-    osc2.frequency.exponentialRampToValueAtTime(90 * t, now + 0.12);
-    g2.gain.setValueAtTime(0.035, now);
-    g2.gain.exponentialRampToValueAtTime(0.0008, now + 0.18);
+    osc2.frequency.setValueAtTime(320 * pitchSpread, now);
+    osc2.frequency.exponentialRampToValueAtTime(90 * pitchSpread, now + 0.12);
+    g2.gain.setValueAtTime(0.035 * envScale, now);
+    g2.gain.exponentialRampToValueAtTime(0.0008, now + 0.18 * envScale);
     osc2.connect(g2);
     g2.connect(ctx.destination);
     osc2.start(now);
@@ -98,11 +100,11 @@ export function playBleep(kind: BleepKind): void {
     osc.stop(now + 0.23);
   } else {
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(523 * t, now);
-    osc.frequency.setValueAtTime(784 * t, now + 0.08);
-    osc.frequency.setValueAtTime(1046 * t, now + 0.16);
-    gain.gain.setValueAtTime(0.05, now);
-    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.35);
+    osc.frequency.setValueAtTime(523 * pitchSpread, now);
+    osc.frequency.setValueAtTime(784 * pitchSpread, now + 0.08);
+    osc.frequency.setValueAtTime(1046 * pitchSpread, now + 0.16);
+    gain.gain.setValueAtTime(0.05 * envScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.35 * envScale);
     osc.start(now);
     osc.stop(now + 0.36);
   }

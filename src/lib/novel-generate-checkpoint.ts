@@ -1,5 +1,4 @@
 import { planLongNovelSegments, type LongNovelSegmentPlan } from "@/lib/novel-long-config";
-import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import {
   type NovelBible,
   type NovelChapterPlan,
@@ -37,7 +36,7 @@ export async function createDraftGeneratingNovel(opts: {
       prompt: opts.prompt,
       content: "",
       status: NOVEL_STATUS_DRAFT_GENERATING,
-      visibility: defaultWorkVisibility(),
+      visibility: "hidden",
     },
   });
   return { id: row.id };

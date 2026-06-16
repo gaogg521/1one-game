@@ -1,7 +1,16 @@
 import Phaser from "phaser";
-import { playBleep, setBleepTemperament } from "@/game/audio/webBleeps";
+import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import {
+  juiceBoss,
+  juiceBurst,
+  juiceFail,
+  juiceFlash,
+  juiceHit,
+  juicePickup,
+  juiceWin,
+  themeParticleHex,
+} from "@/game/engine/gameJuice";
 import {
   drawStealthLaserBeam,
   paintStealthVaultBackdrop,
@@ -43,11 +52,8 @@ import {
   platformerFinishText,
   platformerStageMessage,
 } from "@/lib/i18n/game-hud-labels";
-import {
-  buildCohesivePresentation,
-  phaserUintToCssHex,
-  type CohesivePresentation,
-} from "@/lib/cohesive-presentation";
+import { phaserUintToCssHex, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildSceneCohesion } from "@/lib/scene-experience";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { fitSpriteDisplay, sampleBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
@@ -267,8 +273,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.grapplePull = samplePf?.grapplePull ?? 0.022;
     this.laserGfx = this.add.graphics().setDepth(48);
 
-    const ui = buildCohesivePresentation(this.spec);
-    setBleepTemperament(ui.bleepTemperament);
+    const ui = buildSceneCohesion(this.spec);
     this.cohesive = ui;
 
     const blockyWorld = isMinecraftLikeSpec(this.spec);
@@ -752,8 +757,6 @@ export class PlatformerScene extends Phaser.Scene {
     });
     this.physics.add.overlap(this.player, this.treasureSprite, () => {
       if (this.finished) return;
-      juiceBurst(this, tx, ty, "#fbbf24", 24);
-      juiceFlash(this, { r: 255, g: 220, b: 80 }, { durationMs: 200 });
       this.finish({ score: this.score + 50, won: true });
     });
     this.hintText.setText(
@@ -793,7 +796,6 @@ export class PlatformerScene extends Phaser.Scene {
       const ex = ox + range * (s.x >= ox ? 1 : -1);
       if (Math.abs(px - ex) < 16 && py >= oy - 8 && py <= oy + 128) {
         this.laserHitCd = 700;
-        juiceFlash(this, { r: 239, g: 68, b: 68 }, { durationMs: 100 });
         this.onHitHazard();
         return;
       }
@@ -956,20 +958,35 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private fxCollect(x: number, y: number) {
-    juiceBurst(this, x, y, themeParticleHex(this.spec), 12);
-    juiceFlash(this, { r: 180, g: 160, b: 255 }, { durationMs: 100 });
+    juicePickup(this, {
+      x,
+      y,
+      colorHex: themeParticleHex(this.spec),
+      text: "+1",
+      textColorCss: this.cohesive.hud.body,
+    });
     playBleep("pickup");
     this.soundscape?.triggerKillStinger();
   }
 
   private fxDamage() {
-    juiceShake(this, { durationMs: 120, intensity: 0.005 });
-    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 130 });
+    juiceHit(this, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      colorHex: this.spec.theme.hazardColor,
+      large: this.lives <= 1,
+    });
     playBleep("hit");
   }
 
   private fxShield() {
-    juiceFlash(this, { r: 120, g: 120, b: 255 }, { durationMs: 120 });
+    juicePickup(this, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      colorHex: this.cohesive.hud.accent2,
+      text: this.spec.systems?.skill?.name ?? "shield",
+      textColorCss: this.cohesive.hud.accent,
+    });
     playBleep("pickup");
   }
 
@@ -996,11 +1013,23 @@ export class PlatformerScene extends Phaser.Scene {
     this.physics.pause();
     this.hintText.setText(platformerFinishText(this.uiLocale, payload.won));
     if (payload.won) {
+      juiceWin(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: themeParticleHex(this.spec),
+        text: this.uiLocale === "zh-Hans" ? "胜利" : "Win",
+        textColorCss: this.cohesive.hud.accent,
+      });
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
-      juiceShake(this, { durationMs: 280, intensity: 0.014 });
-      juiceFlash(this, { r: 120, g: 220, b: 160 }, { durationMs: 160 });
-      juiceBurst(this, this.player.x, this.player.y, themeParticleHex(this.spec), 18);
+    } else {
+      juiceFail(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.spec.theme.hazardColor,
+        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        textColorCss: this.cohesive.hud.danger,
+      });
     }
     this.onEnd(payload);
   }
@@ -1236,7 +1265,13 @@ export class PlatformerScene extends Phaser.Scene {
       this.miniBossUntil = this.eventUntil;
       this.nextMiniSpawnAt = 0;
       this.spawnMiniBossHazard();
-      juiceShake(this, { durationMs: 350, intensity: 0.016 });
+      juiceBoss(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.spec.theme.hazardColor,
+        text: title,
+        textColorCss: this.cohesive.hud.danger,
+      });
       this.refreshHud();
       return;
     }
@@ -1283,7 +1318,13 @@ export class PlatformerScene extends Phaser.Scene {
               : "default";
       const stageMessage = platformerStageMessage(this.uiLocale, mod);
       this.banner.show({ ...bannerActStage(this.uiLocale, acts[idx]?.label, stageMessage), ms: 1400 });
-      juiceFlash(this, { r: 140, g: 120, b: 255 }, { durationMs: 90 });
+      juicePickup(this, {
+        x: this.player.x,
+        y: this.player.y - 18,
+        colorHex: this.cohesive.hud.accent2,
+        text: acts[idx]?.label ?? stageMessage,
+        textColorCss: this.cohesive.hud.accent,
+      });
       this.refreshHud();
     }
   }
@@ -1363,7 +1404,13 @@ export class PlatformerScene extends Phaser.Scene {
         const d = Phaser.Math.Distance.Between(hx, hy, sp.x, sp.y);
         if (d <= r) sp.destroy();
       }
-      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
+      juiceBoss(this, {
+        x: hx,
+        y: hy,
+        colorHex: themeParticleHex(this.spec),
+        text: skill.name,
+        textColorCss: this.cohesive.hud.accent,
+      });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -1372,7 +1419,13 @@ export class PlatformerScene extends Phaser.Scene {
     if (skill.effect === "dash") {
       this.dashUntil = this.time.now + 1100;
       this.invulnUntil = Math.max(this.invulnUntil, this.time.now + 520);
-      juiceFlash(this, { r: 120, g: 255, b: 160 }, { durationMs: 90 });
+      juicePickup(this, {
+        x: this.player.x,
+        y: this.player.y,
+        colorHex: this.cohesive.hud.accent,
+        text: skill.name,
+        textColorCss: this.cohesive.hud.accent,
+      });
       playBleep("pickup");
       this.refreshHud();
       return;

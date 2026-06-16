@@ -7,9 +7,10 @@ import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { GameSpec } from "@/lib/game-spec";
 import { captureCanvasAsJpegDataUrl } from "@/lib/capture-game-thumb";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
-import { buildCohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildCohesivePresentation, describeCohesiveExperience } from "@/lib/cohesive-presentation";
 import { createPhaserGame } from "@/game/engine/createPhaserGame";
 import type Phaser from "phaser";
+import { SAMPLES } from "@/lib/samples";
 
 export default function GamePlayerInner({
   spec,
@@ -36,6 +37,18 @@ export default function GamePlayerInner({
   const [playReady, setPlayReady] = useState(false);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
+  const cohesiveSnapshot = useMemo(() => describeCohesiveExperience(cohesive), [cohesive]);
+  const showCohesiveSnapshot = process.env.NODE_ENV !== "production";
+  const resolvedPromptHint = useMemo(() => {
+    const direct = promptHint?.trim();
+    if (direct) return direct;
+    const variantId = spec.samplePlayProfile?.variantId;
+    if (variantId) {
+      const samplePrompt = SAMPLES.find((s) => s.id === variantId)?.prompt?.trim();
+      if (samplePrompt) return samplePrompt;
+    }
+    return [spec.labels.subtitle, spec.title].filter(Boolean).join(" · ");
+  }, [promptHint, spec.labels.subtitle, spec.title, spec.samplePlayProfile?.variantId]);
   const shellStyle = useMemo(
     () =>
       ({
@@ -112,7 +125,7 @@ export default function GamePlayerInner({
       referencePayloads: refPayloads,
       projectId: projectId ?? undefined,
       uiLocale: locale,
-      promptHint,
+      promptHint: resolvedPromptHint,
     });
     gameRef.current = handle.game;
     bootAudioRef.current = handle.bootAudio;
@@ -127,7 +140,7 @@ export default function GamePlayerInner({
       gameRef.current = null;
       bootAudioRef.current = null;
     };
-  }, [spec, session, locale, projectId, promptHint]);
+  }, [spec, session, locale, projectId, resolvedPromptHint]);
 
   /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
   useEffect(() => {
@@ -142,12 +155,12 @@ export default function GamePlayerInner({
       window.clearInterval(poll);
       window.clearTimeout(fallback);
     };
-  }, [spec, session, locale, projectId, promptHint]);
+  }, [spec, session, locale, projectId, resolvedPromptHint]);
 
   useEffect(() => {
     if (!playReady) return;
     hostRef.current?.focus({ preventScroll: true });
-  }, [playReady, spec, session, locale, projectId, promptHint]);
+  }, [playReady, spec, session, locale, projectId, resolvedPromptHint]);
 
   useEffect(() => {
     if (!audioHint) return;
@@ -192,6 +205,20 @@ export default function GamePlayerInner({
         style={shellStyle}
         className="group relative overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"
       >
+        {showCohesiveSnapshot ? (
+          <div className="pointer-events-none absolute left-3 top-3 z-[6] flex max-w-[calc(100%-10rem)] flex-wrap items-center gap-2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1.5 text-[10px] text-[var(--gc-muted)] backdrop-blur-md">
+            <span className="font-medium text-[var(--gc-text)]">{cohesiveSnapshot.label}</span>
+            <span className="text-[var(--gc-muted)]">{cohesiveSnapshot.detail}</span>
+            {cohesiveSnapshot.chips.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg)_82%,#000)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--gc-text-soft)]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div
           ref={hostRef}
           tabIndex={0}

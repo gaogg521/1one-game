@@ -3,9 +3,10 @@ import path from "node:path";
 import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { loadSharp } from "@/lib/sharp-loader";
 import { getBlobStore } from "@/lib/storage/blob-store";
+import { repoPublicPath } from "@/lib/public-path";
 
 const MAX_BYTES = 320_000;
-const COVERS_DIR = path.join(process.cwd(), "public", "covers");
+const COVERS_DIR = repoPublicPath("covers");
 
 async function persistCoverJpeg(projectId: string, jpeg: Buffer): Promise<string> {
   const key = `covers/${projectId}.jpg`;
@@ -61,12 +62,12 @@ export async function saveProjectCoverFromBuffer(projectId: string, raw: Buffer)
 
 export function coverAbsPathFromPublicRel(rel: string): string {
   const clean = rel.replace(/^\//, "");
-  return path.join(process.cwd(), "public", clean);
+  return repoPublicPath(clean);
 }
 
 export async function copyProjectCoverFile(sourceProjectId: string, targetProjectId: string): Promise<string | null> {
-  const src = path.join(process.cwd(), "public", "covers", `${sourceProjectId}.jpg`);
-  const dst = path.join(process.cwd(), "public", "covers", `${targetProjectId}.jpg`);
+  const src = repoPublicPath("covers", `${sourceProjectId}.jpg`);
+  const dst = repoPublicPath("covers", `${targetProjectId}.jpg`);
   try {
     await fs.access(src);
   } catch {
@@ -78,7 +79,7 @@ export async function copyProjectCoverFile(sourceProjectId: string, targetProjec
 }
 
 export async function deleteProjectCoverFile(projectId: string): Promise<void> {
-  const abs = path.join(process.cwd(), "public", "covers", `${projectId}.jpg`);
+  const abs = repoPublicPath("covers", `${projectId}.jpg`);
   try {
     await fs.unlink(abs);
   } catch {

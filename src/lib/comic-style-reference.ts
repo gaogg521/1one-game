@@ -3,6 +3,7 @@ import path from "path";
 import type { ComicDocument } from "@/lib/comic-format";
 import { docHasPlaceholderPanels } from "@/lib/comic-panel-prompt-urban";
 import { getComicPanelStyleLock, type CoverGenre } from "@/lib/cover-genre";
+import { repoPublicPath } from "@/lib/public-path";
 
 export type StyleReferenceImage = {
   mimeType: string;
@@ -60,7 +61,7 @@ async function loadImageReferenceFromUrl(url: string): Promise<StyleReferenceIma
     }
 
     const rel = url.replace(/^\//, "").replace(/^public\//, "");
-    const filePath = path.join(process.cwd(), "public", rel);
+    const filePath = repoPublicPath(rel);
     if (!fs.existsSync(filePath)) return null;
     const buf = fs.readFileSync(filePath);
     if (buf.length < 64) return null;
