@@ -6,6 +6,7 @@ import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
 import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
 import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
+import { buildChessBlueprint } from "@/lib/chess-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
@@ -99,6 +100,7 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
   const isPlatformer = rt.phaser === "platformer";
   const isShooter = rt.phaser === "shooter";
   const isCoaster = rt.phaser === "coaster";
+  const isChess = rt.phaser === "chess";
   const arenaMode = rt.arenaMode ?? "avoider";
   const isSurvivor = arenaMode === "survivor";
   const isCollector = arenaMode === "collector";
@@ -201,7 +203,7 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
       : pick([380, 410, 440, 470], seed, 51);
   const gravity = pick([880, 930, 980, 1040], seed, 52);
 
-  const hazardLabel = isRooc
+  const baseHazardLabel = isRooc
     ? "魔物"
     : space
       ? "陨石"
@@ -213,8 +215,19 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
             ? "碎片"
             : guessed.hazard;
 
-  const collLabel = isRooc ? "Zeny" : guessed.collectible;
-  const playerLabel = isRooc ? "冒险者" : guessed.player;
+  const collLabel = isRooc
+    ? "Zeny"
+    : /开心消消乐|消消乐|三消|糖果|动物/.test(prompt)
+      ? "糖果"
+      : guessed.collectible;
+  const playerLabel = isRooc
+    ? "冒险者"
+    : /中国象棋|楚河|汉界|红黑/.test(prompt)
+      ? "红方"
+      : /开心消消乐|消消乐|三消|糖果|动物/.test(prompt)
+        ? "糖果小队"
+        : guessed.player;
+  const hazardLabel = /中国象棋|楚河|汉界|红黑/.test(prompt) ? "黑方" : baseHazardLabel;
 
   const spec: GameSpec = {
     version: 1,
@@ -297,6 +310,9 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
   }
   if (rt.blueprint === "puzzle" && !spec.puzzle) {
     spec.puzzle = buildPuzzleBlueprint({ prompt, spec, sampleId: opts.sampleId });
+  }
+  if (isChess && !spec.chess) {
+    spec.chess = buildChessBlueprint({ prompt, spec });
   }
   if (rt.phaser === "platformer" && !spec.platformer) {
     spec.platformer = buildPlatformerBlueprint({ prompt, spec });

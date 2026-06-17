@@ -20,6 +20,7 @@ import {
   type ChildrenTargetAge,
 } from "@/lib/children-age-length";
 import {
+  getNovelLengthTierUiCopy,
   localizedChildrenAgeLabel,
   localizedChildrenCharRangeLabel,
   localizedChildrenFeaturesLabel,
@@ -115,6 +116,7 @@ export default function NovelCreatePage() {
     DEFAULT_CHILDREN_TARGET_AGE,
   );
   const [longPolish, setLongPolish] = useState<boolean>(PRODUCT.novel.longSegmented.polishAfterSegment);
+  const [lengthEditing, setLengthEditing] = useState(false);
 
   const [childrenCreativeBrief, setChildrenCreativeBrief] =
     useState<ChildrenCreativeBrief | null>(null);
@@ -192,6 +194,10 @@ export default function NovelCreatePage() {
       .then((r) => r.json())
       .then((data: { drafts?: typeof generatingDrafts }) => setGeneratingDrafts(data.drafts ?? []));
   }, [locale]);
+
+  useEffect(() => {
+    if (step === 3) setLengthEditing(false);
+  }, [step]);
 
   const prefillApplied = useRef(false);
   useEffect(() => {
@@ -886,17 +892,39 @@ export default function NovelCreatePage() {
                   </p>
                 </div>
               ) : (
-                <div>
-                  <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">
-                    {t("lengthSync")}
-                  </label>
-                  <NovelLengthTierPicker
-                    value={lengthTier}
-                    onChange={setLengthTier}
-                    disabled={loading}
-                    showEta
-                    etaPrefix={t("etaPrefix")}
-                  />
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-xl border border-[color:var(--gc-accent)]/30 bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-xs leading-relaxed text-[var(--gc-text-soft)]">
+                    <p>
+                      <span className="font-medium text-[var(--gc-accent)]">
+                        {getNovelLengthTierUiCopy(effectiveLengthTier as "short" | "medium" | "long", locale).label}
+                      </span>
+                      <span className="text-[var(--gc-muted)]">
+                        {" "}
+                        · {getNovelLengthTierUiCopy(effectiveLengthTier as "short" | "medium" | "long", locale).desc}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--gc-accent)]">
+                      {t("etaPrefix")} {novelGenerationEtaHint(effectiveLengthTier, locale)}
+                    </p>
+                    {!loading ? (
+                      <button
+                        type="button"
+                        onClick={() => setLengthEditing((open) => !open)}
+                        className="mt-2 text-[11px] text-[var(--gc-muted)] underline decoration-[color:var(--gc-border)] underline-offset-2 hover:text-[var(--gc-text)]"
+                      >
+                        {lengthEditing ? t("collapseLength") : t("editLength")}
+                      </button>
+                    ) : null}
+                  </div>
+                  {lengthEditing ? (
+                    <NovelLengthTierPicker
+                      value={lengthTier}
+                      onChange={setLengthTier}
+                      disabled={loading}
+                      showEta
+                      etaPrefix={t("etaPrefix")}
+                    />
+                  ) : null}
                 </div>
               )}
 

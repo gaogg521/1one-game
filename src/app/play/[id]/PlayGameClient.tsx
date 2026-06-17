@@ -352,9 +352,9 @@ export function PlayGameClient({ id }: { id: string }) {
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">
-      <SiteHeader />
+      {!meta?.isSampleGallery ? <SiteHeader /> : null}
       <AppMain>
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-10 lg:px-8 xl:pr-12">
+      <main className={`mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-10 lg:px-8 xl:pr-12 ${meta?.isSampleGallery ? "max-w-4xl" : ""}`}>
         {error ? (
           <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
         ) : !spec || !meta ? (
@@ -365,17 +365,39 @@ export function PlayGameClient({ id }: { id: string }) {
         ) : (
           <>
             {meta.isSampleGallery ? (
-              <div className="space-y-3 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_25%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)] px-4 py-3 text-sm text-[var(--gc-text-soft)]">
-                <p>{t("samplePlayHint")}</p>
-                <Link
-                  href={buildCreatePrefillPath(meta.prompt, locale)}
-                  className="inline-flex text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_92%,white)] hover:underline"
-                  data-testid="sample-play-create-with-prompt"
-                >
-                  {t("createWithSamplePrompt")}
-                </Link>
-              </div>
-            ) : parityInfo ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Link
+                    href={withLocalePath("/samples", locale)}
+                    className="text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                  >
+                    ← {t("backToSamples")}
+                  </Link>
+                  <h1 className="min-w-0 flex-1 text-center text-lg font-semibold tracking-tight text-[var(--gc-text)] sm:text-xl">
+                    {meta.title}
+                  </h1>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={remixBusy}
+                      onClick={() => void remix()}
+                      className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text)] disabled:opacity-50"
+                    >
+                      {remixBusy ? t("remixing") : t("cloneToMine")}
+                    </button>
+                    <Link
+                      href={buildCreatePrefillPath(meta.prompt, locale)}
+                      className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-3 py-1.5 text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
+                    >
+                      {t("createWithSamplePrompt")}
+                    </Link>
+                  </div>
+                </div>
+                <GamePlayer spec={spec} immersive projectId={id} promptHint={meta.prompt} />
+              </>
+            ) : (
+              <>
+            {parityInfo ? (
               <SampleParityTrustBadge info={parityInfo} />
             ) : null}
             <ResultMomentBanner
@@ -585,6 +607,8 @@ export function PlayGameClient({ id }: { id: string }) {
             {patchError ? (
               <p className="text-xs text-red-400">{patchError}</p>
             ) : null}
+              </>
+            )}
           </>
         )}
       </main>

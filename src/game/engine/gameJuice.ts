@@ -137,15 +137,12 @@ export function resolveJuicePreset(kind: JuiceSemanticKind, opts?: { combo?: num
   }
 }
 
-/** 统一屏幕震动强度（与导演强度略挂钩） */
+/** 全屏相机震动（已全局关闭：开局与打击时背景抖动影响沉浸感，保留粒子/闪白/飘字反馈） */
 export function juiceShake(
-  scene: Phaser.Scene,
-  opts?: { durationMs?: number; intensity?: number; intensityScale?: number },
+  _scene: Phaser.Scene,
+  _opts?: { durationMs?: number; intensity?: number; intensityScale?: number },
 ) {
-  const scale = (opts?.intensityScale ?? 1) * sharedJuiceStyle.shakeScale;
-  const duration = (opts?.durationMs ?? 140) * sharedJuiceStyle.shakeDurationScale;
-  const intensity = (opts?.intensity ?? 0.006) * scale;
-  scene.cameras.main.shake(duration, intensity);
+  /* intentional no-op */
 }
 
 export function juiceFlash(

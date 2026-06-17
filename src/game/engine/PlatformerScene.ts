@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
+import { pointerSteerX, readMoveAxis } from "@/game/engine/phaser-input";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import {
   juiceBoss,
   juiceBurst,
@@ -56,8 +58,11 @@ import { phaserUintToCssHex, type CohesivePresentation } from "@/lib/cohesive-pr
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
-import { fitSpriteDisplay, sampleBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
+import { applySystemImpact } from "@/game/engine/systemImpact";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -104,6 +109,8 @@ export class PlatformerScene extends Phaser.Scene {
 
   private keyW!: Phaser.Input.Keyboard.Key;
 
+  private keyS!: Phaser.Input.Keyboard.Key;
+
   private keyA!: Phaser.Input.Keyboard.Key;
 
   private keyD!: Phaser.Input.Keyboard.Key;
@@ -125,6 +132,8 @@ export class PlatformerScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
 
   private banner!: HudBanner;
+
+  private goalPanel!: HudGoalPanel;
 
   private cohesive!: CohesivePresentation;
 
@@ -291,7 +300,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.add
         .image(this.worldW / 2, viewH / 2, "bgTex")
         .setDepth(-10)
-        .setAlpha(sampleBackgroundAlpha(this.projectId));
+        .setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier));
     }
 
     this.add
@@ -354,9 +363,9 @@ export class PlatformerScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
 
-    const collLabel = this.spec.labels.collectible ?? hudDefaultPlatformerCollectible(this.uiLocale);
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.hintText = this.add
-      .text(viewW / 2, viewH - 20, hudControlsPlatformer(this.uiLocale, collLabel), {
+      .text(viewW / 2, viewH - 20, guidance.bottomHint, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -527,10 +536,13 @@ export class PlatformerScene extends Phaser.Scene {
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyW = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.keyS = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
     this.banner = new HudBanner(this, ui.banner);
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     this.shieldRing = this.add.graphics();
     this.shieldRing.setDepth(120);
@@ -578,6 +590,16 @@ export class PlatformerScene extends Phaser.Scene {
     this.cameras.main.setScroll(Math.max(0, this.player.x - viewW / 2), 0);
     setPhaserQaState({ playerX: Math.round(this.player.x) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(this.player.x) });
+
+    this.input.on("pointerdown", () => {
+      if (this.finished) return;
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      if (body.blocked.down) {
+        this.player.setVelocityY(-this.jumpVel);
+        this.doubleJumpUsed = false;
+        playBleep("pickup");
+      }
+    });
   }
 
   private buildLevel(viewH: number) {
@@ -1069,6 +1091,7 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   update() {
+    this.goalPanel?.update();
     if (this.finished) return;
     const speed = this.spec.gameplay.playerSpeed;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -1091,11 +1114,21 @@ export class PlatformerScene extends Phaser.Scene {
 
     setPhaserQaState({ playerX: Math.round(this.player.x) });
 
-    let vx = 0;
-    if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
     const dashOn = this.time.now < this.dashUntil;
-    this.player.setVelocityX(vx * speed * (dashOn ? 1.22 : 1));
+
+    const keys = {
+      cursors: this.cursors,
+      w: this.keyW,
+      a: this.keyA,
+      s: this.keyS,
+      d: this.keyD,
+      space: this.keySpace,
+      shift: this.keyShift,
+    };
+    const axis = readMoveAxis(keys, { allowVertical: false });
+    const ptr = pointerSteerX(this, this.player.x);
+    const vx = (axis.x !== 0 ? axis.x : ptr) * speed * (dashOn ? 1.22 : 1);
+    this.player.setVelocityX(vx);
     if (this.stealthMode && vx !== 0) {
       juiceBurst(this, this.player.x, this.player.y + 16, "#38bdf8", 8);
       juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 60 });
@@ -1114,6 +1147,8 @@ export class PlatformerScene extends Phaser.Scene {
       this.player.setVelocityY(-this.jumpVel * 0.82);
       juiceBurst(this, this.player.x, this.player.y + 18, themeParticleHex(this.spec), 8);
       playBleep("pickup");
+    } else if ((this.keyS.isDown || this.cursors.down.isDown) && !body.blocked.down) {
+      this.player.setVelocityY(Math.max(body.velocity.y, 420));
     }
 
     if (this.grappleEnabled) {
@@ -1251,6 +1286,14 @@ export class PlatformerScene extends Phaser.Scene {
     this.eventUntil = now + durationMs;
 
     this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
+    applyRuntimeEventImpact(this, ev.type, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      title,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      strength,
+    });
 
     if (ev.type === "coinRain") {
       this.coinRainUntil = this.eventUntil;
@@ -1348,6 +1391,14 @@ export class PlatformerScene extends Phaser.Scene {
 
   private applyPowerup(kind: string) {
     const now = this.time.now;
+    applySystemImpact(this, "powerup", {
+      effect: kind,
+      label: kind,
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      spec: this.spec,
+      cohesive: this.cohesive,
+    });
     if (kind === "shield") {
       this.shieldCharges = Math.min(2, this.shieldCharges + 1);
       return;
@@ -1380,6 +1431,14 @@ export class PlatformerScene extends Phaser.Scene {
 
     this.skillReadyAt = this.time.now + skill.cooldownMs;
     const dur = skill.durationMs ?? 0;
+    applySystemImpact(this, "skill", {
+      effect: skill.effect,
+      label: skill.name,
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      spec: this.spec,
+      cohesive: this.cohesive,
+    });
 
     if (skill.effect === "shield") {
       this.shieldCharges = Math.max(this.shieldCharges, skill.strength && skill.strength > 0.75 ? 2 : 1);

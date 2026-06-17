@@ -1,5 +1,13 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { getTemplateDefinition } from "@/lib/game-templates/registry";
+import {
+  buildDebugSkillRepairHints,
+  buildTemplateSkillRepairAppend,
+  buildTemplateSkillSystemAppend,
+  buildTemplateSkillUserAppend,
+  matchDebugSkillReactive,
+  runDebugSkillProactive,
+} from "@/lib/opengame-skills";
 
 /** 各模板 Agentic 玩法约束（Astrocade 级：拒绝泛化点击计数器） */
 const TEMPLATE_GAMEPLAY_HINTS: Partial<Record<GameSpec["templateId"], string>> = {
@@ -107,7 +115,8 @@ Runtime API:
 
 Rules: no fetch/XHR/WebSocket/eval/import/require. Use Phaser Arcade physics only (scene.physics.add.existing, overlap, collider, staticGroup) — do NOT use Matter-only APIs (constraint, worldConstraint, setDamping on body).
 Implement the SPECIFIC genre from the template hint — NOT a generic "click anywhere +10 score" unless unavoidable.
-Keep source under 140 lines. Must call ctx.onEnd(true) when win condition met.`;
+Keep source under 140 lines. Must call ctx.onEnd(true) when win condition met.
+${buildTemplateSkillSystemAppend()}`;
 }
 
 export function buildAgenticUserPrompt(prompt: string, spec: GameSpec): string {
@@ -129,6 +138,7 @@ export function buildAgenticUserPrompt(prompt: string, spec: GameSpec): string {
   if (extra?.length) {
     lines.push("", ...extra);
   }
+  lines.push(buildTemplateSkillUserAppend(prompt, spec));
   return lines.join("\n");
 }
 
@@ -137,6 +147,7 @@ export function buildAgenticRepairPrompt(
   spec: GameSpec,
   prevSource: string,
   reason: string,
+  debugHints: string[] = [],
 ): string {
   const repairHints: string[] = [
     "Constraints: no fetch/eval/import/require; must export createGame(ctx, Phaser); create() must not throw.",
@@ -148,6 +159,8 @@ export function buildAgenticRepairPrompt(
   }
   const repairExtra = TEMPLATE_REPAIR_EXTRA[spec.templateId];
   if (repairExtra) repairHints.push(repairExtra);
+  repairHints.push(buildTemplateSkillRepairAppend(spec, prompt));
+  if (debugHints.length) repairHints.push(...debugHints);
   return [
     buildAgenticUserPrompt(prompt, spec),
     "",
@@ -156,4 +169,11 @@ export function buildAgenticRepairPrompt(
     "Broken source excerpt:",
     (prevSource || "").slice(0, 2400),
   ].join("\n");
+}
+
+/** Debug Skill 协议条目 → repair 提示（供 generate 管线调用） */
+export function buildAgenticDebugRepairHints(reason: string, source: string): string[] {
+  const proactive = runDebugSkillProactive(source);
+  const reactive = matchDebugSkillReactive(reason);
+  return buildDebugSkillRepairHints([...proactive, ...reactive]);
 }

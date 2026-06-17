@@ -10,6 +10,8 @@ import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { buildLlmTemplateCatalogLines, llmTemplateIdEnum } from "@/lib/game-templates/llm-catalog";
 import { isGameTemplateId } from "@/lib/game-templates/registry";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
+import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
+import { buildChessBlueprint } from "@/lib/chess-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
@@ -261,6 +263,12 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   let next = spec;
   if (spec.templateId === "towerDefense" && !spec.towerDefense) {
     next = { ...next, towerDefense: buildTowerDefenseBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "puzzle" && !next.puzzle) {
+    next = { ...next, puzzle: buildPuzzleBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "chess" && !next.chess) {
+    next = { ...next, chess: buildChessBlueprint({ prompt, spec: next }) };
   }
   if (!next.director) {
     next = { ...next, director: buildDirector({ prompt, spec: next, locale: activeGenerationLocale }) };

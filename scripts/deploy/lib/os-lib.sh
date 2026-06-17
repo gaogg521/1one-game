@@ -586,7 +586,7 @@ nginx_write_operone_site() {
 }
 
 configure_firewall_ports() {
-  local port="${1:-6666}" with_http="${2:-0}"
+  local port="${1:-80}" with_http="${2:-0}"
   os_detect
 
   # Debian/Ubuntu 优先 ufw

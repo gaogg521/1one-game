@@ -30,22 +30,16 @@ type Row = {
 
 const SAMPLES: Array<{ slug: string; templateId: string; expectScene: string; title: string }> = [
   { slug: "smash-the-dummy", templateId: "physics", expectScene: "PhysicsScene", title: "Smash" },
-  { slug: "rail-in-air", templateId: "coaster", expectScene: "CoasterScene", title: "Rail" },
-  { slug: "state-conquest", templateId: "strategy", expectScene: "StrategyScene", title: "State" },
-  { slug: "car-color-palette", templateId: "customization", expectScene: "CustomizationScene", title: "Car" },
   { slug: "grow-a-garden", templateId: "farming", expectScene: "FarmingScene", title: "Garden" },
   { slug: "color-bloom", templateId: "puzzle", expectScene: "PuzzleScene", title: "Color" },
-  { slug: "ultimate-3d-chess", templateId: "chess", expectScene: "ChessScene", title: "Chess" },
-  { slug: "tiny-planet-chopper", templateId: "shooter", expectScene: "ShooterScene", title: "Tiny" },
   { slug: "gun-merge-3d-zombie-apocalypse", templateId: "towerDefense", expectScene: "TowerDefenseScene", title: "Gun" },
   { slug: "pottery-master-3d", templateId: "customization", expectScene: "CustomizationScene", title: "Pottery" },
   { slug: "crashy-roads", templateId: "racing", expectScene: "CoasterScene", title: "Crashy" },
+  { slug: "temple-relic-runner", templateId: "coaster", expectScene: "CoasterScene", title: "Temple" },
   { slug: "elastic-thief-2", templateId: "stealth", expectScene: "PlatformerScene", title: "Elastic" },
-  { slug: "blocky-sniper-hunter", templateId: "shooter", expectScene: "ShooterScene", title: "Sniper" },
-  { slug: "whimsy-differences", templateId: "puzzle", expectScene: "PuzzleScene", title: "Whimsy" },
-  { slug: "memory-match-mania", templateId: "puzzle", expectScene: "PuzzleScene", title: "Memory" },
-  { slug: "kids-puzzle", templateId: "puzzle", expectScene: "PuzzleScene", title: "KIDS" },
   { slug: "blade-defender-merge", templateId: "towerDefense", expectScene: "TowerDefenseScene", title: "Blade" },
+  { slug: "number-merge-2048", templateId: "puzzle", expectScene: "PuzzleScene", title: "2048" },
+  { slug: "classic-international-chess", templateId: "chess", expectScene: "ChessScene", title: "Chess" },
 ];
 
 /** 与样品 prompt 完全一致的用户 POST → 验证 profile infer + 专用 Scene 路由 */

@@ -1,3 +1,920 @@
+更新时间：**2026-06-17**（迭代九十三 · 消消乐 HUD + 全局关震屏 ✅）
+
+## 迭代九十三（当前）
+
+1. ✅ **消消乐顶栏 HUD 合并**
+   - `drawAnipopTopBar` 单行：关卡 | 三目标牌（得分/破冰/小鸡）| 步数
+   - 去掉重复进度条、y=52 金线、中央飘分数字
+   - 操作提示移到道具栏上方并加半透明底；道具栏去掉穿按钮金线
+   - 棋盘上移 `oy 118→88`
+2. ✅ **全局关闭相机背景抖动**
+   - `gameJuice.juiceShake` 改为 no-op（保留粒子/闪白/飘字）
+3. ✅ **验证**
+   - build ✅ · `qa:juice-quality-tier` ✅ · `qa:juice-semantic-presets` ✅
+
+## 迭代九十二
+
+1. ✅ **开心消消乐三关递进**
+   - `ANIPOP_LEVEL_CONFIGS` 三档目标（得分/小鸡/破冰/步数递增）
+   - 过关后自动进下一关；全关通关 banner；二/三关奖励道具
+   - 胜利条件补齐：得分 + 小鸡 + 破冰三目标同时达成
+   - `puzzle-blueprint` `levelCount: 3`
+2. ✅ **样品 DB 清理**
+   - `PRUNED_SAMPLE_IDS` + `seedSampleGalleryProjects` 删除下架 project
+3. ✅ **杂项**
+   - `CoasterScene` 移除 `rail-in-air` richVisuals 残留
+   - 文档样品数 23→14
+4. ✅ **验证**
+   - build ✅ · seed + db-sync **14/14** ✅ · gameplay **14/14** ✅
+
+## 迭代九十一
+
+1. ✅ **样品馆商业标准裁剪**
+   - 删除 9 款薄 demo / 重复 SKU：`ultimate-3d-chess`、`rail-in-air`、`whimsy-differences`、`memory-match-mania`、`kids-puzzle`、`car-color-palette`、`state-conquest`、`tiny-planet-chopper`、`blocky-sniper-hunter`
+   - 保留 **14 款**：棋盘五款 + 2048 + 神庙 + 消消乐 + Crashy/Smash/Garden/Gun Merge/Elastic Thief/Blade Defender/Pottery
+   - 同步 `samples.ts`、registry、QA、infer、封面脚本；删除对应封面 PNG 与 `e2e/sample-rail-en` / `qa-tiny-planet-parity-smoke`
+   - 决策记入 `PROJECT_MEMORY/DECISIONS.md`
+2. ✅ **验证**
+   - build ✅ · offline clone **14/14** ✅ · gameplay **14/14** ✅ · sample-profiles ✅
+
+## 迭代九十
+
+1. ✅ **冰块下特殊块可见性**
+   - `drawAnipopIcedSpecialGlow` 金色外圈穿透冰层；特殊标记 `underIce` 加粗高亮
+   - 炸弹特殊块补绘橙色辐射图案
+   - 点击冰封特殊块提示「先破冰，再激活特殊块」
+   - 宝石贴图 depth 6 / 冰层+标记 depth 10 分层
+2. ✅ **神庙死亡区域可读性**
+   - 死亡遮罩改为上 48% 深压 + 中段轻压，跑者区域更清晰
+   - 死亡时同步隐藏 `goalPanel`
+3. ✅ **color-bloom 封面重截**
+   - `capture:sample-covers` 专用预热（棋盘交换点击）→ `public/samples/color-bloom.png`
+4. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅ · 封面截图 ✅
+
+## 迭代八十九
+
+1. ✅ **开心消消乐动物宝石贴图**
+   - `npm run generate:anipop-gem-atlas` → `public/game-sprites/sample-color-bloom/anipop-gems-v1.png`（5 种动物 64×64）
+   - `anipop-gem-atlas.ts` spritesheet 加载；有图集时用 Image 渲染，无图集回退程序化绘制
+2. ✅ **特殊块 × 冰块边界**
+   - 四连/五连 spawn 优先非冰块格；锤子击中特殊块会引爆（行/列/炸弹/彩虹）
+3. ✅ **神庙死亡 HUD 叠层修复**
+   - 死亡时隐藏顶栏分数/金币/连击/提示/本地榜；摘要面板上移至 banner 上方（`h - panelH - 108`）
+   - 重开时恢复 live HUD
+4. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅
+
+## 迭代八十八
+
+1. ✅ **开心消消乐特殊块真正可玩**
+   - 四连/五连生成特殊块并**保留在棋盘**（spawn 格免清）
+   - 匹配含特殊块时自动引爆：行消 / 列消 / 炸弹 / 彩虹同色清场
+   - 与相邻宝石**交换特殊块**即可手动激活；双特殊组合额外 3×3
+   - 下落时特殊块随宝石列堆叠；`collapseMatch3` 同步搬运 `match3Specials`
+2. ✅ **破冰目标牌**
+   - 顶栏三牌：得分 / 破冰 / 小鸡；破冰计数随冰块完全消除递增
+3. ✅ **神庙里程碑降噪**
+   - 里程飘字改为 400m 步长、仅偶数里程碑显示、灰色弱提示、去掉音效
+   - 金币连击飘字仅 x5/x8；震动减弱
+4. ✅ **验证**
+   - build ✅ · color-bloom + temple QA **2/2** ✅ · match3-commercial-runtime ✅
+
+## 迭代八十七
+
+1. ✅ **开心消消乐（color-bloom）玩法深化**
+   - **冰块障碍**：开局 10 格；匹配先破冰、邻格震裂；冰冻格不可选/不可交换
+   - **底部道具栏**：锤子（点格消除+连锁）、重排、+5 步；次数扣减与武装态
+   - **三星评价**：过关 banner 按分数倍率 1/2/3 星
+   - `addMove` 在 anipop 模式走双目标 `checkAnipopWin`（步数耗尽不误杀）
+2. ✅ **神庙逃亡死亡可读性**
+   - `drawTempleDeathDim` 远景遮罩；障碍预警深度收窄 `0.38–0.55`
+   - `HudBanner` 支持 `anchor: "bottom"`
+3. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅
+
+## 迭代八十六
+
+1. ✅ **神庙逃亡可读性再收紧**
+   - 死亡 banner 移到底部；死亡时隐藏顶栏 HUD / 跑道 shader / 装饰粒子
+   - 车道虚线、石板色、边线对比度加强
+2. ✅ **开心消消乐（color-bloom）深化**
+   - 交换三消 **连锁消除**（`resolveMatch3Cascade`）
+   - 开局无自动三消 + 中心可一步教学局
+   - 棋盘格底纹、木质目标牌（得分/小鸡）、特殊块标记
+   - 双目标胜利：得分 ≥1200 且收集小鸡 ≥14；步数耗尽判负
+3. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅
+
+## 下一步（P0）
+
+- 消消乐：过关动画/星星飞入；样品馆 `photoCover` 肉眼验收新封面
+- 神庙：死亡 3 秒结算流程与 `GamePlayerInner` 结算层连贯抽测
+
+## 迭代八十五
+
+1. ✅ **神庙/crashy 死亡回放摘要**
+   - 局内死亡等待期显示摘要面板（距离/金币/连击/存活/死因/与最佳对比）
+   - `runnerRecap` 经 `EndPayload` 传到 `GamePlayerInner` 结算层
+2. ✅ **样品馆云端排行榜 API**
+   - `GET/POST /api/samples/runner-leaderboard`（`.data/runner-leaderboards/` 文件存储 Top10）
+   - 结算时自动提交并展示「样品馆榜」Top5 + 云端排名
+3. ✅ **验证**
+   - build ✅ · board-showcase ✅ · gameplay **23/23** ✅
+
+## 迭代八十四
+
+1. ✅ **波次随里程提速**（`wavePaceScale`）
+   - 跑越远：波次冷却越短、障碍略提前出现、同屏上限 +1、滚动加速
+2. ✅ **crashy 撞车无敌帧**
+   - 撞车后 1.25s 无敌 + 车辆闪光；扣命后 banner 提示；无敌期免二次碰撞
+3. ✅ **神庙/combo 本地排行榜**
+   - `runner-leaderboard.ts` localStorage Top5（得分/连击/距离）
+   - 局内右上角「本地榜」Top3；结算层 `GamePlayerInner` 完整榜单 + 新纪录 + 排名
+4. ✅ **验证**
+   - build ✅ · board-showcase ✅ · gameplay **23/23** ✅
+
+## 迭代八十三
+
+1. ✅ **神庙障碍波次套路**（`temple-run-patterns.ts`）
+   - 10 组固定节奏波次（单障教学 → 双障 zigzag → 横梁/三车道压境 → 金币喘息）
+   - `spawnTemplePatternWave` + `resolvePatternLane` 替代纯随机单发
+2. ✅ **连击奖励 UI**
+   - `drawTempleComboBadge` + 顶栏 `连击 xN` 文案；x3/x5/x8 里程碑飘字 + 加分
+3. ✅ **crashy-roads 抛光**（`crashy-road-patterns.ts` / `crashy-road-visual.ts`）
+   - 8 组波次（路障/残骸/锥桶/双障/之字/喘息）
+   - 夜景透视车道、三种障碍造型、生命 HUD、远处预警框
+   - 滑动手势换道、擦边连击加分 + `drawCrashyDodgeCombo` 徽章
+   - 得分 = 距离×10 + 擦边奖励
+4. ✅ **验证**
+   - build ✅ · board-showcase ✅ · gameplay **23/23** ✅
+
+## 迭代八十二
+
+1. ✅ **神庙可玩性深化**
+   - `pickTempleObstacleLane`：避免同屏堵死三车道，前期侧道教学，优先非当前道
+   - 远处障碍 `drawTempleObstacleTelegraph`（车道色带 + 跳/铲图标）
+   - 首次滚石/断柱/横梁 banner 教学；底部 hint 随逼近障碍动态切换
+   - 弯道 QTE 时 `templeCurveBias` 与视觉弯道同步
+2. ✅ **画面与手感**
+   - 跑者地面阴影 `drawTempleRunnerShadow`；跳起尘土 + 轻震；滑铲略延长
+   - 金币优先刷在安全车道
+3. ✅ **验证**
+   - build ✅ · board-showcase ✅ · gameplay **23/23** ✅
+
+## 迭代八十一
+
+1. ✅ **神庙逃亡画质重叠修复**
+   - 统一顶栏 HUD（追兵条 / 得分 / 金币单行），隐藏 goalPanel，banner 1.6s 自动收起 + `banner.tick()`
+   - 追兵独立 `chaserGfx`（depth 4.5）锚定跑者脚后，不再与精灵重叠
+   - 移除车道柔光叠层、降低跑道 shader 强度（ADD→NORMAL，alpha 0.55→0.28）
+   - 障碍/金币按深度排序绘制；弯道提示移至画面上方侧栏
+   - 金币飘字改在跑者头顶，不再压 HUD
+2. ✅ **可玩性调优**
+   - 追兵压力增速放缓（0.013→0.0075），吃金币减压加大
+   - 障碍生成延后（3.5s 热身）、间距拉大、碰撞窗口略放宽
+   - 换道响应加快（lane lerp×18）、弯道 QTE 时限 2.05s、12s 后触发
+3. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅ · board-showcase ✅
+
+## 迭代八十
+
+1. ✅ **围棋提子 / 气 / 打劫**（`ChessScene.ts`）
+   - `goSimulatePlay` / `goRemoveDeadGroups` / `goKoBan`
+   - 自杀禁入、打劫禁回提；提子 banner + 计分 HUD
+   - 空盘开局 + 天元 QA 点击提示
+2. ✅ **神庙外部 sprite sheet**
+   - `npm run generate:temple-runner-atlas` → `public/game-sprites/.../temple-runner-v7.png`（912×96）
+   - `registerTempleRunnerAtlasLoader` + `CoasterScene.preload`；无图集时回退 v6 程序化纹理
+3. ✅ **ops-health 三轨快照**
+   - `npm run qa:ops-health-snapshots`（board + admin + play + db-sync）
+   - 已刷新 `.qa-cache/` 三轨 JSON；后台 ops-health **overall=ok snapshots=3**
+4. ✅ **验证**
+   - build ✅ · gameplay **23/23** ✅ · seed **23** ✅
+
+## 迭代七十九
+
+1. ✅ **23 款样品实机封面 PNG**
+   - `capture:sample-covers:all` / `:astrocade` 脚本；预热逻辑复用 gameplay QA 用例
+   - `samples.ts` 全部改为 `/samples/{id}.png`（告别 astrocade webp/jpg）
+   - 实跑截图 **23/23** 写入 `public/samples/`
+2. ✅ **斗兽棋地形规则**（`ChessScene.ts`）
+   - 河流：仅鼠可入；狮虎中央列跳河
+   - 兽穴禁入；陷阱弱化攻防
+3. ✅ **围棋开局**：`buildGoPieces` 随棋盘尺寸自适应落子
+4. ✅ **验证**
+   - build ✅ · board-showcase ✅ · gameplay **23/23** ✅
+   - `seed:samples` **23 projects** ✅
+
+## 迭代七十八
+
+1. ✅ **国际象棋将军 / 应将 / 将死**
+   - `intlPseudoMoves` / `intlApplyMove`（兵升后）
+   - `intlInCheck` / `intlLegalMovesFiltered` 过滤自将
+   - 与象棋共用 `afterMoveStatus` / `finishCheckmate` / `checkTarget` 高亮
+   - 黑方 AI 仅合法应将着，优先吃王
+2. ✅ **神庙死亡结算**（`CoasterScene.ts`）
+   - 撞车/被追上后 3 秒内可重开，否则 `onEnd` 回传 `templeRunScore`
+   - `finish()` 神庙模式用 `templeRunScore` 计分
+   - 死亡 banner 提示「3 秒后结算」
+3. ✅ **验证**
+   - build ✅ · board-showcase QA ✅ · gameplay **23/23** ✅
+
+## 迭代七十七
+
+**今日复盘范围**：象棋 / 神庙 / 2048 / 围棋·斗兽棋·国际象棋演示 / 全量 23 款 QA
+
+### 已优化
+
+| 游戏 | 改动 |
+|------|------|
+| **中国象棋** | 将死横幅按胜负切换；困毙改 `finish(false)`；将军高亮将/帅红圈；黑方应将状态文案；去掉每帧 QA 重算 |
+| **神庙逃亡** | QTE 边界车道可按对方向应；跳起可躲石头；无敌期不记擦边追兵；死亡写入 QA 分数；尘土粒子降频；追兵条图标；QTE 紧急闪红 |
+| **2048** | 触控改为滑动手势（非恒向右）；无路可走 Game Over；取消步数上限误杀 |
+| **围棋/斗兽棋** | 开局标注「演示模式」避免用户按正式规则误解 |
+
+### 验证
+- `npm run build` ✅
+- `qa:board-showcase-samples` ✅
+- 全量 `qa:sample-gameplay-interaction` **23/23** ✅
+
+### 已知限制（未改，属演示级）
+- 围棋/斗兽棋/国际象棋：非完整竞技规则（样品定位）
+- 神庙：死亡后场内重开，不立即 `onEnd`（街机循环）
+
+---
+
+更新时间：**2026-06-17**（迭代七十六 · 象棋将军/应将/将死完整链路 ✅）
+
+## 迭代七十六
+
+1. ✅ **中国象棋将军 / 应将 / 将死**（`ChessScene.ts`）
+   - `xiangqiPseudoMoves` + `xiangqiApplyMove` 局面模拟
+   - `xiangqiIsSquareAttacked` / `xiangqiInCheck` / `xiangqiLegalMovesFiltered` 过滤自将
+   - 走子后 `xiangqiAfterMoveStatus`：将军 banner + 震动音效；将死 / 困毙终局
+   - 红方被将军时状态栏「⚠ 你被将军！必须应将」
+   - 黑方 AI 仅选合法应将着（优先吃帅）
+   - QA 状态暴露 `inCheck` / `redInCheck` / `blackInCheck`
+2. ✅ **验证**
+   - `npm run build` ✅
+   - `qa:board-showcase-samples` ✅（含将军/将死源码断言）
+   - `SAMPLE_AUDIT_IDS=classic-xiangqi-board` gameplay QA **1/1** ✅
+
+## 迭代七十五
+
+1. ✅ **中国象棋规则对齐**（参照 `Chinese_Chess.md`）
+   - 黑方用 象/士/将；红方 相/仕/帅
+   - 马：蹩马腿；象：塞象眼 + 不过河
+   - 炮：走法如车，吃子必须隔一子（炮架）
+   - 兵/卒：过河前只进，过河后可横走
+   - 将帅九宫 + 白脸将（同线无子不可照面）
+2. ✅ **神庙跑者 v6**
+   - 12 帧、探险帽、火把、腰带；纹理 76×96
+3. ✅ **封面批量**
+   - `npm run capture:sample-covers:arcade` → crashy/rail/smash/garden/bloom PNG
+   - smash/rail/crashy 样品元数据改指向 `/samples/*.png`
+4. ✅ **验证**
+   - build ✅ · qa:board-showcase-samples ✅
+
+---
+
+更新时间：**2026-06-17**（迭代七十四 · 追兵机制 + 弯道 QTE ✅）
+
+## 迭代七十四（当前）
+
+1. ✅ **追兵压力机制**
+   - 左下逼近条随时间上涨；吃金币 −、擦边 +
+   - 满条触发「被追上了」Game Over（独立于撞障碍）
+   - 猴群视觉随压力靠近；高压力红色 vignette
+2. ✅ **弯道 QTE**
+   - 16s 后每 ~11–18s 提示 A/← 或 D/→ 漂移
+   - 成功 +45 分并降低追兵条；失误追兵条 +20%
+3. ✅ **验证**
+   - build ✅ · 神庙 QA ✅
+
+## 迭代七十三
+
+**神庙逃亡可玩性评估**：核心循环已完整，**已达可玩样品标准**。
+
+---
+
+更新时间：**2026-06-17**（迭代七十二 · 首页样品精选 + 封面截图 ✅）
+
+## 迭代七十二（当前）
+
+1. ✅ **首页样品馆精选区**
+   - `FeaturedSamplesSection`：6 款 featured 竖版封面 + 链到 `/samples`
+   - 置于社区热门游戏之前；5 语言 i18n
+2. ✅ **封面刷新（6/6 PNG）**
+   - 清除 `SAMPLE_COVER_IDS` 后 `capture:sample-covers` 完成 6 款核心样品
+   - 2048 / 象棋 / 围棋 / 动物棋 / 神庙 → `public/samples/*.png`
+3. ✅ **验证**
+   - build ✅ · qa:board-showcase-samples ✅
+4. ⬜ **下一步**
+   - 专业跑者 sprite sheet；Astrocade 样品封面批量截图；生产 seed
+
+---
+
+更新时间：**2026-06-17**（迭代七十一 · discover 样品馆入口 + 全量 QA 23/23 ✅）
+
+## 迭代七十一
+
+1. ✅ **发现页 → 样品馆**
+   - `/discover` 顶栏与空状态增加「样品馆试玩」（复用 `lists.browseSampleGallery`）
+2. ✅ **全量试玩 QA**
+   - `Remove-Item Env:SAMPLE_AUDIT_IDS` 后 `qa:sample-gameplay-interaction` **23/23**
+   - 神庙/枪战合并各 retry 1 次后通过
+3. ✅ **三轨快照全绿**
+   - admin-smoke 32/32 · sample-play 23/23 · sample-db-sync 23/23
+4. ⬜ **下一步**（见迭代七十二）
+
+---
+
+更新时间：**2026-06-17**（迭代七十 · 游戏广场入口 + 生产 seed 文档 + QA 快照链 ✅）
+
+## 迭代七十
+
+1. ✅ **游戏广场 → 样品馆**
+   - `/games` 增加「样品馆试玩」入口；空状态也可跳转
+2. ✅ **生产运维文档**
+   - `deploy-linux-ubuntu22.md` / `admin-console.md` 补充 seed、对账、后台同步说明
+3. ✅ **QA 快照链**
+   - `qa:sample-gallery-db-sync` → `.qa-cache/sample-db-sync.json`
+   - ops-health 展示 DB 对账快照（三轨：admin / 试玩 / DB）
+4. ✅ **全量试玩 QA**（见迭代七十一）
+5. ✅ **验证**
+   - build ✅ · qa:sample-gallery-db-sync 23/23 ✅
+
+---
+
+更新时间：**2026-06-17**（迭代六十九 · 跑者 v5 + 样品 QA 快照 ✅）
+
+## 迭代六十九（当前）
+
+1. ✅ **神庙跑者 v5 Explorer 精灵**
+   - 10 帧跑步、背包/头巾/飘带、72×92 纹理；跳跃/滑铲/ lean 姿态
+2. ✅ **QA 快照扩展**
+   - `qa:sample-gameplay-interaction` → `.qa-cache/sample-play.json`
+   - ops-health 展示 admin + 样品试玩双快照，失败 sampleId 提示
+3. ✅ **验证**
+   - build ✅ · qa:board-showcase-samples ✅ · qa:admin-console ✅
+4. ⬜ **下一步**
+   - 跑全量 `qa:sample-gameplay-interaction` 刷新快照；生产 seed
+
+---
+
+更新时间：**2026-06-17**（迭代六十八 · 神庙 WebGL + 样品馆搜索 + QA 快照 ✅）
+
+## 迭代六十八（当前）
+
+1. ✅ **神庙 WebGL 透视光晕**
+   - `temple-run-road-shader.ts`：Phaser 4 Shader ADD 叠层，随弯道/滚动更新 uniform
+   - CoasterScene 神庙模式接入 + shutdown 清理
+2. ✅ **样品馆 UX**
+   - `/samples` 搜索框、数量统计、失败重试
+3. ✅ **运营健康 QA 快照**
+   - `qa:admin-console` 写入 `.qa-cache/admin-smoke.json`
+   - ops-health 展示最近 smoke 结果与过期提示
+4. ✅ **验证**
+   - build ✅ · qa:admin-console ✅ · qa:board-showcase-samples ✅
+5. ⬜ **下一步**
+   - 专业跑者 sprite sheet；生产 seed 后验收 `/samples`
+
+---
+
+更新时间：**2026-06-17**（迭代六十七 · 运营健康 + 作品封面 + 样品批量 ✅）
+
+## 迭代六十七（当前）
+
+1. ✅ **概览「系统健康」面板**
+   - `GET /api/admin/ops-health`：DB、邮件、样品同步/封面、待审队列
+   - QA 命令参考 + 一键跳转样品馆/待审
+2. ✅ **作品治理封面列**
+   - 游戏/小说/漫画 `coverPath` 缩略图预览
+3. ✅ **样品馆批量精选**
+   - 多选 + `PATCH projectIds[]` 批量 feature/unfeature
+4. ✅ **验证**
+   - build ✅ · qa:admin-console 33/33 ✅
+5. ⬜ **下一步**
+   - WebGL 透视跑道；生产 seed 后肉眼验收 `/samples`
+
+---
+
+更新时间：**2026-06-17**（迭代六十六 · 后台样品馆管理 ✅）
+
+## 迭代六十六（当前）
+
+1. ✅ **后台「样品馆」Tab**
+   - `GET/PATCH/POST /api/admin/samples`：目录↔DB 对账、一键同步、精选切换
+   - `SampleGalleryPanel`：封面预览、试玩链接、未同步/缺封面筛选
+2. ✅ **概览运营快捷入口**
+   - KPI「样品馆同步」+ 待审/样品馆/公开页快捷按钮
+3. ✅ **作品治理增强**
+   - 游戏「试玩」链接；「复制到样品馆」i18n（5 语言）
+4. ✅ **验证**
+   - build ✅ · qa:admin-console 30/30 ✅（含 admin samples API）
+5. ⬜ **下一步**
+   - 生产 `seed:samples`；可选 QA 健康面板；WebGL 透视跑道
+
+---
+
+更新时间：**2026-06-17**（迭代六十五 · 神庙玩法深度 + 视差氛围 ✅）
+
+## 迭代六十五（当前）
+
+1. ✅ **神庙玩法深度**
+   - 擦边 near-miss 反馈（「擦边!/Near!」+ 轻震）
+   - 金币连击 streak（≥3 显示 xN，额外加分 `templeCoinBonus`）
+2. ✅ **神庙 v6 氛围**
+   - 垂坠藤蔓视差、萤火虫粒子、当前车道柔光高亮
+3. ✅ **验证**
+   - build ✅ · board QA ✅ · 神庙互动 QA ✅ · 封面重截 ✅ · seed 23
+4. ⬜ **下一步**
+   - 生产 seed；Phaser Shader 透视跑道（WebGL）或专业 sprite sheet
+
+---
+
+更新时间：**2026-06-17**（迭代六十四 · 目标引导 + 神庙 v5 ✅）
+
+## 迭代六十四（当前）
+
+1. ✅ **CoasterScene 目标引导**
+   - 接入 `HudGoalPanel` + `buildSceneGoalGuidance`；`racing/coaster` 模板含神庙/endless 专属文案。
+2. ✅ **神庙 v5 视觉**
+   - 透视车道虚线滚动；金币 spin 动画；追兵改为猿猴剪影（伸臂追逐）。
+3. ✅ **QA 扩展**
+   - `qa:hud-goal-panel` / `qa:scene-goal-guidance` 覆盖 CoasterScene。
+4. ✅ **验证**
+   - build ✅ · board QA ✅ · 神庙互动 QA ✅ · 封面重截 ✅
+5. ⬜ **下一步**
+   - 生产 `seed:samples`；WebGL 透视网格或专业跑者 sprite sheet。
+
+---
+
+更新时间：**2026-06-17**（迭代六十三 · 样品馆卡片 + 神庙 v4 + 封面全量刷新 ✅）
+
+## 迭代六十三（当前）
+
+1. ✅ **样品馆卡片 UX**
+   - 6 款棋盘/益智/神庙样品加 `photoCover: true`：封面不再叠 emoji/标题，标题移到卡片下方（与 Astrocade 样品一致）。
+2. ✅ **神庙 v4 视觉**
+   - 两侧远景残柱 `drawTempleSideRuins`、金色夕阳 vignette、跑者脚下尘土粒子。
+   - 跑者 v4 精灵（背包+头巾）；弯道 lean/bank；金币可 3 枚一串生成。
+3. ✅ **封面全量刷新**
+   - `capture:sample-covers` 增强棋盘/2048 预热交互；6 款 PNG 全部重截。
+4. ✅ **验证**
+   - `qa:sample-gameplay-interaction` **23/23** ✅
+   - `qa:board-showcase-samples` ✅（含 photoCover + v4 contract）
+   - `seed:samples` 23 · `npm run build` ✅
+5. ⬜ **下一步**
+   - 部署生产 `npm run seed:samples`；肉眼检查 `/samples` 与 `/games?sort=latest` 前 6 卡封面。
+   - 商业级 Temple Run 仍缺专业美术/WebGL。
+
+---
+
+更新时间：**2026-06-17**（迭代六十二 · seed + 封面 + 神庙手感 polish ✅）
+
+## 迭代六十二（当前）
+
+1. ✅ **神庙手感 polish**
+   - 得分 `scorePopT` 脉冲；捡金币 `camPulseT` 轻微 zoom；弯道幅度/频率加强。
+2. ✅ **样品封面工具**
+   - 新增 `npm run capture:sample-covers`（Playwright 截 canvas → `public/samples/*.png`）。
+   - 已重生成 `temple-relic-runner.png`（v3 水域/分数面板/弯道）。
+3. ✅ **DB 与门禁**
+   - `npm run seed:samples` → **23 projects**
+   - `qa:sample-gallery-db-sync` **23/23** ✅
+   - `qa:board-showcase-samples` 增加 v3 contract（水域/分数面板/相机脉冲）
+   - `npm run build` ✅ · 神庙互动 QA ✅
+4. ⬜ **下一步**
+   - 部署生产后 `npm run seed:samples` 或访问 `/samples` ensure。
+   - 商业级 3D 仍缺专业 sprite sheet / WebGL 网格。
+
+---
+
+更新时间：**2026-06-17**（迭代六十一 · QA 闭环 + 神庙 v3 视觉 ✅）
+
+## 迭代六十一（当前）
+
+1. ✅ **修复 2 个旧 QA 失败样品**
+   - `color-bloom`：`PuzzleScene` flood 消除补 `addMove()`；开局中心 4 连块保证一点即消。
+   - `gun-merge-3d-zombie-apocalypse`：合成成功加 `juiceShake`/`juiceFlash` + 额外 `bumpQaTouch`。
+2. ✅ **神庙 v3 视觉**
+   - `temple-run-visual.ts`：跑道两侧暗水/深渊 `drawTempleWaterMoat`；顶部石质分数面板 `drawTempleScorePanel`。
+   - `CoasterScene.drawTempleRunFrame` 接入分数面板（`templeRunScore` + 金币 pop 脉冲）。
+3. ✅ **验证**
+   - `npm run qa:sample-gameplay-interaction` **23/23** ✅（含 color-bloom、gun-merge）
+   - `npm run qa:board-showcase-samples` ✅
+   - `npm run build` ✅
+4. ⬜ **下一步**
+   - 生产 `npm run seed:samples` 确认 23 样品。
+   - 神庙仍非商业级 3D：可选 WebGL 网格或专业 sprite sheet；封面 PNG 可随 v3 重生成。
+
+---
+
+更新时间：**2026-06-17**（迭代六十 · 神庙重做 + 统一 WASD/鼠标 ✅）
+
+## 迭代六十
+
+1. ✅ **神庙可玩性根因修复**
+   - 梯形收敛透视跑道（非平行竖条）→ `temple-run-visual.ts`。
+   - 开局 2.6s 无敌；同时仅 1 障碍；1 命撞停 + Space/点击原地重开；无尽模式。
+   - 8 帧跑者 + jump/slide/lean 姿态；速度线、追兵剪影、金币 HUD 动效。
+2. ✅ **统一输入 `phaser-input.ts`**
+   - 全局 WASD+方向键+Space+Shift；Play/Shooter/Platformer/Coaster 全接 WASD+鼠标。
+   - 跑酷：A/D 换道、W 跳、S 滑铲、鼠标点按/滑动。
+3. ✅ **验证**：build ✅、神庙互动 QA ✅、`qa:board-showcase-samples` ✅。
+
+---
+
+更新时间：**2026-06-17**（迭代五十九 · 神庙逃亡 v2 机制 ✅）
+
+## 迭代五十九（当前）
+
+1. ✅ **神庙逃亡 v2 玩法**
+   - 金币拾取：`roadPickups` + `drawTempleCoin`，`coasterCoins` 写入 QA 状态。
+   - 跳跃 / 滑铲：↑/W/空格跳、↓/S 滑；低障碍 `pillar` 需跳、高障碍 `beam` 需滑、滚石 `rock` 需换道。
+   - 弯道透视：`laneCenterX` + `roadCurvePhase` 正弦偏移车道。
+   - 跑者动画：`runAnimPhase` 摆腿；跳/滑姿态区分。
+   - HUD：`hudTempleRunControls` / `hudTempleRunScore`（五语系 i18n）。
+   - 结算：金币 ×50 加分，神庙专属 banner 文案。
+2. ✅ **验证**
+   - `npm run qa:board-showcase-samples` ✅（含 v2 contract 断言）
+   - `SAMPLE_AUDIT_IDS=temple-relic-runner npm run qa:sample-gameplay-interaction` ✅
+   - `npm run build` ✅
+3. ⬜ **下一步**
+   - 商业级仍缺：精灵帧动画、连续弯道手感调优、失败即时重开、更强 3D 透视与金币 UI 动效。
+   - 生产 `npm run seed:samples` 确认 23 样品。
+
+---
+
+更新时间：**2026-06-17**（迭代五十八 · 六款小游戏真实试玩 + 神庙逃亡样品 ✅）
+
+## 迭代五十八
+
+1. ✅ **真实试玩复核**
+   - `qa:sample-gameplay-interaction` 聚焦 5 款：2048 / 中国象棋 / 国际象棋 / 围棋 / 斗兽棋 **5/5 PASS**。
+   - Playwright canvas 截图复核：
+     - 2048：可滑动合成，分数/最大数字变化。
+     - 围棋：19x19 棋盘、棋子足够大，落子后 pieceCount 增长。
+     - 斗兽棋：动物 icon + 标签 + 陷阱/河流/兽穴可辨。
+     - 中国象棋：已从普通格子棋盘改为真实线盘、楚河汉界、宫格斜线、红黑圆棋子。
+     - 国际象棋：已补全 32 子和基础后排/兵走法。
+2. ✅ **神庙逃亡样品**
+   - 新增 `temple-relic-runner`：`racing` → `CoasterScene` → `endlessRoad`。
+   - 视觉：丛林/遗迹/石门、三条石板路、跑者 stick avatar、滚石/石柱障碍。
+   - 操作：左右键 / A-D / 点击左右半屏换道。
+   - 封面：`public/samples/temple-relic-runner.png`。
+3. ✅ **验证**
+   - `npm run qa:board-showcase-samples` ✅
+   - `npm run seed:samples` ✅（23 projects）
+   - `npm run qa:sample-gallery-db-sync` ✅（23/23）
+   - `SAMPLE_AUDIT_IDS=temple-relic-runner npm run qa:sample-gameplay-interaction` ✅（1/1，首轮 retry 后通过）
+   - `SAMPLE_AUDIT_IDS=number-merge-2048,classic-xiangqi-board,classic-international-chess,zen-go-board,jungle-animal-chess,temple-relic-runner npm run qa:sample-gameplay-interaction` ✅（6/6）
+   - 神庙 runner 截图状态：`coasterDistance` 7 → 14，`coasterLives` 3。
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+4. ⬜ **下一步**
+   - 如继续提升神庙逃亡质量：补金币拾取、跳跃/滑铲、连续弯道、角色动画帧、碰撞失败重开和更强 3D 透视。
+   - 部署生产后执行 `npm run seed:samples`，确认生产 DB 也为 23 个样品。
+
+---
+
+更新时间：**2026-06-17**（迭代五十七 · 五款棋盘/益智样品可见 + 封面/围棋/抖动修复 ✅）
+
+## 迭代五十七（当前）
+
+1. ✅ **补齐用户要求的 5 款可见样品**
+   - 新增 `classic-xiangqi-board`（Chinese Xiangqi，中国象棋）和 `classic-international-chess`（International Chess，国际象棋）。
+   - 本地 DB 已 `npm run seed:samples`：`seed-sample-gallery: ok 22 projects`。
+   - DB 最新 5 条已确认：International Chess、Chinese Xiangqi、Jungle Animal Chess、Zen Go Board、2048 Neon Merge。
+2. ✅ **修复游戏广场封面**
+   - 五款棋盘/益智样品改用 PNG 封面：
+     - `/samples/number-merge-2048.png`
+     - `/samples/classic-xiangqi-board.png`
+     - `/samples/classic-international-chess.png`
+     - `/samples/zen-go-board.png`
+     - `/samples/jungle-animal-chess.png`
+   - `qa:board-showcase-samples` 强制检查 PNG 文件存在，防止再出现破图/空白。
+3. ✅ **修复围棋棋子过小**
+   - `ChessScene` 新增 `drawGoStone()`，Go 棋子改为图形大圆盘（半径 `cell * 0.43`）+ 高光 + 阴影，不再依赖小号文本符号。
+4. ✅ **修复 2048 背景抖动**
+   - 2048 每次移动不再调用 `juiceCombo()`，避免 camera shake；保留局部 `juiceBurst()` 和音效反馈。
+5. ✅ **验证**
+   - `npm run qa:board-showcase-samples` ✅
+   - `npm run qa:sample-gallery-db-sync` ✅（22/22）
+   - `npm run seed:samples` ✅（22 projects）
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+   - `qa:sample-gameplay-interaction`：本次相关 5 款全部 ✅；全量 22 款仍有 2 个旧样品失败（`color-bloom` depth、`gun-merge-3d-zombie-apocalypse` interaction diff）。
+6. ⬜ **下一步**
+   - 若要继续推进质量闭环，优先修 `qa:sample-gameplay-interaction` 中两个旧样品失败。
+   - 部署后在生产执行 `npm run seed:samples` 或访问 `/samples` 触发 ensure，确认生产 DB 也为 22 个样品。
+   - 在 `/games?sort=latest` 肉眼检查前 5 个卡片封面是否加载为 PNG。
+
+---
+
+更新时间：**2026-06-17**（迭代五十六 · 斗兽棋棋子可读性修复 ✅）
+
+## 迭代五十六（当前）
+
+1. ✅ **斗兽棋棋子图标化**
+   - `ChessScene` 中 `ruleset === "jungle"` 的棋子从纯汉字改成“动物 emoji 图标 + 汉字标签”。
+   - 每个斗兽棋棋子先绘制高对比圆形底：红方浅底红边、蓝方深底深边，避免文字和棋盘/河流/陷阱混色。
+2. ✅ **防回退 QA**
+   - `qa:board-showcase-samples` 新增断言：
+     - 必须有 `jungleAnimalIcon()`。
+     - 必须有 `junglePieceText()`。
+     - 必须绘制 `fillCircle(cx, cy, this.cell * 0.38)` 作为棋子底。
+3. ✅ **验证**
+   - `npm run qa:board-showcase-samples` ✅
+   - `SAMPLE_AUDIT_IDS=jungle-animal-chess PLAYWRIGHT_BASE_URL=http://127.0.0.1:8888 npm run qa:sample-gameplay-interaction` ✅ **1/1**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+4. ⬜ **下一步**
+   - 肉眼再看斗兽棋截图，如果 emoji 字体在目标设备表现不稳定，可进一步替换为本地 SVG/PNG 动物 icon 资产。
+
+---
+
+更新时间：**2026-06-17**（迭代五十五 · 样品馆真实可见与控制台复制 ✅）
+
+## 迭代五十五（当前）
+
+1. ✅ **回答“为什么看不到”**
+   - 根因：上一轮只新增了代码里的 `SAMPLES`、运行时和离线 QA；真实 `/games` / `/samples` 依赖数据库 `Project`。
+   - 另外 `/api/samples/ensure` 原先只按数量判断，数量够时不会刷新已有 DB 样品，代码变更可能不落库。
+2. ✅ **样品馆改为 DB catalog**
+   - 新增 `/api/samples`，从 `ownerKey=__sample-gallery__` 的公开项目返回样品列表。
+   - `/samples` 页面先触发 ensure，再用 `/api/samples` 渲染；控制台复制出来的样品不再被静态 `SAMPLES` 卡住。
+3. ✅ **控制台复制到样品馆**
+   - 新增 `copyProjectToSampleGallery()`：把任意 `Project` 复制/更新为 `sample-*`、公开、样品馆 owner。
+   - 新增 super admin API：`POST /api/admin/samples/copy-project`。
+   - 运营控制台 Works 表对 game 增加“复制到样品馆”按钮。
+   - 新增 CLI：`npm run sample:copy-project -- <projectId> [sampleId]`，复制并生成本地 public 资产。
+4. ✅ **真实可见性与试玩验证**
+   - `npm run seed:samples` ✅（20 projects）
+   - `npm run qa:sample-gallery-db-sync` ✅（20/20）
+   - `/api/samples` HTTP 检查 ✅：返回 20 个样品，含 `number-merge-2048` / `zen-go-board` / `jungle-animal-chess`。
+   - `agent-browser` 打开 `/zh-Hans/samples` ✅：页面可见三款新样品。
+   - `SAMPLE_AUDIT_IDS=number-merge-2048,zen-go-board,jungle-animal-chess npm run qa:sample-gameplay-interaction` ✅ **3/3**
+5. ✅ **回归验证**
+   - `npm run qa:sample-gallery-copy` ✅
+   - `npm run qa:b-tier-smoke` ✅ **47/47**
+   - `npm run build` ✅
+6. ⬜ **下一步**
+   - 部署后跑 `npm run seed:samples` 或访问 `/samples` 触发 ensure，确认生产 DB 也有 20 个样品。
+   - 用生产控制台测试“复制到样品馆”按钮，再让非登录访客打开 `/samples` 借鉴/克隆。
+
+---
+
+更新时间：**2026-06-17**（迭代五十四 · 彩色棋盘与 2048 样品扩展 ✅）
+
+## 迭代五十四（当前）
+
+1. ✅ **新增三款色彩鲜明展示样品**
+   - `number-merge-2048`：4x4 数字合成、亮黄/橙/红/青色块、分数/目标反馈。
+   - `zen-go-board`：19x19 围棋、木纹棋盘、黑白落子、最近交互可观测。
+   - `jungle-animal-chess`：7x9 斗兽棋、河流/陷阱/兽穴、动物棋子与合法走法。
+2. ✅ **规格与运行时扩展**
+   - `PuzzleBlueprint.mode` 新增 `merge2048`，`PuzzleScene` 实现滑动合并、生成新块、彩色数字块、QA `merge2048Max`。
+   - `ChessBlueprint.ruleset` 新增 `go` / `jungle`，`ChessScene` 实现围棋落子 AI、斗兽棋动物子力与地形着色。
+   - 修复斗兽棋关键词误伤“中国象棋”的推断 bug。
+3. ✅ **样品体系补齐**
+   - 三款新样品加入 `SAMPLES`、`SAMPLE_PLAY_PROFILES`、竞品 scene 期望、玩法深度期望、交互用例。
+   - 生成基础 `public/game-sprites/sample-*/*.png` 与 `public/game-bg/sample-*.png`，避免样品门禁和运行时资产缺失。
+   - 新增 `qa:board-showcase-samples` 并纳入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:board-showcase-samples` ✅
+   - `npm run qa:template-matrix` ✅（13 templates + 20 samples）
+   - `npm run qa:competitor-clone-checks-offline` ✅ **20/20**
+   - `npm run qa:gameplay-depth-offline` ✅ **20/20**
+   - `npm run qa:sample-gameplay-interaction:offline` ✅
+   - `npm run qa:b-tier-smoke` ✅ **47/47**
+   - `npm run build` ✅
+5. ⬜ **下一步**
+   - 部署后跑真实生产 URL 样品审计。
+   - 产品肉眼抽测：重点看 2048 色块层次、围棋棋盘可读性、斗兽棋地形/棋子辨识度。
+
+---
+
+更新时间：**2026-06-17**（迭代五十三 · 商业精品生成门禁与双样例落地 ✅）
+
+## 迭代五十三（当前）
+
+1. ✅ **商业精品专项门禁**
+   - 新增 `qa:commercial-game-design-contracts`，用“开心消消乐”和“中国象棋”验证生成链路是否具备商业设计字段。
+   - 新增 `qa:match3-commercial-runtime`，验证 PuzzleScene 有 swap 三消、三连检测、特殊块状态。
+   - 新增 `qa:xiangqi-commercial-runtime`，验证 ChessScene 具备 xiangqi 规则集、9x10、完整子力、QA 状态。
+2. ✅ **规格层扩展**
+   - `GameSpec.puzzle` 增加 `matchMechanic`、`objectives`、`boosters`、`specialTiles`、`levelCount`。
+   - 新增 `GameSpec.chess` 蓝图与 `src/lib/chess-blueprint.ts`，支持 `international` / `xiangqi`。
+   - `mockSpecFromPrompt()`、`finalizeSpec()`、`applyHardQualityDefaults()` 均会补齐 puzzle/chess 商业蓝图。
+   - `lintGameSpecForOrchestration()` 增加 puzzle/chess 模板感知检查，避免“纸面精品”。
+3. ✅ **开心消消乐式三消**
+   - `PuzzleScene` 支持 `matchMechanic: "swap"`：相邻交换，形成三连才消除。
+   - 四/五连会记录特殊块状态，QA 暴露 `match3Specials` / `specialTilesCreated`。
+   - 旧 flood 点击消除保留为普通 match3 / 样品兼容路径。
+4. ✅ **中国象棋运行时**
+   - `ChessScene` 支持 `ruleset: "xiangqi"`：9x10 棋盘、楚河汉界、红黑完整子力。
+   - 增加基础合法走法、合法落点高亮、吃子优先黑方 AI、`boardRows` / `boardCols` / `pieceCount` QA 状态。
+   - 默认国际象棋样品路径保留。
+5. ✅ **验证**
+   - `npm run qa:commercial-game-design-contracts` ✅
+   - `npm run qa:match3-commercial-runtime` ✅
+   - `npm run qa:xiangqi-commercial-runtime` ✅
+   - `npm run qa:non-sample-game-quality` ✅
+   - `npm run qa:b-tier-smoke` ✅ **46/46**
+   - `npm run build` ✅
+   - `npm run qa:sample-play-extended` ✅ **7/7**
+   - `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8888 npm run qa:prod-sample-play-audit` ✅ **17/17**
+6. ⬜ **下一步**
+   - 部署后跑真实生产 URL 样品审计。
+   - 产品肉眼抽测：重点看 swap 三消手感、特殊块演出强度、中国象棋棋盘可读性与 AI 回应。
+
+---
+
+更新时间：**2026-06-17**（迭代五十二 · 次级入口 HUD/资产下限补齐 ✅）
+
+## 迭代五十二（当前）
+
+1. ✅ **Farming / Puzzle / Physics 目标卡接入**
+   - 三个次级 Scene 引入 `HudGoalPanel` 与 `buildSceneGoalGuidance()`。
+   - 开场 banner 改走统一 guidance，目标 / 操作 / 风险说明不再只靠旧 Ready 文案。
+   - update 循环驱动 `goalPanel.update()`，目标卡从开场说明过渡到半透明常驻。
+2. ✅ **Farming / Puzzle / Physics 背景可见度下限**
+   - 三个 Scene 增加 `backgroundUrl` 的 `bgTex` preload。
+   - 背景图展示统一使用 `assetBackgroundAlpha(projectId, qualityTier)`。
+   - 非 rich 模式纯色底降低到背景图之后，避免文生图背景完全被盖住。
+3. ✅ **防回退契约扩展**
+   - `qa:hud-goal-panel` 覆盖扩展到 7 个 Phaser Scene。
+   - `qa:asset-visibility-floor` 覆盖扩展到 7 个 Phaser Scene。
+4. ✅ **验证**
+   - `npm run qa:hud-goal-panel` ✅
+   - `npm run qa:asset-visibility-floor` ✅
+   - `npm run qa:b-tier-smoke` ✅ **43/43**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ✅ **Bug 审查与本地路径验证**
+   - 发现并修复 Puzzle 背景层级 bug：文生图背景原本在不透明 puzzle backdrop 下面，实际不可见；现改到 depth `-7`，并在 `qa:asset-visibility-floor` 增加回归断言。
+   - 清理 Farming / Puzzle / Physics 不再使用的 `hudReady` import。
+   - 本地样品扩展试玩：`npm run qa:sample-play-extended` ✅ **7/7**。
+   - 本地样品互动审计：`PLAYWRIGHT_BASE_URL=http://127.0.0.1:8888 npm run qa:prod-sample-play-audit` ✅ **17/17**。
+   - 非样品与深度门禁：`qa:non-sample-game-quality` ✅、`qa:gameplay-depth-offline` ✅、`qa:sample-gameplay-interaction:offline` ✅。
+6. ⬜ **下一步**
+   - 等当前改动部署后，对真实生产 URL 跑 `PLAYWRIGHT_BASE_URL=<prod> npm run qa:prod-sample-play-audit`。
+   - 继续做肉眼抽测/截图审查，重点看 HUD 是否遮挡 Farming / Puzzle / Physics 的关键交互区。
+
+---
+
+更新时间：**2026-06-17**（迭代五十一 · Systems 技能/道具可观察层 ✅）
+
+## 迭代五十一（当前）
+
+1. ✅ **共享 systems 冲击层**
+   - 新增 `src/game/engine/systemImpact.ts`。
+   - `applySystemImpact()` 将 `skill` / `powerup` 的可见反馈统一为 pickup / combo / boss 语义反馈。
+   - `bomb` 用 boss 级冲击，`dash` / `doubleScore` 用 combo，`shield` / `timeSlow` / `heal` 用明显 pickup。
+2. ✅ **核心 Scene 接入**
+   - `PlayScene` / `PlatformerScene` 的 `applyPowerup()` 统一触发 powerup 观察层。
+   - `PlayScene` / `ShooterScene` / `PlatformerScene` / `TowerDefenseScene` 的 `tryCastSkill()` 统一触发 skill 观察层。
+   - 保留原有数值副作用：护盾、倍率、磁铁、回血、炸弹清场、dash、timeSlow 等。
+3. ✅ **防回退契约**
+   - 新增 `qa:systems-observable-impact`。
+   - 已接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:systems-observable-impact` ✅
+   - `npm run qa:b-tier-smoke` ✅ **43/43**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ✅ **后续补齐**
+   - Farming / Puzzle / Physics 目标面板与资产下限已在迭代五十二完成。
+
+---
+
+更新时间：**2026-06-17**（迭代五十 · Director 事件运行时冲击层 ✅）
+
+## 迭代五十（当前）
+
+1. ✅ **共享运行时事件冲击层**
+   - 新增 `src/game/engine/runtimeEventImpact.ts`。
+   - `applyRuntimeEventImpact()` 按 director 事件类型触发 pickup / hit / combo / boss 语义反馈，避免事件只剩 banner。
+   - `coinRain` / `goldenPickup` / `breathingRoom` 用 pickup，`goalShift` 用 combo，`miniBoss` / `finalBarrage` 用 boss。
+2. ✅ **核心 Scene 接入**
+   - `PlayScene` / `ShooterScene` / `PlatformerScene` / `TowerDefenseScene` 的 `startEvent(ev)` 统一调用 `applyRuntimeEventImpact()`。
+   - 保留原有数值副作用：倍率、boss/精英刷怪、目标窗口、护盾/奖励等。
+3. ✅ **防回退契约**
+   - 新增 `qa:runtime-depth-observable`。
+   - 已接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:runtime-depth-observable` ✅
+   - `npm run qa:b-tier-smoke` ✅ **42/42**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ⬜ **下一步**
+   - 继续 runtime-depth：把 systems skill / powerup 的状态变化做成更统一的可观察层。
+   - 后续扩展目标面板与资产下限到 Farming / Puzzle / Physics 等次级入口。
+
+---
+
+更新时间：**2026-06-17**（迭代四十九 · 用户生成资产可见度下限 ✅）
+
+## 迭代四十九（当前）
+
+1. ✅ **运行时资产可见度下限**
+   - `phaser-loaded-sprites.ts` 新增 `assetBackgroundAlpha()`：非样品 standard 背景从低透明度水印提升到 ≥0.18，showcase 更高。
+   - 新增 `visibleSpriteTargetSize()`：为 player / hazard / collectible / power / boss 提供按 `qualityTier` 缩放的最小可见尺寸。
+   - `sampleBackgroundAlpha()` 改为走新下限，保留样品更突出的背景表现。
+2. ✅ **核心 Scene 接入**
+   - `PlayScene` / `ShooterScene` / `PlatformerScene` / `TowerDefenseScene` 的文生图背景透明度改用 `assetBackgroundAlpha(projectId, qualityTier)`。
+   - 清除核心 Scene 中背景 `0.1` / `0.12` 这类过低硬编码，减少“空模板/水印背景”观感。
+3. ✅ **防回退契约**
+   - 新增 `qa:asset-visibility-floor`。
+   - 已接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:asset-visibility-floor` ✅
+   - `npm run qa:b-tier-smoke` ✅ **41/41**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ⬜ **下一步**
+   - 继续 runtime-depth：让 director/systems 的阶段、技能、道具和高潮事件更明显地改变运行时体验。
+   - 后续扩展目标面板与资产下限到 Farming / Puzzle / Physics 等次级入口。
+
+---
+
+更新时间：**2026-06-17**（迭代四十八 · HUD 目标任务卡 ✅）
+
+## 迭代四十八（当前）
+
+1. ✅ **统一 HUD 目标面板**
+   - 新增 `src/game/engine/HudGoalPanel.ts`，常驻展示游戏目标、操作方式和风险/节奏提示。
+   - 面板使用 `CohesivePresentation` 的 panel/hud 样式，按 `qualityTier` 控制收起后的透明度。
+   - 初始完整展示，数秒后半透明常驻，避免遮挡核心玩法。
+2. ✅ **核心 Scene 挂载**
+   - `PlayScene` / `ShooterScene` / `PlatformerScene` / `TowerDefenseScene` 增加 `goalPanel` 实例。
+   - update 循环驱动 `goalPanel.update()`，让任务卡从开场说明过渡到常驻辅助。
+   - `TowerDefenseScene` 任务卡下移，避免挡住基地/波次 HUD。
+3. ✅ **防回退契约**
+   - 新增 `qa:hud-goal-panel`。
+   - 已接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:hud-goal-panel` ✅
+   - `npm run qa:scene-goal-guidance` ✅
+   - `npm run qa:b-tier-smoke` ✅ **40/40**
+   - `npm run build` ✅（先抓到 `HudGoalPanel` 类型宽化问题，已修复）
+   - Edited-file lints：无错误
+5. ⬜ **下一步**
+   - 扩展目标面板到 Farming / Puzzle / Physics 等次级入口。
+   - 继续推进用户生成资产可见度下限与 director/systems 运行时深度。
+
+---
+
+更新时间：**2026-06-17**（迭代四十七 · 目标引导层第一步 ✅）
+
+## 迭代四十七（当前）
+
+1. ✅ **共享目标引导文案层**
+   - 新增 `src/lib/scene-goal-guidance.ts`，统一生成 `title` / `objective` / `controls` / `stakes` / `banner` / `bottomHint`。
+   - 覆盖 collector / shooter / platformer / towerDefense / farming / puzzle 的目标、操作与风险提示。
+   - 目标文案由 `GameSpec` 标题、labels、winScore、skill 推导，不再只显示 `Ready` 或零散控制提示。
+2. ✅ **首批 Scene 接入**
+   - `PlayScene`、`ShooterScene`、`PlatformerScene`、`TowerDefenseScene` 的底部提示改用 `guidance.bottomHint`。
+   - 四个核心入口开场 banner 改用 `guidance.banner`，首屏直接告诉玩家目标、操作和节奏风险。
+3. ✅ **防回退契约**
+   - 新增 `qa:scene-goal-guidance`。
+   - 已接入 `qa:b-tier-smoke`。
+4. ✅ **验证**
+   - `npm run qa:scene-goal-guidance` ✅
+   - `npm run qa:b-tier-smoke` ✅ **39/39**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+5. ⬜ **下一步**
+   - 阶段三继续：把文案层升级为统一 HUD 目标面板/任务卡，而不只是 banner 与底部 hint。
+   - 随后推进用户生成资产可见度下限与 director/systems 运行时深度。
+
+---
+
+更新时间：**2026-06-17**（迭代四十六 · TowerDefense 语义反馈收口 ✅）
+
+## 迭代四十六（当前）
+
+1. ✅ **TowerDefenseScene 接入语义 feedback**
+   - 合成格选择/合成、开波、建塔/升级、击杀、基地护盾/受击、全局技能、coinRain、胜负结算收敛到 `juicePickup` / `juiceHit` / `juiceCombo` / `juiceBoss` / `juiceWin` / `juiceFail`。
+   - 新增 `baseFxPoint()`，统一用路径终点作为基地反馈坐标，避免硬编码目标位置。
+   - 清空 `TowerDefenseScene` 内旧式 `juiceShake` / `juiceFlash` / `juiceBurst` / `juiceFloater` 直接调用。
+2. ✅ **防回退契约**
+   - 新增 `qa:tower-defense-semantic-juice`。
+   - 已接入 `qa:b-tier-smoke`。
+3. ✅ **验证**
+   - `npm run qa:tower-defense-semantic-juice` ✅
+   - `npm run qa:b-tier-smoke` ✅ **38/38**
+   - `npm run build` ✅
+   - Edited-file lints：无错误
+4. ⬜ **下一步**
+   - 阶段三：统一 HUD/目标引导层，解决“看起来像调试模板”的问题。
+   - 随后推进用户生成资产可见度下限与 director/systems 运行时深度。
+
+---
+
 更新时间：**2026-06-17**（迭代四十五 · 语义化 Juice 横向推广 ✅）
 
 ## 迭代四十五（当前）
@@ -174,7 +1091,8 @@
 8. ✅ **启动链收口**：`createPhaserGame` 改为统一入口，启动 banner / 共享气质 / 短反馈音色均走同一协议
 9. ✅ 关键回归：`qa:sample-gameplay-interaction` **17/17**、`qa:competitor-parity-validation` **17/17+克隆5/5**、`qa:competitor-clone-batch` **all 17/17**（2026-06-16T15:51）；Windows 子进程假挂 → `process.exit(0)` 收口
 10. ✅ `qa:competitor-gates` 全量 wrapper **全绿**（2026-06-16T16:27 · `e2eAllOk=true` · 约 33min）
-11. ⬜ **一轮** commit（含旗舰 AI PNG + 上述修复 + 硬质量底座 + 共享表现层升级 + Scene / 启动链收口 + QA 退出收口）+ push + deploy
+11. ✅ **commit + push + deploy** — `85bd56c` @ `http://43.163.105.71:6666` · health OK（2026-06-17）
+12. P3：Console SSO
 11. P3：Console SSO
 
 **下一步**：如果你要，我可以继续把 `HudBanner` / `gameSoundscape` 再收薄一点，或者直接做 commit 收口。

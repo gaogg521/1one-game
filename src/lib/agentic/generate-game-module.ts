@@ -13,6 +13,7 @@ import {
   buildAgenticUserPrompt,
 } from "@/lib/agentic/agentic-prompts";
 import { validateAgenticRunnable } from "@/lib/agentic/agentic-runnable";
+import { buildDebugSkillRepairHints, runDebugSkillPipeline } from "@/lib/opengame-skills";
 import { llmJson, getActiveProvider, getProviderModelCascade } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 
@@ -21,6 +22,16 @@ export type GenerateAgenticModuleResult =
   | { ok: false; reason: string };
 
 const REPAIR_ATTEMPTS = 2;
+
+/** OpenGame Debug Skill：proactive + runnable 闭环最大轮次（含 LLM repair） */
+const DEBUG_SKILL_MAX_ROUNDS = 3;
+
+function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; reason: string; hints: string[] } {
+  const pipeline = runDebugSkillPipeline(mod);
+  if (pipeline.ok) return { ok: true };
+  const hints = buildDebugSkillRepairHints(pipeline.checks);
+  return { ok: false, reason: `${pipeline.stage}:${pipeline.reason}`, hints };
+}
 
 function agenticGenLimits() {
   const fast = process.env.AGENTIC_LLM_FAST === "1";
@@ -63,8 +74,8 @@ export async function generateAgenticGameModule(
     process.env.AGENTIC_FORCE_LLM !== "1"
   ) {
     const mod = buildTemplateFallbackModule(spec);
-    const run = validateAgenticRunnable(mod);
-    if (run.ok) {
+    const debug = passesDebugSkill(mod);
+    if (debug.ok) {
       return { ok: true, module: mod, source: "template_first", lastReason: "template_first" };
     }
   }
@@ -120,7 +131,49 @@ export async function generateAgenticGameModule(
           continue;
         }
 
-        const runnable = validateAgenticRunnable(mod);
+        let debugRound = 0;
+        let candidate = mod;
+        let debugFail: ReturnType<typeof passesDebugSkill> = passesDebugSkill(candidate);
+        while (!debugFail.ok && debugRound < DEBUG_SKILL_MAX_ROUNDS) {
+          lastReason = debugFail.reason;
+          lastSource = candidate.source;
+          logAgenticProgress(model, attempt, `debug_skill(${lastReason}) round=${debugRound}`);
+          if (debugRound >= DEBUG_SKILL_MAX_ROUNDS - 1 || attempt >= limits.maxRepairs) break;
+          const repairUser = buildAgenticRepairPrompt(
+            prompt,
+            spec,
+            candidate.source,
+            lastReason,
+            debugFail.hints,
+          );
+          try {
+            const repairResult = await llmJson({
+              model,
+              system,
+              user: repairUser,
+              temperature: 0.32,
+              mode: "json_object",
+              timeoutMs: limits.repairTimeoutMs,
+            });
+            if (!repairResult.ok) break;
+            const repaired = parseLlmModule(repairResult.raw);
+            if (!repaired) break;
+            candidate = repaired;
+            lastSource = candidate.source;
+            debugFail = passesDebugSkill(candidate);
+          } catch {
+            break;
+          }
+          debugRound += 1;
+        }
+
+        if (!debugFail.ok) {
+          lastReason = debugFail.reason;
+          logAgenticProgress(model, attempt, `debug_skill_fail: ${lastReason}`);
+          continue;
+        }
+
+        const runnable = validateAgenticRunnable(candidate);
         if (!runnable.ok) {
           lastReason = runnable.reason;
           logAgenticProgress(model, attempt, `runnable_fail: ${lastReason}`);
@@ -128,7 +181,7 @@ export async function generateAgenticGameModule(
         }
 
         logAgenticProgress(model, attempt, "ok");
-        return { ok: true, module: mod, source: "llm" };
+        return { ok: true, module: candidate, source: "llm" };
       } catch {
         lastReason = "llm_error";
       }

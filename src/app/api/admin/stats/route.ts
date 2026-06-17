@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, canManageRuntimeConfig, canPromoteSuperAdmin } from "@/lib/auth/admin";
+import { SAMPLE_GALLERY_OWNER } from "@/lib/sample-gallery";
+import { SAMPLES } from "@/lib/samples";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
@@ -18,6 +20,7 @@ export async function GET(req: Request) {
     hiddenG,
     hiddenN,
     hiddenC,
+    sampleGalleryDb,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.project.count(),
@@ -32,6 +35,9 @@ export async function GET(req: Request) {
     prisma.project.count({ where: { visibility: "hidden" } }),
     prisma.novel.count({ where: { visibility: "hidden" } }),
     prisma.comic.count({ where: { visibility: "hidden" } }),
+    prisma.project.count({
+      where: { ownerKey: SAMPLE_GALLERY_OWNER, visibility: "public", status: "ready" },
+    }),
   ]);
   const pendingReview = pendingG + pendingN + pendingC;
   const hidden = hiddenG + hiddenN + hiddenC;
@@ -41,6 +47,7 @@ export async function GET(req: Request) {
     works: { game: projects, novel: novels, comic: comics },
     shares24h,
     moderation: { pendingReview, hidden },
+    sampleGallery: { catalog: SAMPLES.length, synced: sampleGalleryDb },
     viaLegacySuperAdmin: gate.viaLegacy,
     canManageRuntimeConfig: canManageRuntimeConfig(gate.user, gate.viaLegacy),
     canPromoteSuperAdmin: canPromoteSuperAdmin(gate.user),

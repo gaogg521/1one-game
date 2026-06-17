@@ -1,10 +1,10 @@
 /**
- * 竞品克隆可玩度批量验收（17 款 Astrocade 样品）
+ * 竞品克隆可玩度批量验收（14 款商业样品）
  * npm run qa:competitor-clone-batch
  *
  * 环境：dev @8888
  * COMPETITOR_CLONE_BATCH=smoke — 8 款快验（historical-closure 默认）
- * COMPETITOR_CLONE_BATCH=all — 全部 17 款
+ * COMPETITOR_CLONE_BATCH=all — 全部 14 款
  * COMPETITOR_SAMPLE_IDS=id1,id2 — 自定义列表
  */
 import "dotenv/config";
@@ -28,13 +28,12 @@ const OUT = path.join(process.cwd(), "qa-output", "competitor-clone-batch");
 
 const SMOKE_SAMPLE_IDS = [
   "crashy-roads",
+  "temple-relic-runner",
   "elastic-thief-2",
   "pottery-master-3d",
-  "state-conquest",
-  "kids-puzzle",
   "color-bloom",
-  "ultimate-3d-chess",
   "grow-a-garden",
+  "classic-international-chess",
 ] as const;
 
 function pickSamples(): Sample[] {

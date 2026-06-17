@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import { juiceCombo, juiceHit, juiceWin } from "@/game/engine/gameJuice";
 import { generateRichDummyTexture, paintSmashDummyArena } from "@/game/engine/action-visual";
 import { styleHudText } from "@/game/engine/hudTextStyle";
@@ -9,10 +10,12 @@ import type { AppLocale } from "@/i18n/routing";
 import { type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import type { GameSpec } from "@/lib/game-spec";
-import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudReady, hudScore } from "@/lib/i18n/game-hud-labels";
+import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudScore } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -37,6 +40,7 @@ export class PhysicsScene extends Phaser.Scene {
   private comboText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
+  private goalPanel!: HudGoalPanel;
   private cohesive!: CohesivePresentation;
 
   private comboWindowMs = 900;
@@ -53,6 +57,12 @@ export class PhysicsScene extends Phaser.Scene {
     this.spec = spec;
     this.onEnd = onEnd;
     this.soundscape = soundscape;
+  }
+
+  preload() {
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
   }
 
   create() {
@@ -74,7 +84,16 @@ export class PhysicsScene extends Phaser.Scene {
     if (this.richArena) {
       paintSmashDummyArena(this, this.spec, w, h, dummyX, dummyY);
     } else {
-      this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+      this.add
+        .rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color)
+        .setDepth(-12);
+    }
+    if (this.backgroundUrl && this.textures.exists("bgTex")) {
+      const bg = this.add
+        .image(w / 2, h / 2, "bgTex")
+        .setDepth(-11)
+        .setAlpha(assetBackgroundAlpha(this.projectId, cohesive.qualityTier));
+      bg.setScale(Math.max(w / bg.width, h / bg.height));
     }
 
     this.physics.world.setBounds(0, 0, w, h);
@@ -111,8 +130,10 @@ export class PhysicsScene extends Phaser.Scene {
         color: "#cbd5e1",
       }).setOrigin(0.5),
     );
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
-    this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 124 });
 
     if (this.richArena) {
       this.progressGfx = this.add.graphics().setDepth(18);
@@ -196,6 +217,7 @@ export class PhysicsScene extends Phaser.Scene {
   }
 
   update(_t: number, dt: number) {
+    this.goalPanel?.update();
     this.banner.tick();
     setPhaserQaState({ qaTouches: this.hits, hits: this.hits });
     if (this.finished) return;

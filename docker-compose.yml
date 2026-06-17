@@ -3,11 +3,11 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${OPERONE_PORT:-6666}:6666"
+      - "${OPERONE_PORT:-80}:80"
     env_file:
       - .env
     environment:
-      PORT: "6666"
+      PORT: "80"
       NODE_ENV: production
       DATABASE_URL: file:/app/data/prod.db
     volumes:

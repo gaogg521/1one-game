@@ -9,23 +9,20 @@ export type GameplayDepthExpect = {
   minDelta?: number;
 };
 
-/** 17 款样品 — 玩法深度须可观测变化（不能只靠像素 diff） */
+/** 14 款样品 — 玩法深度须可观测变化（不能只靠像素 diff） */
 export const GAMEPLAY_DEPTH_BY_SAMPLE: Record<string, GameplayDepthExpect> = {
+  "number-merge-2048": { field: "puzzleMoves", change: "increased", minDelta: 1 },
+  "classic-xiangqi-board": { field: "moves", change: "increased", minDelta: 1 },
+  "classic-international-chess": { field: "moves", change: "increased", minDelta: 1 },
+  "zen-go-board": { field: "moves", change: "increased", minDelta: 1 },
+  "jungle-animal-chess": { field: "moves", change: "increased", minDelta: 1 },
+  "temple-relic-runner": { field: "coasterDistance", change: "increased", minDelta: 1 },
   "smash-the-dummy": { field: "hits", change: "increased", minDelta: 1 },
-  "rail-in-air": { field: "coasterDistance", change: "increased", minDelta: 1 },
   "grow-a-garden": { field: "plantedTiles", change: "increased", minDelta: 1 },
   "color-bloom": { field: "puzzleMoves", change: "increased", minDelta: 1 },
-  "whimsy-differences": { field: "foundDiff", change: "increased", minDelta: 1 },
   "gun-merge-3d-zombie-apocalypse": { field: "qaTouches", change: "increased", minDelta: 1 },
-  "ultimate-3d-chess": { field: "moves", change: "increased", minDelta: 1 },
   "elastic-thief-2": { field: "playerX", change: "changed", minDelta: 1 },
-  "state-conquest": { field: "qaTouches", change: "increased", minDelta: 1 },
-  "tiny-planet-chopper": { field: "qaTouches", change: "increased", minDelta: 1 },
   "blade-defender-merge": { field: "qaTouches", change: "increased", minDelta: 1 },
-  "car-color-palette": { field: "qaTouches", change: "increased", minDelta: 1 },
-  "blocky-sniper-hunter": { field: "qaTouches", change: "increased", minDelta: 1 },
-  "memory-match-mania": { field: "flippedCards", change: "increased", minDelta: 1 },
-  "kids-puzzle": { field: "puzzleMoves", change: "increased", minDelta: 1 },
   "pottery-master-3d": { field: "potteryHeight", change: "increased", minDelta: 1 },
   "crashy-roads": { field: "coasterDistance", change: "increased", minDelta: 1 },
 };

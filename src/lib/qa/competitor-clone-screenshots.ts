@@ -56,7 +56,7 @@ export async function bestCloneVisualMatch(
   return best!;
 }
 
-/** 17 款统一 burst 对标：消除单帧/HUD 时序差 */
+/** 14 款统一 burst 对标：消除单帧/HUD 时序差 */
 export async function compareCloneVisualParity(opts: {
   page: import("@playwright/test").Page;
   baseUrl: string;

@@ -43,9 +43,10 @@ export class HudBanner {
     this.message.setAlpha(0);
   }
 
-  show(params: { title: string; message?: string; ms?: number }) {
+  show(params: { title: string; message?: string; ms?: number; anchor?: "top" | "bottom" }) {
     const ms = params.ms ?? 2200;
     this.hideAt = this.scene.time.now + ms;
+    this.applyAnchor(params.anchor ?? "top");
 
     this.title.setText(params.title);
     this.message.setText(params.message ?? "");
@@ -68,6 +69,17 @@ export class HudBanner {
       duration: 220,
       ease: "Quad.In",
     });
+  }
+
+  private applyAnchor(anchor: "top" | "bottom") {
+    const w = this.scene.scale.width;
+    const h = this.scene.scale.height;
+    const boxY = anchor === "bottom" ? h - 52 : 96;
+    const titleY = anchor === "bottom" ? h - 68 : 80;
+    const messageY = anchor === "bottom" ? h - 48 : 102;
+    this.box.setPosition(w / 2, boxY);
+    this.title.setPosition(w / 2, titleY);
+    this.message.setPosition(w / 2, messageY);
   }
 
   destroy() {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } f
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
+import { withLocalePath } from "@/i18n/navigation";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import {
   AdminDonutChart,
@@ -19,6 +20,8 @@ import {
 } from "@/components/admin/AdminCharts";
 import { RuntimeConfigPanel } from "@/components/admin/RuntimeConfigPanel";
 import { EmailConfigPanel } from "@/components/admin/EmailConfigPanel";
+import { SampleGalleryPanel } from "@/components/admin/SampleGalleryPanel";
+import { OpsHealthPanel } from "@/components/admin/OpsHealthPanel";
 import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
@@ -40,6 +43,8 @@ const AUDIT_ACTION_FILTERS = [
   "user_role",
   "runtime_config_update",
   "email_config_update",
+  "sample_gallery_sync",
+  "sample_gallery_copy_project",
 ] as const;
 
 type Stats = {
@@ -47,6 +52,7 @@ type Stats = {
   works: { game: number; novel: number; comic: number };
   shares24h: number;
   moderation: { pendingReview: number; hidden: number };
+  sampleGallery?: { catalog: number; synced: number };
   canManageRuntimeConfig?: boolean;
   canPromoteSuperAdmin?: boolean;
   actorRole?: string | null;
@@ -63,6 +69,7 @@ type WorkRow = {
   playCount?: number;
   likeCount?: number;
   shareCount?: number;
+  coverPath?: string | null;
   novelId?: string | null;
   novelTitle?: string | null;
 };
@@ -303,6 +310,9 @@ export default function AdminConsolePage({
       if (tab === "overview") await Promise.all([loadOverview(), loadAnalytics()]);
       else if (tab === "pending") await loadPending();
       else if (tab === "works") await loadOverview();
+      else if (tab === "samples") {
+        /* SampleGalleryPanel 自行加载 */
+      }
       else if (tab === "shares") await loadShares();
       else if (tab === "users") await loadUsers();
       else if (tab === "billing") await loadAnalytics();
@@ -396,6 +406,21 @@ export default function AdminConsolePage({
       return;
     }
     await moderate(batch, "public");
+  }
+
+  async function copyGameToSamples(id: string) {
+    const res = await fetch("/api/admin/samples/copy-project", {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: id, featured: true }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { sample?: { id?: string; playPath?: string }; error?: string };
+    if (!res.ok || !data.sample?.id) {
+      setNotice({ kind: "error", text: data.error || t("copyToSamplesFailed") });
+      return;
+    }
+    setNotice({ kind: "ok", text: t("copyToSamplesDone", { id: data.sample.id }) });
+    await loadOverview();
   }
 
   function toggleSelect(key: string) {
@@ -604,7 +629,36 @@ export default function AdminConsolePage({
                       label: t("kpiFeaturedWorks"),
                       value: analytics.product.featured,
                     },
+                    ...(stats.sampleGallery
+                      ? [
+                          {
+                            label: t("kpiSampleGallery"),
+                            value: stats.sampleGallery.synced,
+                            hint: t("kpiSampleGalleryHint", {
+                              catalog: stats.sampleGallery.catalog,
+                            }),
+                            tone:
+                              stats.sampleGallery.synced < stats.sampleGallery.catalog
+                                ? ("warn" as const)
+                                : ("default" as const),
+                          },
+                        ]
+                      : []),
                   ]}
+                />
+
+                <AdminOpsQuickLinks
+                  pendingCount={stats.moderation.pendingReview}
+                  sampleSynced={stats.sampleGallery?.synced}
+                  sampleCatalog={stats.sampleGallery?.catalog}
+                  onGoPending={() => setTab("pending")}
+                  onGoSamples={() => setTab("samples")}
+                />
+
+                <OpsHealthPanel
+                  headers={headers}
+                  onGoSamples={() => setTab("samples")}
+                  onGoPending={() => setTab("pending")}
                 />
 
                 <div className="grid gap-5 xl:grid-cols-2">
@@ -772,11 +826,16 @@ export default function AdminConsolePage({
                       onToggle={toggleSelect}
                       onModerate={(type, id, vis) => void moderate([{ type, id }], vis)}
                       onFeatured={(type, id, featured) => void moderate([{ type, id }], undefined, featured)}
+                      onCopyGameToSamples={(id) => void copyGameToSamples(id)}
                     />
                     <AdminPagination page={clampedPage} pageCount={pageCount} onPageChange={setPage} />
                   </>
                 )}
               </section>
+            ) : null}
+
+            {!loading && !error && isAdminConsoleTab(tab) && tab === "samples" ? (
+              <SampleGalleryPanel headers={headers} onNotice={setNotice} />
             ) : null}
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "works" ? (
@@ -790,6 +849,7 @@ export default function AdminConsolePage({
                       works={pagedWorks}
                       onModerate={(type, id, vis) => void moderate([{ type, id }], vis)}
                       onFeatured={(type, id, featured) => void moderate([{ type, id }], undefined, featured)}
+                      onCopyGameToSamples={(id) => void copyGameToSamples(id)}
                     />
                     <AdminPagination page={clampedPage} pageCount={pageCount} onPageChange={setPage} />
                   </>
@@ -1266,6 +1326,7 @@ function WorksTable({
   onToggle,
   onModerate,
   onFeatured,
+  onCopyGameToSamples,
 }: {
   works: WorkRow[];
   selectable?: boolean;
@@ -1273,6 +1334,7 @@ function WorksTable({
   onToggle?: (key: string) => void;
   onModerate: (type: string, id: string, visibility: string) => void;
   onFeatured: (type: string, id: string, featured: boolean) => void;
+  onCopyGameToSamples?: (id: string) => void;
 }) {
   const t = useTranslations("adminPage");
   return (
@@ -1291,6 +1353,7 @@ function WorksTable({
                     onChange={() => onToggle?.(key)}
                   />
                 ) : null}
+                <WorkCoverThumb work={w} />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] uppercase tracking-wide text-[var(--gc-muted)]">{w.type}</p>
                   <p className="mt-1 font-medium text-[var(--gc-text)]">{w.title}</p>
@@ -1300,7 +1363,7 @@ function WorksTable({
                   </p>
                   <WorkEngagementMeta work={w} />
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} />
+                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} />
                   </div>
                 </div>
               </div>
@@ -1313,6 +1376,7 @@ function WorksTable({
           <thead className="bg-[var(--gc-surface-glass)] text-[var(--gc-muted)]">
             <tr>
               {selectable ? <th className="px-4 py-3" /> : null}
+              <th className="px-4 py-3 font-medium">{t("colCover")}</th>
               <th className="px-4 py-3 font-medium">{t("colType")}</th>
               <th className="px-4 py-3 font-medium">{t("colTitle")}</th>
               <th className="px-4 py-3 font-medium">{t("colEngagement")}</th>
@@ -1331,6 +1395,9 @@ function WorksTable({
                       <input type="checkbox" checked={selected?.has(key) ?? false} onChange={() => onToggle?.(key)} />
                     </td>
                   ) : null}
+                  <td className="px-4 py-3">
+                    <WorkCoverThumb work={w} compact />
+                  </td>
                   <td className="px-4 py-3 text-[var(--gc-muted)]">{w.type}</td>
                   <td className="max-w-[220px] truncate px-4 py-3">{w.title}</td>
                   <td className="px-4 py-3">
@@ -1344,7 +1411,7 @@ function WorksTable({
                     {w.featured ? t("featuredBadge") : ""}
                   </td>
                   <td className="px-4 py-3">
-                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} />
+                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} />
                   </td>
                 </tr>
               );
@@ -1353,6 +1420,27 @@ function WorksTable({
         </table>
       </div>
     </>
+  );
+}
+
+function WorkCoverThumb({ work, compact = false }: { work: WorkRow; compact?: boolean }) {
+  const t = useTranslations("adminPage");
+  const size = compact ? "h-12 w-9" : "h-14 w-11";
+  if (!work.coverPath) {
+    return (
+      <div
+        className={`flex ${size} shrink-0 items-center justify-center rounded-lg border border-dashed border-[color:var(--gc-border)] bg-black/20 text-[10px] text-[var(--gc-text-faint)]`}
+        title={t("coverMissing")}
+      >
+        —
+      </div>
+    );
+  }
+  return (
+    <div className={`relative ${size} shrink-0 overflow-hidden rounded-lg border border-[color:var(--gc-border)] bg-black/30`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={work.coverPath} alt="" className="h-full w-full object-cover" />
+    </div>
   );
 }
 
@@ -1401,12 +1489,15 @@ function WorkActions({
   work,
   onModerate,
   onFeatured,
+  onCopyGameToSamples,
 }: {
   work: WorkRow;
   onModerate: (type: string, id: string, visibility: string) => void;
   onFeatured: (type: string, id: string, featured: boolean) => void;
+  onCopyGameToSamples?: (id: string) => void;
 }) {
   const t = useTranslations("adminPage");
+  const locale = useLocale() as AppLocale;
   return (
     <div className="flex flex-wrap gap-2">
       {work.visibility !== "public" ? (
@@ -1421,6 +1512,21 @@ function WorkActions({
       <button type="button" className="text-sm text-[var(--gc-accent)]" onClick={() => onFeatured(work.type, work.id, !work.featured)}>
         {work.featured ? t("actionUnfeature") : t("actionFeature")}
       </button>
+      {work.type === "game" && onCopyGameToSamples ? (
+        <button type="button" className="text-sm text-sky-400" onClick={() => onCopyGameToSamples(work.id)}>
+          {t("actionCopyToSamples")}
+        </button>
+      ) : null}
+      {work.type === "game" ? (
+        <Link
+          href={withLocalePath(`/play/${work.id}`, locale)}
+          className="text-sm text-sky-400 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t("actionPlay")}
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -1588,6 +1694,61 @@ const CHANNEL_PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#fbbf24", "#f472b6", 
 
 function channelColor(index: number): string {
   return CHANNEL_PALETTE[index % CHANNEL_PALETTE.length] ?? CHART_COLORS.accent;
+}
+
+function AdminOpsQuickLinks({
+  pendingCount,
+  sampleSynced,
+  sampleCatalog,
+  onGoPending,
+  onGoSamples,
+}: {
+  pendingCount: number;
+  sampleSynced?: number;
+  sampleCatalog?: number;
+  onGoPending: () => void;
+  onGoSamples: () => void;
+}) {
+  const t = useTranslations("adminPage");
+  const locale = useLocale() as AppLocale;
+  return (
+    <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5">
+      <p className="text-sm font-medium text-[var(--gc-text)]">{t("opsQuickTitle")}</p>
+      <p className="mt-1 text-xs text-[var(--gc-muted)]">{t("opsQuickSubtitle")}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onGoPending}
+          className={`rounded-full px-4 py-2 text-sm font-medium ${
+            pendingCount > 0
+              ? "border border-amber-500/40 bg-amber-500/10 text-amber-300"
+              : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+          }`}
+        >
+          {t("opsQuickPending", { count: pendingCount })}
+        </button>
+        <button
+          type="button"
+          onClick={onGoSamples}
+          className={`rounded-full px-4 py-2 text-sm font-medium ${
+            sampleCatalog != null && sampleSynced != null && sampleSynced < sampleCatalog
+              ? "border border-sky-500/40 bg-sky-500/10 text-sky-300"
+              : "border border-[color:var(--gc-border)] text-[var(--gc-muted)]"
+          }`}
+        >
+          {t("opsQuickSamples", { synced: sampleSynced ?? 0, catalog: sampleCatalog ?? 0 })}
+        </button>
+        <Link
+          href={withLocalePath("/samples", locale)}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+        >
+          {t("samplesOpenPublic")}
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {

@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-- **默认目录**：`/opt/operone` · **端口**：`6666` · **再执行同命令** = 更新
+- **默认目录**：`/opt/operone` · **端口**：`80` · **再执行同命令** = 更新
 
 ### 自定义安装目录
 
@@ -140,7 +140,7 @@ sudo systemctl restart operone
 验证：
 
 ```bash
-curl -s http://127.0.0.1:6666/api/health
+curl -s http://127.0.0.1:80/api/health
 ```
 
 > 上线后也可在运营控制台 `/console` →「网关 / 模型」轮换部分配置（数据库优先生效）。
@@ -149,12 +149,13 @@ curl -s http://127.0.0.1:6666/api/health
 
 ### 2. 修改端口
 
-**默认端口为 `6666`**。Next.js 16 的 `next start -p 6666` 会报「reserved for ircu」；本项目 `scripts/run-start.mjs` 使用 programmatic server 可监听任意端口。
+**默认端口为 `80`**。Next.js 16 的 `next start -p 80` 需 root 或 `setcap`；本项目 `scripts/run-start.mjs` 使用 programmatic server，部署脚本会为 node 授予 `cap_net_bind_service`。
 
-> **说明：Chrome / Edge 与 6666**
+> **说明：勿再使用 6666**
 >
-> 部分浏览器将 **6666** 列为「不安全端口」（`net::ERR_UNSAFE_PORT`），直连 `http://IP:6666` 可能打不开。
-> 若遇此情况，可配 **Nginx 反代到 80/443**，或改用 Firefox 等；**防火墙与监听端口仍可按 6666 配置**。
+> Chrome / Edge 将 **6666** 列为「不安全端口」（`net::ERR_UNSAFE_PORT`）。历史部署若仍写 `:6666`，请改为 **`http://你的域名/`**（80 端口，无后缀）。
+>
+> 若已配置域名 + Nginx：对外 **80**，应用可监听 **8080** 由 Nginx 反代；直连部署则应用监听 **80**（`setcap` 已自动处理）。
 
 若需改为其他端口，需改两处：
 
@@ -167,7 +168,7 @@ sudo nano /opt/operone/.env
 修改或添加：
 
 ```env
-PORT=6666
+PORT=80
 ```
 
 #### ② 若已配置 Nginx 反代
@@ -330,7 +331,10 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 | 服务日志 | `journalctl -u operone -f` |
 | Nginx 站点（Debian） | `/etc/nginx/sites-available/operone` |
 | Nginx 站点（RHEL/CentOS） | `/etc/nginx/conf.d/operone.conf` |
-| 健康检查 | `curl -s http://127.0.0.1:6666/api/health` |
+| 健康检查 | `curl -s http://127.0.0.1:80/api/health` |
+| **样品馆同步** | 部署脚本默认执行 `npm run seed:samples`；手动：`cd $OPERONE_DIR && npm run seed:samples`；或访问 `/samples` 触发 `/api/samples/ensure` |
+| 样品 DB 对账 | `npm run qa:sample-gallery-db-sync`（应 14/14） |
+| 运营后台 | `/console` → **样品馆** Tab → **同步全部样品** |
 | 更新版本 | 再次执行 `install.sh`，或 `sudo bash "$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh" --update` |
 
 ---

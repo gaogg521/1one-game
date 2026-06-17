@@ -1,5 +1,27 @@
 # DECISIONS
 
+更新时间：**2026-06-17**
+
+## 2026-06-17 — 样品馆商业标准裁剪（23 → 14）
+
+**背景**：用户要求淘汰不符合技术/商业标准的薄 demo 与重复 SKU，集中精力打磨保留款。
+
+**删除（9 款）**：
+| id | 理由 |
+|----|------|
+| `ultimate-3d-chess` | 与国际象棋重复 |
+| `rail-in-air` | 跑酷/过山车重复（保留神庙 + Crashy） |
+| `whimsy-differences` / `memory-match-mania` / `kids-puzzle` | 薄益智，无商业深度 |
+| `car-color-palette` | 薄定制 demo |
+| `state-conquest` | 薄策略 |
+| `tiny-planet-chopper` / `blocky-sniper-hunter` | 薄射击 |
+
+**保留（14 款）**：棋盘五款 + 2048 + 神庙 + 消消乐 + 街机/深度七款（Crashy、Smash、Garden、Gun Merge、Elastic Thief、Blade Defender、Pottery）。
+
+**实现**：`src/lib/samples.ts` 及 registry / QA / infer / 封面脚本同步；用户 prompt 推断能力保留（非样品馆 SKU）。
+
+---
+
 更新时间：**2026-06-13**
 
 ## 2026-06-13 — 全局 canonical spec（Spec/资产/运行时同源）

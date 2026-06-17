@@ -34,7 +34,6 @@ export const STRICT_CLONE_PARITY: CanvasParityThresholds = {
 export const STRICT_VISUAL_SAMPLE_IDS = new Set([
   "grow-a-garden",
   "color-bloom",
-  "whimsy-differences",
   "elastic-thief-2",
   "crashy-roads",
 ]);

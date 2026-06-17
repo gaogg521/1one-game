@@ -72,7 +72,7 @@ Operone 一键部署（内部脚本，用户请用 install.sh）
 
 环境变量（可选）：
   OPERONE_DIR     安装目录，默认 /opt/operone
-  OPERONE_PORT    监听端口，默认 6666
+  OPERONE_PORT    对外端口，默认 80（Chrome 勿用 6666）
   OPERONE_USER    运行用户，默认 www-data
   GIT_REPO        源码仓库地址
 
@@ -194,7 +194,7 @@ check_source_available() {
 }
 
 collect_config() {
-  # 默认全自动：不设域名 = 内网 6666；设域名 = 自动 Nginx/HTTPS
+  # 默认全自动：不设域名 = 直连 80；设域名 = 自动 Nginx/HTTPS（应用 8080，对外 80）
   if [[ -n "$OPERONE_DOMAIN" && "$ENABLE_NGINX" == "auto" ]]; then
     ENABLE_NGINX=1
   fi

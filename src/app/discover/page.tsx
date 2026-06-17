@@ -131,6 +131,7 @@ type SortKey = "playCount" | "likeCount" | "createdAt" | "hot";
 
 export default function DiscoverPage() {
   const t = useTranslations();
+  const tl = useTranslations("lists");
   const locale = useLocale() as AppLocale;
   const [, startTransition] = useTransition();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
@@ -205,12 +206,20 @@ export default function DiscoverPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">{t("discover.title")}</h1>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("discover.desc", { subtitle: sortMeta.subtitle })}</p>
           </div>
-          <Link
-            href={withLocalePath("/start", locale)}
-            className="gc-theme-cta self-start rounded-full px-5 py-2 text-sm font-semibold sm:self-auto"
-          >
-            {t("common.startCreating")}
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Link
+              href={withLocalePath("/samples", locale)}
+              className="inline-flex items-center justify-center rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-xs font-medium text-[var(--gc-muted)] transition hover:border-sky-500/40 hover:text-sky-300"
+            >
+              {tl("browseSampleGallery")}
+            </Link>
+            <Link
+              href={withLocalePath("/start", locale)}
+              className="gc-theme-cta inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold"
+            >
+              {t("common.startCreating")}
+            </Link>
+          </div>
         </div>
 
         <DiscoverIntakeBanner />
@@ -286,9 +295,17 @@ export default function DiscoverPage() {
                 suffix: filter ? `（${t.has(`discover.templateLabels.${filter}`) ? t(`discover.templateLabels.${filter}`) : filter}）` : "",
               })}
             </p>
-            <Link href={withLocalePath("/create", locale)} className="text-sm text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline underline-offset-4">
-              {t("discover.beFirstCreator")}
-            </Link>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link
+                href={withLocalePath("/samples", locale)}
+                className="rounded-full border border-[color:var(--gc-border)] px-6 py-2 text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+              >
+                {tl("browseSampleGallery")}
+              </Link>
+              <Link href={withLocalePath("/create", locale)} className="text-sm text-[color:color-mix(in_srgb,var(--gc-accent)_90%,white)] underline underline-offset-4">
+                {t("discover.beFirstCreator")}
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

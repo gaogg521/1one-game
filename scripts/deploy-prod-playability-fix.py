@@ -12,7 +12,7 @@ import paramiko
 HOST = "43.163.105.71"
 USER = "root"
 REPO = "/opt/operone"
-DEFAULT_PORT = os.environ.get("OPERONE_PORT", "6666")
+DEFAULT_PORT = os.environ.get("OPERONE_PORT", "80")
 
 
 def load_password() -> str:
@@ -49,8 +49,10 @@ def main() -> int:
 
     steps = [
         f"cd {REPO} && git fetch origin && git reset --hard origin/main && git log -1 --oneline",
-        # 样品 sprite/bg 已入库 public/，随 git 同步；生产机 sharp 不可用，勿跑 seed:sample-assets
         f"cd {REPO} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT={port}|' .env || echo 'PORT={port}' >> .env)",
+        'NODE_REAL=$(readlink -f $(command -v node)) && setcap cap_net_bind_service+ep "$NODE_REAL" 2>/dev/null || true',
+        "systemctl stop nginx 2>/dev/null || true",
+        "systemctl disable nginx 2>/dev/null || true",
         f"cd {REPO} && HOME={REPO} NPM_CONFIG_CACHE={REPO}/.npm-cache npm install --no-audit --no-fund --ignore-scripts",
         f"cd {REPO} && HOME={REPO} npx prisma generate",
         (
@@ -78,7 +80,7 @@ def main() -> int:
             return code if i < len(steps) - 1 else 1
 
     client.close()
-    print(f"\nDEPLOY_OK @ http://{HOST}:{port}")
+    print(f"\nDEPLOY_OK @ http://operone.1oneclaw.com (port {port})")
     return 0
 
 

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1125" role="img" aria-label="Zen Go Board cover">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset=".48" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#92400e"/>
+    </linearGradient>
+    <radialGradient id="black" cx=".35" cy=".3">
+      <stop offset="0" stop-color="#64748b"/>
+      <stop offset="1" stop-color="#020617"/>
+    </radialGradient>
+    <radialGradient id="white" cx=".35" cy=".3">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cbd5e1"/>
+    </radialGradient>
+  </defs>
+  <rect width="900" height="1125" fill="#111827"/>
+  <rect x="55" y="85" width="790" height="970" rx="34" fill="url(#wood)"/>
+  <text x="450" y="165" font-family="Arial, sans-serif" font-size="58" font-weight="800" text-anchor="middle" fill="#3f260f">Zen Go Board</text>
+  <g stroke="#5f3b17" stroke-width="3" opacity=".82">
+    <path d="M120 240h660M120 280h660M120 320h660M120 360h660M120 400h660M120 440h660M120 480h660M120 520h660M120 560h660M120 600h660M120 640h660M120 680h660M120 720h660M120 760h660M120 800h660M120 840h660M120 880h660M120 920h660M120 960h660"/>
+    <path d="M120 240v720M160 240v720M200 240v720M240 240v720M280 240v720M320 240v720M360 240v720M400 240v720M440 240v720M480 240v720M520 240v720M560 240v720M600 240v720M640 240v720M680 240v720M720 240v720M760 240v720M780 240v720"/>
+  </g>
+  <g>
+    <circle cx="240" cy="360" r="24" fill="url(#black)"/>
+    <circle cx="320" cy="360" r="24" fill="url(#white)"/>
+    <circle cx="360" cy="400" r="24" fill="url(#white)"/>
+    <circle cx="520" cy="480" r="24" fill="url(#black)"/>
+    <circle cx="560" cy="520" r="24" fill="url(#white)"/>
+    <circle cx="600" cy="520" r="24" fill="url(#black)"/>
+    <circle cx="440" cy="720" r="24" fill="url(#white)"/>
+    <circle cx="480" cy="760" r="24" fill="url(#black)"/>
+    <circle cx="520" cy="760" r="24" fill="url(#black)"/>
+    <circle cx="600" cy="840" r="24" fill="url(#white)"/>
+  </g>
+  <text x="450" y="1035" font-family="Arial, sans-serif" font-size="38" font-weight="800" text-anchor="middle" fill="#fff7ed">19x19 � �}=P � (�p</text>
+</svg>

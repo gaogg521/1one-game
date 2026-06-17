@@ -360,6 +360,14 @@ export function hudEndlessRoadDistance(locale: AppLocale, meters: number): strin
   return hud(locale, "endlessRoadDistance", { meters });
 }
 
+export function hudTempleRunControls(locale: AppLocale): string {
+  return hud(locale, "templeRunControls");
+}
+
+export function hudTempleRunScore(locale: AppLocale, meters: number, coins: number): string {
+  return hud(locale, "templeRunScore", { meters, coins });
+}
+
 export function bannerCoasterFinishWin(locale: AppLocale, time: string) {
   return {
     title: banner(locale, "coasterFinishWin"),

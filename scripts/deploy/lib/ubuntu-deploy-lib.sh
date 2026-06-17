@@ -13,7 +13,8 @@ OPERONE_DIR="${OPERONE_DIR%"${OPERONE_DIR##*[![:space:]]}"}"
 : "${GIT_BRANCH:=main}"
 : "${OPERONE_DOMAIN:=}"
 : "${CERTBOT_EMAIL:=}"
-: "${OPERONE_PORT:=6666}"
+: "${OPERONE_PORT:=80}"
+: "${OPERONE_APP_PORT:=}"
 : "${SKIP_SEED:=0}"
 : "${SKIP_PREFLIGHT:=1}"
 : "${NODE_MAJOR:=22}"
@@ -252,6 +253,32 @@ prisma_migrate_deploy() {
   run_app_shell_as_user "$cmd" || die "prisma migrate deploy 仍失败，请查看上方日志"
 }
 
+operone_resolve_app_port() {
+  # 有域名且启用 Nginx 时，应用监听高端口，由 Nginx 对外 80
+  if [[ -n "${OPERONE_DOMAIN:-}" && "${ENABLE_NGINX:-0}" == "1" ]]; then
+    echo "${OPERONE_APP_PORT:-8080}"
+  else
+    echo "${OPERONE_PORT:-80}"
+  fi
+}
+
+grant_node_bind_low_port() {
+  local node_bin="$1" port="$2"
+  [[ -n "$node_bin" && -f "$node_bin" ]] || return 0
+  [[ "$port" -lt 1024 ]] || return 0
+  local node_real="$node_bin"
+  if command -v readlink >/dev/null 2>&1; then
+    node_real="$(readlink -f "$node_bin" 2>/dev/null || echo "$node_bin")"
+  fi
+  if command -v setcap >/dev/null 2>&1; then
+    setcap 'cap_net_bind_service=+ep' "$node_real" 2>/dev/null && \
+      ok "已授权 node 绑定低端口 (${port}): $node_real" || \
+      warn "setcap 失败，${port} 端口可能需要 root 或改用 Nginx 反代"
+  else
+    warn "未安装 setcap，无法绑定 ${port}，请安装 libcap2-bin 或改用 Nginx"
+  fi
+}
+
 port_in_use() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -264,7 +291,9 @@ port_in_use() {
 }
 
 wait_for_health() {
-  local url="http://127.0.0.1:${OPERONE_PORT}/api/health"
+  local app_port
+  app_port="$(operone_resolve_app_port)"
+  local url="http://127.0.0.1:${app_port}/api/health"
   local i max="${1:-30}"
   for ((i = 1; i <= max; i++)); do
     if curl -sf "$url" >/dev/null 2>&1; then
@@ -397,7 +426,7 @@ write_env_if_missing() {
   }
 
   append_env "NODE_ENV" "production"
-  append_env "PORT" "${OPERONE_PORT}"
+  append_env "PORT" "$(operone_resolve_app_port)"
   append_env "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   append_env "OPENAI_BASE_URL" "${OPENAI_BASE_URL:-https://litellm-internal.123u.com}"
   append_env "SUPER_ADMIN_SECRET" "${SUPER_ADMIN_SECRET:-}"
@@ -512,6 +541,10 @@ EOF
 
   chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
 
+  local app_port
+  app_port="$(operone_resolve_app_port)"
+  grant_node_bind_low_port "$node_bin" "$app_port"
+
   systemctl daemon-reload
   systemctl enable operone
   systemctl restart operone
@@ -550,7 +583,7 @@ phase_nginx() {
   centos7_configure_selinux
   systemctl enable nginx 2>/dev/null || true
 
-  nginx_write_operone_site "$template" "$OPERONE_DOMAIN" "$OPERONE_PORT"
+  nginx_write_operone_site "$template" "$OPERONE_DOMAIN" "$(operone_resolve_app_port)"
   if [[ "$OS_FAMILY" == debian && -f /etc/nginx/sites-enabled/default ]]; then
     warn "移除 Nginx default 站点（避免与 operone 冲突）"
     rm -f /etc/nginx/sites-enabled/default
@@ -558,7 +591,7 @@ phase_nginx() {
 
   nginx -t
   systemctl reload nginx || systemctl start nginx
-  ok "Nginx 反代: http://${OPERONE_DOMAIN} → 127.0.0.1:${OPERONE_PORT}"
+  ok "Nginx 反代: http://${OPERONE_DOMAIN}:80 → 127.0.0.1:$(operone_resolve_app_port)"
 }
 
 check_domain_points_here() {
@@ -629,7 +662,7 @@ print_deploy_summary() {
   echo "║          Operone 部署成功 — 可以访问了               ║"
   echo "╠══════════════════════════════════════════════════════╣"
   printf "║  访问地址:  %-40s ║\n" "$access_url"
-  printf "║  健康检查:  %-40s ║\n" "curl -s http://127.0.0.1:${OPERONE_PORT}/api/health"
+  printf "║  健康检查:  %-40s ║\n" "curl -s http://127.0.0.1:$(operone_resolve_app_port)/api/health"
   echo "╠══════════════════════════════════════════════════════╣"
   echo "║  下一步（可选）：编辑 API Key 后重启                  ║"
   printf "║    nano %s\n" "$env_file"

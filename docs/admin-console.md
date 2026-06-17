@@ -35,9 +35,10 @@ NEXT_PUBLIC_ADMIN_CONSOLE_PATH=/console
 
 ## 模块（当前）
 
-- **概览** — KPI、增长与内容产出图表  
+- **概览** — KPI、增长与内容产出图表、**系统健康**、运营快捷入口  
 - **待审队列** — 批量通过 / 隐藏  
-- **作品治理** — 可见性、精选  
+- **作品治理** — 可见性、精选、封面预览、试玩  
+- **样品馆** — 14 款目录↔DB 同步、封面、批量精选、试玩链接  
 - **分享漏斗** — 渠道与转化  
 - **用户** — 角色、额度、升 super_admin  
 - **计费治理** — 收入 KPI、订阅分布、配额流水、付费趋势、**订单 CSV 导出**
@@ -65,7 +66,21 @@ npm run qa:comic-storyboard-resilience
 npm run build
 PW_REUSE_SERVER=1 npm run test:e2e:admin-runtime-config
 npm run qa:deploy-preflight       # migrate + build（部署前）
+npm run seed:samples              # 样品馆 23 款 upsert（生产部署后亦需）
+npm run qa:sample-gallery-db-sync # 目录↔DB 对账
 ```
+
+## 生产样品馆
+
+部署脚本默认在 build 后执行 `npm run seed:samples`（可通过 `SKIP_SEED=1` 跳过）。
+
+| 场景 | 操作 |
+|------|------|
+| 首次上线 / 升级后 | `npm run seed:samples` 或 `/console` → **样品馆** → **同步全部样品** |
+| 对账 | `npm run qa:sample-gallery-db-sync`（期望 23/23） |
+| 公开页 | 访问 `/samples` 会 POST `/api/samples/ensure` 幂等同步 |
+
+QA 快照写入 `.qa-cache/`（gitignore），概览 **系统健康** 可读取最近 smoke / 试玩 QA 结果。
 
 ## 企业 SSO（Phase 1）
 

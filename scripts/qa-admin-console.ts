@@ -253,6 +253,44 @@ async function main() {
       checks.push(
         assert("audit-log filter query", auditFiltered.ok, `status=${auditFiltered.status}`),
       );
+      const samplesAdmin = await fetch(`${base}/api/admin/samples`);
+      checks.push(
+        assert(
+          "admin samples list (dev bypass)",
+          samplesAdmin.ok,
+          `status=${samplesAdmin.status}`,
+        ),
+      );
+      if (samplesAdmin.ok) {
+        const body = (await samplesAdmin.json()) as { catalogCount?: number; items?: unknown[] };
+        checks.push(
+          assert(
+            "admin samples catalog shape",
+            typeof body.catalogCount === "number" && Array.isArray(body.items),
+            `catalog=${body.catalogCount} items=${body.items?.length ?? 0}`,
+          ),
+        );
+      }
+      const opsHealth = await fetch(`${base}/api/admin/ops-health`);
+      checks.push(
+        assert(
+          "admin ops-health (dev bypass)",
+          opsHealth.ok,
+          `status=${opsHealth.status}`,
+        ),
+      );
+      if (opsHealth.ok) {
+        const health = (await opsHealth.json()) as { overall?: string; checks?: unknown[]; qaSnapshots?: unknown[] };
+        checks.push(
+          assert(
+            "ops-health shape",
+            ["ok", "warn", "fail"].includes(health.overall ?? "") &&
+              Array.isArray(health.checks) &&
+              Array.isArray(health.qaSnapshots),
+            `overall=${health.overall} checks=${health.checks?.length ?? 0} snapshots=${health.qaSnapshots?.length ?? 0}`,
+          ),
+        );
+      }
       const ordersExport = await fetch(`${base}/api/admin/orders/export?days=7`);
       const csvType = ordersExport.headers.get("content-type") ?? "";
       checks.push(
@@ -278,6 +316,22 @@ async function main() {
           String(ordersAnon.status),
         ),
       );
+      const samplesAnon = await fetch(`${base}/api/admin/samples`);
+      checks.push(
+        assert(
+          "admin samples rejects anonymous",
+          samplesAnon.status === 401 || samplesAnon.status === 403,
+          String(samplesAnon.status),
+        ),
+      );
+      const opsHealthAnon = await fetch(`${base}/api/admin/ops-health`);
+      checks.push(
+        assert(
+          "admin ops-health rejects anonymous",
+          opsHealthAnon.status === 401 || opsHealthAnon.status === 403,
+          String(opsHealthAnon.status),
+        ),
+      );
       const twoFaAnon = await fetch(`${base}/api/admin/console/verify-2fa`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -300,7 +354,31 @@ async function main() {
 
   if (failed.length) {
     console.error(`qa-admin-console: ${failed.length}/${checks.length} failed`);
+    try {
+      const { writeQaSnapshot } = await import("../src/lib/qa-cache");
+      writeQaSnapshot("admin", {
+        script: "qa:admin-console",
+        ok: false,
+        passed: checks.length - failed.length,
+        total: checks.length,
+        ts: new Date().toISOString(),
+      });
+    } catch {
+      /* cache optional */
+    }
     process.exit(1);
+  }
+  try {
+    const { writeQaSnapshot } = await import("../src/lib/qa-cache");
+    writeQaSnapshot("admin", {
+      script: "qa:admin-console",
+      ok: true,
+      passed: checks.length,
+      total: checks.length,
+      ts: new Date().toISOString(),
+    });
+  } catch {
+    /* cache optional */
   }
   console.log(`qa-admin-console: ok (${checks.length} checks)`);
 }

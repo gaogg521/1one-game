@@ -1,6 +1,6 @@
 import { buildCanonicalAstrocadeSpec } from "@/lib/astrocade-canonical-spec";
 import { prisma } from "@/lib/prisma";
-import { SAMPLES } from "@/lib/samples";
+import { PRUNED_SAMPLE_IDS, SAMPLES } from "@/lib/samples";
 import {
   SAMPLE_GALLERY_OWNER,
   parseSamplePlaysLabel,
@@ -46,14 +46,14 @@ export async function seedSampleGalleryProjects(): Promise<{ upserted: number; i
     });
   }
 
+  for (const prunedId of PRUNED_SAMPLE_IDS) {
+    await prisma.project.deleteMany({ where: { id: sampleProjectId(prunedId) } });
+  }
+
   return { upserted: ids.length, ids };
 }
 
 export async function ensureSampleGalleryProjects(): Promise<{ ok: true; ids: string[] }> {
-  const ids = SAMPLES.map((s) => sampleProjectId(s.id));
-  const found = await prisma.project.count({ where: { id: { in: ids } } });
-  if (found < ids.length) {
-    await seedSampleGalleryProjects();
-  }
-  return { ok: true, ids };
+  const result = await seedSampleGalleryProjects();
+  return { ok: true, ids: result.ids };
 }

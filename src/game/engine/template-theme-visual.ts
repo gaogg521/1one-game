@@ -144,6 +144,7 @@ export function paintPuzzleThemeBackdrop(
     spotDifference: 0xfde047,
     memoryMatch: 0xa78bfa,
     jigsaw: 0x38bdf8,
+    merge2048: 0xfb923c,
   };
   strip.fillStyle(modeColors[mode], 0.55);
   strip.fillCircle(34, 92, 6);

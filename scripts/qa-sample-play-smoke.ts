@@ -5,8 +5,8 @@ import { sampleProjectId } from "@/lib/sample-gallery";
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8888";
 
 const CASES = [
-  { slug: "rail-in-air", expectHeading: "Rail in Air", expectHud: /Boost|加速|速度|计时/i },
-  { slug: "tiny-planet-chopper", expectHeading: "Tiny Planet", expectHud: /射击|波次|得分/i },
+  { slug: "temple-relic-runner", expectHeading: "Temple Relic", expectHud: /距离|金币|遗迹/i },
+  { slug: "crashy-roads", expectHeading: "Crashy Roads", expectHud: /距离|得分|生命/i },
   { slug: "gun-merge-3d-zombie-apocalypse", expectHeading: "Gun Merge", expectHud: /塔|波次|金币/i },
 ];
 

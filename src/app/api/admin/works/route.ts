@@ -25,6 +25,7 @@ export async function GET(req: Request) {
     shareCode: string | null;
     playCount?: number;
     likeCount: number;
+    coverPath?: string | null;
     novelId?: string | null;
     novelTitle?: string | null;
   }> = [];
@@ -51,6 +52,7 @@ export async function GET(req: Request) {
         shareCode: true,
         playCount: true,
         likeCount: true,
+        coverPath: true,
       },
     });
     items.push(
@@ -65,6 +67,7 @@ export async function GET(req: Request) {
         shareCode: r.shareCode,
         playCount: r.playCount,
         likeCount: r.likeCount,
+        coverPath: r.coverPath,
       })),
     );
   }
@@ -87,6 +90,7 @@ export async function GET(req: Request) {
         shareCode: true,
         playCount: true,
         likeCount: true,
+        coverPath: true,
       },
     });
     items.push(
@@ -101,6 +105,7 @@ export async function GET(req: Request) {
         shareCode: r.shareCode,
         playCount: r.playCount,
         likeCount: r.likeCount,
+        coverPath: r.coverPath,
       })),
     );
   }
@@ -123,6 +128,7 @@ export async function GET(req: Request) {
         shareCode: true,
         likeCount: true,
         novelId: true,
+        coverPath: true,
       },
     });
     const novelIds = [...new Set(rows.map((r) => r.novelId).filter((id): id is string => Boolean(id)))];
@@ -147,6 +153,7 @@ export async function GET(req: Request) {
         likeCount: r.likeCount,
         novelId: r.novelId,
         novelTitle: r.novelId ? novelTitleMap.get(r.novelId) ?? null : null,
+        coverPath: r.coverPath,
       })),
     );
   }

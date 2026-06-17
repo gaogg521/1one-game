@@ -557,6 +557,15 @@ body {
   }
 }
 
+/* 原生 <select>：下拉列表与当前主题一致，避免暗色页面上出现白底浅字 */
+.gc-native-select {
+  color-scheme: dark;
+}
+
+[data-theme="light"] .gc-native-select {
+  color-scheme: light;
+}
+
 /* 1oneclaw 全站噪点层 */
 .noise {
   pointer-events: none;

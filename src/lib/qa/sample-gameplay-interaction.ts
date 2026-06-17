@@ -27,33 +27,28 @@ export type SampleGameplayCase = {
 /** 与 ANIMATED_CLONE_SAMPLES 对齐 */
 export const ANIMATED_GAMEPLAY_SAMPLES = new Set([
   "crashy-roads",
-  "rail-in-air",
-  "tiny-planet-chopper",
+  "temple-relic-runner",
   "elastic-thief-2",
   "gun-merge-3d-zombie-apocalypse",
   "blade-defender-merge",
-  "blocky-sniper-hunter",
   "smash-the-dummy",
   "pottery-master-3d",
 ]);
 
 export const SAMPLE_GAMEPLAY_CASES: SampleGameplayCase[] = [
+  { sampleId: "number-merge-2048", expectedScene: "PuzzleScene", interaction: "arrow-right", clickBurst: 2 },
+  { sampleId: "classic-xiangqi-board", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.48, y: 0.66 }, clickRel2: { x: 0.48, y: 0.56 }, clickBurst: 2 },
+  { sampleId: "classic-international-chess", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.48, y: 0.72 }, clickRel2: { x: 0.48, y: 0.56 }, clickBurst: 2 },
+  { sampleId: "zen-go-board", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.24, y: 0.24 }, clickBurst: 2 },
+  { sampleId: "jungle-animal-chess", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.08, y: 0.9 }, clickRel2: { x: 0.08, y: 0.78 }, clickBurst: 2 },
+  { sampleId: "temple-relic-runner", expectedScene: "CoasterScene", interaction: "arrow-left", animated: true, clickBurst: 8 },
   { sampleId: "smash-the-dummy", expectedScene: "PhysicsScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },
-  { sampleId: "rail-in-air", expectedScene: "CoasterScene", interaction: "arrow-right", animated: true, clickBurst: 3 },
   { sampleId: "crashy-roads", expectedScene: "CoasterScene", interaction: "arrow-left", animated: true, clickBurst: 8 },
   { sampleId: "grow-a-garden", expectedScene: "FarmingScene", interaction: "click-center", clickRel: { x: 0.38, y: 0.24 }, clickBurst: 2 },
   { sampleId: "color-bloom", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.38, y: 0.52 }, clickBurst: 2 },
-  { sampleId: "whimsy-differences", expectedScene: "PuzzleScene", interaction: "click-upper", clickRel: { x: 0.32, y: 0.42 }, clickBurst: 2 },
   { sampleId: "gun-merge-3d-zombie-apocalypse", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
-  { sampleId: "ultimate-3d-chess", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.48, y: 0.72 }, clickRel2: { x: 0.48, y: 0.55 }, clickBurst: 2 },
   { sampleId: "elastic-thief-2", expectedScene: "PlatformerScene", interaction: "arrow-right", animated: true, clickBurst: 8 },
-  { sampleId: "state-conquest", expectedScene: "StrategyScene", interaction: "click-center", clickRel: { x: 0.32, y: 0.42 }, clickRel2: { x: 0.58, y: 0.38 }, clickBurst: 2 },
-  { sampleId: "tiny-planet-chopper", expectedScene: "ShooterScene", interaction: "space", animated: true, clickBurst: 3 },
   { sampleId: "blade-defender-merge", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
-  { sampleId: "car-color-palette", expectedScene: "CustomizationScene", interaction: "click-center", clickRel: { x: 0.5, y: 0.42 }, clickBurst: 2 },
-  { sampleId: "blocky-sniper-hunter", expectedScene: "ShooterScene", interaction: "space", animated: true, clickBurst: 5 },
-  { sampleId: "memory-match-mania", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.35, y: 0.5 }, clickBurst: 2 },
-  { sampleId: "kids-puzzle", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.4, y: 0.48 }, clickBurst: 2 },
   { sampleId: "pottery-master-3d", expectedScene: "CustomizationScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },
 ];
 

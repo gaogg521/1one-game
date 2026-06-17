@@ -1,0 +1,35 @@
+{
+  "at": "2026-06-15T15:06:06.468Z",
+  "base": "http://43.163.105.71:6666",
+  "projectId": "sample-grow-a-garden",
+  "instruction": "把起始金币改成200",
+  "targetCoins": 200,
+  "pass": true,
+  "totalMs": 12584,
+  "rows": [
+    {
+      "step": "health",
+      "pass": true,
+      "ms": 219,
+      "detail": "ok"
+    },
+    {
+      "step": "load-project",
+      "pass": true,
+      "ms": 78,
+      "detail": "{\"farming\":57}"
+    },
+    {
+      "step": "api-generate-patch",
+      "pass": true,
+      "ms": 4816,
+      "detail": "{\"coins\":{\"farming\":200,\"gameplay\":200},\"promptLen\":36}"
+    },
+    {
+      "step": "play-ui-patch",
+      "pass": true,
+      "ms": 6968,
+      "detail": "patch prompt cleared, no error banner"
+    }
+  ]
+}

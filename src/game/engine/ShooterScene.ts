@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
+import { pointerSteerX, readMoveAxis } from "@/game/engine/phaser-input";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
@@ -36,12 +38,15 @@ import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/act
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import {
+  assetBackgroundAlpha,
   fitSpriteDisplay,
   firstExistingTexture,
-  sampleBackgroundAlpha,
 } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
+import { applySystemImpact } from "@/game/engine/systemImpact";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -76,6 +81,8 @@ export class ShooterScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
+  private keyW!: Phaser.Input.Keyboard.Key;
+  private keyS!: Phaser.Input.Keyboard.Key;
   private keyShift!: Phaser.Input.Keyboard.Key;
 
   private score = 0;
@@ -114,6 +121,7 @@ export class ShooterScene extends Phaser.Scene {
   private skillText!: Phaser.GameObjects.Text;
   private skillCdText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
+  private goalPanel!: HudGoalPanel;
   private cohesive!: CohesivePresentation;
   private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
@@ -270,7 +278,7 @@ export class ShooterScene extends Phaser.Scene {
       this.add
         .image(width / 2, height / 2, "bgTex")
         .setDepth(-10)
-        .setAlpha(sampleBackgroundAlpha(this.projectId));
+        .setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier));
     }
 
     // Title + subtitle（章节标签单独一行，避免与标题 y 重叠发糊）
@@ -334,8 +342,9 @@ export class ShooterScene extends Phaser.Scene {
         .setDepth(25),
     );
 
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.hintText = this.add
-      .text(width / 2, height - 20, hudControlsShooter(this.uiLocale, this.spec.labels.hazard), {
+      .text(width / 2, height - 20, guidance.bottomHint, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -355,6 +364,8 @@ export class ShooterScene extends Phaser.Scene {
     }
 
     this.banner = new HudBanner(this, ui.banner);
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     // 射击模板：优先使用 preload 的 texPlayer/texHazard，其次参考图 ref*，最后程序化星舰
     const loadedPlayerKey = firstExistingTexture(this, ["texPlayer"]);
@@ -414,9 +425,16 @@ export class ShooterScene extends Phaser.Scene {
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyW = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.keyS = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on("down", () => {
       if (this.finished) return;
+      bumpQaTouch();
+      this.firePlayerBullet();
+    });
+    this.input.on("pointerdown", () => {
+      if (this.finished || !this.bootstrapDone) return;
       bumpQaTouch();
       this.firePlayerBullet();
     });
@@ -956,6 +974,15 @@ export class ShooterScene extends Phaser.Scene {
     this.eventType = ev.type;
     this.eventUntil = now + durationMs;
     this.banner.show({ title, message: ev.message ?? "", ms: Math.min(2400, durationMs - 200) });
+    applyRuntimeEventImpact(this, ev.type, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height * 0.58,
+      title,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      strength: ev.strength ?? 0.6,
+      rng: this.runtimeRng,
+    });
 
     if (ev.type === "coinRain") {
       this.scoreMult = 2;
@@ -979,6 +1006,15 @@ export class ShooterScene extends Phaser.Scene {
     if (this.time.now < this.skillReadyAt) return;
     this.skillReadyAt = this.time.now + skill.cooldownMs;
     const dur = Math.max(1200, skill.durationMs ?? 0);
+    applySystemImpact(this, "skill", {
+      effect: skill.effect,
+      label: skill.name,
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height * 0.72,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      rng: this.runtimeRng,
+    });
 
     if (skill.effect === "shield") {
       this.shieldUntil = this.time.now + dur;
@@ -1116,6 +1152,7 @@ export class ShooterScene extends Phaser.Scene {
   // ─── Update ────────────────────────────────────────────────────────────────
 
   update(time: number) {
+    this.goalPanel?.update();
     if (this.finished || !this.bootstrapDone) return;
     setPhaserQaState({ qaTouches: this.shotsFired });
 
@@ -1132,16 +1169,36 @@ export class ShooterScene extends Phaser.Scene {
     // Player movement
     const { height } = this.scale;
     if (this.orbitMode) {
-      if (this.cursors.left.isDown || this.keyA.isDown) this.orbitSpeed -= 0.00006;
-      if (this.cursors.right.isDown || this.keyD.isDown) this.orbitSpeed += 0.00006;
+      const keys = {
+        cursors: this.cursors,
+        w: this.keyW,
+        a: this.keyA,
+        s: this.keyS,
+        d: this.keyD,
+        space: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        shift: this.keyShift,
+      };
+      const axis = readMoveAxis(keys, { allowVertical: false });
+      const ptr = pointerSteerX(this, this.player.x);
+      const steer = axis.x !== 0 ? axis.x : ptr;
+      this.orbitSpeed += steer * 0.00006;
       this.orbitSpeed = Phaser.Math.Clamp(this.orbitSpeed, 0.0009, 0.0034);
       this.orbitAngle += this.orbitSpeed * (this.game.loop.delta / 16.67);
       this.syncOrbitPlayerPosition();
     } else {
-      let vx = 0;
-      if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
-      if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
-      this.player.setVelocityX(vx * this.playerSpeed);
+      const keys = {
+        cursors: this.cursors,
+        w: this.keyW,
+        a: this.keyA,
+        s: this.keyS,
+        d: this.keyD,
+        space: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        shift: this.keyShift,
+      };
+      const axis = readMoveAxis(keys, { allowVertical: false });
+      const ptr = pointerSteerX(this, this.player.x);
+      const vx = (axis.x !== 0 ? axis.x : ptr) * this.playerSpeed;
+      this.player.setVelocityX(vx);
       this.player.setVelocityY(0);
       this.player.y = height - 56;
     }

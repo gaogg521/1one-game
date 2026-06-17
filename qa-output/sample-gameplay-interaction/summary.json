@@ -1,0 +1,24 @@
+{
+  "at": "2026-06-17T15:05:24.475Z",
+  "baseUrl": "http://127.0.0.1:8888",
+  "passed": 1,
+  "total": 1,
+  "results": [
+    {
+      "sampleId": "color-bloom",
+      "title": "开心消消乐",
+      "projectId": "sample-color-bloom",
+      "apiOk": true,
+      "canvasOk": true,
+      "playReadyOk": true,
+      "sceneOk": true,
+      "actualScene": "PuzzleScene",
+      "interactionOk": true,
+      "interactionDiff": 0.18619791666666666,
+      "gameplayDepthOk": true,
+      "idleCeiling": 0,
+      "pass": true,
+      "gameplayDepthField": "puzzleMoves"
+    }
+  ]
+}

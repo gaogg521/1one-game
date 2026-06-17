@@ -1,5 +1,5 @@
 /**
- * 英文样品馆 E2E 矩阵：全 17 款 /en/play/sample-* + Phaser canvas
+ * 英文样品馆 E2E 矩阵：全 14 款 /en/play/sample-* + Phaser canvas
  * npx playwright test e2e/samples-en-matrix.smoke.spec.ts
  */
 import { expect, test } from "@playwright/test";

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1125" role="img" aria-label="Jungle Animal Chess cover">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset=".42" stop-color="#86efac"/>
+      <stop offset="1" stop-color="#fef08a"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1125" fill="url(#sky)"/>
+  <text x="450" y="130" font-family="Arial, sans-serif" font-size="72" font-weight="900" text-anchor="middle" fill="#7c2d12">�}�</text>
+  <rect x="105" y="190" width="690" height="780" rx="26" fill="#fef9c3" stroke="#14532d" stroke-width="10"/>
+  <g stroke="#14532d" stroke-width="4">
+    <path d="M105 276.7h690M105 363.4h690M105 450.1h690M105 536.8h690M105 623.5h690M105 710.2h690M105 796.9h690M105 883.6h690"/>
+    <path d="M203.6 190v780M302.2 190v780M400.8 190v780M499.4 190v780M598 190v780M696.6 190v780"/>
+  </g>
+  <rect x="205" y="450" width="196" height="260" fill="#38bdf8" opacity=".9"/>
+  <rect x="499" y="450" width="196" height="260" fill="#38bdf8" opacity=".9"/>
+  <g font-family="Arial, sans-serif" font-size="44" font-weight="900" text-anchor="middle" dominant-baseline="middle">
+    <rect x="402" y="193" width="96" height="82" fill="#facc15" opacity=".85"/><text x="450" y="234" fill="#7f1d1d">}t</text>
+    <rect x="205" y="193" width="96" height="82" fill="#fca5a5" opacity=".85"/><text x="253" y="234" fill="#7f1d1d">w</text>
+    <rect x="599" y="193" width="96" height="82" fill="#fca5a5" opacity=".85"/><text x="647" y="234" fill="#7f1d1d">1</text>
+    <text x="253" y="320" fill="#1e3a8a">�</text>
+    <text x="647" y="320" fill="#1e3a8a">N</text>
+    <text x="154" y="493" fill="#1e3a8a"> </text>
+    <text x="351" y="493" fill="#1e3a8a">y</text>
+    <text x="548" y="493" fill="#7f1d1d">�</text>
+    <text x="746" y="493" fill="#7f1d1d">a</text>
+    <text x="253" y="840" fill="#7f1d1d">N</text>
+    <text x="647" y="840" fill="#7f1d1d">�</text>
+  </g>
+  <g fill="#0ea5e9" opacity=".75">
+    <path d="M238 575c32-24 60 28 92 0s60 28 92 0v80c-32 26-60-26-92 0s-60-26-92 0z"/>
+    <path d="M532 575c32-24 60 28 92 0s60 28 92 0v80c-32 26-60-26-92 0s-60-26-92 0z"/>
+  </g>
+  <text x="450" y="1044" font-family="Arial, sans-serif" font-size="40" font-weight="900" text-anchor="middle" fill="#14532d">�i�P � �Aw1 � �?��</text>
+</svg>

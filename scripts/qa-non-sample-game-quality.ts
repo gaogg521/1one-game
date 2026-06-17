@@ -43,6 +43,8 @@ const cases: Array<{ prompt: string; spec: GameSpec }> = [
   { prompt: "做一个植物守家打怪物的塔防经营游戏", spec: baseSpec("towerDefense", "花园守卫战") },
   { prompt: "做一个物理撞击木偶获得连击和爆炸反馈的游戏", spec: baseSpec("physics", "爆裂训练场") },
   { prompt: "做一个农场种菜收获升级抵御害虫的休闲游戏", spec: baseSpec("farming", "晨光农场") },
+  { prompt: "做一个开心消消乐类型的三消游戏，交换糖果，连锁爆炸和步数限制", spec: baseSpec("puzzle", "糖果乐园") },
+  { prompt: "做一个中国象棋游戏，楚河汉界，红黑双方，有将军提示", spec: baseSpec("chess", "楚河棋局") },
 ];
 
 for (const { prompt, spec } of cases) {
@@ -60,6 +62,14 @@ for (const { prompt, spec } of cases) {
     upgraded.presentation?.qualityTier === "standard" || upgraded.presentation?.qualityTier === "showcase",
     `${spec.title}: non-sample spec should default to a commercial presentation quality tier`,
   );
+  if (upgraded.templateId === "puzzle") {
+    assert(upgraded.puzzle?.matchMechanic === "swap", `${spec.title}: commercial puzzle should use swap match3`);
+    assert((upgraded.puzzle?.boosters?.length ?? 0) >= 3, `${spec.title}: commercial puzzle should define boosters`);
+  }
+  if (upgraded.templateId === "chess") {
+    assert(upgraded.chess?.ruleset === "xiangqi", `${spec.title}: Chinese chess prompt should use xiangqi ruleset`);
+    assert(upgraded.chess?.boardCols === 9 && upgraded.chess?.boardRows === 10, `${spec.title}: xiangqi should use 9x10 board`);
+  }
 }
 
 console.log("[OK] qa-non-sample-game-quality");

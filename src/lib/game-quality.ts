@@ -3,6 +3,8 @@ import type { GameSpec } from "@/lib/game-spec";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
+import { buildChessBlueprint } from "@/lib/chess-blueprint";
 import { mixHex, withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { resolveQualityTier } from "@/lib/orchestration/context-pack";
 
@@ -88,6 +90,16 @@ function syncFarmingEconomy(spec: GameSpec, prompt = ""): GameSpec {
   };
 }
 
+function ensureCommercialBlueprints(spec: GameSpec, prompt = ""): GameSpec {
+  if (spec.templateId === "puzzle" && !spec.puzzle) {
+    return { ...spec, puzzle: buildPuzzleBlueprint({ prompt, spec }) };
+  }
+  if (spec.templateId === "chess" && !spec.chess) {
+    return { ...spec, chess: buildChessBlueprint({ prompt, spec }) };
+  }
+  return spec;
+}
+
 function ensureCommercialDirector(spec: GameSpec, prompt: string, locale: AppLocale): GameSpec {
   if ((spec.director?.events?.length ?? 0) >= 3) return spec;
   const rebuilt = buildDirector({
@@ -150,6 +162,7 @@ export function applyHardQualityDefaults(spec: GameSpec, prompt = "", locale: Ap
   next = ensureCommercialDirector(next, prompt || next.title, locale);
   next = floorGameplay(next);
   next = syncFarmingEconomy(next, prompt || next.title);
+  next = ensureCommercialBlueprints(next, prompt || next.title);
 
   return next;
 }

@@ -11,17 +11,30 @@ import { buildCohesivePresentation, describeCohesiveExperience } from "@/lib/coh
 import { createPhaserGame } from "@/game/engine/createPhaserGame";
 import type Phaser from "phaser";
 import { SAMPLES } from "@/lib/samples";
+import type { RunnerLeaderboardSnapshot, RunnerRunRecap, CloudRunnerLeaderboardSnapshot } from "@/lib/runner-leaderboard";
+import {
+  fetchCloudRunnerLeaderboard,
+  submitCloudRunnerScore,
+} from "@/lib/runner-cloud-leaderboard.client";
+
+function formatRecapTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+}
 
 export default function GamePlayerInner({
   spec,
   coverCapture,
   projectId,
   promptHint,
+  immersive = false,
 }: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
   promptHint?: string;
+  immersive?: boolean;
 }) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
@@ -33,12 +46,18 @@ export default function GamePlayerInner({
   const coverSentRef = useRef(false);
   const [audioHint, setAudioHint] = useState(true);
   const [session, setSession] = useState(0);
-  const [result, setResult] = useState<{ score: number; won: boolean } | null>(null);
+  const [result, setResult] = useState<{
+    score: number;
+    won: boolean;
+    runnerLeaderboard?: RunnerLeaderboardSnapshot;
+    runnerRecap?: RunnerRunRecap;
+  } | null>(null);
+  const [cloudBoard, setCloudBoard] = useState<CloudRunnerLeaderboardSnapshot | null>(null);
   const [playReady, setPlayReady] = useState(false);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
   const cohesiveSnapshot = useMemo(() => describeCohesiveExperience(cohesive), [cohesive]);
-  const showCohesiveSnapshot = process.env.NODE_ENV !== "production";
+  const showCohesiveSnapshot = process.env.NODE_ENV !== "production" && !immersive;
   const resolvedPromptHint = useMemo(() => {
     const direct = promptHint?.trim();
     if (direct) return direct;
@@ -117,9 +136,35 @@ export default function GamePlayerInner({
   }, [spec, session, coverCapture?.projectId, locale]);
 
   useEffect(() => {
+    if (!result?.runnerLeaderboard) {
+      setCloudBoard(null);
+      return;
+    }
+    const variantId =
+      result.runnerRecap?.variantId ?? spec.samplePlayProfile?.variantId ?? "";
+    if (!variantId) return;
+    let cancelled = false;
+    void (async () => {
+      const submitted = await submitCloudRunnerScore({
+        variantId,
+        score: result.score,
+        combo: result.runnerLeaderboard!.inserted.combo,
+        distance: result.runnerLeaderboard!.inserted.distance,
+        coins: result.runnerLeaderboard!.inserted.coins,
+      });
+      const board = submitted ?? (await fetchCloudRunnerLeaderboard(variantId));
+      if (!cancelled) setCloudBoard(board);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [result, spec.samplePlayProfile?.variantId]);
+
+  useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     setResult(null);
+    setCloudBoard(null);
     const refPayloads = readReferenceImagePayloadsFromSession();
     const handle = createPhaserGame(el, spec, (r) => setResult(r), {
       referencePayloads: refPayloads,
@@ -240,25 +285,27 @@ export default function GamePlayerInner({
             {t("audioHint")}
           </p>
         ) : null}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end gap-2 p-3">
-          <button
-            type="button"
-            onClick={fullscreen}
-            className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-          >
-            {t("fullscreen")}
-          </button>
-          <button
-            type="button"
-            onClick={restart}
-            className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-          >
-            {t("restart")}
-          </button>
-        </div>
+        {!immersive ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end gap-2 p-3">
+            <button
+              type="button"
+              onClick={fullscreen}
+              className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
+            >
+              {t("fullscreen")}
+            </button>
+            <button
+              type="button"
+              onClick={restart}
+              className="pointer-events-auto rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_82%,#000)] px-3 py-1.5 text-xs font-medium text-[var(--gc-text-soft)] opacity-90 backdrop-blur-md transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)] md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
+            >
+              {t("restart")}
+            </button>
+          </div>
+        ) : null}
 
         {result ? (
-          <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/70 px-6 text-center backdrop-blur-md">
+          <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 px-6 text-center backdrop-blur-md">
             <div className="space-y-1">
               <p className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">
                 {result.won ? t("victory") : t("gameOver")}
@@ -267,7 +314,94 @@ export default function GamePlayerInner({
                 {t("score")}{" "}
                 <span className="tabular-nums text-[var(--gc-text)]">{result.score}</span>
               </p>
+              {result.runnerLeaderboard?.isNewBest ? (
+                <p className="text-xs font-medium text-amber-300">{t("leaderboardNewBest")}</p>
+              ) : null}
             </div>
+            {result.runnerRecap ? (
+              <div className="w-full max-w-xs rounded-xl border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-4 py-3 text-left text-xs text-[var(--gc-muted)]">
+                <p className="mb-2 text-xs font-semibold text-[var(--gc-text-soft)]">{t("runnerRecapTitle")}</p>
+                <ul className="space-y-1 tabular-nums">
+                  <li>
+                    {t("runnerRecapDistance", { distance: result.runnerRecap.distance })}
+                    {result.runnerRecap.coins != null
+                      ? ` · ${t("runnerRecapCoins", { coins: result.runnerRecap.coins })}`
+                      : ""}
+                  </li>
+                  <li>{t("runnerRecapCombo", { combo: result.runnerRecap.maxCombo })}</li>
+                  <li>{t("runnerRecapTime", { time: formatRecapTime(result.runnerRecap.survivalSec) })}</li>
+                  <li>
+                    {t("runnerRecapCause", {
+                      cause: t(
+                        result.runnerRecap.cause === "caught"
+                          ? "runnerRecapCauseCaught"
+                          : result.runnerRecap.cause === "lives"
+                            ? "runnerRecapCauseLives"
+                            : "runnerRecapCauseCrash",
+                      ),
+                    })}
+                  </li>
+                  <li className={result.runnerRecap.beatPrevBest ? "text-amber-300" : ""}>
+                    {result.runnerRecap.beatPrevBest
+                      ? t("runnerRecapBeatBest")
+                      : result.runnerRecap.prevBestScore > 0
+                        ? t("runnerRecapVsBest", { delta: result.runnerRecap.prevBestScore - result.runnerRecap.score })
+                        : null}
+                  </li>
+                </ul>
+              </div>
+            ) : null}
+            {result.runnerLeaderboard ? (
+              <div className="w-full max-w-xs rounded-xl border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_90%,#000)] px-4 py-3 text-left">
+                <p className="mb-2 text-xs font-semibold text-[var(--gc-text-soft)]">{t("leaderboardTitle")}</p>
+                <ol className="space-y-1 text-xs text-[var(--gc-muted)]">
+                  {result.runnerLeaderboard.entries.map((entry, idx) => (
+                    <li
+                      key={entry.at}
+                      className={`flex items-center justify-between gap-2 tabular-nums ${
+                        entry.at === result.runnerLeaderboard?.inserted.at ? "text-amber-200" : ""
+                      }`}
+                    >
+                      <span>
+                        {idx + 1}. {entry.score}
+                        {entry.combo >= 2
+                          ? ` · ${t("leaderboardCombo", { combo: entry.combo })}`
+                          : ""}
+                      </span>
+                      <span className="text-[10px] text-[var(--gc-text-faint)]">
+                        {t("leaderboardDistance", { distance: entry.distance })}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-2 text-[10px] text-[var(--gc-text-faint)]">
+                  {t("leaderboardRank", { rank: result.runnerLeaderboard.rank })}
+                </p>
+              </div>
+            ) : null}
+            {cloudBoard && cloudBoard.entries.length > 0 ? (
+              <div className="w-full max-w-xs rounded-xl border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_90%,#000)] px-4 py-3 text-left">
+                <p className="mb-2 text-xs font-semibold text-[var(--gc-text-soft)]">{t("cloudLeaderboardTitle")}</p>
+                <ol className="space-y-1 text-xs text-[var(--gc-muted)]">
+                  {cloudBoard.entries.slice(0, 5).map((entry, idx) => (
+                    <li key={entry.at} className="flex items-center justify-between gap-2 tabular-nums">
+                      <span>
+                        {idx + 1}. {entry.nickname} · {entry.score}
+                      </span>
+                      <span className="text-[10px] text-[var(--gc-text-faint)]">
+                        {t("leaderboardDistance", { distance: entry.distance })}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                {cloudBoard.rank ? (
+                  <p className="mt-2 text-[10px] text-[var(--gc-text-faint)]">
+                    {t("cloudLeaderboardRank", { rank: cloudBoard.rank })}
+                    {cloudBoard.isNewBest ? ` · ${t("cloudLeaderboardNewBest")}` : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={restart}

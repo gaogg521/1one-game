@@ -90,6 +90,30 @@ export function lintGameSpecForOrchestration(spec: GameSpec): LintResult {
     issues.push("systems: 缺少技能/道具系统，游戏爽感偏弱");
   }
 
+  if (spec.templateId === "puzzle") {
+    if (!spec.puzzle) {
+      issues.push("puzzle: 缺少益智关卡蓝图");
+    } else if (spec.puzzle.mode === "match3" && spec.puzzle.matchMechanic === "swap") {
+      if ((spec.puzzle.objectives?.length ?? 0) < 2) issues.push("puzzle.objectives: 开心消消乐式三消至少需要 2 个关卡目标");
+      if ((spec.puzzle.boosters?.length ?? 0) < 3) issues.push("puzzle.boosters: 开心消消乐式三消至少需要 3 个道具");
+      if ((spec.puzzle.specialTiles?.length ?? 0) < 3) issues.push("puzzle.specialTiles: 开心消消乐式三消至少需要 3 种特殊块");
+      if ((spec.puzzle.levelCount ?? 0) < 3) issues.push("puzzle.levelCount: 商业三消至少需要 3 关关卡包");
+    }
+  }
+
+  if (spec.templateId === "chess") {
+    if (!spec.chess) {
+      issues.push("chess: 缺少棋类规则蓝图");
+    } else if (spec.chess.ruleset === "xiangqi") {
+      if (spec.chess.boardCols !== 9 || spec.chess.boardRows !== 10) {
+        issues.push("chess.board: 中国象棋必须是 9x10 棋盘");
+      }
+      if (spec.chess.pieceSet.length < 7) issues.push("chess.pieceSet: 中国象棋需要完整子力族");
+      if (!spec.chess.showLegalMoves) issues.push("chess.showLegalMoves: 中国象棋需要合法走法提示");
+      if (!spec.chess.checkHint) issues.push("chess.checkHint: 中国象棋需要将军提示");
+    }
+  }
+
   const floors: Record<string, { winScore?: number; lives?: number; spawnIntervalMs?: number }> = {
     shooter: { winScore: 50, lives: 3, spawnIntervalMs: 900 },
     platformer: { winScore: 42, lives: 3, spawnIntervalMs: 640 },

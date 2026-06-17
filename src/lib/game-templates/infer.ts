@@ -10,23 +10,20 @@ export type InferTemplateOptions = {
 
 /** 样品 id → 语义模板（最可靠，避免 prompt 误判） */
 export const SAMPLE_TEMPLATE_OVERRIDES: Partial<Record<string, GameTemplateId>> = {
-  "rail-in-air": "coaster",
+  "number-merge-2048": "puzzle",
+  "classic-xiangqi-board": "chess",
+  "classic-international-chess": "chess",
+  "zen-go-board": "chess",
+  "jungle-animal-chess": "chess",
+  "temple-relic-runner": "coaster",
   "smash-the-dummy": "physics",
   "grow-a-garden": "farming",
   "color-bloom": "puzzle",
-  "whimsy-differences": "puzzle",
   "gun-merge-3d-zombie-apocalypse": "towerDefense",
-  "ultimate-3d-chess": "chess",
   "elastic-thief-2": "stealth",
-  "state-conquest": "strategy",
-  "tiny-planet-chopper": "shooter",
   "blade-defender-merge": "towerDefense",
-  "car-color-palette": "customization",
   "pottery-master-3d": "customization",
   "crashy-roads": "racing",
-  "blocky-sniper-hunter": "sniper",
-  "memory-match-mania": "puzzle",
-  "kids-puzzle": "puzzle",
 };
 
 /**

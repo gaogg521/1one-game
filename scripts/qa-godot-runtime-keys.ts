@@ -7,10 +7,6 @@ const EXPECT: Record<string, string> = {
   "grow-a-garden": "farming",
   "color-bloom": "puzzle",
   "smash-the-dummy": "physics",
-  "ultimate-3d-chess": "chess",
-  "car-color-palette": "customization",
-  "rail-in-air": "coaster",
-  "state-conquest": "strategy",
 };
 
 let failed = 0;

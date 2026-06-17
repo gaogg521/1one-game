@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -40,12 +41,25 @@ import {
   classifyTdReferenceTextureKeys,
   tdRuntimeTextureKey,
 } from "@/lib/reference-classify";
-import { juiceBurst, juiceFlash, juiceFloater, juiceShake, themeParticleHex } from "@/game/engine/gameJuice";
+import {
+  juiceBoss,
+  juiceCombo,
+  juiceFail,
+  juiceFlash,
+  juiceHit,
+  juicePickup,
+  juiceShake,
+  juiceWin,
+  themeParticleHex,
+} from "@/game/engine/gameJuice";
 import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
-import { fitSpriteDisplay, sampleBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
+import { applySystemImpact } from "@/game/engine/systemImpact";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -378,6 +392,8 @@ export class TowerDefenseScene extends Phaser.Scene {
   private towerTimers: number[] = [];
 
   private banner!: HudBanner;
+
+  private goalPanel!: HudGoalPanel;
 
   private cohesion!: CohesivePresentation;
 
@@ -713,7 +729,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       const amb = this.add
         .image(w / 2, h / 2, "bgTex")
         .setDepth(-17)
-        .setAlpha(sampleBackgroundAlpha(this.projectId) + 0.04);
+        .setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier) + 0.04);
       amb.setScale(Math.max(w / amb.width, h / amb.height));
     }
 
@@ -988,11 +1004,12 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     const towerLabel = this.spec.labels.player ?? hudDefaultTowerLabel(this.uiLocale);
     const foeLabel = this.spec.labels.hazard ?? hudDefaultFoeLabel(this.uiLocale);
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.hintText = this.add
       .text(
         w / 2,
         h - 18,
-        tdControlsHint(this.uiLocale, towerLabel, foeLabel),
+        guidance.bottomHint,
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
@@ -1038,6 +1055,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.refreshHud();
 
     this.banner = new HudBanner(this, ui.banner);
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, ui, { y: 166 });
 
     this.hpBarGfx = this.add.graphics();
     this.hpBarGfx.setDepth(19);
@@ -1210,7 +1229,16 @@ export class TowerDefenseScene extends Phaser.Scene {
       if (tier <= 0) return;
       this.mergeSelected = idx;
       playBleep("pickup");
-      juiceFlash(this, { r: 56, g: 189, b: 248 }, { durationMs: 100 });
+      const selected = this.mergeCellGfx[idx];
+      if (selected) {
+        juicePickup(this, {
+          x: selected.x,
+          y: selected.y,
+          colorHex: this.cohesion.hud.accent2,
+          text: mergeTierLabel(tier, this.spec.samplePlayProfile?.variantId),
+          textColorCss: this.cohesion.hud.accent,
+        });
+      }
       this.refreshMergeGridUI();
       return;
     }
@@ -1228,11 +1256,20 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.coins += this.mergeBonusCoins;
       const merged = this.mergeCellGfx[idx];
       if (merged) {
-        juiceBurst(this, merged.x, merged.y, themeParticleHex(this.spec), 10);
-        juiceFloater(this, merged.x, merged.y - 14, `+${this.mergeBonusCoins}`, this.cohesion.hud.accent);
-        juiceShake(this, { durationMs: 80, intensity: 0.003 });
+        juiceCombo(this, {
+          x: merged.x,
+          y: merged.y,
+          colorHex: themeParticleHex(this.spec),
+          text: `+${this.mergeBonusCoins}`,
+          textColorCss: this.cohesion.hud.accent,
+          combo: fromTier + 1,
+          large: fromTier + 1 >= 4,
+        });
+        juiceShake(this, { intensity: 0.012, durationMs: 160 });
+        juiceFlash(this, { r: 74, g: 222, b: 128 }, { durationMs: 120 });
       }
       playBleep("pickup");
+      bumpQaTouch();
       if (fromTier + 1 >= 4) {
         this.coins += this.mergeBonusCoins * 2;
         this.banner.show({
@@ -1296,8 +1333,13 @@ export class TowerDefenseScene extends Phaser.Scene {
     const waveBanner = tdWaveStartBanner(this.uiLocale, index, this.waveDefs.length);
     this.banner.show({ ...waveBanner, ms: 1800 });
 
-    // Screen flash on wave start
-    juiceFlash(this, { r: 255, g: 200, b: 80 }, { durationMs: 80 });
+    juiceBoss(this, {
+      x: this.scale.width / 2,
+      y: 92,
+      colorHex: themeParticleHex(this.spec),
+      text: waveBanner.title,
+      textColorCss: this.cohesion.hud.accent,
+    });
     this.soundscape?.triggerWaveStart(index, this.waveDefs.length);
   }
 
@@ -1456,8 +1498,18 @@ export class TowerDefenseScene extends Phaser.Scene {
         this.tweens.add({ targets: this.rangePreviewGfx, alpha: 0, delay: 600, duration: 400, ease: "Quad.easeOut" });
       }
 
-      juiceBurst(this, s.x, s.y, themeParticleHex(this.spec), isBuild ? 12 : 8);
-      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: isBuild ? 100 : 80 });
+      const towerFeedback = {
+        x: s.x,
+        y: s.y,
+        colorHex: themeParticleHex(this.spec),
+        text: `${def.name} Lv.${s.level}`,
+        textColorCss: this.cohesion.hud.accent,
+      };
+      if (isBuild) {
+        juicePickup(this, towerFeedback);
+      } else {
+        juiceCombo(this, { ...towerFeedback, combo: s.level, large: s.level >= 3 });
+      }
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -2139,10 +2191,12 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.showKillEffect(e.sprite.x, e.sprite.y, reward);
     this.soundscape?.triggerKillStinger();
     const isTank = e.id === "tank";
-    juiceBurst(this, e.sprite.x, e.sprite.y, themeParticleHex(this.spec), isTank ? 18 : 12);
-    if (isTank) {
-      juiceShake(this, { durationMs: 100, intensity: 0.003 });
-    }
+    juiceHit(this, {
+      x: e.sprite.x,
+      y: e.sprite.y,
+      colorHex: themeParticleHex(this.spec),
+      large: isTank,
+    });
     e.sprite.clearMask();
     e.maskGfx?.destroy();
     e.sprite.destroy();
@@ -2151,9 +2205,21 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.refreshHud();
   }
 
+  private baseFxPoint(): { x: number; y: number } {
+    const points = this.path?.points ?? [];
+    return points.length > 0 ? points[points.length - 1]! : { x: this.scale.width - 64, y: this.scale.height / 2 };
+  }
+
   private damageBase(amount: number) {
+    const base = this.baseFxPoint();
     if (this.time.now < this.baseShieldUntil) {
-      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: 90 });
+      juicePickup(this, {
+        x: base.x,
+        y: base.y,
+        colorHex: this.cohesion.hud.accent2,
+        text: this.uiLocale === "zh-Hans" ? "护盾" : "Shield",
+        textColorCss: this.cohesion.hud.accent,
+      });
       playBleep("pickup");
       return;
     }
@@ -2161,8 +2227,14 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.goalShiftFailed = true;
     }
     this.baseHp -= amount;
-    juiceShake(this, { durationMs: 120, intensity: 0.004 });
-    juiceFlash(this, { r: 255, g: 60, b: 60 }, { durationMs: 120 });
+    juiceHit(this, {
+      x: base.x,
+      y: base.y,
+      colorHex: this.cohesion.hud.danger,
+      text: `-${amount}`,
+      textColorCss: this.cohesion.hud.danger,
+      large: this.baseHp <= 0,
+    });
     playBleep("hit");
     this.refreshHud();
     const maxHp = this.spec.gameplay.baseHealth ?? 50;
@@ -2182,10 +2254,27 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     this.skillReadyAt = this.time.now + skill.cooldownMs;
     const dur = skill.durationMs ?? 0;
+    const baseImpact = this.baseFxPoint();
+    applySystemImpact(this, "skill", {
+      effect: skill.effect,
+      label: skill.name,
+      x: skill.effect === "bomb" ? this.scale.width / 2 : baseImpact.x,
+      y: skill.effect === "bomb" ? this.scale.height * 0.42 : baseImpact.y,
+      spec: this.spec,
+      cohesive: this.cohesion,
+      rng: this.runtimeRng,
+    });
 
     if (skill.effect === "shield") {
+      const base = this.baseFxPoint();
       this.baseShieldUntil = this.time.now + Math.max(1600, dur || 2200);
-      juiceFlash(this, { r: 120, g: 220, b: 255 }, { durationMs: 90 });
+      juicePickup(this, {
+        x: base.x,
+        y: base.y,
+        colorHex: this.cohesion.hud.accent2,
+        text: skill.name,
+        textColorCss: this.cohesion.hud.accent,
+      });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -2193,6 +2282,14 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     if (skill.effect === "timeSlow") {
       this.globalSlowUntil = this.time.now + Math.max(1400, dur || 2200);
+      juicePickup(this, {
+        x: this.scale.width / 2,
+        y: 120,
+        colorHex: this.cohesion.hud.accent2,
+        text: skill.name,
+        textColorCss: this.cohesion.hud.accent,
+        large: true,
+      });
       playBleep("pickup");
       this.refreshHud();
       return;
@@ -2208,7 +2305,13 @@ export class TowerDefenseScene extends Phaser.Scene {
         const e = this.enemies[i];
         if (e && e.hp <= 0) this.killEnemy(e);
       }
-      juiceFlash(this, { r: 255, g: 200, b: 90 }, { durationMs: 120 });
+      juiceBoss(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.42,
+        colorHex: themeParticleHex(this.spec),
+        text: skill.name,
+        textColorCss: this.cohesion.hud.accent,
+      });
       playBleep("hit");
       this.refreshHud();
       return;
@@ -2217,7 +2320,13 @@ export class TowerDefenseScene extends Phaser.Scene {
     if (skill.effect === "dash") {
       // 塔防中映射为“短暂增伤/加速射击”
       this.boostUntil = this.time.now + 2000;
-      juiceFlash(this, { r: 120, g: 255, b: 160 }, { durationMs: 90 });
+      juicePickup(this, {
+        x: this.scale.width / 2,
+        y: 120,
+        colorHex: this.cohesion.hud.accent,
+        text: skill.name,
+        textColorCss: this.cohesion.hud.accent,
+      });
       playBleep("pickup");
       this.refreshHud();
     }
@@ -2246,8 +2355,24 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.spawning = false;
     this.hintText.setText(payload.won ? hudTdWin(this.uiLocale) : hudTdLose(this.uiLocale));
     if (payload.won) {
+      juiceWin(this, {
+        x: this.scale.width / 2,
+        y: this.scale.height * 0.42,
+        colorHex: themeParticleHex(this.spec),
+        text: hudTdWin(this.uiLocale),
+        textColorCss: this.cohesion.hud.accent,
+      });
       playBleep("win");
       this.soundscape?.triggerEvent("victory");
+    } else {
+      const base = this.baseFxPoint();
+      juiceFail(this, {
+        x: base.x,
+        y: base.y,
+        colorHex: this.cohesion.hud.danger,
+        text: hudTdLose(this.uiLocale),
+        textColorCss: this.cohesion.hud.danger,
+      });
     }
     this.onEnd(payload);
   }
@@ -2255,6 +2380,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   private tdQaTouches = 0;
 
   update(time: number) {
+    this.goalPanel?.update();
     if (!this.bootstrapComplete || this.finished) return;
     setPhaserQaState({ qaTouches: this.tdQaTouches });
 
@@ -2374,7 +2500,13 @@ export class TowerDefenseScene extends Phaser.Scene {
       if (now >= this.nextCoinTickAt) {
         const gain = Math.max(6, Math.floor(8 + this.eventStrength * 14));
         this.coins += gain;
-        juiceFlash(this, { r: 255, g: 230, b: 120 }, { durationMs: 60 });
+        juicePickup(this, {
+          x: this.scale.width / 2,
+          y: 118,
+          colorHex: this.spec.theme.collectibleColor ?? themeParticleHex(this.spec),
+          text: `+${gain}`,
+          textColorCss: this.cohesion.hud.accent,
+        });
         this.refreshHud();
         this.nextCoinTickAt = now + 900;
       }
@@ -2435,6 +2567,16 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.eventStrength = strength;
     this.eventUntil = now + durationMs;
     this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
+    const impactPoint = this.baseFxPoint();
+    applyRuntimeEventImpact(this, ev.type, {
+      x: impactPoint.x,
+      y: impactPoint.y,
+      title,
+      spec: this.spec,
+      cohesive: this.cohesion,
+      strength,
+      rng: this.runtimeRng,
+    });
 
     if (ev.type === "miniBoss") {
       this.soundscape?.triggerEvent("boss");

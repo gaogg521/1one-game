@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { FeaturedShelfSkeleton } from "@/components/FeaturedShelfSkeleton";
 
+import { FeaturedSamplesSection } from "@/components/FeaturedSamplesSection";
+
 const FeaturedGamesSection = dynamic(
   () => import("@/components/FeaturedGamesSection").then((m) => m.FeaturedGamesSection),
   { loading: () => <FeaturedShelfSkeleton count={6} aspect="920/560" /> },
@@ -19,6 +21,7 @@ const FeaturedComicsSection = dynamic(
 export function HomeFeaturedSections() {
   return (
     <>
+      <FeaturedSamplesSection />
       <FeaturedGamesSection />
       <FeaturedNovelsSection />
       <FeaturedComicsSection />

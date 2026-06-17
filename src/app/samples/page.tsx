@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
@@ -13,6 +13,7 @@ import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { buildCreatePrefillPath, buildStartPrefillPath } from "@/lib/sample-create-prefill";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import {
+  getLocalizedSample,
   getLocalizedSamplesByShelf,
   getLocalizedShelfMeta,
 } from "@/lib/i18n/samples-localized";
@@ -69,7 +70,7 @@ function SampleCard({
             fill
             sizes={featured ? "(min-width: 1024px) 22vw, (min-width: 640px) 40vw, 86vw" : "(min-width: 1024px) 18vw, (min-width: 640px) 36vw, 82vw"}
             unoptimized
-            className="absolute inset-0 z-[1] h-full w-full object-cover transition duration-500 will-change-transform group-hover/card:scale-[1.04]"
+            className="absolute inset-0 z-[1] h-full w-full object-cover object-[center_58%] transition duration-500 will-change-transform group-hover/card:scale-[1.04]"
             onError={() => setCoverFailed(true)}
           />
         ) : null}
@@ -199,30 +200,45 @@ export default function SamplesPage() {
   const [busy, setBusy] = useState<BusyMap>({});
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [catalog, setCatalog] = useState<Sample[] | null>(null);
+  const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    let stale = false;
-    void fetch("/api/samples/ensure", {
+  const loadCatalog = useCallback(async () => {
+    setError(null);
+    setReady(false);
+    await fetch("/api/samples/ensure", {
       method: "POST",
       headers: mergeLocaleHeaders(locale),
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(() => {
-        if (!stale) {
-          setReady(true);
-          prefetchSamplesGodotExports();
-        }
-      })
-      .catch(() => {
-        if (!stale) setError(ts("networkError"));
-      });
-    return () => {
-      stale = true;
-    };
-  }, [locale, ts]);
+    }).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+    const res = await fetch("/api/samples", { headers: mergeLocaleHeaders(locale) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { samples?: Sample[] };
+    setCatalog(data.samples?.length ? data.samples : null);
+    setReady(true);
+    prefetchSamplesGodotExports();
+  }, [locale]);
+
+  useEffect(() => {
+    void loadCatalog().catch(() => setError(ts("networkError")));
+  }, [loadCatalog, ts]);
+
+  const allSamples = useMemo(() => {
+    if (!catalog) return null;
+    return catalog.map((s) => getLocalizedSample(s, locale));
+  }, [catalog, locale]);
+
+  const filteredSamples = useMemo(() => {
+    if (!allSamples) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return allSamples;
+    return allSamples.filter(
+      (s) =>
+        `${s.title} ${s.subtitle} ${s.id} ${s.tags.join(" ")} ${s.prompt}`.toLowerCase().includes(q),
+    );
+  }, [allSamples, search]);
 
   const handleClone = useCallback(
     async (sampleId: string) => {
@@ -271,19 +287,44 @@ export default function SamplesPage() {
             {!ready && !error ? (
               <p className="text-xs text-[var(--gc-text-faint)]">{ts("bootstrapping")}</p>
             ) : null}
+            {ready && filteredSamples ? (
+              <p className="text-xs text-[var(--gc-text-faint)]">{ts("sampleCount", { count: filteredSamples.length })}</p>
+            ) : null}
           </header>
 
+          <div className="mt-5 flex max-w-xl flex-wrap items-center gap-3">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={ts("searchPlaceholder")}
+              className="min-w-[14rem] flex-1 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-sm text-[var(--gc-text)]"
+            />
+          </div>
+
           {error ? (
-            <p className="mt-6 max-w-xl rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {error}
-            </p>
+            <div className="mt-6 flex max-w-xl flex-wrap items-center gap-3">
+              <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadCatalog().catch(() => setError(ts("networkError")))}
+                className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+              >
+                {ts("retry")}
+              </button>
+            </div>
           ) : null}
         </div>
 
         <div className="mt-10 flex flex-col gap-14 sm:mt-12 sm:gap-16">
           {SAMPLE_SHELVES.map((shelf) => {
             const meta = getLocalizedShelfMeta(shelf, locale);
-            const list = getLocalizedSamplesByShelf(shelf, locale);
+            const list = filteredSamples
+              ? filteredSamples.filter((s) => s.shelf === shelf)
+              : getLocalizedSamplesByShelf(shelf, locale);
+            if (search.trim() && list.length === 0) return null;
             const featured = shelf === "featured";
             return (
               <section key={shelf} className="min-w-0">
@@ -321,6 +362,9 @@ export default function SamplesPage() {
               </section>
             );
           })}
+          {search.trim() && filteredSamples?.length === 0 ? (
+            <p className="px-4 text-sm text-[var(--gc-muted)] sm:px-6 lg:px-10">{ts("searchEmpty")}</p>
+          ) : null}
         </div>
       </main>
       </AppMain>

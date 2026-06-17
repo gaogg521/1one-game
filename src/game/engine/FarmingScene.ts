@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import {
   cropEmoji,
   drawCropPlant,
@@ -21,11 +22,12 @@ import {
   hudFarmingCoins,
   hudFarmingControls,
   hudFarmingCropSelected,
-  hudReady,
   hudScore,
 } from "@/lib/i18n/game-hud-labels";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 
 type EndPayload = { score: number; won: boolean };
 type TileState = "empty" | "seeded" | "growing" | "ready";
@@ -62,6 +64,7 @@ export class FarmingScene extends Phaser.Scene {
   private goalText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
+  private goalPanel!: HudGoalPanel;
   private cohesive!: CohesivePresentation;
   private autoWater = false;
   private harvestGoal = 0;
@@ -78,6 +81,12 @@ export class FarmingScene extends Phaser.Scene {
     this.spec = spec;
     this.onEnd = onEnd;
     this.soundscape = soundscape;
+  }
+
+  preload() {
+    if (this.backgroundUrl) {
+      this.load.image("bgTex", this.backgroundUrl);
+    }
   }
 
   create() {
@@ -116,7 +125,16 @@ export class FarmingScene extends Phaser.Scene {
         gridH: this.cell * this.bp.rows,
       });
     } else {
-      this.add.rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color);
+      this.add
+        .rectangle(w / 2, h / 2, w, h, Phaser.Display.Color.HexStringToColor(this.spec.theme.backgroundColor).color)
+        .setDepth(-12);
+    }
+    if (this.backgroundUrl && this.textures.exists("bgTex")) {
+      const bg = this.add
+        .image(w / 2, h / 2, "bgTex")
+        .setDepth(-11)
+        .setAlpha(assetBackgroundAlpha(this.projectId, cohesive.qualityTier));
+      bg.setScale(Math.max(w / bg.width, h / bg.height));
     }
 
     for (let r = 0; r < this.bp.rows; r += 1) {
@@ -160,8 +178,10 @@ export class FarmingScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(20),
     );
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
-    this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 88 });
 
     if (this.richGarden) this.buildCropSelector(w, h);
 
@@ -394,6 +414,7 @@ export class FarmingScene extends Phaser.Scene {
   }
 
   update(_t: number, dt: number) {
+    this.goalPanel?.update();
     this.banner.tick();
     if (this.finished) return;
     const sec = dt / 1000;

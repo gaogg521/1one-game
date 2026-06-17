@@ -76,5 +76,5 @@ public/covers/debug-*
 
 # E2E / 手测用 SQLite（无业务密钥；CI 亦可 migrate 重建）
 !prisma/ci.sqlite
-# 误创建的嵌套目录（勿提交）
-prisma/prisma/
+# 本地 QA smoke 快照（admin ops-health 读取）
+.qa-cache/

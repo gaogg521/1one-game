@@ -80,10 +80,8 @@ function main() {
     const scene = expectedPhaserSceneName(spec);
     if (s.id === "grow-a-garden") assert(scene === "FarmingScene", "sample farming");
     if (s.id === "smash-the-dummy") assert(scene === "PhysicsScene", "sample physics");
-    if (s.id === "ultimate-3d-chess") assert(scene === "ChessScene", "sample chess");
-    if (s.id === "car-color-palette") assert(scene === "CustomizationScene", "sample customization");
-    if (s.id === "rail-in-air") assert(scene === "CoasterScene", "sample coaster");
-    if (s.id === "state-conquest") assert(scene === "StrategyScene", "sample strategy");
+    if (s.id === "temple-relic-runner") assert(scene === "CoasterScene", "sample temple runner");
+    if (s.id === "color-bloom") assert(scene === "PuzzleScene", "sample match3");
     console.log(`  [OK] sample/${s.id} → ${scene}`);
   }
 

@@ -96,11 +96,46 @@ const CustomizationBlueprintSchema = z.object({
 });
 
 const PuzzleBlueprintSchema = z.object({
-  mode: z.enum(["match3", "spotDifference", "memoryMatch", "jigsaw"]),
+  mode: z.enum(["match3", "spotDifference", "memoryMatch", "jigsaw", "merge2048"]),
+  matchMechanic: z.enum(["flood", "swap"]).optional(),
   cols: z.number().min(2).max(12),
   rows: z.number().min(2).max(12),
-  targetScore: z.number().min(1).max(999),
+  targetScore: z.number().min(1).max(4096),
   moveLimit: z.number().min(1).max(999),
+  levelCount: z.number().min(1).max(30).optional(),
+  objectives: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(24),
+        label: z.string().min(1).max(32),
+        type: z.enum(["score", "collectColor", "clearObstacle", "combo"]),
+        target: z.number().min(1).max(4096),
+      }),
+    )
+    .max(8)
+    .optional(),
+  boosters: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(24),
+        name: z.string().min(1).max(24),
+        effect: z.enum(["rowClear", "colClear", "bomb", "rainbow", "shuffle", "extraMoves"]),
+        unlockLevel: z.number().min(1).max(30).optional(),
+      }),
+    )
+    .max(8)
+    .optional(),
+  specialTiles: z.array(z.enum(["rowClear", "colClear", "bomb", "rainbow"])).max(8).optional(),
+});
+
+const ChessBlueprintSchema = z.object({
+  ruleset: z.enum(["international", "xiangqi", "go", "jungle"]),
+  boardCols: z.number().min(7).max(19),
+  boardRows: z.number().min(8).max(19),
+  pieceSet: z.array(z.string().min(1).max(16)).min(2).max(32),
+  aiDepth: z.number().min(0).max(4),
+  showLegalMoves: z.boolean().optional(),
+  checkHint: z.boolean().optional(),
 });
 
 const PlatformerBlueprintSchema = z.object({
@@ -276,6 +311,8 @@ export const GameSpecSchema = z.object({
   customization: CustomizationBlueprintSchema.optional(),
   /** puzzle：消除/找不同/记忆/拼图模式 */
   puzzle: PuzzleBlueprintSchema.optional(),
+  /** chess：国际象棋 / 中国象棋规则蓝图 */
+  chess: ChessBlueprintSchema.optional(),
   /** platformer / stealth：二段跳与弹性摆荡 */
   platformer: PlatformerBlueprintSchema.optional(),
   /** farming：网格种植经济 */

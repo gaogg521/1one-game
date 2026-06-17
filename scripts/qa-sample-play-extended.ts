@@ -5,13 +5,10 @@ import { sampleProjectId } from "@/lib/sample-gallery";
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8888";
 
 const SAMPLES = [
-  "whimsy-differences",
-  "memory-match-mania",
-  "kids-puzzle",
   "elastic-thief-2",
-  "blocky-sniper-hunter",
   "blade-defender-merge",
-  "state-conquest",
+  "pottery-master-3d",
+  "gun-merge-3d-zombie-apocalypse",
 ];
 
 async function main() {

@@ -15,15 +15,13 @@ const CASES: Array<{
   expectScene: string;
   titleFragment: string;
 }> = [
-  { slug: "rail-in-air", expectScene: "CoasterScene", titleFragment: "Rail" },
+  { slug: "temple-relic-runner", expectScene: "CoasterScene", titleFragment: "Temple" },
   { slug: "smash-the-dummy", expectScene: "PhysicsScene", titleFragment: "Smash" },
   { slug: "grow-a-garden", expectScene: "FarmingScene", titleFragment: "Garden" },
-  { slug: "color-bloom", expectScene: "PuzzleScene", titleFragment: "Color Bloom" },
-  { slug: "ultimate-3d-chess", expectScene: "ChessScene", titleFragment: "Chess" },
-  { slug: "car-color-palette", expectScene: "CustomizationScene", titleFragment: "Car Color" },
-  { slug: "tiny-planet-chopper", expectScene: "ShooterScene", titleFragment: "Tiny Planet" },
+  { slug: "color-bloom", expectScene: "PuzzleScene", titleFragment: "开心消消乐" },
   { slug: "gun-merge-3d-zombie-apocalypse", expectScene: "TowerDefenseScene", titleFragment: "Gun Merge" },
-  { slug: "state-conquest", expectScene: "StrategyScene", titleFragment: "State" },
+  { slug: "elastic-thief-2", expectScene: "PlatformerScene", titleFragment: "Elastic" },
+  { slug: "crashy-roads", expectScene: "CoasterScene", titleFragment: "Crashy" },
 ];
 
 async function main() {

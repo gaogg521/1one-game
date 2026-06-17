@@ -14,6 +14,8 @@ export function GamePlayer(props: {
   coverCapture?: { projectId: string } | null;
   projectId?: string;
   promptHint?: string;
+  /** 样品馆试玩：隐藏 dev 叠层，更沉浸 */
+  immersive?: boolean;
 }) {
   return <GamePlayerInner {...props} />;
 }

@@ -1,5 +1,5 @@
 /**
- * 17 款竞品样品 clone 可玩度断言（离线，无需 dev）
+ * 14 款竞品样品 clone 可玩度断言（离线，无需 dev）
  * npm run qa:competitor-clone-checks-offline
  */
 import assert from "node:assert/strict";

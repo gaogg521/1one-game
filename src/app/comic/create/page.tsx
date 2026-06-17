@@ -450,7 +450,7 @@ export default function ComicCreatePage() {
                       <select
                         value={selectedNovelId}
                         onChange={(e) => setSelectedNovelId(e.target.value)}
-                        className="w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none focus:border-[color:var(--gc-accent)]"
+                        className="gc-native-select w-full rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] px-4 py-3 text-sm text-[var(--gc-text)] outline-none focus:border-[color:var(--gc-accent)]"
                       >
                         <option value="">{t("selectNovelPlaceholder")}</option>
                         {novelOptions.map((n) => (

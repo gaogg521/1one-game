@@ -31,8 +31,9 @@ function hashSeed(s: string): number {
 
 export function inferCoasterMode(opts: { prompt?: string; sampleId?: string }): CoasterMode {
   if (opts.sampleId === "crashy-roads") return "endlessRoad";
+  if (opts.sampleId === "temple-relic-runner") return "endlessRoad";
   const blob = (opts.prompt ?? "").toLowerCase();
-  if (/crashy roads|无尽公路|撞车|endless road|swerve|换道躲避|伪 3d 透视公路/i.test(blob)) {
+  if (/crashy roads|无尽公路|撞车|endless road|swerve|换道躲避|伪 3d 透视公路|神庙逃亡|temple run|temple runner|地铁跑酷|三线.*跑酷|lane runner/i.test(blob)) {
     return "endlessRoad";
   }
   return "coaster";

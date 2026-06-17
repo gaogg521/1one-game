@@ -21,8 +21,8 @@ RUN mkdir -p data public/covers public/comic-panels public/game-bg \
   && npx prisma generate \
   && npm run build
 
-ENV PORT=6666
-EXPOSE 6666
+ENV PORT=80
+EXPOSE 80
 
-# run-start.mjs 用 programmatic server，6666 不会被 next start CLI 拦截
+# run-start.mjs 用 programmatic server，可监听 80 等端口
 CMD ["sh", "-c", "npx prisma migrate deploy && node scripts/run-start.mjs"]

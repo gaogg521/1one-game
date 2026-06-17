@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
 import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { mergeMoveAxis, pointerSteer2D, pointerSteerX, readMoveAxis } from "@/game/engine/phaser-input";
 import { HudBanner } from "@/game/engine/HudBanner";
+import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
 import {
   juiceBoss,
   juiceBurst,
@@ -27,6 +29,10 @@ import type { AppLocale } from "@/i18n/routing";
 import { gameEventTitle, platformerFinalSprint, playSceneBossBanner } from "@/lib/i18n/game-event-labels";
 import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
+import { applySystemImpact } from "@/game/engine/systemImpact";
 import {
   bannerActStage,
   bannerBossDefeated,
@@ -120,6 +126,8 @@ export class PlayScene extends Phaser.Scene {
   private shieldRing!: Phaser.GameObjects.Graphics;
 
   private banner!: HudBanner;
+
+  private goalPanel!: HudGoalPanel;
 
   private cohesive!: CohesivePresentation;
 
@@ -266,7 +274,7 @@ export class PlayScene extends Phaser.Scene {
 
     // 文生图背景（异步生成，不存在时静默回退）
     if (this.backgroundUrl && this.textures.exists("bgTex")) {
-      this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(0.12);
+      this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier));
     }
 
     this.add
@@ -327,17 +335,10 @@ export class PlayScene extends Phaser.Scene {
           .setDepth(25)
       : null;
 
-    const controls =
-      this.spec.templateId === "collector"
-        ? hudControlsPlayCollector(
-            this.uiLocale,
-            this.spec.labels.collectible ?? "collectible",
-            this.spec.labels.hazard,
-          )
-        : hudControlsPlayAvoider(this.uiLocale, this.spec.labels.hazard);
+    const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
 
     this.hintText = this.add
-      .text(width / 2, height - 20, `${controls}${hudControlsShiftSuffix(this.uiLocale)}`, {
+      .text(width / 2, height - 20, guidance.bottomHint, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -498,6 +499,8 @@ export class PlayScene extends Phaser.Scene {
     this.shieldRing.setDepth(24);
 
     this.banner = new HudBanner(this, ui.banner);
+    this.banner.show(guidance.banner);
+    this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {
       if (this.finished) return;
@@ -919,6 +922,15 @@ export class PlayScene extends Phaser.Scene {
     this.eventUntil = now + durationMs;
 
     this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
+    applyRuntimeEventImpact(this, ev.type, {
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      title,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      strength,
+      rng: this.runtimeRng,
+    });
 
     if (ev.type === "coinRain") {
       this.coinRainUntil = this.eventUntil;
@@ -1147,6 +1159,15 @@ export class PlayScene extends Phaser.Scene {
 
   private applyPowerup(kind: string) {
     const now = this.time.now;
+    applySystemImpact(this, "powerup", {
+      effect: kind,
+      label: kind,
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      rng: this.runtimeRng,
+    });
     if (kind === "shield") {
       this.shieldCharges = Math.min(2, this.shieldCharges + 1);
       return;
@@ -1184,6 +1205,15 @@ export class PlayScene extends Phaser.Scene {
     this.skillReadyAt = this.time.now + cd;
 
     const dur = skill.durationMs ?? 0;
+    applySystemImpact(this, "skill", {
+      effect: skill.effect,
+      label: skill.name,
+      x: this.player?.x ?? this.scale.width / 2,
+      y: this.player?.y ?? this.scale.height / 2,
+      spec: this.spec,
+      cohesive: this.cohesive,
+      rng: this.runtimeRng,
+    });
     if (skill.effect === "shield") {
       this.shieldCharges = Math.max(this.shieldCharges, skill.strength && skill.strength > 0.75 ? 2 : 1);
       if (dur > 0) {
@@ -1323,6 +1353,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   update() {
+    this.goalPanel?.update();
     if (this.finished) return;
     this.updateBoss();
     if (this.spec.templateId === "survivor") {
@@ -1349,18 +1380,21 @@ export class PlayScene extends Phaser.Scene {
       this.time.timeScale = slowOn ? 0.92 : 1;
     }
 
-    if (this.spec.templateId === "collector") {
-      let vx = 0;
-      let vy = 0;
-      if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
-      if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
-      if (this.cursors.up.isDown || this.keyW.isDown) vy -= 1;
-      if (this.cursors.down.isDown || this.keyS.isDown) vy += 1;
-      if (vx !== 0 || vy !== 0) {
-        const len = Math.hypot(vx, vy);
-        vx = (vx / len) * speed;
-        vy = (vy / len) * speed;
-      }
+    if (this.spec.templateId === "collector" || this.spec.templateId === "survivor") {
+      const keys = {
+        cursors: this.cursors,
+        w: this.keyW,
+        a: this.keyA,
+        s: this.keyS,
+        d: this.keyD,
+        space: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        shift: this.keyShift,
+      };
+      const kb = readMoveAxis(keys, { allowVertical: true });
+      const ptr = pointerSteer2D(this, this.player.x, this.player.y);
+      const axis = mergeMoveAxis(kb, ptr);
+      let vx = axis.x * speed;
+      let vy = axis.y * speed;
       this.player.setVelocity(vx, vy);
 
       // 磁铁：吸附收集物
@@ -1380,10 +1414,19 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    let vx = 0;
-    if (this.cursors.left.isDown || this.keyA.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.keyD.isDown) vx += 1;
-    this.player.setVelocityX(vx * speed);
+    const keys = {
+      cursors: this.cursors,
+      w: this.keyW,
+      a: this.keyA,
+      s: this.keyS,
+      d: this.keyD,
+      space: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+      shift: this.keyShift,
+    };
+    const kb = readMoveAxis(keys, { allowVertical: false });
+    const ptrX = pointerSteerX(this, this.player.x);
+    const vx = (kb.x !== 0 ? kb.x : ptrX) * speed;
+    this.player.setVelocityX(vx);
     this.player.setVelocityY(0);
     this.player.y = height - this.pad;
 

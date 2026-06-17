@@ -448,7 +448,7 @@ Schema：`prisma/schema.prisma` · 迁移：`prisma/migrations/`。
 | 游戏 | Phaser 4 · Godot 4.4 Web · Agentic JS 模块 |
 | AI | OpenAI 兼容 SDK · 多模型 cascade · 文生图 |
 | 测试 | Playwright E2E · tsx QA 脚本 · GitHub Actions |
-| 部署 | Linux 一键脚本（**6666**）· Docker Compose · systemd |
+| 部署 | Linux 一键脚本（**80**）· Docker Compose · systemd |
 
 ---
 
@@ -482,7 +482,7 @@ curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/dep
 | 项 | 默认值 |
 |----|--------|
 | 安装目录 | `/opt/operone` |
-| 监听端口 | **6666**（内网 `http://服务器IP:6666`） |
+| 监听端口 | **80**（`http://服务器IP/` 或绑定域名） |
 | 再次执行 | 自动更新版本 |
 
 **有域名 + HTTPS**（DNS 已指向本机，可选）：
@@ -636,7 +636,7 @@ game/
 |------|------|
 | [`docs/ai-handoff-architecture-cn.md`](docs/ai-handoff-architecture-cn.md) | 给其他 AI：架构总览 + 源码索引 |
 | [`docs/architecture-orchestration.md`](docs/architecture-orchestration.md) | 编排 Phase 0～4 |
-| [`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md) | **Linux 生产一键部署**（Ubuntu 22 · 端口 6666 · API Key · 绑域名） |
+| [`docs/deploy-linux-ubuntu22.md`](docs/deploy-linux-ubuntu22.md) | **Linux 生产一键部署**（Ubuntu 22 · 端口 80 · API Key · 绑域名） |
 | [`docs/local-database.md`](docs/local-database.md) | 本地库与迁移 |
 | [`docs/admin-super-admin.md`](docs/admin-super-admin.md) | 超级管理员与 `/console` |
 | [`PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md`](PROJECT_MEMORY/HISTORICAL_ISSUES_CLOSURE.md) | 历史问题闭环清单 |
@@ -670,7 +670,7 @@ Product models and pipeline thresholds: **`src/lib/product-config.ts`**. Secrets
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
-# → http://<server-ip>:6666 · see docs/deploy-linux-ubuntu22.md
+# → http://<server-ip>/ · see docs/deploy-linux-ubuntu22.md
 ```
 
 See [`docs/ai-handoff-architecture-cn.md`](docs/ai-handoff-architecture-cn.md) for the full handoff guide.

@@ -43,7 +43,10 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     blueprint: "coaster",
     defaultSubtitle: "竞速冲刺 · 计时挑战",
     llmSummary: "轨道/赛道竞速（与 coaster 同引擎，偏计时）",
-    infer: [{ pattern: /竞速|赛车|racing|赛道|圈速|计时赛|crashy roads|无尽公路|撞车/i, priority: 75 }],
+    infer: [
+      { pattern: /神庙逃亡|temple run|temple runner|地铁跑酷|三线.*跑酷|lane runner/i, priority: 105 },
+      { pattern: /竞速|赛车|racing|赛道|圈速|计时赛|crashy roads|无尽公路|撞车/i, priority: 75 },
+    ],
   },
   {
     id: "shooter",
@@ -124,6 +127,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "益智解谜 · 连锁消除",
     llmSummary: "消除/找不同/记忆配对/拼图等益智",
     infer: [
+      { pattern: /2048|数字合成|数字合并|number merge|merge numbers/i, priority: 95 },
       { pattern: /找不同|spot the difference|whimsy differences/i, priority: 93 },
       { pattern: /记忆配对|memory match|翻牌配对/i, priority: 91 },
       { pattern: /儿童.*拼图|kids puzzle|jigsaw|拼图小游戏|拖拽.*拼图/i, priority: 90 },
@@ -137,7 +141,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     godotExport: true,
     defaultSubtitle: "棋类对弈 · 合法走法提示",
     llmSummary: "棋类/回合策略盘面",
-    infer: [{ pattern: /国际象棋|象棋|chess|将杀|将军提示/i, priority: 94 }],
+    infer: [{ pattern: /围棋|斗兽棋|动物棋|国际象棋|象棋|chess|go board|baduk|jungle chess|将杀|将军提示/i, priority: 94 }],
   },
   {
     id: "customization",

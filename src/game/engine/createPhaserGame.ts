@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { captureGameKeys } from "@/game/engine/phaser-input";
 import type { GameSpec } from "@/lib/game-spec";
 import type { AppLocale } from "@/i18n/routing";
 import { canonicalSpecForPlay, resolveAssetProjectId } from "@/lib/astrocade-canonical-spec";
@@ -29,6 +30,16 @@ import { GameSoundscape } from "@/game/audio/gameSoundscape";
 import { thematicRootFrequencyHz } from "@/lib/cohesive-presentation";
 import { bindAudioBootGestures, buildSceneCohesion } from "@/lib/scene-experience";
 
+import type { RunnerLeaderboardSnapshot } from "@/lib/runner-leaderboard";
+import type { RunnerRunRecap } from "@/lib/runner-leaderboard";
+
+export type PhaserEndPayload = {
+  score: number;
+  won: boolean;
+  runnerLeaderboard?: RunnerLeaderboardSnapshot;
+  runnerRecap?: RunnerRunRecap;
+};
+
 export type CreatePhaserGameOptions = {
   /** 创作台解析后写入 sessionStorage 的参考图 data URL（仅会话） */
   referencePayloads?: RuntimeReferencePayload[];
@@ -51,7 +62,7 @@ export type PhaserGameHandle = {
 export function createPhaserGame(
   parent: HTMLElement,
   spec: GameSpec,
-  onEnd: (r: { score: number; won: boolean }) => void,
+  onEnd: (r: PhaserEndPayload) => void,
   opts?: CreatePhaserGameOptions,
 ): PhaserGameHandle {
   const ref =
@@ -158,13 +169,7 @@ export function createPhaserGame(
 
   const kb = game.input.keyboard;
   if (kb) {
-    kb.addCapture([
-      Phaser.Input.Keyboard.KeyCodes.LEFT,
-      Phaser.Input.Keyboard.KeyCodes.RIGHT,
-      Phaser.Input.Keyboard.KeyCodes.UP,
-      Phaser.Input.Keyboard.KeyCodes.DOWN,
-      Phaser.Input.Keyboard.KeyCodes.SPACE,
-    ]);
+    captureGameKeys(kb);
   }
 
   return { game, bootAudio };

@@ -1,6 +1,6 @@
 /**
- * 生产模式启动：默认 6666（与一键部署一致）；本地 dev 仍为 8888。
- * 使用 programmatic server，绕过 `next start` CLI 对 6666 等保留端口的拦截。
+ * 生产模式启动：默认 80（与一键部署一致）；本地 dev 仍为 8888。
+ * 使用 programmatic server，绕过 `next start` CLI 对部分保留端口的拦截。
  */
 import { createServer } from "node:http";
 import path from "node:path";
@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import next from "next";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const port = Number.parseInt(process.env.PORT?.trim() || "6666", 10);
+const port = Number.parseInt(process.env.PORT?.trim() || "80", 10);
 const hostname = process.env.HOSTNAME?.trim() || "0.0.0.0";
 
 if (!Number.isFinite(port) || port < 1 || port > 65535) {

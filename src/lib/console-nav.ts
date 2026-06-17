@@ -5,6 +5,7 @@ export type ConsoleTab =
   | "overview"
   | "pending"
   | "works"
+  | "samples"
   | "shares"
   | "users"
   | "billing"
@@ -50,6 +51,7 @@ export const CONSOLE_ADMIN_SECTION: ConsoleNavSection = {
     { id: "overview", labelKey: "tabOverview" },
     { id: "pending", labelKey: "tabPending" },
     { id: "works", labelKey: "tabWorks" },
+    { id: "samples", labelKey: "tabSamples" },
     { id: "shares", labelKey: "tabShares" },
     { id: "users", labelKey: "tabUsers" },
     { id: "billing", labelKey: "tabBilling" },

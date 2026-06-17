@@ -1,0 +1,48 @@
+{
+  "version": "v1",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "texture": "/game-sprites/sample-color-bloom/anipop-gems-v1.png",
+  "frames": {
+    "frog": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
+    },
+    "hippo": {
+      "frame": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
+    },
+    "fox": {
+      "frame": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
+    },
+    "owl": {
+      "frame": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
+    },
+    "chick": {
+      "frame": {
+        "x": 256,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
+    }
+  }
+}
