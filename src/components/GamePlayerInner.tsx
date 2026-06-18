@@ -57,7 +57,15 @@ export default function GamePlayerInner({
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
   const cohesiveSnapshot = useMemo(() => describeCohesiveExperience(cohesive), [cohesive]);
-  const showCohesiveSnapshot = process.env.NODE_ENV !== "production" && !immersive;
+  /**
+   * 调试用 chip（"共享体验层 music:neon · tier:standard ..."）只在显式调试开关下显示。
+   * 之前的判定 `process.env.NODE_ENV !== "production"` 会在 dev 服务器上覆盖到真实用户视线，
+   * 与 HUD 互相叠加形成"四层信息墙"。生产/预览/本地默认都不再显示，需要时设 `?hud=debug` 启用。
+   */
+  const showCohesiveSnapshot =
+    !immersive &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("hud") === "debug";
   const resolvedPromptHint = useMemo(() => {
     const direct = promptHint?.trim();
     if (direct) return direct;

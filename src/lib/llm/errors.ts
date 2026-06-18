@@ -8,6 +8,13 @@ export function looksLikeGatewayUpstreamError(msg: string): boolean {
  */
 export function clarifyGatewayUpstreamError(raw: string, gatewayBaseUrl?: string | null): string {
   const msg = raw.trim();
+  if (/client-abort after \d+ms|AbortError|aborted/i.test(msg) && /abort|context canceled/i.test(msg)) {
+    return [
+      "本平台在单次 LLM 超时预算到达后，通过 AbortSignal 主动取消了发往网关的请求（非用户关闭浏览器）。",
+      "LiteLLM 上游日志中的 context canceled 通常由此引起；若模型仍偏慢，可在 product-config.game.genTimeoutMs 加长。",
+      `详情：${msg}`,
+    ].join(" ");
+  }
   if (!looksLikeGatewayUpstreamError(msg)) return msg;
   const gw =
     gatewayBaseUrl?.trim() ||

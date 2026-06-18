@@ -282,8 +282,14 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt);
 }
 
+function gameLlmCallTimeoutMs(configured: number): number {
+  const cap = PRODUCT.llm.withTimeoutMaxMs;
+  return Math.max(4_000, Math.min(cap, Math.floor(configured)));
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  const ms = Math.max(1_000, Math.min(90_000, Math.floor(timeoutMs)));
+  const cap = PRODUCT.llm.withTimeoutMaxMs;
+  const ms = Math.max(1_000, Math.min(cap, Math.floor(timeoutMs)));
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => {
@@ -324,7 +330,7 @@ async function callPrimaryLLM(
   userPrompt: string,
   scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
-  const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.genTimeoutMs));
+  const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.genTimeoutMs);
   const res = await llmJson({
     model,
     scene,
@@ -345,7 +351,7 @@ async function callRepairLLM(
   issues: string[],
   scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
-  const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.repairTimeoutMs));
+  const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.repairTimeoutMs);
   const res = await llmJson({
     model,
     scene,
@@ -447,7 +453,7 @@ async function callEnhanceLLM(
   draft: GameSpec,
   scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
-  const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.enhanceTimeoutMs));
+  const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.enhanceTimeoutMs);
   const res = await llmJson({
     model,
     scene,
@@ -778,7 +784,7 @@ export async function generateGameSpecDraftWithMeta(
     };
   }
 
-  const totalTimeoutMs = Math.max(8_000, Math.min(120_000, PRODUCT.game.totalTimeoutMs));
+  const totalTimeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.totalTimeoutMs);
   let llmError: string | undefined;
   let llmMode: "json_schema" | "json_object" | undefined;
   const runDraftChain = async () =>
@@ -860,7 +866,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
     models: gameRoute.models,
   });
   const models = gameRoute.models;
-  const totalTimeoutMs = Math.max(8_000, Math.min(120_000, PRODUCT.game.totalTimeoutMs));
+  const totalTimeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.totalTimeoutMs);
   const orch = params.options?.orchestration;
   const runEnhance = async () =>
     await withTimeout(

@@ -121,21 +121,132 @@ export function saturateHex(hex: string, delta: number): string {
   return rgbToHex(o.r, o.g, o.b);
 }
 
-/** 补齐 presentation.musicProfile（仅当缺失时）；不改变模型已输出的合法取值。 */
+export type AssetStyle =
+  | "classic-arcade"
+  | "hard-sci-fi"
+  | "kawaii-mecha"
+  | "bullet-hell"
+  | "wuxia-flight"
+  | "blocky-pixel"
+  | "cute-cartoon"
+  | "dark-fantasy"
+  | "80s-cartoon"
+  | "nature-organic"
+  | "neon-cyber"
+  | "paper-craft";
+
+const ASSET_STYLES: readonly AssetStyle[] = [
+  "classic-arcade",
+  "hard-sci-fi",
+  "kawaii-mecha",
+  "bullet-hell",
+  "wuxia-flight",
+  "blocky-pixel",
+  "cute-cartoon",
+  "dark-fantasy",
+  "80s-cartoon",
+  "nature-organic",
+  "neon-cyber",
+  "paper-craft",
+] as const;
+
+/**
+ * 从 spec 推断 assetStyle（仅当 LLM 未明确输出时使用）。
+ * 检查 title/subtitle/labels 关键词 → 模板默认 → 主题色推断。
+ */
+export function inferAssetStyle(spec: GameSpec): AssetStyle {
+  const blob = [
+    spec.title,
+    spec.labels?.subtitle ?? "",
+    spec.labels?.player ?? "",
+    spec.labels?.hazard ?? "",
+    spec.labels?.collectible ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  // 强关键词命中
+  if (/方块|我的世界|minecraft|像素|pixel|8bit|steve|苦力怕/.test(blob)) return "blocky-pixel";
+  if (/赛博|霓虹|cyber|neon|赛博朋克|cyberpunk/.test(blob)) return "neon-cyber";
+  if (/弹幕|bullet hell|东方|touhou|barrage/.test(blob)) return "bullet-hell";
+  if (/武侠|剑客|江湖|水墨|wuxia|中国风|仙侠/.test(blob)) return "wuxia-flight";
+  if (/萌|可爱|cute|chibi|kawaii|猫|狗|kitten|喵/.test(blob)) return "cute-cartoon";
+  if (/机甲|高达|gundam|mecha|robot/.test(blob)) return "kawaii-mecha";
+  if (/暗黑|哥特|地狱|恶魔|gothic|dark fantasy|demon|undead/.test(blob)) return "dark-fantasy";
+  if (/纸|折纸|手工|paper|craft|origami/.test(blob)) return "paper-craft";
+  if (/田园|自然|森林|花园|garden|forest|farm/.test(blob)) return "nature-organic";
+  if (/80s|复古|retro|vintage|霓虹复古/.test(blob)) return "80s-cartoon";
+  if (/太空|宇宙|星际|战舰|space|galaxy|spaceship|starfighter|sci-?fi/.test(blob)) return "hard-sci-fi";
+
+  // 模板默认气质
+  const templateDefault: Partial<Record<GameSpec["templateId"], AssetStyle>> = {
+    shooter: "classic-arcade",
+    towerDefense: "cute-cartoon",
+    platformer: "80s-cartoon",
+    coaster: "kawaii-mecha",
+    farming: "nature-organic",
+    survivor: "dark-fantasy",
+    avoider: "classic-arcade",
+    collector: "cute-cartoon",
+    puzzle: "paper-craft",
+    physics: "paper-craft",
+    chess: "paper-craft",
+    customization: "cute-cartoon",
+    strategy: "dark-fantasy",
+  };
+  const def = templateDefault[spec.templateId];
+  if (def) return def;
+
+  // 主题色推断兜底
+  const bg = hexToRgb(spec.theme.backgroundColor);
+  const player = hexToRgb(spec.theme.playerColor);
+  if (bg && player) {
+    const lum = relativeLuminance(bg);
+    const hs = rgbToHsl(player.r, player.g, player.b);
+    if (lum < 0.18 && hs.s > 0.5) return "neon-cyber";
+    if (lum > 0.6) return "cute-cartoon";
+  }
+  return "classic-arcade";
+}
+
+/** 补齐 presentation.musicProfile / assetStyle / qualityTier 等（仅当缺失时）。 */
 export function withPresentationDefaults(spec: GameSpec): GameSpec {
-  const cur = spec.presentation?.musicProfile;
-  const tier = spec.presentation?.qualityTier;
-  if ((cur === "organic" || cur === "pulse" || cur === "minimal" || cur === "neon") && tier) {
+  const cur = spec.presentation ?? {};
+  const musicProfile =
+    cur.musicProfile === "organic" ||
+    cur.musicProfile === "pulse" ||
+    cur.musicProfile === "minimal" ||
+    cur.musicProfile === "neon"
+      ? cur.musicProfile
+      : inferMusicProfile(spec.theme);
+  const qualityTier = cur.qualityTier ?? "standard";
+  const assetStyle =
+    cur.assetStyle && ASSET_STYLES.includes(cur.assetStyle as AssetStyle)
+      ? cur.assetStyle
+      : inferAssetStyle(spec);
+
+  if (
+    cur.musicProfile === musicProfile &&
+    cur.qualityTier === qualityTier &&
+    cur.assetStyle === assetStyle
+  ) {
     return spec;
   }
   return {
     ...spec,
     presentation: {
-      ...spec.presentation,
-      musicProfile: cur === "organic" || cur === "pulse" || cur === "minimal" || cur === "neon" ? cur : inferMusicProfile(spec.theme),
-      qualityTier: tier ?? "standard",
+      ...cur,
+      musicProfile,
+      qualityTier,
+      assetStyle,
     },
   };
+}
+
+export function resolveAssetStyle(spec: GameSpec): AssetStyle {
+  const cur = spec.presentation?.assetStyle;
+  if (cur && ASSET_STYLES.includes(cur as AssetStyle)) return cur as AssetStyle;
+  return inferAssetStyle(spec);
 }
 
 export function resolveMusicProfile(spec: GameSpec): MusicProfile {

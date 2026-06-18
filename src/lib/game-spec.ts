@@ -295,6 +295,44 @@ export const GameSpecSchema = z.object({
       musicProfile: z.enum(["organic", "pulse", "minimal", "neon"]).optional(),
       /** 运行时表现档：用户新建默认 standard；样品/精选可升 showcase；CI/低端环境可降 minimal。 */
       qualityTier: z.enum(["minimal", "standard", "showcase"]).optional(),
+      /**
+       * 模板内艺术风格枚举。由 LLM 输出 → 运行时挑选对应程序化绘制皮肤。
+       * 跨模板通用（不是每个模板都支持所有风格，运行时挑最接近的）：
+       * - classic-arcade：80-90s 复古街机像素感（飞机大战 / 弹幕首选）
+       * - hard-sci-fi：硬科幻金属光泽（太空 / 战舰）
+       * - kawaii-mecha：可爱机甲 / 萌系射击
+       * - bullet-hell：高密度弹幕、霓虹冷暖
+       * - wuxia-flight：中国风 / 水墨写意飞行
+       * - blocky-pixel：方块像素（Minecraft 风）
+       * - cute-cartoon：可爱卡通圆角
+       * - dark-fantasy：暗黑奇幻 / 哥特
+       * - 80s-cartoon：80 年代手绘卡通
+       * - nature-organic：自然有机 / 田园
+       * - neon-cyber：赛博霓虹
+       * - paper-craft：纸艺折纸
+       */
+      assetStyle: z
+        .enum([
+          "classic-arcade",
+          "hard-sci-fi",
+          "kawaii-mecha",
+          "bullet-hell",
+          "wuxia-flight",
+          "blocky-pixel",
+          "cute-cartoon",
+          "dark-fantasy",
+          "80s-cartoon",
+          "nature-organic",
+          "neon-cyber",
+          "paper-craft",
+        ])
+        .optional(),
+      /** HUD 字体倾向：与 assetStyle 协同（serif/handwritten/pixel/sans 等） */
+      hudFontStyle: z.enum(["sans", "serif", "pixel", "handwritten", "display"]).optional(),
+      /** 背景音乐标签：与 musicProfile 协同，用于映射 public/game-bgm/*.ogg */
+      bgmTag: z.string().min(1).max(40).optional(),
+      /** SFX 音效包标签：用于映射 public/game-sfx/{tag}/*.wav */
+      sfxPack: z.string().min(1).max(40).optional(),
     })
     .optional(),
   labels: z.object({

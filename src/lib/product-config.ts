@@ -19,9 +19,9 @@ export const PRODUCT = {
     /** 游戏 / GameSpec — 纯文本创意（无参考图） */
     gameTextPrimary: "glm-5-2",
     gameTextFallbacks: ["deepseek-v4-pro"] as string[],
-    /** 游戏 / GameSpec — 含参考图或多模态理解 */
-    gameVisionPrimary: "gpt-5.4",
-    gameVisionFallbacks: ["gemini-3.1-pro-preview"] as string[],
+    /** 游戏 / GameSpec — 含参考图或多模态理解（LiteLLM 池内 ID：gpt-5-4） */
+    gameVisionPrimary: "gpt-5-4",
+    gameVisionFallbacks: ["kimi-k2-6"] as string[],
     /** @deprecated 兼容旧路由；新配置请用 gameText* / gameVision* */
     gamePrimary: "gpt-5.2",
     gameFallbacks: ["gemini-3.1-pro-preview"] as string[],
@@ -123,13 +123,15 @@ export const PRODUCT = {
   },
 
   game: {
-    genTimeoutMs: 45_000,
-    repairTimeoutMs: 30_000,
-    enhanceTimeoutMs: 45_000,
+    /** 单次 GameSpec LLM 调用；过短会在应用侧 AbortSignal 取消，网关记 context canceled */
+    genTimeoutMs: 120_000,
+    repairTimeoutMs: 90_000,
+    enhanceTimeoutMs: 120_000,
     /** Agentic 模块：完整 JS 源码 JSON，需更长网关超时 */
     agenticTimeoutMs: 120_000,
     agenticRepairTimeoutMs: 90_000,
-    totalTimeoutMs: 120_000,
+    /** 模型链整段（含 repair / 多模型回退） */
+    totalTimeoutMs: 300_000,
     maxRepairRounds: 2,
     /** 部分网关 strict schema 不兼容扩展 director 时保持 false */
     jsonSchemaIncludeDirector: false,

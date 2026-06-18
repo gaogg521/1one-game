@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from "openai/resources/chat/completions";
 import { safeErrorSummary } from "@/lib/llm/errors";
-import { withTimeout } from "@/lib/llm/utils";
+import { runWithAbortTimeout } from "@/lib/llm/utils";
 import { PRODUCT } from "@/lib/product-config";
 import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
 import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
@@ -20,8 +20,6 @@ export async function llmTextOpenAICompatible(params: {
   req: LlmTextRequest & { provider: LlmProvider };
 }): Promise<LlmTextResult> {
   const { client, req } = params;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
   const messages = [
     { role: "system" as const, content: req.system },
     { role: "user" as const, content: req.user },
@@ -29,16 +27,17 @@ export async function llmTextOpenAICompatible(params: {
   try {
     const maxOut = req.maxTokens ?? PRODUCT.llm.textMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
-    const p = client.chat.completions.create(
-      {
-        model: req.model,
-        temperature: req.temperature,
-        messages,
-        ...tokenField,
-      } as ChatCompletionCreateParamsNonStreaming,
-      { signal: ac.signal },
+    const res = await runWithAbortTimeout(req.timeoutMs, `llm-text ${req.provider}`, (signal) =>
+      client.chat.completions.create(
+        {
+          model: req.model,
+          temperature: req.temperature,
+          messages,
+          ...tokenField,
+        } as ChatCompletionCreateParamsNonStreaming,
+        { signal },
+      ),
     );
-    const res = await withTimeout(p, req.timeoutMs + 2500, `llm-text ${req.provider}`);
     const text = res.choices[0]?.message?.content ?? "";
     if (!text || text.length < 10) {
       return { ok: false, provider: req.provider, model: req.model, error: "empty text output" };
@@ -46,36 +45,35 @@ export async function llmTextOpenAICompatible(params: {
     return { ok: true, provider: req.provider, model: req.model, text };
   } catch (e) {
     return { ok: false, provider: req.provider, model: req.model, error: safeErrorSummary(e) };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
 /**
  * OpenAI 兼容网关流式输出（SSE 上游）；用于长篇小说等场景。
- * 在 `timeoutMs` 到达时 abort；不按 chunk 做额外 Promise.race（避免误截断）。
+ * 超时通过独立 AbortSignal 取消，不按 chunk 做额外 Promise.race。
  */
 export async function* llmTextStreamOpenAICompatible(params: {
   client: OpenAI;
   req: LlmTextRequest & { provider: LlmProvider };
 }): AsyncGenerator<string, void, unknown> {
   const { client, req } = params;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
   const messages = [
     { role: "system" as const, content: req.system },
     { role: "user" as const, content: req.user },
   ];
+  const maxOut = req.maxTokens ?? PRODUCT.llm.textMaxOutputTokens;
+  const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
+  const body = {
+    model: req.model,
+    temperature: req.temperature,
+    messages,
+    stream: true as const,
+    ...tokenField,
+  } satisfies ChatCompletionCreateParamsStreaming;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
   try {
-    const maxOut = req.maxTokens ?? PRODUCT.llm.textMaxOutputTokens;
-    const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
-    const body = {
-      model: req.model,
-      temperature: req.temperature,
-      messages,
-      stream: true as const,
-      ...tokenField,
-    } satisfies ChatCompletionCreateParamsStreaming;
     const stream = await client.chat.completions.create(body, { signal: ac.signal });
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content ?? "";
@@ -92,8 +90,6 @@ export async function llmJsonOpenAICompatible(params: {
   gatewayBaseUrl?: string | null;
 }): Promise<LlmJsonResult> {
   const { client, req, gatewayBaseUrl } = params;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), req.timeoutMs);
   const messages = [
     { role: "system" as const, content: req.system },
     { role: "user" as const, content: req.user },
@@ -118,8 +114,10 @@ export async function llmJsonOpenAICompatible(params: {
             response_format: { type: "json_object" },
             ...tokenField,
           } as ChatCompletionCreateParamsNonStreaming);
-    const p = client.chat.completions.create(completionParams, { signal: ac.signal });
-    const res = await withTimeout(p, req.timeoutMs + 2500, `llm ${req.provider} ${mode}`);
+
+    const res = await runWithAbortTimeout(req.timeoutMs, `llm ${req.provider} ${mode}`, (signal) =>
+      client.chat.completions.create(completionParams, { signal }),
+    );
     return { raw: parseJsonContent(res.choices[0]?.message?.content), mode };
   }
 
@@ -128,7 +126,7 @@ export async function llmJsonOpenAICompatible(params: {
       const r = await run(req.mode);
       if (r.raw !== null) return { ok: true, provider: req.provider, model: req.model, mode: r.mode, raw: r.raw };
     } catch {
-      // fallthrough
+      // fallthrough — 每次 run 使用独立 AbortController
     }
     const fallbackMode: LlmMode = req.mode === "json_schema" ? "json_object" : "json_schema";
     const r2 = await run(fallbackMode);
@@ -142,8 +140,5 @@ export async function llmJsonOpenAICompatible(params: {
       modeTried: req.mode,
       error: safeErrorSummary(e, { gatewayBaseUrl }),
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
-

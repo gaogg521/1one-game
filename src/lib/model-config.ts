@@ -9,8 +9,10 @@ export type ImageGenSizeOption = import("@/lib/product-config").ImageGenSizeOpti
 export function normalizeOpenAIModelId(id: string): string {
   const t = id.trim();
   const prefix = "litellm/";
-  if (t.toLowerCase().startsWith(prefix)) return t.slice(prefix.length);
-  return t;
+  const bare = t.toLowerCase().startsWith(prefix) ? t.slice(prefix.length) : t;
+  /** 内部 LiteLLM 注册名与常见误写 */
+  if (bare === "gpt-5.4") return "gpt-5-4";
+  return bare;
 }
 
 function dedupeModelIds(ids: string[]): string[] {
