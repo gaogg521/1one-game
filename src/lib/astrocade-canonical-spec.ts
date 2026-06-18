@@ -29,14 +29,21 @@ export function buildCanonicalAstrocadeSpec(
     opts.sampleId ?? inferSampleIdFromPrompt(trimmed) ?? persistedVariantId;
   const sample = inferredId ? SAMPLES.find((s) => s.id === inferredId) : undefined;
 
-  /** 已知样品 prompt / variant：mock 起跑；否则沿用 persisted */
-  const base: GameSpec = sample
-    ? mockSpecFromPrompt(trimmed, {
-        sampleId: sample.id,
-        title: sample.title,
-        subtitle: sample.subtitle,
-      })
-    : opts.persistedSpec ?? mockSpecFromPrompt(trimmed);
+  const hasAgenticArtifact =
+    Boolean(opts.persistedSpec?.agenticModule?.source) ||
+    opts.persistedSpec?.agenticPlayRoute === "agentic";
+
+  /** 已知样品 prompt / variant：mock 起跑；Agentic 生成物保留 persisted，避免入库时剥离模块 */
+  const base: GameSpec =
+    hasAgenticArtifact && opts.persistedSpec
+      ? opts.persistedSpec
+      : sample
+        ? mockSpecFromPrompt(trimmed, {
+            sampleId: sample.id,
+            title: sample.title,
+            subtitle: sample.subtitle,
+          })
+        : (opts.persistedSpec ?? mockSpecFromPrompt(trimmed));
 
   const projectId = opts.projectId;
   const sampleId =
@@ -44,10 +51,20 @@ export function buildCanonicalAstrocadeSpec(
     (projectId && isSampleGalleryProject(projectId) ? projectId.slice("sample-".length) : undefined) ??
     inferredId;
 
-  return enrichGameSpecForRuntime(base, trimmed, locale, {
+  let result = enrichGameSpecForRuntime(base, trimmed, locale, {
     sampleId,
     projectId,
   });
+  if (hasAgenticArtifact && opts.persistedSpec) {
+    result = {
+      ...result,
+      ...(opts.persistedSpec.agenticModule?.source
+        ? { agenticModule: opts.persistedSpec.agenticModule }
+        : {}),
+      agenticPlayRoute: opts.persistedSpec.agenticPlayRoute ?? "agentic",
+    };
+  }
+  return result;
 }
 
 /** 试玩前：normalize + canonical（幂等） */

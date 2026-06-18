@@ -10,9 +10,15 @@ import type { GameSpec } from "@/lib/game-spec";
 import { repoPublicPath } from "@/lib/public-path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
+import type { CreativeBrief } from "@/lib/creative-brief/types";
+import {
+  appendBriefVisualDirection,
+  buildBriefVisualDirection,
+} from "@/lib/assets/brief-visual-direction";
 import type { AppLocale } from "@/i18n/routing";
 import { assetGenMessage } from "@/lib/i18n/progress-message";
 import { templateVisualStyle, buildAssetMoodLine } from "@/lib/assets/template-visual-styles";
+import { generateComfySpritePngBuffer, isComfyGameSpriteEnabled } from "@/lib/comfy-game-sprite-gen";
 
 const SPRITE_DIR = repoPublicPath("game-sprites");
 
@@ -40,7 +46,10 @@ export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
   // 检测具体游戏风格，生成更有针对性的提示词
   // 扩展：覆盖 LLM 抽象后的常见 PvZ 词汇（温室、防线、射手、阳光、塔、波等）
   const isPvZ = /植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant|温室|防线|射手|阳光|塔防|腐化|变异|植/.test(allText);
-  const isSpace = /太空|宇宙|星际|飞船|space|star|galaxy|星云|战舰/.test(allText);
+  const isSpace =
+    /太空|宇宙|星际|飞船|space|star|galaxy|星云|战舰|飞机|战机|敌机|空战|弹幕|打飞机|plane|aircraft|fighter|jet|dogfight/i.test(
+      allText,
+    ) || spec.templateId === "shooter";
   const isWuxia = /武侠|江湖|剑客|sword|wuxia|门派|内力/.test(allText);
   const isAnime = /二次元|动漫|anime|少女|萌|机甲|manga/.test(allText);
   const isCyber = /赛博|霓虹|cyber|neon|全息|机甲/.test(allText);
@@ -252,40 +261,39 @@ export type SpriteGenResult = {
   error?: string;
 };
 
-export async function generateGameSprites(
+async function generateOneSprite(
   projectId: string,
   spec: GameSpec,
-  uiLocale: AppLocale = "zh-Hans",
-): Promise<SpriteGenResult[]> {
-  const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
-    assetGenMessage(uiLocale, key, p);
-  const availability = getImageGenAvailability();
-  if (!availability.ok) {
-    return (["player", "hazard", "gem", "power"] as SpriteKind[]).map((kind) => ({
-      kind,
-      url: null,
-      error: availability.message,
-    }));
+  kind: SpriteKind,
+  dir: string,
+  brief: CreativeBrief | null | undefined,
+  ag: (key: string, p?: Record<string, string | number | undefined | null>) => string,
+): Promise<SpriteGenResult> {
+  const filePath = path.join(/*turbopackIgnore: true*/ dir, `${kind}.png`);
+  const publicUrl = `/game-sprites/${projectId}/${kind}.png`;
+
+  if (fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
+    console.info(`[game-sprite] 复用缓存 ${projectId}/${kind}`);
+    return { kind, url: publicUrl };
   }
 
-  const dir = ensureDir(projectId);
-  const results: SpriteGenResult[] = [];
+  const prompt = appendBriefVisualDirection(
+    buildSpritePrompt(spec, kind),
+    buildBriefVisualDirection(brief),
+  );
+  console.info(`[game-sprite] 生成 ${projectId}/${kind}…`);
 
-  for (const kind of ["player", "hazard", "gem", "power", "boss"] as SpriteKind[]) {
-    const filePath = path.join(/*turbopackIgnore: true*/ dir, `${kind}.png`);
-    const publicUrl = `/game-sprites/${projectId}/${kind}.png`;
-
-    // 已有缓存则跳过
-    if (fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
-      console.info(`[game-sprite] 复用缓存 ${projectId}/${kind}`);
-      results.push({ kind, url: publicUrl });
-      continue;
+  try {
+    let buf: Buffer | null = null;
+    if (isComfyGameSpriteEnabled()) {
+      buf = await generateComfySpritePngBuffer(prompt, {
+        filenamePrefix: `sprite_${projectId.slice(0, 8)}_${kind}`,
+        negative: "blurry, text, watermark, logo, UI mockup, multiple characters",
+      });
+      if (buf) console.info(`[game-sprite] ${projectId}/${kind} via Comfy 256→512`);
     }
 
-    const prompt = buildSpritePrompt(spec, kind);
-    console.info(`[game-sprite] 生成 ${projectId}/${kind}…`);
-
-    try {
+    if (!buf) {
       const result = await generateImageDetailed(prompt, {
         size: "1024x1024",
         quality: "standard",
@@ -293,33 +301,52 @@ export async function generateGameSprites(
 
       if (!result.ok || !result.url) {
         console.warn(`[game-sprite] ${projectId}/${kind} 生成失败：${result.error ?? "无返回"}`);
-        results.push({ kind, url: null, error: result.error ?? ag("generateFailed") });
-        continue;
+        return { kind, url: null, error: result.error ?? ag("generateFailed") };
       }
 
-      let buf: Buffer;
       if (result.localPath && fs.existsSync(result.localPath)) {
         buf = fs.readFileSync(result.localPath);
       } else {
         const res = await fetch(result.url);
         if (!res.ok) {
-          results.push({ kind, url: null, error: ag("downloadFailedHttp", { status: res.status }) });
-          continue;
+          return { kind, url: null, error: ag("downloadFailedHttp", { status: res.status }) };
         }
         buf = Buffer.from(await res.arrayBuffer());
       }
-
-      fs.writeFileSync(/*turbopackIgnore: true*/ filePath, buf);
-      console.info(`[game-sprite] ${projectId}/${kind} 已保存`);
-      results.push({ kind, url: publicUrl });
-    } catch (e) {
-      results.push({
-        kind,
-        url: null,
-        error: e instanceof Error ? e.message : String(e),
-      });
     }
+
+    fs.writeFileSync(/*turbopackIgnore: true*/ filePath, buf);
+    console.info(`[game-sprite] ${projectId}/${kind} 已保存`);
+    return { kind, url: publicUrl };
+  } catch (e) {
+    return {
+      kind,
+      url: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+export async function generateGameSprites(
+  projectId: string,
+  spec: GameSpec,
+  uiLocale: AppLocale = "zh-Hans",
+  brief?: CreativeBrief | null,
+): Promise<SpriteGenResult[]> {
+  const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
+    assetGenMessage(uiLocale, key, p);
+  const availability = getImageGenAvailability();
+  const kinds: SpriteKind[] = ["player", "hazard", "gem", "power", "boss"];
+  if (!availability.ok) {
+    return kinds.map((kind) => ({
+      kind,
+      url: null,
+      error: availability.message,
+    }));
   }
 
-  return results;
+  const dir = ensureDir(projectId);
+  return Promise.all(
+    kinds.map((kind) => generateOneSprite(projectId, spec, kind, dir, brief, ag)),
+  );
 }

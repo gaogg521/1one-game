@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { classifyPromptComplexity } from "@/lib/opengame-skills/complexity-route";
 import { resolveTemplateArchetype } from "@/lib/opengame-skills/template-archetypes";
 
 /**
@@ -19,9 +20,11 @@ Must call ctx.onEnd(true|false). No generic click-for-score unless template is u
 }
 
 export function buildTemplateSkillUserAppend(prompt: string, spec: GameSpec): string {
-  const archetype = resolveTemplateArchetype(spec, prompt);
+  const complexity = classifyPromptComplexity(prompt, spec);
+  const archetype = resolveTemplateArchetype(spec, prompt, complexity.archetypeHint);
   const lines = [
     "",
+    `Prompt complexity: ${complexity.tier} (score=${complexity.score}${complexity.signals.length ? `; ${complexity.signals.join(", ")}` : ""})`,
     `Template Skill archetype: ${archetype.label} (OpenGame module: ${archetype.opengameModule})`,
     `Physics profile: ${archetype.physicsProfile}`,
     "Required hooks in create():",

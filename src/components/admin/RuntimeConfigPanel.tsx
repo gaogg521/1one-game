@@ -30,6 +30,10 @@ export type RuntimeConfigView = {
   };
   sources: Record<string, "env" | "db" | "none">;
   models: {
+    gameTextPrimary: string;
+    gameTextFallbacks: string[];
+    gameVisionPrimary: string;
+    gameVisionFallbacks: string[];
     gamePrimary: string;
     gameFallbacks: string[];
     novelTextPrimary: string;
@@ -39,6 +43,10 @@ export type RuntimeConfigView = {
   };
   modelSources: Record<string, "product" | "db">;
   productDefaults: {
+    gameTextPrimary?: string;
+    gameTextFallbacks?: string[];
+    gameVisionPrimary?: string;
+    gameVisionFallbacks?: string[];
     gamePrimary: string;
     gameFallbacks: string[];
     novelTextPrimary: string;
@@ -853,8 +861,21 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           ?? providersForm.find((p) => p.protocol === meta.defaultProtocol && p.enabled)?.id
           ?? providersForm[0]?.id
           ?? "";
-        if (meta.scene === "game") {
-          return { scene: meta.scene, providerId, primary: d.gamePrimary, fallbacks: [...d.gameFallbacks] };
+        if (meta.scene === "game_text") {
+          return {
+            scene: meta.scene,
+            providerId,
+            primary: d.gameTextPrimary ?? d.gamePrimary,
+            fallbacks: [...(d.gameTextFallbacks ?? d.gameFallbacks)],
+          };
+        }
+        if (meta.scene === "game_vision") {
+          return {
+            scene: meta.scene,
+            providerId,
+            primary: d.gameVisionPrimary ?? d.gamePrimary,
+            fallbacks: [...(d.gameVisionFallbacks ?? d.gameFallbacks)],
+          };
         }
         if (meta.scene === "novel" || meta.scene === "novel_plan" || meta.scene === "comic_storyboard") {
           return {
@@ -1049,7 +1070,11 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                   const domain =
                     meta.domain === "game" ? DOMAIN.game : meta.domain === "novel" ? DOMAIN.novel : DOMAIN.comic;
                   const showFallback =
-                    meta.scene === "game" || meta.scene === "novel" || meta.scene === "novel_plan" || meta.scene === "comic_storyboard";
+                    meta.scene === "game_text"
+                    || meta.scene === "game_vision"
+                    || meta.scene === "novel"
+                    || meta.scene === "novel_plan"
+                    || meta.scene === "comic_storyboard";
                   const provider = providersForm.find((p) => p.id === route?.providerId);
                   const suggestions = provider ? parseModelsText(provider.modelsText) : [];
                   return (

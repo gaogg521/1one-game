@@ -47,6 +47,11 @@ function guessLabels(prompt: string): {
   hazard: string;
   collectible: string;
 } {
+  // 飞机大战/竖版射击：强制更贴近的标签，避免生成出“萌块”贴图
+  if (/(飞机大战|打飞机|战机|敌机|空战|dogfight|aircraft|fighter\s*jet|jet\s*fighter|bullet\s*hell|stg)/i.test(prompt)) {
+    return { player: "战机", hazard: "敌机", collectible: "金币" };
+  }
+
   const role =
     /(?:操控|扮演|控制|我是|扮演一只|扮演一个)([^，。！？\s]{1,8})/.exec(prompt)?.[1] ??
     /([\u4e00-\u9fa5]{2,6})(?:在|于)/.exec(prompt)?.[1];

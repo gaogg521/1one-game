@@ -4,7 +4,9 @@ import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
 import { getComfyBaseUrl, probeComfyHealthDetailed } from "@/lib/orchestration/comfy-gateway";
-import { llmJson, getActiveProvider, getProviderModelCascade } from "@/lib/llm";
+import { llmJson, getActiveProvider } from "@/lib/llm";
+import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-model-route";
+import type { RuntimeSceneKey } from "@/lib/runtime-providers";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { buildLlmTemplateCatalogLines, llmTemplateIdEnum } from "@/lib/game-templates/llm-catalog";
@@ -34,7 +36,8 @@ import {
   type ExpandCreativeBriefResult,
 } from "@/lib/creative-brief";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
-import { attachAgenticModuleIfEnabled, isAgenticModuleEnabled } from "@/lib/agentic/generate-game-module";
+import { attachAgenticModuleIfEnabled, isAgenticModuleEnabled, lintDedicatedRouteDebugSkill } from "@/lib/agentic/generate-game-module";
+import { classifyPromptComplexity } from "@/lib/opengame-skills";
 
 const SYSTEM = `你是「一句话小游戏」规格生成器。用户用中文或英文描述想要的极简 2D 网页小游戏（单次会话内可玩）。
 
@@ -306,13 +309,25 @@ function safeErrorSummary(e: unknown): string {
   }
 }
 
+function gameLlmRouteInput(
+  prompt: string,
+  options?: Pick<GenerateOptions, "assetManifestSummary">,
+): GameModelRouteInput {
+  return {
+    prompt,
+    assetManifestItemCount: options?.assetManifestSummary?.itemCount,
+  };
+}
+
 async function callPrimaryLLM(
   model: string,
   userPrompt: string,
+  scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
   const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.genTimeoutMs));
   const res = await llmJson({
     model,
+    scene,
     system: SYSTEM,
     user: userPrompt,
     temperature: 0.55,
@@ -328,10 +343,12 @@ async function callRepairLLM(
   userPrompt: string,
   broken: unknown,
   issues: string[],
+  scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
   const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.repairTimeoutMs));
   const res = await llmJson({
     model,
+    scene,
     system:
       "你是 JSON 修复器。用户要一个小游戏规格。你只输出一个完整 JSON 对象，符合既定 schema，颜色必须是 #RRGGBB，不要 markdown。",
     user: `原始创意：\n${userPrompt}\n\n校验问题：\n${issues.slice(0, 12).join("\n")}\n\n残缺输出（请修正为合法规格）：\n${JSON.stringify(broken).slice(0, 6000)}`,
@@ -350,10 +367,11 @@ export async function repairGameSpecFromIssues(
   issues: string[],
 ): Promise<GameSpec | null> {
   const clean = userPrompt.trim();
-  const models = getProviderModelCascade();
+  const route = resolveGameModelRoute({ prompt: userPrompt });
+  const models = route.models;
   for (const model of models) {
     try {
-      const repairedRaw = await callRepairLLM(model, userPrompt, broken, issues);
+      const repairedRaw = await callRepairLLM(model, userPrompt, broken, issues, route.scene);
       if (!repairedRaw) continue;
       const repaired = coerceGameSpec(repairedRaw);
       if (repaired.ok) {
@@ -427,10 +445,12 @@ async function callEnhanceLLM(
   model: string,
   userPrompt: string,
   draft: GameSpec,
+  scene: RuntimeSceneKey,
 ): Promise<unknown | null> {
   const timeoutMs = Math.max(4_000, Math.min(45_000, PRODUCT.game.enhanceTimeoutMs));
   const res = await llmJson({
     model,
+    scene,
     system:
       "你是「游戏规格强化器」。输入：用户创意 + 一份初稿 GameSpec。输出：一份更成品、更有系统深度的 GameSpec（严格符合 schema）。\n" +
       "硬约束：\n" +
@@ -453,11 +473,12 @@ async function tryGenerateWithModelChain(
   userContent: string,
   clean: string,
   mock: GameSpec,
+  scene: RuntimeSceneKey,
 ): Promise<{ spec: GameSpec; source: GenerationSource; model: string } | null> {
   for (const model of models) {
     let raw: unknown | null = null;
     try {
-      raw = await callPrimaryLLM(model, userContent);
+      raw = await callPrimaryLLM(model, userContent, scene);
     } catch {
       continue;
     }
@@ -474,7 +495,7 @@ async function tryGenerateWithModelChain(
     }
 
     try {
-      const repairedRaw = await callRepairLLM(model, userContent, raw, direct.issues);
+      const repairedRaw = await callRepairLLM(model, userContent, raw, direct.issues, scene);
       if (repairedRaw) {
         const repaired = coerceGameSpec(repairedRaw);
         if (repaired.ok) {
@@ -495,7 +516,7 @@ function specsEqual(a: GameSpec, b: GameSpec): boolean {
 export type GenerateOptions = {
   /** 附在用户消息末尾，用于多套方案差异化（不影响离线 mock 的标题推断基准）。 */
   flavorSuffix?: string;
-  /** 是否启用联网检索增强（需要 TAVILY_API_KEY）。默认 false。 */
+  /** 是否启用联网检索增强（需要 TAVILY_API_KEY）。默认 true。 */
   searchEnhance?: boolean;
   /** 强制/提示玩法模板。auto 表示按 prompt 自动推断。 */
   templateHint?: "auto" | GameSpec["templateId"];
@@ -621,11 +642,12 @@ async function tryEnhanceWithModelChain(
   clean: string,
   draft: GameSpec,
   mock: GameSpec,
+  scene: RuntimeSceneKey,
 ): Promise<{ spec: GameSpec; source: GenerationSource; model: string } | null> {
   for (const model of models) {
     let raw: unknown | null = null;
     try {
-      raw = await callEnhanceLLM(model, userPrompt, draft);
+      raw = await callEnhanceLLM(model, userPrompt, draft, scene);
     } catch {
       continue;
     }
@@ -644,7 +666,7 @@ async function tryEnhanceWithModelChain(
     }
 
     try {
-      const repairedRaw = await callRepairLLM(model, userPrompt, raw, direct.issues);
+      const repairedRaw = await callRepairLLM(model, userPrompt, raw, direct.issues, scene);
       if (repairedRaw) {
         const repaired = coerceGameSpec(repairedRaw);
         if (repaired.ok) {
@@ -728,7 +750,13 @@ export async function generateGameSpecDraftWithMeta(
   const userContent = options?.flavorSuffix ? `${base}\n\n${options.flavorSuffix}` : base;
 
   const provider = getActiveProvider();
-  const models = getProviderModelCascade();
+  const gameRoute = resolveGameModelRoute(gameLlmRouteInput(clean, options));
+  options?.orchestration?.note("game_model_route", {
+    mode: gameRoute.mode,
+    scene: gameRoute.scene,
+    models: gameRoute.models,
+  });
+  const models = gameRoute.models;
   if (!models.length) {
     options?.orchestration?.note("spec_draft_llm_skipped", { reason: "no_models" });
     const hinted = applyTemplateHint(mock, hint);
@@ -755,7 +783,7 @@ export async function generateGameSpecDraftWithMeta(
   let llmMode: "json_schema" | "json_object" | undefined;
   const runDraftChain = async () =>
     withTimeout(
-      tryGenerateWithModelChain(models, userContent, clean, mock),
+      tryGenerateWithModelChain(models, userContent, clean, mock, gameRoute.scene),
       totalTimeoutMs,
       "openai total",
     ).catch((e) => {
@@ -815,7 +843,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   draftSource: GenerationSource;
   draftDebug: GenerationDebug;
   web?: WebEnhanceMeta | null;
-  options?: Pick<GenerateOptions, "templateHint" | "orchestration">;
+  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "assetManifestSummary">;
 }): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
   const clean0 = params.prompt.trim();
   const clean = clean0;
@@ -825,12 +853,18 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   const draft = applyTemplateHint(params.draft, hint);
   const mock = mockSpecFromPrompt(clean);
 
-  const models = getProviderModelCascade();
+  const gameRoute = resolveGameModelRoute(gameLlmRouteInput(clean, params.options));
+  params.options?.orchestration?.note("game_model_route", {
+    mode: gameRoute.mode,
+    scene: gameRoute.scene,
+    models: gameRoute.models,
+  });
+  const models = gameRoute.models;
   const totalTimeoutMs = Math.max(8_000, Math.min(120_000, PRODUCT.game.totalTimeoutMs));
   const orch = params.options?.orchestration;
   const runEnhance = async () =>
     await withTimeout(
-      tryEnhanceWithModelChain(models, enhancePromptForProduction(params.prompt), clean, draft, mock),
+      tryEnhanceWithModelChain(models, enhancePromptForProduction(params.prompt), clean, draft, mock, gameRoute.scene),
       totalTimeoutMs,
       "openai enhance total",
     ).catch(() => null);
@@ -1030,6 +1064,12 @@ export async function generateGameSpecWithMeta(
         itemCount: am.itemCount,
       });
     }
+    const gameRoute = resolveGameModelRoute(gameLlmRouteInput(prompt.trim(), options));
+    orch.note("game_model_route", {
+      mode: gameRoute.mode,
+      scene: gameRoute.scene,
+      models: gameRoute.models,
+    });
   }
 
   const enhancedRequested = options?.enhancePass !== false;
@@ -1058,11 +1098,30 @@ export async function generateGameSpecWithMeta(
     spec = applyTemplateHint(spec, hint);
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {
-      spec = await attachAgenticModuleIfEnabled(prompt.trim(), spec, true);
+      const complexity = classifyPromptComplexity(prompt.trim(), spec);
+      orch?.note("opengame_complexity", {
+        tier: complexity.tier,
+        score: complexity.score,
+        signals: complexity.signals,
+        skipTemplateFirst: complexity.skipTemplateFirst,
+        playRoute: complexity.skipTemplateFirst ? "agentic" : "dedicated",
+      });
+      spec = await attachAgenticModuleIfEnabled(prompt.trim(), spec, true, orch ?? undefined);
       orch?.note("agentic_module", {
         attached: Boolean(spec.agenticModule),
+        playRoute: spec.agenticPlayRoute ?? "dedicated",
         tier: isAstrocade ? "astrocade" : isRich ? "rich" : "standard",
+        opengameTier: complexity.tier,
+        moduleSource: spec.agenticModule ? "attached" : undefined,
       });
+      if (spec.agenticPlayRoute !== "agentic") {
+        const dedicatedLint = lintDedicatedRouteDebugSkill(spec);
+        orch?.note("opengame_dedicated_debug_lint", {
+          ok: dedicatedLint.ok,
+          stage: dedicatedLint.ok ? "runnable" : dedicatedLint.stage,
+          reason: dedicatedLint.ok ? null : dedicatedLint.reason,
+        });
+      }
     }
     if (orch) {
       if (PRODUCT.godot.enabled && isGodotExportSupported(spec)) {

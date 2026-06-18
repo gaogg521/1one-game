@@ -73,9 +73,28 @@ async function main() {
   run("npm run qa:agentic-sandbox-mock");
   run("npm run qa:agentic-template-matrix");
   run("npm run qa:agentic-repair");
+  run("npm run qa:opengame-skills");
+  run("npm run qa:sample-template-skill-parity");
+  run("npm run qa:opengame-cli-spike");
+  run("npm run qa:opengame-cli-bridge");
+  run("npm run qa:temple-death-flow");
+  run("npm run qa:brief-asset-cohesion");
+  run("npm run qa:agentic-persist-coerce");
+  run("npm run qa:sample-behavior-signoff");
+  run("npm run qa:sample-launch-checklist");
+  run("npm run qa:sensory-pipeline-offline");
+  run("npm run qa:opengame-staging-env");
+  run("npm run qa:comfy-game-sprite");
+  run("npm run qa:opengame-cli-live");
+  run("npm run qa:platform-create-replay");
+  ensureDevServer();
+  const benchBase = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8888";
+  run("npm run qa:opengame-browser-bench", { PLAYWRIGHT_BASE_URL: benchBase });
   if (process.env.RUN_LLM_QA === "1") {
     process.env.AGENTIC_LLM_FAST = process.env.AGENTIC_LLM_FAST ?? "1";
     process.env.AGENTIC_QA_STRICT = process.env.AGENTIC_QA_STRICT ?? "1";
+    process.env.PLATFORM_TEST_OWNER = process.env.PLATFORM_TEST_OWNER ?? "platform-test-user";
+    run("npm run qa:platform-test-generate");
     run("npm run qa:generate-stream-agentic");
     run("npm run qa:llm-agentic");
     run("npm run qa:llm-agentic:monitor:all");

@@ -1509,6 +1509,7 @@
     "updatingAndPlay": "อัปเดตโปรเจกต์และทดลองเล่น",
     "saveAndPlay": "บันทึกและทดลองเล่น",
     "spriteWait": "กำลังสร้างสไปรต์เกมเฉพาะ (ตัวละคร ศัตรู ฉากหลัง ฯลฯ) ปกติใช้เวลา 2-3 นาที จากนั้นหน้าทดลองเล่นจะเปิดให้อัตโนมัติ…",
+    "autoCoverReady": "ปกอัตโนมัติจาก Creative Brief พร้อมแล้ว—จะแสดงในคลังงานและศูนย์เกมหลังบันทึก",
     "ingestBusy": "กำลังแยกวิเคราะห์แอสเซต… (ไฟล์ที่อัปโหลดมีลำดับก่อนรูปจากคลิปบอร์ด)",
     "previewAria": "ตัวอย่างที่เล่นได้",
     "previewHint": "เมื่อกรอกไอเดียและแอสเซตอ้างอิงเสร็จแล้ว ให้สร้างแล้วเล่นด้านล่าง แนะนำให้ลอง Godot เวอร์ชันเต็มก่อน ส่วน Phaser เหมาะกับการพรีวิวทันที",
@@ -1664,7 +1665,7 @@
       "templateLabel": "Gameplay template",
       "enhancePass": "Second pass (more polished / complex)",
       "searchEnhance": "Web search boost (Tavily)",
-      "searchEnhanceHint": "Off by default; when on, searches similar games and injects findings into the description",
+      "searchEnhanceHint": "On by default; searches similar games and injects findings. Skips if Tavily key is missing",
       "webWarningPrefix": "Web search note:",
       "webSources": "Sources this round ({count})",
       "generateHint": "Click Generate to auto-parse queued assets; URLs in the link field are fetched and merged too",
@@ -2219,7 +2220,7 @@
       "sectionModelCatalog": "Model catalog (reference)",
       "sectionModelCatalogHint": "Reference for routing—not the live production model.",
       "sectionRoutingEdit": "Edit model routing",
-      "routingEditHint": "Pick provider and model ID per workload.",
+      "routingEditHint": "Pick provider and model ID per workload. Game spec is split into text-only vs reference-image routes; Create Studio picks automatically. Rows that differ from Live are marked Unsaved.",
       "discardChanges": "Discard unsaved edits",
       "discardDone": "Restored last saved config",
       "legacyEnvTitle": "Deployment env (.env)",
@@ -2380,7 +2381,11 @@
       "sourceDb": "Database",
       "sourceEnv": ".env",
       "sourceProduct": "Code default",
-      "sourceNone": "Not set"
+      "sourceNone": "Not set",
+      "sceneGameText": "Game spec · text only",
+      "sceneGameTextDesc": "No reference images: GameSpec draft/enhance, patches, multi-agent, creative brief",
+      "sceneGameVision": "Game spec · with references",
+      "sceneGameVisionDesc": "When reference images are uploaded or prompt includes asset snippets: spec + vision understanding"
     },
     "tabAudit": "Audit log",
     "tabBilling": "Billing",
@@ -2693,8 +2698,188 @@
       "recapTd": "**TD overview**: base HP **{baseHealth}** · start coins **{startingCoins}** · waves **{winScore}** (tweak in quick debug).",
       "recapEnemies": "**Enemy types**: **{count}** registered in blueprint.",
       "recapGeneric": "**Core numbers**: player speed {playerSpeed} · hazard speed {hazardSpeed} · win score {winScore}.",
+      "recapPlayRouteDedicated": "**Play engine**: dedicated sample-grade Scene (fast & stable for simple ideas)",
+      "recapPlayRouteAgentic": "**Play engine**: OpenGame Agentic + Skills (complex ideas → LLM gameplay code)",
+      "recapOpenGameTier": "**OpenGame tier**: {tier}",
+      "recapAgenticModule": "**Agentic module**: attached (source {source}, Debug Skill verified)",
+      "recapAgenticModuleMissing": "**Agentic module**: agentic route but attach failed",
+      "recapBrowserBenchOk": "**Browser Bench**: real-browser probe passed",
+      "recapBrowserBenchFail": "**Browser Bench**: real-browser probe failed (fallback/repair)",
       "recapSearchUsed": "**Web search**: summary merged; sources may appear after completion.",
-      "recapSearchFallback": "**Web search**: no usable summary this round — text-only pipeline.{warning}"
+      "recapSearchFallback": "**Web search**: no usable summary this round — text-only pipeline.{warning}",
+      "recapGameModelModeText": "text-only spec",
+      "recapGameModelModeVision": "multimodal (reference image)",
+      "recapGameModelRoute": "**Model route**: {modeLabel} · scene {scene} · primary {primary}{fallbacks}"
+    },
+    "dialogue": {
+      "shooter": {
+        "classic": {
+          "title": "Classic arcade shmup?",
+          "summary": "Auto-fire upward, dense enemy waves — dodging patterns is the core.",
+          "bullet0": "Enemy formations + escalating waves within ~3 minutes",
+          "bullet1": "Player = fighter jet; foes = enemy craft; drops = coins or energy cores",
+          "addonHeader": "[Choice] Classic arcade shmup",
+          "addon0": "shooter template: auto-fire, wave spawns, vertical/top-down air combat",
+          "addon1": "Bullet density + dodge windows; a clear beat every 20–40s",
+          "addon2": "Unify naming/HUD around “{fantasy}”"
+        },
+        "boss": {
+          "title": "Add a mothership / boss phase?",
+          "summary": "Clear fodder first, then a multi-phase boss (shields → core).",
+          "bullet0": "At least one multi-phase boss with pattern shifts",
+          "bullet1": "Win by destroying the core or holding the line",
+          "addonHeader": "[Choice] Boss / mothership fight",
+          "addon0": "shooter + phased boss: shields, core, add spawns",
+          "addon1": "Elite wave before final boss with dedicated HUD callout",
+          "addon2": "Theme “{fantasy}” in boss name and stage captions"
+        },
+        "power": {
+          "title": "Power-up snowball loop?",
+          "summary": "Enemies drop upgrades — fire rate, spread, shields stack for payoff.",
+          "bullet0": "Drops: +fire, spread, shield, bomb skill",
+          "bullet1": "Combos or kill streaks amplify feedback",
+          "addonHeader": "[Choice] Power growth loop",
+          "addon0": "shooter: visible power growth from enemy drops",
+          "addon1": "Shift skill vs pickup skills have distinct roles",
+          "addon2": "Tuned for “getting stronger” in the first session"
+        },
+        "story": {
+          "title": "Lean into warzone story?",
+          "summary": "Named sectors, enemy legions, mission briefs — still fully playable.",
+          "bullet0": "Chapter/sector titles + consistent faction naming",
+          "bullet1": "subtitle = mood; HUD goals = actionable rules",
+          "addonHeader": "[Choice] Warzone narrative",
+          "addon0": "Air combat shooter + distinct factions and chapter names",
+          "addon1": "labels: player=fighter, hazard=enemy craft, collectible=energy core",
+          "addon2": "Long lore in subtitle/chapters; keep top HUD short"
+        }
+      },
+      "towerDefense": {
+        "lane": {
+          "title": "Single-lane classic TD?",
+          "summary": "One path, multiple tower slots, readable economy and waves.",
+          "bullet0": "Three tower roles (DPS / AoE / slow or buff)",
+          "bullet1": "Clear wave table; leaks damage the base",
+          "addonHeader": "[Choice] Single-lane TD",
+          "addon0": "towerDefense: one path, fixed slots, rising waves",
+          "addon1": "Economy: afford 2–3 towers early; elites mid-game",
+          "addon2": "Theme “{fantasy}”"
+        },
+        "multi": {
+          "title": "Split paths to divide pressure?",
+          "summary": "2–3 routes merging — placement order matters.",
+          "bullet0": "Fast near lane, tanky far lane",
+          "bullet1": "Junction slots are high-value decisions",
+          "addonHeader": "[Choice] Multi-lane TD",
+          "addon0": "Multiple paths merging at choke points",
+          "addon1": "At least one “both lanes spike” beat",
+          "addon2": "Consistent base/enemy naming"
+        },
+        "hero": {
+          "title": "Add a movable hero?",
+          "summary": "Towers hold zones; hero plugs leaks and bursts with skills.",
+          "bullet0": "Hero cooldown skill (clear / slow / heal base)",
+          "bullet1": "Tower upgrades + hero growth in parallel",
+          "addonHeader": "[Choice] Hero + towers",
+          "addon0": "TD skeleton + controllable hero",
+          "addon1": "Shift = hero skill; balanced with build economy",
+          "addon2": "Roles fit “{fantasy}”"
+        },
+        "events": {
+          "title": "Random wave events?",
+          "summary": "Elites, air drops, terrain shifts — force plan changes.",
+          "bullet0": "Mini-event every 2–3 waves (speed / stealth / split)",
+          "bullet1": "Final boss or swarm rush",
+          "addonHeader": "[Choice] Wave events",
+          "addon0": "Insert event cards between waves",
+          "addon1": "Noticeable shift ~every 30s",
+          "addon2": "Banner teases the next threat"
+        }
+      },
+      "platformer": {
+        "run": {
+          "title": "Run-and-collect stages?",
+          "summary": "Move forward, grab coins/items, reach goal or quota.",
+          "bullet0": "Start → goal or checkpoints",
+          "bullet1": "Height changes drive pacing",
+          "addonHeader": "[Choice] Run & collect",
+          "addon0": "platformer: forward stages + collect quota",
+          "addon1": "Clear sections (flat → jump → hazard)",
+          "addon2": "Theme “{fantasy}” in tiles and foes"
+        },
+        "precision": {
+          "title": "Tight precision jumps?",
+          "summary": "Narrow landings, fast rhythm, light penalty but real pressure.",
+          "bullet0": "Spikes / moving platforms / timed gaps",
+          "bullet1": "Checkpoints or short levels",
+          "addonHeader": "[Choice] Precision platforming",
+          "addon0": "Jump feel first; short beats, fast feedback",
+          "addon1": "Gentle start, spicier finish",
+          "addon2": "Visual hazard telegraph"
+        },
+        "combat": {
+          "title": "Combat on platforms?",
+          "summary": "Jump plus stomp/fight enemies — not just hazards.",
+          "bullet0": "At least two enemy behaviors",
+          "bullet1": "Defeats drop items or open gates",
+          "addonHeader": "[Choice] Combat platformer",
+          "addon0": "platformer + defeatable enemies",
+          "addon1": "Shift = dash or attack window",
+          "addon2": "Foes fit “{fantasy}”"
+        },
+        "chapters": {
+          "title": "Chapter-based story?",
+          "summary": "Per-chapter goals, palette shifts, chapter titles.",
+          "bullet0": "~3 chapters with micro mechanic twists",
+          "bullet1": "Chapter name vs subtitle roles (mood vs rules)",
+          "addonHeader": "[Choice] Chapter narrative",
+          "addon0": "Multi-chapter platform levels + transitions",
+          "addon1": "Short HUD goals; long copy not in top bar",
+          "addon2": "“{fantasy}” visible each chapter"
+        }
+      },
+      "fallback": {
+        "goal": {
+          "title": "How should the player win?",
+          "summary": "Pin the win condition — collect, hold, reach, or defeat a boss.",
+          "bullet0": "Make winScore / stage goal / time limit explicit",
+          "bullet1": "Fail state obvious too",
+          "addonHeader": "[Choice] Clear win condition",
+          "addon0": "Quantifiable win (count, waves, time, destination)",
+          "addon1": "Goal panel uses short rule text",
+          "addon2": "Names fit “{fantasy}”"
+        },
+        "threat": {
+          "title": "Where does pressure come from?",
+          "summary": "Pick the main threat: chasers, bullets, traps, leaks, or scarcity.",
+          "bullet0": "Predictable but varied threat behavior",
+          "bullet1": "Feel pressure in the first 30s",
+          "addonHeader": "[Choice] Concrete threats",
+          "addon0": "Specify hazard/enemy/trap types and behavior",
+          "addon1": "Themed foes — not faceless random blocks",
+          "addon2": "Fit “{fantasy}”"
+        },
+        "progression": {
+          "title": "How does it escalate?",
+          "summary": "Waves, skills, chapters, or events that layer pressure.",
+          "bullet0": "A shift every 20–40s",
+          "bullet1": "At least one mid-layer decision",
+          "addonHeader": "[Choice] Progression & depth",
+          "addon0": "Use at least two of: waves, chapters, skills, events",
+          "addon1": "Avoid one flat rhythm all match",
+          "addon2": "Changes justified by “{fantasy}”"
+        },
+        "fantasy": {
+          "title": "Deepen this world direction?",
+          "summary": "Unified naming, palette, and item/enemy terms — one coherent world.",
+          "bullet0": "Title, subtitle, HUD, enemies share vocabulary",
+          "bullet1": "Playable loop first; memorable theme second",
+          "addonHeader": "[Choice] Worldbuilding",
+          "addon0": "Center all labels on “{fantasy}”",
+          "addon1": "Long mood in subtitle; short goals on HUD",
+          "addon2": "Sprite prompts match theme (fighters, not random cute blocks)"
+        }
+      }
     }
   },
   "comicPanelProgress": {

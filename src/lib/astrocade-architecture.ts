@@ -25,9 +25,10 @@ export type AstrocadePlayRoute = {
 
 /** 平台级不变量（QA / 文档共用） */
 export const ASTROCADE_INVARIANTS = [
-  "样品馆、用户新建、duplicate 克隆：同 templateId → 同 Phaser 专用 Scene",
-  "template-first 默认不 attach agenticModule（dedicatedSceneForTemplateFirst）",
-  "试玩前 normalizeAstrocadePlaySpec 剥离旧 agenticModule",
+  "样品馆、用户新建、duplicate 克隆：同 templateId → 同 Phaser 专用 Scene（简单 prompt）",
+  "复杂 prompt（OpenGame agentic_complex）→ agenticPlayRoute=agentic → AgenticScene + Skills",
+  "template-first 简单 prompt 默认不 attach agenticModule（dedicatedSceneForTemplateFirst）",
+  "试玩前 normalizeAstrocadePlaySpec 剥离 dedicated 路由上的 agenticModule；agentic 路由保留",
   "玩法变体由 GameSpec 蓝图字段 + prompt 语义推断写入 specJson",
   "竞品级 per-game 定制写入 spec.samplePlayProfile（seed/clone 烘焙，Scene 读 profile 不查 sampleId）",
   "封面/试玩资产 V2 manifest 双轨一致",

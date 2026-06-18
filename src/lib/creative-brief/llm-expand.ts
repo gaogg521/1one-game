@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { llmJson, getProviderModelCascade } from "@/lib/llm";
+import { llmJson } from "@/lib/llm";
+import { getNovelStyleTextModelCascade } from "@/lib/model-config";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { PRODUCT } from "@/lib/product-config";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
@@ -118,7 +120,17 @@ export async function llmExpandCreativeBrief(
 ): Promise<CreativeBrief> {
   if (!briefLlmEnabled(medium)) return base;
 
-  const models = getProviderModelCascade();
+  const route =
+    medium === "game"
+      ? resolveGameModelRoute({
+          prompt: base.userPrompt,
+          hasReferenceAssets: Boolean(referenceSnippet?.trim()),
+        })
+      : null;
+  const models =
+    medium === "game"
+      ? (route?.models ?? [])
+      : getNovelStyleTextModelCascade();
   if (!models.length) return base;
 
   const timeoutMs = Math.max(4_000, Math.min(28_000, briefExpandTimeoutMs(medium)));
@@ -132,6 +144,7 @@ export async function llmExpandCreativeBrief(
     try {
       const res = await llmJson({
         model,
+        ...(route ? { scene: route.scene } : {}),
         system,
         user:
           `用户原话：\n${base.userPrompt}\n\n` +

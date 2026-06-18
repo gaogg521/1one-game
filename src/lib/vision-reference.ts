@@ -1,9 +1,12 @@
 import type { AppLocale } from "@/i18n/routing";
 import { apiErrorMessage } from "@/lib/i18n/progress-message";
-import { createOpenAIClient } from "@/lib/openai-client";
-import { PRODUCT } from "@/lib/product-config";
+import { clarifyGatewayUpstreamError } from "@/lib/llm/errors";
 import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
-import { getModelCascade } from "@/lib/model-cascade";
+import { getGameModelCascade } from "@/lib/game-model-route";
+import { PRODUCT } from "@/lib/product-config";
+import { getRuntimeConfigSync } from "@/lib/runtime-config";
+import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
+import { resolveSceneRoute } from "@/lib/runtime-providers";
 
 const MAX_SIDE_NOTE =
   "简要列出：①画面主体轮廓与体态 ②配色与光源 ③画风关键词（像素/手绘/水彩/二次元等）④主体与背景的可分性。**另起一行**：用「落地建议」前缀写三小点——(背景是否透明底/纯白/复杂实拍)、(若为可走行兵种或塔楼贴片，推荐使用「居中正方形精灵格」还是保持原宽幅)、(主体是否偏心、是否建议留白边)。总长≤260字中文。";
@@ -29,8 +32,15 @@ export async function describeReferenceImage(params: {
   imageOrdinal?: number;
   uiLocale?: AppLocale;
 }): Promise<string> {
-  const client = createOpenAIClient();
-  const models = getModelCascade();
+  const payload = getRuntimeConfigSync().payload;
+  const ctx = resolveSceneRoute(payload, "game_vision");
+  if (!ctx) {
+    return apiErrorMessage(params.uiLocale ?? "zh-Hans", "visionDescFailed");
+  }
+
+  const client = createOpenAIClientForProvider(ctx.provider);
+  const models = ctx.models.length ? ctx.models : getGameModelCascade("vision");
+  const gatewayBaseUrl = ctx.provider.baseUrl;
   const content = [
     { type: "text" as const, text: buildVisionPrompt(params) },
     {
@@ -53,7 +63,12 @@ export async function describeReferenceImage(params: {
       });
       const t = res.choices[0]?.message?.content?.trim();
       if (t?.length) return t.slice(0, 720);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        "[vision-reference]",
+        clarifyGatewayUpstreamError(msg, gatewayBaseUrl),
+      );
       /* 尝试下一备用模型 */
     }
   }

@@ -1,3 +1,113 @@
+## 2026-06-18 — 迭代一百零四 · Staging Bench + Comfy 精灵 + BGM ✅
+
+Completed:
+
+- `browser-bench-env.ts`：staging 默认 `OPENGAME_BROWSER_BENCH=1` + repair。
+- `comfy-game-sprite-gen.ts`：Comfy 256 → sharp 512；staging/`GAME_SPRITE_COMFY=1`。
+- `seed:game-bgm-slots`：5 款模板 loop；部署 `OPERONE_STAGING=1` 文档 + install.sh 钩子。
+- `qa:opengame-staging-env` · `qa:comfy-game-sprite` · `qa:opengame-cli-live` · build ✅。
+
+---
+
+## 2026-06-18 — 迭代一百零三 · Phase D 视听 + 三阶段缺口 ✅
+
+Completed:
+
+- Phase D：`game-asset-pipeline` Brief 对齐背景/精灵/封面；并行文生图；创作台等 core 3 精灵。
+- BGM：`game-bgm-presets` + `GameSoundscape` 模板 loop 槽与 BPM 微调。
+- Phase A：E2E `platform-complex-agentic.smoke`。
+- Phase C：`qa:sample-behavior-signoff`。
+- QA：brief-asset-cohesion ✅ · build ✅。
+
+---
+
+## 2026-06-18 — 迭代一百零二 · 平台测试生成闭环 ✅
+
+Completed:
+
+- `qa-platform-test-generate.ts`：模拟用户 generate → persist → 试玩链接（owner=`platform-test-user`）。
+- 修复 `coerceGameSpec` 丢弃 `agenticModule`/`agenticPlayRoute` 导致复杂 prompt 入库后变 dedicated。
+- `qa:agentic-persist-coerce` + `qa:platform-test-generate` **全绿**（简单 PhysicsScene + 复杂 AgenticScene）。
+
+---
+
+## 2026-06-17 — 迭代一百零一 · Phaser.Scene bridge + P0 polish ✅
+
+Completed:
+
+- `wrapPhaserSceneAsCreateGame` + phaser-scene fixture；cli-bridge **3/3** ✅。
+- 消消乐关间 ⭐ 飞入；神庙死亡 3s 倒计时 + `templeDeathCountdown` QA 状态。
+- `qa:temple-death-flow` ✅ · build ✅。
+
+---
+
+## 2026-06-17 — 迭代一百 · CLI→Agentic bridge ✅
+
+Completed:
+
+- `opengame-cli-bridge.ts`：workDir JS 合并 + createGame 桥接 + forbidden 校验。
+- `OPENGAME_CLI_BRIDGE=1` 接入 `generateAgenticGameModule`（Debug Skill + 可选 Browser Bench）。
+- Fixtures + `qa:opengame-cli-bridge` ✅；orch `opengame_cli_bridge` trace。
+- QA + build ✅。
+
+---
+
+## 2026-06-17 — 迭代九十九 · Phase C 全量 hook + Phase B CLI spike ✅
+
+Completed:
+
+- Phase C：4 款棋类 Scene hook；**14/14** 样品 hook 试点全覆盖。
+- Phase B：`opengame-cli.ts` + `qa:opengame-cli-spike`；复杂 prompt orch `opengame_cli_spike`。
+- `.env.example` OPENGAME_CLI_* 文档；astrocade-pipeline 接入 cli-spike QA。
+- QA + build ✅。
+
+---
+
+## 2026-06-17 — 迭代九十八 · Phase C 扩展 + dedicated Debug lint ✅
+
+Completed:
+
+- `generation-trace.ts`：OpenGame recap（tier / playRoute / browser bench）；i18n 5 语言。
+- `template-sample-parity.ts` + `qa:sample-template-skill-parity` **14/14**；10 款 Scene hook 试点。
+- `lintDedicatedRouteDebugSkill` + orch `opengame_dedicated_debug_lint`（Phase A dedicated 门禁）。
+- 修复 build：`tMessage` 参数类型；`TemplateArchetypeId` 从 types 导入；barrel 不再 re-export fs 模块。
+- QA + build ✅。
+
+---
+
+## 2026-06-17 — 迭代九十七 · refine 路由重算 + 创作台试玩引擎提示 ✅
+
+Completed:
+
+- `respectPersisted`：生成/refine 重算路由；patch 复杂迭代可升级 agentic。
+- `stripAgenticModuleForDedicatedRoute`；attach 对齐。
+- SSE recap + refine API `agenticPlayRoute`；QA + build ✅。
+
+---
+
+## 2026-06-17 — 迭代九十六 · OpenGame 试玩路由接入用户管线 ✅
+
+Completed:
+
+- `play-route.ts`：`resolveAgenticPlayRoute` / `agenticPlayRoute` 持久化；复杂 prompt 走 Agentic+Skills。
+- `attachAgenticModuleIfEnabled` + `normalizeAstrocadePlaySpec` 对齐；简单 prompt 仍 dedicated Scene。
+- `browser-bench-generate.ts`：可选 `OPENGAME_BROWSER_BENCH=1` 生成后真浏览器验证。
+- QA + build ✅。
+
+---
+
+## 2026-06-17 — 迭代九十五 · OpenGame Browser Bench 闭环 ✅
+
+Completed:
+
+- 修复 `decodeAgenticBenchPayload`：client 侧 base64url 解码（不再依赖 Node `Buffer`）。
+- 修复 `AgenticBenchClient`：`sceneKey` 改在 boot 后用 `getScenes(true)` 探测，消除误报 `MODULE_LOAD_FAILED`。
+- `AgenticBenchShell` 无效 payload 增加 `data-testid="agentic-bench-error"`。
+- `qa:opengame-browser-bench` **2/2**；`qa:opengame-skills` + `qa:agentic-template-matrix` **16/16** ✅。
+- `qa:astrocade-pipeline` 接入 browser bench（dev server @8888）。
+
+---
+
 ## 2026-06-17 — 迭代六十五 · 神庙 near-miss + 连击 + 视差 ✅
 
 Completed:

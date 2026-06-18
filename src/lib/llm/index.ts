@@ -9,6 +9,8 @@ import {
 import { llmJsonAnthropic } from "@/lib/llm/provider-anthropic";
 import { llmJsonGemini } from "@/lib/llm/provider-gemini";
 import { getModelCascadeForProvider, getNovelStyleTextModelCascade, getProviderKeyStatus } from "@/lib/llm/models";
+import type { GameModelRouteInput } from "@/lib/game-model-route";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { LlmJsonRequest, LlmJsonResult, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
 import { resolveSceneRoute, protocolToLlmProvider, RUNTIME_SCENE_KEYS, type RuntimeSceneKey } from "@/lib/runtime-providers";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
@@ -107,7 +109,11 @@ export async function llmJson(
       const client = opts?.novelLongRun
         ? createNovelOpenAIClientForProvider(ctx.provider, tier)
         : createOpenAIClientForProvider(ctx.provider);
-      return await llmJsonOpenAICompatible({ client, req: { ...req, provider } });
+      return await llmJsonOpenAICompatible({
+        client,
+        req: { ...req, provider },
+        gatewayBaseUrl: ctx.provider.baseUrl,
+      });
     });
   }
 
@@ -120,7 +126,11 @@ export async function llmJson(
   if (provider === "gemini") return await llmJsonGemini({ ...req, provider });
   const tier = opts?.lengthTier ?? "medium";
   const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
-  return await llmJsonOpenAICompatible({ client, req: { ...req, provider } });
+  return await llmJsonOpenAICompatible({
+    client,
+    req: { ...req, provider },
+    gatewayBaseUrl: process.env.OPENAI_BASE_URL,
+  });
 }
 
 /** 长篇流水线 JSON（设定圣经 / 章规划）：使用小说网关超时头。 */
@@ -224,8 +234,12 @@ export async function* llmNovelTextStream(
   yield* llmTextStream({ ...req, scene: "novel" }, { novelLongRun: true, lengthTier });
 }
 
-export function getProviderModelCascade(): string[] {
-  return getModelCascadeForProvider(getActiveProvider());
+export function getProviderModelCascade(opts?: GameModelRouteInput): string[] {
+  const provider = getActiveProvider();
+  if (provider === "anthropic" || provider === "gemini") {
+    return getModelCascadeForProvider(provider);
+  }
+  return resolveGameModelRoute(opts ?? {}).models;
 }
 
 export { getNovelStyleTextModelCascade, getNovelPlanModelCascade, getComicStoryboardModelCascade } from "@/lib/model-config";

@@ -1,6 +1,234 @@
-更新时间：**2026-06-17**（迭代九十三 · 消消乐 HUD + 全局关震屏 ✅）
+更新时间：**2026-06-18**（迭代一百零九 · 创作台质量与模型路由）
 
-## 迭代九十三（当前）
+## 迭代一百零九（当前）
+
+1. ✅ **飞机大战 → shooter 模板**
+   - `definitions.ts` / `create-studio-narrative` 关键词补齐
+   - `qa:game-route-offline` 断言 `inferTemplateFromPrompt` + text/vision 路由
+2. ✅ **共创方向改版**
+   - `buildCoCreationDirections` 按 prompt 生成 4 条对话式选项（非固定三张卡片）
+3. ✅ **HUD 叠字发糊**
+   - 长 subtitle 不画顶栏；有 Goal 面板时 Banner 只闪标题
+4. ✅ **游戏模型双路由 `game_text` / `game_vision`**
+   - 无图文本池 · 有图/参考摘录多模态池；后台 Runtime 可配
+   - 生成 recap 展示「模型路由」行（SSE + 创作台）
+5. ✅ **LiteLLM 超时放宽**
+   - `genTimeoutMs` 18s→45s · `totalTimeoutMs` 42s→120s
+   - 网关错误文案澄清上游失败（非平台直连 Azure）
+6. **下一步**
+   - Console 保存 `game_text` / `game_vision` 两行模型
+   - 用「设计一个飞机大战的游戏」实机生成验收 shooter 贴图与 HUD
+   - 预发 `qa:staging-post-deploy`；LiteLLM 侧排查 Azure/Vertex 上游
+
+## 迭代一百零八
+
+1. ✅ **Staging 部署后抽测**
+   - `qa:staging-post-deploy`：health · QA 路由 · Browser Bench · 复杂 SSE · 离线门禁
+   - `STAGING_BASE_URL` 支持远程预发；报告 `qa-output/staging-post-deploy/`
+2. ✅ **平台 QA 打包**
+   - `qa:platform-bundle`：回放 + staging SSE +（`RUN_LLM_QA=1`）双用例生成
+3. ✅ **文档**
+   - `deploy-linux-ubuntu22.md` staging 部署后验收命令
+   - `.env.staging.example` 补充 `GAME_SPRITE_OUTPUT_PX`
+4. **下一步**
+   - 预发服务器 `STAGING_BASE_URL=http://host npm run qa:staging-post-deploy`
+   - 真实 `opengame` CLI：`OPENGAME_CLI_ALLOW_STUB=0`
+
+## 迭代一百零七
+
+1. ✅ **platform-test-user 创作台回放**
+   - `qa:platform-create-replay`：DB + HTTP GET 验收 · 报告 `qa-output/platform-create-replay/`
+   - `e2e/platform-test-user-replay.smoke.spec.ts`：**1/1 PASS**
+2. ✅ **平台 E2E 收口**
+   - `test:e2e:platform-smoke`：3/3（Agentic / 封面 / 回放）
+   - 修复 `platform-complex-agentic`：`buildFallbackAgenticModule` 导入 + `page.goto` 拿 owner cookie
+3. ✅ **Staging 复杂 prompt HTTP**
+   - `qa:staging-complex-smoke`：离线 + **dev @8888 Agentic SSE 全绿**
+4. **下一步**
+   - `qa:platform-test-generate` 长跑验收（需 OPENAI_API_KEY）
+   - staging 服务器 `OPERONE_STAGING=1` 部署抽测
+   - 真实 `opengame` CLI：`OPENGAME_CLI_ALLOW_STUB=0`
+
+## 迭代一百零六
+
+1. ✅ **OpenGame CLI 实机管线（QA stub）**
+   - `scripts/bin/opengame-qa-stub.mjs`：无本机 `opengame` 时走 headless→bridge→Debug Skill
+   - `opengame-cli.ts`：`listOpenGameCliInvocations` / `resolveOpenGameCliInvocation`
+   - `qa:opengame-cli-live`：**qa-stub 模式** · 报告 `qa-output/opengame-cli-live/`
+2. ✅ **Staging 复杂 prompt 抽测**
+   - `qa:staging-complex-smoke`：STAGING 默认 Bench + 可选 HTTP Agentic SSE
+   - 报告：`qa-output/staging-complex-smoke/REPORT.md`
+3. ✅ **创作台封面 E2E**
+   - `e2e/platform-create-auto-cover.smoke.spec.ts`：**1/1 PASS**（mock background + 封面缩略图）
+4. **下一步**
+   - 生产/staging 部署后 `OPERONE_STAGING=1` 实机跑 `qa:staging-complex-smoke`
+   - 本机安装真实 `opengame` 后 `OPENGAME_CLI_ALLOW_STUB=0 qa:opengame-cli-live`
+
+## 迭代一百零五
+
+1. ✅ **Phase C PM 上架清单**
+   - `qa:sample-launch-checklist`：**14/14**（封面 / 精灵 / 背景 / parity / hook）
+   - 报告：`qa-output/sample-launch-checklist/REPORT.md`
+   - 已接入 `qa:astrocade-pipeline` · `qa:pm-handtest-signoff`
+2. ✅ **创作台 Brief 自动封面预览**
+   - `CreateClient`：保存时并行等待 `background` API，消费 `coverPath` 并在预览区展示
+3. ✅ **Comfy 精灵二阶段输出**
+   - `GAME_SPRITE_OUTPUT_PX=512|1024`（默认 512）
+   - `qa:sensory-pipeline-offline` · `qa:comfy-game-sprite` 扩展
+4. **下一步**
+   - 本机 `npm link opengame` → `qa:opengame-cli-live` 实机
+   - staging `OPERONE_STAGING=1` + Comfy + Browser Bench 复杂 prompt 抽测
+   - `platform-test-user` 创作台 `/zh-Hans/create?from=<id>` 肉眼验收
+
+## 迭代一百零四
+
+1. ✅ **Staging Browser Bench**
+   - `browser-bench-env.ts`：`STAGING=1` 默认开启 bench + repair
+   - 部署：`OPERONE_STAGING=1` 写入 `.env` · `.env.staging.example`
+2. ✅ **Comfy 精灵 256→512** · **BGM 五槽** · **CLI live QA**
+3. **下一步**：本机 `npm link opengame` 后 `qa:opengame-cli-live` 实机；staging 服务器 `OPERONE_STAGING=1` 部署抽测
+
+## 迭代一百零三
+
+1. ✅ **Phase D 视听管线**
+   - `brief-visual-direction` + `runProjectAssetPipeline`
+   - 并行精灵 · Brief 自动封面 · 核心 3 精灵试玩门槛
+   - 模板 BGM 槽 `public/game-bgm/{template}-{profile}.ogg`
+2. ✅ **三阶段缺口**
+   - E2E Agentic：`e2e/platform-complex-agentic.smoke.spec.ts`
+   - Phase C：`qa:sample-behavior-signoff`
+   - pipeline：`qa:brief-asset-cohesion` · `qa:platform-test-generate`（RUN_LLM_QA）
+3. **下一步**
+   - staging `OPENGAME_BROWSER_BENCH=1`
+   - OpenGame CLI 实机 · Comfy sprite workflow
+
+## 迭代一百零二
+
+1. ✅ **平台用户路径 QA**
+   - `scripts/qa-platform-test-generate.ts` + `npm run qa:platform-test-generate`
+   - ownerKey=`platform-test-user`：简单 dedicated + 复杂 Agentic 双用例入库
+2. ✅ **入库 Agentic 保留修复**
+   - 根因：`coerceGameSpec` 丢弃 `agenticModule` / `agenticPlayRoute`
+   - 修复：`normalize-spec.ts` 透传 + `buildCanonicalAstrocadeSpec` 强化写回
+   - `qa:agentic-persist-coerce` ✅
+3. ✅ **验证**：platform-test-generate **2/2** · SSE 抽测 OK
+4. **下一步**
+   - staging `OPENGAME_BROWSER_BENCH=1`
+   - OpenGame CLI headless + bridge 实机
+   - 消消乐/神庙 Playwright 实机抽测
+
+## 迭代一百零一
+
+1. ✅ **Phaser.Scene CLI bridge**
+   - `wrapPhaserSceneAsCreateGame`：OpenGame 常见 Scene 类产物 → Agentic 单文件
+   - fixture `phaser-scene` + `qa:opengame-cli-bridge` **3/3** 策略
+2. ✅ **P0 玩法 polish**
+   - 消消乐：关间星星飞入顶栏（`playAnipopStarFlyIn`）
+   - 神庙：死亡 3 秒结算倒计时 + 底栏提示 · `qa:temple-death-flow` ✅
+3. **下一步**
+   - 本机 OpenGame headless + bridge 端到端
+   - staging `OPENGAME_BROWSER_BENCH=1`
+   - 消消乐全关通关星星动画 · 神庙与 GamePlayerInner 实机抽测
+
+## 迭代一百 · CLI→Agentic bridge ✅
+
+1. ✅ **Phase B bridge 适配层**
+   - `mergeOpenGameCliSources` + `bridgeOpenGameCliWorkDir`
+   - helper 文件先于 entry 合并；strip import/export
+   - `OPENGAME_CLI_BRIDGE=1`：CLI 成功后 Debug Skill 通过 → `opengame_cli` 源
+2. ✅ **Fixtures + QA**
+   - `scripts/fixtures/opengame-cli-bridge/`（native / multi-file）
+   - `qa:opengame-cli-bridge` ✅ · astrocade-pipeline 已接入
+3. **下一步**
+   - 本机 OpenGame headless 实机 + bridge 端到端
+   - Phaser.Scene 类产物桥接（当前仅 `createGame` 契约）
+   - staging `OPENGAME_BROWSER_BENCH=1` · 消消乐/神庙 P0
+
+## 迭代九十九 · Phase C 全量 hook + Phase B CLI spike ✅
+
+1. ✅ **Phase C 收口**
+   - 4 款棋类样品 hook：象棋 / 国际象棋 / 围棋 / 斗兽棋
+   - `qa:sample-template-skill-parity` **14/14**（全部样品有 Scene hook 断言）
+2. ✅ **Phase B CLI spike**
+   - `opengame-cli.ts`：probe + headless spawn + dry-run
+   - `OPENGAME_CLI=1` 复杂 prompt 写入 `opengame_cli_spike` trace（不替换 Agentic 模块）
+   - `qa:opengame-cli-spike` ✅ · astrocade-pipeline 已接入
+3. ✅ **验证**：opengame-skills ✅ · build ✅
+4. **下一步**
+   - 本机 `npm link` OpenGame 后 `OPENGAME_CLI=1` 实机 headless 抽测
+   - CLI 产物 → Agentic 模块适配层（多文件 → 单文件 bridge）
+   - staging `OPENGAME_BROWSER_BENCH=1` · 消消乐/神庙 P0 抽测
+
+## 迭代九十八 · Phase C 扩展 + dedicated Debug lint ✅
+
+1. ✅ **OpenGame 生成摘要**
+   - `generation-trace.ts`：`summarizeOpenGameGeneration` / `buildOpenGameRecapFromTrace`
+   - 创作台 debug 区 + SSE recap 展示 tier / Agentic / Browser Bench
+2. ✅ **Phase C Template→样品**
+   - `template-sample-parity.ts`：14 款 archetype 对照 QA
+   - Scene hook 试点扩至 **10 款**（消消乐/2048/神庙/crashy/TD merge/农场/陶艺等）
+3. ✅ **Phase A dedicated 门禁**
+   - `lintDedicatedRouteDebugSkill`：简单 prompt 生成后对 Template fallback 跑 Debug Skill
+4. ✅ **验证**
+   - `qa:sample-template-skill-parity` **14/14** · `qa:opengame-skills` ✅ · build ✅
+5. **下一步**
+   - 剩余 4 款棋类样品 hook 清单；staging `OPENGAME_BROWSER_BENCH=1`
+   - Phase B spike：OpenGame CLI 最小子进程调用
+   - 消消乐过关动画 / 神庙死亡结算连贯抽测（迭代九十四 P0）
+
+## 迭代九十七 · refine 路由重算 + 创作台试玩引擎提示 ✅
+
+1. ✅ **refine / attach 路由重算**
+   - `resolveAgenticPlayRoute({ respectPersisted: false })`：生成/refine 不被旧 `agenticPlayRoute` 锁死
+   - dedicated 路由显式 `stripAgenticModuleForDedicatedRoute`
+2. ✅ **创作台 SSE recap**
+   - 生成完成展示 dedicated vs Agentic 试玩引擎（5 语言 i18n）
+3. ✅ **refine API**
+   - 响应增加 `agenticPlayRoute`
+4. **下一步**
+   - staging `OPENGAME_BROWSER_BENCH=1` 抽测；创作台 refine UI 展示路由徽章
+
+## 迭代九十六 · OpenGame 试玩路由接入用户管线 ✅
+
+1. ✅ **复杂 prompt → Agentic + OpenGame Skills**
+   - `agenticPlayRoute` 写入 GameSpec；`resolveAgenticPlayRoute`（默认 `complex_only`）
+   - `attachAgenticModuleIfEnabled` / `normalizeAstrocadePlaySpec` 对齐
+2. ✅ **可选 Browser Bench 进生成管线**
+   - `OPENGAME_BROWSER_BENCH=1` → `maybeVerifyAgenticModuleInBrowser`
+3. ✅ **验证**
+   - `qa:opengame-skills` ✅ · `qa:opengame-browser-bench` 2/2 ✅ · build ✅
+4. **下一步**
+   - refine regenerate 补跑 Creative Brief；staging 开 `OPENGAME_BROWSER_BENCH=1` 抽测
+
+## 迭代九十五 · OpenGame Browser Bench 闭环 ✅
+
+1. ✅ **Browser Bench 修复**
+   - payload base64url 浏览器安全编解码（`browser-bench.ts`）
+   - `AgenticBenchClient`：`getScenes(true)` 延迟探测 `AgenticScene`，消除误报
+   - Shell 无效 payload → `data-testid="agentic-bench-error"`
+2. ✅ **验证**
+   - `qa:opengame-browser-bench` **2/2** ✅
+   - `qa:opengame-skills` ✅ · `qa:agentic-template-matrix` **16/16** ✅
+   - `qa:astrocade-pipeline` 已接入 browser bench
+3. **下一步**
+   - 可选：`OPENGAME_BROWSER_BENCH=1` 时生成管线追加浏览器验证
+   - 消消乐过关动画 / 神庙死亡结算连贯抽测（迭代九十四 P0）
+
+## 迭代九十四
+
+1. ✅ **GitHub 提交**
+   - `5460b16` feat(samples): 样品14款深化 + 消消乐HUD + 沉浸试玩与生产80端口
+   - 514 files；已排除 `test-prod-login-password.py`、`upload-literary-samples-to-server.py`
+2. ✅ **生产部署**
+   - `deploy-prod-playability-fix.py` → `git reset --hard origin/main` @ `5460b16`
+   - `PORT=80` · setcap · build ✅ · `curl /api/health` → 200
+   - 访问：`http://operone.1oneclaw.com`
+3. **验收建议**
+   - `/zh-Hans/create` 创作台（勿用 `:6666`）
+   - `/play/sample-color-bloom` 消消乐 HUD + 三关
+   - 样品馆沉浸试玩（无全屏/重开按钮）
+
+## 迭代九十三
 
 1. ✅ **消消乐顶栏 HUD 合并**
    - `drawAnipopTopBar` 单行：关卡 | 三目标牌（得分/破冰/小鸡）| 步数

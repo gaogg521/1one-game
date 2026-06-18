@@ -60,7 +60,8 @@ import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
+import { hudTopSubtitleText } from "@/game/engine/hudTextStyle";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
 
@@ -313,9 +314,10 @@ export class PlatformerScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(100);
 
-    if (this.spec.labels.subtitle) {
+    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
+    if (topSubtitle) {
       this.add
-        .text(viewW / 2, 48, this.spec.labels.subtitle, {
+        .text(viewW / 2, 48, topSubtitle, {
           fontFamily: "system-ui, sans-serif",
           fontSize: "12px",
           color: ui.hud.subtitle,
@@ -541,7 +543,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
     this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     this.shieldRing = this.add.graphics();

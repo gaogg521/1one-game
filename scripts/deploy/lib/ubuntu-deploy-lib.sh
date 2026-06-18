@@ -435,6 +435,15 @@ write_env_if_missing() {
   if [[ -z "${OPENAI_API_KEY:-}" ]]; then
     warn "OPENAI_API_KEY 未填 — 服务可启动，LLM 走 mock；装完后编辑 $env_file 并 systemctl restart operone"
   fi
+
+  if [[ "${OPERONE_STAGING:-}" == "1" ]]; then
+    append_env "STAGING" "1"
+    append_env "OPENGAME_BROWSER_BENCH" "1"
+    append_env "OPENGAME_BROWSER_BENCH_REPAIR" "1"
+    append_env "QA_ROUTES_ENABLED" "1"
+    append_env "GAME_SPRITE_COMFY" "1"
+    log "OPERONE_STAGING=1 → Browser Bench + QA routes + Comfy sprite pipeline"
+  fi
 }
 
 merge_env_key() {

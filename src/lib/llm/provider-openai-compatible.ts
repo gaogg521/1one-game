@@ -89,8 +89,9 @@ export async function* llmTextStreamOpenAICompatible(params: {
 export async function llmJsonOpenAICompatible(params: {
   client: OpenAI;
   req: Omit<LlmJsonRequest, "provider"> & { provider: LlmProvider };
+  gatewayBaseUrl?: string | null;
 }): Promise<LlmJsonResult> {
-  const { client, req } = params;
+  const { client, req, gatewayBaseUrl } = params;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), req.timeoutMs);
   const messages = [
@@ -134,7 +135,13 @@ export async function llmJsonOpenAICompatible(params: {
     if (r2.raw !== null) return { ok: true, provider: req.provider, model: req.model, mode: r2.mode, raw: r2.raw };
     return { ok: false, provider: req.provider, model: req.model, modeTried: fallbackMode, error: "empty json output" };
   } catch (e) {
-    return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: safeErrorSummary(e) };
+    return {
+      ok: false,
+      provider: req.provider,
+      model: req.model,
+      modeTried: req.mode,
+      error: safeErrorSummary(e, { gatewayBaseUrl }),
+    };
   } finally {
     clearTimeout(timer);
   }

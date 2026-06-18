@@ -122,7 +122,11 @@ const PROMPT_ARCHETYPE_HINTS: { pattern: RegExp; archetype: TemplateArchetypeId 
 export function resolveTemplateArchetype(
   spec: GameSpec,
   prompt = "",
+  overrideId?: TemplateArchetypeId,
 ): TemplateArchetype {
+  if (overrideId && TEMPLATE_ARCHETYPES[overrideId]) {
+    return TEMPLATE_ARCHETYPES[overrideId];
+  }
   for (const { pattern, archetype } of PROMPT_ARCHETYPE_HINTS) {
     if (pattern.test(prompt) || pattern.test(spec.title) || pattern.test(spec.labels.subtitle ?? "")) {
       return TEMPLATE_ARCHETYPES[archetype];

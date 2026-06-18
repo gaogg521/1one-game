@@ -321,6 +321,8 @@ export const GameSpecSchema = z.object({
   strategy: StrategyBlueprintSchema.optional(),
   /** Phase 3：Agentic 生成的受限游戏模块（优先于 template 场景） */
   agenticModule: AgenticModuleSchema.optional(),
+  /** OpenGame 试玩路由：dedicated=样品级专用 Scene；agentic=AgenticScene+Skills（复杂 prompt 自动 agentic） */
+  agenticPlayRoute: z.enum(["dedicated", "agentic"]).optional(),
   /** 通用导演蓝图（可选；缺省则由引擎侧使用默认曲线） */
   director: DirectorSchema.optional(),
   /** 通用系统层（可选；缺省则由引擎侧补齐） */

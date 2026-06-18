@@ -16,9 +16,9 @@ function entryMatchesProactive(entry: DebugProtocolEntry, source: string, matche
     if (entry.signature.errorCode === "MISSING_PLAYFIELD") return !hasMatch;
     if (entry.signature.errorCode === "MISSING_HUD") return !hasMatch;
     if (entry.signature.errorCode === "MISSING_UPDATE_FOR_SPAWNER") {
-      const hasSpawn = /spawn|wave|hazard/i.test(source);
-      const hasUpdate = /update\s*\(/i.test(source);
-      return hasSpawn && !hasUpdate;
+      const hasSpawn = /spawn|wave|hazard|enemies/i.test(source);
+      const hasUpdateLoop = /update\s*\(|events\.on\s*\(\s*['"]update['"]|time\.addEvent|delayedCall/i.test(source);
+      return hasSpawn && !hasUpdateLoop;
     }
     return hasMatch;
   } catch {

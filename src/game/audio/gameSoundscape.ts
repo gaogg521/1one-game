@@ -1,11 +1,15 @@
 import { getSharedAudioContext, resumeSharedAudioContext } from "@/game/audio/audio-context";
 import type { MusicProfile } from "@/lib/cohesive-presentation";
+import type { GameSpec } from "@/lib/game-spec";
+import { resolveTemplateBgmUrl, templateBpmBias } from "@/lib/game-bgm-presets";
 
 type SoundscapeCleanup = () => void;
 
 export type GameSoundscapeOptions = {
   /** 明亮方块户外风（我的世界等）：更清晰的铺底与慢速五声音阶 */
   blocky?: boolean;
+  /** Phase D：模板 BGM 槽 + procedural BPM 微调 */
+  templateId?: GameSpec["templateId"];
 };
 
 export type MusicSection = "intro" | "build" | "drop" | "climax" | "victory" | "defeat";
@@ -31,12 +35,10 @@ function getScaleForProfile(profile: MusicProfile): number[] {
   return PENTATONIC_MINOR;
 }
 
-function bpmForProfile(profile: MusicProfile): number {
-  if (profile === "neon") return 124;
-  if (profile === "pulse") return 108;
-  if (profile === "organic") return 88;
-  if (profile === "minimal") return 72;
-  return 96;
+function bpmForProfile(profile: MusicProfile, templateBias = 0): number {
+  const base =
+    profile === "neon" ? 124 : profile === "pulse" ? 108 : profile === "organic" ? 88 : profile === "minimal" ? 72 : 96;
+  return Math.max(60, Math.min(140, base + templateBias));
 }
 
 /** 程序化鼓点音序器 */
@@ -52,8 +54,9 @@ class DrumSequencer {
     private readonly ctx: AudioContext,
     private readonly destination: AudioNode,
     profile: MusicProfile,
+    templateBias = 0,
   ) {
-    this.bpm = bpmForProfile(profile);
+    this.bpm = bpmForProfile(profile, templateBias);
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = 0;
     this.masterGain.connect(destination);
@@ -351,6 +354,7 @@ export class GameSoundscape {
   private tensionTarget: number;
   private tensionRampId: ReturnType<typeof setInterval> | null = null;
   private currentSection: MusicSection = "intro";
+  private templateAudio: HTMLAudioElement | null = null;
 
   constructor(
     private readonly profile: MusicProfile,
@@ -568,6 +572,8 @@ export class GameSoundscape {
 
     this.started = true;
 
+    const templateBias = this.opts.templateId ? templateBpmBias(this.opts.templateId) : 0;
+
     const master = ctx.createGain();
     const lvl = Math.min(1, Math.max(0, this.intensity));
     const base = profileBaseGain(this.profile, this.blocky);
@@ -583,13 +589,15 @@ export class GameSoundscape {
     this.filterNode = filter;
 
     // 初始化鼓点和旋律层（连接到 filter 前）
-    this.drumSequencer = new DrumSequencer(ctx, filter, this.profile);
+    this.drumSequencer = new DrumSequencer(ctx, filter, this.profile, templateBias);
     this.drumSequencer.start();
     this.drumSequencer.setIntensity(0); // 开场静音
 
     this.melodicArp = new MelodicArpeggiator(ctx, filter, this.profile, this.rootHz);
     this.melodicArp.start();
     this.melodicArp.setIntensity(0); // 开场静音
+
+    void this.tryTemplateBgmLoop(ctx, master);
 
     const now = ctx.currentTime;
     const root = this.rootHz;
@@ -738,6 +746,15 @@ export class GameSoundscape {
 
   dispose(): void {
     this.started = false;
+    if (this.templateAudio) {
+      try {
+        this.templateAudio.pause();
+        this.templateAudio.src = "";
+      } catch {
+        /* ignore */
+      }
+      this.templateAudio = null;
+    }
     if (this.tensionRampId !== null) {
       clearInterval(this.tensionRampId);
       this.tensionRampId = null;
@@ -759,5 +776,36 @@ export class GameSoundscape {
     this.filterNode = null;
     this.lfoOsc = null;
     this.lfoGain = null;
+  }
+
+  /** 若 public/game-bgm/{template}-{profile}.ogg 存在则与 procedural 混音 */
+  private async tryTemplateBgmLoop(ctx: AudioContext, master: GainNode): Promise<void> {
+    const tid = this.opts.templateId;
+    if (!tid || typeof window === "undefined") return;
+    const url = resolveTemplateBgmUrl(tid, this.profile);
+    try {
+      const probe = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(4000) });
+      if (!probe.ok) return;
+      const audio = new Audio(url);
+      audio.loop = true;
+      audio.crossOrigin = "anonymous";
+      const track = ctx.createMediaElementSource(audio);
+      const gain = ctx.createGain();
+      gain.gain.value = 0.24;
+      track.connect(gain);
+      gain.connect(master);
+      await audio.play();
+      this.templateAudio = audio;
+      this.cleanups.push(() => {
+        try {
+          audio.pause();
+          audio.src = "";
+        } catch {
+          /* ignore */
+        }
+      });
+    } catch {
+      /* procedural only */
+    }
   }
 }

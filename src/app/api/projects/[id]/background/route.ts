@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import type { GameSpec } from "@/lib/game-spec";
-import { generateGameBackground } from "@/lib/game-background-gen";
-import { generateGameSprites } from "@/lib/game-sprite-gen";
-import { buildRuntimeAssetManifest } from "@/lib/assets/asset-runtime-resolver";
+import { runProjectAssetPipeline } from "@/lib/game-asset-pipeline";
+import { loadProjectCreativeBrief } from "@/lib/project-creative-brief-db";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
@@ -18,7 +17,7 @@ export async function POST(
   try {
     const project = await prisma.project.findUnique({
       where: { id },
-      select: { specJson: true, ownerKey: true },
+      select: { specJson: true, ownerKey: true, coverPath: true },
     });
     if (!project) {
       return localizedJsonError(req, "notFound", 404);
@@ -28,23 +27,25 @@ export async function POST(
     }
 
     const spec = JSON.parse(project.specJson) as GameSpec;
-    // 并行生成背景图 + 实体精灵
     const uiLocale = resolveRequestLocaleSync(req);
-    const [bgUrl, sprites] = await Promise.all([
-      generateGameBackground(id, spec),
-      generateGameSprites(id, spec, uiLocale),
-    ]);
+    const brief = await loadProjectCreativeBrief(id);
 
-    const spritePayload = sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url }));
+    const result = await runProjectAssetPipeline({
+      projectId: id,
+      spec,
+      brief,
+      uiLocale,
+      existingCoverPath: project.coverPath,
+    });
+
+    const spritePayload = result.sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url! }));
 
     return NextResponse.json({
-      backgroundUrl: bgUrl,
+      backgroundUrl: result.backgroundUrl,
       spriteUrls: spritePayload,
-      assetManifest: buildRuntimeAssetManifest({
-        projectId: id,
-        backgroundUrl: bgUrl,
-        spriteUrls: spritePayload,
-      }),
+      assetManifest: result.assetManifest,
+      coverPath: result.coverPath,
+      coverSource: result.coverSource,
     });
   } catch {
     return localizedJsonError(req, "backgroundGenFailed", 500);

@@ -10,7 +10,9 @@
  */
 
 import type { GameSpec } from "@/lib/game-spec";
-import { llmJson, getProviderModelCascade } from "@/lib/llm";
+import { llmJson } from "@/lib/llm";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
+import type { RuntimeSceneKey } from "@/lib/runtime-providers";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
@@ -18,9 +20,8 @@ import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
 import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 
-function pickModel(): string {
-  const models = getProviderModelCascade();
-  return models[0] ?? "gpt-4o-mini";
+function pickGameRoute(prompt: string) {
+  return resolveGameModelRoute({ prompt });
 }
 
 function safeJson(raw: unknown | null): Record<string, unknown> | null {
@@ -61,10 +62,14 @@ const WORLD_SCHEMA = {
   },
 } as const;
 
-async function callWorldAgent(prompt: string): Promise<{ templateId: string; title: string; labels: GameSpec["labels"] } | null> {
-  const model = pickModel();
+async function callWorldAgent(
+  prompt: string,
+  scene: RuntimeSceneKey,
+  model: string,
+): Promise<{ templateId: string; title: string; labels: GameSpec["labels"] } | null> {
   const res = await llmJson({
     model,
+    scene,
     system: WORLD_SYSTEM,
     user: prompt,
     temperature: 0.6,
@@ -128,10 +133,14 @@ const GAMEPLAY_SCHEMA = {
   },
 } as const;
 
-async function callGameplayAgent(prompt: string): Promise<{ templateId: string; gameplay: GameSpec["gameplay"] } | null> {
-  const model = pickModel();
+async function callGameplayAgent(
+  prompt: string,
+  scene: RuntimeSceneKey,
+  model: string,
+): Promise<{ templateId: string; gameplay: GameSpec["gameplay"] } | null> {
   const res = await llmJson({
     model,
+    scene,
     system: GAMEPLAY_SYSTEM,
     user: prompt,
     temperature: 0.4,
@@ -200,10 +209,14 @@ function safeColor(v: unknown, fallback: string): string {
   return typeof v === "string" && COLOR_RE.test(v) ? v : fallback;
 }
 
-async function callArtAgent(prompt: string): Promise<{ theme: GameSpec["theme"]; musicProfile?: string } | null> {
-  const model = pickModel();
+async function callArtAgent(
+  prompt: string,
+  scene: RuntimeSceneKey,
+  model: string,
+): Promise<{ theme: GameSpec["theme"]; musicProfile?: string } | null> {
   const res = await llmJson({
     model,
+    scene,
     system: ART_SYSTEM,
     user: prompt,
     temperature: 0.55,
@@ -293,13 +306,17 @@ export async function generateWithMultiAgent(
   prompt: string,
   orch?: RunTraceRecorder,
 ): Promise<MultiAgentResult> {
+  const route = pickGameRoute(prompt);
+  const model = route.models[0] ?? "gpt-4o-mini";
+  orch?.note("game_model_route", { mode: route.mode, scene: route.scene, models: route.models });
+
   const run = <T>(label: string, fn: () => Promise<T | null>): Promise<T | null> =>
     orch ? orch.span(label, fn) : fn();
 
   const [worldResult, gameplayResult, artResult] = await Promise.all([
-    run("agent_world", () => callWorldAgent(prompt)),
-    run("agent_gameplay", () => callGameplayAgent(prompt)),
-    run("agent_art", () => callArtAgent(prompt)),
+    run("agent_world", () => callWorldAgent(prompt, route.scene, model)),
+    run("agent_gameplay", () => callGameplayAgent(prompt, route.scene, model)),
+    run("agent_art", () => callArtAgent(prompt, route.scene, model)),
   ]);
 
   const partial = mergeAgentOutputs(worldResult, gameplayResult, artResult);

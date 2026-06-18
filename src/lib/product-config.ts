@@ -16,7 +16,13 @@ export const PRODUCT = {
   },
 
   models: {
-    /** 游戏 / GameSpec / 规格修补 / 视觉参考 */
+    /** 游戏 / GameSpec — 纯文本创意（无参考图） */
+    gameTextPrimary: "glm-5-2",
+    gameTextFallbacks: ["deepseek-v4-pro"] as string[],
+    /** 游戏 / GameSpec — 含参考图或多模态理解 */
+    gameVisionPrimary: "gpt-5.4",
+    gameVisionFallbacks: ["gemini-3.1-pro-preview"] as string[],
+    /** @deprecated 兼容旧路由；新配置请用 gameText* / gameVision* */
     gamePrimary: "gpt-5.2",
     gameFallbacks: ["gemini-3.1-pro-preview"] as string[],
     /** 小说正文、漫画分镜 JSON */
@@ -117,13 +123,13 @@ export const PRODUCT = {
   },
 
   game: {
-    genTimeoutMs: 18_000,
-    repairTimeoutMs: 12_000,
-    enhanceTimeoutMs: 18_000,
+    genTimeoutMs: 45_000,
+    repairTimeoutMs: 30_000,
+    enhanceTimeoutMs: 45_000,
     /** Agentic 模块：完整 JS 源码 JSON，需更长网关超时 */
     agenticTimeoutMs: 120_000,
     agenticRepairTimeoutMs: 90_000,
-    totalTimeoutMs: 42_000,
+    totalTimeoutMs: 120_000,
     maxRepairRounds: 2,
     /** 部分网关 strict schema 不兼容扩展 director 时保持 false */
     jsonSchemaIncludeDirector: false,
@@ -146,6 +152,12 @@ export const PRODUCT = {
     dedicatedSceneForTemplateFirst:
       process.env.DEDICATED_SCENE_FOR_TEMPLATE_FIRST === "0" ||
       process.env.DEDICATED_SCENE_FOR_TEMPLATE_FIRST === "false"
+        ? false
+        : true,
+    /** Phase D：保存后 Brief 驱动自动封面（GAME_AUTO_COVER_FROM_BRIEF=0 关闭） */
+    autoCoverFromBrief:
+      process.env.GAME_AUTO_COVER_FROM_BRIEF === "0" ||
+      process.env.GAME_AUTO_COVER_FROM_BRIEF === "false"
         ? false
         : true,
   },

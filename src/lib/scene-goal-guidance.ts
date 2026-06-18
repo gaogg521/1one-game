@@ -90,3 +90,13 @@ export function buildSceneGoalGuidance(spec: GameSpec, locale: AppLocale): Scene
     bottomHint: zh ? `操作：${controls} · ${stakes}` : `Controls: ${controls} · ${stakes}`,
   };
 }
+
+/** 已有左上 Goal 面板时，开场 Banner 只闪标题，避免与顶栏长文案叠层发糊 */
+export function introBannerWhenGoalPanel(guidance: SceneGoalGuidance): SceneGoalGuidance["banner"] {
+  const shortTitle = guidance.banner.title.split("·")[0]?.trim() || guidance.banner.title;
+  return {
+    title: shortTitle,
+    message: "",
+    ms: Math.min(guidance.banner.ms, 1400),
+  };
+}

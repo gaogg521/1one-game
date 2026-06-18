@@ -2,7 +2,6 @@ import type { GameSpec } from "@/lib/game-spec";
 import {
   buildFallbackAgenticModule,
   parseAgenticModule,
-  shouldUseDedicatedSceneForTemplateFirst,
   validateAgenticSource,
   type AgenticGameModule,
 } from "@/lib/agentic/game-module";
@@ -13,12 +12,27 @@ import {
   buildAgenticUserPrompt,
 } from "@/lib/agentic/agentic-prompts";
 import { validateAgenticRunnable } from "@/lib/agentic/agentic-runnable";
-import { buildDebugSkillRepairHints, runDebugSkillPipeline } from "@/lib/opengame-skills";
-import { llmJson, getActiveProvider, getProviderModelCascade } from "@/lib/llm";
+import { buildDebugSkillRepairHints, runDebugSkillPipeline, shouldSkipTemplateFirstForPrompt } from "@/lib/opengame-skills";
+import { maybeVerifyAgenticModuleInBrowser } from "@/lib/opengame-skills/browser-bench-generate";
+import { isOpenGameBrowserBenchRequired } from "@/lib/opengame-skills/browser-bench-env";
+import { probeOpenGameCli, runOpenGameCliHeadless } from "@/lib/opengame-skills/opengame-cli";
+import {
+  bridgeOpenGameCliWorkDir,
+  isOpenGameCliBridgeEnabled,
+} from "@/lib/opengame-skills/opengame-cli-bridge";
+import { resolveAgenticPlayRoute, stampAgenticPlayRoute, stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
+import { llmJson, getActiveProvider } from "@/lib/llm";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
+import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
 
 export type GenerateAgenticModuleResult =
-  | { ok: true; module: AgenticGameModule; source: "llm" | "fallback" | "template_first"; lastReason?: string }
+  | {
+      ok: true;
+      module: AgenticGameModule;
+      source: "llm" | "fallback" | "template_first" | "opengame_cli";
+      lastReason?: string;
+    }
   | { ok: false; reason: string };
 
 const REPAIR_ATTEMPTS = 2;
@@ -63,25 +77,99 @@ function parseLlmModule(raw: unknown): AgenticGameModule | null {
 export async function generateAgenticGameModule(
   prompt: string,
   spec: GameSpec,
+  orch?: RunTraceRecorder,
 ): Promise<GenerateAgenticModuleResult> {
   if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1") {
-    return { ok: true, module: buildFallbackAgenticModule(spec.title, spec), source: "fallback" };
+    const mod = buildFallbackAgenticModule(spec.title, spec);
+    orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
+    return { ok: true, module: mod, source: "fallback" };
   }
 
   const templateFirst = PRODUCT.game.agenticTemplateFirst;
+  const skipTemplateFirst = shouldSkipTemplateFirstForPrompt(prompt, spec);
+
+  if (process.env.OPENGAME_CLI === "1" && skipTemplateFirst) {
+    const probe = await probeOpenGameCli();
+    const cliRun = await runOpenGameCliHeadless(prompt, { runId: spec.title });
+    orch?.note("opengame_cli_spike", {
+      probeAvailable: probe.available,
+      probeError: probe.error ?? null,
+      ok: cliRun.ok,
+      skipped: cliRun.skipped,
+      dryRun: !cliRun.skipped && "dryRun" in cliRun ? cliRun.dryRun : false,
+      exitCode: !cliRun.skipped && "exitCode" in cliRun ? cliRun.exitCode : null,
+      durationMs: !cliRun.skipped && "durationMs" in cliRun ? cliRun.durationMs : null,
+      workDir: !cliRun.skipped && "workDir" in cliRun ? cliRun.workDir : null,
+      error:
+        cliRun.skipped
+          ? cliRun.reason
+          : !cliRun.ok && "error" in cliRun
+            ? cliRun.error
+            : null,
+    });
+
+    if (
+      isOpenGameCliBridgeEnabled() &&
+      !cliRun.skipped &&
+      cliRun.ok &&
+      "workDir" in cliRun &&
+      !cliRun.dryRun
+    ) {
+      const bridge = bridgeOpenGameCliWorkDir(cliRun.workDir);
+      orch?.note("opengame_cli_bridge", {
+        ok: bridge.ok,
+        reason: bridge.ok ? null : bridge.reason,
+        strategy: bridge.ok ? bridge.strategy : null,
+        files: bridge.files,
+        entry: bridge.ok ? bridge.entry : null,
+      });
+      if (bridge.ok) {
+        const debug = passesDebugSkill(bridge.module);
+        if (debug.ok) {
+          const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
+          orch?.note("agentic_browser_bench", {
+            ok: bench.benchOk,
+            skipped: bench.benchSkipped,
+            source: "opengame_cli",
+          });
+          orch?.note("agentic_gen_result", {
+            source: "opengame_cli",
+            strategy: bridge.strategy,
+            files: bridge.files,
+          });
+          return {
+            ok: true,
+            module: bench.module,
+            source: "opengame_cli",
+            lastReason: bridge.strategy,
+          };
+        }
+        orch?.note("opengame_cli_bridge", {
+          ok: false,
+          reason: debug.reason,
+          debugStage: "debug_skill",
+        });
+      }
+    }
+  }
+
   if (
+    !skipTemplateFirst &&
     templateFirst.includes(spec.templateId) &&
     process.env.AGENTIC_FORCE_LLM !== "1"
   ) {
     const mod = buildTemplateFallbackModule(spec);
     const debug = passesDebugSkill(mod);
     if (debug.ok) {
+      orch?.note("agentic_gen_result", { source: "template_first", skipTemplateFirst });
       return { ok: true, module: mod, source: "template_first", lastReason: "template_first" };
     }
   }
 
-  const models = getProviderModelCascade();
+  const gameRoute = resolveGameModelRoute({ prompt });
+  const models = gameRoute.models;
   if (!models.length || !getActiveProvider()) {
+    orch?.note("agentic_gen_result", { source: "fallback", reason: "no_llm" });
     return { ok: true, module: buildFallbackAgenticModule(spec.title, spec), source: "fallback" };
   }
 
@@ -101,6 +189,7 @@ export async function generateAgenticGameModule(
       try {
         const result = await llmJson({
           model,
+          scene: gameRoute.scene,
           system,
           user,
           temperature: attempt === 0 ? 0.52 : 0.35,
@@ -181,13 +270,24 @@ export async function generateAgenticGameModule(
         }
 
         logAgenticProgress(model, attempt, "ok");
-        return { ok: true, module: candidate, source: "llm" };
+        const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, candidate);
+        orch?.note("agentic_browser_bench", {
+          ok: bench.benchOk,
+          skipped: bench.benchSkipped,
+        });
+        if (!bench.benchOk && isOpenGameBrowserBenchRequired()) {
+          lastReason = "browser_bench_failed";
+          continue;
+        }
+        orch?.note("agentic_gen_result", { source: "llm", debugRounds: debugRound, llmAttempt: attempt });
+        return { ok: true, module: bench.module, source: "llm" };
       } catch {
         lastReason = "llm_error";
       }
     }
   }
 
+  orch?.note("agentic_gen_result", { source: "fallback", lastReason });
   return {
     ok: true,
     module: buildFallbackAgenticModule(spec.title, spec),
@@ -200,16 +300,34 @@ export function isAgenticModuleEnabled(): boolean {
   return PRODUCT.game.agenticModuleEnabled;
 }
 
+/** Phase A：dedicated 路由对 Template fallback 跑 Debug Skill proactive/runnable 门禁 */
+export function lintDedicatedRouteDebugSkill(spec: GameSpec) {
+  return runDebugSkillPipeline(buildTemplateFallbackModule(spec));
+}
+
 export async function attachAgenticModuleIfEnabled(
   prompt: string,
   spec: GameSpec,
   enabled = isAgenticModuleEnabled(),
+  orch?: RunTraceRecorder,
 ): Promise<GameSpec> {
-  if (!enabled) return spec;
-  if (shouldUseDedicatedSceneForTemplateFirst(spec)) {
-    return spec;
+  if (!enabled) return stampAgenticPlayRoute(prompt, spec);
+
+  const route = resolveAgenticPlayRoute(prompt, spec, { respectPersisted: false });
+  orch?.note("agentic_attach_route", { route, templateId: spec.templateId });
+
+  if (route === "dedicated") {
+    orch?.note("agentic_attach_skipped", { reason: "dedicated_route" });
+    return stripAgenticModuleForDedicatedRoute({ ...spec, agenticPlayRoute: "dedicated" });
   }
-  const r = await generateAgenticGameModule(prompt, spec);
-  if (!r.ok) return spec;
-  return { ...spec, agenticModule: r.module };
+
+  const stamped: GameSpec = { ...spec, agenticPlayRoute: "agentic" };
+  const r = await generateAgenticGameModule(prompt, stamped, orch);
+  orch?.note("agentic_attach_result", {
+    ok: r.ok,
+    source: r.ok ? r.source : null,
+    lastReason: r.ok ? r.lastReason ?? null : r.reason,
+  });
+  if (!r.ok) return stamped;
+  return { ...stamped, agenticModule: r.module };
 }

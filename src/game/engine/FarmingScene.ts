@@ -27,7 +27,7 @@ import {
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 
 type EndPayload = { score: number; won: boolean };
 type TileState = "empty" | "seeded" | "growing" | "ready";
@@ -180,7 +180,7 @@ export class FarmingScene extends Phaser.Scene {
     );
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 88 });
 
     if (this.richGarden) this.buildCropSelector(w, h);

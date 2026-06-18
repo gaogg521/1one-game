@@ -27,6 +27,10 @@ const ROW_ID = "default";
 const CACHE_TTL_MS = 30_000;
 
 export type RuntimeModelsOverride = {
+  gameTextPrimary?: string;
+  gameTextFallbacks?: string[];
+  gameVisionPrimary?: string;
+  gameVisionFallbacks?: string[];
   gamePrimary?: string;
   gameFallbacks?: string[];
   novelTextPrimary?: string;
@@ -72,6 +76,10 @@ export type RuntimeConfigPublicView = {
     anthropicApiKey: string | null;
   };
   models: {
+    gameTextPrimary: string;
+    gameTextFallbacks: string[];
+    gameVisionPrimary: string;
+    gameVisionFallbacks: string[];
     gamePrimary: string;
     gameFallbacks: string[];
     novelTextPrimary: string;
@@ -107,6 +115,10 @@ function envTrim(name: string): string | undefined {
 function defaultModels(): RuntimeModelsOverride {
   const m = PRODUCT.models;
   return {
+    gameTextPrimary: m.gameTextPrimary,
+    gameTextFallbacks: [...(m.gameTextFallbacks ?? [])],
+    gameVisionPrimary: m.gameVisionPrimary,
+    gameVisionFallbacks: [...(m.gameVisionFallbacks ?? [])],
     gamePrimary: m.gamePrimary,
     gameFallbacks: [...m.gameFallbacks],
     novelTextPrimary: m.novelTextPrimary,
@@ -179,7 +191,7 @@ export function applyRuntimeToProcessEnv(resolved: ResolvedRuntime): void {
     else delete process.env[key];
   };
 
-  const gameCtx = resolveSceneRoute(payload, "game");
+  const gameCtx = resolveSceneRoute(payload, "game_text") ?? resolveSceneRoute(payload, "game_vision");
   const geminiCtx = resolveSceneRoute(payload, "comic_image_gemini");
   const anthropic = getEffectiveProviders(payload).find((p) => p.protocol === "anthropic" && p.enabled !== false);
 
@@ -292,6 +304,10 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
       anthropicApiKey: maskSecret(payload.anthropicApiKey),
     },
     models: {
+      gameTextPrimary: models.gameTextPrimary ?? PRODUCT.models.gameTextPrimary,
+      gameTextFallbacks: models.gameTextFallbacks ?? [...PRODUCT.models.gameTextFallbacks],
+      gameVisionPrimary: models.gameVisionPrimary ?? PRODUCT.models.gameVisionPrimary,
+      gameVisionFallbacks: models.gameVisionFallbacks ?? [...PRODUCT.models.gameVisionFallbacks],
       gamePrimary: models.gamePrimary ?? PRODUCT.models.gamePrimary,
       gameFallbacks: models.gameFallbacks ?? [...PRODUCT.models.gameFallbacks],
       novelTextPrimary: models.novelTextPrimary ?? PRODUCT.models.novelTextPrimary,
@@ -357,7 +373,7 @@ function applyPatchToPayload(
         delete next.models![k];
         continue;
       }
-      if (k === "gameFallbacks" || k === "anthropicFallbacks" || k === "geminiFallbacks") {
+      if (k === "gameFallbacks" || k === "gameTextFallbacks" || k === "gameVisionFallbacks" || k === "anthropicFallbacks" || k === "geminiFallbacks") {
         const arr = Array.isArray(v)
           ? v.map((s) => s.trim()).filter(Boolean)
           : String(v)
@@ -386,7 +402,13 @@ function applyPatchToPayload(
     next.routes = patch.routes;
     const modelsFromRoutes: RuntimeModelsOverride = { ...next.models };
     for (const route of patch.routes) {
-      if (route.scene === "game") {
+      if (route.scene === "game_text") {
+        modelsFromRoutes.gameTextPrimary = route.primary;
+        modelsFromRoutes.gameTextFallbacks = route.fallbacks;
+      } else if (route.scene === "game_vision") {
+        modelsFromRoutes.gameVisionPrimary = route.primary;
+        modelsFromRoutes.gameVisionFallbacks = route.fallbacks;
+      } else if (route.scene === "game") {
         modelsFromRoutes.gamePrimary = route.primary;
         modelsFromRoutes.gameFallbacks = route.fallbacks;
       } else if (route.scene === "novel" || route.scene === "novel_plan" || route.scene === "comic_storyboard") {

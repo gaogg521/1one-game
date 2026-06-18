@@ -8,6 +8,8 @@ import type { RuntimeModelsOverride, RuntimeSecretsPayload } from "@/lib/runtime
 export type LlmProtocol = "openai_compatible" | "gemini" | "anthropic";
 
 export type RuntimeSceneKey =
+  | "game_text"
+  | "game_vision"
   | "game"
   | "novel"
   | "novel_plan"
@@ -81,6 +83,10 @@ function parseModelsList(raw: string | string[] | undefined): string[] {
 function openaiLinkedModels(models: RuntimeModelsOverride | undefined): string[] {
   const m = models ?? {};
   return parseModelsList([
+    m.gameTextPrimary,
+    ...(m.gameTextFallbacks ?? []),
+    m.gameVisionPrimary,
+    ...(m.gameVisionFallbacks ?? []),
     m.gamePrimary,
     ...(m.gameFallbacks ?? []),
     m.novelTextPrimary,
@@ -173,10 +179,16 @@ export function buildDefaultRoutes(
 
   return [
     {
-      scene: "game",
+      scene: "game_text",
       providerId: openaiId,
-      primary: m.gamePrimary,
-      fallbacks: [...(m.gameFallbacks ?? [])],
+      primary: m.gameTextPrimary ?? m.gamePrimary,
+      fallbacks: [...(m.gameTextFallbacks ?? m.gameFallbacks ?? [])],
+    },
+    {
+      scene: "game_vision",
+      providerId: openaiId,
+      primary: m.gameVisionPrimary ?? m.gamePrimary,
+      fallbacks: [...(m.gameVisionFallbacks ?? m.gameFallbacks ?? [])],
     },
     {
       scene: "novel",
@@ -220,8 +232,13 @@ export function mergeRoutesWithDefaults(
   const defaults = buildDefaultRoutes(payload.models ?? {}, providers);
   if (!stored?.length) return defaults;
   const byScene = new Map(stored.map((r) => [r.scene, r]));
+  const legacyGame = byScene.get("game");
+
   return defaults.map((d) => {
-    const hit = byScene.get(d.scene);
+    let hit = byScene.get(d.scene);
+    if (!hit && legacyGame) {
+      if (d.scene === "game_vision") hit = legacyGame;
+    }
     if (!hit) return d;
     return {
       ...d,
@@ -295,7 +312,9 @@ export function syncLegacySecretsFromProviders(
   const next = { ...payload, providers };
   const routes = mergeRoutesWithDefaults(payload.routes, { ...next, providers });
   const openai =
-    providerForRoute(providers, routes.find((r) => r.scene === "game"), "openai_compatible", OPENAI_PROVIDER_ID)
+    providerForRoute(providers, routes.find((r) => r.scene === "game_text"), "openai_compatible", OPENAI_PROVIDER_ID)
+    ?? providerForRoute(providers, routes.find((r) => r.scene === "game_vision"), "openai_compatible", OPENAI_PROVIDER_ID)
+    ?? providerForRoute(providers, routes.find((r) => r.scene === "game"), "openai_compatible", OPENAI_PROVIDER_ID)
     ?? providers.find((p) => p.protocol === "openai_compatible" && p.enabled !== false);
   const gemini =
     providerForRoute(
@@ -358,5 +377,7 @@ export const RUNTIME_SCENE_KEYS: RuntimeSceneKey[] = [
   "novel_plan",
   "comic_storyboard",
   "novel",
+  "game_vision",
+  "game_text",
   "game",
 ];

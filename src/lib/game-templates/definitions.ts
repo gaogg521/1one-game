@@ -56,6 +56,11 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "射击迎击 · 波次升级",
     llmSummary: "俯视角/竖版射击，波次敌群与火力窗口",
     infer: [
+      {
+        pattern:
+          /飞机大战|飞机游戏|空战|航空战|飞行射击|flight\s*battle|plane\s*battle|air\s*combat|aircraft\s*battle/i,
+        priority: 115,
+      },
       { pattern: /tiny planet|chopper|直升机|太空战|打飞机|1942|雷电|raiden|space invaders/i, priority: 90 },
       {
         pattern:

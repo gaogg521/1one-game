@@ -204,6 +204,7 @@ export class CoasterScene extends Phaser.Scene {
   private templeDead = false;
   private templeRunFinalized = false;
   private templeDeathFinalizeEvent: Phaser.Time.TimerEvent | null = null;
+  private templeDeathFinalizeAt = 0;
   private templeInvulnT = 0;
   private templePatternIdx = 0;
   private templeScrollPhase = 0;
@@ -656,12 +657,14 @@ export class CoasterScene extends Phaser.Scene {
 
   private scheduleTempleDeathFinalize() {
     this.templeDeathFinalizeEvent?.remove();
+    this.templeDeathFinalizeAt = this.time.now + 3000;
     this.templeDeathFinalizeEvent = this.time.delayedCall(3000, () => this.finalizeTempleRunSession());
   }
 
   private cancelTempleDeathFinalize() {
     this.templeDeathFinalizeEvent?.remove();
     this.templeDeathFinalizeEvent = null;
+    this.templeDeathFinalizeAt = 0;
   }
 
   private finalizeTempleRunSession() {
@@ -745,8 +748,8 @@ export class CoasterScene extends Phaser.Scene {
       title: this.uiLocale === "zh-Hans" ? "撞到了!" : "Crashed!",
       message:
         this.uiLocale === "zh-Hans"
-          ? `得分 ${this.templeRunScore} · 空格重开`
-          : `Score ${this.templeRunScore} · Space to restart`,
+          ? `得分 ${this.templeRunScore} · 空格重开 · 3 秒后结算`
+          : `Score ${this.templeRunScore} · Space to restart · settle in 3s`,
       ms: 2800,
       anchor: "bottom",
     });
@@ -776,8 +779,8 @@ export class CoasterScene extends Phaser.Scene {
       title: this.uiLocale === "zh-Hans" ? "被追上了!" : "Caught!",
       message:
         this.uiLocale === "zh-Hans"
-          ? `得分 ${this.templeRunScore} · 空格重开`
-          : `Score ${this.templeRunScore} · Space to restart`,
+          ? `得分 ${this.templeRunScore} · 空格重开 · 3 秒后结算`
+          : `Score ${this.templeRunScore} · Space to restart · settle in 3s`,
       ms: 2800,
       anchor: "bottom",
     });
@@ -1781,6 +1784,20 @@ export class CoasterScene extends Phaser.Scene {
       this.templeDeathDimGfx?.clear();
       if (this.templeDeathDimGfx) drawTempleDeathDim(this.templeDeathDimGfx, w, h);
       this.refreshDeathRecapHud(liveScore);
+      const left = Math.max(0, Math.ceil((this.templeDeathFinalizeAt - this.time.now) / 1000));
+      const zh = this.uiLocale === "zh-Hans";
+      if (this.hintText) {
+        this.hintText.setVisible(true);
+        this.hintText.setText(
+          zh ? `空格立刻重开 · ${left} 秒后进入结算` : `Space: restart · settle in ${left}s`,
+        );
+      }
+      setPhaserQaState({
+        templeDead: true,
+        templeDeathCountdown: left,
+        templeRunScore: this.templeRunScore,
+        coasterDistance: Math.round(this.distanceM),
+      });
     } else {
       this.templeDeathDimGfx?.clear();
     }

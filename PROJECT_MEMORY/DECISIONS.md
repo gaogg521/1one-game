@@ -1,5 +1,82 @@
 # DECISIONS
 
+更新时间：**2026-06-18**
+
+## 2026-06-18 — coerceGameSpec 保留 Agentic 字段（迭代一百零二）
+
+**增量**：
+1. `prepareGameSpecForPersist` 经 `coerceGameSpec` 时须保留 `agenticModule` / `agenticPlayRoute`（Zod 校验后透传）。
+2. `buildCanonicalAstrocadeSpec`：凡 `hasAgenticArtifact` 均在 enrich 后写回 route + module。
+3. 平台回归：`npm run qa:platform-test-generate`（ownerKey=`platform-test-user`）。
+
+---
+
+## 2026-06-17 — Phaser.Scene CLI bridge + P0 玩法 polish（迭代一百零一）
+
+**增量**：
+1. `wrapPhaserSceneAsCreateGame`：`Phaser.Scene` 子类 → `createGame`（`this`→`scene`，scale→ctx）。
+2. 消消乐关间 **⭐ 飞入** 顶栏关卡位（`playAnipopStarFlyIn`）。
+3. 神庙死亡 **3 秒结算倒计时** + `templeDeathCountdown` QA 状态。
+4. `qa:temple-death-flow` 离线门禁。
+
+---
+
+## 2026-06-17 — OpenGame CLI → Agentic bridge（迭代一百）
+
+**增量**：
+1. `opengame-cli-bridge.ts`：扫描 workDir JS → 去 ESM → 合并 helper + `createGame` → Agentic 模块。
+2. `OPENGAME_CLI_BRIDGE=1`：CLI 成功且 Debug Skill 通过后，生成源 `opengame_cli`（优先于 LLM）。
+3. Fixtures + `qa:opengame-cli-bridge`（native / multi-file / merge）。
+
+---
+
+## 2026-06-17 — OpenGame Pro CLI 子进程 spike（迭代九十九）
+
+**增量**：
+1. `opengame-cli.ts`：`probeOpenGameCli` / `runOpenGameCliHeadless`（headless `-p` + `--yolo`）。
+2. `OPENGAME_CLI=1` 且复杂 prompt 时在 `generateAgenticGameModule` 写入 orch `opengame_cli_spike`（**观测 only**，尚未替换 Agentic 模块）。
+3. `OPENGAME_CLI_DRY_RUN=1` 离线 QA；产物目录 `.tmp-opengame/`（gitignore）。
+4. QA：`npm run qa:opengame-cli-spike`。
+
+---
+
+## 2026-06-17 — OpenGame 试玩路由接入用户管线（迭代九十六）
+
+**决策**：
+1. `GameSpec.agenticPlayRoute`: `dedicated` | `agentic` — 持久化试玩路由，refine 可继承/重算。
+2. `OPENGAME_AGENTIC_ROUTE=complex_only`（默认）：仅 `agentic_complex` prompt 走 `attachAgenticModuleIfEnabled` + AgenticScene；简单 prompt 仍走样品级专用 Scene。
+3. `OPENGAME_AGENTIC_ROUTE=all|off` 全局开关；`AGENTIC_FORCE_LLM=1` 强制 agentic。
+4. `OPENGAME_BROWSER_BENCH=1`：LLM 模块生成后可选 Playwright 真浏览器验证；`OPENGAME_BROWSER_BENCH_REPAIR=1` 失败时追加一轮 repair。
+
+---
+
+## 2026-06-17 — OpenGame Skills Phase B：Browser Bench + 复杂度路由
+
+**增量**：
+1. `complexity-route.ts`：复杂 prompt（多关/选角/Boss/卡牌）→ `agentic_complex`，跳过 template-first 强制 LLM+Skills。
+2. `/qa/agentic-bench`：OpenGame-Bench 风格真 Phaser 探测页（生产需 `QA_ROUTES_ENABLED=1`）。
+3. `browser-bench.ts` + `qa:opengame-browser-bench` Playwright 脚本（**2/2 PASS**：platformer + physics fallback）。
+4. payload 编解码须浏览器安全（`TextEncoder`/`atob`，勿在 client 依赖 Node `Buffer`）；`sceneKey` 须在 Scene boot 后用 `game.scene.getScenes(true)` 读取。
+5. `AgenticScene` 成功加载后 `schedulePhaserPlayReady`。
+6. Debug Skill 修正 `MISSING_UPDATE_FOR_SPAWNER`（认可 `scene.events.on('update')`）。
+
+---
+
+## 2026-06-17 — 提炼 OpenGame Skills 接入 Agentic 管线
+
+**背景**：用户生成质量瓶颈在「单 JSON + 单文件 Agentic」上限；[OpenGame](https://github.com/leigest519/OpenGame) 的核心是 **Template Skill（稳定 scaffold）** + **Debug Skill（verify→diagnose→repair 协议）**，而非单纯换模型。
+
+**决策**：
+1. 新增 `src/lib/opengame-skills/`：Debug 协议（提炼 seed-protocol + Operone 可玩性检查）、Template 族（6 archetype 映射 OpenGame modules → 单文件 Template Method 骨架）。
+2. **Template Skill** 注入 `agentic-prompts` system/user/repair；按 prompt 关键词升级 archetype（如卡牌→ui_heavy、选角多关→platformer）。
+3. **Debug Skill** 接入 `generate-game-module.ts`：`runDebugSkillPipeline`（proactive → runnable）失败时带协议 fix 多轮 LLM repair（最多 3 轮）。
+4. 不替换 GameSpec 秒开主路径；Skills 仅强化 **Advanced Agentic LLM** 分支。完整 OpenGame CLI 多文件工程留作后续 Pro 模式。
+5. QA：`npm run qa:opengame-skills`。
+
+**归因**：Debug 协议思路源自 OpenGame（Apache-2.0, CUHK MMLab）。
+
+---
+
 更新时间：**2026-06-17**
 
 ## 2026-06-17 — 样品馆商业标准裁剪（23 → 14）

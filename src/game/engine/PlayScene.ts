@@ -29,7 +29,8 @@ import type { AppLocale } from "@/i18n/routing";
 import { gameEventTitle, platformerFinalSprint, playSceneBossBanner } from "@/lib/i18n/game-event-labels";
 import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
+import { hudTopSubtitleText, styleHudText } from "@/game/engine/hudTextStyle";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
@@ -277,24 +278,29 @@ export class PlayScene extends Phaser.Scene {
       this.add.image(width / 2, height / 2, "bgTex").setDepth(-10).setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier));
     }
 
-    this.add
-      .text(width / 2, 22, this.spec.title, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "21px",
-        color: ui.hud.title,
-      })
-      .setOrigin(0.5)
-      .setDepth(20);
-
-    if (this.spec.labels.subtitle) {
+    styleHudText(
       this.add
-        .text(width / 2, 48, this.spec.labels.subtitle, {
+        .text(width / 2, 22, this.spec.title, {
           fontFamily: "system-ui, sans-serif",
-          fontSize: "12px",
-          color: ui.hud.subtitle,
+          fontSize: "21px",
+          color: ui.hud.title,
         })
         .setOrigin(0.5)
-        .setDepth(20);
+        .setDepth(20),
+    );
+
+    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
+    if (topSubtitle) {
+      styleHudText(
+        this.add
+          .text(width / 2, 48, topSubtitle, {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "12px",
+            color: ui.hud.subtitle,
+          })
+          .setOrigin(0.5)
+          .setDepth(20),
+      );
     }
 
     this.scoreText = this.add
@@ -499,7 +505,7 @@ export class PlayScene extends Phaser.Scene {
     this.shieldRing.setDepth(24);
 
     this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {

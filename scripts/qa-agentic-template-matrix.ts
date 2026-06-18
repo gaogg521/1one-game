@@ -5,7 +5,7 @@
 import { AGENTIC_QA_CASES } from "./agentic-qa-cases";
 import { mockSpecFromPrompt } from "../src/lib/mock-spec";
 import { buildTemplateFallbackModule } from "../src/lib/agentic/template-fallback-modules";
-import { validateAgenticRunnable } from "../src/lib/agentic/agentic-runnable";
+import { runDebugSkillPipeline } from "../src/lib/opengame-skills";
 import { PRODUCT } from "../src/lib/product-config";
 
 function main() {
@@ -23,7 +23,7 @@ function main() {
       console.warn(`[warn] ${spec.templateId} not in agenticTemplateFirst`);
     }
     const mod = buildTemplateFallbackModule(spec);
-    const run = validateAgenticRunnable(mod);
+    const run = runDebugSkillPipeline(mod);
     if (!run.ok) {
       console.error(`[FAIL] ${spec.templateId} not runnable: ${run.reason} (${mod.source.length} chars)`);
       failed += 1;

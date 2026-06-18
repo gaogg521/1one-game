@@ -108,6 +108,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         spec: nextSpec,
         prompt: mergedPrompt,
         refinementHistory: history,
+        agenticPlayRoute: nextSpec.agenticPlayRoute ?? "dedicated",
       });
     }
 
@@ -151,6 +152,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       prompt: mergedPrompt,
       refinementHistory: history,
       generationSource: meta.source,
+      agenticPlayRoute: meta.spec.agenticPlayRoute ?? "dedicated",
     });
   } catch {
     return NextResponse.json(localizedApiErrorPayload(req, "refineFailed"), { status: 500 });

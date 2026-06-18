@@ -4,6 +4,7 @@ import {
   SystemsSchema,
   type GameSpec,
 } from "@/lib/game-spec";
+import { AgenticModuleSchema } from "@/lib/agentic/game-module";
 import type { AppLocale } from "@/i18n/routing";
 import { untitledGameLabel } from "@/lib/i18n/chapter-labels";
 const TowerDefenseBlueprintSchema = GameSpecSchema.shape.towerDefense;
@@ -163,6 +164,18 @@ export function coerceGameSpec(
     else issues.push("towerDefense 蓝图未通过校验，保存时将自动生成默认关卡");
   }
 
+  let agenticModuleOpt: GameSpec["agenticModule"] | undefined;
+  if (typeof o.agenticModule === "object" && o.agenticModule !== null) {
+    const am = AgenticModuleSchema.safeParse(o.agenticModule);
+    if (am.success) agenticModuleOpt = am.data;
+    else issues.push("agenticModule 未通过校验，已丢弃");
+  }
+
+  let agenticPlayRouteOpt: GameSpec["agenticPlayRoute"] | undefined;
+  if (o.agenticPlayRoute === "dedicated" || o.agenticPlayRoute === "agentic") {
+    agenticPlayRouteOpt = o.agenticPlayRoute;
+  }
+
   const candidate: GameSpec = {
     version: 1,
     templateId,
@@ -196,6 +209,8 @@ export function coerceGameSpec(
     ...(directorOpt !== undefined ? { director: directorOpt } : {}),
     ...(systemsOpt !== undefined ? { systems: systemsOpt } : {}),
     ...(towerDefenseOpt !== undefined ? { towerDefense: towerDefenseOpt } : {}),
+    ...(agenticModuleOpt !== undefined ? { agenticModule: agenticModuleOpt } : {}),
+    ...(agenticPlayRouteOpt !== undefined ? { agenticPlayRoute: agenticPlayRouteOpt } : {}),
   };
 
   const parsed = GameSpecSchema.safeParse(candidate);
@@ -253,6 +268,12 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
       typeof r.towerDefense === "object" && r.towerDefense !== null ? r.towerDefense : base.towerDefense,
     director: overlayDirector,
     systems: overlaySystems,
+    agenticModule:
+      typeof r.agenticModule === "object" && r.agenticModule !== null ? r.agenticModule : base.agenticModule,
+    agenticPlayRoute:
+      r.agenticPlayRoute === "dedicated" || r.agenticPlayRoute === "agentic"
+        ? r.agenticPlayRoute
+        : base.agenticPlayRoute,
     presentation:
       typeof r.presentation === "object" && r.presentation !== null
         ? { ...base.presentation, ...(r.presentation as GameSpec["presentation"]) }

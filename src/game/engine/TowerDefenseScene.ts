@@ -57,7 +57,8 @@ import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
+import { hudTopSubtitleText } from "@/game/engine/hudTextStyle";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
 
@@ -939,9 +940,10 @@ export class TowerDefenseScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(30);
 
-    if (this.spec.labels.subtitle) {
+    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
+    if (topSubtitle) {
       this.add
-        .text(w / 2, 44, this.spec.labels.subtitle, {
+        .text(w / 2, 44, topSubtitle, {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
           color: ui.hud.subtitle,
@@ -1055,7 +1057,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.refreshHud();
 
     this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, ui, { y: 166 });
 
     this.hpBarGfx = this.add.graphics();

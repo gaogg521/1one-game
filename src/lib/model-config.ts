@@ -26,13 +26,25 @@ function dedupeModelIds(ids: string[]): string[] {
   return out;
 }
 
-/** 游戏 / GameSpec / 规格修补 / 视觉参考等文本链路 */
+/** 游戏文本链路默认池（无参考图）；请优先使用 resolveGameModelRoute / getGameModelCascade */
 export function getModelCascade(): string[] {
-  const fromRoute = getSceneModelCascade("game");
+  const fromRoute = getSceneModelCascade("game_text");
   if (fromRoute.length) return dedupeModelIds(fromRoute);
-  const { gamePrimary, gameFallbacks } = getEffectiveModels();
-  return dedupeModelIds([gamePrimary ?? PRODUCT.models.gamePrimary, ...(gameFallbacks ?? PRODUCT.models.gameFallbacks)]);
+  const { gameTextPrimary, gameTextFallbacks, gamePrimary, gameFallbacks } = getEffectiveModels();
+  return dedupeModelIds([
+    gameTextPrimary ?? gamePrimary ?? PRODUCT.models.gameTextPrimary,
+    ...(gameTextFallbacks ?? gameFallbacks ?? PRODUCT.models.gameTextFallbacks),
+  ]);
 }
+
+export {
+  getGameModelCascade,
+  resolveGameModelRoute,
+  resolveGameModelRouteMode,
+  gameSceneKeyForMode,
+  type GameModelRouteInput,
+  type GameModelRouteMode,
+} from "@/lib/game-model-route";
 
 /** 小说正文、漫画分镜 JSON */
 export function getNovelStyleTextModelCascade(): string[] {

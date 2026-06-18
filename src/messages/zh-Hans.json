@@ -1508,6 +1508,7 @@
     "updatingAndPlay": "更新项目并试玩",
     "saveAndPlay": "保存并试玩",
     "spriteWait": "正在生成专属游戏贴图（豌豆射手、僵尸、背景等），约需 2-3 分钟，完成后自动跳转试玩页…",
+    "autoCoverReady": "Brief 自动封面已生成，保存后可在作品库与广场展示。",
     "ingestBusy": "素材解析进行中…（上传优先于剪贴板）",
     "previewAria": "试玩预览",
     "previewHint": "完成创意描述与参考素材配置并生成后，在下方试玩；先选 Godot（在线）完整版，Phaser 用于秒开预览。",
@@ -1663,7 +1664,7 @@
       "templateLabel": "玩法模板",
       "enhancePass": "二次强化（更成品/更复杂）",
       "searchEnhance": "联网检索增强（Tavily）",
-      "searchEnhanceHint": "默认关闭，开启后会自动检索同类玩法并注入描述",
+      "searchEnhanceHint": "默认开启，会自动检索同类玩法并注入描述；无 Tavily 密钥时自动跳过",
       "webWarningPrefix": "联网检索提示：",
       "webSources": "本次检索来源（{count}）",
       "generateHint": "点击「生成」时会自动解析队列素材；参考链接框有 URL 时也会一并抓取合并",
@@ -2278,7 +2279,7 @@
       "sectionModelCatalog": "模型目录（参考）",
       "sectionModelCatalogHint": "仅供「业务模型路由」填写 model ID 时参考，不等于当前线上正在运行的模型。",
       "sectionRoutingEdit": "编辑业务模型路由",
-      "routingEditHint": "为每个业务场景指定服务商与实际 model ID。与顶部「当前线上生效」不一致的行会标记「待保存」。",
+      "routingEditHint": "为每个业务场景指定服务商与实际 model ID。游戏规格已拆为「纯文本」与「含参考图」两路，系统会按创作台是否上传参考图自动选型。与顶部「当前线上生效」不一致的行会标记「待保存」。",
       "discardChanges": "放弃未保存修改",
       "discardDone": "已恢复为上次保存的配置",
       "legacyEnvTitle": "部署环境变量（.env）",
@@ -2358,6 +2359,10 @@
       "providerCopySuffix": "副本",
       "sceneGame": "游戏规格 JSON",
       "sceneGameDesc": "GameSpec、规格修补、多 Agent、Creative Brief",
+      "sceneGameText": "游戏规格 · 纯文本",
+      "sceneGameTextDesc": "无参考图时：GameSpec 初稿/强化、规格修补、多 Agent、Creative Brief",
+      "sceneGameVision": "游戏规格 · 含参考图",
+      "sceneGameVisionDesc": "上传参考图或 prompt 含【参考素材】时：规格生成 + 参考图视觉理解",
       "sceneNovelBody": "小说正文",
       "sceneNovelBodyDesc": "短篇/长篇正文流式生成",
       "sceneNovelPlan": "长篇规划 JSON",
@@ -2961,6 +2966,176 @@
         "addonLine3": "保证可玩基础上，让玩家更容易记住这个世界观。"
       }
     },
+    "dialogue": {
+      "shooter": {
+        "classic": {
+          "title": "更像经典街机弹幕？",
+          "summary": "自下而上自动射击，满屏敌机压境，走位躲弹幕是核心。",
+          "bullet0": "敌机编队 + 波次升级，3 分钟内压力明显抬升",
+          "bullet1": "玩家是战机，敌人是敌机/无人机，掉落金币或能量核",
+          "addonHeader": "【共创选择】经典街机弹幕",
+          "addon0": "使用 shooter 模板：战机自动射击、敌机波次、竖版/俯视角空战",
+          "addon1": "强调弹幕密度与走位窗口，每 20~40 秒一波明显变化",
+          "addon2": "世界观以「{fantasy}」统一命名敌我单位与 HUD"
+        },
+        "boss": {
+          "title": "要不要母舰/Boss 阶段战？",
+          "summary": "前半清小怪攒火力，后半打分段 Boss（护盾→核心）。",
+          "bullet0": "至少 1 个多阶段 Boss，弹幕花样随血量变化",
+          "bullet1": "胜利条件可设为击破母舰核心或守住防线",
+          "addonHeader": "【共创选择】Boss/母舰阶段战",
+          "addon0": "shooter 模板 + 分段 Boss：护盾层、核心层、召唤小怪",
+          "addon1": "波次末出现精英编队，最终 Boss 战有独立 HUD 提示",
+          "addon2": "主题包装贴合「{fantasy}」，Boss 名与阶段字幕要鲜明"
+        },
+        "power": {
+          "title": "更偏击落掉装、火力叠加？",
+          "summary": "击毁敌机掉道具，火力/射速/护盾可叠加，形成爽感循环。",
+          "bullet0": "掉落：火力+1、散射、护盾、炸弹技能",
+          "bullet1": "连击或连杀放大奖励反馈",
+          "addonHeader": "【共创选择】火力成长循环",
+          "addon0": "shooter 模板：击落敌机掉落可拾取强化，火力 visibly 升级",
+          "addon1": "Shift 技能与掉落技能分工明确（冲刺/炸弹/清屏）",
+          "addon2": "数值偏爽快，首版就要感受到「越打越强」"
+        },
+        "story": {
+          "title": "更想突出战区剧情与军团设定？",
+          "summary": "每章有战区名、敌方军团与任务简报，玩法仍要完整可打。",
+          "bullet0": "章节/战区字幕 + 敌我命名统一（如铁幕军团、能量核）",
+          "bullet1": "subtitle 写氛围，HUD 目标写可执行规则",
+          "addonHeader": "【共创选择】战区剧情演出",
+          "addon0": "shooter 空战 + 鲜明军团设定与章节名",
+          "addon1": "labels 中 player=战机 hazard=敌机 collectible=能量核/目标物",
+          "addon2": "长世界观放副标题/章节，顶栏 HUD 保持短句可读"
+        }
+      },
+      "towerDefense": {
+        "lane": {
+          "title": "单路线经典塔防可以吗？",
+          "summary": "一条主路 + 多塔位，看清经济节奏与波次压力。",
+          "bullet0": "三种塔分工（速射/范围/减速或增益）",
+          "bullet1": "波次表可读，漏怪扣基地生命",
+          "addonHeader": "【共创选择】单路线塔防",
+          "addon0": "towerDefense：单路线、明确塔位、波次递增",
+          "addon1": "经济曲线：开局能建 2~3 塔，中期才遇精英",
+          "addon2": "主题贴合「{fantasy}」"
+        },
+        "multi": {
+          "title": "需要多路线分流压力？",
+          "summary": "2~3 条路径汇合，玩家要分配火力与建造顺序。",
+          "bullet0": "分路出兵，近路快、远路肉",
+          "bullet1": "关键岔口塔位更有决策价值",
+          "addonHeader": "【共创选择】多路线塔防",
+          "addon0": "多路径行军 + 汇合点高压",
+          "addon1": "至少一轮「分路同时加压」事件",
+          "addon2": "基地与敌人命名统一世界观"
+        },
+        "hero": {
+          "title": "要加可移动英雄单位吗？",
+          "summary": "塔负责区域，英雄负责补漏与技能爆发。",
+          "bullet0": "英雄有冷却技能（清场/减速/治疗基地）",
+          "bullet1": "塔升级与英雄成长双线",
+          "addonHeader": "【共创选择】英雄+塔混合",
+          "addon0": "塔防骨架 + 可操控英雄补位",
+          "addon1": "Shift 释放英雄技能，与建塔经济平衡",
+          "addon2": "贴合「{fantasy}」的角色与敌人设定"
+        },
+        "events": {
+          "title": "波次里穿插随机事件？",
+          "summary": "精英波、空投、天气/场地变化打断节奏，逼玩家调整策略。",
+          "bullet0": "每 2~3 波一个小事件（加速/隐身/分裂）",
+          "bullet1": "最终波 Boss 或集群冲锋",
+          "addonHeader": "【共创选择】波次事件型",
+          "addon0": "波次间插入事件卡：精英、增益塔、限时挑战",
+          "addon1": "局势每 30 秒左右有明显变化",
+          "addon2": "演出字幕提示下一威胁来源"
+        }
+      },
+      "platformer": {
+        "run": {
+          "title": "偏奔跑收集闯关？",
+          "summary": "前进探索 + 捡金币/道具，终点或收集数达标即胜。",
+          "bullet0": "关卡有起点终点或分段检查点",
+          "bullet1": "平台高度差制造节奏变化",
+          "addonHeader": "【共创选择】奔跑收集闯关",
+          "addon0": "platformer：前进式关卡 + 收集目标",
+          "addon1": "地形段落清晰（平地→跳跃→风险区）",
+          "addon2": "主题「{fantasy}」贯穿地块与敌人"
+        },
+        "precision": {
+          "title": "想要精密跳跃挑战？",
+          "summary": "落点窄、节奏快，失败惩罚轻但有压迫感。",
+          "bullet0": "尖刺/移动平台/限时段组合",
+          "bullet1": "检查点或短关卡降低挫败",
+          "addonHeader": "【共创选择】精密跳跃",
+          "addon0": "跳跃手感优先，段落短、反馈快",
+          "addon1": "难度曲线前松后紧",
+          "addon2": "视觉提示危险区（颜色/动画）"
+        },
+        "combat": {
+          "title": "关卡里加战斗与敌人？",
+          "summary": "跳跃 + 踩踏/攻击敌人，而不只是躲障碍。",
+          "bullet0": "至少 2 种敌人行为（巡逻/跳跃）",
+          "bullet1": "击败敌人掉收集物或开门",
+          "addonHeader": "【共创选择】战斗平台",
+          "addon0": "platformer + 可击败敌人",
+          "addon1": "Shift 技能用于冲刺或攻击窗口",
+          "addon2": "敌我设定贴合「{fantasy}」"
+        },
+        "chapters": {
+          "title": "按章节讲故事推进？",
+          "summary": "每章有小目标、场景换皮与章节字幕。",
+          "bullet0": "3 章左右，每章机制微变化",
+          "bullet1": "章节名与 subtitle 分工（氛围 vs 规则）",
+          "addonHeader": "【共创选择】章节叙事",
+          "addon0": "多章节平台关卡 + 章节过渡字幕",
+          "addon1": "HUD 目标短句，长文案不进顶栏",
+          "addon2": "世界观「{fantasy}」在每章视觉中体现"
+        }
+      },
+      "fallback": {
+        "goal": {
+          "title": "胜利条件想怎么定？",
+          "summary": "先钉死「玩家怎样算赢」——收集、坚守、抵达或击败首领。",
+          "bullet0": "winScore / 关卡目标 / 时间限制写清楚",
+          "bullet1": "失败条件也要一眼能懂",
+          "addonHeader": "【共创选择】明确胜利条件",
+          "addon0": "补全可量化的胜利条件（数量、波次、时间、到达点）",
+          "addon1": "HUD 目标面板用短句描述规则",
+          "addon2": "贴合「{fantasy}」命名目标物与威胁"
+        },
+        "threat": {
+          "title": "主要威胁来自哪里？",
+          "summary": "选定压力来源：追击者、弹幕、陷阱、漏怪或资源枯竭。",
+          "bullet0": "威胁行为可预测但有变化",
+          "bullet1": "每局前 30 秒就要感受到压力",
+          "addonHeader": "【共创选择】具体威胁来源",
+          "addon0": "明确 hazard/敌人/陷阱类型与行为",
+          "addon1": "威胁与主题一致，不要无脸随机块",
+          "addon2": "贴合「{fantasy}」"
+        },
+        "progression": {
+          "title": "进程怎么逐步变难？",
+          "summary": "用波次、技能解锁、章节或事件让局势层层加码。",
+          "bullet0": "每 20~40 秒一次局势变化",
+          "bullet1": "至少一种中期决策（升级/路线/技能）",
+          "addonHeader": "【共创选择】进程与层次",
+          "addon0": "加入波次/章节/技能/事件中的至少两项",
+          "addon1": "避免全程同一节奏",
+          "addon2": "变化理由与「{fantasy}」世界观一致"
+        },
+        "fantasy": {
+          "title": "世界观就按这个方向深化？",
+          "summary": "统一命名、配色与敌人/道具称呼，让首版就像同一个世界。",
+          "bullet0": "标题、副标题、HUD、敌人名同一套词汇",
+          "bullet1": "玩法完整优先，包装其次但要有记忆点",
+          "addonHeader": "【共创选择】世界观深化",
+          "addon0": "以「{fantasy}」为核心统一所有 labels",
+          "addon1": "长氛围句放 subtitle，顶栏只显示短目标",
+          "addon2": "贴图 prompt 对齐主题（战机/敌机，而非无关萌块）"
+        }
+      }
+    },
     "assets": {
       "fileQueue": "本机「选择文件」队列中：**{count}** 张图片（上传优先）。",
       "clipQueue": "剪贴板队列：**{count}** 张（用途分布：{breakdown}）。",
@@ -2977,8 +3152,18 @@
       "recapTd": "**塔防概览**：基地生命约 **{baseHealth}** · 开局金币 **{startingCoins}** · 总波次数 **{winScore}**（可到右侧快速调试微调）。",
       "recapEnemies": "**敌军种类**：蓝图内登记 **{count}** 种敌人模型。",
       "recapGeneric": "**通用玩法数值**：主角移速 {playerSpeed} · 威胁移速 {hazardSpeed} · 取胜目标(winScore) {winScore}。",
+      "recapPlayRouteDedicated": "**试玩引擎**：样品级专用 Scene（快速稳定，适合简单创意）",
+      "recapPlayRouteAgentic": "**试玩引擎**：OpenGame Agentic + Skills（复杂创意，LLM 定制玩法代码）",
+      "recapOpenGameTier": "**OpenGame 档位**：{tier}",
+      "recapAgenticModule": "**Agentic 模块**：已 attach（来源 {source}，经 Debug Skill 校验）",
+      "recapAgenticModuleMissing": "**Agentic 模块**：路由为 agentic 但未成功 attach",
+      "recapBrowserBenchOk": "**Browser Bench**：真浏览器探测通过",
+      "recapBrowserBenchFail": "**Browser Bench**：真浏览器探测未通过（已回退或 repair）",
       "recapSearchUsed": "**联网检索**：已并入摘要片段；来源列表可在生成完成后于页内查看（若有）。",
-      "recapSearchFallback": "**联网检索**：本轮未得到有效摘要（密钥/配额/无命中等皆可），已退回纯文本管线。{warning}"
+      "recapSearchFallback": "**联网检索**：本轮未得到有效摘要（密钥/配额/无命中等皆可），已退回纯文本管线。{warning}",
+      "recapGameModelModeText": "纯文本规格",
+      "recapGameModelModeVision": "多模态（参考图）",
+      "recapGameModelRoute": "**模型路由**：{modeLabel} · 场景 {scene} · 主模型 {primary}{fallbacks}"
     }
   },
   "comicPanelProgress": {

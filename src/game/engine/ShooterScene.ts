@@ -35,7 +35,7 @@ import {
 } from "@/game/engine/gameJuice";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { paintOrbitPlanetRich, paintSniperScopeOverlay } from "@/game/engine/action-visual";
-import { styleHudText } from "@/game/engine/hudTextStyle";
+import { hudTopSubtitleText, styleHudText } from "@/game/engine/hudTextStyle";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import {
   assetBackgroundAlpha,
@@ -44,7 +44,7 @@ import {
 } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
 
@@ -293,10 +293,11 @@ export class ShooterScene extends Phaser.Scene {
         .setDepth(20),
     );
 
-    if (this.spec.labels.subtitle) {
+    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
+    if (topSubtitle) {
       styleHudText(
         this.add
-          .text(width / 2, 48, this.spec.labels.subtitle, {
+          .text(width / 2, 48, topSubtitle, {
             fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
             fontSize: "11px",
             color: ui.hud.subtitle,
@@ -364,7 +365,7 @@ export class ShooterScene extends Phaser.Scene {
     }
 
     this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, ui);
 
     // 射击模板：优先使用 preload 的 texPlayer/texHazard，其次参考图 ref*，最后程序化星舰

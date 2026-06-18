@@ -51,6 +51,8 @@ export type CreatePhaserGameOptions = {
   uiLocale?: AppLocale;
   /** 原始 prompt，用于 blueprint 推断（样品馆 / 用户项目） */
   promptHint?: string;
+  /** OpenGame Browser Bench：保留 agenticModule，不 strip template-first normalize */
+  preserveAgenticModule?: boolean;
 };
 
 export type PhaserGameHandle = {
@@ -75,7 +77,9 @@ export function createPhaserGame(
     [spec.labels.subtitle, spec.title].filter(Boolean).join(" · ");
   resetPhaserPlayReady();
   const specPlay = applyMinecraftThemeOverlay(
-    canonicalSpecForPlay(spec, promptHint, uiLocale, opts?.projectId),
+    opts?.preserveAgenticModule
+      ? spec
+      : canonicalSpecForPlay(spec, promptHint, uiLocale, opts?.projectId),
   );
   const assetProjectId = resolveAssetProjectId(specPlay, opts?.projectId);
   const canonicalBackgroundUrl = assetProjectId ? `/game-bg/${assetProjectId}.png` : null;
@@ -92,7 +96,7 @@ export function createPhaserGame(
     presentation.musicProfile,
     thematicRootFrequencyHz(specPlay.theme),
     specPlay.director?.intensity ?? 0.55,
-    { blocky: blockyAdventure },
+    { blocky: blockyAdventure, templateId: specPlay.templateId },
   );
 
   const scene = createPhaserSceneForSpec(specPlay, onEnd, ref, soundscape, {

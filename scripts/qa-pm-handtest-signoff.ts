@@ -17,7 +17,8 @@ const STEPS: { name: string; cmd: string }[] = [
   { name: "Refinement 日志", cmd: "npm run qa:refinement-log" },
   { name: "共创闭环", cmd: "npm run qa:co-create-loop" },
   { name: "17 款竞品 clone 断言", cmd: "npm run qa:competitor-clone-checks-offline" },
-  { name: "B 档 smoke", cmd: "npm run qa:b-tier-smoke" },
+  { name: "14 款 PM 上架清单", cmd: "npm run qa:sample-launch-checklist" },
+  { name: "Phase C 行为 hook", cmd: "npm run qa:sample-behavior-signoff" },
 ];
 
 function runStep(cmd: string): { ok: boolean; detail?: string } {

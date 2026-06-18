@@ -13,10 +13,17 @@ export type RuntimeSceneMeta = {
 /** 产品内建场景 — 可按业务拆到不同 LiteLLM 网关 / 模型池 */
 export const RUNTIME_SCENE_CATALOG: RuntimeSceneMeta[] = [
   {
-    scene: "game",
+    scene: "game_text",
     domain: "game",
-    labelKey: "sceneGame",
-    descKey: "sceneGameDesc",
+    labelKey: "sceneGameText",
+    descKey: "sceneGameTextDesc",
+    defaultProtocol: "openai_compatible",
+  },
+  {
+    scene: "game_vision",
+    domain: "game",
+    labelKey: "sceneGameVision",
+    descKey: "sceneGameVisionDesc",
     defaultProtocol: "openai_compatible",
   },
   {

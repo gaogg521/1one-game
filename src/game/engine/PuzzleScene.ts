@@ -22,7 +22,7 @@ import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 import {
   anipopKindFromColorIndex,
   anipopSwapHint,
@@ -308,7 +308,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 88, hidden: this.anipopMode });
     this.gridGfx = this.add.graphics();
     if (this.anipopMode) {
@@ -462,26 +462,29 @@ export class PuzzleScene extends Phaser.Scene {
       this.finished = true;
       const stars =
         this.score >= this.target * 1.4 ? 3 : this.score >= this.target * 1.12 ? 2 : 1;
-      this.banner.show({
-        title: zh ? `第 ${this.anipopLevel} 关完成` : `Level ${this.anipopLevel} cleared`,
-        message: zh
-          ? `获得 ${stars} 星 · 进入第 ${this.anipopLevel + 1} 关`
-          : `${stars} star(s) · Level ${this.anipopLevel + 1} next`,
-        ms: 1600,
-      });
-      juiceWin(this, {
-        x: this.scale.width / 2,
-        y: this.scale.height * 0.44,
-        colorHex: themeParticleHex(this.spec),
-        text: zh ? "过关" : "Clear",
-        textColorCss: this.cohesive.hud.accent,
-      });
-      this.time.delayedCall(1600, () => {
-        this.advanceAnipopLevel();
+      this.playAnipopStarFlyIn(stars, () => {
         this.banner.show({
-          title: zh ? `第 ${this.anipopLevel} 关` : `Level ${this.anipopLevel}`,
-          message: zh ? "目标已更新，继续消除吧！" : "New goals — keep matching!",
-          ms: 1400,
+          title: zh ? `第 ${this.anipopLevel} 关完成` : `Level ${this.anipopLevel} cleared`,
+          message: zh
+            ? `获得 ${stars} 星 · 进入第 ${this.anipopLevel + 1} 关`
+            : `${stars} star(s) · Level ${this.anipopLevel + 1} next`,
+          ms: 1600,
+        });
+        juiceWin(this, {
+          x: this.scale.width / 2,
+          y: this.scale.height * 0.44,
+          colorHex: themeParticleHex(this.spec),
+          text: zh ? "过关" : "Clear",
+          textColorCss: this.cohesive.hud.accent,
+        });
+        this.time.delayedCall(1600, () => {
+          this.advanceAnipopLevel();
+          this.finished = false;
+          this.banner.show({
+            title: zh ? `第 ${this.anipopLevel} 关` : `Level ${this.anipopLevel}`,
+            message: zh ? "目标已更新，继续消除吧！" : "New goals — keep matching!",
+            ms: 1400,
+          });
         });
       });
       return;
@@ -959,6 +962,40 @@ export class PuzzleScene extends Phaser.Scene {
     this.moveLimit = cfg.moveLimit;
     this.anipopChickTarget = cfg.chickTarget;
     this.anipopIceTarget = cfg.iceTarget;
+  }
+
+  private playAnipopStarFlyIn(stars: number, onDone: () => void) {
+    const bar = this.anipopTopBarLayout;
+    if (!bar || stars <= 0) {
+      onDone();
+      return;
+    }
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height * 0.42;
+    let done = 0;
+    const finishOne = () => {
+      done += 1;
+      if (done >= stars) onDone();
+    };
+    for (let i = 0; i < stars; i += 1) {
+      const star = this.add
+        .text(cx + (i - (stars - 1) / 2) * 30, cy, "⭐", { fontSize: "30px" })
+        .setDepth(220)
+        .setOrigin(0.5);
+      this.tweens.add({
+        targets: star,
+        x: bar.levelCx + (i - (stars - 1) / 2) * 10,
+        y: bar.levelCy,
+        scale: 0.55,
+        alpha: 0.92,
+        duration: 700 + i * 110,
+        ease: "Cubic.easeOut",
+        onComplete: () => {
+          star.destroy();
+          finishOne();
+        },
+      });
+    }
   }
 
   private advanceAnipopLevel() {

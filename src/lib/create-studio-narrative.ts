@@ -55,7 +55,10 @@ export function guessPlayStyle(prompt: string, locale: AppLocale = "zh-Hans"): s
   if (/塔防|保卫萝卜|波次防守|防御塔|箭塔|炮塔|放置塔|\b(td|tower defense|tower\s*defen[cs]e)\b/i.test(p)) {
     return tr(locale, "playStyle.towerDefense");
   }
-  if (/射击|飞船|敌机|弹幕|战机|太空战|清屏|shooter|shoot|bullet hell/i.test(p)) {
+  if (
+    /飞机大战|打飞机|战机|敌机|空战|飞机|射击|飞船|弹幕|太空战|清屏/i.test(prompt) ||
+    /shooter|shoot|bullet hell|shmup|plane battle|air combat/i.test(p)
+  ) {
     return tr(locale, "playStyle.shooter");
   }
   if (/平台|跳台|横版闯关|\b(platformer|platform)\b|马里奥|恶魔城/i.test(prompt) || /\b(platform|jump)\b/.test(p)) {
@@ -129,7 +132,7 @@ function detectTemplateId(
 function inferFantasy(prompt: string, locale: AppLocale): string {
   if (/海|洋|珊瑚|章鱼|潜水|鱼/.test(prompt)) return tr(locale, "fantasy.ocean");
   if (/森林|树|蘑菇|精灵|藤蔓|鹿/.test(prompt)) return tr(locale, "fantasy.forest");
-  if (/太空|宇宙|星|飞船|银河|陨石/.test(prompt)) return tr(locale, "fantasy.space");
+  if (/太空|宇宙|星|飞船|银河|陨石|飞机|战机|空战|航空/.test(prompt)) return tr(locale, "fantasy.space");
   if (/赛博|霓虹|cyber|neon|机甲|全息/.test(prompt.toLowerCase())) return tr(locale, "fantasy.cyber");
   if (/猫|狗|萌|可爱|治愈/.test(prompt)) return tr(locale, "fantasy.cute");
   return tr(locale, "fantasy.default");
@@ -172,68 +175,115 @@ export function buildCoCreationIntent(
   };
 }
 
-function directionBulletsFor(templateId: CoCreationIntent["templateId"], locale: AppLocale): string[] {
-  if (templateId === "towerDefense") {
-    return [tr(locale, "directionBullets.td0"), tr(locale, "directionBullets.td1")];
-  }
-  if (templateId === "shooter") {
-    return [tr(locale, "directionBullets.shooter0"), tr(locale, "directionBullets.shooter1")];
-  }
-  if (templateId === "platformer") {
-    return [tr(locale, "directionBullets.platformer0"), tr(locale, "directionBullets.platformer1")];
-  }
-  return [tr(locale, "directionBullets.default0"), tr(locale, "directionBullets.default1")];
+
+function buildDialogueAddon(locale: AppLocale, keyPrefix: string, fantasy: string): string {
+  const header = tr(locale, `${keyPrefix}.addonHeader`);
+  const lines = [0, 1, 2]
+    .map((i) => {
+      const line = tr(locale, `${keyPrefix}.addon${i}`, { fantasy });
+      if (!line || line === `${keyPrefix}.addon${i}`) return null;
+      return `- ${line}`;
+    })
+    .filter((line): line is string => Boolean(line));
+  return [header, ...lines].join("\n");
 }
 
-function buildPromptAddon(
+function dialogueDirection(
   locale: AppLocale,
-  directionKey: "balanced" | "depth" | "spectacle",
-  commonLead: string,
-): string {
-  const d = tr(locale, `directions.${directionKey}.addonHeader`);
-  const line2 = tr(locale, `directions.${directionKey}.addonLine2`);
-  const line3 = tr(locale, `directions.${directionKey}.addonLine3`);
-  return `${d}\n- ${commonLead}\n- ${line2}\n- ${line3}`;
+  id: string,
+  templateId: GameTemplateId,
+  keyPrefix: string,
+  fantasy: string,
+): CoCreationDirection {
+  const bullets = [0, 1]
+    .map((i) => tr(locale, `${keyPrefix}.bullet${i}`))
+    .filter((b) => b && !b.startsWith("createStudioNarrative.dialogue"));
+  return {
+    id,
+    title: tr(locale, `${keyPrefix}.title`),
+    summary: tr(locale, `${keyPrefix}.summary`),
+    templateId,
+    bullets,
+    promptAddon: buildDialogueAddon(locale, keyPrefix, fantasy),
+  };
+}
+
+function resolveDirectionTemplateId(intent: CoCreationIntent): GameTemplateId {
+  return intent.templateId === "auto" ? "avoider" : intent.templateId;
+}
+
+function buildTemplateDialogueDirections(
+  templateId: GameTemplateId,
+  intent: CoCreationIntent,
+  locale: AppLocale,
+): CoCreationDirection[] | null {
+  const fantasy = intent.fantasy;
+  if (templateId === "shooter" || templateId === "sniper") {
+    return [
+      dialogueDirection(locale, "shmup-classic", "shooter", "dialogue.shooter.classic", fantasy),
+      dialogueDirection(locale, "boss-mothership", "shooter", "dialogue.shooter.boss", fantasy),
+      dialogueDirection(locale, "power-loop", "shooter", "dialogue.shooter.power", fantasy),
+      dialogueDirection(locale, "warzone-story", "shooter", "dialogue.shooter.story", fantasy),
+    ];
+  }
+  if (templateId === "towerDefense") {
+    return [
+      dialogueDirection(locale, "td-lane", "towerDefense", "dialogue.towerDefense.lane", fantasy),
+      dialogueDirection(locale, "td-multi", "towerDefense", "dialogue.towerDefense.multi", fantasy),
+      dialogueDirection(locale, "td-hero", "towerDefense", "dialogue.towerDefense.hero", fantasy),
+      dialogueDirection(locale, "td-events", "towerDefense", "dialogue.towerDefense.events", fantasy),
+    ];
+  }
+  if (templateId === "platformer") {
+    return [
+      dialogueDirection(locale, "plat-run", "platformer", "dialogue.platformer.run", fantasy),
+      dialogueDirection(locale, "plat-precision", "platformer", "dialogue.platformer.precision", fantasy),
+      dialogueDirection(locale, "plat-combat", "platformer", "dialogue.platformer.combat", fantasy),
+      dialogueDirection(locale, "plat-chapters", "platformer", "dialogue.platformer.chapters", fantasy),
+    ];
+  }
+  return null;
+}
+
+function buildFallbackDialogueDirections(
+  intent: CoCreationIntent,
+  locale: AppLocale,
+): CoCreationDirection[] {
+  const templateId = resolveDirectionTemplateId(intent);
+  const fantasy = intent.fantasy;
+  const out: CoCreationDirection[] = [];
+
+  if (intent.risks.includes(tr(locale, "intent.riskGoal"))) {
+    out.push(dialogueDirection(locale, "fb-goal", templateId, "dialogue.fallback.goal", fantasy));
+  }
+  if (intent.risks.includes(tr(locale, "intent.riskThreat"))) {
+    out.push(dialogueDirection(locale, "fb-threat", templateId, "dialogue.fallback.threat", fantasy));
+  }
+  if (intent.risks.includes(tr(locale, "intent.riskProgression"))) {
+    out.push(
+      dialogueDirection(locale, "fb-progression", templateId, "dialogue.fallback.progression", fantasy),
+    );
+  }
+  out.push(dialogueDirection(locale, "fb-fantasy", templateId, "dialogue.fallback.fantasy", fantasy));
+
+  const seen = new Set<string>();
+  return out.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  }).slice(0, 4);
 }
 
 export function buildCoCreationDirections(
   intent: CoCreationIntent,
   locale: AppLocale = "zh-Hans",
+  prompt = "",
 ): CoCreationDirection[] {
-  const templateId = intent.templateId === "auto" ? "avoider" : intent.templateId;
-  const commonLead = tr(locale, "directionBullets.commonLead", { fantasy: intent.fantasy });
-  const templateBullets = directionBulletsFor(templateId, locale);
-
-  return [
-    {
-      id: "balanced",
-      title: tr(locale, "directions.balanced.title"),
-      summary: tr(locale, "directions.balanced.summary"),
-      templateId,
-      bullets: [...templateBullets, tr(locale, "directionBullets.balancedExtra")],
-      promptAddon: buildPromptAddon(locale, "balanced", commonLead),
-    },
-    {
-      id: "depth",
-      title: tr(locale, "directions.depth.title"),
-      summary: tr(locale, "directions.depth.summary"),
-      templateId,
-      bullets: [...templateBullets, tr(locale, "directionBullets.depthExtra")],
-      promptAddon: buildPromptAddon(locale, "depth", commonLead),
-    },
-    {
-      id: "spectacle",
-      title: tr(locale, "directions.spectacle.title"),
-      summary: tr(locale, "directions.spectacle.summary"),
-      templateId,
-      bullets: [
-        commonLead,
-        tr(locale, "directionBullets.spectacleExtra1"),
-        tr(locale, "directionBullets.spectacleExtra2"),
-      ],
-      promptAddon: buildPromptAddon(locale, "spectacle", commonLead),
-    },
-  ];
+  const templateId =
+    intent.templateId === "auto" ? inferTemplateFromPrompt(prompt.trim()) : intent.templateId;
+  const themed = buildTemplateDialogueDirections(templateId, intent, locale);
+  if (themed?.length) return themed;
+  return buildFallbackDialogueDirections(intent, locale);
 }
 
 export function describeQueuedAssetSummary(
@@ -272,6 +322,7 @@ export function buildGenerateRecapLines(
     templateId: string;
     title: string;
     labels?: { subtitle?: string | null };
+    agenticPlayRoute?: "dedicated" | "agentic";
     gameplay: { baseHealth?: number; startingCoins?: number; winScore?: number; playerSpeed?: number; hazardSpeed?: number };
     towerDefense?: { enemies?: unknown[] | null };
   },

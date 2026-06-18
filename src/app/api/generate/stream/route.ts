@@ -7,6 +7,7 @@ import { readLimitedJson } from "@/lib/api/read-json-body";
 import { expandCreativeBrief } from "@/lib/creative-brief";
 import { buildStudioBriefBullets } from "@/lib/creative-brief/format-prompt";
 import { buildGenerateRecapLines, buildServerPrepLines, streamMessage } from "@/lib/create-studio-narrative";
+import { buildOpenGameRecapFromTrace, buildGameModelRecapFromTrace } from "@/lib/opengame-skills/generation-trace";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { generateGameSpecWithMeta } from "@/lib/generate-spec";
 import { createRunTraceRecorder } from "@/lib/orchestration/run-trace";
@@ -112,12 +113,18 @@ export async function POST(req: Request) {
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
         const spec = result.spec;
-        const recapLines = buildGenerateRecapLines(
-          uiLocale,
-          spec,
-          result.web ?? undefined,
-          parsed.searchEnhance,
-        );
+        const recapLines = [
+          ...buildGenerateRecapLines(
+            uiLocale,
+            spec,
+            result.web ?? undefined,
+            parsed.searchEnhance,
+          ),
+          ...buildOpenGameRecapFromTrace(uiLocale, result.debug.orchestrationTrace, {
+            agenticPlayRoute: spec.agenticPlayRoute,
+          }),
+          ...buildGameModelRecapFromTrace(uiLocale, result.debug.orchestrationTrace),
+        ];
         send({ step: "recap", lines: recapLines });
         emitGenerateServeLog({
           phase: "generate_stream_done",

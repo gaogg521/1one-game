@@ -1,5 +1,135 @@
 # CURRENT_STATUS
 
+更新时间：**2026-06-18**（迭代一百零四 · Staging Bench + Comfy 精灵 + BGM 槽 ✅）
+
+## 迭代一百零四（当前）
+
+| 项 | 结果 |
+|----|------|
+| Staging | `STAGING=1` 默认 Browser Bench + repair；`.env.staging.example` |
+| Comfy 精灵 | 256 预览 → sharp 512；`GAME_SPRITE_COMFY` |
+| BGM | `public/game-bgm/*.ogg` ×5 · `seed:game-bgm-slots` |
+| Phase B | `qa:opengame-cli-live`（fixture 回退） |
+| QA | staging-env ✅ · comfy-sprite ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-18**（迭代一百零三 · Phase D 视听 + 三阶段缺口收口）
+
+## 迭代一百零三
+
+| 项 | 结果 |
+|----|------|
+| Phase D | Brief→资产 prompt · 并行精灵 · 自动封面 · BGM 槽 |
+| Phase A | E2E `platform-complex-agentic.smoke` |
+| Phase C | `qa:sample-behavior-signoff` |
+| QA | brief-asset-cohesion ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-18**（迭代一百零二 · 平台测试生成闭环 ✅）
+
+## 迭代一百零二
+
+| 项 | 结果 |
+|----|------|
+| 平台 QA | `qa:platform-test-generate` 简单 dedicated + 复杂 Agentic **2/2** |
+| 入库修复 | `coerceGameSpec` 保留 agentic 字段；canonical 写回强化 |
+| 测试用户 | ownerKey=`platform-test-user`；报告 `qa-output/platform-test-generate/` |
+| QA | agentic-persist-coerce ✅ · platform-test-generate ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代一百零一 · Phaser.Scene bridge + P0 polish ✅）
+
+## 迭代一百零一
+
+| 项 | 结果 |
+|----|------|
+| Phase B | `Phaser.Scene` → `createGame` 桥接 + fixture `phaser-scene` |
+| P0 消消乐 | 关间 ⭐ 飞入顶栏关卡位动画 |
+| P0 神庙 | 死亡 3s 倒计时提示 + QA `templeDeathCountdown` |
+| QA | cli-bridge ✅ · temple-death-flow ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代一百 · CLI→Agentic bridge ✅）
+
+## 迭代一百
+
+| 项 | 结果 |
+|----|------|
+| Phase B bridge | `opengame-cli-bridge.ts`：多文件 JS → 单文件 `createGame` Agentic 模块 |
+| 生成管线 | `OPENGAME_CLI_BRIDGE=1` + CLI 成功 → `source: opengame_cli`（Debug Skill 门禁） |
+| QA | cli-bridge ✅ · sample-parity 14/14 · opengame-skills ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代九十九 · Phase C 全量 hook + Phase B CLI spike ✅）
+
+## 迭代九十九
+
+| 项 | 结果 |
+|----|------|
+| Phase C | **14/14** 样品 Scene hook 试点（补全 4 款棋类） |
+| Phase B | `opengame-cli.ts` 子进程 spike + orch trace + dry-run QA |
+| 生成管线 | 复杂 prompt + `OPENGAME_CLI=1` → `opengame_cli_spike` 观测 |
+| QA | sample-parity 14/14 · opengame-skills ✅ · cli-spike ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代九十八 · Phase C 扩展 + dedicated Debug lint ✅）
+
+## 迭代九十八
+
+| 项 | 结果 |
+|----|------|
+| generation-trace | OpenGame SSE recap（tier / agentic / browser bench） |
+| Phase C | `template-sample-parity` 14 款对照 + **10 款** Scene hook 试点 |
+| Phase A | dedicated 路由 `lintDedicatedRouteDebugSkill` → orch `opengame_dedicated_debug_lint` |
+| 工程 | `template-sample-parity` 移出 barrel export（消除 NFT trace）；build ✅ |
+| QA | sample-template-skill-parity **14/14** · opengame-skills ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代九十七 · refine 路由重算 + 创作台试玩引擎提示 ✅）
+
+## 迭代九十七
+
+| 项 | 结果 |
+|----|------|
+| refine attach | 重算 `agenticPlayRoute`；dedicated 剥离 agenticModule |
+| 创作台 | SSE recap 展示试玩引擎（dedicated / Agentic） |
+| refine API | 返回 `agenticPlayRoute` |
+| QA | opengame-skills ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代九十六 · OpenGame 试玩路由接入用户管线 ✅）
+
+## 迭代九十六
+
+| 项 | 结果 |
+|----|------|
+| 试玩路由 | `agenticPlayRoute` + `resolveAgenticPlayRoute`（默认 complex_only） |
+| 用户复杂 prompt | attach Agentic + OpenGame Skills；试玩保留 agenticModule |
+| Browser Bench | 可选挂进 `generateAgenticGameModule`（`OPENGAME_BROWSER_BENCH=1`） |
+| QA | opengame-skills ✅ · build ✅ |
+
+---
+
+更新时间：**2026-06-17**（迭代九十五 · OpenGame Browser Bench 闭环 ✅）
+
+## 迭代九十五
+
+| 项 | 结果 |
+|----|------|
+| Browser Bench | payload 解码 + scene 探测修复；**2/2 PASS** |
+| OpenGame Skills | Debug + Template + 复杂度路由 + astrocade 流水线接入 |
+| QA | opengame-skills ✅ · agentic-template-matrix **16/16** ✅ |
+
+---
+
 更新时间：**2026-06-17**（迭代九十二 · 样品 14 款 + 消消乐三关 ✅）
 
 ## 迭代九十二

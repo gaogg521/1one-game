@@ -24,6 +24,7 @@ import {
   describeQueuedAssetSummary,
   summarizePromptForStudio,
 } from "@/lib/create-studio-narrative";
+import { buildOpenGameRecapFromTrace, buildGameModelRecapFromTrace } from "@/lib/opengame-skills/generation-trace";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSpec } from "@/lib/game-spec";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
@@ -156,12 +157,13 @@ async function checkSpriteFile(url: string): Promise<boolean> {
   }
 }
 
-async function waitForSprites(projectId: string, timeoutMs = 300_000, intervalMs = 5000): Promise<boolean> {
-  const kinds = ["player", "hazard", "gem", "power", "boss"];
+async function waitForSprites(projectId: string, timeoutMs = 300_000, intervalMs = 4000): Promise<boolean> {
+  /** 试玩最低集：主角 + 障碍 + 收集物；power/boss 后台补齐 */
+  const coreKinds = ["player", "hazard", "gem"];
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const results = await Promise.all(
-      kinds.map((k) => checkSpriteFile(`/game-sprites/${projectId}/${k}.png`)),
+      coreKinds.map((k) => checkSpriteFile(`/game-sprites/${projectId}/${k}.png`)),
     );
     if (results.every(Boolean)) return true;
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -231,7 +233,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [visionOn, setVisionOn] = useState(true);
   const [ingestBusy, setIngestBusy] = useState(false);
   const [ingestNotes, setIngestNotes] = useState<string[] | null>(null);
-  const [searchEnhance, setSearchEnhance] = useState(false);
+  const [searchEnhance, setSearchEnhance] = useState(true);
   const [templateHint, setTemplateHint] = useState<"auto" | GameSpec["templateId"]>("auto");
   const [enhancePass, setEnhancePass] = useState(true);
   const [webMeta, setWebMeta] = useState<{ warning?: string; sources?: Array<{ title: string; url: string }> } | null>(
@@ -270,6 +272,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [pickerImageCount, setPickerImageCount] = useState(0);
   /** 参考图写入 session 后递增，强制试玩区重挂 Phaser 以加载新贴图 */
   const [refPixelEpoch, setRefPixelEpoch] = useState(0);
+  /** Brief 自动封面（background API 返回 coverPath） */
+  const [autoCoverPath, setAutoCoverPath] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
   const [showStudioDetails, setShowStudioDetails] = useState(false);
@@ -296,7 +300,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
   const buildCoCreationPlan = useCallback(() => {
     const intent = buildCoCreationIntent(prompt, templateHint, locale);
-    const directions = buildCoCreationDirections(intent, locale);
+    const directions = buildCoCreationDirections(intent, locale, prompt);
     setCoCreationIntent(intent);
     setCoDirections(directions);
     setSelectedDirectionId(directions[0]?.id ?? null);
@@ -518,6 +522,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setCreativeBrief(null);
     setCreativeBriefSummary(null);
     setBriefRevision(null);
+    setAutoCoverPath(null);
     if (hasQueuedAssetFiles || hasIngestUrl) {
       setStreamStep("ingest");
       setStreamMsg(
@@ -998,16 +1003,27 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         return;
       }
       setProjectId(nextProjectId);
-      // 后台异步触发精灵/背景生成
-      void fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, {
+      setAutoCoverPath(null);
+
+      const backgroundPromise = fetch(`/api/projects/${encodeURIComponent(nextProjectId)}/background`, {
         method: "POST",
         keepalive: true,
         headers: mergeLocaleHeaders(locale),
-      });
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = (await res.json()) as { coverPath?: string | null };
+          if (typeof data.coverPath === "string" && data.coverPath.trim()) {
+            setAutoCoverPath(data.coverPath.trim());
+          }
+        })
+        .catch(() => {
+          /* 封面为附加项，失败不阻断试玩 */
+        });
 
       // 等待精灵生成完成再跳转（确保用户第一次看到游戏就有贴图）
       setBusy("sprites");
-      const ready = await waitForSprites(nextProjectId);
+      const [ready] = await Promise.all([waitForSprites(nextProjectId), backgroundPromise]);
       if (ready) {
         router.push(withLocalePath(`/play/${nextProjectId}`, locale));
       } else {
@@ -1630,6 +1646,19 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                 <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--gc-border)] pb-4">
                   <div>
                     <h2 className="text-lg font-semibold text-[var(--gc-text)]">{spec.title}</h2>
+                    {autoCoverPath ? (
+                      <div className="mt-3 flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- project cover path from API */}
+                        <img
+                          src={autoCoverPath}
+                          alt=""
+                          className="h-20 w-20 shrink-0 rounded-xl border border-[color:var(--gc-border)] object-cover shadow-sm"
+                        />
+                        <p className="max-w-xs text-xs leading-relaxed text-[var(--gc-muted)]">
+                          {t("autoCoverReady")}
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">
                         {spec.templateId} · {t("realtimePreview")}
@@ -1677,6 +1706,18 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                         ) : null}
                         {genDebug.enhanceWarning ? (
                           <p className="mt-2 text-[11px] text-amber-200/90">{t("enhanceWarningPrefix")}{genDebug.enhanceWarning}</p>
+                        ) : null}
+                        {genDebug.orchestrationTrace && spec ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-[var(--gc-muted)]">
+                            {[
+                              ...buildOpenGameRecapFromTrace(locale, genDebug.orchestrationTrace, {
+                                agenticPlayRoute: spec.agenticPlayRoute,
+                              }),
+                              ...buildGameModelRecapFromTrace(locale, genDebug.orchestrationTrace),
+                            ].map((line) => (
+                              <li key={line}>{line.replace(/\*\*/g, "")}</li>
+                            ))}
+                          </ul>
                         ) : null}
                         {(() => {
                           const ot = genDebug.orchestrationTrace;

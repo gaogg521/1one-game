@@ -1,4 +1,5 @@
-import { llmJson, getProviderModelCascade } from "@/lib/llm";
+import { llmJson } from "@/lib/llm";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { sanitizeSpecRaw } from "@/lib/sanitize-spec-raw";
@@ -95,18 +96,22 @@ export async function patchGameSpecWithLlm(params: {
     return { ok: false, errorKey: "patchSpecInvalid", status: 400 };
   }
 
-  const models = getProviderModelCascade();
+  const currentPrompt = (params.currentPrompt ?? "").trim();
+  const gameRoute = resolveGameModelRoute({
+    prompt: `${currentPrompt}\n${prompt}`.trim(),
+  });
+  const models = gameRoute.models;
   if (!models.length) {
     return { ok: false, errorKey: "patchNoModel", status: 503 };
   }
 
-  const currentPrompt = (params.currentPrompt ?? "").trim();
   const userMsg = `修改指令：${prompt}\n\n现有游戏规格（请在此基础上修改）：\n${JSON.stringify(coerced.spec).slice(0, 8000)}`;
 
   for (const model of models) {
     try {
       const res = await llmJson({
         model,
+        scene: gameRoute.scene,
         system: SPEC_PATCH_SYSTEM,
         user: userMsg,
         temperature: 0.3,

@@ -1,39 +1,41 @@
-# TASK_QUEUE
+# TASK_QUEUE · OpenGame 三阶段 + Phase D 视听
 
-更新时间：**2026-06-14**
+更新时间：**2026-06-18**（迭代一百零四）
 
-## 已完成任务
+## 阶段 A — Debug Skill
 
-- **游戏生成产品升级 Phase 1-5（首轮）**
-  - `/create` **4 步共创流程**
-  - SSE 增加 **当前理解 / 方向选择 / 成品提要**
-  - `/api/projects/[id]` 支持 **prompt + spec** 更新
-  - `/play/[id]` 支持 **AI patch / quick tune 后保存回项目**
-  - `/create?from=` 恢复 **完整项目上下文**
-  - `shooter` 接入 `systems.skill` 与 `director.events`
-  - `td-blueprint` 波次加入 `rush / elite` 差异
-- Studio 三类型合并 + `mine=1` + 删除  
-- 漫画分镜规范化 + 请求体上限 + 前端错误提示  
-- **动漫列表 Prisma coverPath 绕过**（`comic-list-query`）  
-- **漫画 SSE 配图进度 + 每格耗时**  
-- **文生图批量 n=4 + 并发 4 配置**  
-- **小说广场本人删除**  
-- **《煤山崇祯》2 页漫画 + 8 格配图**（`cmp8e84lk0001x6zgo8jrd8jg`）
+| 状态 | 项 |
+|------|-----|
+| ✅ | debug-protocol + repair + 平台测试 2/2 + E2E Agentic |
+| ✅ | **Staging 默认 Browser Bench**（`STAGING=1` / `OPERONE_STAGING=1`） |
+| ⬜ | 生产环境显式开启 Browser Bench（按需） |
 
-## 当前进行中
+## 阶段 B — Pro OpenGame 子进程
 
-- （无阻断项 — 自动化门禁已全绿）
+| 状态 | 项 |
+|------|-----|
+| ✅ | CLI spike + bridge + `qa:opengame-cli-live`（无 CLI 时 fixture 回退） |
+| ⬜ | 本机安装 opengame 后 live headless 实机验收 |
 
-## B 档产品线目标（周级，用户确认纳入范围）
+## 阶段 C — Template Skill → 样品库
 
-- **多回合共创**：单项目内支持「生成 → 试玩 → 明确修改意图 → 再 patch / 再全量生成」的闭环产品化（不仅是单次 4 步）  
-- **生成与运行时对齐**：`generate-spec` / mock / variants 输出的结构字段与 `director.acts`、`director.events`、各 `*Scene` 读取路径一致，并有回归抓手  
-- **全模板验收**：TD / shooter / platformer / collector / survivor / avoider 章节感、事件反馈、胜负文案与性能红线  
+| 状态 | 项 |
+|------|-----|
+| ✅ | 14/14 parity + `qa:sample-behavior-signoff` |
+| ⬜ | 全 14 款行为深度 · PM 上架 checklist |
 
-## 待执行（按优先级）
+## 阶段 D — Sensory Cohesion
 
-0. **P1** — 封面 / runtime 门禁 — ✅ 2026-06-13  
-1. **P2** — 漫画 64 格长测 — ✅ 2026-06-13  
+| 状态 | 项 |
+|------|-----|
+| ✅ | Brief 资产管线 + 并行精灵 + 自动封面 |
+| ✅ | **Comfy 256→512 精灵**（`GAME_SPRITE_COMFY` / staging 默认） |
+| ✅ | **模板 BGM 槽** + `seed:game-bgm-slots`（5 款 loop） |
+| ⬜ | Comfy 侧车生产联调 · 256→1024 二阶段文生图 |
+
+---
+
+# TASK_QUEUE（历史）
 2. **P2** — `qa:deploy-preflight` — ✅ 2026-06-13  
 3. **P1** — 煤山崇祯漫画用户验收 / 按需 8 页 — ⬜ 需用户  
 4. **P1** — build 回归 — ✅ 2026-06-13  

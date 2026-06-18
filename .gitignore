@@ -77,4 +77,5 @@ public/covers/debug-*
 # E2E / 手测用 SQLite（无业务密钥；CI 亦可 migrate 重建）
 !prisma/ci.sqlite
 # 本地 QA smoke 快照（admin ops-health 读取）
-.qa-cache/
+# 本地克隆参考仓库（OpenGame 等）
+.tmp-opengame/

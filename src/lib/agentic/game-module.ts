@@ -138,11 +138,4 @@ export function shouldUseAgenticRuntime(spec: { agenticModule?: AgenticGameModul
   return Boolean(spec.agenticModule?.source);
 }
 
-/** Astrocade 竞对：template-first 模板不 attach agenticModule，路由到样品级专用 Scene */
-export function shouldUseDedicatedSceneForTemplateFirst(spec: { templateId?: string }): boolean {
-  if (process.env.AGENTIC_FORCE_LLM === "1") return false;
-  if (!PRODUCT.game.dedicatedSceneForTemplateFirst) return false;
-  const tid = spec.templateId;
-  if (!tid) return false;
-  return PRODUCT.game.agenticTemplateFirst.includes(tid);
-}
+export { shouldUseDedicatedSceneForTemplateFirst } from "@/lib/opengame-skills/play-route";

@@ -15,7 +15,7 @@ import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
-import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
+import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -132,7 +132,7 @@ export class PhysicsScene extends Phaser.Scene {
     );
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
-    this.banner.show(guidance.banner);
+    this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 124 });
 
     if (this.richArena) {

@@ -53,7 +53,7 @@ export function parseGeneratePayload(body: unknown): GeneratePayload {
   const searchEnhance =
     typeof body === "object" && body !== null && "searchEnhance" in body
       ? Boolean((body as { searchEnhance?: unknown }).searchEnhance)
-      : false;
+      : true;
   const templateHintRaw =
     typeof body === "object" && body !== null && "templateHint" in body
       ? String((body as { templateHint?: unknown }).templateHint ?? "auto")

@@ -15,6 +15,7 @@ import {
   type AgenticGameModuleInstance,
 } from "@/lib/agentic/game-module";
 import type { GameSpec } from "@/lib/game-spec";
+import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import {
   agenticScoreJuiceScale,
   bannerAgenticFinish,
@@ -115,6 +116,7 @@ export class AgenticScene extends Phaser.Scene {
     if (this.moduleInstance) {
       this.moduleInstance.create(this);
       this.banner.show({ title: hudReady(this.uiLocale), ms: 1000 });
+      schedulePhaserPlayReady(this, 1200);
     } else {
       this.add
         .text(w / 2, h / 2, hudAgenticModuleFailed(this.uiLocale), { fontSize: "18px", color: "#f87171" })

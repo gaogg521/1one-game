@@ -137,6 +137,31 @@ SUPER_ADMIN_SECRET=请改成强密码
 sudo systemctl restart operone
 ```
 
+#### Staging / 预发（OpenGame Browser Bench + Comfy 精灵）
+
+一键部署时加 **`OPERONE_STAGING=1`**，会在 `.env` 写入：
+
+- `STAGING=1` · `OPENGAME_BROWSER_BENCH=1` · `OPENGAME_BROWSER_BENCH_REPAIR=1`
+- `QA_ROUTES_ENABLED=1` · `GAME_SPRITE_COMFY=1`
+
+或手动复制模板：
+
+```bash
+cp /opt/operone/.env.staging.example /opt/operone/.env
+# 再补 OPENAI_API_KEY / COMFY_UI_BASE_URL 等
+```
+
+本地验收：`npm run qa:opengame-staging-env`
+
+部署后抽测（本机或远程 staging）：
+
+```bash
+# 默认探测 80 / 8888 / 3000；或指定预发地址
+STAGING_BASE_URL=http://127.0.0.1 npm run qa:staging-post-deploy
+```
+
+含：health · `/qa/agentic-bench` · Browser Bench · 复杂 Agentic SSE · 离线 staging 门禁。报告：`qa-output/staging-post-deploy/REPORT.md`
+
 验证：
 
 ```bash
