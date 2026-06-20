@@ -11,18 +11,27 @@ export async function generateMetadata(props: {
   try {
     const row = await prisma.project.findUnique({
       where: { id },
-      select: { title: true, prompt: true },
+      select: { title: true, prompt: true, coverPath: true },
     });
     if (!row) {
       return { title: t("workMissing") };
     }
     const description = row.prompt.length > 160 ? `${row.prompt.slice(0, 157)}…` : row.prompt;
+    const images = row.coverPath ? [{ url: row.coverPath, width: 1024, height: 1024, alt: row.title }] : [];
     return {
       title: row.title,
       description,
       openGraph: {
         title: row.title,
         description,
+        type: "website",
+        ...(images.length ? { images } : {}),
+      },
+      twitter: {
+        card: images.length ? "summary_large_image" : "summary",
+        title: row.title,
+        description,
+        ...(images.length ? { images: [images[0].url] } : {}),
       },
     };
   } catch {

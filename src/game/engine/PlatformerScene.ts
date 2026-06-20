@@ -1,8 +1,7 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { pointerSteerX, readMoveAxis } from "@/game/engine/phaser-input";
-import { HudBanner } from "@/game/engine/HudBanner";
-import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
+import { HudFrame } from "@/game/engine/HudFrame";
 import {
   juiceBoss,
   juiceBurst,
@@ -32,36 +31,30 @@ import type { AppLocale } from "@/i18n/routing";
 import { gameEventTitle, platformerFinalSprint } from "@/lib/i18n/game-event-labels";
 import {
   bannerActStage,
+  bannerCheckpointSaved,
   bannerEventEnd,
   bannerPlatformerGoalMiss,
   bannerPlatformerGoalSuccess,
   hudActChapter,
   hudCooldown,
-  hudLives,
   hudPlatformerCollect,
   hudPlatformerTarget,
   hudReady,
-  hudScore,
-  hudControlsPlatformer,
-  hudDefaultCollectible,
-  hudDefaultFoeLabel,
-  hudDefaultPlatformerCollectible,
   hudDefaultSkill,
-  hudDefaultTowerLabel,
-  hudTdDefaultBase,
-  hudTdEnemyName,
-  hudTdTowerName,
   platformerFinishText,
   platformerStageMessage,
 } from "@/lib/i18n/game-hud-labels";
-import { phaserUintToCssHex, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { phaserUintToCssHex, resolveAssetStyle, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildPlatformerAssetSet } from "@/game/engine/platformer-assets";
+import { buildPlayAssetSet } from "@/game/engine/play-assets";
+import { showControlsHint, platformerControlLines } from "@/game/engine/controls-hint";
+import { spawnDamageNumber } from "@/game/engine/damage-number";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
-import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
+import { applySpritesOverAliasMap, assetBackgroundAlpha, fitSpriteDisplay, preloadSpriteSet } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
-import { hudTopSubtitleText } from "@/game/engine/hudTextStyle";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
 
@@ -106,6 +99,18 @@ export class PlatformerScene extends Phaser.Scene {
 
   private sentryHazards!: Phaser.Physics.Arcade.Group;
 
+  private movingPlatforms!: Phaser.Physics.Arcade.Group;
+
+  private movingPlatConfigs: Array<{
+    spr: Phaser.Physics.Arcade.Image;
+    baseX: number;
+    baseY: number;
+    ampX: number;
+    ampY: number;
+    freq: number;
+    phase: number;
+  }> = [];
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   private keyW!: Phaser.Input.Keyboard.Key;
@@ -124,21 +129,9 @@ export class PlatformerScene extends Phaser.Scene {
 
   private lives = 3;
 
-  private scoreText!: Phaser.GameObjects.Text;
-
-  private livesText!: Phaser.GameObjects.Text;
-
-  private progressText!: Phaser.GameObjects.Text;
-
-  private hintText!: Phaser.GameObjects.Text;
-
-  private banner!: HudBanner;
-
-  private goalPanel!: HudGoalPanel;
+  private hud!: HudFrame;
 
   private cohesive!: CohesivePresentation;
-
-  private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
   private finished = false;
 
@@ -155,12 +148,6 @@ export class PlatformerScene extends Phaser.Scene {
   private intensity = 0.6;
 
   private actIndex = 0;
-
-  private actText!: Phaser.GameObjects.Text;
-
-  private skillText!: Phaser.GameObjects.Text;
-
-  private skillCdText!: Phaser.GameObjects.Text;
 
   private shieldRing!: Phaser.GameObjects.Graphics;
 
@@ -215,6 +202,7 @@ export class PlatformerScene extends Phaser.Scene {
   private grappleActive = false;
 
   private grappleGfx!: Phaser.GameObjects.Graphics;
+  private trailGfx!: Phaser.GameObjects.Graphics;
 
   private treasureHeist = false;
 
@@ -230,6 +218,29 @@ export class PlatformerScene extends Phaser.Scene {
   private laserPulse = 0;
   private treasureGlow?: Phaser.GameObjects.Arc;
 
+  private checkpoints!: Phaser.Physics.Arcade.StaticGroup;
+  private lastCheckpointX = 140;
+  private lastCheckpointY = 0; // set in create() after viewH is known
+  private spawnX = 140;
+  private spawnY = 0;
+
+  // 游戏手感：Coyote Time + Jump Buffer
+  /** 离开平台后仍可跳跃的截止时间（coyote time 120ms） */
+  private coyoteUntil = 0;
+  /** 提前输入跳跃的截止时间（jump buffer 110ms） */
+  private jumpBufferUntil = 0;
+
+  // Mobile controls
+  private mobileJumpZone: Phaser.GameObjects.Zone | null = null;
+  private mobileJumpBtnGfx: Phaser.GameObjects.Graphics | null = null;
+
+  // Procedural character animation state
+  private wasGrounded = true;
+  private hurtFlashUntil = 0;
+
+  // Player movement trail
+  private playerTrail: Array<{ x: number; y: number; t: number }> = [];
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("PlatformerScene");
     this.spec = spec;
@@ -242,11 +253,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.load.image("bgTex", this.backgroundUrl);
     }
     if (this.projectId) {
-      const base = `/game-sprites/${this.projectId}`;
-      this.load.image("texPlayer", `${base}/player.png`);
-      this.load.image("texGem", `${base}/gem.png`);
-      this.load.image("texPower", `${base}/power.png`);
-      this.load.image("texBoss", `${base}/boss.png`);
+      preloadSpriteSet(this, this.projectId, ["player", "gem", "power", "boss"]);
     }
   }
 
@@ -276,6 +283,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.winScore = suggestedWin;
     }
     this.grappleGfx = this.add.graphics().setDepth(50);
+    this.trailGfx = this.add.graphics().setDepth(6);
 
     const samplePf = this.spec.samplePlayProfile?.platformer;
     this.treasureHeist = samplePf?.treasureHeist ?? false;
@@ -304,77 +312,7 @@ export class PlatformerScene extends Phaser.Scene {
         .setAlpha(assetBackgroundAlpha(this.projectId, ui.qualityTier));
     }
 
-    this.add
-      .text(viewW / 2, 22, this.spec.title, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "21px",
-        color: ui.hud.title,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(100);
-
-    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
-    if (topSubtitle) {
-      this.add
-        .text(viewW / 2, 48, topSubtitle, {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "12px",
-          color: ui.hud.subtitle,
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(100);
-    }
-
-    this.scoreText = this.add
-      .text(18, 14, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "17px",
-        color: ui.hud.body,
-      })
-      .setScrollFactor(0)
-      .setDepth(101);
-
-    this.progressText = this.add
-      .text(viewW - 18, 14, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: ui.hud.accent,
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(101);
-
-    this.actText = this.add
-      .text(viewW / 2, 68, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: ui.hud.muted,
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(101);
-
-    this.livesText = this.add
-      .text(18, 44, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: ui.hud.danger,
-      })
-      .setScrollFactor(0)
-      .setDepth(101);
-
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
-    this.hintText = this.add
-      .text(viewW / 2, viewH - 20, guidance.bottomHint, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: ui.hud.hint,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(101);
 
     // ─── Procedural textures (much more detailed than flat rect/circle) ───
     const makePlayerTex = (key: string, fillHex: string) => {
@@ -402,14 +340,20 @@ export class PlatformerScene extends Phaser.Scene {
       const g = this.make.graphics({ x: 0, y: 0 });
       const base = parseInt(fillHex.replace("#", ""), 16);
       const hi = parseInt(hiHex.replace("#", ""), 16);
+      const dark = (base & 0xfefefe) >> 1;
+      // Drop shadow
+      g.fillStyle(0x000000, 0.18); g.fillRoundedRect(3, 6, 120, 20, 5);
+      // Body
       g.fillStyle(base, 1); g.fillRoundedRect(0, 2, 120, 20, 5);
-      g.lineStyle(1.5, 0x000000, 0.25); g.strokeRoundedRect(0, 2, 120, 20, 5);
+      g.lineStyle(1.5, dark, 0.35); g.strokeRoundedRect(0, 2, 120, 20, 5);
       // Top highlight strip
-      g.fillStyle(hi, 0.55); g.fillRoundedRect(2, 2, 116, 6, 3);
+      g.fillStyle(hi, 0.6); g.fillRoundedRect(2, 2, 116, 7, 3);
+      // Bottom shadow strip
+      g.fillStyle(0x000000, 0.12); g.fillRoundedRect(2, 16, 116, 5, 2);
       // Plank lines
-      g.lineStyle(1, 0x000000, 0.12);
+      g.lineStyle(1, 0x000000, 0.10);
       for (let x = 24; x < 120; x += 24) g.lineBetween(x, 4, x, 20);
-      g.generateTexture(key, 120, 22); g.destroy();
+      g.generateTexture(key, 120, 26); g.destroy();
     };
 
     const makeGemTex = (key: string, fillHex: string) => {
@@ -458,19 +402,47 @@ export class PlatformerScene extends Phaser.Scene {
       g.generateTexture(key, 64, 40); g.destroy();
     };
 
-    const hadLoadedPlayer = !blockyWorld && this.textures.exists("texPlayer");
-
     if (blockyWorld) {
       ensureMinecraftPlatformerTextures(this, this.spec);
     } else {
-      makePlayerTex("texPlayer", this.spec.theme.playerColor);
-      makePlatTex("texPlat", phaserUintToCssHex(ui.platformMid), phaserUintToCssHex(ui.platformHi));
-      makePlatTex("texPlatHi", phaserUintToCssHex(ui.platformHi), phaserUintToCssHex(ui.platformHi));
-      makeGroundTex("texGround", phaserUintToCssHex(ui.platformGround));
-      makeSpikeTex("texSpike", this.spec.theme.hazardColor);
-      makeGemTex("texGem", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
-      makeGemTex("texPower", this.spec.theme.collectibleColor ?? this.spec.theme.playerColor);
+      // 高保真程序化资产：平台/地面/尖刺/旗 走 platformer-assets；
+      // 玩家/宝石/道具/boss 优先用 SVG/PNG；无则回退程序化 play-assets。
+      const platStyle = resolveAssetStyle(this.spec);
+      const platPalette = {
+        player: this.spec.theme.playerColor,
+        hazard: this.spec.theme.hazardColor,
+        collectible: this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
+        particle: this.spec.theme.particleTint ?? this.spec.theme.collectibleColor ?? "#a3a3a3",
+        background: this.spec.theme.backgroundColor,
+        platformMid: phaserUintToCssHex(ui.platformMid),
+        platformHi: phaserUintToCssHex(ui.platformHi),
+        platformGround: phaserUintToCssHex(ui.platformGround),
+      };
+      const platSet = buildPlatformerAssetSet(this, platPalette, platStyle, "texPlatA");
+      const playSet = buildPlayAssetSet(this, platPalette, platStyle, "texPlatP");
+      const aliasMap: Array<[string, string]> = [
+        ["texPlayer", playSet.player],
+        ["texGem", playSet.gem],
+        ["texPower", playSet.power],
+        ["texBoss", playSet.boss],
+        ["texPlat", platSet.platformShort],
+        ["texPlatHi", platSet.platformLong],
+        ["texGround", platSet.ground],
+        ["texSpike", platSet.spike],
+        ["texFlag", platSet.flag],
+        ["texSpring", platSet.spring],
+      ];
+      for (const [alias, src] of aliasMap) {
+        if (this.textures.exists(alias)) this.textures.remove(alias);
+        const img = this.textures.get(src).getSourceImage();
+        if (img instanceof HTMLImageElement) this.textures.addImage(alias, img);
+        else if (img instanceof HTMLCanvasElement) this.textures.addCanvas(alias, img);
+      }
+      // Override procedural with SVG/PNG sprites where available (SVG > PNG > procedural)
+      applySpritesOverAliasMap(this, ["texPlayer", "texGem", "texPower", "texBoss"]);
     }
+
+    const hadPlayerSprite = !blockyWorld && (this.textures.exists("texPlayer_svg") || this.textures.exists("texPlayer_png"));
 
     this.platforms = this.physics.add.staticGroup();
     this.spikes = this.physics.add.staticGroup();
@@ -478,25 +450,35 @@ export class PlatformerScene extends Phaser.Scene {
     this.powerups = this.physics.add.group();
     this.eliteHazards = this.physics.add.group();
     this.sentryHazards = this.physics.add.group();
+    this.movingPlatforms = this.physics.add.group();
+    this.checkpoints = this.physics.add.staticGroup();
+    this.movingPlatConfigs = [];
+
+    this.spawnX = 140;
+    this.spawnY = viewH - 200;
+    this.lastCheckpointX = this.spawnX;
+    this.lastCheckpointY = this.spawnY;
 
     this.buildLevel(viewH);
 
     this.player = this.physics.add.image(140, viewH - 200, "texPlayer");
-    if (hadLoadedPlayer) fitSpriteDisplay(this.player, 42);
+    if (hadPlayerSprite) fitSpriteDisplay(this.player, 44);
     this.player.setCollideWorldBounds(true);
     this.player.body.setSize(28, 36);
     this.player.setDepth(10);
 
     this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.collider(this.player, this.movingPlatforms);
 
     this.physics.add.overlap(this.player, this.gems, (_p, g) => {
       if (this.finished) return;
       const gem = g as Phaser.Physics.Arcade.Image;
       const gx = gem.x;
       const gy = gem.y;
+      const gemValue = (gem.getData("gemValue") as number | undefined) ?? 1;
       gem.destroy();
       this.fxCollect(gx, gy);
-      this.score += 1 * this.scoreMult;
+      this.score += gemValue * this.scoreMult;
       if (this.time.now < this.goalShiftUntil) {
         this.goalShiftHave += 1;
         if (!this.goalShiftSucceeded && this.goalShiftHave >= this.goalShiftNeed) {
@@ -505,7 +487,7 @@ export class PlatformerScene extends Phaser.Scene {
           this.score += bonus;
           this.shieldCharges = Math.max(this.shieldCharges, 1);
           this.dashUntil = Math.max(this.dashUntil, this.time.now + 900);
-          this.banner.show({ ...bannerPlatformerGoalSuccess(this.uiLocale, bonus), ms: 1800 });
+          this.hud.flashBanner({ ...bannerPlatformerGoalSuccess(this.uiLocale, bonus), ms: 1800 });
         }
       }
       this.refreshHud();
@@ -534,6 +516,17 @@ export class PlatformerScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.eliteHazards, () => this.onHitHazard());
     this.physics.add.overlap(this.player, this.sentryHazards, () => this.onHitHazard());
 
+    this.physics.add.overlap(this.player, this.checkpoints, (_p, cp) => {
+      const flag = cp as Phaser.Physics.Arcade.Image;
+      if (flag.getData("activated")) return;
+      flag.setData("activated", true);
+      flag.setTint(0x4ade80); // green when activated
+      this.lastCheckpointX = flag.x;
+      this.lastCheckpointY = flag.y - 60;
+      this.hud.flashBanner({ title: bannerCheckpointSaved(this.uiLocale), ms: 1200 });
+      playBleep("pickup");
+    });
+
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
@@ -542,33 +535,11 @@ export class PlatformerScene extends Phaser.Scene {
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
-    this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(introBannerWhenGoalPanel(guidance));
-    this.goalPanel = new HudGoalPanel(this, guidance, ui);
+    this.hud = new HudFrame(this, { title: this.spec.title }, guidance, ui);
 
     this.shieldRing = this.add.graphics();
     this.shieldRing.setDepth(120);
     this.shieldRing.setScrollFactor(0);
-
-    const skillName = this.stealthMode && this.grappleEnabled
-      ? (this.uiLocale === "zh-Hans" ? "弹性摆荡" : "Elastic swing")
-      : (this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale));
-    this.skillText = this.add
-      .text(18, viewH - 56, `Shift · ${skillName}`, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "12px",
-        color: ui.hud.body,
-      })
-      .setScrollFactor(0)
-      .setDepth(130);
-    this.skillCdText = this.add
-      .text(18, viewH - 38, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: ui.hud.muted,
-      })
-      .setScrollFactor(0)
-      .setDepth(130);
 
     this.powerupTimer = this.time.addEvent({
       delay: Math.max(1800, Math.floor(5200 - this.intensity * 2200)),
@@ -582,26 +553,65 @@ export class PlatformerScene extends Phaser.Scene {
 
     this.refreshHud();
 
-    // Danger vignette overlay (hidden until low HP)
-    this.dangerVignette = this.add.graphics();
-    this.dangerVignette.setDepth(24);
-    this.dangerVignette.setAlpha(0);
-    this.dangerVignette.fillStyle(0xff2233, 1);
-    this.dangerVignette.fillRect(0, 0, viewW * 4, viewH);
-
     this.cameras.main.setScroll(Math.max(0, this.player.x - viewW / 2), 0);
     setPhaserQaState({ playerX: Math.round(this.player.x) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(this.player.x) });
 
-    this.input.on("pointerdown", () => {
+    this.setupMobileControls();
+
+    showControlsHint(this, platformerControlLines(this.uiLocale));
+  }
+
+  private setupMobileControls() {
+    const isMobile = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+    const { width, height } = this.scale;
+
+    // Desktop: any tap anywhere still queues a jump via the buffer
+    this.input.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
       if (this.finished) return;
-      const body = this.player.body as Phaser.Physics.Arcade.Body;
-      if (body.blocked.down) {
-        this.player.setVelocityY(-this.jumpVel);
-        this.doubleJumpUsed = false;
-        playBleep("pickup");
-      }
+      // On mobile, only trigger jump if tap is in the right 45% of screen
+      if (isMobile && ptr.x < width * 0.55) return;
+      this.jumpBufferUntil = this.time.now + 110;
     });
+
+    if (!isMobile) return;
+
+    // Draw a visible jump button bottom-right
+    const btnR = 34;
+    const btnX = width - btnR - 20;
+    const btnY = height - btnR - 28;
+
+    const gfx = this.add.graphics().setScrollFactor(0).setDepth(290);
+    this.mobileJumpBtnGfx = gfx;
+
+    const redrawBtn = (pressed: boolean) => {
+      gfx.clear();
+      gfx.fillStyle(pressed ? 0xffffff : 0x000000, pressed ? 0.55 : 0.35);
+      gfx.fillCircle(btnX, btnY, btnR);
+      gfx.lineStyle(2.5, 0xffffff, 0.7);
+      gfx.strokeCircle(btnX, btnY, btnR);
+      // Arrow up symbol
+      gfx.fillStyle(0xffffff, 0.9);
+      const ax = btnX, ay = btnY - 10, aw = 16;
+      gfx.fillTriangle(ax, ay - 10, ax - aw / 2, ay + 4, ax + aw / 2, ay + 4);
+      gfx.fillRect(ax - 5, ay + 4, 10, 10);
+    };
+    redrawBtn(false);
+
+    const zone = this.add
+      .zone(btnX, btnY, btnR * 2 + 20, btnR * 2 + 20)
+      .setScrollFactor(0)
+      .setDepth(291)
+      .setInteractive({ useHandCursor: false });
+    this.mobileJumpZone = zone;
+
+    zone.on("pointerdown", () => {
+      if (this.finished) return;
+      redrawBtn(true);
+      this.jumpBufferUntil = this.time.now + 110;
+    });
+    zone.on("pointerup", () => redrawBtn(false));
+    zone.on("pointerout", () => redrawBtn(false));
   }
 
   private buildLevel(viewH: number) {
@@ -610,6 +620,10 @@ export class PlatformerScene extends Phaser.Scene {
     const pad = this.spec.gameplay.arenaPadding ?? 36;
     const acts = this.spec.director?.acts ?? [];
     const totalLayers = this.spec.platformer?.levelLayers ?? 56;
+    const levelStyle = this.spec.platformer?.levelStyle ?? "challenge";
+    // 风格参数覆写
+    const styleExplore = levelStyle === "explore";
+    const styleSpeedrun = levelStyle === "speedrun";
 
     const getActIndexForRatio = (ratio: number) => {
       let idx = 0;
@@ -647,6 +661,19 @@ export class PlatformerScene extends Phaser.Scene {
         stage.setDisplaySize(stageWidth, 24);
         stage.refreshBody();
 
+        // Checkpoint flag at act boundary (skip first act — spawn is already there)
+        if (actIdx > 0) {
+          const cpX = x + stageWidth / 2 - 52;
+          const cpY = y - 8;
+          const cp = this.checkpoints.create(cpX, cpY, "texFlag") as Phaser.Physics.Arcade.Image;
+          cp.setDisplaySize(22, 36);
+          cp.setDepth(9);
+          cp.setTint(0xfbbf24); // yellow until activated
+          cp.refreshBody();
+          // Idle bob animation
+          this.tweens.add({ targets: cp, y: cpY - 5, duration: 650, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+        }
+
         for (let i = 0; i < 2 + (isFinaleAct ? 1 : 0); i += 1) {
           const gem = this.gems.create(x + 44 + i * 42, y - 24, "texGem");
           gem.setDepth(8);
@@ -664,31 +691,84 @@ export class PlatformerScene extends Phaser.Scene {
       }
 
       const rw = rnd(seed, layer * 3);
+      // levelStyle 覆写平台宽度：explore→更宽、speedrun→适中长条、challenge→沿用原逻辑
       const platW = Math.floor(
         isPrecisionAct
-          ? 68 + rw * 64
+          ? (styleExplore ? 90 + rw * 80 : 68 + rw * 64)
           : isGapAct
-            ? 82 + rw * 78
+            ? (styleExplore ? 110 + rw * 90 : styleSpeedrun ? 100 + rw * 60 : 82 + rw * 78)
             : isFinaleAct
               ? 88 + rw * 86
-              : 78 + rw * 112,
+              : styleExplore
+                ? 110 + rw * 140
+                : styleSpeedrun
+                  ? 100 + rw * 100
+                  : 78 + rw * 112,
       );
-      const plat = this.platforms.create(x + platW / 2, y, rnd(seed, layer) > 0.55 ? "texPlatHi" : "texPlat");
-      plat.setDisplaySize(platW, 22);
-      plat.refreshBody();
+
+      // Moving platforms: ~22% of gap/precision act platforms move
+      const movRoll = rnd(seed, layer * 17 + 8);
+      const makeMoving = (isGapAct || isPrecisionAct) && movRoll < 0.22 && platW < 130;
+
+      let plat: Phaser.Physics.Arcade.Image;
+      if (makeMoving) {
+        const movSpr = this.movingPlatforms.create(
+          x + platW / 2, y,
+          "texPlatHi",
+        ) as Phaser.Physics.Arcade.Image;
+        movSpr.setDisplaySize(platW, 22);
+        movSpr.setTint(0x7dd3fc); // cyan tint — signals "this platform moves"
+        const mb = movSpr.body as Phaser.Physics.Arcade.Body;
+        mb.setImmovable(true);
+        mb.setAllowGravity(false);
+        mb.setSize(platW, 22);
+        const ampX = isGapAct ? 52 + rnd(seed, layer) * 48 : 0;
+        const ampY = isPrecisionAct ? 26 + rnd(seed, layer) * 30 : 0;
+        const freq = 0.55 + rnd(seed, layer * 3 + 7) * 0.75;
+        const phase = rnd(seed, layer * 5 + 13) * Math.PI * 2;
+        this.movingPlatConfigs.push({
+          spr: movSpr,
+          baseX: x + platW / 2,
+          baseY: y,
+          ampX,
+          ampY,
+          freq,
+          phase,
+        });
+        plat = movSpr;
+      } else {
+        const staticPlat = this.platforms.create(x + platW / 2, y, rnd(seed, layer) > 0.55 ? "texPlatHi" : "texPlat") as Phaser.Physics.Arcade.Image;
+        staticPlat.setDisplaySize(platW, 22);
+        staticPlat.refreshBody();
+        plat = staticPlat;
+      }
 
       const gemRoll = rnd(seed, layer * 7 + 1);
-      const gemThreshold = isPrecisionAct ? 0.28 : isGapAct ? 0.2 : 0.16;
-      if (gemRoll > gemThreshold) {
+      // explore→ gem 更多；speedrun→ gem 更少（追速度感）
+      const gemThreshold = styleExplore
+        ? (isPrecisionAct ? 0.1 : 0.06)
+        : styleSpeedrun
+          ? (isPrecisionAct ? 0.45 : 0.35)
+          : isPrecisionAct ? 0.28 : isGapAct ? 0.2 : 0.16;
+      if (!makeMoving && gemRoll > gemThreshold) {
         const gem = this.gems.create(x + platW / 2, y - 36, "texGem");
         gem.setDepth(8);
+        const isBonusGem = rnd(seed, layer * 7 + 33) > 0.88; // ~12% chance gold bonus gem
+        if (isBonusGem) {
+          gem.setScale(1.22);
+          gem.setTint(0xfcd34d);
+          gem.setData("gemValue", 3);
+        }
         const gb = gem.body as Phaser.Physics.Arcade.Body | null;
         if (gb) gb.setAllowGravity(false);
       }
 
       const spikeRoll = rnd(seed, layer * 11 + 2);
-      const spikeThreshold = isSpikeAct ? 0.46 : isPrecisionAct ? 0.58 : 0.72;
-      if (spikeRoll > spikeThreshold && platW > (isPrecisionAct ? 82 : 95)) {
+      // explore→ spike 少；challenge/speedrun→ 按原逻辑
+      const spikeThreshold = styleExplore
+        ? (isSpikeAct ? 0.62 : 0.88)
+        : isSpikeAct ? 0.46 : isPrecisionAct ? 0.58 : 0.72;
+      if (!makeMoving && spikeRoll > spikeThreshold && platW > (isPrecisionAct ? 82 : 95)) {
         const spikeCount = isSpikeAct || isFinaleAct ? 2 : 1;
         for (let i = 0; i < spikeCount; i += 1) {
           const spikeX = x + platW * (spikeCount === 1 ? 0.72 : 0.52 + i * 0.22);
@@ -707,12 +787,20 @@ export class PlatformerScene extends Phaser.Scene {
         );
       }
 
-      const stepX =
-        (isGapAct ? 124 : isPrecisionAct ? 88 : isFinaleAct ? 118 : 96) +
-        rnd(seed, layer * 5 + 4) * (isGapAct ? 110 : isPrecisionAct ? 68 : 88);
-      const stepY =
-        (isPrecisionAct ? -62 : -48) +
-        rnd(seed, layer * 6 + 5) * (isPrecisionAct ? 132 : isGapAct ? 126 : 112);
+      // levelStyle 影响水平间距和垂直落差
+      // explore: 水平间距大，垂直落差小（宽场景）；speedrun: 水平密，垂直小（直线流）
+      const stepX = styleExplore
+        ? (isGapAct ? 148 : 116) + rnd(seed, layer * 5 + 4) * (isGapAct ? 130 : 100)
+        : styleSpeedrun
+          ? (isGapAct ? 100 : 78) + rnd(seed, layer * 5 + 4) * (isGapAct ? 80 : 60)
+          : (isGapAct ? 124 : isPrecisionAct ? 88 : isFinaleAct ? 118 : 96) +
+            rnd(seed, layer * 5 + 4) * (isGapAct ? 110 : isPrecisionAct ? 68 : 88);
+      const stepY = styleExplore
+        ? (-36) + rnd(seed, layer * 6 + 5) * 90  // 小垂直落差，更平坦
+        : styleSpeedrun
+          ? (-24) + rnd(seed, layer * 6 + 5) * 72 // 更平，速度感
+          : (isPrecisionAct ? -62 : -48) +
+            rnd(seed, layer * 6 + 5) * (isPrecisionAct ? 132 : isGapAct ? 126 : 112);
       x += stepX;
       y += stepY;
       if (y < 160) y = 200 + rnd(seed, layer + 99) * 80;
@@ -725,8 +813,22 @@ export class PlatformerScene extends Phaser.Scene {
     endPlat.refreshBody();
     const flagGem = this.gems.create(this.worldW - 120, groundY - 210, "texGem");
     flagGem.setDepth(12);
+    flagGem.setScale(1.45);
+    flagGem.setTint(0xffd700);
+    flagGem.setData("gemValue", 5);
     const fb = flagGem.body as Phaser.Physics.Arcade.Body | null;
     if (fb) fb.setAllowGravity(false);
+    // Flag gem pulse animation
+    this.tweens.add({
+      targets: flagGem,
+      scaleX: { from: 1.45, to: 1.72 },
+      scaleY: { from: 1.45, to: 1.72 },
+      alpha: { from: 1, to: 0.65 },
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private spawnSentryHazard(x: number, y: number, patrolRange: number, speedScale: number) {
@@ -783,7 +885,7 @@ export class PlatformerScene extends Phaser.Scene {
       if (this.finished) return;
       this.finish({ score: this.score + 50, won: true });
     });
-    this.hintText.setText(
+    this.hud.setBottomHint(
       this.uiLocale === "zh-Hans"
         ? "Shift 摆荡 · 偷取金色目标 · 避开激光"
         : "Shift swing · Steal the gold · Avoid lasers",
@@ -934,24 +1036,23 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private refreshHud() {
-    this.scoreText.setText(hudScore(this.uiLocale, this.score));
-    if (this.time.now < this.goalShiftUntil) {
-      this.progressText.setText(hudPlatformerTarget(this.uiLocale, this.goalShiftHave, this.goalShiftNeed));
-    } else {
-      this.progressText.setText(
-        hudPlatformerCollect(this.uiLocale, Math.min(this.score, this.winScore), this.winScore),
-      );
-    }
-    if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
-
+    const right = this.time.now < this.goalShiftUntil
+      ? hudPlatformerTarget(this.uiLocale, this.goalShiftHave, this.goalShiftNeed)
+      : hudPlatformerCollect(this.uiLocale, Math.min(this.score, this.winScore), this.winScore);
     const acts = this.spec.director?.acts ?? null;
     const label = acts?.[this.actIndex]?.label;
-    this.actText.setText(label ? hudActChapter(this.uiLocale, label) : "");
-
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
-    this.skillCdText.setText(
-      cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1)),
-    );
+    const skillName = this.stealthMode && this.grappleEnabled
+      ? (this.uiLocale === "zh-Hans" ? "弹性摆荡" : "Elastic swing")
+      : (this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale));
+    const cdStr = cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1));
+    this.hud.update({
+      score: this.score,
+      lives: this.lives,
+      right,
+      actLabel: label ? hudActChapter(this.uiLocale, label) : "",
+      skill: `Shift · ${skillName} · ${cdStr}`,
+    });
     this.drawShieldRing();
   }
 
@@ -967,18 +1068,29 @@ export class PlatformerScene extends Phaser.Scene {
     }
     this.fxDamage();
     this.lives -= 1;
-    if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
-    this.invulnUntil = this.time.now + 900;
-    this.player.setVelocityY(-this.jumpVel * 0.55);
-    this.player.setAlpha(0.35);
-    this.time.delayedCall(220, () => this.player.setAlpha(1));
+    this.refreshHud();
+    this.invulnUntil = this.time.now + 1400;
+    if (this.lives <= 0) {
+      this.finish({ score: this.score, won: false });
+      return;
+    }
+    // Respawn at last checkpoint
+    this.respawnAtCheckpoint();
+    const maxLives = this.spec.gameplay.lives ?? 3;
+    this.soundscape?.setTension(1 - (this.lives - 1) / Math.max(1, maxLives - 1));
     if (this.lives === 1) {
       this.soundscape?.triggerEvent("danger");
       this.startDangerVignette();
     }
-    if (this.lives <= 0) {
-      this.finish({ score: this.score, won: false });
-    }
+  }
+
+  private respawnAtCheckpoint() {
+    this.player.setPosition(this.lastCheckpointX, this.lastCheckpointY);
+    this.player.setVelocity(0, 0);
+    this.player.setAlpha(0.3);
+    this.grappleActive = false;
+    this.doubleJumpUsed = false;
+    this.time.delayedCall(300, () => this.player.setAlpha(1));
   }
 
   private fxCollect(x: number, y: number) {
@@ -994,13 +1106,20 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private fxDamage() {
+    const dying = this.lives <= 1;
     juiceHit(this, {
       x: this.player?.x ?? this.scale.width / 2,
       y: this.player?.y ?? this.scale.height / 2,
       colorHex: this.spec.theme.hazardColor,
-      large: this.lives <= 1,
+      large: dying,
     });
     playBleep("hit");
+    this.hurtFlashUntil = this.time.now + 260;
+    this.cameras.main.shake(dying ? 280 : 180, dying ? 0.012 : 0.006);
+    spawnDamageNumber(this, this.player.x, this.player.y, 1, {
+      color: dying ? "#ff1111" : "#ff6644",
+      large: dying,
+    });
   }
 
   private fxShield() {
@@ -1015,28 +1134,17 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   private startDangerVignette() {
-    if (!this.dangerVignette) return;
-    this.tweens.killTweensOf(this.dangerVignette);
-    this.tweens.add({
-      targets: this.dangerVignette,
-      alpha: { from: 0.0, to: 0.18 },
-      duration: 800,
-      ease: "Sine.easeInOut",
-      yoyo: true,
-      repeat: -1,
-    });
+    this.hud.update({ dangerLevel: 1 });
   }
 
   private finish(payload: EndPayload) {
     if (this.finished) return;
-    if (this.dangerVignette) {
-      this.tweens.killTweensOf(this.dangerVignette);
-      this.dangerVignette.setAlpha(0);
-    }
+    this.hud.update({ dangerLevel: 0 });
     this.finished = true;
     this.physics.pause();
-    this.hintText.setText(platformerFinishText(this.uiLocale, payload.won));
+    this.hud.setBottomHint(platformerFinishText(this.uiLocale, payload.won));
     if (payload.won) {
+      this.cameras.main.shake(300, 0.008);
       juiceWin(this, {
         x: this.player.x,
         y: this.player.y,
@@ -1093,7 +1201,7 @@ export class PlatformerScene extends Phaser.Scene {
   }
 
   update() {
-    this.goalPanel?.update();
+    this.hud.update({});
     if (this.finished) return;
     const speed = this.spec.gameplay.playerSpeed;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -1101,6 +1209,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.updateAct();
     this.tickDirectorEvents();
     this.tickEventLoops();
+    this.updateMovingPlatforms();
 
     if (Phaser.Input.Keyboard.JustDown(this.keyShift) && !(this.stealthMode && this.grappleEnabled)) {
       this.tryCastSkill();
@@ -1141,15 +1250,33 @@ export class PlatformerScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.keyW) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up);
 
-    if (jumpPressed && body.blocked.down) {
-      this.player.setVelocityY(-this.jumpVel);
+    const now2 = this.time.now;
+    const grounded2 = body.blocked.down;
+
+    // Coyote time：落地时刷新，离地后 120ms 内仍视为可跳
+    if (grounded2) {
+      this.coyoteUntil = now2 + 120;
       this.doubleJumpUsed = false;
-    } else if (jumpPressed && this.doubleJumpAllowed && !this.doubleJumpUsed) {
+    }
+
+    // Jump buffer：提前 110ms 预输入，落地时自动触发
+    if (jumpPressed) this.jumpBufferUntil = now2 + 110;
+
+    const canCoyoteJump = now2 < this.coyoteUntil && !grounded2;
+    const bufferedJump = now2 < this.jumpBufferUntil;
+
+    if ((grounded2 || canCoyoteJump) && bufferedJump) {
+      this.player.setVelocityY(-this.jumpVel);
+      this.coyoteUntil = 0;      // 消耗 coyote 机会
+      this.jumpBufferUntil = 0;  // 消耗 buffer
+      this.doubleJumpUsed = false;
+    } else if (jumpPressed && this.doubleJumpAllowed && !this.doubleJumpUsed && !grounded2 && !canCoyoteJump) {
       this.doubleJumpUsed = true;
+      this.jumpBufferUntil = 0;
       this.player.setVelocityY(-this.jumpVel * 0.82);
       juiceBurst(this, this.player.x, this.player.y + 18, themeParticleHex(this.spec), 8);
       playBleep("pickup");
-    } else if ((this.keyS.isDown || this.cursors.down.isDown) && !body.blocked.down) {
+    } else if ((this.keyS.isDown || this.cursors.down.isDown) && !grounded2) {
       this.player.setVelocityY(Math.max(body.velocity.y, 420));
     }
 
@@ -1177,8 +1304,113 @@ export class PlatformerScene extends Phaser.Scene {
       }
     }
 
-    if (this.player.y > this.scale.height + 120) {
-      this.finish({ score: this.score, won: false });
+    if (this.player.y > this.scale.height + 120 && this.time.now >= this.invulnUntil) {
+      if (this.lives <= 1) {
+        this.lives = 0;
+        this.finish({ score: this.score, won: false });
+      } else {
+        this.lives -= 1;
+        this.refreshHud();
+        this.invulnUntil = this.time.now + 1400;
+        this.fxDamage();
+        this.respawnAtCheckpoint();
+        if (this.lives === 1) {
+          this.soundscape?.triggerEvent("danger");
+          this.startDangerVignette();
+        }
+      }
+    }
+
+    // Player trail recording
+    const dashOn2 = this.time.now < this.dashUntil;
+    if (this.player?.active && (dashOn2 || Math.abs(vx) > 110)) {
+      this.playerTrail.push({ x: this.player.x, y: this.player.y, t: this.time.now });
+      if (this.playerTrail.length > 7) this.playerTrail.shift();
+    } else if (this.playerTrail.length > 0) {
+      this.playerTrail.shift();
+    }
+
+    this.updatePlayerAnim(body, vx);
+  }
+
+  private updatePlayerAnim(body: Phaser.Physics.Arcade.Body, vx: number) {
+    const now = this.time.now;
+    const grounded = body.blocked.down;
+
+    // Player movement trail
+    const g = this.trailGfx;
+    g.clear();
+    if (this.playerTrail.length > 1) {
+      const dashOn3 = now < this.dashUntil;
+      const trailColor = dashOn3 ? 0xa78bfa : 0x38bdf8;
+      for (let i = 0; i < this.playerTrail.length - 1; i++) {
+        const pt = this.playerTrail[i]!;
+        const age = (now - pt.t) / 220;
+        const alpha = Math.max(0, (1 - age) * 0.20 * (i / this.playerTrail.length));
+        if (alpha <= 0) continue;
+        g.fillStyle(trailColor, alpha);
+        const sz = 10 + i * 1.2;
+        g.fillCircle(pt.x, pt.y, sz);
+      }
+    }
+
+    // Flip to face movement direction
+    if (vx > 6) this.player.setFlipX(false);
+    else if (vx < -6) this.player.setFlipX(true);
+
+    // Squash on landing, stretch on jumping
+    if (grounded && !this.wasGrounded) {
+      // Just landed — squash
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 1.28,
+        scaleY: 0.72,
+        duration: 60,
+        yoyo: true,
+        ease: "Sine.easeOut",
+        onComplete: () => { this.player.setScale(1); },
+      });
+    } else if (!grounded && this.wasGrounded) {
+      // Just left ground — stretch
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 0.82,
+        scaleY: 1.22,
+        duration: 80,
+        yoyo: true,
+        ease: "Sine.easeOut",
+        onComplete: () => { this.player.setScale(1); },
+      });
+    }
+    this.wasGrounded = grounded;
+
+    // Hurt tint flash: starts white, fades to red-orange then clears
+    if (now < this.hurtFlashUntil) {
+      const t = (this.hurtFlashUntil - now) / 260; // 1→0
+      const g = Math.round(255 * Math.max(0, t - 0.35));
+      this.player.setTint(Phaser.Display.Color.GetColor(255, g, g));
+    } else {
+      this.player.clearTint();
+    }
+
+    // Running bob: slight vertical oscillation when grounded and moving
+    if (grounded && Math.abs(vx) > 20) {
+      const bob = Math.sin(now * 0.018) * 1.5;
+      this.player.setY(this.player.y + bob * (this.game.loop.delta / 16.67));
+    }
+  }
+
+  private updateMovingPlatforms() {
+    if (this.movingPlatConfigs.length === 0) return;
+    const tSec = this.time.now / 1000;
+    const dt = Math.max(0.008, this.game.loop.delta / 1000);
+    for (const mp of this.movingPlatConfigs) {
+      if (!mp.spr?.active) continue;
+      const nx = mp.baseX + Math.sin(tSec * mp.freq + mp.phase) * mp.ampX;
+      const ny = mp.baseY + Math.sin(tSec * mp.freq * 0.8 + mp.phase + 1.57) * mp.ampY;
+      const vx = Phaser.Math.Clamp((nx - mp.spr.x) / dt, -480, 480);
+      const vy = Phaser.Math.Clamp((ny - mp.spr.y) / dt, -360, 360);
+      (mp.spr.body as Phaser.Physics.Arcade.Body).setVelocity(vx, vy);
     }
   }
 
@@ -1237,7 +1469,6 @@ export class PlatformerScene extends Phaser.Scene {
 
   private tickDirectorEvents() {
     const now = this.time.now;
-    this.banner.tick();
 
     if (this.eventType && now >= this.eventUntil) {
       const ended = this.eventType;
@@ -1251,9 +1482,9 @@ export class PlatformerScene extends Phaser.Scene {
       }
 
       if (ended === "goalShift" && !this.goalShiftSucceeded) {
-        this.banner.show({ ...bannerPlatformerGoalMiss(this.uiLocale), ms: 1600 });
+        this.hud.flashBanner({ ...bannerPlatformerGoalMiss(this.uiLocale), ms: 1600 });
       } else {
-        this.banner.show({ ...bannerEventEnd(this.uiLocale, "platformer"), ms: 1400 });
+        this.hud.flashBanner({ ...bannerEventEnd(this.uiLocale, "platformer"), ms: 1400 });
       }
 
       this.eventType = null;
@@ -1287,7 +1518,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.eventStrength = strength;
     this.eventUntil = now + durationMs;
 
-    this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
+    this.hud.flashBanner({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
     applyRuntimeEventImpact(this, ev.type, {
       x: this.player?.x ?? this.scale.width / 2,
       y: this.player?.y ?? this.scale.height / 2,
@@ -1362,7 +1593,7 @@ export class PlatformerScene extends Phaser.Scene {
               ? "finale"
               : "default";
       const stageMessage = platformerStageMessage(this.uiLocale, mod);
-      this.banner.show({ ...bannerActStage(this.uiLocale, acts[idx]?.label, stageMessage), ms: 1400 });
+      this.hud.flashBanner({ ...bannerActStage(this.uiLocale, acts[idx]?.label, stageMessage), ms: 1400 });
       juicePickup(this, {
         x: this.player.x,
         y: this.player.y - 18,

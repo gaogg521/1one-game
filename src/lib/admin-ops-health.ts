@@ -149,10 +149,13 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     checks.push({ id: "samples_cover", status: "ok", labelKey: "healthCheck_samplesCover" });
   }
 
-  const [pendingG, pendingN, pendingC] = await Promise.all([
+  const since1h = new Date(Date.now() - 60 * 60 * 1000);
+  const [pendingG, pendingN, pendingC, genErrors1h, genSuccess1h] = await Promise.all([
     prisma.project.count({ where: { visibility: "pending_review" } }),
     prisma.novel.count({ where: { visibility: "pending_review" } }),
     prisma.comic.count({ where: { visibility: "pending_review" } }),
+    prisma.generationError.count({ where: { createdAt: { gte: since1h } } }),
+    prisma.project.count({ where: { createdAt: { gte: since1h }, status: "ready" } }),
   ]);
   const pendingTotal = pendingG + pendingN + pendingC;
   checks.push({
@@ -161,6 +164,16 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     labelKey: "healthCheck_moderation",
     detail: String(pendingTotal),
     hintKey: pendingTotal > 0 ? "healthHint_moderation" : undefined,
+  });
+
+  const totalGen1h = genErrors1h + genSuccess1h;
+  const errorRate1h = totalGen1h > 0 ? Math.round((genErrors1h / totalGen1h) * 100) : 0;
+  checks.push({
+    id: "gen_errors",
+    status: genErrors1h > 20 ? "fail" : genErrors1h > 5 ? "warn" : "ok",
+    labelKey: "healthCheck_genErrors",
+    detail: `${genErrors1h} errors / ${totalGen1h} attempts (${errorRate1h}% failure rate, 1h)`,
+    hintKey: genErrors1h > 5 ? "healthHint_genErrors" : undefined,
   });
 
   const qaCommands: OpsHealthQaCommand[] = [

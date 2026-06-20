@@ -1,4 +1,5 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { logGenerationError } from "@/lib/generation-error-log";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
@@ -128,6 +129,8 @@ export async function POST(req: Request) {
       { headers: ridHeaders(requestId) },
     );
   } catch (err) {
+    const promptSnippet = body.creativePrompt ?? body.content ?? body.title ?? "";
+    void logGenerationError({ contentType: "comic", prompt: promptSnippet, error: err, ownerKey });
     if (err instanceof ComicGenerateError) {
       return NextResponse.json(
         localizedApiErrorPayload(req, err.errorKey, { code: codes.LLM_FAILED, requestId }),

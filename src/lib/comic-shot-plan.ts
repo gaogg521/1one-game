@@ -3,6 +3,7 @@ import type { ComicPanel, ComicPage } from "@/lib/comic-format";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getComicPanelStyleLock } from "@/lib/cover-genre";
 import type { ComicDirectorPack, ComicShotType } from "@/lib/comic-director-types";
+import type { ComicAdaptationBlueprint } from "@/lib/comic-adaptation-blueprint";
 
 export const SHOT_FRAMING: Record<ComicShotType, string> = {
   wide: "wide establishing shot, full environment visible",
@@ -28,6 +29,7 @@ export function buildFinalPanelImagePrompt(
   director: ComicDirectorPack,
   panel: PlannedComicPanel,
   genre: CoverGenre,
+  consistencyLock?: string,
 ): string {
   const style = director.visualStyleEn || getComicPanelStyleLock(genre);
   const shot = SHOT_FRAMING[panel.shotType ?? "medium"];
@@ -55,6 +57,8 @@ export function buildFinalPanelImagePrompt(
     panel.prompt?.trim() ||
     "story moment matching the caption mood";
 
+  const consistencyBlock = consistencyLock ? `[VISUAL CONSISTENCY LOCK]: ${consistencyLock}` : "";
+
   const parts = [
     style,
     shot,
@@ -62,6 +66,7 @@ export function buildFinalPanelImagePrompt(
     locLine,
     `Action: ${action.slice(0, 280)}`,
     director.colorPalette ? `Color palette: ${director.colorPalette}` : "",
+    consistencyBlock,
     COMIC_IMAGE_NO_TEXT_SUFFIX,
   ].filter(Boolean);
 
@@ -72,12 +77,14 @@ export function applyShotPlanToPages(
   pages: ComicPage[],
   director: ComicDirectorPack,
   genre: CoverGenre,
+  adaptationBlueprint?: ComicAdaptationBlueprint | null,
 ): ComicPage[] {
+  const consistencyLock = adaptationBlueprint?.consistencyLock ?? "";
   return pages.map((page) => ({
     ...page,
     panels: page.panels.map((panel) => {
       const planned = panel as PlannedComicPanel;
-      const prompt = buildFinalPanelImagePrompt(director, planned, genre);
+      const prompt = buildFinalPanelImagePrompt(director, planned, genre, consistencyLock);
       return { ...panel, prompt };
     }),
   }));

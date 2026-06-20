@@ -4,26 +4,26 @@ extends Node2D
 @onready var _world: Node3D = $ViewportContainer/SubViewport/World
 @onready var _viewport: SubViewport = $ViewportContainer/SubViewport
 
-var _hud := GameHud.new()
+var _hud = GameHud.new()
 var _nodes: Array = []
 var _node_meshes: Dictionary = {}
 var _node_labels: Dictionary = {}
 var _link_meshes: Array = []
-var _selected := ""
-var _player_turn := true
-var _ended := false
+var _selected = ""
+var _player_turn = true
+var _ended = false
 var _camera: Camera3D
-var _win_nodes := 4
-var _ai_aggression := 1.0
-var _rush_mode := false
+var _win_nodes = 4
+var _ai_aggression = 1.0
+var _rush_mode = false
 
 
 func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
-	var strat := GameSpecData.strategy()
-	var sp := GameSpecData.sample_play_profile().get("strategy", {})
+	var strat = GameSpecData.strategy()
+	var sp = GameSpecData.sample_play_profile().get("strategy", {})
 	if sp is Dictionary:
 		_win_nodes = int(sp.get("winNodes", strat.get("winNodes", 4)))
 		_ai_aggression = float(sp.get("aiAggression", 1.0))
@@ -46,8 +46,8 @@ func _load_nodes(strat: Dictionary) -> void:
 		_nodes.clear()
 		for raw_n in strat.nodes:
 			if raw_n is Dictionary:
-				var nx := float(raw_n.get("x", 0))
-				var ny := float(raw_n.get("y", 0))
+				var nx = float(raw_n.get("x", 0))
+				var ny = float(raw_n.get("y", 0))
 				if nx <= 1.0 and ny <= 1.0:
 					nx *= 880.0
 					ny *= 480.0
@@ -70,10 +70,10 @@ func _load_nodes(strat: Dictionary) -> void:
 
 
 func _build_scene() -> void:
-	var env_n := WorldEnvironment.new()
-	var env := Environment.new()
+	var env_n = WorldEnvironment.new()
+	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	var bg := GameSpecData.theme_color("backgroundColor", Color("#1e293b"))
+	var bg = GameSpecData.theme_color("backgroundColor", Color("#1e293b"))
 	env.background_color = bg.darkened(0.2)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.45, 0.48, 0.55)
@@ -81,7 +81,7 @@ func _build_scene() -> void:
 	env_n.environment = env
 	_world.add_child(env_n)
 
-	var sun := DirectionalLight3D.new()
+	var sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52, 35, 0)
 	sun.light_energy = 1.1
 	sun.shadow_enabled = true
@@ -93,12 +93,12 @@ func _build_scene() -> void:
 	_camera.current = true
 	_world.add_child(_camera)
 
-	var table := MeshInstance3D.new()
-	var table_mesh := BoxMesh.new()
+	var table = MeshInstance3D.new()
+	var table_mesh = BoxMesh.new()
 	table_mesh.size = Vector3(14, 0.12, 8)
 	table.mesh = table_mesh
 	table.position = Vector3(0, -0.06, 0)
-	var tmat := StandardMaterial3D.new()
+	var tmat = StandardMaterial3D.new()
 	tmat.albedo_color = bg.lightened(0.08)
 	tmat.roughness = 0.75
 	table.material_override = tmat
@@ -110,8 +110,8 @@ func _build_scene() -> void:
 
 
 func _map_pos(n: Dictionary) -> Vector3:
-	var x := (float(n.x) - 440.0) * 0.018
-	var z := (float(n.y) - 240.0) * 0.018
+	var x = (float(n.x) - 440.0) * 0.018
+	var z = (float(n.y) - 240.0) * 0.018
 	return Vector3(x, 0.35, z)
 
 
@@ -124,24 +124,24 @@ func _owner_color(owner: String) -> Color:
 
 
 func _spawn_node(n: Dictionary) -> void:
-	var root := Node3D.new()
+	var root = Node3D.new()
 	root.position = _map_pos(n)
 	_world.add_child(root)
 
-	var cyl := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
+	var cyl = MeshInstance3D.new()
+	var mesh = CylinderMesh.new()
 	mesh.top_radius = 0.42
 	mesh.bottom_radius = 0.42
 	mesh.height = 0.55
 	cyl.mesh = mesh
 	cyl.position = Vector3(0, 0.28, 0)
-	var mat := StandardMaterial3D.new()
+	var mat = StandardMaterial3D.new()
 	mat.albedo_color = _owner_color(n.owner)
 	mat.roughness = 0.45
 	cyl.material_override = mat
 	root.add_child(cyl)
 
-	var lbl := Label3D.new()
+	var lbl = Label3D.new()
 	lbl.text = str(int(n.troops))
 	lbl.font_size = 28
 	lbl.position = Vector3(0, 0.75, 0)
@@ -162,20 +162,20 @@ func _build_links() -> void:
 			var other = _find(lid)
 			if other.is_empty() or str(n.id) > str(other.id):
 				continue
-			var a := _map_pos(n)
-			var b := _map_pos(other)
-			var mid := (a + b) * 0.5
-			var dir := b - a
-			var length := dir.length()
+			var a = _map_pos(n)
+			var b = _map_pos(other)
+			var mid = (a + b) * 0.5
+			var dir = b - a
+			var length = dir.length()
 			if length < 0.01:
 				continue
-			var bar := MeshInstance3D.new()
-			var box := BoxMesh.new()
+			var bar = MeshInstance3D.new()
+			var box = BoxMesh.new()
 			box.size = Vector3(0.08, 0.04, length)
 			bar.mesh = box
 			bar.position = mid
 			bar.look_at(b, Vector3.UP)
-			var lmat := StandardMaterial3D.new()
+			var lmat = StandardMaterial3D.new()
 			lmat.albedo_color = Color("#64748b")
 			bar.material_override = lmat
 			_world.add_child(bar)
@@ -200,7 +200,7 @@ func _sync_visuals() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _ended or not _player_turn or not event is InputEventMouseButton:
 		return
-	var mb := event as InputEventMouseButton
+	var mb = event as InputEventMouseButton
 	if not mb.pressed:
 		return
 	var hit = _hit(mb.position)
@@ -218,8 +218,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if not _linked(from, hit):
 			return
-		var send := int(from.troops / 2)
-		var prev_owner := str(hit.owner)
+		var send = int(from.troops / 2)
+		var prev_owner = str(hit.owner)
 		from.troops -= send
 		if hit.owner == "player":
 			hit.troops += send
@@ -248,7 +248,7 @@ func _ai_turn() -> void:
 			for lid in n.links:
 				var t = _find(lid)
 				if not t.is_empty() and t.owner != "ai":
-					var send := int(n.troops * 0.5 * _ai_aggression)
+					var send = int(n.troops * 0.5 * _ai_aggression)
 					n.troops -= send
 					if send > t.troops:
 						t.owner = "ai"
@@ -263,7 +263,7 @@ func _ai_turn() -> void:
 
 
 func _player_nodes() -> int:
-	var c := 0
+	var c = 0
 	for n in _nodes:
 		if n.owner == "player":
 			c += 1

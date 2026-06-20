@@ -109,6 +109,8 @@ export function enrichPagesFromSegmentNarration(
 }
 
 export function comicPagesAreAllPlaceholders(pages: ComicPage[]): boolean {
+  // P2 修复：0 页返回 false（非全占位），避免空数组被误判 throw
+  if (pages.length === 0) return false;
   const panels = pages.flatMap((p) => p.panels);
   if (panels.length === 0) return true;
   return panels.every((p) => isPlaceholderComicPanel(p));

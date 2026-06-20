@@ -12,6 +12,20 @@ import type { PlayScene } from "@/game/engine/PlayScene";
 import type { PuzzleScene } from "@/game/engine/PuzzleScene";
 import type { ShooterScene } from "@/game/engine/ShooterScene";
 import type { TowerDefenseScene } from "@/game/engine/TowerDefenseScene";
+import type { RhythmScene } from "@/game/engine/RhythmScene";
+import type { SportsScene } from "@/game/engine/SportsScene";
+import type { CardScene } from "@/game/engine/CardScene";
+import type { FightingScene } from "@/game/engine/FightingScene";
+import type { MobaScene } from "@/game/engine/MobaScene";
+import type { HorrorScene } from "@/game/engine/HorrorScene";
+import type { MahjongScene } from "@/game/engine/MahjongScene";
+import type { TetrisScene } from "@/game/engine/TetrisScene";
+import type { EndlessRunnerScene } from "@/game/engine/EndlessRunnerScene";
+import type { FruitNinjaScene } from "@/game/engine/FruitNinjaScene";
+import type { MahjongSolitaireScene } from "@/game/engine/MahjongSolitaireScene";
+import type { DouDizhuScene } from "@/game/engine/DouDizhuScene";
+import type { BreakoutScene } from "@/game/engine/BreakoutScene";
+import type { Merge2048Scene } from "@/game/engine/Merge2048Scene";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
@@ -22,15 +36,28 @@ export type GodotRuntimePayload = {
   godotKey: GodotRuntimeKey;
   arenaMode?: ArenaMode;
   semanticTemplateId: string;
+  /** 千人千面：从 prompt 派生的 seed（0..1），驱动运行时程序化差异化 */
+  seed?: number;
+  /** 推断的氛围，影响视觉色调 */
+  mood?: string;
 };
 
 export function buildGodotRuntimePayload(spec: GameSpec): GodotRuntimePayload {
   const rt = resolveTemplateRuntime(spec.templateId);
-  return {
+  const payload: GodotRuntimePayload = {
     godotKey: rt.godot,
     arenaMode: rt.arenaMode,
     semanticTemplateId: spec.templateId,
   };
+  // 千人千面：从 samplePlayProfile 或 director 推断 seed（enrich 阶段已写入）
+  const spp = spec.samplePlayProfile as Record<string, unknown> | undefined;
+  if (spp && typeof spp.seed === "number") {
+    payload.seed = spp.seed;
+  }
+  if (spp && typeof spp.mood === "string") {
+    payload.mood = spp.mood;
+  }
+  return payload;
 }
 
 /** 写入 spec/gamespec.json 的 Godot 导出体 */
@@ -70,6 +97,34 @@ export function toPhaserPlaySpec(spec: GameSpec): GameSpec {
       return { ...spec, templateId: "customization" };
     case "strategy":
       return { ...spec, templateId: "strategy" };
+    case "rhythm":
+      return { ...spec, templateId: "rhythm" };
+    case "sports":
+      return { ...spec, templateId: "sports" };
+    case "card":
+      return { ...spec, templateId: "card" };
+    case "fighting":
+      return { ...spec, templateId: "fighting" };
+    case "moba":
+      return { ...spec, templateId: "moba" };
+    case "horror":
+      return { ...spec, templateId: "horror" };
+    case "mahjong":
+      return { ...spec, templateId: "mahjong" };
+    case "tetris":
+      return { ...spec, templateId: "tetris" };
+    case "endlessRunner":
+      return { ...spec, templateId: "endless-runner" };
+    case "fruitNinja":
+      return { ...spec, templateId: "fruit-ninja" };
+    case "mahjongSolitaire":
+      return { ...spec, templateId: "mahjong-solitaire" };
+    case "douDizhu":
+      return { ...spec, templateId: "dou-dizhu" };
+    case "breakout":
+      return { ...spec, templateId: "breakout" };
+    case "merge2048":
+      return { ...spec, templateId: "merge" };
     case "agentic":
       return spec;
     default:
@@ -94,6 +149,20 @@ export type PhaserSceneImports = {
   ChessScene: typeof ChessScene;
   CustomizationScene: typeof CustomizationScene;
   StrategyScene: typeof StrategyScene;
+  RhythmScene: typeof RhythmScene;
+  SportsScene: typeof SportsScene;
+  CardScene: typeof CardScene;
+  FightingScene: typeof FightingScene;
+  MobaScene: typeof MobaScene;
+  HorrorScene: typeof HorrorScene;
+  MahjongScene: typeof MahjongScene;
+  TetrisScene: typeof TetrisScene;
+  EndlessRunnerScene: typeof EndlessRunnerScene;
+  FruitNinjaScene: typeof FruitNinjaScene;
+  MahjongSolitaireScene: typeof MahjongSolitaireScene;
+  DouDizhuScene: typeof DouDizhuScene;
+  BreakoutScene: typeof BreakoutScene;
+  Merge2048Scene: typeof Merge2048Scene;
   AgenticScene: typeof AgenticScene;
 };
 
@@ -109,6 +178,20 @@ export type PhaserSceneInstance =
   | ChessScene
   | CustomizationScene
   | StrategyScene
+  | RhythmScene
+  | SportsScene
+  | CardScene
+  | FightingScene
+  | MobaScene
+  | HorrorScene
+  | MahjongScene
+  | TetrisScene
+  | EndlessRunnerScene
+  | FruitNinjaScene
+  | MahjongSolitaireScene
+  | DouDizhuScene
+  | BreakoutScene
+  | Merge2048Scene
   | AgenticScene;
 
 export function createPhaserSceneForSpec(
@@ -146,6 +229,34 @@ export function createPhaserSceneForSpec(
       return new imports.CustomizationScene(playSpec, onEnd, sfxNull);
     case "strategy":
       return new imports.StrategyScene(playSpec, onEnd, sfxNull);
+    case "rhythm":
+      return new imports.RhythmScene(playSpec, onEnd, sfxOpt);
+    case "sports":
+      return new imports.SportsScene(playSpec, onEnd, sfxOpt);
+    case "card":
+      return new imports.CardScene(playSpec, onEnd, sfxOpt);
+    case "fighting":
+      return new imports.FightingScene(playSpec, onEnd, sfxOpt);
+    case "moba":
+      return new imports.MobaScene(playSpec, onEnd, sfxOpt);
+    case "horror":
+      return new imports.HorrorScene(playSpec, onEnd, sfxOpt);
+    case "mahjong":
+      return new imports.MahjongScene(playSpec, onEnd, sfxOpt);
+    case "tetris":
+      return new imports.TetrisScene(playSpec, onEnd, sfxOpt);
+    case "endlessRunner":
+      return new imports.EndlessRunnerScene(playSpec, onEnd, sfxOpt);
+    case "fruitNinja":
+      return new imports.FruitNinjaScene(playSpec, onEnd, sfxOpt);
+    case "mahjongSolitaire":
+      return new imports.MahjongSolitaireScene(playSpec, onEnd, sfxOpt);
+    case "douDizhu":
+      return new imports.DouDizhuScene(playSpec, onEnd, sfxOpt);
+    case "breakout":
+      return new imports.BreakoutScene(playSpec, onEnd, sfxOpt);
+    case "merge2048":
+      return new imports.Merge2048Scene(playSpec, onEnd, sfxOpt);
     case "arena":
     default:
       return new imports.PlayScene(playSpec, onEnd, sfxOpt);
@@ -171,6 +282,20 @@ export function expectedPhaserSceneName(spec: GameSpec): string {
     chess: "ChessScene",
     customization: "CustomizationScene",
     strategy: "StrategyScene",
+    rhythm: "RhythmScene",
+    sports: "SportsScene",
+    card: "CardScene",
+    fighting: "FightingScene",
+    moba: "MobaScene",
+    horror: "HorrorScene",
+    mahjong: "MahjongScene",
+    tetris: "TetrisScene",
+    endlessRunner: "EndlessRunnerScene",
+    fruitNinja: "FruitNinjaScene",
+    mahjongSolitaire: "MahjongSolitaireScene",
+    douDizhu: "DouDizhuScene",
+    breakout: "BreakoutScene",
+    merge2048: "Merge2048Scene",
     agentic: "AgenticScene",
   };
   return map[family] ?? "PlayScene";

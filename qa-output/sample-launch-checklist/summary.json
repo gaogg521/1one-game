@@ -1,0 +1,162 @@
+{
+  "at": "2026-06-18T05:34:37.437Z",
+  "passCount": 14,
+  "total": 14,
+  "pass": true,
+  "rows": [
+    {
+      "sampleId": "number-merge-2048",
+      "title": "2048 Neon Merge",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "classic-xiangqi-board",
+      "title": "Chinese Xiangqi",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "classic-international-chess",
+      "title": "International Chess",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "temple-relic-runner",
+      "title": "Temple Relic Runner",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "zen-go-board",
+      "title": "Zen Go Board",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "jungle-animal-chess",
+      "title": "Jungle Animal Chess",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "smash-the-dummy",
+      "title": "Smash the Dummy",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "grow-a-garden",
+      "title": "Grow a Garden",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "color-bloom",
+      "title": "开心消消乐",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "gun-merge-3d-zombie-apocalypse",
+      "title": "Gun Merge 3D: Zombie Apocalypse",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "elastic-thief-2",
+      "title": "Elastic Thief 2",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "blade-defender-merge",
+      "title": "Blade Defender Merge",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "pottery-master-3d",
+      "title": "Pottery Master 3D",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    },
+    {
+      "sampleId": "crashy-roads",
+      "title": "Crashy Roads",
+      "coverOk": true,
+      "spritesOk": true,
+      "bgOk": true,
+      "parityOk": true,
+      "hooksOk": true,
+      "ok": true,
+      "notes": []
+    }
+  ]
+}

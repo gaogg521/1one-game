@@ -50,6 +50,7 @@ export type RuntimeSecretsPayload = {
   geminiApiKey?: string;
   geminiBaseUrl?: string;
   anthropicApiKey?: string;
+  replicateApiKey?: string;
   models?: RuntimeModelsOverride;
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
@@ -61,7 +62,8 @@ export type RuntimeSecretField =
   | "openaiUserAgent"
   | "geminiApiKey"
   | "geminiBaseUrl"
-  | "anthropicApiKey";
+  | "anthropicApiKey"
+  | "replicateApiKey";
 
 export type RuntimeConfigPublicView = {
   updatedAt: string | null;
@@ -74,6 +76,7 @@ export type RuntimeConfigPublicView = {
     geminiApiKey: string | null;
     geminiBaseUrl: string | null;
     anthropicApiKey: string | null;
+    replicateApiKey: string | null;
   };
   models: {
     gameTextPrimary: string;
@@ -154,6 +157,7 @@ function mergePayload(db: RuntimeSecretsPayload): RuntimeSecretsPayload {
     geminiApiKey: db.geminiApiKey ?? envTrim("GEMINI_API_KEY"),
     geminiBaseUrl: db.geminiBaseUrl ?? envTrim("GEMINI_BASE_URL"),
     anthropicApiKey: db.anthropicApiKey ?? envTrim("ANTHROPIC_API_KEY"),
+    replicateApiKey: db.replicateApiKey ?? envTrim("REPLICATE_API_TOKEN"),
     models,
   };
 }
@@ -210,6 +214,8 @@ export function applyRuntimeToProcessEnv(resolved: ResolvedRuntime): void {
 
   if (anthropic?.apiKey) set("ANTHROPIC_API_KEY", anthropic.apiKey);
   else set("ANTHROPIC_API_KEY", payload.anthropicApiKey);
+
+  set("REPLICATE_API_TOKEN", payload.replicateApiKey);
 }
 
 export async function loadRuntimeConfig(): Promise<ResolvedRuntime> {
@@ -294,6 +300,7 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
       geminiApiKey: secretSource("geminiApiKey", dbPayload, payload),
       geminiBaseUrl: secretSource("geminiBaseUrl", dbPayload, payload),
       anthropicApiKey: secretSource("anthropicApiKey", dbPayload, payload),
+      replicateApiKey: secretSource("replicateApiKey", dbPayload, payload),
     },
     secrets: {
       openaiApiKey: maskSecret(payload.openaiApiKey),
@@ -302,6 +309,7 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
       geminiApiKey: maskSecret(payload.geminiApiKey),
       geminiBaseUrl: payload.geminiBaseUrl ?? null,
       anthropicApiKey: maskSecret(payload.anthropicApiKey),
+      replicateApiKey: maskSecret(payload.replicateApiKey),
     },
     models: {
       gameTextPrimary: models.gameTextPrimary ?? PRODUCT.models.gameTextPrimary,

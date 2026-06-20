@@ -24,6 +24,7 @@ import {
 import { formatImageGenElapsed } from "@/lib/format-duration";
 import {
   ensureComicCharacterSheetsForRender,
+  validateCharacterSheetUrls,
 } from "@/lib/comic-character-sheet-gen";
 import { getComicPanelGenConcurrency } from "@/lib/model-config";
 import { PRODUCT } from "@/lib/product-config";
@@ -162,6 +163,41 @@ export async function renderComicPanels(
       doc.characterSheetUrls = ensured.urls;
     }
   }
+
+  // ★ 验证参考图 URL 有效性，失效的 URL 自动移除
+  if (charSheets.length > 0 && doc.characterRoster && !onlyMissing) {
+    const validation = await validateCharacterSheetUrls(
+      doc.characterRoster,
+      Math.min(4, charSheets.length),
+      5000,
+    );
+
+    const invalidIds = Array.from(validation.entries())
+      .filter(([_, v]) => !v.valid)
+      .map(([id]) => id);
+
+    if (invalidIds.length > 0) {
+      const validCharSheets = charSheets.filter((url) => {
+        const match = url.match(/comic-char-sheets\/[\w-]+-(\w+)\.png/);
+        return match && !invalidIds.includes(match[1]!);
+      });
+
+      opts?.onProgress?.({
+        type: "start",
+        total: flat.length,
+        message: pm("charSheetValidationWarning", {
+          invalid: String(invalidIds.length),
+          valid: String(validCharSheets.length),
+        }),
+      });
+
+      charSheets = validCharSheets;
+      if (doc.characterSheetUrls) {
+        doc.characterSheetUrls = validCharSheets;
+      }
+    }
+  }
+
   for (const url of charSheets) {
     if (!styleRefUrls.includes(url)) styleRefUrls.push(url);
   }

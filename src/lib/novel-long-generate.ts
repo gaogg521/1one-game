@@ -140,8 +140,11 @@ export async function streamLongNovelBody(params: {
   resume?: LongNovelResumeInput;
   onSegmentCheckpoint?: (opts: { index: number; content: string; meta: NovelGenerationMeta }) => Promise<void>;
   onPipelineReady?: (meta: NovelGenerationMeta) => Promise<void>;
+  /** P1 修复：外部 AbortSignal，客户端断连时取消 LLM fetch */
+  signal?: AbortSignal;
 }): Promise<LongNovelGenerateResult> {
   const { model, promptTrim, titleTrim, plan, lengthTier, emit, resume } = params;
+  const signal = params.signal;
   const uiLocale = params.uiLocale ?? "zh-Hans";
   const polish = params.polish ?? resume?.polish ?? LONG_NOVEL_PRODUCT.polishAfterSegment;
 
@@ -240,6 +243,7 @@ export async function streamLongNovelBody(params: {
           });
         }
       : undefined,
+    signal: params.signal,
   });
 
   if (getRemainingChapterPlan(chapterPlan, content).length > 0) {
@@ -312,6 +316,8 @@ export async function writeNovelSegmentSlices(params: {
   startSegmentIndex?: number;
   onSegmentDone?: (index: number, content: string) => Promise<void>;
   requireAllPlannedChapters?: boolean;
+  /** P1 修复：外部 AbortSignal */
+  signal?: AbortSignal;
 }): Promise<{ content: string }> {
   const {
     model,
@@ -377,6 +383,15 @@ export async function writeNovelSegmentSlices(params: {
       ? getNovelContinuationSystemPrompt(outputLocale)
       : getNovelSystemPrompt(lengthTier, undefined, promptTrim);
 
+    // 产品优化：段开始时 emit 进度细分，让用户知道当前段/总段 + 本章号
+    emit({
+      step: "segment_start",
+      segment: i + 1,
+      totalSegments,
+      chapters: slice.chapters.map((c) => c.num),
+      message: `正在写第 ${i + 1}/${totalSegments} 段（第 ${slice.chapters[0]?.num}-${slice.chapters[slice.chapters.length - 1]?.num} 章）`,
+    });
+
     let segmentText = "";
     const contentBeforeSegment = content;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -389,6 +404,7 @@ export async function writeNovelSegmentSlices(params: {
           temperature: attempt === 1 ? 0.82 : 0.75,
           maxTokens: segmentMaxTokens,
           timeoutMs: segmentTimeout,
+          signal: params.signal,
         },
         lengthTier,
       )) {
@@ -397,7 +413,11 @@ export async function writeNovelSegmentSlices(params: {
       }
 
       segmentText = segmentText.trim();
-      if (!segmentText) continue;
+      if (!segmentText) {
+        // M4 修复：空输出直接 continue，attempt===3 时无需 merge（避免空字符串合并浪费）
+        if (attempt === 3) break;
+        continue;
+      }
 
       segmentText = normalizeSegmentToChapterPlan(segmentText, slice.chapters, outputLocale);
       const trial = mergeNovelChapterContents(content, segmentText, outputLocale);

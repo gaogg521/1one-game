@@ -22,16 +22,32 @@ import { PhysicsScene } from "@/game/engine/PhysicsScene";
 import { ChessScene } from "@/game/engine/ChessScene";
 import { CustomizationScene } from "@/game/engine/CustomizationScene";
 import { StrategyScene } from "@/game/engine/StrategyScene";
+import { RhythmScene } from "@/game/engine/RhythmScene";
+import { SportsScene } from "@/game/engine/SportsScene";
+import { CardScene } from "@/game/engine/CardScene";
+import { FightingScene } from "@/game/engine/FightingScene";
+import { MobaScene } from "@/game/engine/MobaScene";
+import { HorrorScene } from "@/game/engine/HorrorScene";
+import { MahjongScene } from "@/game/engine/MahjongScene";
+import { TetrisScene } from "@/game/engine/TetrisScene";
+import { EndlessRunnerScene } from "@/game/engine/EndlessRunnerScene";
+import { FruitNinjaScene } from "@/game/engine/FruitNinjaScene";
+import { MahjongSolitaireScene } from "@/game/engine/MahjongSolitaireScene";
+import { DouDizhuScene } from "@/game/engine/DouDizhuScene";
+import { BreakoutScene } from "@/game/engine/BreakoutScene";
+import { Merge2048Scene } from "@/game/engine/Merge2048Scene";
 import { AgenticScene } from "@/game/engine/AgenticScene";
 import { createPhaserSceneForSpec } from "@/lib/game-templates/runtime";
 import { resolveRuntimeAssets } from "@/lib/assets/asset-runtime-resolver";
 import { readAssetManifestFromSession } from "@/lib/assets/asset-manifest-session.client";
 import { GameSoundscape } from "@/game/audio/gameSoundscape";
-import { thematicRootFrequencyHz } from "@/lib/cohesive-presentation";
+import { thematicRootFrequencyHz, resolveAssetStyle } from "@/lib/cohesive-presentation";
 import { bindAudioBootGestures, buildSceneCohesion } from "@/lib/scene-experience";
+import { setSfxPack } from "@/game/audio/webBleeps";
 
 import type { RunnerLeaderboardSnapshot } from "@/lib/runner-leaderboard";
 import type { RunnerRunRecap } from "@/lib/runner-leaderboard";
+import { getDifficultyBias } from "@/game/engine/win-rate-guard";
 
 export type PhaserEndPayload = {
   score: number;
@@ -53,6 +69,11 @@ export type CreatePhaserGameOptions = {
   promptHint?: string;
   /** OpenGame Browser Bench：保留 agenticModule，不 strip template-first normalize */
   preserveAgenticModule?: boolean;
+  /**
+   * 创作台预览模式：游戏结束时自动重启而非显示结算画面。
+   * onEnd 回调不会被调用，让玩家持续观察游戏效果。
+   */
+  previewMode?: boolean;
 };
 
 export type PhaserGameHandle = {
@@ -81,6 +102,20 @@ export function createPhaserGame(
       ? spec
       : canonicalSpecForPlay(spec, promptHint, uiLocale, opts?.projectId),
   );
+  // Win Rate Guard: apply difficulty bias from prior play history
+  if (!opts?.previewMode) {
+    const bias = getDifficultyBias(specPlay.templateId);
+    if (bias !== 0 && specPlay.gameplay) {
+      const g = specPlay.gameplay as Record<string, unknown>;
+      // bias > 0 → too hard → reduce hazard speed, increase lives/grace
+      // bias < 0 → too easy → increase hazard speed
+      if (typeof g.hazardSpeed === "number") g.hazardSpeed = Math.round(g.hazardSpeed * (1 - bias * 0.5));
+      if (typeof g.enemySpeed === "number") g.enemySpeed = Math.round(g.enemySpeed * (1 - bias * 0.5));
+      if (typeof g.spawnRate === "number") g.spawnRate = Math.max(0.5, (g.spawnRate as number) * (1 + bias * 0.4));
+      if (bias > 0.1 && typeof g.lives === "number") g.lives = Math.min((g.lives as number) + 1, 7);
+    }
+  }
+
   const assetProjectId = resolveAssetProjectId(specPlay, opts?.projectId);
   const canonicalBackgroundUrl = assetProjectId ? `/game-bg/${assetProjectId}.png` : null;
   const presentation = buildSceneCohesion(specPlay);
@@ -96,10 +131,69 @@ export function createPhaserGame(
     presentation.musicProfile,
     thematicRootFrequencyHz(specPlay.theme),
     specPlay.director?.intensity ?? 0.55,
-    { blocky: blockyAdventure, templateId: specPlay.templateId },
+    { blocky: blockyAdventure, templateId: specPlay.templateId, projectId: opts?.projectId },
   );
 
-  const scene = createPhaserSceneForSpec(specPlay, onEnd, ref, soundscape, {
+  // SFX 调色（按 templateId 优先，再按 assetStyle / musicProfile 决定 osc 波形偏好和反射尾比例）
+  const sfxStyle = resolveAssetStyle(specPlay);
+  const templateId = specPlay.templateId;
+  setSfxPack(
+    // 按模板类型第一优先级
+    templateId === "towerDefense" || templateId === "strategy"
+      ? "pulse"           // 节奏感强、有层次的防御类
+      : templateId === "platformer" || templateId === "coaster"
+        ? "blocky"        // 横版跳跃/过山车保持 8-bit 感
+        : templateId === "farming" || templateId === "puzzle"
+          ? "organic"     // 农场/消除偏舒缓
+          : templateId === "chess"
+            ? "minimal"   // 棋类极简
+            : templateId === "rhythm"
+              ? "chime"   // 节奏音游清脆
+              : templateId === "sports"
+                ? "whistle" // 体育哨声
+                : templateId === "card"
+                  ? "shuffle" // 卡牌翻动
+                  : templateId === "fighting"
+                    ? "impact" // 格斗打击
+                    : templateId === "moba"
+                      ? "laser" // MOBA 激光
+                      : templateId === "horror"
+                        ? "drone" // 恐怖低沉
+                        // 以下按 assetStyle / musicProfile 细化
+                        : sfxStyle === "blocky-pixel"
+                          ? "blocky"
+                          : sfxStyle === "neon-cyber" || sfxStyle === "bullet-hell"
+                            ? "neon"
+                            : sfxStyle === "nature-organic" || sfxStyle === "wuxia-flight" || sfxStyle === "paper-craft"
+                              ? "organic"
+                              : presentation.musicProfile === "minimal"
+                    ? "minimal"
+                    : presentation.musicProfile === "pulse"
+                      ? "pulse"
+                      : "arcade",
+  );
+
+  // 预览模式：游戏结束时自动重启，不触发结算 overlay
+  // 使用 ref 对象绕过 forward-declaration 限制
+  const gameRef = { current: null as Phaser.Game | null };
+  const effectiveOnEnd = opts?.previewMode
+    ? (_r: PhaserEndPayload) => {
+        // 延迟 800ms 让死亡动画播完，然后重启所有活动场景
+        window.setTimeout(() => {
+          try {
+            const g = gameRef.current;
+            if (!g) return;
+            g.scene.getScenes(true).forEach((s) => {
+              g.scene.start(s.sys.settings.key as string);
+            });
+          } catch {
+            // game 已销毁，忽略
+          }
+        }, 800);
+      }
+    : onEnd;
+
+  const scene = createPhaserSceneForSpec(specPlay, effectiveOnEnd, ref, soundscape, {
     PlayScene,
     PlatformerScene,
     TowerDefenseScene,
@@ -111,6 +205,20 @@ export function createPhaserGame(
     ChessScene,
     CustomizationScene,
     StrategyScene,
+    RhythmScene,
+    SportsScene,
+    CardScene,
+    FightingScene,
+    MobaScene,
+    HorrorScene,
+    MahjongScene,
+    TetrisScene,
+    EndlessRunnerScene,
+    FruitNinjaScene,
+    MahjongSolitaireScene,
+    DouDizhuScene,
+    BreakoutScene,
+    Merge2048Scene,
     AgenticScene,
   });
   scene.backgroundUrl = assets.backgroundUrl ?? null;
@@ -148,6 +256,7 @@ export function createPhaserGame(
   } as Phaser.Types.Core.GameConfig;
 
   const game = new Phaser.Game(config);
+  gameRef.current = game;
   registerPhaserQaGame(game);
 
   /** 同步 Scene 兜底；异步 Scene 在 bootstrap 完成后会再次 mark */

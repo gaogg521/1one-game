@@ -9,33 +9,35 @@ var _camera: Camera3D
 var _bullets_root: Node3D
 var _enemies_root: Node3D
 var _enemy_bullets_root: Node3D
-var _hud := GameHud.new()
-var _director := GameDirector.new()
-var _score := 0
-var _lives := 3
-var _wave := 0
-var _win_score := 50
-var _fire_cd := 0.0
-var _enemy_fire_cd := 0.0
-var _spawn_cd := 0.0
-var _enemies_left := 0
-var _wave_clearing := false
-var _between_waves_until := 0.0
-var _ended := false
-var _invuln := 0.0
-var _player_speed := 5.6
-var _bullet_speed := 10.4
-var _game_time := 0.0
-var _score_mult := 1.0
-var _burst_until := 0.0
-var _shots_fired := 0
-var _bounds_x := Vector2(-7.2, 7.2)
-var _player_z := 4.4
-var _orbit_mode := false
-var _orbit_angle := -PI * 0.5
-var _orbit_speed := 0.0018
-var _planet_center := Vector3.ZERO
-var _sniper_scope := false
+var _hud = GameHud.new()
+var _director = GameDirector.new()
+var _score = 0
+var _lives = 3
+var _wave = 0
+var _win_score = 50
+var _fire_cd = 0.0
+var _enemy_fire_cd = 0.0
+var _spawn_cd = 0.0
+var _enemies_left = 0
+var _wave_clearing = false
+var _between_waves_until = 0.0
+var _ended = false
+var _invuln = 0.0
+var _player_speed = 5.6
+var _bullet_speed = 10.4
+var _game_time = 0.0
+var _score_mult = 1.0
+var _burst_until = 0.0
+var _shots_fired = 0
+var _bounds_x = Vector2(-7.2, 7.2)
+var _player_z = 4.4
+var _orbit_mode = false
+var _orbit_angle = -PI * 0.5
+var _orbit_speed = 0.0018
+var _planet_center = Vector3.ZERO
+var _sniper_scope = false
+var _particle_mult = 1.0
+var _player_mat: Material
 
 
 func _ready() -> void:
@@ -44,7 +46,8 @@ func _ready() -> void:
 	RuntimeReferenceRegistry.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
-	var sp := GameSpecData.sample_play_profile().get("shooter", {})
+	_particle_mult = GameSpecData.particle_intensity_mult()
+	var sp = GameSpecData.sample_play_profile().get("shooter", {})
 	if sp is Dictionary:
 		_orbit_mode = bool(sp.get("orbitChopper", false))
 		_sniper_scope = bool(sp.get("sniperScope", false))
@@ -88,13 +91,13 @@ func _build_world() -> void:
 	_world.add_child(_player)
 	if _orbit_mode:
 		_planet_center = Vector3(0, 0.6, 0)
-		var planet := MeshInstance3D.new()
-		var sph := SphereMesh.new()
+		var planet = MeshInstance3D.new()
+		var sph = SphereMesh.new()
 		sph.radius = 2.2
 		sph.height = 4.4
 		planet.mesh = sph
 		planet.position = _planet_center
-		var pmat := StandardMaterial3D.new()
+		var pmat = StandardMaterial3D.new()
 		pmat.albedo_color = Color("#22c55e")
 		planet.material_override = pmat
 		_world.add_child(planet)
@@ -102,17 +105,17 @@ func _build_world() -> void:
 
 
 func _add_ground() -> void:
-	var floor_body := StaticBody3D.new()
-	var col := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
+	var floor_body = StaticBody3D.new()
+	var col = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
 	shape.size = Vector3(Runtime3DEnv.MAP_W * Runtime3DEnv.SCALE, 0.2, Runtime3DEnv.MAP_H * Runtime3DEnv.SCALE)
 	col.shape = shape
 	floor_body.add_child(col)
-	var vis := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var vis = MeshInstance3D.new()
+	var mesh = BoxMesh.new()
 	mesh.size = shape.size
 	vis.mesh = mesh
-	var mat := StandardMaterial3D.new()
+	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color("#141c28")
 	vis.material_override = mat
 	floor_body.add_child(vis)
@@ -121,26 +124,23 @@ func _add_ground() -> void:
 
 
 func _make_player() -> CharacterBody3D:
-	var body := CharacterBody3D.new()
+	var body = CharacterBody3D.new()
 	body.position = Runtime3DEnv.px_to_world(Vector2(400, 520), 0.55)
-	var col := CollisionShape3D.new()
-	var box := BoxShape3D.new()
+	var col = CollisionShape3D.new()
+	var box = BoxShape3D.new()
 	box.size = Vector3(0.7, 0.35, 0.9)
 	col.shape = box
 	body.add_child(col)
-	var vis := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var vis = MeshInstance3D.new()
+	var mesh = BoxMesh.new()
 	mesh.size = box.size
 	vis.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = GameSpecData.theme_color("playerColor", Color.CYAN)
-	mat.emission_enabled = true
-	mat.emission = mat.albedo_color * 0.25
-	vis.material_override = mat
+	_player_mat = GameMaterials.make_from_pack(GameSpecData.shader_pack(), GameSpecData.theme_color("playerColor", Color.CYAN))
+	vis.material_override = _player_mat
 	body.add_child(vis)
-	var ref := RuntimeReferenceRegistry.protagonist_texture
+	var ref = RuntimeReferenceRegistry.protagonist_texture
 	if ref:
-		var spr := Sprite3D.new()
+		var spr = Sprite3D.new()
 		spr.texture = ref
 		spr.pixel_size = 0.01
 		spr.position = Vector3(0, 0.2, 0.35)
@@ -162,8 +162,8 @@ func _physics_process(delta: float) -> void:
 	if _ended or _player == null:
 		return
 	_game_time += delta
-	var progress := clampf(float(_score) / float(maxi(_win_score, 1)), 0.0, 1.0)
-	var d_out := _director.tick(progress, delta)
+	var progress = clampf(float(_score) / float(maxi(_win_score, 1)), 0.0, 1.0)
+	var d_out = _director.tick(progress, delta)
 	if _director.active_type == "coinRain" or _game_time < _director.coin_rain_until:
 		_score_mult = 2.0
 	else:
@@ -207,12 +207,12 @@ func _physics_process(delta: float) -> void:
 
 func _move_player(_delta: float) -> void:
 	if _orbit_mode:
-		var steer := Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
+		var steer = Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
 		_orbit_speed = clampf(_orbit_speed + steer.x * _delta * 0.0012, 0.0009, 0.0034)
 		_orbit_angle += _orbit_speed * _delta * 60.0
 		_sync_orbit_player()
 		return
-	var dir := Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
+	var dir = Input.get_vector("move_left", "move_right", "ui_left", "ui_right")
 	_player.velocity = Vector3(dir.x * _player_speed, 0.0, 0.0)
 	_player.move_and_slide()
 	_player.position.x = clampf(_player.position.x, _bounds_x.x, _bounds_x.y)
@@ -222,8 +222,8 @@ func _move_player(_delta: float) -> void:
 func _sync_orbit_player() -> void:
 	if _player == null:
 		return
-	var rx := 2.55
-	var rz := 1.65
+	var rx = 2.55
+	var rz = 1.65
 	_player.position = _planet_center + Vector3(cos(_orbit_angle) * rx, 0.35, sin(_orbit_angle) * rz)
 	_player.rotation.y = _orbit_angle + PI * 0.5
 	_player.velocity = Vector3.ZERO
@@ -248,10 +248,10 @@ func _player_fire_interval() -> float:
 
 
 func _fire_player_salvo() -> void:
-	var col := GameSpecData.theme_color("collectibleColor", Color.YELLOW)
-	var rapid := _is_rapid_fire()
-	var speed := _bullet_speed * (1.35 if rapid else 1.0)
-	var origin := _player.position + Vector3(0, 0.2, -0.45)
+	var col = GameSpecData.theme_color("collectibleColor", Color.YELLOW)
+	var rapid = _is_rapid_fire()
+	var speed = _bullet_speed * (1.35 if rapid else 1.0)
+	var origin = _player.position + Vector3(0, 0.2, -0.45)
 	var spreads: Array[float] = [0.0]
 	if rapid:
 		spreads = [-0.36, 0.0, 0.36]
@@ -273,20 +273,20 @@ func _spawn_boss_enemy() -> void:
 
 
 func _spawn_enemy(hp: int = 2, speed_mul: float = 1.0, scale_mul: float = 1.0) -> void:
-	var spawn_px := Vector2(randf_range(60.0, 740.0), -20.0)
-	var node := Node3D.new()
+	var spawn_px = Vector2(randf_range(60.0, 740.0), -20.0)
+	var node = Node3D.new()
 	node.position = Runtime3DEnv.px_to_world(spawn_px, 0.55)
-	var vis := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var vis = MeshInstance3D.new()
+	var mesh = BoxMesh.new()
 	mesh.size = Vector3(0.65 * scale_mul, 0.35 * scale_mul, 0.8 * scale_mul)
 	vis.mesh = mesh
-	var mat := StandardMaterial3D.new()
+	var mat = StandardMaterial3D.new()
 	mat.albedo_color = GameSpecData.theme_color("hazardColor", Color.ORANGE_RED)
 	vis.material_override = mat
 	node.add_child(vis)
-	var mt := RuntimeReferenceRegistry.next_monster_texture()
+	var mt = RuntimeReferenceRegistry.next_monster_texture()
 	if mt:
-		var spr := Sprite3D.new()
+		var spr = Sprite3D.new()
 		spr.texture = mt
 		spr.pixel_size = 0.009 * scale_mul
 		spr.position = Vector3(0, 0.2, 0)
@@ -307,7 +307,7 @@ func _tick_enemies(delta: float) -> void:
 			continue
 		var d: Dictionary = c.get_meta("data", {})
 		c.position.z += float(d.get("speed", 1.8)) * delta
-		var flat := Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
+		var flat = Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
 		if _invuln <= 0.0 and flat.length() < 0.56:
 			_hurt()
 		if c.position.z > 6.4:
@@ -318,25 +318,28 @@ func _tick_enemies(delta: float) -> void:
 
 
 func _spawn_enemy_bullet(from: Vector3) -> void:
-	var to := _player.position - from
+	var to = _player.position - from
 	to.y = 0.0
-	var dir := to.normalized()
+	var dir = to.normalized()
 	_make_bullet(from, dir * 5.2, Color(1, 0.35, 0.35), false)
 
 
 func _make_bullet(pos: Vector3, vel: Vector3, col: Color, friendly: bool) -> void:
-	var n := Node3D.new()
+	var n = Node3D.new()
 	n.position = pos
-	var vis := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var vis = MeshInstance3D.new()
+	var mesh = BoxMesh.new()
 	mesh.size = Vector3(0.12, 0.12, 0.28)
 	vis.mesh = mesh
-	var mat := StandardMaterial3D.new()
+	var mat = StandardMaterial3D.new()
 	mat.albedo_color = col
 	mat.emission_enabled = true
 	mat.emission = col * 0.3
 	vis.material_override = mat
 	n.add_child(vis)
+	# 子弹拖尾粒子（friendly 子弹挂常驻拖尾；enemy 子弹简化）
+	if friendly:
+		GameParticles.attach(n, "trail_bullet", col, _particle_mult * 0.6, false)
 	n.set_meta("b", {"vel": vel, "friendly": friendly})
 	if friendly:
 		_bullets_root.add_child(n)
@@ -361,26 +364,28 @@ func _move_bullet_node(c: Node, delta: float, friendly: bool) -> void:
 	c.position += b.get("vel", Vector3.ZERO) as Vector3 * delta
 	if friendly:
 		for e in _enemies_root.get_children():
-			var flat := Vector2(c.position.x - e.position.x, c.position.z - e.position.z)
+			var flat = Vector2(c.position.x - e.position.x, c.position.z - e.position.z)
 			if flat.length() < 0.44:
 				var d: Dictionary = e.get_meta("data", {})
 				d["hp"] = int(d.get("hp", 1)) - 1
 				e.set_meta("data", d)
 				if int(d.get("hp", 0)) <= 0:
-					var is_boss := bool(d.get("is_boss", false))
+					var is_boss = bool(d.get("is_boss", false))
 					_score += int((2 if is_boss else 1) * _score_mult)
 					GameAudio.play_bleep(GameBleeps.Kind.EXPLODE if not is_boss else GameBleeps.Kind.WIN)
-					var burst_n := 14 if is_boss else 8
-					if _camera:
-						GameJuice.burst(self, _camera.unproject_position(e.global_position), GameSpecData.theme_color("hazardColor", Color.ORANGE), burst_n)
+					# 深度版：GPUParticles3D 替代 2D ColorRect 爆散
+					var burst_name = "burst_death" if is_boss else "burst_hit"
+					GameParticles.spawn(_world, e.global_position, burst_name, GameSpecData.theme_color("hazardColor", Color.ORANGE), _particle_mult * (2.0 if is_boss else 1.0))
 					if is_boss:
+						# Boss 死亡：dissolve shader 动画 + 强化震屏
+						_dissolve_node(e)
 						GameJuice.flash_background(self, Color(1, 0.7, 0.2), 0.22)
 						GameJuice.shake_node(self, 5.0, 0.12)
 					e.queue_free()
 				c.queue_free()
 				return
 	else:
-		var flat_p := Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
+		var flat_p = Vector2(c.position.x - _player.position.x, c.position.z - _player.position.z)
 		if _invuln <= 0.0 and flat_p.length() < 0.4:
 			_hurt()
 			c.queue_free()
@@ -402,8 +407,34 @@ func _hurt() -> void:
 	GameAudio.play_bleep(GameBleeps.Kind.HIT)
 	GameJuice.shake_node(self, 7.0, 0.15)
 	GameJuice.flash_background(self, Color(1, 0.35, 0.35), 0.28)
+	# player 受击 shader 闪白
+	if _player_mat:
+		GameMaterials.flash(_player_mat, 3.0)
+		GameMaterials.drop_intensity(_player_mat, 3.0, 1.0, 0.2, self)
+	if _player:
+		GameParticles.spawn(_world, _player.position + Vector3(0, 0.2, 0), "burst_hit", Color(1, 0.4, 0.4), _particle_mult)
 	if _lives <= 0:
 		_end(false)
+
+
+## Boss 死亡 dissolve 动画：替换 mesh material 为 dissolve shader + tween dissolve_amount
+func _dissolve_node(target: Node3D) -> void:
+	if target == null:
+		return
+	var vis = target.get_child_or_null(0) as MeshInstance3D
+	if vis == null:
+		return
+	var hazard_col = GameSpecData.theme_color("hazardColor", Color.ORANGE_RED)
+	var mat = GameMaterials.make_from_pack("dissolve", hazard_col, 1.5)
+	vis.material_override = mat
+	GameMaterials.set_dissolve(mat, 0.0)
+	var tw = create_tween()
+	tw.tween_method(
+		func(v: float) -> void: GameMaterials.set_dissolve(mat, v),
+		0.0,
+		1.0,
+		1.0,
+	)
 
 
 func _end(won: bool) -> void:
@@ -414,9 +445,9 @@ func _end(won: bool) -> void:
 func _draw() -> void:
 	if not _sniper_scope or _ended:
 		return
-	var rect := get_viewport_rect()
-	var center := rect.size * 0.5
-	var radius := minf(rect.size.x, rect.size.y) * 0.31
+	var rect = get_viewport_rect()
+	var center = rect.size * 0.5
+	var radius = minf(rect.size.x, rect.size.y) * 0.31
 	draw_arc(center, radius, 0.0, TAU, 72, Color(0.29, 0.87, 0.5, 0.55), 3.0)
 	draw_circle(center, 4.0, Color(0.93, 0.27, 0.27, 0.92))
 

@@ -43,6 +43,7 @@ import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
 import { PRODUCT } from "@/lib/product-config";
 import { CreativeBriefPanel } from "@/components/CreativeBriefPanel";
 import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
+import { CreateQuickStart } from "@/components/CreateQuickStart";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
@@ -71,9 +72,11 @@ const STEP_PROGRESS: Record<string, number> = {
   ingest: 0.11,
   handshake: 0.14,
   start: 0.16,
-  brief: 0.2,
-  prep: 0.18,
-  running: 0.58,
+  brief: 0.22,
+  prep: 0.28,
+  spec_draft: 0.42,   // LLM 生成规格中
+  running: 0.58,      // 兜底进度（无明确 step 时）
+  enriching: 0.72,    // 规格完成，丰化资产中
   recap: 0.9,
   done: 1,
   error: 1,
@@ -158,12 +161,20 @@ async function checkSpriteFile(url: string): Promise<boolean> {
 }
 
 async function waitForSprites(projectId: string, timeoutMs = 300_000, intervalMs = 4000): Promise<boolean> {
-  /** 试玩最低集：主角 + 障碍 + 收集物；power/boss 后台补齐 */
+  /** 试玩最低集：主角 + 障碍 + 收集物；SVG 优先（text LLM 快）或 PNG 均可 */
   const coreKinds = ["player", "hazard", "gem"];
+  const base = `/game-sprites/${projectId}`;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const results = await Promise.all(
-      coreKinds.map((k) => checkSpriteFile(`/game-sprites/${projectId}/${k}.png`)),
+      coreKinds.map(async (k) => {
+        // Accept either SVG (fast, text LLM) or PNG (image gen)
+        const [svg, png] = await Promise.all([
+          checkSpriteFile(`${base}/${k}.svg`),
+          checkSpriteFile(`${base}/${k}.png`),
+        ]);
+        return svg || png;
+      }),
     );
     if (results.every(Boolean)) return true;
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -225,6 +236,15 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     enhanceWarning?: string;
     fallbackReason?: string;
     orchestrationTrace?: OrchestrationRunTrace;
+    /** AI 评审员评分 + 建议 */
+    criticVerdict?: {
+      score: number;
+      strongest: string;
+      weakest: string;
+      weakestReason: string;
+      suggestions: string[];
+      summary: string;
+    };
   } | null>(null);
   const [streamMsg, setStreamMsg] = useState<string | null>(null);
   const [variants, setVariants] = useState<VariantRow[] | null>(null);
@@ -496,6 +516,25 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         const block = (data.text ?? "").trim();
         if (Array.isArray(data.referenceAssets) && data.referenceAssets.length > 0) {
           saveReferenceHandlesToSession(data.referenceAssets);
+          // G1: 结构化分析第一张参考图，自动填充 templateHint
+          const firstRef = data.referenceAssets[0];
+          if (firstRef?.refId && visionOn) {
+            try {
+              const briefRes = await fetch("/api/analyze-ref-image", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refId: firstRef.refId }),
+              });
+              if (briefRes.ok) {
+                const brief = await briefRes.json() as { suggestedTemplateId?: string | null; confidence?: string };
+                if (brief.suggestedTemplateId && brief.confidence !== "low" && !templateHint) {
+                  setTemplateHint(brief.suggestedTemplateId);
+                }
+              }
+            } catch {
+              /* 非关键步骤，静默失败 */
+            }
+          }
         }
         if (!block) {
           return { ok: false, error: t("errors.noMergeText") };
@@ -735,6 +774,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               orchestrationTrace?: unknown;
               creativeBrief?: unknown;
               briefSummary?: unknown;
+              criticVerdict?: unknown;
             };
             const otRaw = d.orchestrationTrace;
             let orchestrationTrace: OrchestrationRunTrace | undefined;
@@ -773,6 +813,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               templateHint: typeof d.templateHint === "string" ? d.templateHint : undefined,
               enhanceWarning: typeof d.enhanceWarning === "string" ? d.enhanceWarning : undefined,
               orchestrationTrace,
+              criticVerdict: (() => {
+                const c = d.criticVerdict;
+                if (!c || typeof c !== "object") return undefined;
+                const obj = c as Record<string, unknown>;
+                const score = typeof obj.score === "number" ? obj.score : null;
+                if (score === null) return undefined;
+                return {
+                  score,
+                  strongest: String(obj.strongest ?? ""),
+                  weakest: String(obj.weakest ?? ""),
+                  weakestReason: String(obj.weakestReason ?? ""),
+                  suggestions: Array.isArray(obj.suggestions) ? (obj.suggestions as string[]) : [],
+                  summary: String(obj.summary ?? ""),
+                };
+              })(),
             });
           }
           if (ev.web && typeof ev.web === "object") {
@@ -1184,6 +1239,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         </header>
 
         <div className="flex flex-col gap-10">
+          <CreateQuickStart prompt={prompt} onPromptChange={setPrompt} locale={locale} />
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-5 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/80 px-1 py-2">
             <div className="flex flex-col gap-2">
@@ -1694,6 +1750,36 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                         {genDebug.fallbackReason ? (
                           <p className="mt-2 text-[11px] text-amber-200/90">{t("genEvidence.fallbackReason")}{genDebug.fallbackReason}</p>
                         ) : null}
+                        {genDebug.criticVerdict ? (
+                          <div
+                            className={`mt-3 rounded-xl border px-3 py-2 text-[11px] ${
+                              genDebug.criticVerdict.score >= 7.5
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                                : genDebug.criticVerdict.score >= 6
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                                  : "border-red-500/30 bg-red-500/10 text-red-200"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] font-semibold">
+                                AI 评审员 {genDebug.criticVerdict.score.toFixed(1)}/10
+                              </span>
+                              <span className="text-[11px] opacity-80">
+                                · 最弱：{genDebug.criticVerdict.weakest}
+                              </span>
+                            </div>
+                            {genDebug.criticVerdict.summary ? (
+                              <p className="mt-1 opacity-90">{genDebug.criticVerdict.summary}</p>
+                            ) : null}
+                            {genDebug.criticVerdict.suggestions.length ? (
+                              <ul className="mt-2 list-disc space-y-0.5 pl-4 opacity-85">
+                                {genDebug.criticVerdict.suggestions.slice(0, 3).map((s, i) => (
+                                  <li key={i}>{s}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {genDebug.provider || genDebug.llmMode ? (
                           <p className="mt-2 text-[11px] text-[var(--gc-text-faint)]">
                             LLM：{genDebug.provider ?? "?"} · {genDebug.llmMode ?? "?"}
@@ -1795,6 +1881,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                       key={`${variants ? `v-${variantIndex}` : "one-shot"}-px-${refPixelEpoch}`}
                       spec={spec}
                       promptHint={prompt}
+                      previewMode
                     />
                   }
                 />

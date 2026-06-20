@@ -1,4 +1,6 @@
 import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
+import { z } from "zod";
+import { logGenerationError } from "@/lib/generation-error-log";
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
@@ -70,8 +72,7 @@ import {
   finalizeDraftNovel,
   loadNovelGenerationResumeState,
   NOVEL_STATUS_DRAFT_GENERATING,
-  saveNovelGenerateCheckpoint,
-  updateDraftNovelContent,
+  saveNovelCheckpointAndContent,
 } from "@/lib/novel-generate-checkpoint";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
@@ -105,6 +106,26 @@ export async function POST(req: Request) {
     });
   }
 
+  // M2 修复：用 Zod schema 替代裸 as 断言，运行时校验请求体
+  const NovelRequestBodySchema = z.object({
+    prompt: z.string().optional(),
+    title: z.string().optional(),
+    lengthTier: z.string().optional(),
+    polish: z.boolean().optional(),
+    creativeBrief: z.unknown().optional(),
+    briefRevision: z.unknown().optional(),
+    novelGenreTag: z.string().optional(),
+    genreId: z.string().optional(),
+    childrenTargetAge: z.number().optional(),
+    resumeNovelId: z.string().optional(),
+  });
+  const bodyParsed = NovelRequestBodySchema.safeParse(json.body);
+  if (!bodyParsed.success) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "invalid_body", details: bodyParsed.error.issues.slice(0, 3) }),
+      { status: 400, headers: { "Content-Type": "application/json", ...ridHeaders(requestId) } },
+    );
+  }
   const {
     prompt,
     title,
@@ -116,18 +137,7 @@ export async function POST(req: Request) {
     genreId,
     childrenTargetAge: childrenTargetAgeRaw,
     resumeNovelId: resumeNovelIdRaw,
-  } = json.body as {
-    prompt?: string;
-    title?: string;
-    lengthTier?: string;
-    polish?: boolean;
-    creativeBrief?: unknown;
-    briefRevision?: NovelBriefUserRevision | ChildrenBriefUserRevision;
-    novelGenreTag?: string;
-    genreId?: string;
-    childrenTargetAge?: number;
-    resumeNovelId?: string;
-  };
+  } = bodyParsed.data;
   const normalizedGenreTag = (novelGenreTag ?? genreId)?.trim() || undefined;
   const resumeNovelId = resumeNovelIdRaw?.trim() || undefined;
   const genreTag = getNovelGenreTag(normalizedGenreTag);
@@ -219,6 +229,10 @@ export async function POST(req: Request) {
   const providerLabel = getActiveProvider();
 
   const encoder = new TextEncoder();
+  // M1 修复：AbortController——客户端断连时 abort，取消进行中的 LLM fetch
+  const abortController = new AbortController();
+  const abortSignal = abortController.signal;
+
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
@@ -324,7 +338,8 @@ export async function POST(req: Request) {
           let pipelineCompleteness:
             | Awaited<ReturnType<typeof streamPlannedNovelBody>>["completeness"]
             | undefined;
-          const ping = setInterval(() => send({ step: "ping" }), 15_000);
+          // P2 修复：ping 在 closed 后立即停（不只靠 send 内部守卫）
+          const ping = setInterval(() => { if (!closed) send({ step: "ping" }); }, 15_000);
           try {
             if (longPlan && draftNovelId) {
               const longResult = await streamLongNovelBody({
@@ -337,6 +352,7 @@ export async function POST(req: Request) {
                 uiLocale,
                 polish: Boolean(longPolish),
                 emit: send,
+                signal: abortSignal,
                 resume: resumeState
                   ? {
                       bible: resumeState.bible,
@@ -353,30 +369,37 @@ export async function POST(req: Request) {
                   await persistNovelGenerationMeta(draftNovelId!, meta);
                 },
                 onSegmentCheckpoint: async ({ index, content: partial, meta }) => {
-                  await updateDraftNovelContent(draftNovelId!, partial);
-                  await saveNovelGenerateCheckpoint(draftNovelId!, meta, {
-                    completedSegmentIndex: index,
-                    partialContent: partial,
-                    prompt: promptTrim,
-                    title: titleTrim,
-                    lengthTier,
-                    polish: Boolean(longPolish),
-                    plan: longPlan,
-                    updatedAt: new Date().toISOString(),
-                  });
-                  send({
-                    step: "checkpoint_saved",
-                    index: index + 1,
-                    length: partial.length,
-                    novelId: draftNovelId,
-                    message: progressNovelMessage(uiLocale, "batchSaved", { index: index + 1 }),
-                  });
+                  try {
+                    await saveNovelCheckpointAndContent(draftNovelId!, partial, meta, {
+                      completedSegmentIndex: index,
+                      partialContent: partial,
+                      prompt: promptTrim,
+                      title: titleTrim,
+                      lengthTier,
+                      polish: Boolean(longPolish),
+                      plan: longPlan,
+                      updatedAt: new Date().toISOString(),
+                    });
+                    send({
+                      step: "checkpoint_saved",
+                      index: index + 1,
+                      length: partial.length,
+                      novelId: draftNovelId,
+                      message: progressNovelMessage(uiLocale, "batchSaved", { index: index + 1 }),
+                    });
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.error(`[novel] checkpoint save failed novelId=${draftNovelId} index=${index}:`, msg);
+                    send({ step: "checkpoint_error", index: index + 1, message: msg });
+                  }
                 },
               });
               content = longResult.content;
               pipelineMeta = longResult.pipelineMeta;
 
               if (!longResult.completeness.ok) {
+                // Long 模式不做 cascade retry：已写的章节存在 checkpoint，
+                // 换模型从头生成会丢弃所有已写进度，不如直接报错让用户通过续写恢复。
                 send({
                   step: "model_short",
                   model,
@@ -385,8 +408,10 @@ export async function POST(req: Request) {
                   message: progressNovelMessage(uiLocale, "completenessFail", {
                     reason: longResult.completeness.reason,
                   }),
+                  novelId: draftNovelId,
+                  canResume: true,
                 });
-                continue;
+                break;
               }
 
               send({ step: "synopsis_start", message: progressNovelMessage(uiLocale, "synopsisStart") });
@@ -636,6 +661,7 @@ export async function POST(req: Request) {
         }
       } catch (e) {
         const message = e instanceof Error ? e.message : progressNovelMessage(uiLocale, "processError");
+        void logGenerationError({ contentType: "novel", prompt: promptTrim, error: e, ownerKey });
         send({ step: "error", message, ok: false, requestId });
       } finally {
         if (!closed) {
@@ -646,6 +672,16 @@ export async function POST(req: Request) {
             /* stream already closed by client */
           }
         }
+        // M1 修复：finally 中 abort 进行中的 LLM 调用（防客户端断连后资源泄漏）
+        if (!abortSignal.aborted) {
+          abortController.abort();
+        }
+      }
+    },
+    cancel() {
+      // M1 修复：ReadableStream cancel（客户端断连触发）时 abort LLM
+      if (!abortSignal.aborted) {
+        abortController.abort();
       }
     },
   });

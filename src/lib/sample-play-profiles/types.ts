@@ -75,6 +75,14 @@ export const SamplePlayProfileSchema = z.object({
       sniperScope: z.boolean().optional(),
     })
     .optional(),
+  /** 千人千面：从 prompt 派生的确定性指纹，驱动运行时程序化差异化 */
+  seed: z.number().min(0).max(1).optional(),
+  /** 推断的氛围（bright/dark/lively/calm/mysterious），影响视觉色调 */
+  mood: z.string().max(16).optional(),
+  /** 从 prompt 提取的主题词（最多 8 个），用于主题深度注入 */
+  themeWords: z.array(z.string().max(16)).max(8).optional(),
+  /** Phaser 程序化绘制 mood（ocean/forest/space/cyber/generic），驱动背景装饰 */
+  phaserMood: z.string().max(16).optional(),
 });
 
 export type SamplePlayProfile = z.infer<typeof SamplePlayProfileSchema>;

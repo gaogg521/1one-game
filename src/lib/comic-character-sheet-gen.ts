@@ -37,6 +37,64 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/**
+ * 检查单个角色参考图 URL 是否可访问。
+ * 通过 HEAD 请求验证，带超时保护。
+ */
+export async function validateCharacterSheetUrl(
+  url: string,
+  timeoutMs: number = 5000,
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return { ok: false, status: response.status, error: `HTTP ${response.status}` };
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType?.includes("image")) {
+      return { ok: false, error: "Not an image MIME type" };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: err };
+  }
+}
+
+/**
+ * 并发检查多个角色参考图 URL 的有效性。
+ */
+export async function validateCharacterSheetUrls(
+  roster: ComicCharacterRoster,
+  concurrency: number = 4,
+  timeoutMs: number = 5000,
+): Promise<Map<string, { valid: boolean; error?: string }>> {
+  const results = new Map<string, { valid: boolean; error?: string }>();
+  const toCheck = roster.characters.filter((c) => c.referenceImageUrl?.trim());
+
+  if (toCheck.length === 0) {
+    return results;
+  }
+
+  await mapWithConcurrency(toCheck, concurrency, async (char) => {
+    const result = await validateCharacterSheetUrl(char.referenceImageUrl!, timeoutMs);
+    results.set(char.id, { valid: result.ok, error: result.error });
+  });
+
+  return results;
+}
+
 /** 角色参考图生成所需的最小信息 */
 export type CharSheetSubject = {
   id: string;
@@ -75,10 +133,12 @@ export type CharSheetResult = {
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   if (!Number.isFinite(ms) || ms <= 0) return promise;
+  // P1 修复：promise 先 resolve 时 clearTimeout，避免泄漏 timer + unhandled rejection
+  let timerId: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
-    promise,
+    promise.finally(() => { if (timerId) clearTimeout(timerId); }),
     new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s）`)), ms);
+      timerId = setTimeout(() => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s）`)), ms);
     }),
   ]);
 }
@@ -154,7 +214,22 @@ export async function generateCharacterSheets(params: {
         };
       }
 
-      const res = await fetch(result.url);
+      // P1 修复：fetch 加 30s 超时，防图床挂起永久阻塞
+      const fetchController = new AbortController();
+      const fetchTimer = setTimeout(() => fetchController.abort(), 30_000);
+      let res: Response;
+      try {
+        res = await fetch(result.url, { signal: fetchController.signal });
+      } catch (fetchErr) {
+        return {
+          characterId: char.id,
+          name: char.name,
+          url: null,
+          error: `download timeout/failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+        };
+      } finally {
+        clearTimeout(fetchTimer);
+      }
       if (!res.ok) {
         return {
           characterId: char.id,

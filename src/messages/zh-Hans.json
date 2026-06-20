@@ -312,7 +312,17 @@
       "survivor": "生存",
       "platformer": "平台",
       "towerDefense": "塔防",
-      "shooter": "射击"
+      "shooter": "射击",
+      "puzzle": "解谜",
+      "chess": "棋局",
+      "stealth": "潜行",
+      "strategy": "策略",
+      "farming": "农场",
+      "coaster": "过山车",
+      "racing": "竞速",
+      "sniper": "狙击",
+      "customization": "捏脸",
+      "physics": "物理"
     },
     "firstPlayer": "等待首位玩家",
     "playedTimes": "{count} 次试玩"
@@ -1526,6 +1536,81 @@
     "enhanceWarningPrefix": "强化提示：",
     "sessionRefItems": "会话参考图条目（编排记录）：{count}",
     "orchestrationTrace": "编排追踪（Phase 0）· {steps} 步 · {seconds}s",
+    "quickStart": {
+      "sectionAria": "快速开始 · 热门玩法与全部模板",
+      "hotTitle": "热门真玩法 · 一键开始",
+      "hotSubtitle": "点卡片直接填入示例 prompt，体验最完整的真玩法",
+      "clickToFill": "点击填入",
+      "hotCardHint": "示例 prompt：{sample}",
+      "allTitle": "全部 {count} 模板",
+      "allSubtitle": "按分类筛选，点 chip 一键填入可生成句",
+      "emptyCategory": "该分类暂无模板",
+      "chipHint": "示例：{sample}",
+      "chipPromptTemplate": "{subtitle}（{summary}），自动适配场景、音乐、关卡与怪物",
+      "cat": {
+        "action": "动作",
+        "puzzle": "益智",
+        "board": "棋牌",
+        "runner": "酷跑",
+        "shooter": "射击",
+        "casual": "悠闲",
+        "horror": "恐怖",
+        "card": "卡牌",
+        "strategy": "策略",
+        "sports": "体育",
+        "rhythm": "节奏"
+      },
+      "hot": {
+        "mahjong": {
+          "title": "麻将",
+          "desc": "4 人对局 · 万条筒 · 碰杠胡",
+          "prompt": "国标麻将四人局，万条筒 108 张，摸打碰杠胡，带听牌提示与和风 BGM"
+        },
+        "tetris": {
+          "title": "俄罗斯方块",
+          "desc": "7 形 Tetromino · 旋转 · 行消除",
+          "prompt": "经典俄罗斯方块，7 形方块旋转下落，7-bag 出牌，支持 wall-kick 与行消除连击"
+        },
+        "runner": {
+          "title": "神庙逃亡",
+          "desc": "3 道左右切换 · 跳跃滑铲 · 收金币",
+          "prompt": "神庙逃亡风无尽跑酷，3 道左右切换，跳跃滑铲躲避障碍，金币 combo，速度递增"
+        },
+        "fruitNinja": {
+          "title": "水果忍者",
+          "desc": "切水果 · 避炸弹 · combo",
+          "prompt": "水果忍者玩法，水果抛物线飞出，划屏切割，半片分裂效果，combo 计分，炸弹惩罚"
+        },
+        "mahjongSolitaire": {
+          "title": "麻将接龙",
+          "desc": "配对消除 · 层叠解锁",
+          "prompt": "麻将接龙，选相同牌配对消除，多层牌堆层叠解锁，乌龟阵布局"
+        },
+        "douDizhu": {
+          "title": "斗地主",
+          "desc": "3 人扑克 · 叫地主 · 春天反春",
+          "prompt": "斗地主三人扑克，叫地主出牌比大小，支持春天反春，AI 互助配合"
+        },
+        "breakout": {
+          "title": "打砖块",
+          "desc": "挡板 · 弹球 · 多关卡",
+          "prompt": "经典打砖块，挡板反弹球消除砖块，多关卡递进，特殊砖块掉落道具"
+        },
+        "merge2048": {
+          "title": "2048",
+          "desc": "滑动合并 · 数字翻倍",
+          "prompt": "2048 数字合并，4x4 网格滑动合并相同数字，目标 2048，连击计分"
+        }
+      },
+      "previewTitle": "实时主题预览",
+      "previewSubtitle": "输入时自动适配场景、音乐、怪物与收集物配色",
+      "previewMood": "场景",
+      "previewMusic": "音乐",
+      "previewEnemy": "怪物",
+      "previewCollectible": "收集物",
+      "previewTemplate": "推荐模板",
+      "previewNoTemplate": "未命中明确模板，将由大模型决定"
+    },
     "examples": {
       "0": "田园小径旁建猫舍塔楼，拦住偷萝卜的捣蛋鼠军团",
       "1": "海底小鱼收集珍珠，避开章鱼墨汁",
@@ -1562,9 +1647,17 @@
         "label": "解读创意",
         "defaultMsg": "把你的提示与选项整理成可执行计划…"
       },
+      "spec_draft": {
+        "label": "大模型起草",
+        "defaultMsg": "LLM 正在起草游戏规格，规则、关卡与主题全部生成中…"
+      },
       "running": {
         "label": "深度生成",
         "defaultMsg": "大模型起草 + 本地纠错 + 规格校验（可能需几十秒～数分钟）…"
+      },
+      "enriching": {
+        "label": "丰化内容",
+        "defaultMsg": "规格已就绪，正在补充封面、音效与游戏资产…"
       },
       "recap": {
         "label": "成品摘要",
@@ -1938,6 +2031,17 @@
     "tabRuntime": "网关 / 模型",
     "tabEmail": "邮件 / SMTP",
     "tabAudit": "审计日志",
+    "tabGenErrors": "生成错误",
+    "tabCacheManagement": "缓存管理",
+    "genErrorAll": "全部",
+    "genErrorContentType": "类型",
+    "genErrorErrorType": "错误类别",
+    "genErrorSinceDays": "时间范围",
+    "genErrorLoad": "加载",
+    "genErrorLoading": "加载中...",
+    "genErrorTotal": "共 {total} 条",
+    "genErrorEmpty": "范围内无错误",
+    "genErrorsSubtitle": "按类型查看近期生成失败",
     "billingSubtitle": "收入、订阅与配额消耗概览",
     "kpiRevenueWindow": "窗口收入",
     "chartWindowDays": "近 {days} 日",
@@ -1977,6 +2081,7 @@
     "statWorks": "作品",
     "statShares24h": "24h 分享",
     "statPending": "待审",
+    "statGenErrors24h": "生成错误(24h)",
     "navAria": "运营模块",
     "close": "关闭",
     "verifyKey": "验证密钥",
@@ -2088,6 +2193,8 @@
     "copyToSamplesDone": "已复制到样品馆：{id}",
     "kpiSampleGallery": "样品馆同步",
     "kpiSampleGalleryHint": "目录 {catalog} 款",
+    "kpiGenErrors24h": "生成错误(24h)",
+    "kpiGenSuccessRate": "成功率 {rate}%",
     "opsQuickTitle": "运营快捷入口",
     "opsQuickSubtitle": "待审、样品馆与公开页",
     "opsQuickPending": "待审队列 ({count})",
@@ -2163,12 +2270,15 @@
     "auditAction_sample_gallery_sync": "样品馆同步",
     "auditAction_sample_gallery_copy_project": "复制到样品馆",
     "colNickname": "昵称",
+    "colEmail": "邮箱",
     "colRole": "角色",
     "colLogin": "登录方式",
     "colReferral": "邀请",
     "unnamedUser": "未命名用户",
     "userReferralLine": "{role} · 邀请 {count} · {providers}",
     "setAdminRole": "设为 admin",
+    "demoteToUser": "降回普通用户",
+    "demoteToUserConfirm": "确认将该用户降回普通用户？其将失去管理员权限。",
     "setSuperAdminRole": "升为 super_admin",
     "setSuperAdminConfirm": "确认将该用户升为 super_admin？其将可管理网关密钥与模型配置。",
     "roleUpdated": "用户角色已更新",
@@ -2177,6 +2287,7 @@
     "quotaUpdated": "额度已更新",
     "quotaGrantFailed": "额度发放失败",
     "grantQuota": "发额度",
+    "confirmHide": "确认隐藏该内容？隐藏后用户将无法查看。",
     "conversionRateHint": "转化率 {rate}%",
     "shareChannels": {
       "wechat": "微信",
@@ -2243,6 +2354,47 @@
       "testDone": "测试邮件已发送",
       "testFailed": "发送失败，请检查 SMTP 参数",
       "testNeedEmail": "请填写测试收件邮箱"
+    },
+    "cacheManagement": {
+      "title": "缓存管理",
+      "desc": "监控和管理角色参考图缓存、角色表单和生成内容。配置存储模式、TTL 策略和清理任务。",
+      "sectionStats": "缓存统计",
+      "sectionStatsHint": "缓存的角色表单和元数据概览",
+      "statsTotalEntries": "总条目数",
+      "statsValidEntries": "有效条目",
+      "statsExpiredEntries": "过期条目",
+      "statsTotalSize": "总大小",
+      "statsHealthScore": "健康度评分",
+      "statsLoading": "加载统计中…",
+      "sectionStorage": "存储配置",
+      "sectionStorageHint": "选择存储后端并配置 TTL 策略",
+      "fieldStorageMode": "存储模式",
+      "storageMode_session": "会话（内存）",
+      "storageMode_session_desc": "缓存存储在会话内存中",
+      "storageMode_home-dir": "家目录",
+      "storageMode_home-dir_desc": "持久化存储在 ~/.cache/open-game/comic-char-sheets",
+      "storageMode_cdn": "CDN",
+      "storageMode_cdn_desc": "上传到 CDN 进行分布式供应",
+      "fieldCdnEndpoint": "CDN 端点",
+      "fieldCdnEndpointHint": "CDN 上传的基础 URL（如 https://cdn.example.com）",
+      "fieldTtlDays": "缓存有效期（天）",
+      "fieldValidateIntervalDays": "验证间隔（天）",
+      "fieldMaxLocalFiles": "最大本地文件数",
+      "sectionCleanup": "缓存清理",
+      "sectionCleanupHint": "删除过期或无效的缓存条目",
+      "cleanupExpired": "清理过期缓存",
+      "cleanupAll": "清理全部缓存",
+      "cleaning": "清理中…",
+      "cleanupExpiredDone": "已清理 {count} 个过期缓存条目",
+      "cleanupExpiredFailed": "清理过期缓存失败",
+      "cleanupAllDone": "已清理 {count} 个缓存条目",
+      "cleanupAllFailed": "清理全部缓存失败",
+      "cleanupAllConfirm": "删除全部缓存的角色参考图和元数据？此操作无法撤销。",
+      "refreshStats": "刷新",
+      "configSaved": "缓存配置已保存",
+      "configSaveFailed": "保存配置失败",
+      "save": "保存",
+      "saving": "保存中…"
     },
     "runtimeConfig": {
       "eyebrow": "Platform Gateway",
@@ -2595,6 +2747,7 @@
       "message": "限时出现高价值物件，优先拾取可大幅拉开分数"
     },
     "breathingRoomMsg": "威胁密度短暂降低，趁机补充道具与血量",
+    "comboBonusMsg": "连击倍率翻倍！快速连续拾取可叠加超高分数",
     "shooter": {
       "waveN": "第 {n} 波",
       "bossWave": "首领来袭！",
@@ -2621,6 +2774,9 @@
       "goalShift": "限时目标 · {have}/{need}",
       "finalWave": "最后一波 {sec}s",
       "dodgeStreak": "生存连躲 {streak}",
+      "comboStreak": "连击 ×{combo}",
+      "nearMissChain": "擦身连锁 ×{chain}",
+      "scoreMult": "×{mult} 积分加成",
       "progressCollect": "收集进度 {prog}/{total}",
       "progressAvoid": "回避进度 {prog}/{total}",
       "progressDefault": "进度 {prog}/{total}",
@@ -2700,6 +2856,8 @@
       "tdDefaultBase": "基地",
       "tdEnemyGrunt": "杂兵",
       "tdEnemyTank": "装甲怪",
+      "tdEnemyFlyer": "飞行者",
+      "tdEnemyRunner": "疾跑兵",
       "tdTowerDart": "箭塔",
       "tdTowerSplash": "炸弹塔",
       "floaterCombo": "连收 ×{combo}",
@@ -2737,7 +2895,20 @@
           "spikes": "陷阱段落：平台上危险更密集",
           "default": "进入下一段关卡"
         }
-      }
+      },
+      "rhythmScore": "得分 {score} · 连击 ×{combo}",
+      "rhythmProgress": "命中 {hit}/{total} · Miss ×{miss}",
+      "sportsScore": "得分 {score}/{target} · 剩余 {sec}s",
+      "cardState": "我 HP {hp} · 法力 {mana}/{maxMana} · AI HP {aiHp} · 回合 {round}",
+      "fightingRound": "回合 {round}/{total} · 比分 {pWins}-{aWins}",
+      "fightingHp": "我 {playerHp} HP · AI {aiHp} HP",
+      "mobaState": "HP {hp} · 我塔 {mine} · 敌塔 {enemy}",
+      "horrorState": "夜 {night}/{totalNights} · 电力 {power}% · 摄像头 {cam}",
+      "mahjongState": "点数 {points} · 第 {round}/{totalRounds} 局",
+      "mahjongTenpai": "听牌中",
+      "tetrisScore": "得分 {score} · 消行 {lines}/{target}",
+      "endlessRunnerScore": "分数 {score}/{target} · 命 {lives}",
+      "fruitNinjaScore": "分数 {score}/{target} · 命 {lives} · {sec}s"
     },
     "banner": {
       "goalComplete": "限时目标完成",
@@ -2786,12 +2957,42 @@
       "farmingInsufficientCoins": "金币不足",
       "farmingFinishWin": "农场目标达成！",
       "farmingFinishLose": "继续努力",
+      "farmingWeatherRain": "🌧 降雨！生长速度×2",
+      "farmingWeatherSun": "☀️ 晴天！售价+20%",
+      "farmingWeatherDrought": "🌵 干旱！生长速度-50%",
+      "farmingWeatherNormal": "🌤 天气转好",
+      "farmingPestAlert": "🐛 虫害！点击清除",
+      "farmingMarketUp": "📈 市场繁荣！+30%",
+      "farmingMarketDown": "📉 市场低迷！-20%",
       "strategyFinishWin": "征服完成！",
       "strategyFinishLose": "被 AI 占领",
       "puzzleFinishWin": "益智目标达成！",
       "puzzleFinishLose": "步数用尽",
       "agenticFinishWin": "完成！",
-      "agenticFinishLose": "游戏结束"
+      "agenticFinishLose": "游戏结束",
+      "milestone": "进度 {pct}%！",
+      "milestoneMsg": "保持节奏继续冲",
+      "checkpointSaved": "存档点！",
+      "rhythmWinTitle": "节奏完美！",
+      "rhythmWinMsg": "全部命中，达成通关",
+      "sportsWinTitle": "比赛胜利！",
+      "sportsWinMsg": "目标分数达成",
+      "cardWinTitle": "卡牌大师！",
+      "cardWinMsg": "AI HP 归零",
+      "fightingWinTitle": "格斗冠军！",
+      "fightingWinMsg": "赢下本场比赛",
+      "mobaWinTitle": "推塔成功！",
+      "mobaWinMsg": "敌方基地沦陷",
+      "horrorWinTitle": "撑到天亮！",
+      "horrorWinMsg": "活过所有夜晚",
+      "mahjongWinTitle": "和牌！",
+      "mahjongWinMsg": "荣和获胜",
+      "tetrisWinTitle": "方块大师！",
+      "tetrisWinMsg": "达成消行目标",
+      "endlessRunnerWinTitle": "极速通关！",
+      "endlessRunnerWinMsg": "到达终点距离",
+      "fruitNinjaWinTitle": "刀法精湛！",
+      "fruitNinjaWinMsg": "达成切水果目标"
     }
   },
   "genrePacks": {

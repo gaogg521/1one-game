@@ -68,6 +68,16 @@ import {
 } from "@/lib/comic-adaptation-blueprint";
 import type { NovelChapter } from "@/lib/novel-chapters";
 import { parseNovelChapters } from "@/lib/novel-chapters";
+import {
+  logComicModeFallback,
+  recordComicModeFallback,
+  type ComicFallbackEvent,
+} from "@/lib/comic-pipeline-fallback-tracker";
+import {
+  checkIncrementalConsistency,
+  formatIncrementalConsistencyIssues,
+  type IncrementalConsistencyIssue,
+} from "@/lib/comic-consistency-incremental";
 
 export type { ComicStreamEmitter } from "@/lib/comic-pipeline-events";
 
@@ -85,6 +95,7 @@ export type ComicPagesGenerateResult = {
   plotDigest?: ComicPlotDigest;
   adaptationBlueprint?: ComicAdaptationBlueprint;
   directorStoryboardStats?: DirectorStoryboardRunStats;
+  fallbackEvent?: ComicFallbackEvent;
 };
 
 function buildKeyBeatsForChunk(opts: {
@@ -449,6 +460,21 @@ async function generateComicPagesLight(params: {
     }
     pages.push(...chunkResult);
 
+    // 产品优化：每 chunk 完成后做增量一致性检查（角色连续性/场景衔接）
+    if (pages.length > chunkResult.length) {
+      const consistencyReport = checkIncrementalConsistency({
+        existingPages: pages.slice(0, pages.length - chunkResult.length),
+        newPages: chunkResult,
+      });
+      if (!consistencyReport.ok) {
+        send({
+          step: "consistency_warning",
+          issues: consistencyReport.issues.map((i) => ({ code: i.code, message: i.message, severity: i.severity })),
+          message: `增量一致性检查发现 ${consistencyReport.issues.length} 个问题`,
+        });
+      }
+    }
+
     send({
       step: "light_chunk_done",
       index: chunkIdx + 1,
@@ -489,6 +515,7 @@ async function generateComicPagesLong(params: {
   existingDirector?: ComicDirectorPack | null;
   startChunkIndex?: number;
   onChunkCheckpoint?: (ev: ComicChunkCheckpoint) => void | Promise<void>;
+  adaptationBlueprint?: ComicAdaptationBlueprint | null;
 }): Promise<{
   pages: ComicPage[];
   director: ComicDirectorPack;
@@ -595,6 +622,21 @@ async function generateComicPagesLong(params: {
     }
     pages.push(...chunkResult);
 
+    // 产品优化：每 chunk 完成后做增量一致性检查（角色连续性/场景衔接）
+    if (pages.length > chunkResult.length) {
+      const consistencyReport = checkIncrementalConsistency({
+        existingPages: pages.slice(0, pages.length - chunkResult.length),
+        newPages: chunkResult,
+      });
+      if (!consistencyReport.ok) {
+        send({
+          step: "consistency_warning",
+          issues: consistencyReport.issues.map((i) => ({ code: i.code, message: i.message, severity: i.severity })),
+          message: `增量一致性检查发现 ${consistencyReport.issues.length} 个问题`,
+        });
+      }
+    }
+
     send({
       step: "storyboard_chunk_done",
       index: chunkIdx + 1,
@@ -619,7 +661,7 @@ async function generateComicPagesLong(params: {
   });
 
   send({ step: "shot_plan_start", message: progressComicMessage(uiLocale, "shotPlanStart") });
-  pages = applyShotPlanToPages(pages, director, params.storyGenre);
+  pages = applyShotPlanToPages(pages, director, params.storyGenre, params.adaptationBlueprint);
   send({ step: "shot_plan_done", message: progressComicMessage(uiLocale, "shotPlanDone") });
 
   const segments = splitNovelIntoSegments(params.novelContent, 24, params.outputLocale);
@@ -758,6 +800,7 @@ export async function generateComicPages(opts: {
   let roster: ComicCharacterRoster | null = null;
   let plotDigest: ComicPlotDigest | null = null;
   let adaptationBlueprint: ComicAdaptationBlueprint | null = null;
+  let fallbackEvent: ComicFallbackEvent | undefined = undefined;
 
   if (useLong) {
     ({ roster, plotDigest, adaptationBlueprint } = await resolveComicRosterAndDigest({
@@ -821,6 +864,7 @@ export async function generateComicPages(opts: {
         existingDirector: opts.existingDirector,
         startChunkIndex: opts.startChunkIndex,
         onChunkCheckpoint: opts.onChunkCheckpoint,
+        adaptationBlueprint,
       });
 
       send({ step: "consistency_start", message: progressComicMessage(uiLocale, "consistencyStart") });
@@ -852,9 +896,17 @@ export async function generateComicPages(opts: {
         ...(directorStoryboardStats ? { directorStoryboardStats } : {}),
       };
     } catch (error) {
+      fallbackEvent = recordComicModeFallback({
+        fromMode: "long_director",
+        toMode: "light",
+        error,
+        context: "director_pack",
+      });
+      logComicModeFallback(fallbackEvent);
       send({
         step: "pipeline_fallback",
         pipeline: "light",
+        fallbackEvent,
         message: progressComicMessage(uiLocale, "directorFallback", {
           error: resolveComicRunErrorMessage(uiLocale, error),
         }),
@@ -886,6 +938,26 @@ export async function generateComicPages(opts: {
       onChunkCheckpoint: opts.onChunkCheckpoint,
     });
 
+    // ★ 增量一致性检查：新生成分页与既有分页的衔接
+    let incrementalIssues: IncrementalConsistencyIssue[] = [];
+    if (opts.existingPages && opts.existingPages.length > 0) {
+      const incremental = checkIncrementalConsistency({
+        existingPages: opts.existingPages,
+        newPages: pages,
+        directorCharacterIds: roster?.characters ? new Set(roster.characters.map((c) => c.id)) : undefined,
+      });
+
+      incrementalIssues = incremental.issues;
+      if (!incremental.ok || incremental.issues.length > 0) {
+        send({
+          step: "incremental_consistency_warning",
+          issues: incremental.issues,
+          sampledPairs: incremental.sampledPagePairs,
+          message: formatIncrementalConsistencyIssues(incremental.issues),
+        });
+      }
+    }
+
     return {
       pages,
       pipeline: "light",
@@ -893,17 +965,26 @@ export async function generateComicPages(opts: {
       director: null,
       provider,
       model,
-      consistencyIssues: [],
+      consistencyIssues: incrementalIssues,
       readMode,
       layoutId,
       ...(roster ? { characterRoster: roster } : {}),
       ...(plotDigest ? { plotDigest } : {}),
       ...(adaptationBlueprint ? { adaptationBlueprint } : {}),
+      ...(fallbackEvent ? { fallbackEvent } : {}),
     };
   } catch (error) {
+    const emergencyFallbackEvent = recordComicModeFallback({
+      fromMode: "light",
+      toMode: "emergency",
+      error,
+      context: "light_generation",
+    });
+    logComicModeFallback(emergencyFallbackEvent);
     send({
       step: "pipeline_fallback",
-      pipeline: "light",
+      pipeline: "emergency",
+      fallbackEvent: emergencyFallbackEvent,
       message: progressComicMessage(uiLocale, "lightFallback", {
         error: resolveComicRunErrorMessage(uiLocale, error),
       }),
@@ -930,6 +1011,7 @@ export async function generateComicPages(opts: {
       ...(roster ? { characterRoster: roster } : {}),
       ...(plotDigest ? { plotDigest } : {}),
       ...(adaptationBlueprint ? { adaptationBlueprint } : {}),
+      fallbackEvent: emergencyFallbackEvent,
     };
   }
 }

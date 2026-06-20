@@ -507,7 +507,13 @@ export function PlayGameClient({ id }: { id: string }) {
             <GameRuntimeTabs
               spec={spec}
               projectId={id}
-              phaser={<GamePlayer spec={spec} promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} />}
+              phaser={<GamePlayer spec={spec} promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} onIterate={(instr) => {
+                setPatchPrompt(instr);
+                setTimeout(() => {
+                  document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  document.getElementById("patch-prompt")?.focus();
+                }, 100);
+              }} />}
             />
             {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 

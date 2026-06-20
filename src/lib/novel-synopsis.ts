@@ -4,6 +4,7 @@ import { parseNovelChapters } from "@/lib/novel-chapters";
 import { looksLikeOutlineOrPrompt } from "@/lib/novel-display";
 import { llmNovelText } from "@/lib/llm";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 
 /** 无 LLM 时从创意 / 开篇 / 章节目录拼一段可读梗概（客户端可用）。 */
 export function buildNovelSynopsisHeuristic(
@@ -62,6 +63,30 @@ export function buildNovelSynopsisHeuristic(
   return novelSynopsisMessage(uiLocale, "aiFallback", { title });
 }
 
+/** 从正文中提取首章+末章+章节标题，总控制在 6000 字以内，让摘要覆盖完整弧线。
+ * M4 修复：4000→6000 提升超长小说摘要质量（60000+ 字小说末章 1000 字覆盖不足）。 */
+function buildSynopsisExcerpt(content: string, uiLocale: AppLocale): string {
+  const chapters = parseNovelChapters(content.trim(), uiLocale);
+  if (chapters.length === 0) return content.trim().slice(0, 6000);
+
+  const titles = chapters
+    .map((c) => c.title?.trim())
+    .filter(Boolean)
+    .join(" / ");
+  const titlesBlock = titles ? `[目录] ${titles}\n\n` : "";
+
+  // 超长小说（>30 章）给首末章更多篇幅
+  const isLongNovel = chapters.length > 30;
+  const firstBody = chapters[0]!.body.trim().slice(0, isLongNovel ? 2200 : 1500);
+  const lastBody = chapters.length > 1
+    ? chapters[chapters.length - 1]!.body.trim().slice(0, isLongNovel ? 1600 : 1000)
+    : "";
+
+  const parts = [titlesBlock, `[首章]\n${firstBody}`];
+  if (lastBody) parts.push(`[末章]\n${lastBody}`);
+  return parts.join("\n\n").slice(0, 6000);
+}
+
 /** 生成入库用简介：优先 LLM 梗概，失败则启发式。 */
 export async function generateNovelSynopsis(params: {
   model: string;
@@ -72,13 +97,27 @@ export async function generateNovelSynopsis(params: {
   uiLocale?: AppLocale;
 }): Promise<string> {
   const uiLocale = params.uiLocale ?? "zh-Hans";
-  const excerpt = params.content.trim().slice(0, 4000);
+  const excerpt = buildSynopsisExcerpt(params.content, uiLocale);
   try {
+    // 产品优化：system prompt 按输出语言适配（原硬编码中文，非中文小说摘要质量差）
+    const outputLocale = resolveNovelOutputLocale(params.prompt);
+    const systemByLocale: Record<string, string> = {
+      zh: `你是中文网文平台的文案编辑。根据书名、创意与正文节选，写一段小说简介（剧情梗概）。
+硬性要求：2–3 句；80–160 个汉字；第三人称；写清主角处境、世界观与核心矛盾；不要剧透结局；不要章节列表、不要 JSON、不要 markdown。`,
+      en: `You are a copy editor for a fiction platform. Based on the title, concept, and excerpt, write a novel synopsis.
+Requirements: 2-3 sentences; 40-100 English words; third person; clarify the protagonist's situation, world-building, and core conflict; do not spoil the ending; no chapter lists, no JSON, no markdown.`,
+      ja: `あなたは小説プラットフォームの編集者です。タイトル、コンセプト、本文抜粋に基づいて小説のあらすじを書いてください。
+要件：2〜3文；80〜160文字；三人称；主人公の状況、世界観、核心の葛藤を明確に；結末のネタバレ禁止；章リスト・JSON・markdown禁止。`,
+      ms: `Anda adalah editor salinan untuk platform fiksyen. Berdasarkan tajuk, konsep, dan petikan, tulis sinopsis novel.
+Keperluan: 2-3 ayat; 40-100 perkataan; orang ketiga; jelaskan situasi protagonis, pembinaan dunia, dan konflik teras; jangan rosakkan pengakhiran; tiada senarai bab, JSON, markdown.`,
+      th: `คุณเป็นบรรณาธิการสำหรับแพลตฟอร์มนิยาย จากชื่อ แนวคิด และบทคัดย่อ เขียนเรื่องย่อนิยาย
+ข้อกำหนด: 2-3 ประโยค; 40-100 คำ; บุคคลที่สาม; อธิบายสถานการณ์พระเอก การสร้างโลก และความขัดแย้งหลัก; ห้ามสปอยยอด; ห้ามลิสต์บท JSON markdown`,
+    };
+    const system = systemByLocale[outputLocale] ?? systemByLocale.zh;
     const result = await llmNovelText(
       {
         model: params.model,
-        system: `你是中文网文平台的文案编辑。根据书名、创意与正文节选，写一段小说简介（剧情梗概）。
-硬性要求：2–3 句；80–160 个汉字；第三人称；写清主角处境、世界观与核心矛盾；不要剧透结局；不要章节列表、不要 JSON、不要 markdown。`,
+        system,
         user: `书名：${params.title}\n创意：${params.prompt.trim().slice(0, 700)}\n\n正文节选：\n${excerpt}`,
         temperature: 0.65,
         maxTokens: 320,

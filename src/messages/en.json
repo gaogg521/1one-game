@@ -312,7 +312,17 @@
       "survivor": "Survive",
       "platformer": "Platformer",
       "towerDefense": "Tower Defense",
-      "shooter": "Shooter"
+      "shooter": "Shooter",
+      "puzzle": "Puzzle",
+      "chess": "Chess",
+      "stealth": "Stealth",
+      "strategy": "Strategy",
+      "farming": "Farming",
+      "coaster": "Coaster",
+      "racing": "Racing",
+      "sniper": "Sniper",
+      "customization": "Dress Up",
+      "physics": "Physics"
     },
     "firstPlayer": "Waiting for the first player",
     "playedTimes": "{count} plays"
@@ -1527,6 +1537,81 @@
     "enhanceWarningPrefix": "Enhancement note:",
     "sessionRefItems": "Session reference items (orchestration log): {count}",
     "orchestrationTrace": "Orchestration trace (Phase 0) · {steps} steps · {seconds}s",
+    "quickStart": {
+      "sectionAria": "Quick start · hot templates & all templates",
+      "hotTitle": "Hot Real Gameplay · One-Click Start",
+      "hotSubtitle": "Click a card to fill in a sample prompt and try the full gameplay",
+      "clickToFill": "Click to fill",
+      "hotCardHint": "Sample prompt: {sample}",
+      "allTitle": "All {count} Templates",
+      "allSubtitle": "Filter by category, click a chip to fill a generatable prompt",
+      "emptyCategory": "No templates in this category yet",
+      "chipHint": "Example: {sample}",
+      "chipPromptTemplate": "{subtitle} ({summary}) — auto-adapts scene, music, levels and monsters",
+      "cat": {
+        "action": "Action",
+        "puzzle": "Puzzle",
+        "board": "Board",
+        "runner": "Runner",
+        "shooter": "Shooter",
+        "casual": "Casual",
+        "horror": "Horror",
+        "card": "Card",
+        "strategy": "Strategy",
+        "sports": "Sports",
+        "rhythm": "Rhythm"
+      },
+      "hot": {
+        "mahjong": {
+          "title": "Mahjong",
+          "desc": "4-player · dots/bamboo · pung/kong/win",
+          "prompt": "Standard mahjong, four-player, 108 dot/bamboo tiles, draw/discard/pung/kong/win, tenpai hints and Japanese-style BGM"
+        },
+        "tetris": {
+          "title": "Tetris",
+          "desc": "7 tetrominoes · rotate · line clear",
+          "prompt": "Classic Tetris, 7 tetromino shapes rotating and falling, 7-bag, wall-kick and line-clear combo"
+        },
+        "runner": {
+          "title": "Temple Run",
+          "desc": "3 lanes · jump/slide · coin combo",
+          "prompt": "Temple Run style endless runner, 3 lanes, jump and slide to dodge, coin combo, escalating speed"
+        },
+        "fruitNinja": {
+          "title": "Fruit Ninja",
+          "desc": "slice fruit · avoid bombs · combo",
+          "prompt": "Fruit Ninja gameplay, fruits fly in parabolas, swipe to slice, half-fruit split effect, combo scoring, bomb penalty"
+        },
+        "mahjongSolitaire": {
+          "title": "Mahjong Solitaire",
+          "desc": "pair-match · layered unlock",
+          "prompt": "Mahjong solitaire, match identical tiles to remove, layered stack unlock, turtle layout"
+        },
+        "douDizhu": {
+          "title": "Dou Dizhu",
+          "desc": "3-player poker · call landlord · spring",
+          "prompt": "Dou Dizhu three-player poker, call landlord and out-play to win, supports spring and anti-spring, AI assists"
+        },
+        "breakout": {
+          "title": "Breakout",
+          "desc": "paddle · ball · multi-level",
+          "prompt": "Classic Breakout, paddle bounces ball to clear bricks, multi-level progression, special bricks drop power-ups"
+        },
+        "merge2048": {
+          "title": "2048",
+          "desc": "slide merge · double numbers",
+          "prompt": "2048 number merge, 4x4 grid slide to merge identical numbers, goal 2048, combo scoring"
+        }
+      },
+      "previewTitle": "Live Theme Preview",
+      "previewSubtitle": "Auto-adapts scene, music, monster & collectible colors as you type",
+      "previewMood": "Scene",
+      "previewMusic": "Music",
+      "previewEnemy": "Monster",
+      "previewCollectible": "Collectible",
+      "previewTemplate": "Suggested Template",
+      "previewNoTemplate": "No template match — LLM will decide"
+    },
     "examples": {
       "0": "Build a cat tower beside a country path to block carrot-stealing mouse armies",
       "1": "Underwater fish collect pearls while dodging octopus ink",
@@ -1563,9 +1648,17 @@
         "label": "Interpreting idea",
         "defaultMsg": "Organizing your prompt and options into an executable plan…"
       },
+      "spec_draft": {
+        "label": "LLM drafting",
+        "defaultMsg": "LLM is drafting the game spec — rules, levels, and theme all generating…"
+      },
       "running": {
         "label": "Deep generation",
         "defaultMsg": "LLM drafting + local correction + spec validation (may take tens of seconds to minutes)…"
+      },
+      "enriching": {
+        "label": "Enriching content",
+        "defaultMsg": "Spec ready — adding cover art, audio, and game assets…"
       },
       "recap": {
         "label": "Final summary",
@@ -1939,6 +2032,17 @@
     "tabRuntime": "Gateway / models",
     "tabEmail": "Email / SMTP",
     "tabAudit": "Audit log",
+    "tabGenErrors": "Gen errors",
+    "tabCacheManagement": "Cache management",
+    "genErrorAll": "All",
+    "genErrorContentType": "Type",
+    "genErrorErrorType": "Error class",
+    "genErrorSinceDays": "Since",
+    "genErrorLoad": "Load",
+    "genErrorLoading": "Loading...",
+    "genErrorTotal": "Total: {total}",
+    "genErrorEmpty": "No errors in range",
+    "genErrorsSubtitle": "Recent generation failures by type",
     "billingSubtitle": "Revenue, subscriptions, and quota usage",
     "kpiRevenueWindow": "Window revenue",
     "chartWindowDays": "Last {days} days",
@@ -1978,6 +2082,7 @@
     "statWorks": "Works",
     "statShares24h": "Shares (24h)",
     "statPending": "Pending",
+    "statGenErrors24h": "Gen Errors (24h)",
     "navAria": "Admin sections",
     "close": "Close",
     "verifyKey": "Verify secret",
@@ -2089,6 +2194,8 @@
     "copyToSamplesDone": "Copied to sample gallery: {id}",
     "kpiSampleGallery": "Sample gallery sync",
     "kpiSampleGalleryHint": "{catalog} in catalog",
+    "kpiGenErrors24h": "Gen errors (24h)",
+    "kpiGenSuccessRate": "Success rate: {rate}%",
     "opsQuickTitle": "Ops shortcuts",
     "opsQuickSubtitle": "Pending review, samples & public page",
     "opsQuickPending": "Pending queue ({count})",
@@ -2139,6 +2246,8 @@
     "healthCheck_samplesSync": "Sample gallery sync",
     "healthCheck_samplesCover": "Sample covers",
     "healthCheck_moderation": "Pending works",
+    "healthCheck_genErrors": "Gen error rate (1h)",
+    "healthHint_genErrors": "Generation failure rate is elevated — check LLM gateway or prompt issues",
     "healthHint_db": "Check DATABASE_URL and migrate status",
     "healthHint_email": "Configure SMTP in Email tab",
     "healthHint_samplesSync": "Use Sync all or run npm run seed:samples",
@@ -2164,12 +2273,15 @@
     "auditAction_sample_gallery_sync": "Sample gallery sync",
     "auditAction_sample_gallery_copy_project": "Copy to sample gallery",
     "colNickname": "Name",
+    "colEmail": "Email",
     "colRole": "Role",
     "colLogin": "Sign-in",
     "colReferral": "Referrals",
     "unnamedUser": "Unnamed user",
     "userReferralLine": "{role} · referrals {count} · {providers}",
     "setAdminRole": "Make admin",
+    "demoteToUser": "Demote to user",
+    "demoteToUserConfirm": "Demote this user to user role? They will lose admin access.",
     "setSuperAdminRole": "Promote to super_admin",
     "setSuperAdminConfirm": "Promote this user to super_admin? They can manage gateway keys and model config.",
     "roleUpdated": "User role updated",
@@ -2178,6 +2290,7 @@
     "quotaUpdated": "Quota updated",
     "quotaGrantFailed": "Quota grant failed",
     "grantQuota": "Grant quota",
+    "confirmHide": "Hide this work? It will no longer be visible to the public.",
     "conversionRateHint": "Conversion {rate}%",
     "shareChannels": {
       "wechat": "WeChat",
@@ -2244,6 +2357,47 @@
       "testDone": "Test email sent",
       "testFailed": "Send failed — check SMTP settings",
       "testNeedEmail": "Enter a recipient email"
+    },
+    "cacheManagement": {
+      "title": "Cache management",
+      "desc": "Monitor and manage reference image caches, character sheets, and generated content. Configure storage modes, TTL policies, and cleanup tasks.",
+      "sectionStats": "Cache statistics",
+      "sectionStatsHint": "Overview of cached character sheets and metadata",
+      "statsTotalEntries": "Total entries",
+      "statsValidEntries": "Valid entries",
+      "statsExpiredEntries": "Expired entries",
+      "statsTotalSize": "Total size",
+      "statsHealthScore": "Health score",
+      "statsLoading": "Loading statistics…",
+      "sectionStorage": "Storage configuration",
+      "sectionStorageHint": "Choose storage backend and configure TTL policies",
+      "fieldStorageMode": "Storage mode",
+      "storageMode_session": "Session (memory)",
+      "storageMode_session_desc": "Caches stored in memory during the session",
+      "storageMode_home-dir": "Home directory",
+      "storageMode_home-dir_desc": "Persistent storage in ~/.cache/open-game/comic-char-sheets",
+      "storageMode_cdn": "CDN",
+      "storageMode_cdn_desc": "Upload to CDN for distributed serving",
+      "fieldCdnEndpoint": "CDN endpoint",
+      "fieldCdnEndpointHint": "Base URL for CDN uploads (e.g., https://cdn.example.com)",
+      "fieldTtlDays": "Cache TTL (days)",
+      "fieldValidateIntervalDays": "Validate interval (days)",
+      "fieldMaxLocalFiles": "Max local files",
+      "sectionCleanup": "Cache cleanup",
+      "sectionCleanupHint": "Remove expired or invalid cache entries",
+      "cleanupExpired": "Clean expired caches",
+      "cleanupAll": "Clean all caches",
+      "cleaning": "Cleaning…",
+      "cleanupExpiredDone": "Cleaned {count} expired cache entries",
+      "cleanupExpiredFailed": "Failed to cleanup expired caches",
+      "cleanupAllDone": "Cleaned {count} cache entries",
+      "cleanupAllFailed": "Failed to cleanup all caches",
+      "cleanupAllConfirm": "Delete all cached character sheets and metadata? This cannot be undone.",
+      "refreshStats": "Refresh",
+      "configSaved": "Cache configuration saved",
+      "configSaveFailed": "Failed to save configuration",
+      "save": "Save",
+      "saving": "Saving…"
     },
     "runtimeConfig": {
       "eyebrow": "Platform Gateway",
@@ -2591,6 +2745,7 @@
       "message": "High-value targets appear briefly — grab them first"
     },
     "breathingRoomMsg": "Threat density drops briefly — recover and restock",
+    "comboBonusMsg": "Combo multiplier doubled! Chain pickups fast for massive score",
     "play": {
       "rewardWindow": "Reward window",
       "timedGoal": "Timed goal",
@@ -2622,6 +2777,9 @@
       "goalShift": "Timed goal · {have}/{need}",
       "finalWave": "Final wave {sec}s",
       "dodgeStreak": "Dodge streak {streak}",
+      "comboStreak": "Combo ×{combo}",
+      "nearMissChain": "Near-miss ×{chain}",
+      "scoreMult": "×{mult} Score Bonus",
       "progressCollect": "Collect {prog}/{total}",
       "progressAvoid": "Avoidance {prog}/{total}",
       "progressDefault": "Progress {prog}/{total}",
@@ -2701,6 +2859,8 @@
       "tdDefaultBase": "Base",
       "tdEnemyGrunt": "Grunt",
       "tdEnemyTank": "Armored",
+      "tdEnemyFlyer": "Flyer",
+      "tdEnemyRunner": "Runner",
       "tdTowerDart": "Arrow tower",
       "tdTowerSplash": "Bomb tower",
       "floaterCombo": "Combo ×{combo}",
@@ -2738,7 +2898,20 @@
           "spikes": "Trap segment — hazards cluster on platforms",
           "default": "Entering the next section"
         }
-      }
+      },
+      "rhythmScore": "Score {score} · Combo ×{combo}",
+      "rhythmProgress": "Hit {hit}/{total} · Miss ×{miss}",
+      "sportsScore": "Score {score}/{target} · {sec}s left",
+      "cardState": "You HP {hp} · Mana {mana}/{maxMana} · AI HP {aiHp} · Round {round}",
+      "fightingRound": "Round {round}/{total} · {pWins}-{aWins}",
+      "fightingHp": "You {playerHp} HP · AI {aiHp} HP",
+      "mobaState": "HP {hp} · Your towers {mine} · Enemy towers {enemy}",
+      "horrorState": "Night {night}/{totalNights} · Power {power}% · Cam {cam}",
+      "mahjongState": "Points {points} · Round {round}/{totalRounds}",
+      "mahjongTenpai": "Tenpai",
+      "tetrisScore": "Score {score} · Lines {lines}/{target}",
+      "endlessRunnerScore": "Score {score}/{target} · Lives {lives}",
+      "fruitNinjaScore": "Score {score}/{target} · Lives {lives} · {sec}s"
     },
     "banner": {
       "goalComplete": "Timed goal complete",
@@ -2787,12 +2960,42 @@
       "farmingInsufficientCoins": "Not enough coins",
       "farmingFinishWin": "Farm goal reached!",
       "farmingFinishLose": "Keep going",
+      "farmingWeatherRain": "🌧 Rain! Growth x2",
+      "farmingWeatherSun": "☀️ Sunny! Sell +20%",
+      "farmingWeatherDrought": "🌵 Drought! Growth -50%",
+      "farmingWeatherNormal": "🌤 Weather cleared",
+      "farmingPestAlert": "🐛 Pests! Tap to clear",
+      "farmingMarketUp": "📈 Market surge! +30%",
+      "farmingMarketDown": "📉 Market slump! -20%",
       "strategyFinishWin": "Conquest complete!",
       "strategyFinishLose": "AI took over",
       "puzzleFinishWin": "Puzzle goal reached!",
       "puzzleFinishLose": "Out of moves",
       "agenticFinishWin": "Complete!",
-      "agenticFinishLose": "Game over"
+      "agenticFinishLose": "Game over",
+      "milestone": "{pct}% reached!",
+      "milestoneMsg": "Keep it up!",
+      "checkpointSaved": "Checkpoint!",
+      "rhythmWinTitle": "Perfect Rhythm!",
+      "rhythmWinMsg": "All hits landed, stage cleared",
+      "sportsWinTitle": "Match Won!",
+      "sportsWinMsg": "Target score reached",
+      "cardWinTitle": "Card Master!",
+      "cardWinMsg": "AI HP depleted",
+      "fightingWinTitle": "Champion!",
+      "fightingWinMsg": "Won the match",
+      "mobaWinTitle": "Base Destroyed!",
+      "mobaWinMsg": "Enemy base falls",
+      "horrorWinTitle": "Survived!",
+      "horrorWinMsg": "Made it through all nights",
+      "mahjongWinTitle": "Mahjong!",
+      "mahjongWinMsg": "Ron — you win",
+      "tetrisWinTitle": "Block Master!",
+      "tetrisWinMsg": "Lines target reached",
+      "endlessRunnerWinTitle": "Speed Clear!",
+      "endlessRunnerWinMsg": "Reached target distance",
+      "fruitNinjaWinTitle": "Blade Master!",
+      "fruitNinjaWinMsg": "Fruit target reached"
     }
   },
   "genrePacks": {

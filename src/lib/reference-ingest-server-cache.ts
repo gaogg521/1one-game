@@ -26,6 +26,11 @@ export async function cacheIngestReferenceBuffer(
   await fs.writeFile(filePath, buffer);
 }
 
+/** 供外部路由读取 ingest 缓存（供 /api/analyze-ref-image 使用）。 */
+export async function readIngestCacheBuffer(refId: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  return readCachedBuffer(refId);
+}
+
 async function readCachedBuffer(refId: string): Promise<{ buffer: Buffer; mime: string } | null> {
   const safe = refId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
   if (!safe) return null;

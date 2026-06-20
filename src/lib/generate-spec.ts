@@ -14,6 +14,10 @@ import { isGameTemplateId } from "@/lib/game-templates/registry";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
 import { buildChessBlueprint } from "@/lib/chess-blueprint";
+import { buildShooterBlueprint } from "@/lib/shooter-blueprint";
+import { buildCollectorBlueprint } from "@/lib/collector-blueprint";
+import { buildSurvivorBlueprint } from "@/lib/survivor-blueprint";
+import { buildAvoiderBlueprint } from "@/lib/avoider-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
@@ -38,25 +42,62 @@ import {
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { attachAgenticModuleIfEnabled, isAgenticModuleEnabled, lintDedicatedRouteDebugSkill } from "@/lib/agentic/generate-game-module";
 import { classifyPromptComplexity } from "@/lib/opengame-skills";
+import { detectTemplateFromPrompt } from "@/lib/template-selector";
 
-const SYSTEM = `你是「一句话小游戏」规格生成器。用户用中文或英文描述想要的极简 2D 网页小游戏（单次会话内可玩）。
+const SYSTEM = `你是「一句话小游戏」**游戏设计师 + 美术总监 + 关卡策划**三合一规格生成器。
+
+# 角色定位（极重要）
+你不是只填 6 个字段的「配置器」，而是**设计师**：
+- 选模板（templateId），定艺术风格（presentation.assetStyle），定音乐气质（musicProfile）
+- 写 4 幕 acts + 5-8 个 director.events，让前/中/后期玩感**截然不同**
+- 调数值，写文案
+
+**核心目标：让"飞机大战" / "塔防丧尸" / "消消乐" / "中国象棋"这种 prompt 给出的设计稿差异巨大且都像成品**，不是换名字换色的同一个游戏。
 
 你必须只输出一个 JSON 对象（不要 markdown，不要代码块），字段必须可被严格校验：
-- **视觉竞争力（极重要）**：主题色必须足够差异化（玩家色 vs 背景色对比度 ≥3:1，危险色醒目但不刺眼）。不要把所有模板做成一样的灰底白字——每个游戏都应有独特色彩氛围。背景色避免纯黑 #000000 或纯白 #FFFFFF，选带色彩倾向的暗色或浅色（如深松绿 #1a2220、暖米 #f5f0e8、暮霭紫 #1e1a2a）。
+
+- **presentation.assetStyle（必填 · 极重要 · 新增）**：从枚举里选一个能定义全作艺术调性的风格：
+  · classic-arcade：80-90s 复古街机像素感（经典飞机大战 / 弹幕首选 / shooter 默认）
+  · hard-sci-fi：硬科幻金属光泽（太空战舰、星际、机库）
+  · kawaii-mecha：可爱机甲萌系射击（粉色 / 圆胖 / 大眼）
+  · bullet-hell：高密度弹幕、霓虹冷暖（东方 Project 风）
+  · wuxia-flight：中国风水墨写意飞行（武侠 / 剑仙 / 飘带）
+  · blocky-pixel：方块像素（Minecraft 风 / 史蒂夫）
+  · cute-cartoon：可爱卡通圆角（合家欢 / 萌宠 / 童趣）
+  · dark-fantasy：暗黑奇幻 / 哥特（地下城 / 恶魔 / 不死）
+  · 80s-cartoon：80 年代手绘卡通（橙黄主色 / 大轮廓线）
+  · nature-organic：自然有机 / 田园（绿野 / 木纹 / 草地）
+  · neon-cyber：赛博霓虹（赛博朋克 / 全息）
+  · paper-craft：纸艺折纸（手工质感）
+  **选错会让运行时画错皮肤**。例：「星际飞机大战」→ hard-sci-fi 或 classic-arcade；「萌系机甲」→ kawaii-mecha；「东方弹幕」→ bullet-hell；「我的世界跑酷」→ blocky-pixel。
+- **presentation.musicProfile（建议）**：organic（舒缓自然）/ pulse（律动）/ minimal（极简）/ neon（电子）四选一，与 assetStyle 一致。
+- **presentation.hudFontStyle（可选）**：sans（默认）/ serif（武侠水墨）/ pixel（像素）/ handwritten（萌系）/ display（霓虹）。
+- **视觉竞争力（极重要 · 硬性约束）**：主题色必须足够差异化（玩家色 vs 背景色对比度 ≥3:1，危险色醒目但不刺眼）。不要把所有模板做成一样的灰底白字——每个游戏都应有独特色彩氛围。**backgroundColor 禁止使用 #000000、#111111 或任何接近纯黑的无色相颜色**，必须选带色彩倾向的深色（示例：深松绿 #1a2220、暖米 #f5f0e8、暮霭紫 #1e1a2a、宇宙蓝 #0c1226、沉木红 #1c1411、苔原绿 #162019）。playerColor 与 hazardColor 的色相必须可区分（不能两者都接近灰白）。
 - **默认审美（重要）**：现代扁平、适度对比与可读优先；palette 取自创意物象色（自然、手工艺、纸本水墨、陶艺、森林、田园等均可以）。除非用户正文或参考摘录**明文**出现霓虹/赛博/夜店/UI 故障/数据线等关键词，否则禁止使用「高饱和大面积青洋红加暗底」这一套典型霓虹 UI 模版；不要随意把 subtitle/title/theme 编成赛博攻防叙事。
 - 若创意或【参考素材】中含「参考图编号说明」或「【参考图 图N（用户用途：…）」段落：须按图序与「用户用途」把视觉要点落到 theme（如 hazardColor 贴近怪物参考主色、playerColor 贴近主角/炮塔、backgroundColor 贴近背景参考）、labels（hazard/player/collectible 的称呼贴合各图角色）以及 title/subtitle 氛围；勿混淆图号。
 - version 固定为 1
 - templateId 只能是已注册语义模板（src/lib/game-templates/definitions.ts 驱动；新增模板时在此 registry 登记即可）：
 ${buildLlmTemplateCatalogLines()}
-- **玩法结构优先（重要）**：不要只做“主题换皮”。优先给出 **5～8 分钟内有明显阶段变化** 的结构：
-  · **director.acts**：若模型输出该字段，建议使用 **四幕** label 语义：**开场 / 加速 / 变奏 / 终局**（时间轴仍用 at，取值 0..1）；省略时由服务端 buildDirector 补齐。
-  · **director.events**：事件 type 请使用运行时已识别的 **coinRain / goalShift / miniBoss / comboBonus / timeAttack**（必要时配 title / message / durationMs）；省略时由服务端按模板保底生成。
-  · director.events **至少要有 3 个不同事件**，分布在 0.25 / 0.50 / 0.75 附近，确保关卡有节奏感。
-  · **《我的世界》/ Minecraft / mc.163.com（重要）**：若用户或【参考素材】要求网易《我的世界》场景，必须体现**方块草地、泥土、天空、像素角色**气质；含「奔跑/跑酷/冲刺/闯关」时 **优先 platformer**，勿默认做成抽象纯色 avoider；theme 用天空蓝 #6EB5FF、草地绿 #5D9B47、泥土褐 #8B6914；labels 用史蒂夫/苦力怕/方块等称呼，title/subtitle 须点明方块世界而非泛化「别墅冲刺」
-  · avoider / survivor / collector：阶段结构由上述 events 支撑
-  · platformer：应更像“关卡推进”，让收集目标、地形段落、精英威胁成立，而不是单屏随机跳跃；winScore 建议 42–64，lives 建议 3–5
-  · shooter：应有敌群波次、压迫升级、短时间火力窗口，而非单调刷怪；winScore 建议 50–85
-  · towerDefense：应有敌军差异、rush / elite 感、经济与守点压力
+- **玩法结构（强制 · 极重要）**：你**必须**输出完整 director：
+  · **director.intensity**：0..1，整体紧张度（轻松 0.35 / 适中 0.6 / 硬核 0.8）。
+  · **director.acts**：必须 **4 幕**，label 用 **开场 / 加速 / 变奏 / 终局**，at 分别 0 / 0.33 / 0.66 / 1.0（允许 ±0.05 抖动），每幕可加 1-3 个 modifiers（如 "doubleSpawn" / "rapidFire" / "boss" / "rush" / "armored" / "zigzag" / "elite" / "densePack" / "gaps" / "spikes" / "precision" / "current" / "meteorShower"）。
+  · **director.events**：必须 **5-8 个**，每个不同 type，分布在 0.1 / 0.25 / 0.42 / 0.6 / 0.78 / 0.9 之类的位置，至少包含 **3 个语义类型**。事件类型从下表挑（type 是字符串）：
+    - **coinRain**：金币雨 / 短时双倍得分窗口（durationMs 3000-5500）
+    - **goalShift**：目标变化（短时火力增益 / 限时收集 / 目标切换）
+    - **miniBoss**：精英 / 小 boss 入场（durationMs 6000-12000）
+    - **finalBarrage**：终局密集弹幕 / 终局 boss（用在 0.85+，durationMs 8000-15000）
+    - **breathingRoom**：喘息窗口（生命恢复 / 低压补给段）
+    - **comboBonus**：连击奖励段
+    - **timeAttack**：限时挑战
+    - **goldenPickup**：高价值限时收集物（collector 专属）
+    - 其它 type 字符串也允许，但运行时会按未知事件兜底处理
+  · **每个 event 必须带 title 与 message**（短文案，HUD 横幅显示）。
+  · **避免所有 prompt 都用同一组**：collector 偏 coinRain/goalShift/goldenPickup/comboBonus；survivor 偏 breathingRoom/miniBoss/timeAttack/finalBarrage；shooter 偏 miniBoss/finalBarrage/coinRain；avoider 偏 finalBarrage/miniBoss/comboBonus；towerDefense 偏 miniBoss/rush/eliteWave。
+  · **《我的世界》场景**：必须体现方块草地、泥土、天空、像素角色气质；含「奔跑/跑酷/冲刺/闯关」时优先 platformer；theme 用天空蓝 #6EB5FF、草地绿 #5D9B47、泥土褐 #8B6914；labels 用史蒂夫/苦力怕/方块等称呼。
+  · **shooter（射击 / 飞机大战）**：winScore 50-85，敌群波次（director.acts 第 2 幕 modifiers 含 "doubleSpawn" 或 "rapidFire"，第 3 幕含 "elite"，第 4 幕含 "boss"），4 幕节奏：编队入侵 → 双倍火力压迫 → 精英突袭 → 母舰决战。
+  · **platformer**：winScore 42-64，lives 3-5，地形段落+收集目标+精英威胁。
+  · **towerDefense**：敌军差异、rush / elite 感、经济与守点压力。
+  · **collector / survivor / avoider**：阶段结构由 events 支撑，不能只刷怪。
 - **整体一致性（重要）**：theme 六色是全作 HUD、网页试玩外壳、怪物/粒子与程序化铺底音乐的共同母色，须色相协调、避免随机彩虹。若玩法气质极其明确可附加 presentation.musicProfile：organic（舒缓自然铺底）| pulse（轻微律动倾向）| minimal（几乎静默）| neon（偏亮电子），须与 theme 饱和度及背景亮度一致；不确定则不要输出该字段（由系统从 theme 推断）。
 - title：≤80 字，抓住幻想点，不要抄用户全文
 - theme：六个十六进制颜色字符串，格式必须是 #RRGGBB（含 #）
@@ -70,12 +111,90 @@ ${buildLlmTemplateCatalogLines()}
   · startingCoins / baseHealth：towerDefense 用真实策略数值；其它模板可填区间中值占位（如 120 / 48）
   · 注意：网关 strict JSON 要求 gameplay 中列出的每个键都必须出现并给数值，不能用「省略字段」表示可选
 - labels：中文优先；player 为操控角色称呼（towerDefense 为防御塔/炮塔）；hazard 为威胁称呼（towerDefense 为敌军）；collector/platformer/towerDefense 时 collectible 为收集物或货币称呼；subtitle 一句氛围话≤120字；不适用 collectible 时可填「—」或「无」
+- **【极重要】labels 必须强主题化**：player/hazard/collectible 的名称必须与用户创意紧密绑定，不能用通用词汇（如「玩家」「敌人」「金币」）。具体规则：
+  · 「保卫萝卜/植物大战僵尸」→ player「豌豆射手」/hazard「腐烂僵尸」/collectible「阳光」
+  · 「海盗」主题 → player「炮船」/hazard「海盗军」/collectible「金银财宝」
+  · 「太空」主题 → player「星际战机」/hazard「外星入侵者」/collectible「能量水晶」
+  · 「中国风/武侠」→ player「飞剑客」/hazard「邪派弟子」/collectible「丹砂/灵石」
+  · 「机器人/科幻」→ player「机甲战士」/hazard「病毒程序」/collectible「数据核心」
+  · 总原则：从用户 prompt 的**核心意象**（角色、场景、世界观）直接提取词汇，让三个 label 合在一起能描述一个故事
 - **可选 director**：若当前服务端网关开启了结构化输出的扩展字段，你可在输出中加入完整的 director（含 intensity、acts；events 可选）。字段语义同上「玩法结构优先」。若不确定网关是否支持，仅输出主体字段即可，由服务端补齐。
 
-示例（语气与饱和度参考——中性自然风，勿照抄内容）：
-{"version":1,"templateId":"collector","title":"松径寻宝人","theme":{"backgroundColor":"#1a2220","playerColor":"#8faf8c","hazardColor":"#a65f3f","collectibleColor":"#c9a66b","particleTint":"#6b7468"},"gameplay":{"playerSpeed":305,"hazardSpeed":205,"spawnIntervalMs":740,"winScore":26,"lives":4,"arenaPadding":38,"jumpStrength":430,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"旅行者","hazard":"刺藤鼠","collectible":"松鳞果","subtitle":"暮色小径上的收集之旅"}}
+## 四个差异化 few-shot 示例（务必参考它们如何让 assetStyle/musicProfile/theme/director/labels 全部对齐主题）
 
-若描述含糊：默认 avoider；若强调塔防/保卫萝卜/植物大战僵尸/PvZ/豌豆射手/波次/箭塔/防线/种植物打僵尸/放置防守/ Kingdom Rush/王国保卫战/皇家守卫军/猴子塔防→towerDefense；若强调横版跳跃/平台闯关/多层地形/超级玛丽/马里奥/索尼克/恶魔城/银河恶魔城/几何冲刺/关卡/闯关→platformer；若强调收集/金币/宝石/吃豆人/贪食蛇/拾取物品→collector；强调生存/血条/多条命/割草/吸血鬼幸存者/黎明前20分钟/尽量久→survivor；若强调射击/飞船/太空战/弹幕/雷电/1942/太空侵略者/消灭敌机/竖版飞机/波次敌人/合金弹头→shooter；若强调过山车/空中轨道/矿车竞速/3D轨道→coaster。强调僵尸入侵但用植物/炮塔/防线抵御→必须是 towerDefense，绝不能做成 survivor/avoider。`;
+【示例 A · 经典飞机大战 → 街机风】
+{"version":1,"templateId":"shooter","title":"红霞机队 · 苍穹拦截战","theme":{"backgroundColor":"#0c1226","playerColor":"#2dd4bf","hazardColor":"#ef4444","collectibleColor":"#fbbf24","particleTint":"#94a3b8"},"presentation":{"assetStyle":"classic-arcade","musicProfile":"pulse","hudFontStyle":"sans"},"gameplay":{"playerSpeed":340,"hazardSpeed":150,"spawnIntervalMs":900,"winScore":60,"lives":3,"arenaPadding":36,"jumpStrength":560,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"红霞战机","hazard":"幽蓝拦截者","collectible":"能量晶体","subtitle":"4 幕街机式飞行射击，最后是母舰决战"},"director":{"intensity":0.62,"acts":[{"at":0,"label":"开场","modifiers":["编队入侵"]},{"at":0.33,"label":"加速","modifiers":["doubleSpawn","rapidFire"]},{"at":0.66,"label":"变奏","modifiers":["elite","zigzag"]},{"at":1,"label":"终局","modifiers":["boss","finale"]}],"events":[{"at":0.18,"type":"coinRain","strength":0.6,"durationMs":4500,"title":"奖励窗口","message":"短时间双倍击杀分"},{"at":0.42,"type":"miniBoss","strength":0.7,"durationMs":9000,"title":"精英编队","message":"小心红色三角拦截者"},{"at":0.6,"type":"goalShift","strength":0.7,"durationMs":4000,"title":"火力增益","message":"散弹同伴出击"},{"at":0.78,"type":"comboBonus","strength":0.75,"durationMs":4000,"title":"连击奖励","message":"连续击破累加分数"},{"at":0.92,"type":"finalBarrage","strength":0.92,"durationMs":12000,"title":"母舰决战","message":"撑过终局密集弹幕"}]}}
+
+【示例 B · 萌系塔防丧尸 → 卡通风】
+{"version":1,"templateId":"towerDefense","title":"喵喵堡垒 · 末日抗丧","theme":{"backgroundColor":"#1f2937","playerColor":"#a7f3d0","hazardColor":"#fb7185","collectibleColor":"#fcd34d","particleTint":"#cbd5e1"},"presentation":{"assetStyle":"cute-cartoon","musicProfile":"pulse","hudFontStyle":"handwritten"},"gameplay":{"playerSpeed":260,"hazardSpeed":180,"spawnIntervalMs":520,"winScore":12,"lives":3,"arenaPadding":36,"jumpStrength":420,"gravity":980,"startingCoins":150,"baseHealth":60},"labels":{"player":"喵喵炮塔","hazard":"萌系小僵","collectible":"猫罐头币","subtitle":"萌系塔防：用猫咪炮塔守住罐头堡垒"},"director":{"intensity":0.58,"acts":[{"at":0,"label":"开场","modifiers":["小波热身"]},{"at":0.33,"label":"加速","modifiers":["elite"]},{"at":0.66,"label":"变奏","modifiers":["armored","rush"]},{"at":1,"label":"终局","modifiers":["boss","rush"]}],"events":[{"at":0.2,"type":"coinRain","strength":0.6,"durationMs":4500,"title":"奖励掉落","message":"罐头雨双倍"},{"at":0.4,"type":"miniBoss","strength":0.7,"durationMs":9000,"title":"重甲小僵","message":"装甲僵尸先头部队"},{"at":0.62,"type":"breathingRoom","strength":0.4,"durationMs":4000,"title":"喘息窗口","message":"修整一下，下波更猛"},{"at":0.82,"type":"finalBarrage","strength":0.9,"durationMs":12000,"title":"末波冲锋","message":"全军压境，守到最后"}]}}
+
+【示例 C · 武侠飞行射击 → 中国风】
+{"version":1,"templateId":"shooter","title":"剑舞苍穹 · 长虹一线","theme":{"backgroundColor":"#1c1411","playerColor":"#fde68a","hazardColor":"#9f1239","collectibleColor":"#e0e7ff","particleTint":"#a8a29e"},"presentation":{"assetStyle":"wuxia-flight","musicProfile":"organic","hudFontStyle":"serif"},"gameplay":{"playerSpeed":320,"hazardSpeed":140,"spawnIntervalMs":960,"winScore":56,"lives":3,"arenaPadding":36,"jumpStrength":540,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"飞剑客","hazard":"邪宗弟子","collectible":"丹砂","subtitle":"水墨飞行射击：剑光破云，邪宗当道"},"director":{"intensity":0.68,"acts":[{"at":0,"label":"开场","modifiers":["小队伏击"]},{"at":0.33,"label":"加速","modifiers":["rapidFire"]},{"at":0.66,"label":"变奏","modifiers":["elite","zigzag"]},{"at":1,"label":"终局","modifiers":["boss"]}],"events":[{"at":0.2,"type":"coinRain","strength":0.55,"durationMs":4500,"title":"丹砂雨","message":"短时双倍内力"},{"at":0.45,"type":"miniBoss","strength":0.7,"durationMs":9000,"title":"邪宗护法","message":"红衣强敌登场"},{"at":0.6,"type":"goalShift","strength":0.65,"durationMs":4000,"title":"剑气连发","message":"自动连射数秒"},{"at":0.82,"type":"finalBarrage","strength":0.92,"durationMs":12000,"title":"宗主出关","message":"剑芒如潮，守住身位"}]}}
+
+【示例 D · 自然田园收集 → 自然风】
+{"version":1,"templateId":"collector","title":"松径寻宝人","theme":{"backgroundColor":"#1a2220","playerColor":"#8faf8c","hazardColor":"#a65f3f","collectibleColor":"#c9a66b","particleTint":"#6b7468"},"presentation":{"assetStyle":"nature-organic","musicProfile":"organic","hudFontStyle":"serif"},"gameplay":{"playerSpeed":305,"hazardSpeed":205,"spawnIntervalMs":740,"winScore":42,"lives":4,"arenaPadding":38,"jumpStrength":430,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"旅行者","hazard":"刺藤鼠","collectible":"松鳞果","subtitle":"暮色小径上的收集之旅"},"director":{"intensity":0.48,"acts":[{"at":0,"label":"开场","modifiers":[]},{"at":0.33,"label":"加速","modifiers":["doubleSpawn"]},{"at":0.66,"label":"变奏","modifiers":["bonusField"]},{"at":1,"label":"终局","modifiers":["finale"]}],"events":[{"at":0.22,"type":"coinRain","strength":0.6,"durationMs":4500,"title":"金枫飘落","message":"短时双倍鳞果"},{"at":0.42,"type":"goldenPickup","strength":0.7,"durationMs":3500,"title":"黄金松果","message":"限时高分目标"},{"at":0.6,"type":"goalShift","strength":0.55,"durationMs":4000,"title":"路径转换","message":"沿着新支线收集"},{"at":0.78,"type":"comboBonus","strength":0.6,"durationMs":4500,"title":"连击奖励","message":"连续拾取累加分数"}]}}
+
+【示例 E · 植物大战僵尸风格塔防 → 卡通自然风】
+{"version":1,"templateId":"towerDefense","title":"向日葵保卫战 · 植物抗尸录","theme":{"backgroundColor":"#1a2a0e","playerColor":"#86efac","hazardColor":"#78350f","collectibleColor":"#fde047","particleTint":"#bbf7d0"},"presentation":{"assetStyle":"cute-cartoon","musicProfile":"organic","hudFontStyle":"handwritten"},"gameplay":{"playerSpeed":220,"hazardSpeed":140,"spawnIntervalMs":680,"winScore":10,"lives":3,"arenaPadding":40,"jumpStrength":420,"gravity":980,"startingCoins":150,"baseHealth":50},"labels":{"player":"豌豆射手","hazard":"腐烂僵尸","collectible":"阳光","subtitle":"植物守护家园，波波僵尸来袭，用阳光造更多炮台！"},"director":{"intensity":0.62,"acts":[{"at":0,"label":"开场","modifiers":["小僵热身"]},{"at":0.33,"label":"加速","modifiers":["elite","rush"]},{"at":0.66,"label":"变奏","modifiers":["armored","doubleSpawn"]},{"at":1,"label":"终局","modifiers":["boss","rush"]}],"events":[{"at":0.18,"type":"coinRain","strength":0.6,"durationMs":4500,"title":"阳光爆发","message":"快速收集阳光，双倍资源"},{"at":0.38,"type":"miniBoss","strength":0.72,"durationMs":9000,"title":"铁桶僵尸","message":"重甲僵尸入侵，集火击破"},{"at":0.58,"type":"breathingRoom","strength":0.4,"durationMs":4000,"title":"喘息时机","message":"波次间隙，赶快补充防线"},{"at":0.78,"type":"finalBarrage","strength":0.9,"durationMs":12000,"title":"僵尸潮","message":"全图压境，坚守到最后"}]}}
+
+五个示例之间**几乎没有共用片段**：模板、风格、配色、节奏、事件类型、文案、HUD 字体倾向全部不同。你应当从中学到「按 prompt 给完全不同的设计稿」的能力，而不是套同一组数值。
+
+## 模板路由决策树（优先级从高到低，命中即停止）
+
+**【第一优先：专有游戏名/品牌词直接映射】**
+- 保卫萝卜 / 保卫 / 萝卜 / 植物大战僵尸 / PvZ / 豌豆射手 / 豌豆 / 向日葵 / 坚果墙 / 寒冰菇 / Kingdom Rush / 王国保卫战 / 皇家守卫军 / 猴子塔防 / Bloons / BTD → **towerDefense**
+- 超级玛丽 / 马里奥 / Super Mario / 索尼克 / Sonic / 恶魔城 / Castlevania / 银河恶魔城 / Metroidvania / 几何冲刺 / Geometry Dash / 空洞骑士 / Hollow Knight / 蔚蓝 / Celeste → **platformer**
+- 雷电 / 1942 / 太空侵略者 / Space Invaders / 东方 Project / 弹幕射击 / 合金弹头 / Metal Slug / 火力全开 / 星际飞机 → **shooter**
+- 坦克大战 / Battle City / 经典坦克战 / 战车对战 / 俯视角坦克射击 → **shooter**（俯视角自动开火，把"敌舰"理解为"敌方坦克"）
+- 红警 / 红色警戒 / 命令与征服 / 星际争霸 / 魔兽争霸 / 帝国时代 → **strategy**
+- 吸血鬼幸存者 / Vampire Survivors / 黎明前20分钟 / 20 Minutes Till Dawn / 弹壳特攻队 → **survivor**
+- 消消乐 / 三消 / Candy Crush / 宝石迷阵 / Bejeweled / 连连看 / 记忆翻牌 / 数独 → **puzzle**
+- 中国象棋 / 象棋 / 围棋 / 国际象棋 / Chess / 五子棋 → **chess**
+- 过山车 / 过山车大亨 / RollerCoaster Tycoon / 矿车竞速 / 3D 轨道 → **coaster**
+- 星露谷 / Stardew Valley / 种地 / 农场 / 农业 / 灌溉 / 收获 / 丰收 / 开心农场 → **farming**
+- 文明 / Civilization / 部落冲突 / Clash of Clans / 即时战略 / RTS / 占领 / 领地 / 节点控制 → **strategy**
+- 红警 / 红色警戒 / 命令与征服 / 星际争霸 / 魔兽争霸 / 帝国时代 → **strategy**
+- 赛车 / 竞速 / F1 / 卡丁车 / 马里奥赛车 / 极品飞车 → **racing**
+- 狙击 / Sniper Elite / 精准瞄准 / 狙击手 → **sniper**
+- 潜行 / 隐身 / 刺杀 / 合金装备 / Splinter Cell / 不被发现 → **stealth**
+- 愤怒的小鸟 / 弹射 / 弹球 / 碰碰球 / 台球 → **physics**
+- 捏脸 / 换装 / 角色自定义 / 服装设计 / avatar maker → **customization**
+- 星露谷 / Stardew Valley / 种地 / 农场 / 农业 / 灌溉 / 收获 / 丰收 / 开心农场 → **farming**
+- 文明 / Civilization / 部落冲突 / Clash of Clans / 即时战略 / RTS / 占领 / 领地 / 节点控制 → **strategy**
+- 穿越火线 / 狙击 / CF / 枪战 / 射击游戏但以枪为主武器+第一视角 → **shooter**（注：竖版飞机>shooter；FPS词汇>shooter）
+
+**【第二优先：玩法描述词映射】**
+- 放置防守 / 波次 / 建防线 / 造塔 / 塔防 / 箭塔 / 种植物打 / 抵御波次 / 路径防守 / 迎击波次 → **towerDefense**
+- 横版 / 跳跃 / 平台 / 闯关 / 多层地形 / 上下跳 / 跑酷关卡 / 收集道具过关 / 关卡地图 → **platformer**
+- 飞船 / 飞机 / 太空战 / 弹幕 / 消灭敌机 / 竖版飞行 / 击落 → **shooter**
+- 坦克 / 战车 / 战车对战 / 俯视角坦克 / 坦克射击 → **shooter**（Battle City 风格；非塔防）
+- 推箱子 / 华容道 / 扫雷 / 2048 → **puzzle**
+- 炸弹人 / 泡泡龙 → **avoider**
+- 收集 / 金币 / 宝石 / 拾取 / 吃豆 / 贪食 → **collector**
+- 生存 / 尽量久 / 割草 / 多条命 / 不断刷怪 / 坚持 → **survivor**
+- 躲避 / 闪避 / 避开 / dodge → **avoider**
+- 三消 / 消除 / 翻牌记忆 / 拼图 → **puzzle**
+
+**【第三优先：冲突情景解歧】**
+- 僵尸入侵但玩家是炮塔/植物/防守方 → **必须 towerDefense**，绝不能做 survivor/avoider
+- 僵尸入侵但玩家主动移动割草消灭 → **survivor**
+- 射击 + 波次敌人 + 竖版视角 → **shooter**（不是 towerDefense）
+- 策略 + 占领节点/领土 → **strategy**（不是 towerDefense）
+- 打怪 + 爬塔 + 关卡通关 → **platformer** 或 **shooter**（看视角）
+- **坦克/战车 + 自由移动 + 射击 → 必须 shooter**（Battle City 风格俯视角战车射击，**绝不是 towerDefense**）。判别：用户操控单辆坦克移动+开火 = shooter；用户造塔守家 = towerDefense
+- **僵尸/植物 + 玩家造炮塔 → 必须 towerDefense**（不要因为"坦克/炮塔"字眼误判为 shooter）
+
+**【第四优先：弱体验模板限制（极重要）】**
+以下模板体验相对单薄，**仅在用户明确点名时才选**，不得作为模糊 prompt 的默认选项：
+- **chess**：仅用于「象棋 / 围棋 / 五子棋 / 国际象棋 / Chess / 棋类」等明确棋盘类意图。其他含「策略/对战」词汇 → strategy 或 towerDefense。
+- **physics**：仅用于「物理 / 弹射 / 弹球 / 碰碰球 / 台球 / 愤怒的小鸟」等明确物理玩法意图。含糊的「有趣/刺激」→ avoider/shooter。
+- **customization**：仅用于「捏脸 / 换装 / 角色自定义 / 服装设计」等明确装扮意图。含糊时 → collector。
+- **racing**：仅用于「赛车 / 竞速 / F1 / 卡丁车」等明确竞速意图。含糊时 → coaster 或 platformer。
+- **sniper**：仅用于「狙击 / 精准射击 / 瞄准」等明确狙击意图。含糊的射击 → shooter。
+- **stealth**：仅用于「潜行 / 隐身 / 刺杀 / 不被发现」等明确潜行意图。含糊的跑酷 → platformer。
+
+**【默认】** 描述含糊、无法归类 → **avoider**`;
+
 
 /** LLM json_schema（strict）：可选纳入 director，默认关闭以免部分网关对扩展 schema 不兼容。见 `PRODUCT.game.jsonSchemaIncludeDirector`。 */
 const GAME_SPEC_DIRECTOR_SCHEMA_FRAGMENT = {
@@ -104,7 +223,9 @@ const GAME_SPEC_DIRECTOR_SCHEMA_FRAGMENT = {
     },
     events: {
       type: "array",
-      maxItems: 16,
+      /** 强制 4-8 个事件：避免节奏同质化 */
+      minItems: 4,
+      maxItems: 12,
       items: {
         type: "object",
         additionalProperties: false,
@@ -116,11 +237,41 @@ const GAME_SPEC_DIRECTOR_SCHEMA_FRAGMENT = {
           title: { type: "string", minLength: 1, maxLength: 32 },
           message: { type: "string", minLength: 1, maxLength: 80 },
         },
-        required: ["at", "type"],
+        required: ["at", "type", "strength", "durationMs", "title", "message"],
       },
     },
   },
-  required: ["intensity", "acts"],
+  required: ["intensity", "acts", "events"],
+} as const;
+
+const PRESENTATION_SCHEMA_FRAGMENT = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    musicProfile: { type: "string", enum: ["organic", "pulse", "minimal", "neon"] },
+    assetStyle: {
+      type: "string",
+      enum: [
+        "classic-arcade",
+        "hard-sci-fi",
+        "kawaii-mecha",
+        "bullet-hell",
+        "wuxia-flight",
+        "blocky-pixel",
+        "cute-cartoon",
+        "dark-fantasy",
+        "80s-cartoon",
+        "nature-organic",
+        "neon-cyber",
+        "paper-craft",
+      ],
+    },
+    hudFontStyle: {
+      type: "string",
+      enum: ["sans", "serif", "pixel", "handwritten", "display"],
+    },
+  },
+  required: ["musicProfile", "assetStyle", "hudFontStyle"],
 } as const;
 
 function getActiveGameSpecJsonSchema() {
@@ -201,8 +352,8 @@ function getActiveGameSpecJsonSchema() {
       schema: {
         type: "object",
         additionalProperties: false,
-        properties: coreProperties,
-        required: [...requiredCore],
+        properties: { ...coreProperties, presentation: PRESENTATION_SCHEMA_FRAGMENT },
+        required: [...requiredCore, "presentation"],
       },
     };
   }
@@ -215,9 +366,10 @@ function getActiveGameSpecJsonSchema() {
       additionalProperties: false,
       properties: {
         ...coreProperties,
+        presentation: PRESENTATION_SCHEMA_FRAGMENT,
         director: GAME_SPEC_DIRECTOR_SCHEMA_FRAGMENT,
       },
-      required: [...requiredCore],
+      required: [...requiredCore, "presentation", "director"],
     },
   };
 }
@@ -246,6 +398,8 @@ export type GenerationDebug = {
   briefSummary?: string;
   /** Phase 0 编排：各 DAG 节点耗时快照（SSE / 可调式接口附带）。 */
   orchestrationTrace?: OrchestrationRunTrace;
+  /** AI 评审员评分 + 建议（可空，失败时不阻塞主链路） */
+  criticVerdict?: import("@/lib/game-quality-critic").GameCriticVerdict;
 };
 
 /** 单次生成请求内 finalize/director 文案 locale（避免层层传参）。 */
@@ -272,6 +426,18 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   }
   if (next.templateId === "chess" && !next.chess) {
     next = { ...next, chess: buildChessBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "shooter" && !next.shooter) {
+    next = { ...next, shooter: buildShooterBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "collector" && !next.collector) {
+    next = { ...next, collector: buildCollectorBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "survivor" && !next.survivor) {
+    next = { ...next, survivor: buildSurvivorBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "avoider" && !next.avoider) {
+    next = { ...next, avoider: buildAvoiderBlueprint({ prompt, spec: next }) };
   }
   if (!next.director) {
     next = { ...next, director: buildDirector({ prompt, spec: next, locale: activeGenerationLocale }) };
@@ -750,10 +916,21 @@ export async function generateGameSpecDraftWithMeta(
     options?.orchestration?.note("web_search_skipped", { reason: "disabled" });
   }
 
-  const hint = resolveEffectiveTemplateHint(options?.templateHint, briefResult);
+  // 规则驱动预选：在 LLM 之前通过关键词锁定模板，避免"保卫萝卜"→shooter 的误判
+  const ruleHint = detectTemplateFromPrompt(clean);
+  const hint = resolveEffectiveTemplateHint(
+    options?.templateHint ?? (ruleHint ?? undefined),
+    briefResult,
+  );
   const mock = mockSpecFromPrompt(clean);
   const base = augmented;
-  const userContent = options?.flavorSuffix ? `${base}\n\n${options.flavorSuffix}` : base;
+  // 如果规则预选了模板，在用户 prompt 前附加强制说明，确保 LLM 不越过规则路由
+  const templateForcePrefix = ruleHint
+    ? `【系统强制】本游戏 templateId 必须是 "${ruleHint}"，不得选其他模板。\n\n`
+    : "";
+  const userContent = options?.flavorSuffix
+    ? `${templateForcePrefix}${base}\n\n${options.flavorSuffix}`
+    : `${templateForcePrefix}${base}`;
 
   const provider = getActiveProvider();
   const gameRoute = resolveGameModelRoute(gameLlmRouteInput(clean, options));
@@ -1137,7 +1314,68 @@ export async function generateGameSpecWithMeta(
         orch.note("godot_web_prefetch", { ...godotPrefetchTraceDetail(spec), scheduled: false });
       }
     }
-    return withTrace({ ...r, spec });
+
+    /**
+     * AI 评审员：评 0-10 分 + 列出最弱维度 + 给具体建议。
+     * 不阻塞主链路：失败/超时静默回退，分数仅写入 debug 供前端展示。
+     * 评分 < 7 时自动触发 critic-guided re-enhance，再过一遍强化器。
+     */
+    let criticVerdict: import("@/lib/game-quality-critic").GameCriticVerdict | null = null;
+    try {
+      const { critiqueGameSpec } = await import("@/lib/game-quality-critic");
+      criticVerdict = orch
+        ? await orch.span("spec_critic", () => critiqueGameSpec(spec, prompt))
+        : await critiqueGameSpec(spec, prompt);
+      orch?.note("spec_critic_verdict", {
+        ok: criticVerdict !== null,
+        score: criticVerdict?.score,
+        weakest: criticVerdict?.weakest,
+      });
+    } catch (e) {
+      orch?.note("spec_critic_error", { error: String(e).slice(0, 200) });
+    }
+
+    // Auto re-enhance when critic score < 6.8 (lowered from 7 to match new visual_distinct cap)
+    if (criticVerdict && criticVerdict.score < 6.8) {
+      try {
+        const { suggestionsToEnhanceHint, critiqueGameSpec } = await import("@/lib/game-quality-critic");
+        const criticHint = suggestionsToEnhanceHint(criticVerdict);
+        const reEnhancePrompt = (enhancePromptForProduction(prompt) + criticHint).slice(0, 5000);
+        const gameRoute = resolveGameModelRoute(gameLlmRouteInput(prompt.trim(), options));
+        const firstModel = gameRoute.models[0];
+        orch?.note("spec_critic_re_enhance", { triggerScore: criticVerdict.score, model: firstModel });
+        const reEnhancedRaw = await callEnhanceLLM(firstModel, reEnhancePrompt, spec, gameRoute.scene);
+        if (reEnhancedRaw) {
+          const coerced = coerceGameSpec(reEnhancedRaw);
+          if (coerced.ok) {
+            const fixed = coerced.spec.templateId === spec.templateId
+              ? coerced.spec
+              : { ...coerced.spec, templateId: spec.templateId };
+            spec = await runFinalizeLintRepair(prompt, fixed, orch, briefPre?.brief ?? null);
+            const hint2 = resolveEffectiveTemplateHint(options?.templateHint, briefPre ?? null);
+            spec = applyTemplateHint(spec, hint2);
+            // Run critic again on the improved spec
+            const criticVerdict2 = await critiqueGameSpec(spec, prompt).catch(() => null);
+            if (criticVerdict2) {
+              orch?.note("spec_critic_re_enhance_verdict", {
+                scoreBefore: criticVerdict.score,
+                scoreAfter: criticVerdict2.score,
+                improved: criticVerdict2.score > criticVerdict.score,
+              });
+              criticVerdict = criticVerdict2;
+            }
+          }
+        }
+      } catch (e) {
+        orch?.note("spec_critic_re_enhance_error", { error: String(e).slice(0, 200) });
+      }
+    }
+
+    const debugWithCritic: GenerationDebug = criticVerdict
+      ? { ...r.debug, criticVerdict }
+      : r.debug;
+
+    return withTrace({ ...r, spec, debug: debugWithCritic });
   };
 
   // Rich tier: three specialized agents run in parallel (World / Gameplay / Art).

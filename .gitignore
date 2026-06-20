@@ -79,3 +79,6 @@ public/covers/debug-*
 # 本地 QA smoke 快照（admin ops-health 读取）
 # 本地克隆参考仓库（OpenGame 等）
 .tmp-opengame/
+public/covers/
+public/game-sprites/
+public/game-bg/

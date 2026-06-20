@@ -20,6 +20,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { showControlsHint, puzzleControlLines } from "@/game/engine/controls-hint";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
@@ -343,6 +344,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
     this.publishQaState();
     this.publishQaClickHints(bp.cols, bp.rows, w, h);
+    showControlsHint(this, puzzleControlLines(this.uiLocale));
   }
 
   private publishQaClickHints(cols: number, rows: number, w: number, h: number) {
@@ -457,6 +459,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   private finish(won: boolean) {
     if (this.finished) return;
+    this.cameras.main.shake(won ? 300 : 240, won ? 0.008 : 0.010);
     const zh = this.uiLocale === "zh-Hans";
     if (won && this.anipopMode && this.anipopLevel < this.anipopMaxLevel) {
       this.finished = true;
@@ -793,6 +796,43 @@ export class PuzzleScene extends Phaser.Scene {
         this.handleSwapMatch3(r, c, cols, rows, p.x, p.y);
         return;
       }
+      const clickKey = `${r},${c}`;
+      const clickSpecial = this.match3Specials.get(clickKey);
+      if (clickSpecial) {
+        const spColor = this.grid[r]![c]!;
+        const blast = this.expandSpecialBlast(
+          clickSpecial, r, c, cols, rows, clickSpecial === "rainbow" ? spColor : undefined,
+        );
+        this.match3Specials.delete(clickKey);
+        for (const key of blast) {
+          const [rr, cc] = key.split(",").map(Number);
+          this.grid[rr]![cc] = -1;
+          this.match3Specials.delete(key);
+        }
+        this.collapseMatch3(cols, rows);
+        const spGain = blast.size * 8 + 30;
+        this.score += spGain;
+        this.scoreText.setText(hudScore(this.uiLocale, this.score));
+        this.addMove();
+        const zh = this.uiLocale === "zh-Hans";
+        const spLabel =
+          clickSpecial === "rowClear" ? (zh ? "行清除" : "Row Clear") :
+          clickSpecial === "colClear" ? (zh ? "列清除" : "Col Clear") :
+          clickSpecial === "rainbow"  ? (zh ? "彩虹清场" : "Rainbow") :
+          (zh ? "爆炸" : "Bomb");
+        juiceCombo(this, {
+          x: p.x, y: p.y,
+          colorHex: COLORS[spColor] ?? "#f472b6",
+          text: `${spLabel} +${spGain}`,
+          textColorCss: "#f472b6",
+          combo: 5,
+          large: true,
+        });
+        playBleep("pickup");
+        this.redrawMatch3(cols, rows);
+        if (this.score >= this.target) this.finish(true);
+        return;
+      }
       const color = this.grid[r]![c]!;
       const group = this.floodMatch3(r, c, color, new Set());
       if (group.size < 2) {
@@ -805,9 +845,16 @@ export class PuzzleScene extends Phaser.Scene {
         });
         return;
       }
+      const spawnSpecial: "bomb" | "rowClear" | null =
+        group.size >= 5 ? "rowClear" : group.size >= 4 ? "bomb" : null;
       for (const key of group) {
+        if (spawnSpecial && key === clickKey) continue;
         const [rr, cc] = key.split(",").map(Number);
         this.grid[rr]![cc] = -1;
+      }
+      if (spawnSpecial) {
+        this.match3Specials.set(clickKey, spawnSpecial);
+        this.specialTilesCreated += 1;
       }
       this.collapseMatch3(cols, rows);
       const gain = group.size * group.size * 3;
@@ -815,14 +862,21 @@ export class PuzzleScene extends Phaser.Scene {
       this.scoreText.setText(hudScore(this.uiLocale, this.score));
       this.addMove();
       const combo = Math.max(group.size, Math.round(group.size * bloomScale));
+      const zh = this.uiLocale === "zh-Hans";
       juiceCombo(this, {
         x: p.x,
         y: p.y,
         colorHex: COLORS[color] ?? "#fff",
-        text: this.richMatch3 && group.size >= 4 ? `${this.uiLocale === "zh-Hans" ? "绽放" : "Bloom"} +${gain}` : `+${gain}`,
-        textColorCss: this.richMatch3 && group.size >= 4 ? "#f472b6" : this.cohesive.hud.accent,
+        text: spawnSpecial === "rowClear"
+          ? (zh ? `行清除块 +${gain}` : `Row Clear +${gain}`)
+          : spawnSpecial === "bomb"
+          ? (zh ? `炸弹块 +${gain}` : `Bomb +${gain}`)
+          : this.richMatch3 && group.size >= 4
+          ? `${zh ? "绽放" : "Bloom"} +${gain}`
+          : `+${gain}`,
+        textColorCss: spawnSpecial || (this.richMatch3 && group.size >= 4) ? "#f472b6" : this.cohesive.hud.accent,
         combo,
-        large: group.size >= 5,
+        large: group.size >= 5 || Boolean(spawnSpecial),
       });
       playBleep("pickup");
       this.redrawMatch3(cols, rows);
@@ -934,7 +988,14 @@ export class PuzzleScene extends Phaser.Scene {
       combo: Math.max(3, result.chains),
       large: result.chains >= 2 || Boolean(result.specialType),
     });
-    playBleep("pickup");
+    // Progressive SFX: special > chain > normal
+    if (result.specialType) playBleep("power");
+    else if (result.chains >= 2) playBleep("hit");
+    else playBleep("pickup");
+    // Particle burst on special tile explosion
+    for (const bp of result.burstPositions) {
+      juiceBurst(this, bp.x, bp.y, bp.kind === "rowClear" ? "#60a5fa" : "#f97316", 8);
+    }
     this.redrawMatch3(cols, rows);
     this.checkAnipopWin();
   }
@@ -1078,7 +1139,7 @@ export class PuzzleScene extends Phaser.Scene {
     matches: Set<string>,
     swapCell: { r: number; c: number },
   ): { type: "rowClear" | "colClear" | "bomb" | "rainbow"; spawnKey: string } | null {
-    if (!this.anipopMode || matches.size < 4) return null;
+    if (matches.size < 4) return null;
     const spawnKey = this.pickSpecialSpawnKey(matches, swapCell);
     if (matches.size >= 5) return { type: "rainbow", spawnKey };
     const matchRows = new Set([...matches].map((k) => Number(k.split(",")[0])));
@@ -1199,7 +1260,10 @@ export class PuzzleScene extends Phaser.Scene {
       combo: Math.max(4, result.chains + 1),
       large: true,
     });
-    playBleep("pickup");
+    playBleep("power");
+    for (const bp of result.burstPositions) {
+      juiceBurst(this, bp.x, bp.y, bp.kind === "rowClear" ? "#60a5fa" : "#f97316", 8);
+    }
     this.redrawMatch3(cols, rows);
     this.checkAnipopWin();
   }
@@ -1286,7 +1350,10 @@ export class PuzzleScene extends Phaser.Scene {
         combo: Math.max(3, result.chains + 1),
         large: true,
       });
-      playBleep("pickup");
+      playBleep("power");
+      for (const bp of result.burstPositions) {
+        juiceBurst(this, bp.x, bp.y, bp.kind === "rowClear" ? "#60a5fa" : "#f97316", 8);
+      }
       this.redrawMatch3(cols, rows);
       this.checkAnipopWin();
       return;
@@ -1312,7 +1379,10 @@ export class PuzzleScene extends Phaser.Scene {
       combo: Math.max(2, result.chains),
       large: result.chains >= 2,
     });
-    playBleep("pickup");
+    if (result.chains >= 2) playBleep("hit"); else playBleep("pickup");
+    for (const bp of result.burstPositions) {
+      juiceBurst(this, bp.x, bp.y, bp.kind === "rowClear" ? "#60a5fa" : "#f97316", 8);
+    }
     this.redrawMatch3(cols, rows);
     this.checkAnipopWin();
   }
@@ -1361,10 +1431,11 @@ export class PuzzleScene extends Phaser.Scene {
     cols: number,
     rows: number,
     swapCell: { r: number; c: number },
-  ): { cleared: number; chains: number; specialType: "rowClear" | "colClear" | "bomb" | "rainbow" | null } {
+  ): { cleared: number; chains: number; specialType: "rowClear" | "colClear" | "bomb" | "rainbow" | null; burstPositions: Array<{x: number; y: number; kind: string}> } {
     let totalCleared = 0;
     let chains = 0;
     let specialType: "rowClear" | "colClear" | "bomb" | "rainbow" | null = null;
+    const burstPositions: Array<{x: number; y: number; kind: string}> = [];
 
     while (true) {
       let matches = this.findLineMatches(cols, rows);
@@ -1377,6 +1448,18 @@ export class PuzzleScene extends Phaser.Scene {
           pendingSpawn = { key: det.spawnKey, type: det.type };
           matches.delete(det.spawnKey);
           specialType = det.type;
+        }
+      }
+      // Collect special blast positions before expanding
+      for (const key of matches) {
+        const sp = this.match3Specials.get(key);
+        if (sp) {
+          const [br, bc] = key.split(",").map(Number);
+          burstPositions.push({
+            x: this.ox + bc! * this.cell + this.cell / 2,
+            y: this.oy + br! * this.cell + this.cell / 2,
+            kind: sp,
+          });
         }
       }
       matches = this.expandMatchesWithSpecials(matches, cols, rows);
@@ -1393,7 +1476,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.collapseMatch3(cols, rows);
     }
 
-    return { cleared: totalCleared, chains, specialType };
+    return { cleared: totalCleared, chains, specialType, burstPositions };
   }
 
   private clearMatchCellsSimple(matches: Set<string>): number {
@@ -1555,6 +1638,23 @@ export class PuzzleScene extends Phaser.Scene {
         if (special) {
           if (ice) drawAnipopIcedSpecialGlow(iceGfx, x, y, this.cell);
           drawAnipopSpecialMark(iceGfx, x, y, this.cell, special, Boolean(ice));
+        }
+      }
+    }
+
+    // Draw special marks for non-anipop flood match3
+    if (!this.anipopMode && this.match3Specials.size > 0) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          const v = this.grid[r]![c]!;
+          const cellKey = `${r},${c}`;
+          if (v < 0) continue;
+          const special = this.match3Specials.get(cellKey);
+          if (special) {
+            const x = this.ox + c * this.cell;
+            const y = this.oy + r * this.cell;
+            drawAnipopSpecialMark(this.gridGfx, x, y, this.cell, special, false);
+          }
         }
       }
     }

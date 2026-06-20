@@ -7,20 +7,20 @@ extends Node2D
 
 const PALETTE := [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, Color.PURPLE, Color.PINK, Color.WHITE, Color("#1e293b")]
 
-var _hud := GameHud.new()
-var _body := Color.RED
-var _wheel := Color.BLACK
-var _bg := Color("#38bdf8")
-var _glaze := Color.RED
-var _rim := Color.YELLOW
-var _base := Color("#78350f")
-var _part := "body"
-var _pottery_part := "glaze"
-var _edits := 0
-var _edit_goal := 5
-var _ended := false
-var _pottery_mode := false
-var _pottery_spin := 0.35
+var _hud = GameHud.new()
+var _body = Color.RED
+var _wheel = Color.BLACK
+var _bg = Color("#38bdf8")
+var _glaze = Color.RED
+var _rim = Color.YELLOW
+var _base = Color("#78350f")
+var _part = "body"
+var _pottery_part = "glaze"
+var _edits = 0
+var _edit_goal = 5
+var _ended = false
+var _pottery_mode = false
+var _pottery_spin = 0.35
 var _pottery_root: Node3D
 var _glaze_mesh: MeshInstance3D
 var _rim_mesh: MeshInstance3D
@@ -37,8 +37,8 @@ func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
-	var cust := GameSpecData.customization()
-	var cp := GameSpecData.sample_play_profile().get("customization", {})
+	var cust = GameSpecData.customization()
+	var cp = GameSpecData.sample_play_profile().get("customization", {})
 	_edit_goal = int(cust.get("editGoal", 5))
 	if cp is Dictionary:
 		if cp.has("editGoal"):
@@ -55,7 +55,7 @@ func _ready() -> void:
 	_build_scene()
 	_apply_colors()
 	for i in range(PALETTE.size()):
-		var sw := ColorRect.new()
+		var sw = ColorRect.new()
 		sw.color = PALETTE[i]
 		sw.size = Vector2(28, 28)
 		sw.position = Vector2(16 + i * 34, 480)
@@ -77,8 +77,8 @@ func _process(delta: float) -> void:
 
 
 func _build_scene() -> void:
-	var env_n := WorldEnvironment.new()
-	var env := Environment.new()
+	var env_n = WorldEnvironment.new()
+	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = _bg.darkened(0.15)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -87,7 +87,7 @@ func _build_scene() -> void:
 	env_n.environment = env
 	_world.add_child(env_n)
 
-	var sun := DirectionalLight3D.new()
+	var sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-42, 30, 0)
 	sun.light_energy = 1.15
 	sun.shadow_enabled = true
@@ -107,25 +107,25 @@ func _build_scene() -> void:
 		return
 
 	_floor_mesh = MeshInstance3D.new()
-	var floor_box := BoxMesh.new()
+	var floor_box = BoxMesh.new()
 	floor_box.size = Vector3(12, 0.08, 8)
 	_floor_mesh.mesh = floor_box
 	_floor_mesh.position = Vector3(0, -0.04, 0)
 	_car_root.add_child(_floor_mesh)
 
 	_body_mesh = MeshInstance3D.new()
-	var body_box := BoxMesh.new()
+	var body_box = BoxMesh.new()
 	body_box.size = Vector3(2.2, 0.55, 1.0)
 	_body_mesh.mesh = body_box
 	_body_mesh.position = Vector3(0, 0.35, 0)
 	_car_root.add_child(_body_mesh)
 
-	var cabin := MeshInstance3D.new()
-	var cabin_box := BoxMesh.new()
+	var cabin = MeshInstance3D.new()
+	var cabin_box = BoxMesh.new()
 	cabin_box.size = Vector3(1.0, 0.35, 0.85)
 	cabin.mesh = cabin_box
 	cabin.position = Vector3(-0.15, 0.72, 0)
-	var cmat := StandardMaterial3D.new()
+	var cmat = StandardMaterial3D.new()
 	cmat.albedo_color = Color("#bae6fd")
 	cmat.roughness = 0.2
 	cmat.metallic = 0.1
@@ -142,20 +142,20 @@ func _build_pottery() -> void:
 	_pottery_root = Node3D.new()
 	_car_root.add_child(_pottery_root)
 
-	var wheel := MeshInstance3D.new()
-	var wheel_mesh := CylinderMesh.new()
+	var wheel = MeshInstance3D.new()
+	var wheel_mesh = CylinderMesh.new()
 	wheel_mesh.top_radius = 1.4
 	wheel_mesh.bottom_radius = 1.4
 	wheel_mesh.height = 0.12
 	wheel.mesh = wheel_mesh
 	wheel.position = Vector3(0, 0.06, 0)
-	var wmat := StandardMaterial3D.new()
+	var wmat = StandardMaterial3D.new()
 	wmat.albedo_color = Color("#57534e")
 	wheel.material_override = wmat
 	_pottery_root.add_child(wheel)
 
 	_base_mesh = MeshInstance3D.new()
-	var base_cyl := CylinderMesh.new()
+	var base_cyl = CylinderMesh.new()
 	base_cyl.top_radius = 0.82
 	base_cyl.bottom_radius = 0.88
 	base_cyl.height = 0.22
@@ -164,7 +164,7 @@ func _build_pottery() -> void:
 	_pottery_root.add_child(_base_mesh)
 
 	_glaze_mesh = MeshInstance3D.new()
-	var body_cyl := CylinderMesh.new()
+	var body_cyl = CylinderMesh.new()
 	body_cyl.top_radius = 0.58
 	body_cyl.bottom_radius = 0.72
 	body_cyl.height = 1.05
@@ -173,7 +173,7 @@ func _build_pottery() -> void:
 	_pottery_root.add_child(_glaze_mesh)
 
 	_rim_mesh = MeshInstance3D.new()
-	var rim_cyl := CylinderMesh.new()
+	var rim_cyl = CylinderMesh.new()
 	rim_cyl.top_radius = 0.62
 	rim_cyl.bottom_radius = 0.58
 	rim_cyl.height = 0.14
@@ -183,8 +183,8 @@ func _build_pottery() -> void:
 
 
 func _make_wheel(pos: Vector3) -> MeshInstance3D:
-	var w := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
+	var w = MeshInstance3D.new()
+	var cyl = CylinderMesh.new()
 	cyl.top_radius = 0.28
 	cyl.bottom_radius = 0.28
 	cyl.height = 0.22
@@ -208,38 +208,38 @@ func _pottery_part_label() -> String:
 func _apply_colors() -> void:
 	if _pottery_mode:
 		if _glaze_mesh:
-			var gmat := StandardMaterial3D.new()
+			var gmat = StandardMaterial3D.new()
 			gmat.albedo_color = _glaze
 			gmat.roughness = 0.28
 			gmat.metallic = 0.05
 			_glaze_mesh.material_override = gmat
 		if _rim_mesh:
-			var rmat := StandardMaterial3D.new()
+			var rmat = StandardMaterial3D.new()
 			rmat.albedo_color = _rim
 			rmat.roughness = 0.18
 			rmat.metallic = 0.12
 			_rim_mesh.material_override = rmat
 		if _base_mesh:
-			var bmat := StandardMaterial3D.new()
+			var bmat = StandardMaterial3D.new()
 			bmat.albedo_color = _base
 			bmat.roughness = 0.45
 			bmat.metallic = 0.08
 			_base_mesh.material_override = bmat
 		return
 	if _body_mesh:
-		var bmat := StandardMaterial3D.new()
+		var bmat = StandardMaterial3D.new()
 		bmat.albedo_color = _body
 		bmat.roughness = 0.35
 		bmat.metallic = 0.15
 		_body_mesh.material_override = bmat
 	for w in [_wheel_l, _wheel_r]:
 		if w:
-			var wmat := StandardMaterial3D.new()
+			var wmat = StandardMaterial3D.new()
 			wmat.albedo_color = _wheel
 			wmat.roughness = 0.5
 			w.material_override = wmat
 	if _floor_mesh:
-		var fmat := StandardMaterial3D.new()
+		var fmat = StandardMaterial3D.new()
 		fmat.albedo_color = _bg
 		fmat.roughness = 0.8
 		_floor_mesh.material_override = fmat
@@ -273,7 +273,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _pick_color(event: InputEvent, col: Color) -> void:
 	if _ended or not event is InputEventMouseButton:
 		return
-	var mb := event as InputEventMouseButton
+	var mb = event as InputEventMouseButton
 	if not mb.pressed:
 		return
 	if _pottery_mode:
@@ -294,7 +294,7 @@ func _pick_color(event: InputEvent, col: Color) -> void:
 				_bg = col
 	_apply_colors()
 	_edits += 1
-	var active := _pottery_part_label() if _pottery_mode else _part
+	var active = _pottery_part_label() if _pottery_mode else _part
 	_hud.set_score("涂色 %d/%d · %s" % [_edits, _edit_goal, active])
 	if _edits >= _edit_goal:
 		_finish(true)

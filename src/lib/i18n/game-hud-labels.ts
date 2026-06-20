@@ -50,6 +50,14 @@ export function hudDodgeStreak(locale: AppLocale, streak: number): string {
   return hud(locale, "dodgeStreak", { streak });
 }
 
+export function hudComboStreak(locale: AppLocale, combo: number): string {
+  return hud(locale, "comboStreak", { combo });
+}
+
+export function hudNearMissChain(locale: AppLocale, chain: number): string {
+  return hud(locale, "nearMissChain", { chain });
+}
+
 export function hudProgress(
   locale: AppLocale,
   templateId: string,
@@ -175,6 +183,10 @@ export function bannerEventEnd(locale: AppLocale, variant: "play" | "platformer"
     title: banner(locale, "eventEnd"),
     message: banner(locale, key),
   };
+}
+
+export function bannerCheckpointSaved(locale: AppLocale): string {
+  return banner(locale, "checkpointSaved");
 }
 
 export function bannerActStage(locale: AppLocale, label: string | undefined, stageMessage: string) {
@@ -465,6 +477,19 @@ export function bannerFarmingFinish(locale: AppLocale, won: boolean) {
   return { title: banner(locale, won ? "farmingFinishWin" : "farmingFinishLose") };
 }
 
+export function bannerFarmingWeather(locale: AppLocale, type: "rain" | "sun" | "drought" | "normal") {
+  const key = { rain: "farmingWeatherRain", sun: "farmingWeatherSun", drought: "farmingWeatherDrought", normal: "farmingWeatherNormal" }[type];
+  return { title: banner(locale, key) };
+}
+
+export function bannerFarmingPest(locale: AppLocale) {
+  return { title: banner(locale, "farmingPestAlert") };
+}
+
+export function bannerFarmingMarket(locale: AppLocale, dir: "up" | "down") {
+  return { title: banner(locale, dir === "up" ? "farmingMarketUp" : "farmingMarketDown") };
+}
+
 export function hudStrategyControls(locale: AppLocale): string {
   return hud(locale, "strategyControls");
 }
@@ -526,13 +551,25 @@ export function hudTdDefaultBase(locale: AppLocale): string {
 }
 
 export function hudTdEnemyName(locale: AppLocale, enemyId: string): string {
-  const key = enemyId === "tank" ? "tdEnemyTank" : "tdEnemyGrunt";
+  const key =
+    enemyId === "tank" ? "tdEnemyTank" : enemyId === "runner" ? "tdEnemyRunner" : enemyId === "flyer" ? "tdEnemyFlyer" : "tdEnemyGrunt";
   return hud(locale, key);
 }
 
 export function hudTdTowerName(locale: AppLocale, towerId: string): string {
   const key = towerId === "splash" ? "tdTowerSplash" : "tdTowerDart";
   return hud(locale, key);
+}
+
+export function hudScoreMult(locale: AppLocale, mult: number): string {
+  return hud(locale, "scoreMult", { mult });
+}
+
+export function bannerMilestone(locale: AppLocale, pct: number) {
+  return {
+    title: banner(locale, "milestone", { pct }),
+    message: banner(locale, "milestoneMsg"),
+  };
 }
 
 /** Agentic onScore 震屏强度（按模板） */
@@ -542,4 +579,100 @@ export function agenticScoreJuiceScale(templateId: string, score: number): numbe
   if (templateId === "shooter" || templateId === "sniper") return 0.42;
   if (templateId === "towerDefense" || templateId === "strategy") return 0.28;
   return 0.32;
+}
+
+// ── 6 个新模板 HUD label ───────────────────────────────────
+
+export function hudRhythmScore(locale: AppLocale, score: number, combo: number): string {
+  return hud(locale, "rhythmScore", { score, combo });
+}
+
+export function hudRhythmProgress(locale: AppLocale, hit: number, total: number, miss: number): string {
+  return hud(locale, "rhythmProgress", { hit, total, miss });
+}
+
+export function hudSportsScore(locale: AppLocale, score: number, target: number, secLeft: number): string {
+  return hud(locale, "sportsScore", { score, target, sec: secLeft });
+}
+
+export function hudCardState(locale: AppLocale, hp: number, mana: number, maxMana: number, aiHp: number, round: number): string {
+  return hud(locale, "cardState", { hp, mana, maxMana, aiHp, round });
+}
+
+export function hudFightingRound(locale: AppLocale, round: number, total: number, pWins: number, aWins: number): string {
+  return hud(locale, "fightingRound", { round, total, pWins, aWins });
+}
+
+export function hudFightingHp(locale: AppLocale, playerHp: number, aiHp: number): string {
+  return hud(locale, "fightingHp", { playerHp, aiHp });
+}
+
+export function hudMobaState(locale: AppLocale, hp: number, mine: number, enemy: number): string {
+  return hud(locale, "mobaState", { hp, mine, enemy });
+}
+
+export function hudHorrorState(locale: AppLocale, night: number, totalNights: number, power: number, cam: number): string {
+  return hud(locale, "horrorState", { night, totalNights, power, cam });
+}
+
+export function bannerRhythmWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "rhythmWinTitle"), message: banner(locale, "rhythmWinMsg") };
+}
+
+export function bannerSportsWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "sportsWinTitle"), message: banner(locale, "sportsWinMsg") };
+}
+
+export function bannerCardWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "cardWinTitle"), message: banner(locale, "cardWinMsg") };
+}
+
+export function bannerFightingWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "fightingWinTitle"), message: banner(locale, "fightingWinMsg") };
+}
+
+export function bannerMobaWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "mobaWinTitle"), message: banner(locale, "mobaWinMsg") };
+}
+
+export function bannerHorrorWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "horrorWinTitle"), message: banner(locale, "horrorWinMsg") };
+}
+
+// ── 4 真玩法 HUD label ───────────────────────────────────
+
+export function hudMahjongState(locale: AppLocale, points: number, round: number, totalRounds: number): string {
+  return hud(locale, "mahjongState", { points, round, totalRounds });
+}
+
+export function hudMahjongTenpai(locale: AppLocale): string {
+  return hud(locale, "mahjongTenpai");
+}
+
+export function bannerMahjongWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "mahjongWinTitle"), message: banner(locale, "mahjongWinMsg") };
+}
+
+export function hudTetrisScore(locale: AppLocale, score: number, lines: number, target: number): string {
+  return hud(locale, "tetrisScore", { score, lines, target });
+}
+
+export function bannerTetrisWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "tetrisWinTitle"), message: banner(locale, "tetrisWinMsg") };
+}
+
+export function hudEndlessRunnerScore(locale: AppLocale, score: number, target: number, lives: number): string {
+  return hud(locale, "endlessRunnerScore", { score, target, lives });
+}
+
+export function bannerEndlessRunnerWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "endlessRunnerWinTitle"), message: banner(locale, "endlessRunnerWinMsg") };
+}
+
+export function hudFruitNinjaScore(locale: AppLocale, score: number, target: number, lives: number, secLeft: number): string {
+  return hud(locale, "fruitNinjaScore", { score, target, lives, sec: secLeft });
+}
+
+export function bannerFruitNinjaWin(locale: AppLocale): { title: string; message: string } {
+  return { title: banner(locale, "fruitNinjaWinTitle"), message: banner(locale, "fruitNinjaWinMsg") };
 }

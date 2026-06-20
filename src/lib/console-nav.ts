@@ -10,8 +10,10 @@ export type ConsoleTab =
   | "users"
   | "billing"
   | "audit"
+  | "gen-errors"
   | "runtime"
-  | "email";
+  | "email"
+  | "cache-management";
 
 export type ConsoleNavItem = {
   id: ConsoleTab;
@@ -56,8 +58,10 @@ export const CONSOLE_ADMIN_SECTION: ConsoleNavSection = {
     { id: "users", labelKey: "tabUsers" },
     { id: "billing", labelKey: "tabBilling" },
     { id: "audit", labelKey: "tabAudit" },
+    { id: "gen-errors", labelKey: "tabGenErrors" },
     { id: "runtime", labelKey: "tabRuntime" },
     { id: "email", labelKey: "tabEmail" },
+    { id: "cache-management", labelKey: "tabCacheManagement" },
   ],
 };
 

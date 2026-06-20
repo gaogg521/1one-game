@@ -6,6 +6,7 @@ import type { CreativeBrief } from "@/lib/creative-brief/types";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { generateGameSprites, type SpriteGenResult } from "@/lib/game-sprite-gen";
+import { generateSvgSprites } from "@/lib/game-svg-sprite-gen";
 import { generateGameCoverFromBrief } from "@/lib/game-brief-comfy-cover";
 import { buildRuntimeAssetManifest } from "@/lib/assets/asset-runtime-resolver";
 import { PRODUCT } from "@/lib/product-config";
@@ -37,10 +38,12 @@ export async function runProjectAssetPipeline(
   const uiLocale = opts.uiLocale ?? "zh-Hans";
   const brief = opts.brief ?? null;
 
+  // SVG sprites（文本 LLM，快速）与背景/PNG sprites 并行
   const [backgroundUrl, sprites] = await Promise.all([
     generateGameBackground(opts.projectId, opts.spec, brief),
+    generateSvgSprites(opts.projectId, opts.spec).catch(() => []), // SVG first — no image API needed
     generateGameSprites(opts.projectId, opts.spec, uiLocale, brief),
-  ]);
+  ]).then(([bg, _svgResults, pngSprites]) => [bg, pngSprites] as const);
 
   const spritePayload = sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url! }));
   const assetManifest = buildRuntimeAssetManifest({

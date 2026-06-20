@@ -11,11 +11,14 @@ import { buildCohesivePresentation, describeCohesiveExperience } from "@/lib/coh
 import { createPhaserGame } from "@/game/engine/createPhaserGame";
 import type Phaser from "phaser";
 import { SAMPLES } from "@/lib/samples";
+import { derivePreviewId } from "@/lib/preview-asset-id";
 import type { RunnerLeaderboardSnapshot, RunnerRunRecap, CloudRunnerLeaderboardSnapshot } from "@/lib/runner-leaderboard";
 import {
   fetchCloudRunnerLeaderboard,
   submitCloudRunnerScore,
 } from "@/lib/runner-cloud-leaderboard.client";
+import { recordGameResult } from "@/game/engine/win-rate-guard";
+import { recordScore, getHighScore } from "@/game/engine/local-highscore";
 
 function formatRecapTime(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -29,12 +32,18 @@ export default function GamePlayerInner({
   projectId,
   promptHint,
   immersive = false,
+  previewMode = false,
+  onIterate,
 }: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
   promptHint?: string;
   immersive?: boolean;
+  /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
+  previewMode?: boolean;
+  /** 结算画面显示"继续调整"输入框，提交后以此 instruction 再次生成 */
+  onIterate?: (instruction: string) => void;
 }) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
@@ -53,6 +62,8 @@ export default function GamePlayerInner({
     runnerRecap?: RunnerRunRecap;
   } | null>(null);
   const [cloudBoard, setCloudBoard] = useState<CloudRunnerLeaderboardSnapshot | null>(null);
+  const [newLocalBest, setNewLocalBest] = useState(false);
+  const [iterateInput, setIterateInput] = useState("");
   const [playReady, setPlayReady] = useState(false);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
@@ -168,17 +179,39 @@ export default function GamePlayerInner({
     };
   }, [result, spec.samplePlayProfile?.variantId]);
 
+  /**
+   * 派生 effective projectId：
+   * - 保存过的项目 → 用真实 projectId
+   * - 创作台首次预览（projectId 缺失）→ 用 spec 哈希派生 previewId
+   *
+   * 这样 Scene preload 总是会尝试加载 `/game-sprites/{id}/*.png`，
+   * 资产异步管线落盘后下次进入即可命中；当前帧用程序化高保真兜底。
+   */
+  const effectiveProjectId = useMemo(
+    () => projectId ?? derivePreviewId(spec),
+    [projectId, spec],
+  );
+
   useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     setResult(null);
     setCloudBoard(null);
+    setNewLocalBest(false);
     const refPayloads = readReferenceImagePayloadsFromSession();
-    const handle = createPhaserGame(el, spec, (r) => setResult(r), {
+    const handle = createPhaserGame(el, spec, (r) => {
+      setResult(r);
+      if (!previewMode) {
+        recordGameResult(spec.templateId, r.won);
+        const isNewBest = recordScore(spec.templateId, r.score);
+        setNewLocalBest(isNewBest);
+      }
+    }, {
       referencePayloads: refPayloads,
-      projectId: projectId ?? undefined,
+      projectId: effectiveProjectId,
       uiLocale: locale,
       promptHint: resolvedPromptHint,
+      previewMode,
     });
     gameRef.current = handle.game;
     bootAudioRef.current = handle.bootAudio;
@@ -193,7 +226,7 @@ export default function GamePlayerInner({
       gameRef.current = null;
       bootAudioRef.current = null;
     };
-  }, [spec, session, locale, projectId, resolvedPromptHint]);
+  }, [spec, session, locale, effectiveProjectId, resolvedPromptHint]);
 
   /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
   useEffect(() => {
@@ -238,6 +271,7 @@ export default function GamePlayerInner({
   const restart = useCallback(() => {
     armAudioBoot();
     setResult(null);
+    setNewLocalBest(false);
     setSession((s) => s + 1);
   }, [armAudioBoot]);
 
@@ -313,15 +347,43 @@ export default function GamePlayerInner({
         ) : null}
 
         {result ? (
-          <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 px-6 text-center backdrop-blur-md">
+          <div
+            className={`pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center backdrop-blur-md transition-colors duration-700 ${
+              result.won
+                ? "bg-[color:color-mix(in_srgb,#052814_72%,transparent)]"
+                : "bg-[color:color-mix(in_srgb,#1a0000_76%,transparent)]"
+            }`}
+            style={{ animation: "gameResultIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both" }}
+          >
+            <div
+              className={`w-full max-w-sm rounded-2xl border px-6 py-5 shadow-2xl ${
+                result.won
+                  ? "border-emerald-600/40 bg-[color:color-mix(in_srgb,#0d2a1a_88%,transparent)]"
+                  : "border-red-800/40 bg-[color:color-mix(in_srgb,#2a0d0d_88%,transparent)]"
+              }`}
+              style={{ animation: "gameCardSlideUp 0.42s cubic-bezier(0.34,1.56,0.64,1) 0.08s both" }}
+            >
             <div className="space-y-1">
-              <p className="text-2xl font-semibold tracking-tight text-[var(--gc-text)]">
+              <p
+                className={`text-3xl font-bold tracking-tight ${
+                  result.won ? "text-emerald-300" : "text-red-300"
+                }`}
+                style={{ animation: result.won ? "gameWinPulse 1.6s ease-in-out 0.5s 2" : undefined }}
+              >
                 {result.won ? t("victory") : t("gameOver")}
               </p>
               <p className="text-sm text-[var(--gc-muted)]">
                 {t("score")}{" "}
                 <span className="tabular-nums text-[var(--gc-text)]">{result.score}</span>
               </p>
+              {newLocalBest ? (
+                <p className="text-xs font-semibold text-amber-300">🏆 New Best!</p>
+              ) : (() => {
+                const best = getHighScore(spec.templateId);
+                return best != null && best > result.score ? (
+                  <p className="text-xs text-[var(--gc-text-faint)] tabular-nums">Best: {best}</p>
+                ) : null;
+              })()}
               {result.runnerLeaderboard?.isNewBest ? (
                 <p className="text-xs font-medium text-amber-300">{t("leaderboardNewBest")}</p>
               ) : null}
@@ -410,13 +472,63 @@ export default function GamePlayerInner({
                 ) : null}
               </div>
             ) : null}
-            <button
-              type="button"
-              onClick={restart}
-              className="gc-theme-cta rounded-full px-8 py-2.5 text-sm font-semibold shadow-lg"
-            >
-              {t("playAgain")}
-            </button>
+            {onIterate ? (
+              <div className="w-full max-w-xs space-y-2">
+                <p className="text-xs font-medium text-[var(--gc-text-soft)]">继续调整</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={iterateInput}
+                    onChange={(e) => setIterateInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && iterateInput.trim()) {
+                        onIterate(iterateInput.trim());
+                        setIterateInput("");
+                      }
+                    }}
+                    placeholder="描述想要的调整…"
+                    className="flex-1 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-1.5 text-sm text-[var(--gc-text)] placeholder:text-[var(--gc-text-faint)] focus:outline-none focus:ring-1 focus:ring-[color:var(--gc-accent)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (iterateInput.trim()) {
+                        onIterate(iterateInput.trim());
+                        setIterateInput("");
+                      }
+                    }}
+                    className="rounded-lg border border-[color:var(--gc-accent)] px-3 py-1.5 text-sm font-medium text-[color:var(--gc-accent)] hover:bg-[color:var(--gc-accent)]/10"
+                  >
+                    调整
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={restart}
+                className="gc-theme-cta rounded-full px-8 py-2.5 text-sm font-semibold shadow-lg"
+              >
+                {t("playAgain")}
+              </button>
+              {projectId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}/play/${projectId}`;
+                    void navigator.clipboard.writeText(url).then(() => {
+                      // brief visual feedback via title flicker
+                    });
+                  }}
+                  className="rounded-full border border-[color:var(--gc-border)] px-5 py-2.5 text-sm font-medium text-[var(--gc-text-soft)] hover:border-[color:var(--gc-accent)] hover:text-[color:var(--gc-accent)]"
+                  title="复制游戏链接"
+                >
+                  🔗 分享
+                </button>
+              ) : null}
+            </div>
+            </div>{/* end card */}
           </div>
         ) : null}
       </div>

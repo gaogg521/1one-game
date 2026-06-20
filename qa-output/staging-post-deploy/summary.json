@@ -1,0 +1,31 @@
+{
+  "at": "2026-06-18T06:21:22.440Z",
+  "base": "http://127.0.0.1:8888",
+  "pass": true,
+  "passCount": 5,
+  "total": 5,
+  "rows": [
+    {
+      "name": "/api/health",
+      "ok": true,
+      "detail": "http://127.0.0.1:8888"
+    },
+    {
+      "name": "/qa/agentic-bench",
+      "ok": true,
+      "detail": "QA 路由可访问"
+    },
+    {
+      "name": "qa:staging-complex-smoke",
+      "ok": true
+    },
+    {
+      "name": "qa:opengame-browser-bench",
+      "ok": true
+    },
+    {
+      "name": "qa:opengame-staging-env",
+      "ok": true
+    }
+  ]
+}

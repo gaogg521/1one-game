@@ -31,6 +31,11 @@ export {
 /** 小说篇幅档位（children 由「儿童短篇」类型自动推导，不在篇幅区展示） */
 export type NovelLengthTier = "short" | "children" | "medium" | "long";
 
+/** P2 修复：运行时校验 NovelLengthTier 枚举（防 DB 数据损坏传入非法值） */
+export function isNovelLengthTier(v: unknown): v is NovelLengthTier {
+  return v === "short" || v === "children" || v === "medium" || v === "long";
+}
+
 type LengthTierRow = {
   id: NovelLengthTier;
   label: string;

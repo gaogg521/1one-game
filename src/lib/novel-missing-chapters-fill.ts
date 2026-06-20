@@ -24,7 +24,7 @@ import { formatNovelChapterMarkerHead } from "@/lib/novel-locale-prompts";
 import { llmNovelText } from "@/lib/llm";
 import { novelMaxChars, type NovelLengthOptions, type NovelLengthTier } from "@/lib/novel-length";
 
-const MAX_FILL_ROUNDS = 5;
+const MAX_FILL_ROUNDS = 3;
 
 function finalizeFilledContent(
   merged: string,
@@ -74,7 +74,7 @@ async function writeOneMissingChapter(params: {
   hardMax: number;
   uiLocale: AppLocale;
   emit: NovelStreamEmitter;
-}): Promise<string> {
+}): Promise<{ content: string; written: boolean }> {
   const { chapter, pipelineMeta, lengthTier, hardMax, uiLocale, emit } = params;
   const outputLocale = resolveNovelOutputLocale(params.promptTrim);
   let content = params.content;
@@ -133,12 +133,13 @@ async function writeOneMissingChapter(params: {
     const merged = mergeNovelChapterContents(content, block, outputLocale);
     const written = parseNovelChapters(merged).find((c) => c.num === chapter.num);
     if (written && written.body.trim().length > 20) {
-      return merged;
+      return { content: merged, written: true };
     }
     content = merged;
   }
 
-  return content;
+  // 所有尝试失败，返回标志让外层感知
+  return { content, written: false };
 }
 
 /** 按章提纲补写缺失章节（中/长篇生成后完整性门禁前的修复 pass）。 */
@@ -184,19 +185,35 @@ export async function fillMissingPlannedNovelChapters(params: {
       round: round + 1,
     });
 
-    for (const chapter of remaining) {
-      merged = await writeOneMissingChapter({
-        model,
-        promptTrim,
-        titleTrim,
-        content: merged,
-        chapter,
-        pipelineMeta,
-        lengthTier,
-        hardMax,
-        uiLocale,
-        emit,
-      });
+    // 独立章节并行写入
+    const results = await Promise.all(
+      remaining.map((chapter) =>
+        writeOneMissingChapter({
+          model,
+          promptTrim,
+          titleTrim,
+          content: merged,
+          chapter,
+          pipelineMeta,
+          lengthTier,
+          hardMax,
+          uiLocale,
+          emit,
+        }),
+      ),
+    );
+
+    const anyWritten = results.some((r) => r.written);
+    // 若本轮全部失败则提前终止，避免无效继续
+    if (!anyWritten) break;
+
+    // 所有 worker 都以同一 merged 为底，返回「底+该章」。
+    // 将各成功结果链式 merge：mergeNovelChapterContents 按章号去重合并，可安全链式调用。
+    const outputLocale = resolveNovelOutputLocale(promptTrim);
+    for (const r of results) {
+      if (r.written) {
+        merged = mergeNovelChapterContents(merged, r.content, outputLocale);
+      }
     }
   }
 

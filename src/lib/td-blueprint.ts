@@ -200,7 +200,7 @@ export function buildTowerDefenseBlueprint(params: {
       splashRadius: 72,
     },
     {
-      id: "frost",
+      id: "slow",
       name: isSpace ? "引力场" : isCyber ? "减速协议" : "寒霜塔",
       buildCost: 64,
       upgradeCosts: [70, 92, 118],

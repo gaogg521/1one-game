@@ -51,6 +51,10 @@ export async function repairPlannedNovelCompleteness(params: {
   let content = params.content.trim();
   const title = titleTrim?.trim() || promptTrim.slice(0, 24);
 
+  // M3 修复：全局填充轮次计数器上限，防止极端情况触发 11+ 轮 LLM 调用
+  const MAX_GLOBAL_FILL_ROUNDS = 5;
+  let globalFillRounds = 0;
+
   let completeness = assessNovelCompleteness(
     content,
     lengthTier,
@@ -62,8 +66,17 @@ export async function repairPlannedNovelCompleteness(params: {
 
   const runFill = async (label: string) => {
     if (!pipelineMeta?.chapterPlan) return;
+    if (globalFillRounds >= MAX_GLOBAL_FILL_ROUNDS) {
+      emit({
+        step: "fill_rounds_exhausted",
+        message: progressNovelMessage(uiLocale, "missingChaptersFill", { count: 0, nums: "" }),
+        round: label,
+      });
+      return;
+    }
     const remaining = getRemainingChapterPlan(pipelineMeta.chapterPlan, content);
     if (remaining.length === 0) return;
+    globalFillRounds += 1;
     emit({
       step: "missing_chapters_fill",
       message: progressNovelMessage(uiLocale, "missingChaptersFill", {
@@ -72,6 +85,7 @@ export async function repairPlannedNovelCompleteness(params: {
       }),
       remainingChapters: remaining.map((c) => c.num),
       round: label,
+      globalFillRounds,
     });
     content = await fillMissingPlannedNovelChapters({
       model,
@@ -87,7 +101,7 @@ export async function repairPlannedNovelCompleteness(params: {
   };
 
   if (pipelineMeta?.chapterPlan) {
-    for (let round = 1; round <= 5; round++) {
+    for (let round = 1; round <= 3 && globalFillRounds < MAX_GLOBAL_FILL_ROUNDS; round++) {
       const remainingBefore = getRemainingChapterPlan(pipelineMeta.chapterPlan, content);
       if (remainingBefore.length === 0) break;
       await runFill(String(round));
@@ -109,7 +123,7 @@ export async function repairPlannedNovelCompleteness(params: {
     ? getRemainingChapterPlan(pipelineMeta.chapterPlan, content).length
     : 0;
 
-  if (!completeness.ok && stillMissing === 0) {
+  if (!completeness.ok && stillMissing === 0 && globalFillRounds < MAX_GLOBAL_FILL_ROUNDS) {
     emit({
       step: "completion_pass",
       message: progressNovelMessage(uiLocale, "completionPass", { reason: completeness.reason }),

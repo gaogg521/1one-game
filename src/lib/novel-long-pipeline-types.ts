@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { LongNovelSegmentPlan } from "@/lib/novel-long-config";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import { isNovelLengthTier } from "@/lib/novel-length";
 
 export const NOVEL_PIPELINE_VERSION = 1 as const;
 
@@ -155,23 +156,29 @@ export function parseNovelGenerationMeta(raw: string | null | undefined): NovelG
     let generating: NovelGenerateCheckpointMeta | undefined;
     if (generatingRaw && typeof generatingRaw === "object") {
       const g = generatingRaw as Record<string, unknown>;
-      const plan = g.plan as LongNovelSegmentPlan | undefined;
+      // P2 修复：plan 结构完整校验（不只检查 totalSegments）
+      const planRaw = g.plan as Record<string, unknown> | undefined;
+      const planValid =
+        planRaw &&
+        typeof planRaw.totalSegments === "number" &&
+        Array.isArray(planRaw.segments);
+      // P2 修复：lengthTier 枚举校验（防 DB 损坏传非法值）
       if (
         typeof g.completedSegmentIndex === "number" &&
         typeof g.partialContent === "string" &&
         typeof g.prompt === "string" &&
         typeof g.lengthTier === "string" &&
-        plan &&
-        typeof plan.totalSegments === "number"
+        isNovelLengthTier(g.lengthTier) &&
+        planValid
       ) {
         generating = {
           completedSegmentIndex: g.completedSegmentIndex,
           partialContent: g.partialContent,
           prompt: g.prompt,
           title: typeof g.title === "string" ? g.title : undefined,
-          lengthTier: g.lengthTier as NovelLengthTier,
+          lengthTier: g.lengthTier,
           polish: g.polish === true,
-          plan,
+          plan: planRaw as unknown as LongNovelSegmentPlan,
           updatedAt: typeof g.updatedAt === "string" ? g.updatedAt : new Date().toISOString(),
         };
       }

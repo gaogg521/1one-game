@@ -1,4 +1,4 @@
-import { getComicPanelStyleLock } from "@/lib/cover-genre";
+import { getComicPanelStyleLock, type CoverGenre } from "@/lib/cover-genre";
 
 const COMIC_IMAGE_NO_TEXT_SUFFIX =
   "Illustration only. No text, no letters, no English or Chinese words in the image, no speech bubbles with readable writing, no subtitles or signs with legible characters.";
@@ -101,4 +101,101 @@ export function docHasPlaceholderPanels(doc: {
     }
   }
   return false;
+}
+
+// ★ 多题材占位分镜恢复机制
+
+/** 仙侠/玄幻题材场景库 */
+const XIANXIA_FANTASY_SCENE_BEATS = [
+  "lush mountain peak with ancient stone temple, spiritual energy mist, purple glow, cultivation garden, xianxia style",
+  "sect headquarters inner courtyard, disciples in ancient robes practicing with qi flows, peaceful cultivation",
+  "cave dwelling deep in mountain, character in meditation trance, mysterious auras swirling, enlightenment",
+  "heavenly realm encounter, immortal beings in celestial robes, clouds and fortune, golden light, godly atmosphere",
+  "cultivation breakthrough, tribulation lightning striking, powerful transformation, energy shockwave, xianxia climax",
+  "secret realm portal opening, ancient array glowing, mystical energy, dimensional tear, magical effects",
+  "enemy confrontation on floating island, qi aura clash, magic spell effects, combat stance, epic scale",
+  "night meditation under starry sky, moonlight on water, spiritual enlightenment moment, peaceful transcendence",
+];
+
+/** 武侠题材场景库 */
+const WUXIA_MARTIAL_SCENE_BEATS = [
+  "ancient Chinese rooftop, martial artist in kung fu stance, traditional architecture, moonlit night, skilled hand position",
+  "martial arts tournament arena, fighters exchanging blows, crowd watching, dramatic combat moment, dust flying",
+  "secret martial arts school courtyard, masters training disciples in internal energy, pine trees, traditional training",
+  "mountain gorge dramatic duel, two masters facing off, wind and energy rippling, breathtaking landscape, sword glare",
+  "inn interior, tense negotiation or revelation scene, traditional wooden interior, character reaction, intrigue",
+  "night stealth infiltration, character in dark robes moving silently, shadows and moonlight, ninja-like movement",
+  "martial arts celebration feast, victorious character toasting, traditional hall, warm lighting, triumph atmosphere",
+  "final epic confrontation, palm techniques clashing, energy vortex, life-or-death moment, dramatic cinematics",
+];
+
+/** 女频/古代言情题材场景库 */
+const ROMANCE_HISTORICAL_SCENE_BEATS = [
+  "elaborate imperial palace courtyard, character in exquisite Hanfu, ornate architecture, garden with flowers",
+  "imperial bedroom with silk drapes, intimate moment, soft lighting, traditional luxury interior design",
+  "crowded marketplace in ancient city, character observing or being observed, merchant stalls, bustling crowd",
+  "rainy night garden scene, character alone or with love interest, romantic melancholy, wet lantern light",
+  "grand imperial banquet hall, character in formal court dress, other nobles, hierarchical seating, elegant dinner",
+  "secret rendezvous in hidden garden or pavilion, tender moment, moonlight, flowering trees, isolation and intimacy",
+  "character riding in palanquin through city streets, moving perspective, crowds and architecture passing",
+  "finale moment, character in finest dress, resolution of conflict, emotional climax, traditional romance resolution",
+];
+
+/**
+ * 通用多题材框架：根据题材选择合适的场景库
+ */
+function pickGenreSceneBeat(genre: CoverGenre, sceneIndex: number, totalScenes: number): string {
+  const library = (() => {
+    switch (genre) {
+      case "xianxia":
+      case "fantasy":
+        return XIANXIA_FANTASY_SCENE_BEATS;
+      case "wuxia":
+        return WUXIA_MARTIAL_SCENE_BEATS;
+      case "romance":
+      case "historical":
+        return ROMANCE_HISTORICAL_SCENE_BEATS;
+      default:
+        return URBAN_SCENE_BEATS;
+    }
+  })();
+
+  if (library.length === 0) return URBAN_SCENE_BEATS[0]!;
+  const idx = Math.min(
+    library.length - 1,
+    Math.floor(((sceneIndex - 1) / totalScenes) * library.length),
+  );
+  return library[idx]!;
+}
+
+/**
+ * 多题材占位分镜 prompt 重建
+ * 当分镜文案为占位符时，按题材节奏重建图像描述
+ */
+export function buildMultiGenrePanelImagePrompt(opts: {
+  panel: { caption?: string; prompt?: string };
+  sceneIndex: number;
+  totalScenes: number;
+  story: ComicStoryContext;
+  genre: CoverGenre;
+}): string {
+  const styleLock = getComicPanelStyleLock(opts.genre);
+  const beat = pickGenreSceneBeat(opts.genre, opts.sceneIndex, opts.totalScenes);
+  const cap = opts.panel.caption?.trim() ?? "";
+  const useCaption = cap && !PLACEHOLDER_CAPTION.test(cap);
+  const storyBit = opts.story.summary.trim().slice(0, 220);
+  const sceneLine = useCaption
+    ? `Story beat (do not draw text): ${cap.slice(0, 100)}`
+    : `Scene: ${beat}`;
+
+  return [
+    `Manhua comic panel for ${opts.genre} genre`,
+    styleLock,
+    `Novel: ${opts.story.title.slice(0, 60)}.`,
+    storyBit ? `Plot: ${storyBit}.` : "",
+    sceneLine,
+    COMIC_IMAGE_NO_TEXT_SUFFIX,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }

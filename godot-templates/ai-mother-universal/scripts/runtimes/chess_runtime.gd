@@ -5,27 +5,27 @@ extends Node2D
 @onready var _viewport: SubViewport = $ViewportContainer/SubViewport
 @onready var _container: SubViewportContainer = $ViewportContainer
 
-var _hud := GameHud.new()
-var _cell := 1.0
-var _board_origin := Vector3(-3.5, 0, -3.5)
+var _hud = GameHud.new()
+var _cell = 1.0
+var _board_origin = Vector3(-3.5, 0, -3.5)
 var _pieces: Array = []
 var _selected: Dictionary = {}
-var _white_turn := true
-var _moves := 0
-var _ended := false
+var _white_turn = true
+var _moves = 0
+var _ended = false
 var _camera: Camera3D
 var _piece_nodes: Dictionary = {}
 var _legal_markers: Node3D
-var _win_moves := 6
-var _show_legal := false
-var _isometric := false
+var _win_moves = 6
+var _show_legal = false
+var _isometric = false
 
 
 func _ready() -> void:
 	GameSpecData.ensure_loaded()
 	_hud.bind(get_parent().get_parent())
 	_hud.apply_meta()
-	var cp := GameSpecData.sample_play_profile().get("chess", {})
+	var cp = GameSpecData.sample_play_profile().get("chess", {})
 	if cp is Dictionary:
 		_win_moves = int(cp.get("winMoves", 6))
 		_show_legal = bool(cp.get("showLegalMoves", false))
@@ -51,8 +51,8 @@ func _ready() -> void:
 
 
 func _build_scene() -> void:
-	var env_n := WorldEnvironment.new()
-	var env := Environment.new()
+	var env_n = WorldEnvironment.new()
+	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = GameSpecData.theme_color("backgroundColor", Color("#1e293b")).darkened(0.25)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -61,7 +61,7 @@ func _build_scene() -> void:
 	env_n.environment = env
 	_world.add_child(env_n)
 
-	var sun := DirectionalLight3D.new()
+	var sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, 35, 0)
 	sun.light_energy = 1.2
 	sun.shadow_enabled = true
@@ -81,30 +81,30 @@ func _build_scene() -> void:
 	_legal_markers.name = "LegalMoves"
 	_world.add_child(_legal_markers)
 
-	var board_root := Node3D.new()
+	var board_root = Node3D.new()
 	board_root.name = "Board"
 	_world.add_child(board_root)
 
-	var light_sq := GameSpecData.theme_color("collectibleColor", Color("#d6d3d1"))
-	var dark_sq := GameSpecData.theme_color("hazardColor", Color("#57534e")).darkened(0.15)
+	var light_sq = GameSpecData.theme_color("collectibleColor", Color("#d6d3d1"))
+	var dark_sq = GameSpecData.theme_color("hazardColor", Color("#57534e")).darkened(0.15)
 	for r in range(8):
 		for c in range(8):
-			var tile := MeshInstance3D.new()
-			var box := BoxMesh.new()
+			var tile = MeshInstance3D.new()
+			var box = BoxMesh.new()
 			box.size = Vector3(_cell * 0.96, 0.12, _cell * 0.96)
 			tile.mesh = box
 			tile.position = _board_origin + Vector3(c * _cell + _cell * 0.5, 0, r * _cell + _cell * 0.5)
-			var mat := StandardMaterial3D.new()
+			var mat = StandardMaterial3D.new()
 			mat.albedo_color = light_sq if (r + c) % 2 == 0 else dark_sq
 			tile.material_override = mat
 			board_root.add_child(tile)
 
-	var frame := MeshInstance3D.new()
-	var frame_mesh := BoxMesh.new()
+	var frame = MeshInstance3D.new()
+	var frame_mesh = BoxMesh.new()
 	frame_mesh.size = Vector3(8.6, 0.08, 8.6)
 	frame.mesh = frame_mesh
 	frame.position = Vector3(0, -0.06, 0)
-	var fmat := StandardMaterial3D.new()
+	var fmat = StandardMaterial3D.new()
 	fmat.albedo_color = GameSpecData.theme_color("playerColor", Color("#854d0e")).darkened(0.3)
 	frame.material_override = fmat
 	board_root.add_child(frame)
@@ -118,37 +118,37 @@ func _sync_piece_meshes() -> void:
 	_piece_nodes.clear()
 	for i in range(_pieces.size()):
 		var p = _pieces[i]
-		var node := _make_piece_mesh(p)
+		var node = _make_piece_mesh(p)
 		node.position = _cell_to_world(int(p.r), int(p.col))
 		_world.add_child(node)
 		_piece_nodes[i] = node
 
 
 func _make_piece_mesh(p: Dictionary) -> Node3D:
-	var root := Node3D.new()
-	var white := p.c == "w"
-	var body := MeshInstance3D.new()
+	var root = Node3D.new()
+	var white = p.c == "w"
+	var body = MeshInstance3D.new()
 	if p.t == "K":
-		var cyl := CylinderMesh.new()
+		var cyl = CylinderMesh.new()
 		cyl.top_radius = 0.32
 		cyl.bottom_radius = 0.38
 		cyl.height = 0.55
 		body.mesh = cyl
-		var crown := MeshInstance3D.new()
-		var cb := BoxMesh.new()
+		var crown = MeshInstance3D.new()
+		var cb = BoxMesh.new()
 		cb.size = Vector3(0.22, 0.18, 0.22)
 		crown.mesh = cb
 		crown.position = Vector3(0, 0.42, 0)
-		var cmat := StandardMaterial3D.new()
+		var cmat = StandardMaterial3D.new()
 		cmat.albedo_color = Color("#fde047") if white else Color("#7c2d12")
 		crown.material_override = cmat
 		root.add_child(crown)
 	else:
-		var sph := SphereMesh.new()
+		var sph = SphereMesh.new()
 		sph.radius = 0.28
 		sph.height = 0.36
 		body.mesh = sph
-	var mat := StandardMaterial3D.new()
+	var mat = StandardMaterial3D.new()
 	mat.albedo_color = GameSpecData.theme_color("playerColor", Color("#f8fafc")) if white else GameSpecData.theme_color("hazardColor", Color("#1f2937"))
 	mat.roughness = 0.35
 	body.material_override = mat
@@ -166,15 +166,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not event is InputEventMouseButton:
 		return
-	var mb := event as InputEventMouseButton
+	var mb = event as InputEventMouseButton
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
-	var cell := _mouse_to_cell(mb.position)
+	var cell = _mouse_to_cell(mb.position)
 	if cell.x < 0:
 		return
-	var row := int(cell.y)
-	var col := int(cell.x)
-	var hit := _piece_at(row, col)
+	var row = int(cell.y)
+	var col = int(cell.x)
+	var hit = _piece_at(row, col)
 	if _selected.is_empty() and hit != null and hit.c == "w":
 		_selected = hit
 		_highlight_selection(true)
@@ -183,12 +183,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _selected.is_empty():
 		_clear_legal_moves()
-		var cap := _piece_at(row, col)
-		var captured := cap != null and cap.c == "b"
+		var cap = _piece_at(row, col)
+		var captured = cap != null and cap.c == "b"
 		if captured:
 			_pieces.erase(cap)
 			if _camera:
-				var wpos := _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.45, 0))
+				var wpos = _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.45, 0))
 				GameJuice.burst(
 					self,
 					_camera.unproject_position(wpos),
@@ -204,7 +204,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_white_turn = false
 		_sync_piece_meshes()
 		if not captured and _camera:
-			var wpos := _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.35, 0))
+			var wpos = _world.to_global(_cell_to_world(row, col) + Vector3(0, 0.35, 0))
 			GameJuice.burst(
 				self,
 				_camera.unproject_position(wpos),
@@ -235,18 +235,18 @@ func _draw_legal_moves(p: Dictionary) -> void:
 					continue
 				moves.append({"r": int(p.r) + dr, "col": int(p.col) + dc})
 	for m in moves:
-		var r := int(m.r)
-		var c := int(m.col)
+		var r = int(m.r)
+		var c = int(m.col)
 		if r < 0 or r > 7 or c < 0 or c > 7:
 			continue
-		var marker := MeshInstance3D.new()
-		var disc := CylinderMesh.new()
+		var marker = MeshInstance3D.new()
+		var disc = CylinderMesh.new()
 		disc.top_radius = 0.18
 		disc.bottom_radius = 0.18
 		disc.height = 0.06
 		marker.mesh = disc
 		marker.position = _cell_to_world(r, c) + Vector3(0, 0.08, 0)
-		var mat := StandardMaterial3D.new()
+		var mat = StandardMaterial3D.new()
 		mat.albedo_color = Color("#4ade80")
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.albedo_color.a = 0.55
@@ -264,14 +264,14 @@ func _clear_legal_moves() -> void:
 func _mouse_to_cell(screen_pos: Vector2) -> Vector2i:
 	if _container == null or _viewport == null:
 		return Vector2i(-1, -1)
-	var rect := _container.get_global_rect()
+	var rect = _container.get_global_rect()
 	if not rect.has_point(screen_pos):
 		return Vector2i(-1, -1)
-	var local := (screen_pos - rect.position) / rect.size
-	var nx := local.x * 2.0 - 1.0
-	var ny := local.y * 2.0 - 1.0
-	var col := int(floor((nx + 0.72) / 1.44 * 8.0))
-	var row := int(floor((ny + 0.62) / 1.24 * 8.0))
+	var local = (screen_pos - rect.position) / rect.size
+	var nx = local.x * 2.0 - 1.0
+	var ny = local.y * 2.0 - 1.0
+	var col = int(floor((nx + 0.72) / 1.44 * 8.0))
+	var row = int(floor((ny + 0.62) / 1.24 * 8.0))
 	if col < 0 or col > 7 or row < 0 or row > 7:
 		return Vector2i(-1, -1)
 	return Vector2i(col, row)

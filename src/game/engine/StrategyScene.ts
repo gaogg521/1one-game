@@ -14,6 +14,7 @@ import { bannerStrategyFinish, hudReady, hudScore, hudStrategyControls } from "@
 import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { showControlsHint, strategyControlLines } from "@/game/engine/controls-hint";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -33,6 +34,7 @@ export class StrategyScene extends Phaser.Scene {
   private finished = false;
   private score = 0;
   private gfx!: Phaser.GameObjects.Graphics;
+  private crisisGfx!: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
   private scoreText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
@@ -88,11 +90,13 @@ export class StrategyScene extends Phaser.Scene {
       );
     }
     this.banner = new HudBanner(this, this.cohesive.banner);
+    this.crisisGfx = this.add.graphics().setDepth(190).setScrollFactor(0).setAlpha(0);
     this.banner.show({ title: hudReady(this.uiLocale), ms: 1200 });
 
     setPhaserQaState({ qaTouches: 0 });
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onTap(p));
     this.redraw();
+    this.initReinforcements();
     schedulePhaserPlayReady(this, 400, {});
     const playerNode = this.nodes.find((n) => n.owner === "player");
     const linked = playerNode
@@ -105,6 +109,7 @@ export class StrategyScene extends Phaser.Scene {
         { x: target.x, y: target.y },
       ]);
     }
+    showControlsHint(this, strategyControlLines(this.uiLocale));
   }
 
   private nodeAt(x: number, y: number): StrategyNode | null {
@@ -154,10 +159,14 @@ export class StrategyScene extends Phaser.Scene {
         hit.troops = send - hit.troops;
       } else hit.troops -= send;
 
+      // travel particle
+      this.spawnTroopParticles(from, hit, this.spec.theme.playerColor);
+
       if (prevOwner !== "player" && hit.owner === "player") {
         juiceBurst(this, nx, ny, this.spec.theme.playerColor, 18, this.runtimeRng);
         juiceFlash(this, { r: 90, g: 210, b: 130 }, { durationMs: 180 });
         juiceShake(this, { durationMs: 120, intensity: 0.006 });
+        this.soundscape?.triggerEvent("restore");
       }
 
       this.selected = null;
@@ -180,25 +189,7 @@ export class StrategyScene extends Phaser.Scene {
   }
 
   private aiTurn() {
-    const ai = this.nodes.filter((n) => n.owner === "ai" && n.troops > 4);
-    const pick = pickSeededFromArray(ai, this.runtimeRng);
-    if (pick) {
-      const targets = this.nodes.filter((n) => this.linked(pick, n) && n.owner !== "ai");
-      const tgt = pickSeededFromArray(targets, this.runtimeRng);
-      if (tgt) {
-        const send = Math.floor(pick.troops * 0.5 * this.aiAggression);
-        pick.troops -= send;
-        if (send > tgt.troops) {
-          tgt.owner = "ai";
-          tgt.troops = send - tgt.troops;
-        } else tgt.troops -= send;
-      }
-    }
-    this.playerTurn = true;
-    this.redraw();
-    const playerNodes = this.nodes.filter((n) => n.owner === "player").length;
-    if (playerNodes >= this.winNodes) this.finish(true);
-    else if (this.nodes.every((n) => n.owner === "ai")) this.finish(false);
+    this.smartAiTurn();
   }
 
   private redraw() {
@@ -245,15 +236,170 @@ export class StrategyScene extends Phaser.Scene {
   }
 
   private qaActions = 0;
+  private nextReinforceAt = 0;
+  private reinforceInterval = 5000;
+  private reinforceText!: Phaser.GameObjects.Text;
 
-  update() {
+  private initReinforcements() {
+    this.reinforceInterval = this.rushMode ? 3000 : 5000;
+    this.nextReinforceAt = (this.time?.now ?? 0) + this.reinforceInterval;
+    const w = this.scale.width;
+    this.reinforceText = styleHudText(
+      this.add.text(w / 2, 14, "", { fontSize: "13px", color: "#fde68a" }).setOrigin(0.5),
+    );
+  }
+
+  private doReinforcements() {
+    const playerCount = this.nodes.filter((n) => n.owner === "player").length;
+    const aiCount = this.nodes.filter((n) => n.owner === "ai").length;
+    for (const n of this.nodes) {
+      if (n.owner === "player") n.troops += Math.max(1, Math.floor(playerCount * 0.6));
+      else if (n.owner === "ai") n.troops += Math.max(1, Math.floor(aiCount * 0.6 * this.aiAggression));
+    }
+    playBleep("pickup");
+    this.redraw();
+  }
+
+  private smartAiTurn() {
+    // Collect all AI nodes with enough troops to attack
+    const ai = this.nodes.filter((n) => n.owner === "ai" && n.troops > 2);
+    if (ai.length === 0) { this.playerTurn = true; this.redraw(); return; }
+
+    // Sort AI nodes by troops descending — strongest attackers first
+    ai.sort((a, b) => b.troops - a.troops);
+
+    let moved = false;
+    for (const pick of ai) {
+      const targets = this.nodes
+        .filter((n) => this.linked(pick, n) && n.owner !== "ai")
+        .sort((a, b) => a.troops - b.troops); // prefer weakest target
+      const tgt = targets[0];
+      if (!tgt) continue;
+
+      // Only attack if we have advantage or aggression demands it
+      const send = Math.floor(pick.troops * Math.min(0.9, 0.5 * this.aiAggression));
+      if (send < 1) continue;
+      pick.troops -= send;
+      const prevOwner = tgt.owner;
+      if (send > tgt.troops) {
+        tgt.owner = "ai";
+        tgt.troops = send - tgt.troops;
+        if (prevOwner === "player") {
+          juiceShake(this, { durationMs: 180, intensity: 0.008 });
+          juiceFlash(this, { r: 220, g: 60, b: 60 }, { durationMs: 140 });
+          this.soundscape?.triggerEvent("danger");
+        }
+      } else {
+        tgt.troops -= send;
+      }
+      // Spawn travel particles
+      this.spawnTroopParticles(pick, tgt, "#ef4444");
+      moved = true;
+      break; // one move per AI turn
+    }
+
+    if (!moved) {
+      // fallback: old simple behavior for edge cases
+      const pick = pickSeededFromArray(ai, this.runtimeRng);
+      if (pick) {
+        const targets = this.nodes.filter((n) => this.linked(pick, n) && n.owner !== "ai");
+        const tgt = pickSeededFromArray(targets, this.runtimeRng);
+        if (tgt) {
+          const send = Math.floor(pick.troops * 0.5 * this.aiAggression);
+          pick.troops -= send;
+          if (send > tgt.troops) { tgt.owner = "ai"; tgt.troops = send - tgt.troops; }
+          else tgt.troops -= send;
+        }
+      }
+    }
+
+    this.playerTurn = true;
+    this.redraw();
+    const playerNodes = this.nodes.filter((n) => n.owner === "player").length;
+    if (playerNodes >= this.winNodes) this.finish(true);
+    else if (this.nodes.every((n) => n.owner === "ai")) this.finish(false);
+  }
+
+  private spawnTroopParticles(from: StrategyNode, to: StrategyNode, colorHex: string) {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const fx = from.x * w;
+    const fy = from.y * h;
+    const tx = to.x * w;
+    const ty = to.y * h;
+    const col = Phaser.Display.Color.HexStringToColor(colorHex).color;
+    for (let i = 0; i < 5; i++) {
+      const dot = this.add.circle(fx, fy, 4, col, 0.85).setDepth(15);
+      this.tweens.add({
+        targets: dot,
+        x: tx,
+        y: ty,
+        alpha: 0,
+        scale: 0.4,
+        delay: i * 60,
+        duration: 320,
+        ease: "Quad.easeIn",
+        onComplete: () => dot.destroy(),
+      });
+    }
+  }
+
+  update(_t: number, _dt: number) {
     this.banner.tick();
     setPhaserQaState({ qaTouches: this.qaActions });
+
+    // Crisis vignette: fire when player controls minority of nodes
+    if (!this.finished) {
+      const total = this.nodes.length;
+      const playerOwned = this.nodes.filter((n) => n.owner === "player").length;
+      const ratio = total > 0 ? playerOwned / total : 1;
+      const crisisLevel = ratio < 0.25 ? 1 : ratio < 0.4 ? 0.55 : 0;
+      const now = this.time.now;
+      const targetAlpha = crisisLevel * (0.22 + Math.sin(now * 0.005) * 0.1);
+      const curAlpha = this.crisisGfx.alpha;
+      if (Math.abs(curAlpha - targetAlpha) > 0.005) {
+        this.crisisGfx.setAlpha(curAlpha + (targetAlpha - curAlpha) * 0.08);
+      }
+      if (crisisLevel > 0) {
+        const cw = this.scale.width;
+        const ch = this.scale.height;
+        this.crisisGfx.clear();
+        const t = 48;
+        for (let i = 0; i < 5; i++) {
+          const off = Math.floor((t * i) / 4);
+          const a = (1 - i / 4) * 0.36;
+          this.crisisGfx.fillStyle(0xff2a44, a);
+          this.crisisGfx.fillRect(0, 0, cw, 4 + off / 5);
+          this.crisisGfx.fillRect(0, ch - 4 - off / 5, cw, 4 + off / 5);
+          this.crisisGfx.fillRect(0, 0, 4 + off / 5, ch);
+          this.crisisGfx.fillRect(cw - 4 - off / 5, 0, 4 + off / 5, ch);
+        }
+      } else {
+        this.crisisGfx.clear();
+      }
+    }
+
+    if (!this.finished && this.nextReinforceAt > 0) {
+      const now = this.time.now;
+      const remaining = Math.ceil((this.nextReinforceAt - now) / 1000);
+      if (this.reinforceText) {
+        this.reinforceText.setText(
+          remaining > 0
+            ? this.uiLocale === "zh-Hans" ? `增援 ${remaining}s` : `Reinforce ${remaining}s`
+            : "",
+        );
+      }
+      if (now >= this.nextReinforceAt) {
+        this.doReinforcements();
+        this.nextReinforceAt = now + this.reinforceInterval;
+      }
+    }
   }
 
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.cameras.main.shake(won ? 320 : 260, won ? 0.008 : 0.010);
     this.banner.show({ ...bannerStrategyFinish(this.uiLocale, won), ms: 2000 });
     this.time.delayedCall(2200, () => this.onEnd({ score: this.score, won }));
   }

@@ -1,4 +1,5 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { z } from "zod";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
@@ -41,24 +42,37 @@ export async function POST(req: Request) {
     });
   }
 
-  const body = json.body as {
-    novelId?: string;
-    sourceMode?: "standalone" | "from_novel";
-    content?: string;
-    creativePrompt?: string;
-    creativeBrief?: unknown;
-    briefRevision?: NovelBriefUserRevision;
-    title?: string;
-    pageCount?: number;
-    layoutId?: string;
-    lengthTier?: string;
-    stylePreset?: string;
-    readMode?: string;
-    chapterScope?: { fromChapter: number; toChapter: number; label?: string };
-    characterRoster?: unknown;
-    resumeComicId?: string;
-    forceLightStoryboard?: boolean;
-  };
+  // P2 修复：Zod schema 替代裸 as 断言
+  const ComicRequestBodySchema = z.object({
+    novelId: z.string().optional(),
+    sourceMode: z.enum(["standalone", "from_novel"]).optional(),
+    content: z.string().max(200_000).optional(),
+    creativePrompt: z.string().max(10_000).optional(),
+    creativeBrief: z.unknown().optional(),
+    briefRevision: z.unknown().optional(),
+    title: z.string().max(200).optional(),
+    pageCount: z.number().int().min(1).max(120).optional(),
+    layoutId: z.string().optional(),
+    lengthTier: z.string().optional(),
+    stylePreset: z.string().optional(),
+    readMode: z.string().optional(),
+    chapterScope: z.object({
+      fromChapter: z.number().int(),
+      toChapter: z.number().int(),
+      label: z.string().optional(),
+    }).optional(),
+    characterRoster: z.unknown().optional(),
+    resumeComicId: z.string().optional(),
+    forceLightStoryboard: z.boolean().optional(),
+  });
+  const bodyParsed = ComicRequestBodySchema.safeParse(json.body);
+  if (!bodyParsed.success) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "invalid_body", details: bodyParsed.error.issues.slice(0, 3) }),
+      { status: 400, headers: { "Content-Type": "application/json", ...ridHeaders(requestId) } },
+    );
+  }
+  const body = bodyParsed.data;
 
   const pipelineError = validateComicPipelineRequest({
     sourceMode: body.sourceMode,
@@ -79,6 +93,8 @@ export async function POST(req: Request) {
   }
 
   const encoder = new TextEncoder();
+  // P1 修复：AbortController——客户端断连时取消进行中的生成
+  const abortController = new AbortController();
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
@@ -91,7 +107,8 @@ export async function POST(req: Request) {
         }
       };
 
-      const ping = setInterval(() => send({ step: "ping" }), 15_000);
+      // P2 修复：ping 在 closed 后立即停
+      const ping = setInterval(() => { if (!closed) send({ step: "ping" }); }, 15_000);
 
       try {
         const result = await runComicGeneration(
@@ -104,7 +121,7 @@ export async function POST(req: Request) {
             creativeBrief: body.creativeBrief
               ? (parseNovelCreativeBrief(body.creativeBrief) ?? undefined)
               : undefined,
-            briefRevision: body.briefRevision,
+            briefRevision: body.briefRevision as NovelBriefUserRevision | undefined,
             title: body.title,
             pageCount: body.pageCount,
             layoutId: body.layoutId,
@@ -149,8 +166,20 @@ export async function POST(req: Request) {
         clearInterval(ping);
         if (!closed) {
           closed = true;
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            // stream already closed
+          }
         }
+        if (!abortController.signal.aborted) {
+          abortController.abort();
+        }
+      }
+    },
+    cancel() {
+      if (!abortController.signal.aborted) {
+        abortController.abort();
       }
     },
   });

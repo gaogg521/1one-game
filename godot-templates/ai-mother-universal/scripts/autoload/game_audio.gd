@@ -73,14 +73,17 @@ func _start_ambient() -> void:
 func _arp_ping() -> void:
 	if not _booted:
 		return
-	var arp_scale := [1.0, 1.25, 1.5, 1.25][_arp_idx % 4]
+	# Godot 4.4 中数组下标取值需显式类型（避免 Variant 推断警告被当错误）
+	var arp_table := [1.0, 1.25, 1.5, 1.25]
+	var arp_scale: float = float(arp_table[_arp_idx % 4])
 	_arp_idx += 1
 	GameBleeps.play(self, GameBleeps.Kind.PICKUP, 0.55 * arp_scale)
 
 
 func _infer_root_hz() -> float:
 	var c := GameSpecData.theme_color("playerColor", Color.GREEN)
-	var h := c.get_hsv().x
+	# Godot 4.4 Color 的 get_h()/get_hsv() 兼容性不稳定，直接用红通道做色相因子
+	var h: float = c.r
 	return 92.0 + h * 118.0
 
 

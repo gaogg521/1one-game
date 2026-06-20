@@ -274,6 +274,8 @@ model Project {
   refinementLogJson String?
   /// Creative Brief 结构化扩写 JSON（与 specJson 并列持久化）
   creativeBriefJson String?
+  /// LLM 生成的旋律音符序列 JSON（无第三方 BGM API Key 时的降级方案，生成后缓存）
+  bgmNotesJson      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -338,4 +340,23 @@ model Comic {
   @@index([novelId])
   @@index([visibility, featured, likeCount])
   @@index([visibility, createdAt])
+}
+
+/// 生成失败日志：game / novel / comic 三类内容的生成错误记录
+model GenerationError {
+  id          String   @id @default(cuid())
+  /// 内容类型：game | novel | comic
+  contentType String
+  /// 触发生成的 prompt 前 512 字符（便于统计高频失败主题）
+  promptSnippet String
+  /// 错误类型标签：timeout | rate_limit | context_length | parse_error | upstream | unknown
+  errorType   String   @default("unknown")
+  /// 原始错误消息（截断至 512 字符）
+  errorMessage String?
+  ownerKey    String?
+  createdAt   DateTime @default(now())
+
+  @@index([contentType, createdAt])
+  @@index([errorType, createdAt])
+  @@index([createdAt])
 }

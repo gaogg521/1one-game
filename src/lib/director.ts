@@ -215,23 +215,39 @@ export function buildDirector(params: {
 
     // avoider 专属：终局密集弹幕倒计时（类似 survivor lastStand）
     if (template === "avoider" && !events.some((e) => e.type === "finalBarrage")) {
+      const barrageDurationMs = params.spec.avoider?.finalBarrageDurationMs
+        ?? Math.floor(7000 + intensity * 3000);
       events.push({
         at: clamp(0.88 + (rnd(seed, 940) - 0.5) * 0.06, 0.82, 0.94),
         type: "finalBarrage",
         strength: evStrength(941, 0.12),
-        durationMs: Math.floor(7000 + intensity * 3000),
+        durationMs: barrageDurationMs,
         title: tr("finalBarrage.title"),
         message: tr("finalBarrage.message"),
       });
     }
 
+    // collector 专属：连击奖励窗口（comboBonus 窗口内 combo 倍率翻倍）
+    if (template === "collector" && !events.some((e) => e.type === "comboBonus")) {
+      events.push({
+        at: clamp(0.30 + (rnd(seed, 945) - 0.5) * 0.10, 0.22, 0.44),
+        type: "comboBonus",
+        strength: evStrength(946, 0.04),
+        durationMs: 5000,
+        title: tr("comboBonus"),
+        message: tr("comboBonusMsg"),
+      });
+    }
+
     // collector 专属：黄金收集物窗口（高价值限时物件）
     if (template === "collector" && !events.some((e) => e.type === "goldenPickup")) {
+      const goldenItem = params.spec.collector?.items?.find((it) => it.isGolden);
+      const goldenWindowMs = goldenItem?.goldenWindowMs ?? 5200;
       events.push({
         at: clamp(0.52 + (rnd(seed, 950) - 0.5) * 0.10, 0.42, 0.68),
         type: "goldenPickup",
         strength: evStrength(951, 0.05),
-        durationMs: 5200,
+        durationMs: goldenWindowMs,
         title: tr("goldenPickup.title"),
         message: tr("goldenPickup.message"),
       });
@@ -247,6 +263,21 @@ export function buildDirector(params: {
         title: tr("breathingRoom"),
         message: tr("breathingRoomMsg"),
       });
+    }
+
+    // survivor 专属：额外精英波（来自 blueprint.eliteWaves）
+    const eliteWaves = params.spec.survivor?.eliteWaves ?? [];
+    for (const wave of eliteWaves) {
+      if (!events.some((e) => e.type === "miniBoss" && Math.abs(e.at - wave.at) < 0.08)) {
+        events.push({
+          at: clamp(wave.at, 0.1, 0.96),
+          type: "miniBoss",
+          strength: Math.min(1, (wave.hpMul - 1) / 6),
+          durationMs: Math.round(6000 + (wave.count * 800)),
+          title: wave.label,
+          message: tr(`playArcade.${template}.miniBoss`),
+        });
+      }
     }
   }
 

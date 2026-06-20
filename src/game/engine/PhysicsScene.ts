@@ -14,6 +14,7 @@ import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudScore } from 
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { showControlsHint } from "@/game/engine/controls-hint";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 
@@ -154,6 +155,13 @@ export class PhysicsScene extends Phaser.Scene {
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
     setPhaserQaClickHints([{ x: dummyX / w, y: dummyY / h }]);
     schedulePhaserPlayReady(this, 400, {});
+    const zh = this.uiLocale === "zh-Hans" || this.uiLocale === "zh-Hant";
+    const phHint = zh
+      ? ["点击角色施加弹力", "连续命中累积分数"]
+      : this.uiLocale === "ms"
+        ? ["Klik karakter untuk lontar", "Kena berterusan kumpul mata"]
+        : ["Click character to apply force", "Chain hits to score points"];
+    showControlsHint(this, phHint);
   }
 
   private refreshProgressBar() {
@@ -232,6 +240,7 @@ export class PhysicsScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.cameras.main.shake(won ? 280 : 220, won ? 0.007 : 0.009);
     if (won) {
       juiceWin(this, {
         x: this.dummy.x,

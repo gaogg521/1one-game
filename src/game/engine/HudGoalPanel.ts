@@ -27,7 +27,12 @@ export class HudGoalPanel {
     const y = opts?.y ?? 112;
     const titleY = y - 38;
 
-    this.idleAlpha = style.qualityTier === "minimal" ? 0.58 : style.qualityTier === "showcase" ? 0.82 : 0.72;
+    /**
+     * 开场 3s 后**完全淡出**，不再半透明常驻。
+     * 之前的 0.58~0.82 常驻 alpha 会与 banner / 顶栏 / 滚动战斗信息四层叠加（截图里的"信息墙"现象）。
+     * 现在采用"教学卡"模式：开场展示，进入战斗即消失，避免遮挡核心玩法。
+     */
+    this.idleAlpha = 0;
 
     this.box = scene.add.rectangle(x, y, panelW, 86, style.panelFill, style.panelFillAlpha);
     this.box.setStrokeStyle(1, style.panelStroke, style.panelStrokeAlpha);
@@ -95,6 +100,13 @@ export class HudGoalPanel {
       alpha: this.idleAlpha,
       duration: 360,
       ease: "Quad.InOut",
+      onComplete: () => {
+        if (this.idleAlpha === 0) {
+          for (const obj of this.objects) {
+            if ("setVisible" in obj) (obj as { setVisible: (v: boolean) => void }).setVisible(false);
+          }
+        }
+      },
     });
   }
 

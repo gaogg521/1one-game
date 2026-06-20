@@ -18,6 +18,10 @@ import {
 } from "@/lib/comic-director-types";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import { formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
+import {
+  migrateComicDirector,
+  getDirectorMigrationSummary,
+} from "@/lib/comic-director-migration";
 
 function sampleNovelExcerpts(content: string, maxChars: number, outputLocale: BriefInputLocale = "zh"): string {
   if (isChildrenFormattedNovelContent(content)) {
@@ -175,8 +179,22 @@ export async function fetchComicDirectorPack(params: {
   novelMeta: NovelGenerationMeta | null;
   layoutId?: ComicLayoutId;
   outputLocale?: BriefInputLocale;
+  storedDirector?: ComicDirectorPack | null;
 }): Promise<ComicDirectorPack> {
   const outputLocale = params.outputLocale ?? "zh";
+
+  // ★ 尝试迁移旧版本导演数据（向后兼容）
+  if (params.storedDirector) {
+    const migrated = migrateComicDirector(params.storedDirector, COMIC_DIRECTOR_VERSION);
+    if (migrated) {
+      console.info(
+        `[comic-director] ${getDirectorMigrationSummary(params.storedDirector.version, COMIC_DIRECTOR_VERSION)}，复用已有数据`,
+      );
+      return migrated;
+    }
+    console.warn("[comic-director] 旧版本数据迁移失败，重新生成导演包");
+  }
+
   const excerpt = sampleNovelExcerpts(
     params.novelContent,
     PRODUCT.comic.directorContentMaxChars,

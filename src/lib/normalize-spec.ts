@@ -2,13 +2,14 @@ import {
   DirectorSchema,
   GameSpecSchema,
   SystemsSchema,
+  VisualSchema,
   type GameSpec,
 } from "@/lib/game-spec";
 import { AgenticModuleSchema } from "@/lib/agentic/game-module";
 import type { AppLocale } from "@/i18n/routing";
 import { untitledGameLabel } from "@/lib/i18n/chapter-labels";
 const TowerDefenseBlueprintSchema = GameSpecSchema.shape.towerDefense;
-import { withPresentationDefaults } from "@/lib/cohesive-presentation";
+import { withPresentationDefaults, withVisualDefaults } from "@/lib/cohesive-presentation";
 import { isGameTemplateId } from "@/lib/game-templates/registry";
 
 function normalizeHex(input: string): string | null {
@@ -176,6 +177,16 @@ export function coerceGameSpec(
     agenticPlayRouteOpt = o.agenticPlayRoute;
   }
 
+  let visualOpt: GameSpec["visual"] | undefined;
+  if (o.visual !== undefined && o.visual !== null) {
+    const v = VisualSchema.safeParse(o.visual);
+    if (v.success) {
+      visualOpt = v.data;
+    } else {
+      issues.push("visual 字段未通过校验，已丢弃（enrich 阶段会自动推断 shaderPack）");
+    }
+  }
+
   const candidate: GameSpec = {
     version: 1,
     templateId,
@@ -211,11 +222,12 @@ export function coerceGameSpec(
     ...(towerDefenseOpt !== undefined ? { towerDefense: towerDefenseOpt } : {}),
     ...(agenticModuleOpt !== undefined ? { agenticModule: agenticModuleOpt } : {}),
     ...(agenticPlayRouteOpt !== undefined ? { agenticPlayRoute: agenticPlayRouteOpt } : {}),
+    ...(visualOpt !== undefined ? { visual: visualOpt } : {}),
   };
 
   const parsed = GameSpecSchema.safeParse(candidate);
   if (parsed.success) {
-    return { ok: true, spec: withPresentationDefaults(parsed.data) };
+    return { ok: true, spec: withVisualDefaults(withPresentationDefaults(parsed.data)) };
   }
   parsed.error.issues.forEach((i) => issues.push(`${i.path.join(".")}: ${i.message}`));
   return { ok: false, issues };

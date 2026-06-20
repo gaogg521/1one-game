@@ -16,6 +16,8 @@ export type LlmJsonRequest = {
    */
   jsonSchema?: unknown;
   timeoutMs: number;
+  /** P1 修复：外部 AbortSignal */
+  signal?: AbortSignal;
 };
 
 export type LlmJsonResult =
@@ -41,6 +43,8 @@ export type LlmTextRequest = {
   temperature: number;
   maxTokens?: number;
   timeoutMs: number;
+  /** P1 修复：外部 AbortSignal，客户端断连时取消 LLM fetch */
+  signal?: AbortSignal;
 };
 
 export type LlmTextResult =

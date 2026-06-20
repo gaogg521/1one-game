@@ -15,6 +15,20 @@ const RUNTIMES := {
 	"chess": preload("res://scenes/runtimes/chess.tscn"),
 	"customization": preload("res://scenes/runtimes/customization.tscn"),
 	"strategy": preload("res://scenes/runtimes/strategy.tscn"),
+	"rhythm": preload("res://scenes/runtimes/rhythm.tscn"),
+	"sports": preload("res://scenes/runtimes/sports.tscn"),
+	"card": preload("res://scenes/runtimes/card.tscn"),
+	"fighting": preload("res://scenes/runtimes/fighting.tscn"),
+	"moba": preload("res://scenes/runtimes/moba.tscn"),
+	"horror": preload("res://scenes/runtimes/horror.tscn"),
+	"mahjong": preload("res://scenes/runtimes/mahjong.tscn"),
+	"tetris": preload("res://scenes/runtimes/tetris.tscn"),
+	"endlessRunner": preload("res://scenes/runtimes/endless_runner.tscn"),
+	"fruitNinja": preload("res://scenes/runtimes/fruit_ninja.tscn"),
+	"mahjongSolitaire": preload("res://scenes/runtimes/mahjong_solitaire.tscn"),
+	"douDizhu": preload("res://scenes/runtimes/dou_dizhu.tscn"),
+	"breakout": preload("res://scenes/runtimes/breakout.tscn"),
+	"merge2048": preload("res://scenes/runtimes/merge_2048.tscn"),
 }
 
 @onready var _mount: Node2D = $RuntimeMount

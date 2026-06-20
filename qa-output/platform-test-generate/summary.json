@@ -1,0 +1,56 @@
+{
+  "at": "2026-06-18T06:00:19.409Z",
+  "ownerKey": "platform-test-user",
+  "baseUrl": "http://127.0.0.1:8888",
+  "streamNote": "SSE dedicated 抽测 OK",
+  "pass": true,
+  "results": [
+    {
+      "id": "simple-dedicated",
+      "label": "简单 prompt · 专用 Scene",
+      "projectId": "cmqj39k840000cw2wtcfw5066",
+      "shareCode": "7577tpcb93",
+      "title": "应力实验舱：连击解压擂台",
+      "templateId": "physics",
+      "scene": "PhysicsScene",
+      "playRoute": "dedicated",
+      "effectivePlayRoute": "dedicated",
+      "specSource": "llm",
+      "opengameTier": "spec_fast",
+      "recap": [
+        "**试玩引擎**：样品级专用 Scene（快速稳定，适合简单创意）",
+        "**OpenGame 档位**：spec_fast"
+      ],
+      "playUrl": "http://127.0.0.1:8888/zh-Hans/play/cmqj39k840000cw2wtcfw5066",
+      "shareUrl": "http://127.0.0.1:8888/zh-Hans/s/7577tpcb93",
+      "createUrl": "http://127.0.0.1:8888/zh-Hans/create?from=cmqj39k840000cw2wtcfw5066",
+      "ms": 42842,
+      "routeOk": true
+    },
+    {
+      "id": "complex-agentic",
+      "label": "复杂 prompt · Agentic + OpenGame",
+      "projectId": "cmqj3b9m20001cw2wzdmmpf77",
+      "shareCode": "2ytn8p9jfw",
+      "title": "星辉遗境：三界跃迁之旅",
+      "templateId": "platformer",
+      "scene": "AgenticScene",
+      "playRoute": "agentic",
+      "effectivePlayRoute": "agentic",
+      "specSource": "llm",
+      "moduleSource": "llm",
+      "opengameTier": "agentic_complex",
+      "recap": [
+        "**试玩引擎**：OpenGame Agentic + Skills（复杂创意，LLM 定制玩法代码）",
+        "**OpenGame 档位**：agentic_complex",
+        "**Agentic 模块**：已 attach（来源 llm，经 Debug Skill 校验）"
+      ],
+      "playUrl": "http://127.0.0.1:8888/zh-Hans/play/cmqj3b9m20001cw2wzdmmpf77",
+      "shareUrl": "http://127.0.0.1:8888/zh-Hans/s/2ytn8p9jfw",
+      "createUrl": "http://127.0.0.1:8888/zh-Hans/create?from=cmqj3b9m20001cw2wzdmmpf77",
+      "ms": 79418,
+      "routeOk": true
+    }
+  ],
+  "failures": []
+}

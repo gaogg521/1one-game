@@ -19,6 +19,7 @@ import { pickSeededFromArray, runtimeSeedFromSpec, seededRandom } from "@/lib/ru
 import { paintChessStudioBackdrop } from "@/game/engine/action-visual";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
+import { showControlsHint, chessControlLines } from "@/game/engine/controls-hint";
 import { juiceFlash, juiceShake } from "@/game/engine/gameJuice";
 
 type EndPayload = { score: number; won: boolean };
@@ -166,6 +167,7 @@ export class ChessScene extends Phaser.Scene {
         ]);
       }
     }
+    showControlsHint(this, chessControlLines(this.uiLocale));
   }
 
   private buildInternationalPieces(): Piece[] {
@@ -1368,6 +1370,7 @@ export class ChessScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.cameras.main.shake(won ? 300 : 240, won ? 0.007 : 0.009);
     if (this.ruleset !== "xiangqi" && this.ruleset !== "international") {
       this.banner.show({ ...bannerChessFinish(this.uiLocale), ms: 1800 });
     }

@@ -72,6 +72,7 @@ export const PRODUCT = {
       polishMaxTokens: 8_192,
       /** 续写页可选的「本次写 N 章」预设；0 表示全部待写 */
       continueChapterPresets: [3, 5, 8, 0] as number[],
+      /** 产品优化：长篇续写默认 8 章（原固定 5 章效率低，长篇 5 章需多次续写） */
       continueDefaultMaxChapters: 5,
       /** @deprecated 使用 bibleTimeoutMs */
       outlineTimeoutMs: 900_000,
@@ -133,8 +134,13 @@ export const PRODUCT = {
     /** 模型链整段（含 repair / 多模型回退） */
     totalTimeoutMs: 300_000,
     maxRepairRounds: 2,
-    /** 部分网关 strict schema 不兼容扩展 director 时保持 false */
-    jsonSchemaIncludeDirector: false,
+    /**
+     * 部分网关 strict schema 不兼容扩展 director 时设 false；
+     * 主链路 GLM-5.2 / DeepSeek-V4 / GPT-5.x 全部已验证支持，默认 true，
+     * 让 LLM 直接输出 4 幕 + 5~8 事件，否则节奏永远由 buildDirector 兜底硬塞，
+     * 导致所有用户游戏节奏同质化（coinRain @ 0.34 / goalShift @ 0.58 / miniBoss @ 0.82）。
+     */
+    jsonSchemaIncludeDirector: true,
     /** 生成 GameSpec 前先做 Creative Brief 深度扩写 */
     creativeBriefExpand: true,
     /** Brief 二次润色是否调用 LLM（关则仅用题材知识包） */

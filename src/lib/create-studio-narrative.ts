@@ -366,6 +366,21 @@ export function buildGenerateRecapLines(
   return recapLines;
 }
 
-export function streamMessage(locale: AppLocale, key: "start" | "done" | "error"): string {
+export function streamMessage(locale: AppLocale, key: "start" | "done" | "error" | "spec_draft" | "enriching"): string {
+  // spec_draft / enriching fallback to inline strings if not in i18n yet
+  if (key === "spec_draft") {
+    return locale === "zh-Hans" || locale === "zh-Hant"
+      ? "🎮 正在生成游戏规格..."
+      : locale === "ms" ? "🎮 Menjana spesifikasi permainan..."
+      : locale === "th" ? "🎮 กำลังสร้างสเปคเกม..."
+      : "🎮 Generating game spec...";
+  }
+  if (key === "enriching") {
+    return locale === "zh-Hans" || locale === "zh-Hant"
+      ? "✨ 正在丰富游戏内容与资产..."
+      : locale === "ms" ? "✨ Memperkaya kandungan permainan..."
+      : locale === "th" ? "✨ กำลังเพิ่มเนื้อหาเกม..."
+      : "✨ Enriching game content & assets...";
+  }
   return tr(locale, `stream.${key}`);
 }

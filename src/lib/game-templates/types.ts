@@ -11,6 +11,20 @@ export type PhaserRuntimeFamily =
   | "chess"
   | "customization"
   | "strategy"
+  | "rhythm"
+  | "sports"
+  | "card"
+  | "fighting"
+  | "moba"
+  | "horror"
+  | "mahjong"
+  | "tetris"
+  | "endlessRunner"
+  | "fruitNinja"
+  | "mahjongSolitaire"
+  | "douDizhu"
+  | "breakout"
+  | "merge2048"
   | "agentic";
 
 /** Godot ai-mother-universal 运行时场景键 */
@@ -27,11 +41,44 @@ export type GodotRuntimeKey =
   | "physics"
   | "chess"
   | "customization"
-  | "strategy";
+  | "strategy"
+  | "rhythm"
+  | "sports"
+  | "card"
+  | "fighting"
+  | "moba"
+  | "horror"
+  | "mahjong"
+  | "tetris"
+  | "endlessRunner"
+  | "fruitNinja"
+  | "mahjongSolitaire"
+  | "douDizhu"
+  | "breakout"
+  | "merge2048";
 
 export type ArenaMode = "avoider" | "collector" | "survivor";
 
-export type TemplateBlueprintKind = "towerDefense" | "coaster" | "puzzle" | "farming" | "strategy";
+export type TemplateBlueprintKind =
+  | "towerDefense"
+  | "coaster"
+  | "puzzle"
+  | "farming"
+  | "strategy"
+  | "rhythm"
+  | "sports"
+  | "card"
+  | "fighting"
+  | "moba"
+  | "horror"
+  | "mahjong"
+  | "tetris"
+  | "endlessRunner"
+  | "fruitNinja"
+  | "mahjongSolitaire"
+  | "douDizhu"
+  | "breakout"
+  | "merge2048";
 
 export type TemplateInferRule = {
   pattern: RegExp;

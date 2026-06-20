@@ -8,6 +8,104 @@ import { getRuntimeConfigSync } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
 import { resolveSceneRoute } from "@/lib/runtime-providers";
 
+/** 从参考图结构化提取游戏 Brief 建议（供 /api/analyze-ref-image 使用）。 */
+export type RefImageGameBrief = {
+  /** 推荐模板 ID，可能为 null（无法判断时） */
+  suggestedTemplateId: string | null;
+  /** 置信度 */
+  confidence: "high" | "medium" | "low";
+  /** 推荐玩家/守护物主色 hex */
+  playerColor: string | null;
+  /** 推荐危险物/敌人主色 hex */
+  hazardColor: string | null;
+  /** 推荐背景色 hex */
+  backgroundColor: string | null;
+  /** 场景主题关键词（中文名词 2-5 个） */
+  themeKeywords: string[];
+  /** 画风建议（与 assetStyle 对齐） */
+  artStyle: string | null;
+};
+
+const ANALYZE_SYSTEM = `你是游戏设计助手，任务是分析一张参考图并输出结构化游戏创意建议，以 JSON 格式返回。
+
+必须输出如下 JSON，不得有任何多余文字：
+{
+  "suggestedTemplateId": "<模板 ID 或 null>",
+  "confidence": "<high|medium|low>",
+  "playerColor": "<hex 或 null>",
+  "hazardColor": "<hex 或 null>",
+  "backgroundColor": "<hex 或 null>",
+  "themeKeywords": ["主题词1", "主题词2"],
+  "artStyle": "<画风 ID 或 null>"
+}
+
+模板 ID 可选值（不确定填 null）：
+platformer / shooter / towerDefense / farming / strategy / puzzle / runner / chess / coaster / stealth
+
+artStyle 可选值（不确定填 null）：
+cute-cartoon / blocky-pixel / neon-cyber / classic-arcade / bullet-hell / wuxia-flight / nature-organic / paper-craft / hand-drawn
+
+判断依据：
+- 若图中有塔楼/城堡/路径/小兵沿路行走 → towerDefense
+- 若图中有横版角色跳跃/地形平台 → platformer
+- 若图中有飞船/子弹/弹幕/太空 → shooter
+- 若图中有农场/田地/作物格/收获 → farming
+- 若图中有棋盘/六边形格/军事地图 → strategy
+- playerColor：主角/守护物/炮台的主色；hazardColor：敌人/危险物的主色
+- backgroundColor：整体场景背景色，通常是图的平均底色
+- themeKeywords：图中识别到的 2-5 个中文名词（如 萝卜、僵尸、向日葵、太空船）`;
+
+export async function analyzeRefImageForGameBrief(params: {
+  mimeType: string;
+  base64: string;
+  uiLocale?: AppLocale;
+}): Promise<RefImageGameBrief | null> {
+  const payload = getRuntimeConfigSync().payload;
+  const ctx = resolveSceneRoute(payload, "game_vision");
+  if (!ctx) return null;
+
+  const client = createOpenAIClientForProvider(ctx.provider);
+  const models = ctx.models.length ? ctx.models : getGameModelCascade("vision");
+
+  const content = [
+    { type: "text" as const, text: "请分析这张游戏参考图，输出 JSON 格式的创意建议：" },
+    {
+      type: "image_url" as const,
+      image_url: { url: `data:${params.mimeType};base64,${params.base64}` },
+    },
+  ];
+
+  for (const model of models) {
+    try {
+      const res = await client.chat.completions.create({
+        model,
+        temperature: 0.1,
+        max_tokens: 400,
+        messages: [
+          { role: "system", content: ANALYZE_SYSTEM },
+          { role: "user", content },
+        ],
+      });
+      const raw = res.choices[0]?.message?.content?.trim() ?? "";
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) continue;
+      const parsed = JSON.parse(jsonMatch[0]) as Partial<RefImageGameBrief>;
+      return {
+        suggestedTemplateId: typeof parsed.suggestedTemplateId === "string" ? parsed.suggestedTemplateId : null,
+        confidence: parsed.confidence ?? "low",
+        playerColor: typeof parsed.playerColor === "string" ? parsed.playerColor : null,
+        hazardColor: typeof parsed.hazardColor === "string" ? parsed.hazardColor : null,
+        backgroundColor: typeof parsed.backgroundColor === "string" ? parsed.backgroundColor : null,
+        themeKeywords: Array.isArray(parsed.themeKeywords) ? parsed.themeKeywords.slice(0, 6) : [],
+        artStyle: typeof parsed.artStyle === "string" ? parsed.artStyle : null,
+      };
+    } catch {
+      /* 尝试下一模型 */
+    }
+  }
+  return null;
+}
+
 const MAX_SIDE_NOTE =
   "简要列出：①画面主体轮廓与体态 ②配色与光源 ③画风关键词（像素/手绘/水彩/二次元等）④主体与背景的可分性。**另起一行**：用「落地建议」前缀写三小点——(背景是否透明底/纯白/复杂实拍)、(若为可走行兵种或塔楼贴片，推荐使用「居中正方形精灵格」还是保持原宽幅)、(主体是否偏心、是否建议留白边)。总长≤260字中文。";
 

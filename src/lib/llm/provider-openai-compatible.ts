@@ -37,6 +37,7 @@ export async function llmTextOpenAICompatible(params: {
         } as ChatCompletionCreateParamsNonStreaming,
         { signal },
       ),
+      req.signal,
     );
     const text = res.choices[0]?.message?.content ?? "";
     if (!text || text.length < 10) {
@@ -73,6 +74,16 @@ export async function* llmTextStreamOpenAICompatible(params: {
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), req.timeoutMs);
+  // P1 修复：外部 signal（客户端断连）联动 abort
+  let onExternalAbort: (() => void) | null = null;
+  if (req.signal) {
+    if (req.signal.aborted) {
+      ac.abort();
+    } else {
+      onExternalAbort = () => ac.abort();
+      req.signal.addEventListener("abort", onExternalAbort, { once: true });
+    }
+  }
   try {
     const stream = await client.chat.completions.create(body, { signal: ac.signal });
     for await (const chunk of stream) {
@@ -81,6 +92,9 @@ export async function* llmTextStreamOpenAICompatible(params: {
     }
   } finally {
     clearTimeout(timer);
+    if (onExternalAbort && req.signal) {
+      req.signal.removeEventListener("abort", onExternalAbort);
+    }
   }
 }
 
@@ -117,6 +131,7 @@ export async function llmJsonOpenAICompatible(params: {
 
     const res = await runWithAbortTimeout(req.timeoutMs, `llm ${req.provider} ${mode}`, (signal) =>
       client.chat.completions.create(completionParams, { signal }),
+      req.signal,
     );
     return { raw: parseJsonContent(res.choices[0]?.message?.content), mode };
   }

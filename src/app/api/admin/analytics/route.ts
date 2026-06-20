@@ -175,7 +175,7 @@ export async function GET(req: Request) {
         }))
         .sort((a, b) => Math.abs(b.deltaSum) - Math.abs(a.deltaSum)),
       paymentsByDay: countByDay(
-        paidOrders.map((o) => o.paidAt ?? new Date()),
+        paidOrders.filter((o) => o.paidAt).map((o) => o.paidAt!),
         dayKeys,
       ),
     },

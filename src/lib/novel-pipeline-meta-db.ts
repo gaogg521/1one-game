@@ -10,14 +10,10 @@ export async function persistNovelGenerationMeta(
   meta: NovelGenerationMeta,
 ): Promise<void> {
   const json = serializeNovelGenerationMeta(meta);
-  try {
-    await prisma.novel.update({
-      where: { id: novelId },
-      data: { generationMetaJson: json },
-    });
-  } catch {
-    /* ignore */
-  }
+  await prisma.novel.update({
+    where: { id: novelId },
+    data: { generationMetaJson: json },
+  });
 }
 
 export async function loadNovelGenerationMeta(novelId: string): Promise<NovelGenerationMeta | null> {

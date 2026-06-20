@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import type { GameSpec } from "@/lib/game-spec";
-import { type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { resolveAssetStyle, type CohesivePresentation } from "@/lib/cohesive-presentation";
+import { buildPlayAssetSet } from "@/game/engine/play-assets";
 import { mergeMoveAxis, pointerSteer2D, pointerSteerX, readMoveAxis } from "@/game/engine/phaser-input";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
@@ -31,14 +32,19 @@ import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 import { hudTopSubtitleText, styleHudText } from "@/game/engine/hudTextStyle";
-import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
+import { applySpritesOverAliasMap, assetBackgroundAlpha, preloadSpriteSet } from "@/game/engine/phaser-loaded-sprites";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
+import { translateDirectorEvent } from "@/game/engine/director-translator";
+import { inferThemeMood } from "@/game/engine/template-theme-visual";
+import { showControlsHint, playSceneControlLines } from "@/game/engine/controls-hint";
+import { spawnDamageNumber } from "@/game/engine/damage-number";
 import {
   bannerActStage,
   bannerBossDefeated,
   bannerBreathingEnd,
   bannerEliteAssault,
+  bannerMilestone,
   bannerEventEnd,
   bannerFinalBarrageEnd,
   bannerGoalComplete,
@@ -48,8 +54,11 @@ import {
   bannerLastStandEnd,
   bannerSurvivorGrit,
   hudActChapter,
+  hudComboStreak,
   hudCooldown,
   hudDodgeStreak,
+  hudNearMissChain,
+  hudScoreMult,
   hudFinalWaveSec,
   hudGoalShift,
   hudLives,
@@ -125,6 +134,8 @@ export class PlayScene extends Phaser.Scene {
   private skillCdText!: Phaser.GameObjects.Text;
 
   private shieldRing!: Phaser.GameObjects.Graphics;
+  private statusGfx!: Phaser.GameObjects.Graphics;
+  private playerTrail: Array<{ x: number; y: number; t: number }> = [];
 
   private banner!: HudBanner;
 
@@ -196,12 +207,18 @@ export class PlayScene extends Phaser.Scene {
 
   private lastCollectorPickupAt = 0;
 
+  /** collector comboBonus 事件：窗口内 combo 倍率翻倍 */
+  private comboBoostUntil = 0;
+
   /** survivor：最后一波倒计时窗口（默认自动触发一次） */
   private survivorLastStandUntil = 0;
 
   private survivorLastStandStarted = false;
 
   private survivorLastStandRewarded = false;
+
+  /** 分数里程碑（25/50/75% winScore）已触发集合，避免重复弹出 */
+  private milestonesSeen = new Set<number>();
 
   /** avoider：近距离擦弹连击 */
   private avoiderNearMissChain = 0;
@@ -211,11 +228,27 @@ export class PlayScene extends Phaser.Scene {
   /** avoider：终局密集弹幕倒计时 */
   private avoiderFinalBarrageUntil = 0;
 
+  /** avoider：当前激活的弹幕波形（来自 spec.avoider.bulletPatterns，随游戏进度切换） */
+  private avoiderCurrentPattern: string = "aimed";
+  private avoiderPatternBurstTick = 0;
+  /** avoider：专注模式（hold Shift）激活时降速 + 扩展擦弹判定 */
+  private avoiderFocusActive = false;
+
   /** collector：黄金收集物窗口 */
   private goldenPickupUntil = 0;
 
   /** survivor：喘息窗口（低压段） */
   private breathingRoomUntil = 0;
+
+  /** survivor：已触发的 eliteWave 索引（避免重复） */
+  private survivorEliteWaveIdx = 0;
+
+  /** director-translator 注入的刷怪密度倍率（< 1 更密，> 1 更稀；事件结束后归 1） */
+  private directorSpawnRateMul = 1;
+  /** director-translator 注入的敌人移动速度倍率（事件结束后归 1） */
+  private directorEnemySpeedMul = 1;
+  /** 基础刷怪间隔（毫秒），从 spec 读取后不变；动态调整时乘以进度系数 */
+  private baseSpawnInterval = 1000;
 
   // ── Boss 系统 ──
   private bossActive = false;
@@ -244,14 +277,9 @@ export class PlayScene extends Phaser.Scene {
     if (this.backgroundUrl) {
       this.load.image("bgTex", this.backgroundUrl);
     }
-    // 尝试加载文生图 sprite（不存在时静默回退几何体）
+    // 加载 SVG（_svg）和 PNG（_png）sprite；create 阶段用 applySpritesOverAliasMap 整合
     if (this.projectId) {
-      const base = `/game-sprites/${this.projectId}`;
-      this.load.image("texPlayer", `${base}/player.png`);
-      this.load.image("texHazard", `${base}/hazard.png`);
-      this.load.image("texGem", `${base}/gem.png`);
-      this.load.image("texPower", `${base}/power.png`);
-      this.load.image("texBoss", `${base}/boss.png`);
+      preloadSpriteSet(this, this.projectId);
     }
   }
 
@@ -270,7 +298,7 @@ export class PlayScene extends Phaser.Scene {
     if (blockyWorld) {
       addMinecraftBackdrop(this);
     } else {
-      this.addStarfield();
+      this.addThemedArenaBackdrop();
     }
 
     // 文生图背景（异步生成，不存在时静默回退）
@@ -343,8 +371,13 @@ export class PlayScene extends Phaser.Scene {
 
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
 
+    const focusHint =
+      this.spec.templateId === "avoider" && (this.spec.avoider?.focusModeEnabled ?? false)
+        ? "  " + hudControlsShiftSuffix(this.uiLocale)
+        : "";
+
     this.hintText = this.add
-      .text(width / 2, height - 20, guidance.bottomHint, {
+      .text(width / 2, height - 20, guidance.bottomHint + focusHint, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
         color: ui.hud.hint,
@@ -364,46 +397,73 @@ export class PlayScene extends Phaser.Scene {
       ensureMinecraftEntityTextures(this, this.spec);
     }
 
-    // Player: rounded body + highlight + eyes
-    if (!blockyWorld && !this.textures.exists("texPlayer")) {
+    // 高保真程序化资产（按 assetStyle 自动挑皮肤）—— 替换原 7 个手写 makeXxx 块
+    if (!blockyWorld) {
+      const playStyle = resolveAssetStyle(this.spec);
+      const playPalette = {
+        player: this.spec.theme.playerColor,
+        hazard: this.spec.theme.hazardColor,
+        collectible: this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
+        particle: this.spec.theme.particleTint ?? this.spec.theme.collectibleColor ?? "#a3a3a3",
+        background: this.spec.theme.backgroundColor,
+      };
+      const playSet = buildPlayAssetSet(this, playPalette, playStyle, "texPlay");
+      // 别名到旧的 tex* 键，保留运行时 5 处直接引用（collectible/hazard 字符串识别等）
+      const aliasMap: Array<[string, string]> = [
+        ["texPlayer", playSet.player],
+        ["texHazard", playSet.hazardBasic],
+        ["texHazardFast", playSet.hazardFast],
+        ["texHazardHeavy", playSet.hazardHeavy],
+        ["texGem", playSet.gem],
+        ["texPower", playSet.power],
+        ["texBoss", playSet.boss],
+      ];
+      for (const [alias, src] of aliasMap) {
+        if (this.textures.exists(alias)) this.textures.remove(alias);
+        const img = this.textures.get(src).getSourceImage();
+        if (img instanceof HTMLImageElement) {
+          this.textures.addImage(alias, img);
+        } else if (img instanceof HTMLCanvasElement) {
+          this.textures.addCanvas(alias, img);
+        }
+      }
+      // SVG > PNG override 覆盖程序化精灵
+      applySpritesOverAliasMap(this, ["texPlayer", "texHazard", "texGem", "texPower", "texBoss"]);
+    }
+
+    // 旧手写贴图代码块（star power-up 等）—— 仅在 blocky 路径或 alias 设置失败时使用
+    if (!this.textures.exists("texPlayer")) {
       const pc = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
       const pd = shiftCol(pc, -55);
       const pl = shiftCol(pc, 50);
       const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(0x000000, 0.18); g.fillEllipse(19, 37, 28, 7); // shadow
+      g.fillStyle(0x000000, 0.18); g.fillEllipse(19, 37, 28, 7);
       g.lineStyle(2.5, pd, 1); g.strokeRoundedRect(4, 6, 28, 28, 9);
       g.fillStyle(pc, 1); g.fillRoundedRect(4, 6, 28, 28, 9);
-      g.fillStyle(pl, 0.4); g.fillRoundedRect(7, 8, 18, 9, 4); // highlight
-      g.fillStyle(0x0f172a, 1); g.fillCircle(13, 18, 4); g.fillCircle(23, 18, 4); // eyes
+      g.fillStyle(pl, 0.4); g.fillRoundedRect(7, 8, 18, 9, 4);
+      g.fillStyle(0x0f172a, 1); g.fillCircle(13, 18, 4); g.fillCircle(23, 18, 4);
       g.fillStyle(0xffffff, 0.75); g.fillCircle(14.2, 16.8, 1.5); g.fillCircle(24.2, 16.8, 1.5);
-      g.fillStyle(pd, 1); g.fillRoundedRect(8, 32, 8, 5, 2); g.fillRoundedRect(20, 32, 8, 5, 2); // feet
+      g.fillStyle(pd, 1); g.fillRoundedRect(8, 32, 8, 5, 2); g.fillRoundedRect(20, 32, 8, 5, 2);
       g.generateTexture("texPlayer", 36, 38); g.destroy();
     }
-
-    // Hazard: angular menacing enemy with spiky silhouette
-    if (!blockyWorld && !this.textures.exists("texHazard")) {
+    if (!this.textures.exists("texHazard")) {
       const hc = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
       const hd = shiftCol(hc, -55);
       const hl = shiftCol(hc, 45);
       const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(0x000000, 0.2); g.fillEllipse(22, 43, 30, 8); // shadow
-      // Spiky crown
+      g.fillStyle(0x000000, 0.2); g.fillEllipse(22, 43, 30, 8);
       g.fillStyle(hd, 1);
       g.fillTriangle(10, 14, 14, 2, 18, 14);
       g.fillTriangle(18, 14, 22, 0, 26, 14);
       g.fillTriangle(26, 14, 30, 2, 34, 14);
-      // Body
       g.lineStyle(2.5, hd, 1); g.strokeRoundedRect(6, 12, 32, 26, 8);
       g.fillStyle(hc, 1); g.fillRoundedRect(6, 12, 32, 26, 8);
       g.fillStyle(hl, 0.3); g.fillRoundedRect(9, 14, 22, 9, 4);
-      // Angry eyes
       g.fillStyle(0xfef3c7, 1); g.fillEllipse(15, 24, 10, 8); g.fillEllipse(29, 24, 10, 8);
       g.fillStyle(0x1a0000, 1); g.fillCircle(16, 25, 3.5); g.fillCircle(30, 25, 3.5);
       g.fillStyle(0xff3333, 0.7); g.fillCircle(16, 25, 1.8); g.fillCircle(30, 25, 1.8);
       g.generateTexture("texHazard", 44, 44); g.destroy();
     }
-
-    // Gem: diamond with shine
     if (!this.textures.exists("texGem")) {
       const gc = parseInt((this.spec.theme.collectibleColor ?? this.spec.theme.playerColor).replace("#", ""), 16);
       const gd = shiftCol(gc, -50);
@@ -415,8 +475,6 @@ export class PlayScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.6); g.fillTriangle(14, 1, 5, 10, 14, 10);
       g.generateTexture("texGem", 28, 28); g.destroy();
     }
-
-    // Power-up: star shape
     if (!this.textures.exists("texPower")) {
       const pc2 = parseInt((this.spec.theme.collectibleColor ?? this.spec.theme.playerColor).replace("#", ""), 16);
       const g = this.make.graphics({ x: 0, y: 0 });
@@ -503,6 +561,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.shieldRing = this.add.graphics();
     this.shieldRing.setDepth(24);
+    this.statusGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
 
     this.banner = new HudBanner(this, ui.banner);
     this.banner.show(introBannerWhenGoalPanel(guidance));
@@ -539,6 +598,7 @@ export class PlayScene extends Phaser.Scene {
       const gy = g.y;
       const riskBonus = Number(g.getData("riskBonus") ?? 0);
       const goldenBonus = Number(g.getData("goldenBonus") ?? 0);
+      const itemPoints = Number(g.getData("itemPoints") ?? 1);
       g.destroy();
       this.fxCollect(gx, gy);
       let comboBonus = 0;
@@ -551,12 +611,18 @@ export class PlayScene extends Phaser.Scene {
           this.collectorCombo = 1;
         }
         this.lastCollectorPickupAt = now;
-        comboBonus = Math.min(this.collectorCombo - 1, 5);
+        const baseComboMul = this.spec.collector?.comboMultiplier ?? 1.5;
+        const comboMul = this.time.now < this.comboBoostUntil ? baseComboMul * 2 : baseComboMul;
+        const maxComboBonus = Math.round(comboMul * 4);
+        comboBonus = Math.min(this.collectorCombo - 1, maxComboBonus);
         if (comboBonus > 0) {
           this.showFloater(gx, gy - 22, floaterCombo(this.uiLocale, this.collectorCombo), this.cohesive.hud.accent2);
         }
       }
-      this.score += 1 * this.scoreMult + comboBonus + riskBonus + goldenBonus;
+      this.score += itemPoints * this.scoreMult + comboBonus + riskBonus + goldenBonus;
+      if (itemPoints > 1 && goldenBonus === 0 && riskBonus === 0) {
+        this.showFloater(gx, gy - 22, `+${itemPoints}`, this.cohesive.hud.accent2);
+      }
       if (goldenBonus > 0) {
         this.showFloater(gx, gy - 38, floaterGolden(this.uiLocale, goldenBonus), "#ffd700");
         juiceFlash(this, { r: 255, g: 220, b: 80 }, { durationMs: 100 });
@@ -603,8 +669,9 @@ export class PlayScene extends Phaser.Scene {
     this.physics.add.collider(this.hazards, this.powerups);
 
     const interval = this.spec.gameplay.spawnIntervalMs;
+    this.baseSpawnInterval = Math.max(240, Math.floor(interval * (1 - this.intensity * 0.18)));
     this.spawnTimer = this.time.addEvent({
-      delay: Math.max(240, Math.floor(interval * (1 - this.intensity * 0.18))),
+      delay: this.baseSpawnInterval,
       loop: true,
       callback: () => this.spawnWave(),
     });
@@ -659,31 +726,133 @@ export class PlayScene extends Phaser.Scene {
     this.refreshHud();
     this.spawnWave();
 
-    // Danger vignette overlay (hidden until low HP)
+    // Danger vignette overlay (hidden until low HP) — corner gradient effect
     this.dangerVignette = this.add.graphics();
     this.dangerVignette.setDepth(24);
     this.dangerVignette.setAlpha(0);
+    // Four corner rects + edge strips to simulate vignette without gradient shader
+    const vEdge = 48;
     this.dangerVignette.fillStyle(0xff2233, 1);
-    this.dangerVignette.fillRect(0, 0, width, height);
+    this.dangerVignette.fillRect(0, 0, width, vEdge);
+    this.dangerVignette.fillRect(0, height - vEdge, width, vEdge);
+    this.dangerVignette.fillRect(0, 0, vEdge, height);
+    this.dangerVignette.fillRect(width - vEdge, 0, vEdge, height);
     schedulePhaserPlayReady(this, 450);
+
+    showControlsHint(this, playSceneControlLines(this.spec.templateId, this.uiLocale));
   }
 
-  private addStarfield() {
+  private addThemedArenaBackdrop() {
     const { width, height } = this.scale;
+    const mood = inferThemeMood(this.spec);
     const raw = this.spec.theme.particleTint?.replace("#", "") ?? "69746c";
     const parsed = parseInt(raw, 16);
     const tint = Number.isFinite(parsed) ? parsed : 0xa78bfa;
-    for (let i = 0; i < 96; i += 1) {
-      const x = seededIntBetween(this.runtimeRng, 4, width - 4);
-      const y = seededIntBetween(this.runtimeRng, 4, height - 4);
-      const s = seededFloatBetween(this.runtimeRng, 1, 2.4);
-      const a = seededFloatBetween(this.runtimeRng, 0.06, 0.35);
-      const dot = this.add.rectangle(x, y, s, s, tint, a);
-      dot.setDepth(-12);
+
+    if (mood === "ocean") {
+      // 深海渐变：底部更暗，波光粼粼
+      const bg = this.add.graphics().setDepth(-15);
+      bg.fillGradientStyle(0x042d4b, 0x042d4b, 0x061a3b, 0x061a3b, 1);
+      bg.fillRect(0, 0, width, height);
+      // 涟漪
+      for (let i = 0; i < 28; i += 1) {
+        const rx = seededIntBetween(this.runtimeRng, 10, width - 10);
+        const ry = seededIntBetween(this.runtimeRng, 10, height - 10);
+        const rs = seededFloatBetween(this.runtimeRng, 6, 28);
+        const ra = seededFloatBetween(this.runtimeRng, 0.04, 0.18);
+        const rc = this.add.ellipse(rx, ry, rs * 2, rs * 0.6, 0x40e0f4, ra);
+        rc.setDepth(-13);
+      }
+      // 气泡
+      for (let i = 0; i < 32; i += 1) {
+        const bx = seededIntBetween(this.runtimeRng, 6, width - 6);
+        const by = seededIntBetween(this.runtimeRng, 6, height - 6);
+        const br = seededFloatBetween(this.runtimeRng, 1.2, 3.8);
+        const ba = seededFloatBetween(this.runtimeRng, 0.08, 0.28);
+        this.add.circle(bx, by, br, 0xaae8f8, ba).setDepth(-12);
+      }
+    } else if (mood === "forest") {
+      // 森林：暖绿渐变 + 光斑
+      const bg = this.add.graphics().setDepth(-15);
+      bg.fillGradientStyle(0x0d2510, 0x0d2510, 0x071809, 0x071809, 1);
+      bg.fillRect(0, 0, width, height);
+      // 树叶光斑
+      for (let i = 0; i < 22; i += 1) {
+        const lx = seededIntBetween(this.runtimeRng, 0, width);
+        const ly = seededIntBetween(this.runtimeRng, 0, height);
+        const lr = seededFloatBetween(this.runtimeRng, 8, 40);
+        const la = seededFloatBetween(this.runtimeRng, 0.03, 0.14);
+        this.add.circle(lx, ly, lr, 0x6ee770, la).setDepth(-13);
+      }
+      // 萤火虫小点
+      for (let i = 0; i < 48; i += 1) {
+        const fx = seededIntBetween(this.runtimeRng, 4, width - 4);
+        const fy = seededIntBetween(this.runtimeRng, 4, height - 4);
+        const fa = seededFloatBetween(this.runtimeRng, 0.08, 0.35);
+        this.add.circle(fx, fy, seededFloatBetween(this.runtimeRng, 0.8, 2.5), 0xd4f77e, fa).setDepth(-12);
+      }
+    } else if (mood === "cyber") {
+      // 赛博：黑底 + 霓虹网格线
+      const bg = this.add.graphics().setDepth(-15);
+      bg.fillStyle(0x060610, 1);
+      bg.fillRect(0, 0, width, height);
+      // 横向扫描线
+      const lineG = this.add.graphics().setDepth(-14);
+      lineG.lineStyle(0.5, tint, 0.08);
+      for (let y = 0; y < height; y += 18) {
+        lineG.lineBetween(0, y, width, y);
+      }
+      // 纵向细线
+      for (let x = 0; x < width; x += 22) {
+        lineG.lineStyle(0.4, tint, 0.05);
+        lineG.lineBetween(x, 0, x, height);
+      }
+      // 霓虹点
+      for (let i = 0; i < 60; i += 1) {
+        const nx = seededIntBetween(this.runtimeRng, 4, width - 4);
+        const ny = seededIntBetween(this.runtimeRng, 4, height - 4);
+        const nr = seededFloatBetween(this.runtimeRng, 0.8, 2.5);
+        const na = seededFloatBetween(this.runtimeRng, 0.15, 0.6);
+        this.add.circle(nx, ny, nr, tint, na).setDepth(-12);
+      }
+    } else if (mood === "space") {
+      // 太空：深黑 + 密集星空 + 彩色星云斑块
+      const bg = this.add.graphics().setDepth(-15);
+      bg.fillStyle(0x04050f, 1);
+      bg.fillRect(0, 0, width, height);
+      // 星云斑
+      for (let i = 0; i < 5; i += 1) {
+        const nbx = seededIntBetween(this.runtimeRng, 0, width);
+        const nby = seededIntBetween(this.runtimeRng, 0, height);
+        const nbr = seededFloatBetween(this.runtimeRng, 40, 100);
+        const nba = seededFloatBetween(this.runtimeRng, 0.03, 0.09);
+        this.add.circle(nbx, nby, nbr, tint, nba).setDepth(-14);
+      }
+      // 密集星点
+      for (let i = 0; i < 140; i += 1) {
+        const sx = seededIntBetween(this.runtimeRng, 2, width - 2);
+        const sy = seededIntBetween(this.runtimeRng, 2, height - 2);
+        const ss = seededFloatBetween(this.runtimeRng, 0.6, 2.2);
+        const sa = seededFloatBetween(this.runtimeRng, 0.2, 0.85);
+        const sColor = i % 8 === 0 ? tint : 0xffffff;
+        const dot = this.add.rectangle(sx, sy, ss, ss, sColor, sa);
+        dot.setDepth(-12);
+      }
+    } else {
+      // generic：粒子散点（原逻辑）
+      for (let i = 0; i < 96; i += 1) {
+        const x = seededIntBetween(this.runtimeRng, 4, width - 4);
+        const y = seededIntBetween(this.runtimeRng, 4, height - 4);
+        const s = seededFloatBetween(this.runtimeRng, 1, 2.4);
+        const a = seededFloatBetween(this.runtimeRng, 0.06, 0.35);
+        const dot = this.add.rectangle(x, y, s, s, tint, a);
+        dot.setDepth(-12);
+      }
     }
   }
 
   private refreshHud() {
+    if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
     this.scoreText.setText(hudScore(this.uiLocale, this.score));
     const prog = Math.min(this.score, this.winScore);
     this.progressText.setText(hudProgress(this.uiLocale, this.spec.templateId, prog, this.winScore));
@@ -700,6 +869,7 @@ export class PlayScene extends Phaser.Scene {
     }
 
     this.drawShieldRing();
+    this.drawStatusEffects();
 
     const now = this.time.now;
     if (now < this.goalShiftUntil) {
@@ -712,9 +882,29 @@ export class PlayScene extends Phaser.Scene {
     } else if (this.spec.templateId === "survivor" && this.survivorDodgeStreak >= 3) {
       this.goalText.setText(hudDodgeStreak(this.uiLocale, this.survivorDodgeStreak));
       this.goalText.setAlpha(1);
+    } else if (this.spec.templateId === "collector" && this.collectorCombo >= 3) {
+      this.goalText.setText(hudComboStreak(this.uiLocale, this.collectorCombo));
+      this.goalText.setAlpha(now < this.comboBoostUntil ? 1 : 0.88);
+    } else if (this.spec.templateId === "avoider" && this.avoiderNearMissChain >= 3) {
+      this.goalText.setText(hudNearMissChain(this.uiLocale, this.avoiderNearMissChain));
+      this.goalText.setAlpha(0.92);
+    } else if (this.scoreMult > 1) {
+      this.goalText.setText(hudScoreMult(this.uiLocale, this.scoreMult));
+      this.goalText.setAlpha(0.88 + Math.sin(now * 0.012) * 0.1);
     } else {
       this.goalText.setText("");
       this.goalText.setAlpha(0.85);
+    }
+
+    // Score milestone celebrations at 25% / 50% / 75% of winScore
+    if (this.winScore > 0 && !this.finished) {
+      for (const pct of [25, 50, 75] as const) {
+        if (!this.milestonesSeen.has(pct) && this.score >= this.winScore * (pct / 100)) {
+          this.milestonesSeen.add(pct);
+          this.banner.show({ ...bannerMilestone(this.uiLocale, pct), ms: 1200 });
+          juiceFlash(this, { r: 255, g: 215, b: 0 }, { durationMs: 80 });
+        }
+      }
     }
   }
 
@@ -732,13 +922,21 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private fxDamage() {
+    const dying = this.lives <= 1;
+    const px = this.player?.x ?? this.scale.width / 2;
+    const py = this.player?.y ?? this.scale.height / 2;
     juiceHit(this, {
-      x: this.player?.x ?? this.scale.width / 2,
-      y: this.player?.y ?? this.scale.height / 2,
+      x: px,
+      y: py,
       colorHex: this.spec.theme.hazardColor,
       rng: this.runtimeRng,
     });
     playBleep("hit");
+    this.cameras.main.shake(dying ? 260 : 150, dying ? 0.010 : 0.005);
+    spawnDamageNumber(this, px, py, 1, {
+      color: dying ? "#ff1111" : "#ff6644",
+      large: dying,
+    });
   }
 
   private fxShield() {
@@ -757,6 +955,11 @@ export class PlayScene extends Phaser.Scene {
     if (this.finished) return;
     const { width } = this.scale;
     const margin = 80;
+    // survivor blueprint 最大同屏敌人数限制
+    if (this.spec.templateId === "survivor") {
+      const maxOnScreen = this.spec.survivor?.maxHazardsOnScreen ?? 14;
+      if (this.hazards.countActive(true) >= maxOnScreen) return;
+    }
     const mods = this.getActModifiers();
     const isFinale = mods.includes("finale");
     const isDoubleSpawn = mods.includes("doubleSpawn");
@@ -764,6 +967,22 @@ export class PlayScene extends Phaser.Scene {
 
     this.updateAct();
     this.tickDirectorEvents();
+
+    // Decay collector combo when 1350ms window expires without a pickup
+    if (this.spec.templateId === "collector" && this.collectorCombo >= 3) {
+      if (this.time.now - this.lastCollectorPickupAt > 1350) {
+        this.collectorCombo = 0;
+        this.refreshHud();
+      }
+    }
+
+    // Decay avoider near-miss chain when 1600ms window expires without a near-miss
+    if (this.spec.templateId === "avoider" && this.avoiderNearMissChain >= 3) {
+      if (this.time.now - this.avoiderLastNearMissAt > 1600) {
+        this.avoiderNearMissChain = 0;
+        this.refreshHud();
+      }
+    }
 
     if (this.spec.templateId === "collector") {
       const collectibleBursts = isFinale ? 2 : this.time.now < this.goalShiftUntil ? 2 : 1;
@@ -812,10 +1031,18 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    for (let i = 0; i <= extraHazards; i += 1) {
-      const x = Phaser.Math.Between(margin, width - margin);
-      const y = -40 - i * 28;
-      this.spawnHazard(x, y);
+    // directorSpawnRateMul < 1 → 更密（额外追加一个障碍）；> 1 → 更稀（随机跳过）
+    const skipBySparsity = this.directorSpawnRateMul > 1.2 && Phaser.Math.FloatBetween(0, 1) < (1 - 1 / this.directorSpawnRateMul);
+    if (!skipBySparsity) {
+      for (let i = 0; i <= extraHazards; i += 1) {
+        const x = Phaser.Math.Between(margin, width - margin);
+        const y = -40 - i * 28;
+        this.spawnHazard(x, y);
+      }
+    }
+    if (this.directorSpawnRateMul < 0.75) {
+      // 高密度事件（finalBarrage/miniBoss）：额外多生成一个危险物
+      this.spawnHazard(Phaser.Math.Between(margin, width - margin), -40);
     }
 
     if (this.time.now < this.coinRainUntil && Phaser.Math.Between(0, 1) === 0) {
@@ -840,10 +1067,23 @@ export class PlayScene extends Phaser.Scene {
       this.spawnEliteHazard();
       if (Phaser.Math.Between(0, 1) === 0) this.spawnEliteHazard();
     }
+    // avoider 弹幕图案刷新：每4帧触发一次图案发射，终局弹幕期间跳过
+    if (this.spec.templateId === "avoider" && this.time.now >= this.avoiderFinalBarrageUntil) {
+      this.avoiderPatternBurstTick += 1;
+      if (this.avoiderPatternBurstTick >= 4) {
+        this.avoiderPatternBurstTick = 0;
+        this.spawnAvoiderPatternBurst();
+      }
+    }
     if (this.spec.templateId === "survivor" && this.time.now < this.survivorLastStandUntil && Phaser.Math.Between(0, 2) === 0) {
       const x = Phaser.Math.Between(margin, width - margin);
       const y = -40 - Phaser.Math.Between(0, 40);
       this.spawnHazard(x, y);
+    }
+    // 进度加码：后半段随机额外刷一个障碍（progress 50%=25%概率, 100%=50%概率）
+    const progress = this.winScore > 0 ? Phaser.Math.Clamp(this.score / this.winScore, 0, 1) : 0;
+    if (progress > 0.5 && Phaser.Math.FloatBetween(0, 1) < (progress - 0.5)) {
+      this.spawnHazard(Phaser.Math.Between(margin, width - margin), -40);
     }
   }
 
@@ -860,7 +1100,7 @@ export class PlayScene extends Phaser.Scene {
       Phaser.Math.Between(-110, 110),
       collectorMode
         ? Phaser.Math.Between(-120, 120)
-        : Math.floor(this.spec.gameplay.hazardSpeed * (1.25 + this.eventStrength * 0.25)),
+        : Math.floor(this.spec.gameplay.hazardSpeed * (1.25 + this.eventStrength * 0.25) * this.directorEnemySpeedMul),
     );
     const body = h.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
@@ -900,6 +1140,9 @@ export class PlayScene extends Phaser.Scene {
       this.eventType = null;
       this.eventUntil = 0;
       this.eventStrength = 0;
+      // 回滚 director-translator 注入的运行时修饰符
+      this.directorSpawnRateMul = 1;
+      this.directorEnemySpeedMul = 1;
       this.refreshHud();
     }
 
@@ -937,6 +1180,32 @@ export class PlayScene extends Phaser.Scene {
       strength,
       rng: this.runtimeRng,
     });
+
+    // Director Translator：把 LLM 语义事件翻译成真正的运行时机制修饰符
+    {
+      const dirMods = translateDirectorEvent(ev.type, strength, this.spec);
+      // 得分倍率（取已有值和 translator 值的较大者，避免 coinRain 被覆盖）
+      if (dirMods.scoreMul > 1) this.scoreMult = Math.max(this.scoreMult, dirMods.scoreMul);
+      // 护盾
+      if (dirMods.shieldGrantMs > 0) this.shieldCharges = Math.min(3, this.shieldCharges + 1);
+      // 刷怪密度 / 敌人速度倍率（在事件结束时 tickDirectorEvents 回滚到 1）
+      this.directorSpawnRateMul = dirMods.spawnRateMul;
+      this.directorEnemySpeedMul = dirMods.enemySpeedMul;
+      // 摄像机震动
+      if (dirMods.cameraShakeBoost > 0) {
+        juiceShake(this, { durationMs: 200, intensity: 0.004 * dirMods.cameraShakeBoost });
+      }
+      // collector 专属：collectibleBurst 立刻生成一批收集物
+      if (dirMods.spawnCollectibleBurst > 0 && this.spec.templateId === "collector") {
+        const { width } = this.scale;
+        for (let i = 0; i < dirMods.spawnCollectibleBurst; i += 1) {
+          this.spawnCollectible(
+            Phaser.Math.Between(80, width - 80),
+            Phaser.Math.Between(120, this.scale.height - 120),
+          );
+        }
+      }
+    }
 
     if (ev.type === "coinRain") {
       this.coinRainUntil = this.eventUntil;
@@ -979,18 +1248,45 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (ev.type === "breathingRoom") {
-      // survivor 专属：喘息窗口，降低刷怪密度
+      // survivor 专属：喘息窗口，降低刷怪密度；立刻投放蓝图指定补给
       this.breathingRoomUntil = this.eventUntil;
+      const supplies = this.spec.survivor?.supplyDrops ?? [];
+      for (const drop of supplies) {
+        this.applyPowerup(drop.type);
+      }
+      return;
+    }
+
+    if (ev.type === "comboBonus") {
+      // collector 专属：窗口内 combo 倍率翻倍（与 coinRain 叠加）；其它模板仅显示横幅
+      if (this.spec.templateId === "collector") {
+        this.comboBoostUntil = this.eventUntil;
+        this.scoreMult = Math.max(this.scoreMult, 1.5);
+        juiceFlash(this, { r: 255, g: 200, b: 60 }, { durationMs: 80 });
+      }
       return;
     }
 
     // 其它 type：仅横幅与时间轴，不产生数值副作用（结束逻辑走通用分支）
   }
 
+  private updateAvoiderPattern() {
+    if (this.spec.templateId !== "avoider") return;
+    const patterns = this.spec.avoider?.bulletPatterns;
+    if (!patterns?.length) return;
+    const t = this.winScore > 0 ? Phaser.Math.Clamp(this.score / this.winScore, 0, 1) : 0;
+    let activePattern = patterns[0]!.pattern;
+    for (const p of patterns) {
+      if (t >= p.at) activePattern = p.pattern;
+    }
+    this.avoiderCurrentPattern = activePattern;
+  }
+
   private updateAct() {
     const now = this.time.now;
     if (now - this.lastActUpdate < 160) return;
     this.lastActUpdate = now;
+    this.updateAvoiderPattern();
     const acts = this.spec.director?.acts ?? null;
     if (!acts?.length) return;
     const t = this.winScore > 0 ? Phaser.Math.Clamp(this.score / this.winScore, 0, 1) : 0;
@@ -1026,6 +1322,47 @@ export class PlayScene extends Phaser.Scene {
       const sections = ["intro", "build", "drop", "climax"] as const;
       this.soundscape?.setSection(sections[idx] ?? "intro");
     }
+    // survivor 蓝图精英波：按进度触发
+    this.checkSurvivorEliteWaves(t);
+    // 难度曲线：随进度动态压缩刷怪间隔（最多减少 35%）
+    this.updateSpawnRate(t);
+  }
+
+  private updateSpawnRate(t: number) {
+    // 进度 0→1 时，间隔从 baseSpawnInterval × 1.0 → × 0.65（越来越快）
+    const progressCompress = 1 - Phaser.Math.Clamp(t, 0, 1) * 0.35;
+    const newDelay = Math.max(220, Math.floor(this.baseSpawnInterval * progressCompress * this.directorSpawnRateMul));
+    if (Math.abs(newDelay - this.spawnTimer.delay) > 40) {
+      this.spawnTimer.reset({ delay: newDelay, loop: true, callback: () => this.spawnWave(), callbackScope: this });
+    }
+  }
+
+  private checkSurvivorEliteWaves(t: number) {
+    if (this.spec.templateId !== "survivor") return;
+    const waves = this.spec.survivor?.eliteWaves ?? [];
+    if (this.survivorEliteWaveIdx >= waves.length) return;
+    const wave = waves[this.survivorEliteWaveIdx];
+    if (!wave || t < wave.at) return;
+    this.survivorEliteWaveIdx += 1;
+    const { width } = this.scale;
+    const baseSpeed = this.spec.gameplay.hazardSpeed;
+    const waveSpeed = Math.floor(baseSpeed * (wave.speedMul ?? 1.2) * this.directorEnemySpeedMul);
+    const count = wave.count ?? 2;
+    const scale = Math.min(2.2, 0.9 + (wave.hpMul ?? 1) * 0.28);
+    for (let i = 0; i < count; i += 1) {
+      const x = Phaser.Math.Between(60, width - 60);
+      const y = -40 - i * 30;
+      const h = this.hazards.create(x, y, "texHazard") as Phaser.Physics.Arcade.Image;
+      h.setDepth(6).setScale(scale).setAlpha(0.92);
+      const body = h.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(false);
+      h.setVelocity(Phaser.Math.Between(-60, 60), waveSpeed);
+    }
+    juiceShake(this, { durationMs: 120, intensity: 0.006 });
+    playBleep("boss");
+    if (wave.label) {
+      this.banner.show({ ...bannerEliteAssault(this.uiLocale, wave.label), ms: 1400 });
+    }
   }
 
   private spawnHazard(x: number, y: number) {
@@ -1049,6 +1386,11 @@ export class PlayScene extends Phaser.Scene {
     const zigzag = mods.includes("zigzag");
     const collectorMode = this.spec.templateId === "collector";
 
+    // 难度曲线：随分数进度，速度从 1× 线性增至 1.35×
+    const progressRamp = this.winScore > 0
+      ? 1 + Phaser.Math.Clamp(this.score / this.winScore, 0, 1) * 0.35
+      : 1;
+
     h.setVelocity(
       collectorMode
         ? zigzag || finale
@@ -1061,7 +1403,7 @@ export class PlayScene extends Phaser.Scene {
         ? finale
           ? Phaser.Math.Between(-140, 140)
           : Phaser.Math.Between(-90, 90)
-        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * (finale ? 0.34 : 0.22)) * speedMod),
+        : Math.floor(this.spec.gameplay.hazardSpeed * (1 + this.intensity * (finale ? 0.34 : 0.22)) * speedMod * this.directorEnemySpeedMul * progressRamp),
     );
     const body = h.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
@@ -1076,11 +1418,229 @@ export class PlayScene extends Phaser.Scene {
     if (texKey === "texHazardHeavy") {
       h.setData("hp", 2);
     }
+    // avoider 模式：20% 几率产生左右振荡障碍（随游戏进度提升至 35%）
+    if (this.spec.templateId === "avoider" && !collectorMode) {
+      const oscChance = 0.2 + this.intensity * 0.15;
+      if (Math.random() < oscChance) {
+        const oscAmp = Phaser.Math.Between(60, 130);
+        const oscDur = Phaser.Math.Between(500, 900);
+        h.setData("oscAmp", oscAmp);
+        h.setData("oscDur", oscDur);
+        h.setData("oscT", Math.random() * Math.PI * 2); // random phase offset
+        h.setData("oscBaseX", h.x);
+      }
+    }
+  }
+
+  /** avoider 专属：按当前 bulletPattern 生成额外弹幕（在正常 spawnHazard 之外追加） */
+  private spawnAvoiderPatternBurst() {
+    if (this.spec.templateId !== "avoider") return;
+    const { width, height } = this.scale;
+    const progressRamp = this.winScore > 0 ? 1 + Phaser.Math.Clamp(this.score / this.winScore, 0, 1) * 0.35 : 1;
+    const speed = Math.floor(this.spec.gameplay.hazardSpeed * (1.1 + this.intensity * 0.3) * this.directorEnemySpeedMul * progressRamp);
+    const px = this.player?.x ?? width / 2;
+    // 从蓝图中读取当前阶段的 density (1-5)，用于缩放每次发射的弹数
+    const patterns = this.spec.avoider?.bulletPatterns ?? [];
+    const t = this.winScore > 0 ? Phaser.Math.Clamp(this.score / this.winScore, 0, 1) : 0;
+    let density = 2;
+    for (const p of patterns) {
+      if (t >= p.at) density = p.density;
+    }
+    // density 1=少量，5=密集
+    const burstScale = Math.max(1, Math.round(density * 0.6));
+    const py = this.player?.y ?? height - 80;
+
+    switch (this.avoiderCurrentPattern) {
+      case "ring": {
+        // 8 方向环形
+        for (let a = 0; a < 8; a += 1) {
+          const angle = (a / 8) * Math.PI * 2;
+          const sx = width / 2 + Math.cos(angle) * (width * 0.55);
+          const sy = height / 2 + Math.sin(angle) * (height * 0.55);
+          if (sy > -10 && sy < height + 10) continue; // 只从屏幕边缘射入
+          const h = this.hazards.create(
+            Phaser.Math.Clamp(sx, 20, width - 20),
+            Phaser.Math.Clamp(sy, -60, height + 60),
+            "texHazard",
+          );
+          h.setDepth(4);
+          h.setScale(0.85);
+          const dx = width / 2 - sx;
+          const dy = height / 2 - sy;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity((dx / len) * speed, (dy / len) * speed);
+        }
+        break;
+      }
+      case "aimed": {
+        // 瞄准玩家方向（density 决定齐射数量）
+        const aimCount = burstScale;
+        for (let ai = 0; ai < aimCount; ai += 1) {
+          const spreadX = aimCount > 1 ? Phaser.Math.Between(-40, 40) : 0;
+          const sx = Phaser.Math.Between(80, width - 80) + spreadX;
+          const sy = -40 - ai * 20;
+          const h = this.hazards.create(sx, sy, "texHazardFast");
+          h.setDepth(4);
+          h.setScale(0.8);
+          const dx = px - sx;
+          const dy = py - sy;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity((dx / len) * speed, (dy / len) * speed);
+        }
+        break;
+      }
+      case "wall": {
+        // 横向弹幕墙（density 增加列数）
+        const yPos = -30;
+        const cols = 3 + burstScale * 2;
+        for (let i = 0; i < cols; i += 1) {
+          const sx = Math.floor((width / (cols + 1)) * (i + 1));
+          const h = this.hazards.create(sx, yPos, "texHazard");
+          h.setDepth(4);
+          h.setScale(0.9);
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity(0, speed);
+        }
+        break;
+      }
+      case "cross": {
+        // 十字四方向
+        const cx = width / 2;
+        const cy = height / 2;
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dx, dy] of dirs) {
+          const sx = cx + (dx ?? 0) * width * 0.6;
+          const sy = cy + (dy ?? 0) * height * 0.6;
+          if (sx < 0 || sx > width || sy < 0 || sy > height) {
+            const h = this.hazards.create(
+              Phaser.Math.Clamp(sx, -20, width + 20),
+              Phaser.Math.Clamp(sy, -60, height + 60),
+              "texHazard",
+            );
+            h.setDepth(4);
+            (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+            h.setVelocity(-(dx ?? 0) * speed, -(dy ?? 0) * speed);
+          }
+        }
+        break;
+      }
+      case "fan": {
+        // 扇形三发（density 增加扇角数量）
+        const fanSx = Phaser.Math.Between(width * 0.2, width * 0.8);
+        const fanSy = -40;
+        const fanCount = 2 + burstScale;
+        const fanSpread = 0.8;
+        const angles = Array.from({ length: fanCount }, (_, fi) =>
+          fanCount > 1 ? -fanSpread / 2 + (fi / (fanCount - 1)) * fanSpread : 0
+        );
+        for (const offset of angles) {
+          const h = this.hazards.create(fanSx, fanSy, "texHazard");
+          h.setDepth(4);
+          h.setScale(0.85);
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity(Math.sin(offset) * speed, Math.cos(offset) * speed);
+        }
+        break;
+      }
+      case "spiral": {
+        // 螺旋弹幕：每次触发 burstScale 发，角度逐帧递增
+        const spiralBase = (this.avoiderPatternBurstTick * 0.42) % (Math.PI * 2);
+        const spiralCount = 2 + burstScale;
+        for (let i = 0; i < spiralCount; i += 1) {
+          const angle = spiralBase + (i / spiralCount) * Math.PI * 2;
+          const sx = width / 2 + Math.cos(angle) * (width * 0.52);
+          const sy = height / 2 + Math.sin(angle) * (height * 0.52);
+          const h = this.hazards.create(
+            Phaser.Math.Clamp(sx, 10, width - 10),
+            Phaser.Math.Clamp(sy, -50, height + 50),
+            "texHazard",
+          );
+          h.setDepth(4);
+          h.setScale(0.8);
+          const dx = width / 2 - sx;
+          const dy = height / 2 - sy;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity((dx / len) * speed, (dy / len) * speed);
+        }
+        break;
+      }
+      case "random-burst": {
+        // 随机爆发：从屏幕外随机位置射出（density 驱动数量）
+        const count = burstScale + Phaser.Math.Between(0, 1);
+        for (let i = 0; i < count; i += 1) {
+          const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+          const sx = edge === 1 ? width + 20 : edge === 3 ? -20 : Phaser.Math.Between(40, width - 40);
+          const sy = edge === 0 ? -30 : edge === 2 ? height + 30 : Phaser.Math.Between(40, height - 40);
+          const h = this.hazards.create(sx, sy, "texHazardFast");
+          h.setDepth(4);
+          h.setScale(0.75);
+          const dx = px - sx + Phaser.Math.Between(-60, 60);
+          const dy = py - sy + Phaser.Math.Between(-60, 60);
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity((dx / len) * speed, (dy / len) * speed);
+        }
+        break;
+      }
+      case "gate": {
+        // 横向弹幕墙留一条通道 — 玩家必须找到缺口穿过
+        const gapCenter = Phaser.Math.Between(Math.floor(width * 0.2), Math.floor(width * 0.8));
+        const gapWidth = Math.floor(width * (0.18 - burstScale * 0.02)); // density越高缺口越窄
+        const step = Math.floor(width / (7 + burstScale * 2));
+        const yPos = -30;
+        for (let sx = step; sx < width - step; sx += step) {
+          if (sx >= gapCenter - gapWidth / 2 && sx <= gapCenter + gapWidth / 2) continue;
+          const h = this.hazards.create(sx, yPos, "texHazardHeavy");
+          h.setDepth(4);
+          h.setScale(1.1);
+          (h.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+          h.setVelocity(0, Math.floor(speed * 0.8));
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   private spawnCollectible(x: number, y: number) {
-    const g = this.collectibles.create(x, y, "texGem");
+    const g = this.collectibles.create(x, y, "texGem") as Phaser.Physics.Arcade.Image;
     g.setDepth(6);
+    // 使用蓝图 items 按权重随机出现稀有物品（分值越高越罕见）
+    const bpItems = (this.spec.collector?.items ?? []).filter((it) => !it.isGolden);
+    if (bpItems.length > 1) {
+      const totalW = bpItems.reduce((acc, it) => acc + 1 / it.points, 0);
+      let r = this.runtimeRng() * totalW;
+      let picked = bpItems[0];
+      for (const it of bpItems) {
+        r -= 1 / it.points;
+        if (r <= 0) { picked = it; break; }
+      }
+      g.setData("itemPoints", picked.points);
+      if (picked.points >= 3) {
+        g.setScale(picked.points >= 6 ? 1.28 : 1.12);
+        const col = parseInt((this.spec.theme.collectibleColor ?? "#80e0ff").replace("#", ""), 16);
+        g.setTint(Math.min(0xffffff, col + 0x2a1800));
+        if (picked.points >= 6) {
+          // Epic rarity: pulse animation
+          this.tweens.add({
+            targets: g,
+            scaleX: { from: 1.28, to: 1.46 },
+            scaleY: { from: 1.28, to: 1.46 },
+            alpha: { from: 1, to: 0.7 },
+            duration: 420,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut",
+          });
+        }
+      }
+    }
+    const gb = g.body as Phaser.Physics.Arcade.Body | null;
+    if (gb) gb.setAllowGravity(false);
   }
 
   private spawnRiskCollectible() {
@@ -1121,7 +1681,8 @@ export class PlayScene extends Phaser.Scene {
     g.setScale(1.32);
     const gc = parseInt((this.spec.theme.collectibleColor ?? "#ffd700").replace("#", ""), 16);
     g.setTint(gc);
-    g.setData("goldenBonus", 8);
+    const goldenItem = this.spec.collector?.items?.find((it) => it.isGolden);
+    g.setData("goldenBonus", goldenItem?.points ?? 8);
     const gb = g.body as Phaser.Physics.Arcade.Body | null;
     if (gb) gb.setAllowGravity(false);
     // 闪烁动画提示高价值
@@ -1136,7 +1697,11 @@ export class PlayScene extends Phaser.Scene {
 
   private spawnPowerup() {
     if (this.finished) return;
-    const pool = this.spec.systems?.powerups ?? [];
+    const allPowerups = this.spec.systems?.powerups ?? [];
+    const magnetEnabled = this.spec.collector?.magnetEnabled ?? true;
+    const pool = magnetEnabled
+      ? allPowerups
+      : allPowerups.filter((p) => p.type !== "magnet");
     if (pool.length === 0) return;
     const pick = pool[Phaser.Math.Between(0, pool.length - 1)];
     if (!pick) return;
@@ -1190,10 +1755,8 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     if (kind === "heal") {
-      if (this.livesText) {
-        this.lives = Math.min(9, this.lives + 1);
-        this.livesText.setText(hudLives(this.uiLocale, this.lives));
-      }
+      this.lives = Math.min(9, this.lives + 1);
+      this.refreshHud();
       return;
     }
     if (kind === "timeSlow") {
@@ -1280,7 +1843,7 @@ export class PlayScene extends Phaser.Scene {
       this.fxDamage();
       this.player.setAlpha(0.35);
       this.time.delayedCall(200, () => this.player.setAlpha(1));
-      if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
+      this.refreshHud();
       if (this.lives === 1) {
         this.soundscape?.triggerEvent("danger");
         this.startDangerVignette();
@@ -1292,11 +1855,22 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (this.spec.templateId === "collector") {
+      const penalty = this.spec.collector?.hazardPenalty ?? "loseLife";
       this.collectorCombo = 0;
       this.lastCollectorPickupAt = 0;
-      this.lives -= 1;
       this.fxDamage();
-      if (this.livesText) this.livesText.setText(hudLives(this.uiLocale, this.lives));
+      if (penalty === "none") {
+        // ノーダメージ：仅重置连击
+        return;
+      }
+      if (penalty === "loseScore") {
+        this.score = Math.max(0, this.score - Math.max(2, Math.floor(this.score * 0.08)));
+        this.refreshHud();
+        return;
+      }
+      // loseLife: lose a life
+      this.lives -= 1;
+      this.refreshHud();
       if (this.lives === 1) {
         this.soundscape?.triggerEvent("danger");
         this.startDangerVignette();
@@ -1335,6 +1909,7 @@ export class PlayScene extends Phaser.Scene {
     this.physics.pause();
     this.hintText.setText(playFinishText(this.uiLocale, this.spec.templateId, payload.won));
     if (payload.won) {
+      this.cameras.main.shake(300, 0.008);
       juiceWin(this, {
         x: this.player.x,
         y: this.player.y,
@@ -1358,7 +1933,7 @@ export class PlayScene extends Phaser.Scene {
     this.onEnd(payload);
   }
 
-  update() {
+  update(_time: number, delta = 16) {
     this.goalPanel?.update();
     if (this.finished) return;
     this.updateBoss();
@@ -1367,10 +1942,17 @@ export class PlayScene extends Phaser.Scene {
       this.tickSurvivorLastStandEnd();
     }
     const baseSpeed = this.spec.gameplay.playerSpeed;
+    // avoider 专注模式：hold Shift 时降速 50%，扩展擦弹窗口
+    this.avoiderFocusActive =
+      this.spec.templateId === "avoider" &&
+      (this.spec.avoider?.focusModeEnabled ?? false) &&
+      this.keyShift.isDown;
     const speed =
-      this.time.now < this.magnetUntil && this.spec.templateId === "collector"
-        ? Math.floor(baseSpeed * 1.08)
-        : baseSpeed;
+      this.avoiderFocusActive
+        ? Math.floor(baseSpeed * 0.5)
+        : this.time.now < this.magnetUntil && this.spec.templateId === "collector"
+          ? Math.floor(baseSpeed * 1.08)
+          : baseSpeed;
     const { width, height } = this.scale;
 
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
@@ -1439,13 +2021,32 @@ export class PlayScene extends Phaser.Scene {
     const half = 18;
     this.player.x = Phaser.Math.Clamp(this.player.x, half + 8, width - half - 8);
 
+    // 专注模式视觉反馈：玩家变浅蓝色
+    if (this.spec.templateId === "avoider") {
+      this.player.setTint(this.avoiderFocusActive ? 0x80d0ff : 0xffffff);
+    }
+
     const hazards = this.hazards.getChildren();
     for (let i = 0; i < hazards.length; i += 1) {
       const s = hazards[i] as Phaser.Physics.Arcade.Image;
       if (!s.active) continue;
+      // Oscillating hazards: update X via sin wave
+      const oscAmp = s.getData("oscAmp") as number | undefined;
+      if (oscAmp !== undefined) {
+        const oscT = (s.getData("oscT") as number) + delta * 0.006;
+        s.setData("oscT", oscT);
+        const baseX = s.getData("oscBaseX") as number;
+        const newX = baseX + Math.sin(oscT) * oscAmp;
+        // Drive horizontal velocity so arcade physics body stays in sync with Y movement
+        const ob = s.body as Phaser.Physics.Arcade.Body;
+        ob.setVelocityX((newX - s.x) / (delta * 0.001));
+      }
       if (this.spec.templateId === "avoider") {
+        const grazeDist = this.spec.avoider?.grazingDistancePx ?? 18;
+        const focusMul = this.avoiderFocusActive ? 1.4 : 1;
+        const effectiveGraze = grazeDist * focusMul;
         const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.x, s.y);
-        if (d < 60 && d > 26) {
+        if (d < effectiveGraze + 40 && d > effectiveGraze) {
           this.triggerNearMiss(s);
         }
       }
@@ -1490,6 +2091,15 @@ export class PlayScene extends Phaser.Scene {
     if (this.spec.templateId === "survivor" && this.survivorLastStandUntil > this.time.now) {
       this.refreshHud();
     }
+
+    // record player trail for ghost afterimage effect
+    if (this.player?.active && (this.scoreMult > 1 || Math.abs(this.player.body.velocity.x) > 120)) {
+      const now = this.time.now;
+      this.playerTrail.push({ x: this.player.x, y: this.player.y, t: now });
+      if (this.playerTrail.length > 8) this.playerTrail.shift();
+    } else if (this.playerTrail.length > 0) {
+      this.playerTrail.shift();
+    }
   }
 
   private showFloater(x: number, y: number, message: string, color: string) {    const floater = this.add
@@ -1517,6 +2127,89 @@ export class PlayScene extends Phaser.Scene {
     this.shieldRing.lineStyle(2, c, 0.65);
     this.shieldRing.strokeCircle(this.player.x, this.player.y, 28);
     this.shieldRing.strokeCircle(this.player.x, this.player.y, 22);
+  }
+
+  private drawStatusEffects() {
+    const g = this.statusGfx;
+    g.clear();
+    const now = this.time.now;
+    const { width, height } = this.scale;
+    const px = this.player?.active ? this.player.x : -999;
+    const py = this.player?.active ? this.player.y : -999;
+
+    // Player ghost trail (active during score mult or fast movement)
+    if (this.playerTrail.length > 1) {
+      const trailColor = this.scoreMult > 1 ? 0xfbbf24 : 0x38bdf8;
+      for (let i = 0; i < this.playerTrail.length - 1; i++) {
+        const pt = this.playerTrail[i]!;
+        const age = (now - pt.t) / 240;
+        const alpha = Math.max(0, (1 - age) * 0.22 * (i / this.playerTrail.length));
+        if (alpha <= 0) continue;
+        g.fillStyle(trailColor, alpha);
+        const sz = 8 + i * 1.5;
+        g.fillCircle(pt.x, pt.y, sz);
+      }
+    }
+
+    // Avoider focus mode: tight blue ring around player + graze hitbox outline
+    if (this.spec.templateId === "avoider" && this.avoiderFocusActive) {
+      const focusPulse = 0.55 + Math.sin(now * 0.014) * 0.35;
+      const grazeDist = (this.spec.avoider?.grazingDistancePx ?? 18) * 1.4;
+      g.lineStyle(2, 0x38bdf8, focusPulse * 0.9);
+      g.strokeCircle(px, py, grazeDist + 40);
+      g.lineStyle(1, 0x7dd3fc, focusPulse * 0.5);
+      g.strokeCircle(px, py, grazeDist);
+    }
+
+    // Magnet aura: dashed orbit ring showing attract radius
+    if (now < this.magnetUntil && this.spec.templateId === "collector") {
+      const pulse = 0.3 + Math.sin(now * 0.006) * 0.15;
+      const accentC = parseInt((this.spec.theme.collectibleColor ?? "#67e8f9").replace("#", ""), 16);
+      g.lineStyle(1.5, accentC, pulse);
+      // Draw dashed circle (8 arcs)
+      const segs = 10;
+      for (let i = 0; i < segs; i += 2) {
+        const a0 = ((i / segs) * Math.PI * 2) + (now * 0.002);
+        const a1 = (((i + 0.8) / segs) * Math.PI * 2) + (now * 0.002);
+        g.beginPath();
+        g.arc(px, py, 280, a0, a1, false, 0.05);
+        g.strokePath();
+      }
+    }
+
+    // Time slow: blue vignette corners
+    if (now < this.slowUntil) {
+      const fade = Math.min(1, (this.slowUntil - now) / 400);
+      g.fillStyle(0x38bdf8, 0.11 * fade);
+      g.fillRect(0, 0, width, height);
+      g.lineStyle(3, 0x38bdf8, 0.28 * fade);
+      g.strokeRect(2, 2, width - 4, height - 4);
+    }
+
+    // Score multiplier badge (×2 glow above player)
+    if (this.scoreMult > 1 && this.player?.active) {
+      const badge = this.scoreMult === 2 ? 0xfbbf24 : 0xf97316;
+      const pulse = 0.7 + Math.sin(now * 0.01) * 0.25;
+      g.fillStyle(badge, pulse * 0.18);
+      g.fillCircle(px, py - 36, 14);
+      g.lineStyle(2, badge, pulse * 0.85);
+      g.strokeCircle(px, py - 36, 14);
+    }
+
+    // coinRain: animated coin sparkle overlay (top-screen rain visual)
+    if (now < this.coinRainUntil) {
+      const gemC = parseInt((this.spec.theme.collectibleColor ?? "#fcd34d").replace("#", ""), 16);
+      for (let i = 0; i < 6; i += 1) {
+        // Each sparkle is at a deterministic but time-varying position
+        const t = (now * 0.001 + i * 1.618) % 1;
+        const sx = ((i * 0.179 + 0.05) * width + now * 0.04 * (i % 2 === 0 ? 1 : -1)) % width;
+        const sy = (t * height * 1.1) % height;
+        const size = 3 + (i % 3);
+        const alpha = Math.sin(now * 0.008 + i * 2.1) * 0.25 + 0.45;
+        g.fillStyle(gemC, Math.max(0, alpha));
+        g.fillRect(sx - size / 2, sy - size / 2, size, size);
+      }
+    }
   }
 
   private getActModifiers(): string[] {
@@ -1579,8 +2272,9 @@ export class PlayScene extends Phaser.Scene {
       this.avoiderNearMissChain = 1;
     }
     this.avoiderLastNearMissAt = now;
+    const baseGrazeBonus = this.spec.avoider?.grazingBonus ?? 1;
     const chainBonus = Math.min(this.avoiderNearMissChain - 1, 5);
-    const add = 1 + chainBonus;
+    const add = baseGrazeBonus + chainBonus;
     this.score += add;
     const label =
       chainBonus > 0

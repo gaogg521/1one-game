@@ -27,6 +27,7 @@ export type RuntimeConfigView = {
     geminiApiKey: string | null;
     geminiBaseUrl: string | null;
     anthropicApiKey: string | null;
+    replicateApiKey: string | null;
   };
   sources: Record<string, "env" | "db" | "none">;
   models: {
@@ -325,6 +326,117 @@ function EnvLegacySecretsPanel({ view }: { view: RuntimeConfigView }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function BgmServicePanel({
+  view,
+  headers,
+  onNotice,
+  onView,
+}: {
+  view: RuntimeConfigView;
+  headers: () => HeadersInit;
+  onNotice: (n: { kind: "ok" | "error"; text: string }) => void;
+  onView: (v: RuntimeConfigView) => void;
+}) {
+  const [keyInput, setKeyInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const source = view.sources.replicateApiKey ?? "none";
+  const masked = view.secrets.replicateApiKey;
+
+  async function saveKey() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/runtime-config", {
+        method: "PATCH",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ secrets: { replicateApiKey: keyInput.trim() || null } }),
+      });
+      if (!res.ok) { onNotice({ kind: "error", text: "保存失败" }); return; }
+      const data = (await res.json()) as RuntimeConfigView;
+      onView(data);
+      setKeyInput("");
+      onNotice({ kind: "ok", text: "Replicate API Key 已保存" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearKey() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/runtime-config", {
+        method: "PATCH",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ secrets: { replicateApiKey: null } }),
+      });
+      if (!res.ok) { onNotice({ kind: "error", text: "清除失败" }); return; }
+      const data = (await res.json()) as RuntimeConfigView;
+      onView(data);
+      onNotice({ kind: "ok", text: "Replicate API Key 已清除" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const bgmMode = source !== "none" ? "replicate" : "llm-fallback";
+
+  return (
+    <section
+      className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4 sm:px-5"
+      data-testid="admin-bgm-service-panel"
+    >
+      <h3 className="text-base font-semibold text-[var(--gc-text)]">BGM 生成服务</h3>
+      <p className="mt-1 text-xs leading-relaxed text-[var(--gc-muted)]">
+        配置第三方音乐生成 API。有 Replicate Key 时自动使用 MusicGen 生成每款游戏专属 BGM；无 Key 时降级为 LLM 音符序列生成。
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-[var(--gc-text-soft)]">当前模式</span>
+        <span
+          className={`rounded-full px-2 py-0.5 font-medium ${
+            bgmMode === "replicate"
+              ? "bg-green-500/15 text-green-400"
+              : "bg-amber-500/15 text-amber-400"
+          }`}
+        >
+          {bgmMode === "replicate" ? "Replicate MusicGen" : "LLM 降级模式"}
+        </span>
+        <SourceBadge source={source} />
+        {masked && (
+          <span className="font-mono text-[11px] text-[var(--gc-muted)]">{masked}</span>
+        )}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <input
+          type="password"
+          placeholder="r8_xxxx… (留空清除)"
+          value={keyInput}
+          onChange={(e) => setKeyInput(e.target.value)}
+          className="h-8 flex-1 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] px-3 text-xs text-[var(--gc-text)] placeholder:text-[var(--gc-text-faint)] focus:outline-none focus:ring-1 focus:ring-[var(--gc-accent)]"
+        />
+        <button
+          type="button"
+          disabled={saving}
+          onClick={saveKey}
+          className="h-8 rounded-lg bg-[var(--gc-accent)] px-3 text-xs font-medium text-white disabled:opacity-50"
+        >
+          保存
+        </button>
+        {source === "db" && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={clearKey}
+            className="h-8 rounded-lg border border-[color:var(--gc-border)] px-3 text-xs font-medium text-[var(--gc-text-soft)] disabled:opacity-50"
+          >
+            清除
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -933,6 +1045,13 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
       <LiveRuntimeSummary routes={savedRoutes} providers={savedProviders} />
 
       <EnvLegacySecretsPanel view={view} />
+
+      <BgmServicePanel
+        view={view}
+        headers={headers}
+        onNotice={onNotice}
+        onView={(v) => { setView(v); hydrateForm(v); }}
+      />
 
       <div className="flex flex-wrap gap-2">
         {(

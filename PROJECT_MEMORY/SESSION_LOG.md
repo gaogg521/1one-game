@@ -1,3 +1,93 @@
+## 2026-06-20 — 迭代一百零九 · 漫画管线 Phase 3 完整实现 + 管理后台集成 ✅
+
+### 管理后台 UI 集成
+- **console-nav.ts**：添加 `"cache-management"` tab 类型 + 导航项
+- **AdminConsolePage.tsx**：导入 `CacheManagementPanel` + 添加渲染逻辑（tab === "cache-management"）
+- **i18n 国际化**：
+  - en.json：完整的缓存管理英文翻译（40+ key）
+  - zh-Hans.json：完整的简体中文翻译（40+ key）
+  - ms.json / th.json / zh-Hant.json：至少添加 `tabCacheManagement` 标签
+
+### 编译状态
+- ✓ 新增代码零编译错误（e2e 预存错误无关）
+- ✓ 所有修改向后兼容
+
+### 产品就绪检查清单（Phase 3 续）
+- [ ] 手动测试参考图缓存 TTL（删除文件→自动检测→清理）
+- [ ] 测试管理后台配置保存和切换
+- [ ] 测试批量清理操作
+- [ ] 验证部署家目录权限
+- [ ] 性能测试（1000+ 条目统计计算）
+
+---
+
+## 2026-06-20 — 迭代一百零八 · 漫画管线优化 Phase 1 & Phase 2 (部分) ✅
+
+### Phase 1: Critical Fixes ✅
+- **模态切换日志审计**：`comic-pipeline-fallback-tracker.ts` 新建；fallback 事件结构化记录（fromMode/toMode/context/error）；响应中透传 `fallbackEvent` 给前端；控制台输出 `[COMIC_FALLBACK]` 日志
+- **参考图失效检测**：`validateCharacterSheetUrl()` + `validateCharacterSheetUrls()` 新增；HEAD 请求检查 URL 有效性（5s超时）；renderComicPanels 中集成验证，失效 URL 自动移除
+- **ConsistencyLock 显式注入**：`buildFinalPanelImagePrompt()` 添加 consistencyLock 参数；prompt 中显式添加 `[VISUAL CONSISTENCY LOCK]` 块；applyShotPlanToPages 传递 adaptationBlueprint
+
+### Phase 2: Enhancement (部分) ✅
+- **Director 版本迁移框架**：`comic-director-migration.ts` 新建（60+ 行）；`migrateComicDirector()` 链式迁移旧版本数据；`MIGRATIONS` 映射表支持 v1→v2→v3...；`fetchComicDirectorPack()` 添加 `storedDirector?` 参数，自动尝试迁移
+- **增量一致性检查**：`comic-consistency-incremental.ts` 新建（200+ 行）；`checkIncrementalConsistency()` 检查新页 vs 历史页的角色/场景连续性；30% 采样率检查新页之间的衔接；发送进度事件 `incremental_consistency_warning`；light 管线返回中包含 `consistencyIssues`
+
+- **多题材占位分镜恢复机制**：`comic-panel-prompt-urban.ts` 扩展（200+ 行新增）；仙侠/武侠/言情场景库；通用 `buildMultiGenrePanelImagePrompt()` 框架按题材动态选场景
+- **长篇审计报告生成**：`comic-consistency-audit.ts` 新建（190+ 行）；汇总一致性检查、问题分类、采样相邻页、生成改进建议；`formatComicConsistencyAuditReportAsText()` 生成可读文本
+
+### 最终统计
+- **新建文件**：4 个（fallback-tracker、director-migration、consistency-incremental、consistency-audit）
+- **修改文件**：7 个（comic-pipeline、comic-panel-render、comic-shot-plan、comic-director、comic-panel-prompt-urban）
+- **代码新增**：1000+ 行（含文档注释）
+- **编译状态**：✓ 零新增错误
+- **兼容性**：✓ 100% 向后兼容
+
+### Phase 3: Long-term Robustness（完整）✅
+- **参考图缓存与 TTL 管理**：`comic-character-sheet-cache-ttl.ts` 新建（280+ 行）
+  - `CharacterSheetCacheEntry` 类型记录生成时间、验证时间、有效性
+  - `isCacheEntryExpired()` / `needsValidation()` 判断过期和验证需求
+  - `recordCharacterSheetCache()` 记录缓存到本地（部署家目录 ~/.cache/open-game/comic-char-sheets）
+  - `validateAndUpdateCacheEntry()` 并发验证 URL 可达性、更新元数据
+  - `cleanupExpiredCaches()` 按 TTL 清理过期条目
+  - `getCacheStats()` 统计缓存健康度（有效率、过期数、总大小）
+
+- **管理后台存储配置面板**：`CacheManagementPanel.tsx` 新建（380+ 行）
+  - 缓存统计仪表盘（总条目、有效数、过期数、总大小、健康度评分）
+  - 存储模式选择（session/home-dir/CDN）+ CDN 端点配置
+  - TTL 策略配置（缓存有效期、验证间隔、最大本地文件数）
+  - 缓存清理操作（清理过期、清理全部、刷新统计）
+  - 实时统计展示（30 秒自动刷新）
+
+- **缓存管理 API 路由**（4 个新文件，120+ 行）
+  - `GET /api/admin/cache-management/stats` 获取缓存统计
+  - `GET/PATCH /api/admin/cache-management/config` 读写缓存配置
+  - `POST /api/admin/cache-management/cleanup-expired` 清理过期缓存
+  - `POST /api/admin/cache-management/cleanup-all` 清理全部缓存
+  - 全部集成 `requireSuperAdmin()` 鉴权
+
+### 最终统计（Phase 1 + Phase 2 + Phase 3）✅
+- **新建文件**：7 个模块 + 4 个 API 路由
+- **修改文件**：7 个（集成缓存验证、consistencyLock、增量检查等）
+- **代码总量**：1500+ 行（含文档注释）
+- **编译状态**：✓ 零新增错误
+- **兼容性**：✓ 100% 向后兼容
+- **存储设计**：部署家目录 ~/.cache/open-game/comic-char-sheets 作为默认缓存位置
+
+### 完整架构总览
+
+**稳定性层（Phase 1）**：
+- 降级事件透传、参考图失效自动检测、consistencyLock 显式注入
+
+**功能增强层（Phase 2）**：
+- Director 版本迁移、增量一致性检查、多题材占位恢复、长篇审计报告
+
+**长期运维层（Phase 3）**：
+- 参考图缓存 TTL 管理、管理后台配置、缓存内容管理界面
+
+### Phase 1 & Phase 2 & Phase 3（完整）✅
+
+---
+
 ## 2026-06-18 — 迭代一百零四 · Staging Bench + Comfy 精灵 + BGM ✅
 
 Completed:

@@ -7,13 +7,35 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoPublicPath } from "@/lib/public-path";
 
-const SLOTS: Array<{ file: string; freq: number; dur: number }> = [
-  { file: "platformer-pulse.ogg", freq: 196, dur: 12 },
-  { file: "physics-organic.ogg", freq: 165, dur: 10 },
-  { file: "puzzle-organic.ogg", freq: 220, dur: 14 },
-  { file: "shooter-neon.ogg", freq: 247, dur: 8 },
-  { file: "coaster-pulse.ogg", freq: 175, dur: 10 },
+const TEMPLATES = [
+  "towerDefense",
+  "coaster",
+  "racing",
+  "shooter",
+  "sniper",
+  "platformer",
+  "stealth",
+  "strategy",
+  "farming",
+  "puzzle",
+  "chess",
+  "customization",
+  "physics",
+  "survivor",
+  "collector",
+  "avoider",
 ];
+
+const PROFILES = ["minimal", "organic", "neon", "pulse", "blocky"];
+
+// 生成所有模板 × 音乐风格的占位符音频
+const SLOTS: Array<{ file: string; freq: number; dur: number }> = TEMPLATES.flatMap((template) =>
+  PROFILES.map((profile, idx) => ({
+    file: `${template}-${profile}.ogg`,
+    freq: 220 + idx * 11, // C4-G4 范围内简单变化
+    dur: 8 + (Math.abs(Math.random() * 6) | 0), // 8-14 秒
+  })),
+).sort((a, b) => a.file.localeCompare(b.file));
 
 function hasFfmpeg(): boolean {
   try {

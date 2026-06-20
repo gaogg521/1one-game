@@ -31,6 +31,7 @@ import {
 } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { showControlsHint, coasterControlLines } from "@/game/engine/controls-hint";
 import {
   drawTempleFireflies,
   drawTempleLaneDashes,
@@ -119,6 +120,8 @@ type RoadObstacle = {
   h: number;
   kind: RoadObstacleKind;
   crashyStyle?: CrashyObstacleStyle;
+  driftVel?: number;
+  driftPhase?: number;
 };
 type RoadPickup = { lane: number; z: number };
 
@@ -500,6 +503,7 @@ export class CoasterScene extends Phaser.Scene {
         }
       });
     }
+    showControlsHint(this, coasterControlLines(this.uiLocale));
   }
 
   private triggerTempleJump() {
@@ -1073,16 +1077,60 @@ export class CoasterScene extends Phaser.Scene {
       } else {
         const density = 1.35 - this.trackProgress * 0.45;
         this.obstacleSpawnCd = Math.max(0.42, density);
-        this.roadObstacles.push({
-          lane: Phaser.Math.Between(-1, 1),
-          z: 1.12,
-          w: 36 + Phaser.Math.Between(0, 22),
-          h: 28 + Phaser.Math.Between(0, 18),
-          kind: "rock",
-        });
+        const variety = Phaser.Math.Between(0, 9);
+        if (variety <= 3) {
+          // Normal single obstacle
+          this.roadObstacles.push({
+            lane: Phaser.Math.Between(-1, 1) as -1 | 0 | 1,
+            z: 1.12,
+            w: 36 + Phaser.Math.Between(0, 22),
+            h: 28 + Phaser.Math.Between(0, 18),
+            kind: "rock",
+          });
+        } else if (variety <= 5) {
+          // Gate: two side obstacles with centre gap — must steer to middle lane
+          const gapLane = ([-1, 0, 1] as const)[Phaser.Math.Between(0, 2)]!;
+          const sides = ([-1, 0, 1] as const).filter((l) => l !== gapLane);
+          for (const sLane of sides) {
+            this.roadObstacles.push({
+              lane: sLane,
+              z: 1.12,
+              w: 40,
+              h: 30,
+              kind: "rock",
+            });
+          }
+        } else if (variety <= 7) {
+          // Wide obstacle that spans 1.5 lanes (visual variety, same hit)
+          this.roadObstacles.push({
+            lane: Phaser.Math.Between(-1, 1) as -1 | 0 | 1,
+            z: 1.12,
+            w: 68 + Phaser.Math.Between(0, 18),
+            h: 26 + Phaser.Math.Between(0, 12),
+            kind: "rock",
+          });
+        } else {
+          // Drifting obstacle (oscillates left-right as it approaches)
+          const driftLane = ([-1, 0, 1] as const)[Phaser.Math.Between(0, 2)]!;
+          this.roadObstacles.push({
+            lane: driftLane,
+            z: 1.12,
+            w: 38 + Phaser.Math.Between(0, 16),
+            h: 28 + Phaser.Math.Between(0, 14),
+            kind: "rock",
+            driftVel: (Phaser.Math.Between(0, 1) === 0 ? 1 : -1) * Phaser.Math.FloatBetween(0.55, 1.1),
+            driftPhase: 0,
+          });
+        }
       }
     }
-    for (const o of this.roadObstacles) o.z -= scroll;
+    for (const o of this.roadObstacles) {
+      o.z -= scroll;
+      if (o.driftVel !== undefined) {
+        o.driftPhase = (o.driftPhase ?? 0) + dt;
+        o.lane = Math.sin(o.driftPhase * o.driftVel) * 1.0;
+      }
+    }
     this.roadObstacles = this.roadObstacles.filter((o) => o.z > -0.05);
     for (const c of this.roadPickups) c.z -= scroll;
     this.roadPickups = this.roadPickups.filter((c) => c.z > -0.05);

@@ -1,4 +1,5 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
+import { logGenerationError } from "@/lib/generation-error-log";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
@@ -103,6 +104,8 @@ export async function POST(req: Request) {
             enhancePass: parsed.enhancePass,
           }, uiLocale),
         });
+        // 进度：LLM 开始生成规格
+        send({ step: "spec_draft", message: streamMessage(uiLocale, "spec_draft") });
         const result = await generateGameSpecWithMeta(parsed.prompt, {
           searchEnhance: parsed.searchEnhance,
           templateHint: parsed.templateHint,
@@ -113,6 +116,8 @@ export async function POST(req: Request) {
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
         const spec = result.spec;
+        // 进度：规格生成完成，进入资产丰富化
+        send({ step: "enriching", message: streamMessage(uiLocale, "enriching") });
         const recapLines = [
           ...buildGenerateRecapLines(
             uiLocale,
@@ -144,7 +149,7 @@ export async function POST(req: Request) {
           debug: result.debug,
           message: streamMessage(uiLocale, "done"),
         });
-      } catch {
+      } catch (err) {
         emitGenerateServeLog({
           phase: "generate_stream_done",
           requestId,
@@ -152,6 +157,7 @@ export async function POST(req: Request) {
           byteLength: json.byteLength,
           promptChars: parsed.prompt.length,
         });
+        void logGenerationError({ contentType: "game", prompt: parsed.prompt, error: err, ownerKey });
         send({ step: "error", message: streamMessage(uiLocale, "error"), ok: false });
       } finally {
         controller.close();

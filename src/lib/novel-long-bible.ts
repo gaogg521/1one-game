@@ -121,20 +121,97 @@ export function fallbackNovelBible(
   plan: LongNovelSegmentPlan,
   uiLocale: AppLocale = "zh-Hans",
 ): NovelBible {
+  const outputLocale = resolveNovelOutputLocale(prompt);
   const t = title?.trim() || untitledNovelLabel(uiLocale);
-  return {
-    title: t,
-    worldSetting: `故事发生于与用户创意相关的虚构世界：${prompt.trim().slice(0, 200)}`,
-    tone: "网络连载、节奏明快",
-    characters: [
-      { name: "主角", role: "主人公", traits: "坚韧、有成长弧光" },
-      { name: "对手", role: "对立面", traits: "制造核心冲突" },
-      { name: "同伴", role: "盟友", traits: "协助主角推进主线" },
-    ],
-    coreConflict: prompt.trim().slice(0, 400),
-    endingDirection: `在约 ${plan.targetTotalChars} 字内完成主线收束，呼应创意核心。`,
-    taboos: ["禁止重启世界观", "禁止主要角色无故改名或死亡复活（无铺垫）"],
-  };
+  const concept = prompt.trim().slice(0, 200);
+  const conflict = prompt.trim().slice(0, 400);
+
+  switch (outputLocale) {
+    case "en":
+      return {
+        title: t,
+        worldSetting: `A fictional world derived from the user's concept: ${concept}`,
+        tone: "Fast-paced serialised fiction",
+        characters: [
+          { name: "Protagonist", role: "Hero", traits: "Resilient, strong character arc" },
+          { name: "Antagonist", role: "Villain", traits: "Drives the core conflict" },
+          { name: "Ally", role: "Companion", traits: "Helps the protagonist advance the main plot" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `Resolve the main storyline within ~${plan.targetTotalChars} characters, echoing the original concept.`,
+        taboos: ["No world-reset endings", "No unexplained character death/resurrection"],
+      };
+    case "ja":
+      return {
+        title: t,
+        worldSetting: `ユーザーの創意に基づく架空世界：${concept}`,
+        tone: "テンポの速い連載小説",
+        characters: [
+          { name: "主人公", role: "ヒーロー", traits: "芯が強く、成長弧がある" },
+          { name: "敵役", role: "ヴィラン", traits: "核心の対立を生み出す" },
+          { name: "仲間", role: "相棒", traits: "主人公の物語を前進させる" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `約${plan.targetTotalChars}文字以内にメインストーリーを収束させる。`,
+        taboos: ["世界観リセット禁止", "根拠なき主要キャラの死亡・復活禁止"],
+      };
+    case "ms":
+      return {
+        title: t,
+        worldSetting: `Dunia rekaan berdasarkan idea pengguna: ${concept}`,
+        tone: "Fiksyen bersiri pantas",
+        characters: [
+          { name: "Protagonis", role: "Wira", traits: "Tabah, perkembangan watak yang kuat" },
+          { name: "Antagonis", role: "Penjahat", traits: "Mencipta konflik teras" },
+          { name: "Rakan", role: "Sahabat", traits: "Membantu protagonis maju dalam plot utama" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `Selesaikan jalan cerita utama dalam ~${plan.targetTotalChars} aksara.`,
+        taboos: ["Tiada pengakhiran set semula dunia", "Tiada kematian/kebangkitan watak tanpa sebab"],
+      };
+    case "th":
+      return {
+        title: t,
+        worldSetting: `โลกสมมุติที่ได้จากแนวคิดของผู้ใช้: ${concept}`,
+        tone: "นิยายซีรีส์ดำเนินเรื่องเร็ว",
+        characters: [
+          { name: "ตัวเอก", role: "ผู้นำ", traits: "เข้มแข็ง มีการเติบโตของตัวละคร" },
+          { name: "ผู้ร้าย", role: "ตัวร้าย", traits: "สร้างความขัดแย้งหลัก" },
+          { name: "เพื่อน", role: "พันธมิตร", traits: "ช่วยตัวเอกขับเคลื่อนเรื่องราวหลัก" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `แก้ไขเรื่องราวหลักภายใน ~${plan.targetTotalChars} ตัวอักษร`,
+        taboos: ["ห้ามรีเซ็ตโลก", "ห้ามตัวละครหลักตายหรือฟื้นคืนชีพโดยไม่มีเหตุผล"],
+      };
+    case "zh-Hant":
+      return {
+        title: t,
+        worldSetting: `故事發生於與用戶創意相關的虛構世界：${concept}`,
+        tone: "網路連載、節奏明快",
+        characters: [
+          { name: "主角", role: "主人公", traits: "堅韌、有成長弧光" },
+          { name: "對手", role: "對立面", traits: "製造核心衝突" },
+          { name: "同伴", role: "盟友", traits: "協助主角推進主線" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `在約 ${plan.targetTotalChars} 字內完成主線收束，呼應創意核心。`,
+        taboos: ["禁止重啟世界觀", "禁止主要角色無故改名或死亡復活（無鋪墊）"],
+      };
+    default:
+      return {
+        title: t,
+        worldSetting: `故事发生于与用户创意相关的虚构世界：${concept}`,
+        tone: "网络连载、节奏明快",
+        characters: [
+          { name: "主角", role: "主人公", traits: "坚韧、有成长弧光" },
+          { name: "对手", role: "对立面", traits: "制造核心冲突" },
+          { name: "同伴", role: "盟友", traits: "协助主角推进主线" },
+        ],
+        coreConflict: conflict,
+        endingDirection: `在约 ${plan.targetTotalChars} 字内完成主线收束，呼应创意核心。`,
+        taboos: ["禁止重启世界观", "禁止主要角色无故改名或死亡复活（无铺垫）"],
+      };
+  }
 }
 
 export async function fetchNovelBible(

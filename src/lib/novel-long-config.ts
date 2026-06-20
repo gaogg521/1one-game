@@ -24,8 +24,13 @@ export function planLongNovelSegments(tier: NovelLengthTier): LongNovelSegmentPl
 export function estimateLongNovelChapterCount(plan: LongNovelSegmentPlan): number {
   const avg = LONG_NOVEL_PRODUCT.avgCharsPerChapter;
   const raw = Math.round(plan.targetTotalChars / avg);
+  // 产品优化：超长篇（>60000 字）允许突破 maxChapterCount 上限，按字数动态扩展
+  // 原 maxChapterCount=36 对 80000+ 字小说章数过少（每章 2200+ 字偏长）
+  const hardMax = plan.targetTotalChars > 60_000
+    ? Math.min(60, Math.ceil(plan.targetTotalChars / 2000))
+    : LONG_NOVEL_PRODUCT.maxChapterCount;
   return Math.min(
-    LONG_NOVEL_PRODUCT.maxChapterCount,
+    hardMax,
     Math.max(LONG_NOVEL_PRODUCT.minChapterCount, raw),
   );
 }

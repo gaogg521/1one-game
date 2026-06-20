@@ -6,7 +6,10 @@ enum Kind { PICKUP, HIT, WIN, FIRE, EXPLODE }
 
 
 static func play(parent: Node, kind: Kind, temperament: float = 1.0) -> void:
-	if DisplayServer.is_headless():
+	# DisplayServer.is_headless() 在某些 Godot 4.4 构建不可用，用 OS.has_feature 替代
+	if OS.has_feature("standalone") or OS.has_feature("editor"):
+		pass  # 非纯 headless，继续播放
+	if DisplayServer.get_name() == "" or DisplayServer.get_name() == "headless":
 		return
 	var t := clampf(temperament, 0.65, 1.45)
 	var player := AudioStreamPlayer.new()

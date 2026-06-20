@@ -1,0 +1,7 @@
+{
+  "script": "qa:sample-gallery-db-sync",
+  "ok": true,
+  "passed": 14,
+  "total": 14,
+  "ts": "2026-06-17T14:44:24.991Z"
+}

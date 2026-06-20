@@ -16,6 +16,10 @@ export function GamePlayer(props: {
   promptHint?: string;
   /** 样品馆试玩：隐藏 dev 叠层，更沉浸 */
   immersive?: boolean;
+  /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
+  previewMode?: boolean;
+  /** 结算画面"继续调整"回调 */
+  onIterate?: (instruction: string) => void;
 }) {
   return <GamePlayerInner {...props} />;
 }

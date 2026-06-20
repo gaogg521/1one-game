@@ -10,6 +10,8 @@ export type GameSoundscapeOptions = {
   blocky?: boolean;
   /** Phase D：模板 BGM 槽 + procedural BPM 微调 */
   templateId?: GameSpec["templateId"];
+  /** 项目 ID，用于拉取 LLM 降级 BGM 音符序列 */
+  projectId?: string;
 };
 
 export type MusicSection = "intro" | "build" | "drop" | "climax" | "victory" | "defeat";
@@ -231,26 +233,196 @@ class DrumSequencer {
   }
 }
 
-/** 旋律琶音器：五声音阶，按 section 切换模式 */
-class MelodicArpeggiator {
+// ─── Chord Progression Engine ────────────────────────────────────────────────
+
+/** [root, third, fifth] — multipliers relative to rootHz */
+type ChordTriad = readonly [number, number, number];
+
+/** Per-profile 4-chord progressions (just intonation ratios) */
+const CHORD_PROGRESSIONS: Record<string, ChordTriad[]> = {
+  neon:    [[1, 1.26, 1.5], [1.125, 1.414, 1.682], [1.5, 1.89, 2.25], [1.26, 1.587, 1.89]],
+  organic: [[1, 1.25, 1.5], [1.333, 1.667, 2],     [1.5, 1.875, 2.25], [0.889, 1.125, 1.333]],
+  pulse:   [[1, 1.2, 1.5],  [1.333, 1.6, 2],        [1.5, 1.8, 2.25],   [1.667, 2, 2.5]],
+  minimal: [[1, 1.5, 2],    [1.333, 2, 2.667],       [1.5, 2.25, 3],     [1, 1.5, 2]],
+  default: [[1, 1.25, 1.5], [1.333, 1.667, 2],       [1.5, 1.875, 2.25], [1.667, 2.083, 2.5]],
+};
+
+class ChordEngine {
+  private chordIdx = 0;
+  private onChangeCb: (() => void) | null = null;
+  private readonly progression: ChordTriad[];
+
+  constructor(profile: MusicProfile) {
+    this.progression = CHORD_PROGRESSIONS[profile] ?? CHORD_PROGRESSIONS.default!;
+  }
+
+  onChordChange(cb: () => void) { this.onChangeCb = cb; }
+
+  advance(): ChordTriad {
+    this.chordIdx = (this.chordIdx + 1) % this.progression.length;
+    this.onChangeCb?.();
+    return this.current();
+  }
+
+  current(): ChordTriad {
+    return this.progression[this.chordIdx] ?? this.progression[0]!;
+  }
+}
+
+// ─── Bass Line ───────────────────────────────────────────────────────────────
+
+class BassLine {
+  private cleanups: SoundscapeCleanup[] = [];
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private chord: ChordTriad = [1, 1.25, 1.5];
+  private readonly masterGain: GainNode;
+  private active = false;
+  private beat = 0;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    destination: AudioNode,
+    private readonly rootHz: number,
+    private readonly bpm: number,
+  ) {
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 0;
+    this.masterGain.connect(destination);
+  }
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    const beatMs = (60 / this.bpm) * 1000;
+    this.timer = setInterval(() => {
+      if (!this.active) return;
+      if (this.beat % 4 === 0) this.pluck(this.beat % 8 === 0 ? 1 : 0.6);
+      this.beat = (this.beat + 1) % 16;
+    }, beatMs);
+  }
+
+  stop() {
+    this.active = false;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+  }
+
+  updateChord(chord: ChordTriad) { this.chord = chord; }
+
+  setIntensity(v: number) {
+    this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)) * 0.5, this.ctx.currentTime, 0.4);
+  }
+
+  private pluck(vel: number) {
+    const t = this.ctx.currentTime;
+    const freq = this.rootHz * this.chord[0] * 0.5; // one octave below root
+    const osc = this.ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.setTargetAtTime(freq * 0.978, t + 0.03, 0.07);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.4 * vel, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+    osc.connect(g); g.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.52);
+    this.cleanups.push(() => { try { osc.disconnect(); g.disconnect(); } catch { /**/ } });
+  }
+
+  dispose() {
+    this.stop();
+    for (const c of this.cleanups) c();
+    this.cleanups.length = 0;
+    try { this.masterGain.disconnect(); } catch { /**/ }
+  }
+}
+
+// ─── Chord Pad ───────────────────────────────────────────────────────────────
+
+class ChordPad {
+  private cleanups: SoundscapeCleanup[] = [];
+  private readonly masterGain: GainNode;
+  private liveNodes: Array<{ osc: OscillatorNode; g: GainNode }> = [];
+  private active = false;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    destination: AudioNode,
+    private readonly rootHz: number,
+  ) {
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 0;
+    this.masterGain.connect(destination);
+  }
+
+  start(chord: ChordTriad) {
+    if (this.active) return;
+    this.active = true;
+    this.spawnChord(chord, 1.0);
+  }
+
+  crossfadeTo(chord: ChordTriad) {
+    if (!this.active) return;
+    for (const n of this.liveNodes) {
+      n.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.28);
+      const { osc, g } = n;
+      setTimeout(() => { try { osc.stop(); osc.disconnect(); g.disconnect(); } catch { /**/ } }, 1100);
+    }
+    this.liveNodes = [];
+    this.spawnChord(chord, 0.8);
+  }
+
+  setIntensity(v: number) {
+    this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)) * 0.038, this.ctx.currentTime, 0.55);
+  }
+
+  private spawnChord(chord: ChordTriad, attackTau: number) {
+    const t = this.ctx.currentTime;
+    for (const mul of chord) {
+      const osc = this.ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(this.rootHz * mul, t);
+      osc.detune.setValueAtTime((Math.random() - 0.5) * 7, t);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.setTargetAtTime(1.0, t, attackTau * 0.38);
+      osc.connect(g); g.connect(this.masterGain);
+      osc.start(t);
+      this.liveNodes.push({ osc, g });
+      this.cleanups.push(() => { try { osc.stop(); osc.disconnect(); g.disconnect(); } catch { /**/ } });
+    }
+  }
+
+  dispose() {
+    this.active = false;
+    for (const c of this.cleanups) c();
+    this.cleanups.length = 0;
+    try { this.masterGain.disconnect(); } catch { /**/ }
+  }
+}
+
+// ─── Chord-aware Melody ───────────────────────────────────────────────────────
+
+/** 旋律层：基于当前和弦音 + 经过音，按 section 切换模式 */
+class ChordMelody {
   private cleanups: SoundscapeCleanup[] = [];
   private stepInterval: ReturnType<typeof setInterval> | null = null;
   private step = 0;
   private readonly scale: number[];
-  private readonly rootHz: number;
   private readonly bpm: number;
   private readonly masterGain: GainNode;
   private active = false;
-  private pattern: number[] = [0, 2, 4, 2, 1, 3, 5, 3]; // 默认琶音模式
+  private chord: ChordTriad = [1, 1.25, 1.5];
+  // pattern values: 0/1/2 = chord root/third/fifth; 3+ = scale passing tones
+  private pattern: number[] = [0, 1, 2, 1, 0, 3, 1, 2];
 
   constructor(
     private readonly ctx: AudioContext,
-    private readonly destination: AudioNode,
+    destination: AudioNode,
     profile: MusicProfile,
-    rootHz: number,
+    private readonly rootHz: number,
   ) {
     this.scale = getScaleForProfile(profile);
-    this.rootHz = rootHz;
     this.bpm = bpmForProfile(profile);
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = 0;
@@ -260,39 +432,39 @@ class MelodicArpeggiator {
   start() {
     if (this.active) return;
     this.active = true;
-    const stepMs = (60 / this.bpm / 2) * 1000; // 8分音符
+    const stepMs = (60 / this.bpm / 2) * 1000; // 8th notes
     this.stepInterval = setInterval(() => this.tick(), stepMs);
   }
 
   stop() {
     this.active = false;
-    if (this.stepInterval) {
-      clearInterval(this.stepInterval);
-      this.stepInterval = null;
-    }
+    if (this.stepInterval) { clearInterval(this.stepInterval); this.stepInterval = null; }
     this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2);
   }
 
-  /** 设置琶音模式 */
-  setPattern(pattern: number[]) {
-    this.pattern = pattern.slice();
-    this.step = 0;
-  }
+  setChord(chord: ChordTriad) { this.chord = chord; this.step = 0; }
 
-  /** 设置旋律强度 0-1 */
+  setPattern(pattern: number[]) { this.pattern = pattern.slice(); this.step = 0; }
+
   setIntensity(intensity: number) {
-    const now = this.ctx.currentTime;
-    const target = Math.max(0, Math.min(1, intensity)) * 0.28;
-    this.masterGain.gain.setTargetAtTime(target, now, 0.4);
+    this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1, intensity)) * 0.24, this.ctx.currentTime, 0.4);
   }
 
   private tick() {
     if (!this.active) return;
-    const idx = this.pattern[this.step % this.pattern.length] ?? 0;
-    const octave = Math.floor(this.step / this.pattern.length) % 2;
-    const mul = this.scale[idx % this.scale.length]! * (octave === 0 ? 1 : 2);
-    const freq = this.rootHz * mul;
+    const patIdx = this.pattern[this.step % this.pattern.length] ?? 0;
+    const bar = Math.floor(this.step / this.pattern.length);
+    let freq: number;
+    if (patIdx < 3) {
+      // Chord tone
+      const octaveMul = bar % 2 === 0 ? 2 : 4;
+      freq = this.rootHz * (this.chord[patIdx] ?? 1) * octaveMul * 0.5;
+    } else {
+      // Scale passing tone
+      const scaleFreq = this.scale[(patIdx - 3) % this.scale.length] ?? 1;
+      freq = this.rootHz * scaleFreq * 2;
+    }
     this.playNote(freq);
     this.step += 1;
   }
@@ -300,22 +472,118 @@ class MelodicArpeggiator {
   private playNote(freq: number) {
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
     osc.type = "triangle";
     osc.frequency.setValueAtTime(freq, t);
-    gain.gain.setValueAtTime(0.14, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-
-    // 轻微 detune 增加厚度
     osc.detune.setValueAtTime((Math.random() - 0.5) * 8, t);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.13, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(g); g.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.34);
+    this.cleanups.push(() => { try { osc.disconnect(); g.disconnect(); } catch { /**/ } });
+  }
 
-    osc.connect(gain);
-    gain.connect(this.masterGain);
+  dispose() {
+    this.stop();
+    for (const c of this.cleanups) c();
+    this.cleanups.length = 0;
+    try { this.masterGain.disconnect(); } catch { /**/ }
+  }
+}
+
+/** 独奏旋律线：每拍一个音符，带 vibrato 与滑音，比琶音层更突出 */
+class LeadMelody {
+  private cleanups: SoundscapeCleanup[] = [];
+  private stepInterval: ReturnType<typeof setInterval> | null = null;
+  private step = 0;
+  private active = false;
+  private readonly masterGain: GainNode;
+  private readonly bpm: number;
+  private readonly scale: number[];
+  private chord: ChordTriad = [1, 1.25, 1.5];
+  // motif: relative scale degree indices (0-based)
+  private motif: number[] = [0, 2, 4, 3, 2, 0, 1, 4];
+
+  constructor(
+    private readonly ctx: AudioContext,
+    destination: AudioNode,
+    profile: MusicProfile,
+    private readonly rootHz: number,
+    templateBias = 0,
+  ) {
+    this.scale = getScaleForProfile(profile);
+    this.bpm = bpmForProfile(profile, templateBias);
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 0;
+    this.masterGain.connect(destination);
+  }
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    // Quarter-note lead (slower, more melodic than chord arpeggio)
+    const stepMs = (60 / this.bpm) * 1000;
+    this.stepInterval = setInterval(() => this.tick(), stepMs);
+  }
+
+  stop() {
+    this.active = false;
+    if (this.stepInterval) { clearInterval(this.stepInterval); this.stepInterval = null; }
+    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3);
+  }
+
+  setChord(chord: ChordTriad) { this.chord = chord; }
+  setMotif(motif: number[]) { this.motif = motif.slice(); this.step = 0; }
+
+  setIntensity(intensity: number) {
+    const vol = Math.max(0, Math.min(1, intensity)) * 0.18;
+    this.masterGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.5);
+  }
+
+  private tick() {
+    if (!this.active) return;
+    const degreeIdx = this.motif[this.step % this.motif.length] ?? 0;
+    const scaleMul = this.scale[degreeIdx % this.scale.length] ?? 1;
+    // Alternate octaves for variety: every 8 steps go up an octave
+    const octave = Math.floor(this.step / 8) % 2 === 0 ? 2 : 4;
+    const freq = this.rootHz * scaleMul * octave * 0.5;
+    this.playNote(freq);
+    this.step += 1;
+    void this.chord;
+  }
+
+  private playNote(freq: number) {
+    const t = this.ctx.currentTime;
+    const dur = (60 / this.bpm) * 0.85;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    // Vibrato via LFO on detune
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 5.5;
+    const vibG = this.ctx.createGain();
+    vibG.gain.setValueAtTime(0, t);
+    vibG.gain.linearRampToValueAtTime(12, t + dur * 0.4);
+    vib.connect(vibG);
+    vibG.connect(osc.detune);
+    vib.start(t);
+    vib.stop(t + dur);
+
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.5, t + 0.04);
+    env.gain.setTargetAtTime(0.3, t + 0.04, 0.08);
+    env.gain.setTargetAtTime(0.001, t + dur * 0.7, 0.05);
+
+    osc.connect(env);
+    env.connect(this.masterGain);
     osc.start(t);
-    osc.stop(t + 0.32);
+    osc.stop(t + dur + 0.06);
 
     this.cleanups.push(() => {
-      try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+      try { osc.disconnect(); vib.disconnect(); vibG.disconnect(); env.disconnect(); } catch { /**/ }
     });
   }
 
@@ -323,7 +591,7 @@ class MelodicArpeggiator {
     this.stop();
     for (const c of this.cleanups) c();
     this.cleanups.length = 0;
-    try { this.masterGain.disconnect(); } catch { /* ignore */ }
+    try { this.masterGain.disconnect(); } catch { /**/ }
   }
 }
 
@@ -347,7 +615,12 @@ export class GameSoundscape {
 
   // Drum and melody layers
   private drumSequencer: DrumSequencer | null = null;
-  private melodicArp: MelodicArpeggiator | null = null;
+  private melodicArp: ChordMelody | null = null;
+  private leadMelody: LeadMelody | null = null;
+  private chordEngine: ChordEngine | null = null;
+  private bassLine: BassLine | null = null;
+  private chordPad: ChordPad | null = null;
+  private chordTimer: ReturnType<typeof setInterval> | null = null;
 
   // Current dynamic state
   private currentTension: number;
@@ -407,8 +680,13 @@ export class GameSoundscape {
 
     // Drum layer: tension 越高鼓点越强
     this.drumSequencer?.setIntensity(t);
-    // Melody layer: tension > 0.4 时旋律出现，> 0.7 时旋律更密集
+    // Chord arp: tension > 0.4 时出现
     this.melodicArp?.setIntensity(t > 0.4 ? (t - 0.4) / 0.6 : 0);
+    // Lead melody: tension > 0.55 时才出现，比琶音晚一步
+    this.leadMelody?.setIntensity(t > 0.55 ? (t - 0.55) / 0.45 * 0.9 : 0);
+    // Bass + chord pad: proportional to tension
+    this.bassLine?.setIntensity(t);
+    this.chordPad?.setIntensity(t * 0.7);
 
     this.currentTension = t;
   }
@@ -423,17 +701,29 @@ export class GameSoundscape {
     const ctx = getSharedAudioContext();
     if (!ctx) return;
 
-    // 更新琶音模式
+    // 更新琶音模式（0/1/2=和弦音, 3+=经过音）
     if (this.melodicArp) {
       const patterns: Record<MusicSection, number[]> = {
-        intro: [0, 2, 4, 2],
-        build: [0, 2, 4, 5, 4, 2],
-        drop: [0, 3, 5, 3, 1, 4, 6, 4],
-        climax: [0, 2, 3, 5, 4, 6, 5, 3, 1, 2],
-        victory: [0, 2, 4, 5, 4, 2, 0, 1, 2],
-        defeat: [0, 1, 0, 1],
+        intro:   [0, 1, 2, 1],
+        build:   [0, 1, 2, 3, 2, 1],
+        drop:    [0, 3, 2, 3, 1, 4, 2, 1],
+        climax:  [0, 2, 1, 3, 2, 4, 1, 3, 0, 2],
+        victory: [0, 2, 1, 2, 0, 3, 1, 2],
+        defeat:  [0, 1, 0, 1],
       };
       this.melodicArp.setPattern(patterns[section] ?? patterns.intro);
+    }
+    // Lead melody motifs per section (scale degree indices)
+    if (this.leadMelody) {
+      const motifs: Record<MusicSection, number[]> = {
+        intro:   [0, 2, 4, 2],
+        build:   [0, 2, 4, 3, 2, 0],
+        drop:    [4, 3, 2, 0, 1, 3, 4, 2],
+        climax:  [0, 4, 3, 5, 4, 2, 1, 3, 0, 4],
+        victory: [0, 2, 4, 6, 4, 2, 0, 2],
+        defeat:  [4, 2, 1, 0],
+      };
+      this.leadMelody.setMotif(motifs[section] ?? motifs.intro);
     }
 
     // 根据章节调整鼓点和铺底
@@ -536,8 +826,9 @@ export class GameSoundscape {
       this.lfoOsc.frequency.setValueAtTime(0.45, now);
       // Boss 时鼓点变密集
       this.drumSequencer?.setIntensity(1);
-      // 琶音加速
       this.melodicArp?.setIntensity(0.85);
+      this.bassLine?.setIntensity(1);
+      this.chordPad?.setIntensity(0.7);
     } else if (type === "danger") {
       // Slow, heavy, low
       this.lfoOsc.frequency.linearRampToValueAtTime(0.06, now + 1.5);
@@ -545,6 +836,8 @@ export class GameSoundscape {
       this.masterGain.gain.linearRampToValueAtTime(0.035, now + 1.5);
       this.drumSequencer?.setIntensity(0.3);
       this.melodicArp?.setIntensity(0);
+      this.bassLine?.setIntensity(0.4);
+      this.chordPad?.setIntensity(0.2);
     } else if (type === "victory") {
       // Bright fast sweep
       this.filterNode.frequency.cancelScheduledValues(now);
@@ -555,10 +848,15 @@ export class GameSoundscape {
       this.lfoOsc.frequency.linearRampToValueAtTime(0.5, now + 0.3);
       this.drumSequencer?.setIntensity(0.25);
       this.melodicArp?.setIntensity(0.6);
+      this.bassLine?.setIntensity(0.5);
+      this.chordPad?.setIntensity(0.5);
     } else if (type === "restore") {
       this.setTension(this.currentTension);
     }
   }
+
+  /** setTension 的别名，供外部场景使用 */
+  setIntensity(v: number) { this.setTension(v); }
 
   /** 在用户首次触控后调用，以满足自动播放策略。 */
   async startInteractive(): Promise<void> {
@@ -593,11 +891,44 @@ export class GameSoundscape {
     this.drumSequencer.start();
     this.drumSequencer.setIntensity(0); // 开场静音
 
-    this.melodicArp = new MelodicArpeggiator(ctx, filter, this.profile, this.rootHz);
+    this.chordEngine = new ChordEngine(this.profile);
+    const bpmFinal = bpmForProfile(this.profile) + templateBias;
+    this.bassLine = new BassLine(ctx, filter, this.rootHz, bpmFinal);
+    this.bassLine.start();
+    this.bassLine.setIntensity(0);
+
+    const initChord = this.chordEngine.current();
+    this.chordPad = new ChordPad(ctx, filter, this.rootHz);
+    this.chordPad.start(initChord);
+    this.chordPad.setIntensity(0);
+
+    this.melodicArp = new ChordMelody(ctx, filter, this.profile, this.rootHz);
+    this.melodicArp.setChord(initChord);
     this.melodicArp.start();
     this.melodicArp.setIntensity(0); // 开场静音
 
+    // Lead melody: solo line on top, 0.5 octave above arp
+    this.leadMelody = new LeadMelody(ctx, filter, this.profile, this.rootHz * 1.5, templateBias);
+    this.leadMelody.setChord(initChord);
+    this.leadMelody.start();
+    this.leadMelody.setIntensity(0);
+
+    // 按 BPM 推进和弦进行（每 4 拍换一个和弦）
+    const beatsPerChord = 4;
+    const chordIntervalMs = (60 / (bpmForProfile(this.profile) + templateBias)) * beatsPerChord * 1000;
+    this.chordTimer = setInterval(() => {
+      const chord = this.chordEngine!.advance();
+      this.chordPad?.crossfadeTo(chord);
+      this.melodicArp?.setChord(chord);
+      this.leadMelody?.setChord(chord);
+      this.bassLine?.updateChord(chord);
+    }, chordIntervalMs);
+    this.cleanups.push(() => {
+      if (this.chordTimer !== null) { clearInterval(this.chordTimer); this.chordTimer = null; }
+    });
+
     void this.tryTemplateBgmLoop(ctx, master);
+    void this.tryLlmNoteBgm(ctx, master);
 
     const now = ctx.currentTime;
     const root = this.rootHz;
@@ -764,10 +1095,18 @@ export class GameSoundscape {
       this.arpSteps = null;
     }
     // Dispose drum and melody layers first
+    if (this.chordTimer !== null) { clearInterval(this.chordTimer); this.chordTimer = null; }
     this.drumSequencer?.dispose();
     this.drumSequencer = null;
     this.melodicArp?.dispose();
     this.melodicArp = null;
+    this.leadMelody?.dispose();
+    this.leadMelody = null;
+    this.bassLine?.dispose();
+    this.bassLine = null;
+    this.chordPad?.dispose();
+    this.chordPad = null;
+    this.chordEngine = null;
     for (let i = this.cleanups.length - 1; i >= 0; i -= 1) {
       this.cleanups[i]!();
     }
@@ -776,6 +1115,61 @@ export class GameSoundscape {
     this.filterNode = null;
     this.lfoOsc = null;
     this.lfoGain = null;
+  }
+
+  /** LLM 降级 BGM：无第三方 API Key 时从服务端拉取音符序列并用 Web Audio 播放 */
+  private async tryLlmNoteBgm(ctx: AudioContext, master: GainNode): Promise<void> {
+    const pid = this.opts.projectId;
+    if (!pid || typeof window === "undefined") return;
+    try {
+      const res = await fetch(`/api/projects/${pid}/bgm`, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) return;
+      const body = (await res.json()) as { skip?: boolean; notes?: { bpm: number; notes: Array<{ freq: number; dur: number; vol?: number }> } };
+      if (body.skip || !body.notes) return;
+
+      const { bpm, notes } = body.notes;
+      const beatSec = 60 / bpm;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.18;
+      gain.connect(master);
+
+      let cancelled = false;
+      this.cleanups.push(() => { cancelled = true; gain.disconnect(); });
+
+      // Schedule the sequence in a loop using AudioContext scheduling
+      const scheduleLoop = (startTime: number) => {
+        if (cancelled) return;
+        let t = startTime;
+        for (const n of notes) {
+          if (cancelled) return;
+          const dur = n.dur * beatSec;
+          const osc = ctx.createOscillator();
+          const env = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = n.freq;
+          const vol = n.vol ?? 0.6;
+          env.gain.setValueAtTime(0, t);
+          env.gain.linearRampToValueAtTime(vol, t + 0.02);
+          env.gain.setValueAtTime(vol, t + dur * 0.7);
+          env.gain.linearRampToValueAtTime(0, t + dur * 0.95);
+          osc.connect(env);
+          env.connect(gain);
+          osc.start(t);
+          osc.stop(t + dur);
+          t += dur;
+        }
+        // Re-schedule next loop before this one ends
+        const loopDur = t - startTime;
+        if (!cancelled) {
+          const nextId = setTimeout(() => scheduleLoop(startTime + loopDur), (loopDur - 1) * 1000);
+          this.cleanups.push(() => clearTimeout(nextId));
+        }
+      };
+
+      scheduleLoop(ctx.currentTime + 0.1);
+    } catch {
+      /* ignore, procedural BGM continues */
+    }
   }
 
   /** 若 public/game-bgm/{template}-{profile}.ogg 存在则与 procedural 混音 */

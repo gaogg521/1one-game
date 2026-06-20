@@ -22,6 +22,8 @@ import { RuntimeConfigPanel } from "@/components/admin/RuntimeConfigPanel";
 import { EmailConfigPanel } from "@/components/admin/EmailConfigPanel";
 import { SampleGalleryPanel } from "@/components/admin/SampleGalleryPanel";
 import { OpsHealthPanel } from "@/components/admin/OpsHealthPanel";
+import { GenErrorsPanel } from "@/components/admin/GenErrorsPanel";
+import { CacheManagementPanel } from "@/components/admin/CacheManagementPanel";
 import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
@@ -53,6 +55,7 @@ type Stats = {
   shares24h: number;
   moderation: { pendingReview: number; hidden: number };
   sampleGallery?: { catalog: number; synced: number };
+  generation?: { errors24h: number; successRate24h: number | null };
   canManageRuntimeConfig?: boolean;
   canPromoteSuperAdmin?: boolean;
   actorRole?: string | null;
@@ -255,7 +258,7 @@ export default function AdminConsolePage({
   }, [analyticsDays, headers]);
 
   const loadUsers = useCallback(async () => {
-    const res = await fetch("/api/admin/users?limit=40", { headers: headers() });
+    const res = await fetch("/api/admin/users?limit=100", { headers: headers() });
     if (res.status === 403) throw new Error("forbidden");
     const data = (await res.json()) as { users?: UserRow[] };
     setUsers(data.users ?? []);
@@ -332,14 +335,18 @@ export default function AdminConsolePage({
     void load();
   }, [load]);
 
+  // Populate header mini-stats when on a non-admin tab (account/wallet/profile).
+  // load() returns early for those tabs, so we fetch stats separately here.
   useEffect(() => {
     if (!canViewAdminSection) return;
+    if (isAdminConsoleTab(tab)) return; // load() already covers admin tabs
     void fetch("/api/admin/stats", { headers: headers() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d) setStats(d as Stats);
       });
-  }, [canViewAdminSection, headers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canViewAdminSection]);
 
   useEffect(() => {
     setPage(1);
@@ -487,7 +494,7 @@ export default function AdminConsolePage({
             </div>
 
             {stats && !error && isAdminConsoleTab(tab) ? (
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
                 <MiniStat label={t("statUsers")} value={stats.users} />
                 <MiniStat
                   label={t("statWorks")}
@@ -495,6 +502,13 @@ export default function AdminConsolePage({
                 />
                 <MiniStat label={t("statShares24h")} value={stats.shares24h} />
                 <MiniStat label={t("statPending")} value={stats.moderation.pendingReview} highlight={stats.moderation.pendingReview > 0} />
+                {stats.generation != null && (
+                  <MiniStat
+                    label={t("statGenErrors24h")}
+                    value={stats.generation.errors24h}
+                    highlight={stats.generation.errors24h > 5}
+                  />
+                )}
               </div>
             ) : null}
 
@@ -641,6 +655,18 @@ export default function AdminConsolePage({
                               stats.sampleGallery.synced < stats.sampleGallery.catalog
                                 ? ("warn" as const)
                                 : ("default" as const),
+                          },
+                        ]
+                      : []),
+                    ...(stats.generation != null
+                      ? [
+                          {
+                            label: t("kpiGenErrors24h"),
+                            value: stats.generation.errors24h,
+                            hint: stats.generation.successRate24h != null
+                              ? t("kpiGenSuccessRate", { rate: stats.generation.successRate24h })
+                              : undefined,
+                            tone: stats.generation.errors24h > 5 ? ("warn" as const) : ("default" as const),
                           },
                         ]
                       : []),
@@ -1083,6 +1109,7 @@ export default function AdminConsolePage({
                       <input
                         value={auditQuery}
                         onChange={(e) => setAuditQuery(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void loadAudit(); }}
                         placeholder={t("auditFilterSearchPlaceholder")}
                         className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-2 py-1.5 text-sm text-[var(--gc-text)]"
                       />
@@ -1174,12 +1201,24 @@ export default function AdminConsolePage({
               </section>
             ) : null}
 
+            {!error && isAdminConsoleTab(tab) && tab === "gen-errors" ? (
+              <section className="space-y-4">
+                <ChartPanel title={t("tabGenErrors")} subtitle={t("genErrorsSubtitle")}>
+                  <GenErrorsPanel headers={headers} />
+                </ChartPanel>
+              </section>
+            ) : null}
+
             {!error && isAdminConsoleTab(tab) && tab === "runtime" ? (
               <RuntimeConfigPanel headers={headers} onNotice={setNotice} />
             ) : null}
 
             {!error && isAdminConsoleTab(tab) && tab === "email" ? (
               <EmailConfigPanel headers={headers} onNotice={setNotice} />
+            ) : null}
+
+            {!error && isAdminConsoleTab(tab) && tab === "cache-management" ? (
+              <CacheManagementPanel headers={headers} onNotice={setNotice} />
             ) : null}
           </div>
         </main>
@@ -1505,7 +1544,14 @@ function WorkActions({
           {t("actionPublish")}
         </button>
       ) : (
-        <button type="button" className="text-sm text-amber-400" onClick={() => onModerate(work.type, work.id, "hidden")}>
+        <button
+          type="button"
+          className="text-sm text-amber-400"
+          onClick={() => {
+            if (!window.confirm(t("confirmHide"))) return;
+            onModerate(work.type, work.id, "hidden");
+          }}
+        >
           {t("actionHide")}
         </button>
       )}
@@ -1547,10 +1593,11 @@ function UsersTable({
   const t = useTranslations("adminPage");
   return (
     <div className="overflow-x-auto rounded-2xl border border-[color:var(--gc-border)]">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[860px] text-left text-sm">
         <thead className="bg-[var(--gc-surface-glass)] text-[var(--gc-muted)]">
           <tr>
             <th className="px-4 py-3 font-medium">{t("colNickname")}</th>
+            <th className="px-4 py-3 font-medium">{t("colEmail")}</th>
             <th className="px-4 py-3 font-medium">{t("colRole")}</th>
             <th className="px-4 py-3 font-medium">{t("colLogin")}</th>
             <th className="px-4 py-3 font-medium">{t("colReferral")}</th>
@@ -1561,9 +1608,10 @@ function UsersTable({
           {users.map((u) => (
             <tr key={u.id} className="border-t border-[color:var(--gc-border)]">
               <td className="px-4 py-3">{u.displayName ?? "—"}</td>
+              <td className="max-w-[200px] truncate px-4 py-3 text-[var(--gc-muted)]" title={u.email ?? undefined}>{u.email ?? "—"}</td>
               <td className="px-4 py-3">{u.role}</td>
               <td className="px-4 py-3">{u.providers.join(", ") || "—"}</td>
-              <td className="px-4 py-3">{u.referralCount}</td>
+              <td className="px-4 py-3 tabular-nums">{u.referralCount}</td>
               <td className="px-4 py-3">
                 <UserActions user={u} headers={headers} canPromoteSuperAdmin={canPromoteSuperAdmin} onReload={onReload} onNotice={onNotice} />
               </td>
@@ -1592,6 +1640,9 @@ function UserCard({
   return (
     <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4">
       <p className="font-medium text-[var(--gc-text)]">{user.displayName ?? t("unnamedUser")}</p>
+      {user.email ? (
+        <p className="mt-0.5 truncate text-xs text-[var(--gc-text-faint)]">{user.email}</p>
+      ) : null}
       <p className="mt-1 text-sm text-[var(--gc-muted)]">
         {t("userReferralLine", {
           role: user.role,
@@ -1621,27 +1672,37 @@ function UserActions({
 }) {
   const t = useTranslations("adminPage");
   const canPromoteSuper = canPromoteSuperAdmin === true;
+  async function patchRole(role: string) {
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user.id, role }),
+    });
+    if (res.ok) {
+      onNotice({ kind: "ok", text: t("roleUpdated") });
+      onReload();
+    } else {
+      onNotice({ kind: "error", text: t("roleUpdateFailed") });
+    }
+  }
+
   return (
     <div className="flex flex-wrap gap-3">
       {user.role !== "admin" && user.role !== "super_admin" ? (
+        <button type="button" className="text-sm text-[var(--gc-accent)]" onClick={() => void patchRole("admin")}>
+          {t("setAdminRole")}
+        </button>
+      ) : null}
+      {(user.role === "admin" || user.role === "super_admin") ? (
         <button
           type="button"
-          className="text-sm text-[var(--gc-accent)]"
-          onClick={async () => {
-            const res = await fetch("/api/admin/users", {
-              method: "PATCH",
-              headers: { ...headers(), "Content-Type": "application/json" },
-              body: JSON.stringify({ id: user.id, role: "admin" }),
-            });
-            if (res.ok) {
-              onNotice({ kind: "ok", text: t("roleUpdated") });
-              onReload();
-            } else {
-              onNotice({ kind: "error", text: t("roleUpdateFailed") });
-            }
+          className="text-sm text-rose-400"
+          onClick={() => {
+            if (!confirm(t("demoteToUserConfirm"))) return;
+            void patchRole("user");
           }}
         >
-          {t("setAdminRole")}
+          {t("demoteToUser")}
         </button>
       ) : null}
       {canPromoteSuper && user.role === "admin" ? (
@@ -1649,19 +1710,9 @@ function UserActions({
           type="button"
           className="text-sm text-sky-300"
           data-testid={`promote-super-admin-${user.id}`}
-          onClick={async () => {
+          onClick={() => {
             if (!confirm(t("setSuperAdminConfirm"))) return;
-            const res = await fetch("/api/admin/users", {
-              method: "PATCH",
-              headers: { ...headers(), "Content-Type": "application/json" },
-              body: JSON.stringify({ id: user.id, role: "super_admin" }),
-            });
-            if (res.ok) {
-              onNotice({ kind: "ok", text: t("roleUpdated") });
-              onReload();
-            } else {
-              onNotice({ kind: "error", text: t("roleUpdateFailed") });
-            }
+            void patchRole("super_admin");
           }}
         >
           {t("setSuperAdminRole")}

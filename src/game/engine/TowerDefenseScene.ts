@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
-import { HudBanner } from "@/game/engine/HudBanner";
-import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
+import { HudFrame } from "@/game/engine/HudFrame";
 import type { GameSpec } from "@/lib/game-spec";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -13,11 +12,8 @@ import {
   bannerTdHoldSuccess,
   hudCooldown,
   hudDefaultCollectible,
-  hudDefaultFoeLabel,
   hudDefaultSkill,
-  hudDefaultTowerLabel,
   hudReady,
-  hudTdBase,
   hudTdDefaultBase,
   hudTdEnemyName,
   hudTdKills,
@@ -27,15 +23,16 @@ import {
   hudTdWave,
   hudTdWin,
   hudTdGoalTag,
-  tdControlsHint,
   tdWaveStartBanner,
 } from "@/lib/i18n/game-hud-labels";
 import {
   hexToPhaserUint,
   mixHex,
   phaserUintToCssHex,
+  resolveAssetStyle,
   type CohesivePresentation,
 } from "@/lib/cohesive-presentation";
+import { buildTdAssetSet } from "@/game/engine/towerdefense-assets";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import {
   classifyTdReferenceTextureKeys,
@@ -55,12 +52,14 @@ import {
 import { mergeTierColor, mergeTierLabel } from "@/game/engine/puzzle-visual";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
-import { assetBackgroundAlpha, fitSpriteDisplay } from "@/game/engine/phaser-loaded-sprites";
-import { runtimeSeedFromSpec, seededFloatBetween, seededRandom } from "@/lib/runtime-seed";
-import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
-import { hudTopSubtitleText } from "@/game/engine/hudTextStyle";
+import { applySpritesOverAliasMap, assetBackgroundAlpha, fitSpriteDisplay, firstExistingTexture, preloadSpriteSet } from "@/game/engine/phaser-loaded-sprites";
+import { runtimeSeedFromSpec, seededFloatBetween, seededIntBetween, seededRandom } from "@/lib/runtime-seed";
+import { inferThemeMood } from "@/game/engine/template-theme-visual";
+import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { applyRuntimeEventImpact } from "@/game/engine/runtimeEventImpact";
 import { applySystemImpact } from "@/game/engine/systemImpact";
+import { showControlsHint, towerDefenseControlLines } from "@/game/engine/controls-hint";
+import { spawnDamageNumber } from "@/game/engine/damage-number";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -298,6 +297,12 @@ type Enemy = {
   slowPct: number;
   reward: number;
   armor: number;
+  flying?: boolean;
+  flyX?: number;
+  flyY?: number;
+  flyTargetX?: number;
+  flyTargetY?: number;
+  flyShadow?: Phaser.GameObjects.Graphics | null;
 };
 
 type TowerSlot = {
@@ -364,9 +369,7 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private keyShift!: Phaser.Input.Keyboard.Key;
 
-  private skillText!: Phaser.GameObjects.Text;
-
-  private skillCdText!: Phaser.GameObjects.Text;
+  private hud!: HudFrame;
 
   private skillReadyAt = 0;
 
@@ -378,27 +381,11 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private boostUntil = 0;
 
-  private coinsText!: Phaser.GameObjects.Text;
-
-  private baseText!: Phaser.GameObjects.Text;
-
-  private waveText!: Phaser.GameObjects.Text;
-
-  private hintText!: Phaser.GameObjects.Text;
-
-  private scoreText!: Phaser.GameObjects.Text;
-
   private finished = false;
 
   private towerTimers: number[] = [];
 
-  private banner!: HudBanner;
-
-  private goalPanel!: HudGoalPanel;
-
   private cohesion!: CohesivePresentation;
-
-  private dangerVignette: Phaser.GameObjects.Graphics | null = null;
 
   private mergeGridEnabled = false;
 
@@ -456,23 +443,55 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.rangePreviewGfx.setDepth(6);
       this.rangePreviewGfx.setAlpha(0);
     }
-    if (this.dangerVignette) {
-      this.dangerVignette.destroy();
-      this.dangerVignette = this.add.graphics();
-      this.dangerVignette.setDepth(24);
-      this.dangerVignette.setAlpha(0);
-    }
   }
 
   /** 批量预加载所有需要的资源 */
   private preloadAllResources(): void {
-    // 预生成塔纹理
-    const towerIds = ["dart", "splash", "frost"];
-    for (const towerId of towerIds) {
-      this.ensureTowerTextureForId(towerId, this.spec.theme.playerColor);
+    // 预生成塔纹理（slow 塔用冰蓝色，与主题 playerColor 区分）
+    const towerTexConfigs: [string, string][] = [
+      ["dart", this.spec.theme.playerColor],
+      ["splash", this.spec.theme.hazardColor],
+      ["slow", "#67e8f9"],   // 冰蓝固定色，代表减速
+    ];
+    for (const [towerId, color] of towerTexConfigs) {
+      this.ensureTowerTextureForId(towerId, color);
     }
-    // 预生成敌军纹理
+    // 预生成敌军纹理（原 38-46px 老贴图）
     ensureTdEnemyTextures(this, this.spec.theme.hazardColor, this.spec.theme.collectibleColor ?? "#67e8f9");
+
+    // 高保真程序化 TD 资产（按 assetStyle 自动挑皮肤），覆盖 texEnemy / texEnemyTank / texEnemyRunner / texBoss
+    const style = resolveAssetStyle(this.spec);
+    const palette = {
+      player: this.spec.theme.playerColor,
+      hazard: this.spec.theme.hazardColor,
+      collectible: this.spec.theme.collectibleColor ?? this.spec.theme.playerColor,
+      particle: this.spec.theme.particleTint ?? this.spec.theme.collectibleColor ?? "#a3a3a3",
+      background: this.spec.theme.backgroundColor,
+    };
+    const tdSet = buildTdAssetSet(this, palette, style, "tdAsset");
+    const aliasMap: Array<[string, string]> = [
+      ["texEnemy", tdSet.enemyGrunt],
+      ["texEnemyTank", tdSet.enemyTank],
+      ["texEnemyRunner", tdSet.enemyRunner],
+      ["texBoss", tdSet.enemyBoss],
+      ["texTdBase", tdSet.base],
+      ["texTdCoin", tdSet.coin],
+    ];
+    for (const [alias, src] of aliasMap) {
+      if (this.textures.exists(alias)) this.textures.remove(alias);
+      const img = this.textures.get(src).getSourceImage();
+      if (img instanceof HTMLImageElement) this.textures.addImage(alias, img);
+      else if (img instanceof HTMLCanvasElement) this.textures.addCanvas(alias, img);
+    }
+    // SVG > PNG override — 覆盖程序化精灵（texPlayer → 塔；texHazard/texBoss → 敌人）
+    applySpritesOverAliasMap(this, ["texPlayer", "texHazard", "texGem", "texBoss"]);
+    // 兼容 TD 检查：texHazard 加载后更新 texEnemy 别名
+    if (this.textures.exists("texHazard")) {
+      const src = this.textures.get("texHazard").getSourceImage();
+      if (this.textures.exists("texEnemy")) this.textures.remove("texEnemy");
+      if (src instanceof HTMLCanvasElement) this.textures.addCanvas("texEnemy", src);
+      else if (src instanceof HTMLImageElement) this.textures.addImage("texEnemy", src);
+    }
   }
 
   /** 监控性能：记录帧率 */
@@ -599,11 +618,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.load.image("bgTex", this.backgroundUrl);
     }
     if (this.projectId) {
-      const base = `/game-sprites/${this.projectId}`;
-      this.load.image("texPlayer", `${base}/player.png`);
-      this.load.image("texHazard", `${base}/hazard.png`);
-      this.load.image("texGem", `${base}/gem.png`);
-      this.load.image("texBoss", `${base}/boss.png`);
+      preloadSpriteSet(this, this.projectId, ["player", "hazard", "gem", "boss"]);
     }
   }
 
@@ -723,6 +738,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       for (const pt of points) { gRoad.fillStyle(0x7c5233, 0.45); gRoad.fillCircle(pt.x, pt.y, 19); }
     } else {
       this.drawGridMap(points, w, h);
+      this.addThemedTdAtmosphere(w, h);
     }
 
     // 文生图背景
@@ -855,27 +871,55 @@ export class TowerDefenseScene extends Phaser.Scene {
         leadInMs: i === 0 ? 650 : 1200,
         spawns: [
           { enemyId: "grunt", count: 4 + i * 2, intervalMs: interval },
+          ...(i >= 2 ? [{ enemyId: "runner", count: 1 + Math.floor(i * 0.5), intervalMs: Math.max(120, interval - 60) }] : []),
           ...(i >= 3 ? [{ enemyId: "tank", count: 1 + Math.floor(i * 0.6), intervalMs: interval + 80 }] : []),
+          ...(i >= 4 ? [{ enemyId: "flyer", count: 1 + Math.floor(i * 0.4), intervalMs: interval + 40 }] : []),
         ],
       }));
+      // 主题化标签：优先使用 spec.labels 提供的名称，否则回退到 i18n 默认名
+      const themeEnemy = (this.spec.labels.hazard ?? "").trim();
+      const themeTower = (this.spec.labels.player ?? "").trim();
+      // 敌人类型后缀
+      const enemyGrunt = themeEnemy || hudTdEnemyName(this.uiLocale, "grunt");
+      const enemyRunner = themeEnemy ? `${themeEnemy}·速攻` : hudTdEnemyName(this.uiLocale, "runner");
+      const enemyTank = themeEnemy ? `${themeEnemy}·重甲` : hudTdEnemyName(this.uiLocale, "tank");
+      const enemyFlyer = themeEnemy ? `${themeEnemy}·飞行` : hudTdEnemyName(this.uiLocale, "flyer");
+      // 塔类型后缀
+      const towerDart = themeTower || hudTdTowerName(this.uiLocale, "dart");
+      const towerSplash = themeTower ? `${themeTower}·爆破` : hudTdTowerName(this.uiLocale, "splash");
+
       this.enemyById.set("grunt", {
         id: "grunt",
-        name: hudTdEnemyName(this.uiLocale, "grunt"),
+        name: enemyGrunt,
         hp: 20,
         speed: 95,
         reward: 8,
       });
+      this.enemyById.set("runner", {
+        id: "runner",
+        name: enemyRunner,
+        hp: 10,
+        speed: 165,
+        reward: 6,
+      });
       this.enemyById.set("tank", {
         id: "tank",
-        name: hudTdEnemyName(this.uiLocale, "tank"),
+        name: enemyTank,
         hp: 60,
         speed: 72,
         reward: 14,
         armor: 0.18,
       });
+      this.enemyById.set("flyer", {
+        id: "flyer",
+        name: enemyFlyer,
+        hp: 18,
+        speed: 140,
+        reward: 18,
+      });
       this.towerById.set("dart", {
         id: "dart",
-        name: hudTdTowerName(this.uiLocale, "dart"),
+        name: towerDart,
         buildCost: 52,
         upgradeCosts: [58, 74, 96],
         damage: 11,
@@ -884,13 +928,26 @@ export class TowerDefenseScene extends Phaser.Scene {
       });
       this.towerById.set("splash", {
         id: "splash",
-        name: hudTdTowerName(this.uiLocale, "splash"),
+        name: towerSplash,
         buildCost: 78,
         upgradeCosts: [86, 110, 140],
         damage: 22,
         cooldownMs: 980,
         range: 128,
         splashRadius: 72,
+      });
+      // 减速塔：命中后降低目标移速，适合拖住重甲/快速敌人
+      const towerSlow = themeTower ? `${themeTower}·冰冻` : "冰锥塔";
+      this.towerById.set("slow", {
+        id: "slow",
+        name: towerSlow,
+        buildCost: 68,
+        upgradeCosts: [76, 96, 124],
+        damage: 7,
+        cooldownMs: 700,
+        range: 150,
+        slowPct: 0.45,
+        slowMs: 1800,
       });
     }
 
@@ -931,95 +988,11 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.rangePreviewGfx.setAlpha(0);
     });
 
-    this.add
-      .text(w / 2, 20, this.spec.title, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "19px",
-        color: ui.hud.title,
-      })
-      .setOrigin(0.5)
-      .setDepth(30);
-
-    const topSubtitle = hudTopSubtitleText(this.spec.labels.subtitle);
-    if (topSubtitle) {
-      this.add
-        .text(w / 2, 44, topSubtitle, {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          color: ui.hud.subtitle,
-        })
-        .setOrigin(0.5)
-        .setDepth(30);
-    }
-
-    this.coinsText = this.add
-      .text(16, 68, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "15px",
-        color: ui.hud.coins,
-      })
-      .setDepth(35);
-
-    this.baseText = this.add
-      .text(16, 92, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: ui.hud.danger,
-      })
-      .setDepth(35);
-
-    this.waveText = this.add
-      .text(w - 16, 68, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: ui.hud.accent,
-      })
-      .setOrigin(1, 0)
-      .setDepth(35);
-
-    this.scoreText = this.add
-      .text(w - 16, 92, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "12px",
-        color: ui.hud.accent2,
-      })
-      .setOrigin(1, 0)
-      .setDepth(35);
-
-    // Shift 全局法术
+    // Shift 全局法術
     this.keyShift = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-    const skillName = this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale);
-    this.skillText = this.add
-      .text(16, h - 56, `Shift · ${skillName}`, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "12px",
-        color: ui.hud.body,
-      })
-      .setDepth(36);
-    this.skillCdText = this.add
-      .text(16, h - 38, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: ui.hud.muted,
-      })
-      .setDepth(36);
 
-    const towerLabel = this.spec.labels.player ?? hudDefaultTowerLabel(this.uiLocale);
-    const foeLabel = this.spec.labels.hazard ?? hudDefaultFoeLabel(this.uiLocale);
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
-    this.hintText = this.add
-      .text(
-        w / 2,
-        h - 18,
-        guidance.bottomHint,
-        {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          color: ui.hud.hint,
-        },
-      )
-      .setOrigin(0.5)
-      .setDepth(35);
+    this.hud = new HudFrame(this, { title: this.spec.title }, guidance, ui);
 
     for (const s of this.slots) {
       // 保卫萝卜风格：绿色圆形底座 + 向上指示箭头
@@ -1056,10 +1029,6 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
     this.refreshHud();
 
-    this.banner = new HudBanner(this, ui.banner);
-    this.banner.show(introBannerWhenGoalPanel(guidance));
-    this.goalPanel = new HudGoalPanel(this, guidance, ui, { y: 166 });
-
     this.hpBarGfx = this.add.graphics();
     this.hpBarGfx.setDepth(19);
 
@@ -1067,16 +1036,11 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.rangePreviewGfx.setDepth(6);
     this.rangePreviewGfx.setAlpha(0);
 
-    // Initialize danger vignette if not already present
-    if (!this.dangerVignette) {
-      this.dangerVignette = this.add.graphics();
-      this.dangerVignette.setDepth(24);
-      this.dangerVignette.setAlpha(0);
-    }
-
     this.bootstrapComplete = true;
     setPhaserQaState({ qaTouches: 0 });
     schedulePhaserPlayReady(this, 500, {});
+
+    showControlsHint(this, towerDefenseControlLines(this.uiLocale));
 
     /** 首波延后，保证 QA 对标截图在静态布局帧（平台级 parity，非 per-game） */
     const lead = Math.max(this.waveDefs[0]?.leadInMs ?? 650, 1600);
@@ -1274,7 +1238,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       bumpQaTouch();
       if (fromTier + 1 >= 4) {
         this.coins += this.mergeBonusCoins * 2;
-        this.banner.show({
+        this.hud.flashBanner({
           title: this.uiLocale === "zh-Hans" ? "满阶合成" : "Max merge",
           message: `+${this.mergeBonusCoins * 2}`,
           ms: 1400,
@@ -1333,7 +1297,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.refreshHud();
 
     const waveBanner = tdWaveStartBanner(this.uiLocale, index, this.waveDefs.length);
-    this.banner.show({ ...waveBanner, ms: 1800 });
+    this.hud.flashBanner({ ...waveBanner, ms: 1800 });
 
     juiceBoss(this, {
       x: this.scale.width / 2,
@@ -1455,7 +1419,9 @@ export class TowerDefenseScene extends Phaser.Scene {
         s.level += 1;
       }
       if (!s.gfx) {
-        const towerTexKey = this.ensureTowerTextureForId(useId, this.spec.theme.playerColor);
+        // 减速塔用冰蓝色纹理，与普通塔视觉区分
+        const towerColor = useId === "slow" ? "#67e8f9" : useId === "splash" ? this.spec.theme.hazardColor : this.spec.theme.playerColor;
+        const towerTexKey = this.ensureTowerTextureForId(useId, towerColor);
         s.gfx = this.add.image(s.x, s.y + 6, towerTexKey); // +6 so base sits on ground
         s.gfx.setDepth(10);
       }
@@ -1477,7 +1443,8 @@ export class TowerDefenseScene extends Phaser.Scene {
           .setOrigin(0.5)
           .setDepth(11);
       }
-      s.label.setText(`${def.name} Lv.${s.level}`);
+      const stars = "★".repeat(s.level);
+      s.label.setText(`${def.name} ${stars}`);
       s.ring.clear();
       // After building: draw a clean grass patch base (no pin indicator)
       s.ring.fillStyle(0x3d8228, 0.8);
@@ -1486,6 +1453,13 @@ export class TowerDefenseScene extends Phaser.Scene {
       s.ring.strokeCircle(s.x, s.y + 6, 20);
       s.ring.fillStyle(0x4fa832, 0.5);
       s.ring.fillEllipse(s.x, s.y + 3, 28, 12);
+      // Level-colored outer ring (Lv1=none, Lv2=cyan, Lv3=blue, Lv4=gold)
+      const lvColors = [0, 0x22d3ee, 0x818cf8, 0xfbbf24] as const;
+      const lvColor = lvColors[Math.min(s.level - 1, 3)] ?? 0;
+      if (lvColor) {
+        s.ring.lineStyle(3, lvColor, 0.88);
+        s.ring.strokeCircle(s.x, s.y + 6, 24);
+      }
 
       // Brief range ring flash on build/upgrade
       if (this.rangePreviewGfx) {
@@ -1577,7 +1551,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       // Mouth (determined)
       gr.lineStyle(2, fireDark, 0.9);
       gr.lineBetween(cx - 5, bodyY + 6, cx + 5, bodyY + 6);
-    } else if (towerId === "frost") {
+    } else if (towerId === "slow" || towerId === "frost") {
       // ── 寒霜塔：冰晶系卡通角色 ──
       const iceBody = shiftRgb(base, -30, -10, 40); // cool blue shift
       const iceDark = shiftRgb(iceBody, -50, -50, -50);
@@ -1768,22 +1742,33 @@ export class TowerDefenseScene extends Phaser.Scene {
     const speed = def.speed * spdMul;
     const reward = def.reward;
 
+    const isFlyer = enemyId === "flyer";
     const texDefault =
-      enemyId === "tank" ? "texEnemyTank" : enemyId === "runner" ? "texEnemyRunner" : "texEnemy";
+      isFlyer ? "texEnemy" : enemyId === "tank" ? "texEnemyTank" : enemyId === "runner" ? "texEnemyRunner" : "texEnemy";
     const useCirc = this.userMonsterCircTexKeys.length > 0;
     let tex = texDefault;
-    if (useCirc) {
-      const pick = this.userMonsterCircTexKeys[this.userMonsterCycle % this.userMonsterCircTexKeys.length]!;
-      this.userMonsterCycle += 1;
-      if (this.textures.exists(pick)) tex = pick;
-    } else if (this.userMonsterTexKeys.length > 0) {
-      const pick = this.userMonsterTexKeys[this.userMonsterCycle % this.userMonsterTexKeys.length]!;
-      this.userMonsterCycle += 1;
-      if (this.textures.exists(pick)) tex = pick;
-    } else if (enemyId === "tank" && this.textures.exists("texBoss")) {
-      tex = "texBoss"; // AI boss sprite for heavy enemies
+    if (!isFlyer) {
+      if (useCirc) {
+        const pick = this.userMonsterCircTexKeys[this.userMonsterCycle % this.userMonsterCircTexKeys.length]!;
+        this.userMonsterCycle += 1;
+        if (this.textures.exists(pick)) tex = pick;
+      } else if (this.userMonsterTexKeys.length > 0) {
+        const pick = this.userMonsterTexKeys[this.userMonsterCycle % this.userMonsterTexKeys.length]!;
+        this.userMonsterCycle += 1;
+        if (this.textures.exists(pick)) tex = pick;
+      } else if (enemyId === "tank" && this.textures.exists("texBoss")) {
+        tex = "texBoss"; // AI boss sprite for heavy enemies
+      } else if (this.textures.exists("texHazard")) {
+        tex = "texHazard"; // AI hazard sprite for standard enemies
+      } else if (!this.textures.exists(texDefault)) {
+        ensureTdEnemyTextures(
+          this,
+          this.spec.theme.hazardColor,
+          this.spec.theme.collectibleColor ?? "#67e8f9",
+        );
+      }
     } else if (this.textures.exists("texHazard")) {
-      tex = "texHazard"; // AI hazard sprite for standard enemies
+      tex = "texHazard";
     } else if (!this.textures.exists(texDefault)) {
       ensureTdEnemyTextures(
         this,
@@ -1792,13 +1777,16 @@ export class TowerDefenseScene extends Phaser.Scene {
       );
     }
     const spr = this.add.image(0, 0, this.textures.exists(tex) ? tex : texDefault);
-    spr.setDepth(8);
-    if (tex === "texHazard") fitSpriteDisplay(spr, enemyId === "tank" ? 44 : 38);
+    spr.setDepth(isFlyer ? 10 : 8); // flyers render above ground enemies
+    const isRunner = enemyId === "runner";
+    if (tex === "texHazard") fitSpriteDisplay(spr, enemyId === "tank" ? 44 : isRunner ? 30 : isFlyer ? 26 : 38);
     else if (tex === "texBoss") fitSpriteDisplay(spr, 46);
     spr.setAlpha(enemyId === "tank" ? 0.95 : 0.9);
+    if (isRunner) spr.setTint(0xfde68a); // yellow tint to visually distinguish runners
+    if (isFlyer) spr.setTint(0x7dd3fc); // light-blue tint for flyers
     let enemyRing: Phaser.GameObjects.Graphics | null = null;
-    const maskRadius = enemyId === "tank" ? 23 : 20;
-    if (useCirc) {
+    const maskRadius = enemyId === "tank" ? 23 : isRunner ? 16 : isFlyer ? 14 : 20;
+    if (useCirc && !isFlyer) {
       spr.setDisplaySize(maskRadius * 2, maskRadius * 2);
       spr.clearTint();
       const ringColor = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
@@ -1807,6 +1795,25 @@ export class TowerDefenseScene extends Phaser.Scene {
       enemyRing.strokeCircle(0, 0, maskRadius + 2);
       enemyRing.setDepth(9);
     }
+
+    // Flying enemy: spawn from random top/left/right edge, fly straight to base endpoint
+    const basePoint = this.baseFxPoint();
+    let flyStartX = 0;
+    let flyStartY = 0;
+    let flyShadow: Phaser.GameObjects.Graphics | null = null;
+    if (isFlyer) {
+      const { width, height } = this.scale;
+      const edge = Math.floor(Math.random() * 3); // 0=top, 1=left, 2=right
+      if (edge === 0) { flyStartX = width * (0.15 + Math.random() * 0.7); flyStartY = -24; }
+      else if (edge === 1) { flyStartX = -24; flyStartY = height * (0.1 + Math.random() * 0.5); }
+      else { flyStartX = width + 24; flyStartY = height * (0.1 + Math.random() * 0.5); }
+      // Drop shadow below the sprite to convey altitude
+      flyShadow = this.add.graphics();
+      flyShadow.fillStyle(0x000000, 0.18);
+      flyShadow.fillEllipse(0, 0, 20, 8);
+      flyShadow.setDepth(7);
+    }
+
     const e: Enemy = {
       id: enemyId,
       sprite: spr,
@@ -1821,31 +1828,42 @@ export class TowerDefenseScene extends Phaser.Scene {
       slowPct: 0,
       reward,
       armor: def.armor ?? 0,
+      flying: isFlyer,
+      flyX: isFlyer ? flyStartX : undefined,
+      flyY: isFlyer ? flyStartY : undefined,
+      flyTargetX: isFlyer ? basePoint.x : undefined,
+      flyTargetY: isFlyer ? basePoint.y : undefined,
+      flyShadow: isFlyer ? flyShadow : undefined,
     };
-    const p0 = posAtDist(this.path, 0);
+    const p0 = isFlyer ? { x: flyStartX, y: flyStartY } : posAtDist(this.path, 0);
     spr.setPosition(p0.x, p0.y);
     if (enemyRing) enemyRing.setPosition(p0.x, p0.y);
+    if (flyShadow) flyShadow.setPosition(p0.x, p0.y + 18);
     this.showSpawnEffect(p0.x, p0.y);
     this.enemies.push(e);
   }
 
   private refreshHud() {
     const coinLabel = this.spec.labels.collectible ?? hudDefaultCollectible(this.uiLocale);
-    this.coinsText.setText(`${coinLabel} ${this.coins}`);
     const shieldOn = this.time.now < this.baseShieldUntil;
     const goalOn = this.time.now < this.goalShiftUntil;
     const left = goalOn ? Math.max(0, Math.ceil((this.goalShiftUntil - this.time.now) / 1000)) : 0;
     const goalTag = goalOn ? hudTdGoalTag(this.uiLocale, left) : "";
-    this.baseText.setText(hudTdBase(this.uiLocale, this.baseHp, shieldOn, goalTag));
     const total = this.waveDefs.length;
-    this.waveText.setText(hudTdWave(this.uiLocale, Math.min(this.wave + 1, total), total));
     const built = this.slots.filter((s) => s.level > 0).length;
-    this.scoreText.setText(hudTdKills(this.uiLocale, this.kills, built));
-
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
-    this.skillCdText.setText(
-      cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1)),
-    );
+    const skillName = this.spec.systems?.skill?.name ?? hudDefaultSkill(this.uiLocale);
+    const cdStr = cdLeft <= 0 ? hudReady(this.uiLocale) : hudCooldown(this.uiLocale, (cdLeft / 1000).toFixed(1));
+    const rightParts = [hudTdWave(this.uiLocale, Math.min(this.wave + 1, total), total)];
+    if (shieldOn) rightParts.push("🛡");
+    if (goalTag) rightParts.push(goalTag);
+    this.hud.update({
+      score: this.kills,
+      lives: this.baseHp,
+      right: rightParts.join(" · "),
+      actLabel: `${coinLabel} ${this.coins}   ${hudTdKills(this.uiLocale, this.kills, built)}`,
+      skill: `Shift · ${skillName} · ${cdStr}`,
+    });
   }
 
   private kills = 0;
@@ -1864,8 +1882,12 @@ export class TowerDefenseScene extends Phaser.Scene {
       for (const e of this.enemies) {
         const d = Phaser.Math.Distance.Between(e.sprite.x, e.sprite.y, s.x, s.y);
         if (d > range) continue;
-        if (e.dist > bestDist) {
-          bestDist = e.dist;
+        // Flyers get a high synthetic priority since they bypass the path
+        const priority = e.flying
+          ? this.path.total + 999
+          : e.dist;
+        if (priority > bestDist) {
+          bestDist = priority;
           best = e;
         }
       }
@@ -1968,6 +1990,53 @@ export class TowerDefenseScene extends Phaser.Scene {
       }
     }
     return cells;
+  }
+
+  /** 非 forest 主题的氛围叠加层（深度 -15，草地之上） */
+  private addThemedTdAtmosphere(w: number, h: number): void {
+    const mood = inferThemeMood(this.spec);
+    if (mood === "forest" || mood === "generic") return; // 草地地图默认自然感，无需叠加
+
+    const raw = this.spec.theme.particleTint?.replace("#", "") ?? "69746c";
+    const parsed = parseInt(raw, 16);
+    const tint = Number.isFinite(parsed) ? parsed : 0x8888aa;
+
+    if (mood === "cyber") {
+      const g = this.add.graphics().setDepth(-15);
+      g.fillStyle(0x060610, 0.55); // 半透明深色蒙版，压暗草地
+      g.fillRect(0, 0, w, h);
+      const lines = this.add.graphics().setDepth(-14);
+      lines.lineStyle(0.5, tint, 0.12);
+      for (let y = 0; y < h; y += 22) lines.lineBetween(0, y, w, y);
+      lines.lineStyle(0.4, tint, 0.08);
+      for (let x = 0; x < w; x += 22) lines.lineBetween(x, 0, x, h);
+    } else if (mood === "space") {
+      const g = this.add.graphics().setDepth(-15);
+      g.fillStyle(0x04050f, 0.62); // 深黑覆盖草地
+      g.fillRect(0, 0, w, h);
+      // 星点散布
+      for (let i = 0; i < 80; i += 1) {
+        const sx = seededIntBetween(this.runtimeRng, 2, w - 2);
+        const sy = seededIntBetween(this.runtimeRng, 2, h - 2);
+        const ss = seededFloatBetween(this.runtimeRng, 0.5, 1.8);
+        const sa = seededFloatBetween(this.runtimeRng, 0.2, 0.7);
+        this.add.rectangle(sx, sy, ss, ss, 0xffffff, sa).setDepth(-14);
+      }
+      for (let i = 0; i < 3; i += 1) {
+        const nbx = seededIntBetween(this.runtimeRng, 0, w);
+        const nby = seededIntBetween(this.runtimeRng, 0, h);
+        const nbr = seededFloatBetween(this.runtimeRng, 40, 90);
+        this.add.circle(nbx, nby, nbr, tint, seededFloatBetween(this.runtimeRng, 0.03, 0.07)).setDepth(-14);
+      }
+    } else if (mood === "ocean") {
+      const g = this.add.graphics().setDepth(-15);
+      g.fillStyle(0x042d4b, 0.5);
+      g.fillRect(0, 0, w, h);
+      // 波纹
+      const wg = this.add.graphics().setDepth(-14);
+      wg.lineStyle(0.7, 0x40e0f4, 0.08);
+      for (let y = 0; y < h; y += 30) wg.lineBetween(0, y, w, y);
+    }
   }
 
   /** 保卫萝卜风格地图：明亮草地 + 沙色石板路 + 装饰元素 */
@@ -2203,6 +2272,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     e.maskGfx?.destroy();
     e.sprite.destroy();
     e.ring?.destroy();
+    e.flyShadow?.destroy();
     this.enemies = this.enemies.filter((x) => x !== e);
     this.refreshHud();
   }
@@ -2229,17 +2299,25 @@ export class TowerDefenseScene extends Phaser.Scene {
       this.goalShiftFailed = true;
     }
     this.baseHp -= amount;
+    const dying2 = this.baseHp <= 0;
     juiceHit(this, {
       x: base.x,
       y: base.y,
       colorHex: this.cohesion.hud.danger,
       text: `-${amount}`,
       textColorCss: this.cohesion.hud.danger,
-      large: this.baseHp <= 0,
+      large: dying2,
     });
     playBleep("hit");
+    this.cameras.main.shake(dying2 ? 260 : 120, dying2 ? 0.010 : 0.004);
+    spawnDamageNumber(this, base.x, base.y, amount, {
+      color: dying2 ? "#ff1111" : "#ff6644",
+      large: dying2,
+    });
     this.refreshHud();
     const maxHp = this.spec.gameplay.baseHealth ?? 50;
+    const hpRatio = Math.max(0, this.baseHp / maxHp);
+    this.soundscape?.setTension(1 - hpRatio * 0.6);
     if (this.baseHp <= maxHp * 0.3 && this.baseHp > 0) {
       this.soundscape?.triggerEvent("danger");
       this.startDangerVignette();
@@ -2335,28 +2413,17 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   private startDangerVignette() {
-    if (!this.dangerVignette) return;
-    this.tweens.killTweensOf(this.dangerVignette);
-    this.tweens.add({
-      targets: this.dangerVignette,
-      alpha: { from: 0.0, to: 0.18 },
-      duration: 800,
-      ease: "Sine.easeInOut",
-      yoyo: true,
-      repeat: -1,
-    });
+    this.hud.update({ dangerLevel: 1 });
   }
 
   private finish(payload: EndPayload) {
     if (this.finished) return;
-    if (this.dangerVignette) {
-      this.tweens.killTweensOf(this.dangerVignette);
-      this.dangerVignette.setAlpha(0);
-    }
+    this.hud.update({ dangerLevel: 0 });
     this.finished = true;
     this.spawning = false;
-    this.hintText.setText(payload.won ? hudTdWin(this.uiLocale) : hudTdLose(this.uiLocale));
+    this.hud.setBottomHint(payload.won ? hudTdWin(this.uiLocale) : hudTdLose(this.uiLocale));
     if (payload.won) {
+      this.cameras.main.shake(320, 0.009);
       juiceWin(this, {
         x: this.scale.width / 2,
         y: this.scale.height * 0.42,
@@ -2382,7 +2449,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   private tdQaTouches = 0;
 
   update(time: number) {
-    this.goalPanel?.update();
+    this.hud.update({});
     if (!this.bootstrapComplete || this.finished) return;
     setPhaserQaState({ qaTouches: this.tdQaTouches });
 
@@ -2420,6 +2487,42 @@ export class TowerDefenseScene extends Phaser.Scene {
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const e = this.enemies[i];
       if (!e) continue;
+
+      if (e.flying) {
+        // Flying enemies move directly toward base in a straight line, ignore slow
+        const spd = e.baseSpeed * dt;
+        const tx = e.flyTargetX ?? 0;
+        const ty = e.flyTargetY ?? 0;
+        const cx = e.flyX ?? 0;
+        const cy = e.flyY ?? 0;
+        const dx = tx - cx;
+        const dy = ty - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= spd + 4) {
+          // Reached base
+          this.damageBase(this.leakDamage);
+          e.sprite.destroy();
+          e.ring?.destroy();
+          e.flyShadow?.destroy();
+          this.enemies.splice(i, 1);
+          continue;
+        }
+        const nx = cx + (dx / dist) * spd;
+        const ny = cy + (dy / dist) * spd;
+        e.flyX = nx;
+        e.flyY = ny;
+        // Oscillate altitude bob for a natural glide feel
+        const bobY = Math.sin(time * 0.007 + i * 1.3) * 3.5;
+        e.sprite.setPosition(nx, ny + bobY);
+        if (e.flyShadow) {
+          e.flyShadow.setPosition(nx + 4, ny + 20); // shadow offset below and right
+        }
+        // Face the direction of travel
+        const angle = Math.atan2(dy, dx);
+        e.sprite.setRotation(angle + Math.PI / 2);
+        continue;
+      }
+
       const slowOn = time < e.slowUntil;
       const spd = e.baseSpeed * (slowOn ? 1 - e.slowPct : 1);
       e.dist += spd * dt;
@@ -2485,7 +2588,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         this.interWaveLock = false;
         const next = this.wave + 1;
         const lead = this.waveDefs[next]?.leadInMs ?? 1200;
-        this.hintText.setText(hudTdNextWave(this.uiLocale, String(Math.round(lead / 100) / 10)));
+        this.hud.setBottomHint(hudTdNextWave(this.uiLocale, String(Math.round(lead / 100) / 10)));
         this.time.delayedCall(lead, () => this.startWave(next));
       });
     }
@@ -2517,7 +2620,6 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private tickDirectorEvents() {
     const now = this.time.now;
-    this.banner.tick();
 
     if (this.eventType && now >= this.eventUntil) {
       const ended = this.eventType;
@@ -2529,12 +2631,12 @@ export class TowerDefenseScene extends Phaser.Scene {
           const bonus = Math.max(20, Math.floor(28 + this.eventStrength * 52));
           this.coins += bonus;
           this.baseShieldUntil = Math.max(this.baseShieldUntil, this.time.now + 2200);
-          this.banner.show({ ...bannerTdHoldSuccess(this.uiLocale, bonus), ms: 1800 });
+          this.hud.flashBanner({ ...bannerTdHoldSuccess(this.uiLocale, bonus), ms: 1800 });
         } else {
-          this.banner.show({ ...bannerTdHoldFail(this.uiLocale), ms: 1600 });
+          this.hud.flashBanner({ ...bannerTdHoldFail(this.uiLocale), ms: 1600 });
         }
       } else {
-        this.banner.show({ ...bannerEventEnd(this.uiLocale, "td"), ms: 1400 });
+        this.hud.flashBanner({ ...bannerEventEnd(this.uiLocale, "td"), ms: 1400 });
       }
 
       this.eventType = null;
@@ -2568,7 +2670,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.eventType = ev.type;
     this.eventStrength = strength;
     this.eventUntil = now + durationMs;
-    this.banner.show({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
+    this.hud.flashBanner({ title, message, ms: Math.min(2600, Math.max(1200, durationMs - 200)) });
     const impactPoint = this.baseFxPoint();
     applyRuntimeEventImpact(this, ev.type, {
       x: impactPoint.x,

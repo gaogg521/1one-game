@@ -4,6 +4,7 @@ import {
   type NovelChapterPlan,
   type NovelGenerateCheckpointMeta,
   type NovelGenerationMeta,
+  serializeNovelGenerationMeta,
 } from "@/lib/novel-long-pipeline-types";
 import { persistNovelGenerationMeta, loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import type { NovelLengthTier } from "@/lib/novel-length";
@@ -65,6 +66,30 @@ export async function saveNovelGenerateCheckpoint(
     { ...checkpoint, updatedAt: new Date().toISOString() },
   );
   await persistNovelGenerationMeta(novelId, merged);
+}
+
+/** 原子化：同时保存正文进度和 checkpoint，避免两次写入之间断连导致不一致。 */
+export async function saveNovelCheckpointAndContent(
+  novelId: string,
+  content: string,
+  meta: NovelGenerationMeta,
+  checkpoint: NovelGenerateCheckpointMeta,
+): Promise<void> {
+  const merged = buildCheckpointMeta(
+    {
+      version: meta.version,
+      bible: meta.bible,
+      chapterPlan: meta.chapterPlan,
+      segmentCount: meta.segmentCount,
+      createdAt: meta.createdAt,
+    },
+    { ...checkpoint, updatedAt: new Date().toISOString() },
+  );
+  const json = serializeNovelGenerationMeta(merged);
+  await prisma.novel.update({
+    where: { id: novelId },
+    data: { content, updatedAt: new Date(), generationMetaJson: json },
+  });
 }
 
 export async function loadNovelGenerationResumeState(

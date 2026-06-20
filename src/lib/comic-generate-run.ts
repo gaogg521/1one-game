@@ -472,6 +472,8 @@ export async function runComicGeneration(
   }
 
   const onChunkCheckpoint = async (ev: ComicChunkCheckpoint) => {
+    // P1 修复：checkpoint 时使用 gen 返回的 director（若已有），避免续跑时 director 丢失
+    const checkpointDirector = gen?.director ?? existingDirector ?? null;
     const partialDoc = buildPartialComicDoc({
       pages: ev.pages,
       stylePreset,
@@ -479,7 +481,7 @@ export async function runComicGeneration(
       readMode,
       chapterScopeLabel,
       chapterScope: checkpointScope,
-      director: existingDirector ?? null,
+      director: checkpointDirector,
       progress: { chunkIndex: ev.chunkIndex, chunkCount: ev.chunkCount, phase: "storyboard" },
     });
     draftComicId = await upsertStoryboardDraftComic({
@@ -516,6 +518,27 @@ export async function runComicGeneration(
 
   for (const model of cascade) {
     send({ step: "model_start", model });
+    // 关键修复：cascade retry 时从 DB checkpoint 恢复，不让前模型已生成内容丢弃
+    // model A 可能在 chunk 2 失败但已 checkpoint 了 chunk 0-1，model B 应从 chunk 2 继续
+    if (draftComicId) {
+      const refreshRow = await prisma.comic.findUnique({ where: { id: draftComicId } });
+      if (refreshRow && refreshRow.status === COMIC_STATUS_DRAFT_STORYBOARD) {
+        const refreshDoc = parseComicImageUrls(refreshRow.imageUrls);
+        if (draftMatchesCurrentRun(refreshDoc) && refreshDoc.pages.length > 0) {
+          existingPages = refreshDoc.pages;
+          existingDirector = refreshDoc.director ?? existingDirector ?? null;
+          startChunkIndex = resumeChunkIndexFromDoc(refreshDoc, {
+            chunkSize: storyboardChunkSize,
+            pageCount,
+          });
+          send({
+            step: "resume_found",
+            message: progressComicMessage(uiLocale, "resumeFromBatch", { start: startChunkIndex + 1 }),
+            comicId: draftComicId,
+          });
+        }
+      }
+    }
     try {
       gen = await generateComicPages({
         novelTitle,
@@ -638,13 +661,23 @@ export async function runComicGeneration(
         step: "char_sheets_start",
         message: progressComicMessage(uiLocale, "charSheetStart", { count: needGenerate.length }),
       });
-      const sheets = await generateCharacterSheets({
-        subjects: needGenerate,
-        stylePreset,
-        comicKey: draftComicId ?? actualNovelId ?? `standalone-${storageTitle.slice(0, 24)}`,
-        uiLocale,
-        timeoutMs: input.charSheetTimeoutMs ?? PRODUCT.comic.charSheetTimeoutMs,
-      });
+      // P0 修复：character sheet 生成失败不阻塞主 pipeline（角色表是可选的）
+      let sheets: Awaited<ReturnType<typeof generateCharacterSheets>>;
+      try {
+        sheets = await generateCharacterSheets({
+          subjects: needGenerate,
+          stylePreset,
+          comicKey: draftComicId ?? actualNovelId ?? `standalone-${storageTitle.slice(0, 24)}`,
+          uiLocale,
+          timeoutMs: input.charSheetTimeoutMs ?? PRODUCT.comic.charSheetTimeoutMs,
+        });
+      } catch (sheetErr) {
+        send({
+          step: "char_sheets_failed",
+          message: `角色表生成失败（不影响分镜）：${sheetErr instanceof Error ? sheetErr.message : String(sheetErr)}`,
+        });
+        sheets = [];
+      }
       const newUrls = sheets.filter((s) => s.url).map((s) => s.url!);
       charSheetUrls = [...charSheetUrls, ...newUrls];
       if (rosterForSheets && newUrls.length > 0) {
@@ -725,6 +758,16 @@ export async function runComicGeneration(
                 })
               : ev.error,
           });
+          // P0 修复：每格渲染完成立即 DB 保存，防中途崩溃丢失已渲染 panel
+          if (draftComicId && ev.imageUrls) {
+            void prisma.comic.update({
+              where: { id: draftComicId },
+              data: {
+                imageUrls: ev.imageUrls,
+                status: ev.withImage > 0 ? "ready" : "draft_storyboard",
+              },
+            }).catch(() => {});
+          }
         }
       },
     });

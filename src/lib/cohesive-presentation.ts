@@ -249,6 +249,132 @@ export function resolveAssetStyle(spec: GameSpec): AssetStyle {
   return inferAssetStyle(spec);
 }
 
+export type ShaderPack =
+  | "flat"
+  | "neon-glow"
+  | "hologram"
+  | "toon"
+  | "pixel-grade"
+  | "ink-wash"
+  | "dissolve"
+  | "crystal"
+  | "organic-pulse";
+
+export type ParticleIntensity = "minimal" | "standard" | "showcase";
+
+export type VisualAnimationSet =
+  | "none"
+  | "prop-bounce"
+  | "prop-action"
+  | "prop-action-glb";
+
+const SHADER_PACKS: readonly ShaderPack[] = [
+  "flat",
+  "neon-glow",
+  "hologram",
+  "toon",
+  "pixel-grade",
+  "ink-wash",
+  "dissolve",
+  "crystal",
+  "organic-pulse",
+] as const;
+
+const ANIMATION_SETS: readonly VisualAnimationSet[] = [
+  "none",
+  "prop-bounce",
+  "prop-action",
+  "prop-action-glb",
+] as const;
+
+/** assetStyle → 推荐 shaderPack（运行时 fallback 到 flat） */
+const ASSET_STYLE_SHADER_PACK: Record<AssetStyle, ShaderPack> = {
+  "classic-arcade": "flat",
+  "hard-sci-fi": "hologram",
+  "kawaii-mecha": "toon",
+  "bullet-hell": "neon-glow",
+  "wuxia-flight": "ink-wash",
+  "blocky-pixel": "pixel-grade",
+  "cute-cartoon": "toon",
+  "dark-fantasy": "dissolve",
+  "80s-cartoon": "toon",
+  "nature-organic": "organic-pulse",
+  "neon-cyber": "neon-glow",
+  "paper-craft": "flat",
+};
+
+const ASSET_STYLE_ANIMATION_SET: Record<AssetStyle, VisualAnimationSet> = {
+  "classic-arcade": "prop-bounce",
+  "hard-sci-fi": "prop-action",
+  "kawaii-mecha": "prop-action",
+  "bullet-hell": "prop-action",
+  "wuxia-flight": "prop-action",
+  "blocky-pixel": "prop-bounce",
+  "cute-cartoon": "prop-bounce",
+  "dark-fantasy": "prop-action",
+  "80s-cartoon": "prop-bounce",
+  "nature-organic": "prop-bounce",
+  "neon-cyber": "prop-action",
+  "paper-craft": "prop-bounce",
+};
+
+export function inferShaderPack(spec: GameSpec): ShaderPack {
+  return ASSET_STYLE_SHADER_PACK[resolveAssetStyle(spec)];
+}
+
+export function inferAnimationSet(spec: GameSpec): VisualAnimationSet {
+  return ASSET_STYLE_ANIMATION_SET[resolveAssetStyle(spec)];
+}
+
+export function resolveShaderPack(spec: GameSpec): ShaderPack {
+  const cur = spec.visual?.shaderPack;
+  if (cur && SHADER_PACKS.includes(cur)) return cur;
+  return inferShaderPack(spec);
+}
+
+export function resolveAnimationSet(spec: GameSpec): VisualAnimationSet {
+  const cur = spec.visual?.animationSet;
+  if (cur && ANIMATION_SETS.includes(cur)) return cur;
+  return inferAnimationSet(spec);
+}
+
+export function resolveParticleIntensity(spec: GameSpec): ParticleIntensity {
+  const cur = spec.visual?.particleIntensity;
+  if (cur === "minimal" || cur === "standard" || cur === "showcase") return cur;
+  const tier = spec.presentation?.qualityTier;
+  if (tier === "showcase") return "showcase";
+  if (tier === "minimal") return "minimal";
+  return "standard";
+}
+
+/**
+ * 补齐 visual.shaderPack / particleIntensity / animationSet（仅当缺失时）。
+ * zones 不在此注入——LLM 关卡意图，缺则 runtime 走 blueprint 默认。
+ * 必须在 withPresentationDefaults 之后调用（依赖 assetStyle/qualityTier 已就位）。
+ */
+export function withVisualDefaults(spec: GameSpec): GameSpec {
+  const cur = spec.visual;
+  const shaderPack = resolveShaderPack(spec);
+  const particleIntensity = resolveParticleIntensity(spec);
+  const animationSet = resolveAnimationSet(spec);
+  if (
+    cur?.shaderPack === shaderPack &&
+    cur?.particleIntensity === particleIntensity &&
+    cur?.animationSet === animationSet
+  ) {
+    return spec;
+  }
+  return {
+    ...spec,
+    visual: {
+      ...(cur ?? {}),
+      shaderPack,
+      particleIntensity,
+      animationSet,
+    },
+  };
+}
+
 export function resolveMusicProfile(spec: GameSpec): MusicProfile {
   const m = spec.presentation?.musicProfile;
   if (m === "organic" || m === "pulse" || m === "minimal" || m === "neon") return m;

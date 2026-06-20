@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+﻿import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { HudBanner } from "@/game/engine/HudBanner";
 import { HudGoalPanel } from "@/game/engine/HudGoalPanel";
@@ -19,18 +19,23 @@ import type { GameSpec } from "@/lib/game-spec";
 import {
   bannerFarmingFinish,
   bannerFarmingInsufficientCoins,
+  bannerFarmingMarket,
+  bannerFarmingPest,
+  bannerFarmingWeather,
   hudFarmingCoins,
   hudFarmingControls,
   hudFarmingCropSelected,
   hudScore,
 } from "@/lib/i18n/game-hud-labels";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
-import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { showControlsHint, farmingControlLines } from "@/game/engine/controls-hint";
+import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 
 type EndPayload = { score: number; won: boolean };
-type TileState = "empty" | "seeded" | "growing" | "ready";
+type TileState = "empty" | "seeded" | "growing" | "ready" | "pest";
+type WeatherType = "normal" | "rain" | "sun" | "drought";
 
 type Tile = {
   state: TileState;
@@ -41,6 +46,7 @@ type Tile = {
   plantGfx: Phaser.GameObjects.Graphics;
   progressGfx: Phaser.GameObjects.Graphics;
   readyGlow?: Phaser.GameObjects.Arc;
+  pestIcon?: Phaser.GameObjects.Text;
 };
 
 /** 网格种植：播种 → 生长 → 收获（Grow a Garden 等样品强化视觉与反馈） */
@@ -63,6 +69,7 @@ export class FarmingScene extends Phaser.Scene {
   private coinText!: Phaser.GameObjects.Text;
   private goalText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
+  private weatherText!: Phaser.GameObjects.Text;
   private banner!: HudBanner;
   private goalPanel!: HudGoalPanel;
   private cohesive!: CohesivePresentation;
@@ -75,6 +82,15 @@ export class FarmingScene extends Phaser.Scene {
   private harvestStreak = 0;
   private lastHarvestAt = 0;
   private cropButtons: Phaser.GameObjects.Container[] = [];
+
+  private weather: WeatherType = "normal";
+  private weatherEndAt = 0;
+  private nextWeatherAt = 0;
+  private nextMarketAt = 0;
+  private livePrices: Record<string, number> = {};
+  private nextPestAt = 0;
+  private sunDrip = 0;
+  private crisisGfx!: Phaser.GameObjects.Graphics;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "FarmingScene" });
@@ -109,6 +125,14 @@ export class FarmingScene extends Phaser.Scene {
     this.autoWater = farmPf?.autoWater ?? false;
     this.harvestGoal = this.bp.harvestGoal;
     this.coins = this.bp.startingCoins;
+
+    for (const c of this.bp.crops) {
+      this.livePrices[c.id] = c.sellPrice;
+    }
+    const nowMs = this.time.now;
+    this.nextWeatherAt = nowMs + 15000 + Math.random() * 10000;
+    this.nextMarketAt = nowMs + 20000 + Math.random() * 10000;
+    this.nextPestAt = nowMs + 28000 + Math.random() * 12000;
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -169,6 +193,9 @@ export class FarmingScene extends Phaser.Scene {
         .setOrigin(1, 0)
         .setDepth(20),
     );
+    this.weatherText = styleHudText(
+      this.add.text(w - 16, 32, "", { fontSize: "12px", color: "#fef9c3" }).setOrigin(1, 0).setDepth(20),
+    );
     this.hintText = styleHudText(
       this.add
         .text(w / 2, h - 36, this.richGarden ? this.richControlsHint() : hudFarmingControls(this.uiLocale), {
@@ -180,6 +207,7 @@ export class FarmingScene extends Phaser.Scene {
     );
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);
     this.banner = new HudBanner(this, this.cohesive.banner);
+    this.crisisGfx = this.add.graphics().setDepth(190).setScrollFactor(0).setAlpha(0);
     this.banner.show(introBannerWhenGoalPanel(guidance));
     this.goalPanel = new HudGoalPanel(this, guidance, this.cohesive, { y: 88 });
 
@@ -202,6 +230,7 @@ export class FarmingScene extends Phaser.Scene {
         { x: this.tiles[0]!.rect.x / w, y: this.tiles[0]!.rect.y / h },
       ]);
     }
+    showControlsHint(this, farmingControlLines(this.uiLocale));
   }
 
   private goalLabel(): string {
@@ -280,9 +309,10 @@ export class FarmingScene extends Phaser.Scene {
 
   private refreshTileVisual(tile: Tile) {
     const crop = this.cropForTile(tile);
-    const fill = soilFillForState(tile.state, crop?.color, tile.progress);
-    tile.rect.setFillStyle(fill, tile.state === "growing" ? 0.75 + tile.progress * 0.2 : 1);
-    tile.rect.setScale(tile.state === "growing" ? 0.94 + tile.progress * 0.1 : 1);
+    const stateV = tile.state === "pest" ? "growing" : tile.state;
+    const fill = soilFillForState(stateV, crop?.color, tile.progress);
+    tile.rect.setFillStyle(fill, stateV === "growing" ? 0.75 + tile.progress * 0.2 : 1);
+    tile.rect.setScale(stateV === "growing" ? 0.94 + tile.progress * 0.1 : 1);
 
     if (this.richGarden && crop) {
       const stage =
@@ -290,13 +320,13 @@ export class FarmingScene extends Phaser.Scene {
           ? 0
           : tile.state === "seeded"
             ? 1
-            : tile.state === "growing"
+            : tile.state === "growing" || tile.state === "pest"
               ? 2 + Math.floor(tile.progress * 2)
               : 4;
       drawCropPlant(tile.plantGfx, crop, stage, tile.rect.x, tile.rect.y - 4, this.cell);
       tile.label.setText(tile.state === "ready" ? cropEmoji(crop.id) : "");
       tile.progressGfx.clear();
-      if (tile.state === "growing") {
+      if (tile.state === "growing" || tile.state === "pest") {
         const pw = (this.cell - 16) * tile.progress;
         tile.progressGfx.fillStyle(0x14532d, 0.5);
         tile.progressGfx.fillRoundedRect(tile.rect.x - (this.cell - 16) / 2, tile.rect.y + this.cell * 0.28, this.cell - 16, 5, 2);
@@ -326,8 +356,21 @@ export class FarmingScene extends Phaser.Scene {
       tile.label.setText("");
     } else {
       tile.label.setText(
-        tile.state === "ready" ? "✨" : tile.state === "growing" ? "💧" : tile.state === "seeded" ? "🌱" : "",
+        tile.state === "ready" ? "✨" : tile.state === "pest" ? "🐛" : tile.state === "growing" ? "💧" : tile.state === "seeded" ? "🌱" : "",
       );
+    }
+
+    if (tile.state === "pest") {
+      if (!tile.pestIcon) {
+        tile.pestIcon = this.add
+          .text(tile.rect.x + this.cell * 0.28, tile.rect.y - this.cell * 0.28, "🐛", { fontSize: "16px" })
+          .setOrigin(0.5)
+          .setDepth(9);
+        this.tweens.add({ targets: tile.pestIcon, angle: { from: -12, to: 12 }, yoyo: true, repeat: -1, duration: 380 });
+      }
+      tile.pestIcon.setVisible(true);
+    } else if (tile.pestIcon) {
+      tile.pestIcon.setVisible(false);
     }
   }
 
@@ -335,6 +378,16 @@ export class FarmingScene extends Phaser.Scene {
     if (this.finished) return;
     const tile = this.tiles[idx]!;
     const crop = this.bp.crops[this.selectedCrop]!;
+
+    if (tile.state === "pest") {
+      tile.state = "growing";
+      juicePickup(this, { x: tile.rect.x, y: tile.rect.y, colorHex: "#86efac", text: "🐛→💨" });
+      playBleep("pickup");
+      this.refreshTileVisual(tile);
+      this.coinText.setText(hudFarmingCoins(this.uiLocale, this.coins));
+      this.publishQaState();
+      return;
+    }
 
     if (tile.state === "empty") {
       if (this.coins < crop.seedCost) {
@@ -365,8 +418,9 @@ export class FarmingScene extends Phaser.Scene {
       if (now - this.lastHarvestAt < 2800) this.harvestStreak += 1;
       else this.harvestStreak = 1;
       this.lastHarvestAt = now;
-      const streakBonus = Math.floor(c.sellPrice * 0.12 * Math.min(this.harvestStreak, 6));
-      const gain = c.sellPrice + streakBonus;
+      const basePrice = this.livePrices[c.id] ?? c.sellPrice;
+      const streakBonus = Math.floor(basePrice * 0.12 * Math.min(this.harvestStreak, 6));
+      const gain = basePrice + streakBonus;
       this.coins += gain;
       this.harvests += 1;
       tile.state = "empty";
@@ -417,13 +471,62 @@ export class FarmingScene extends Phaser.Scene {
     this.goalPanel?.update();
     this.banner.tick();
     if (this.finished) return;
+
+    const now = this.time.now;
+
+    if (now >= this.nextWeatherAt) {
+      const options: WeatherType[] = ["rain", "sun", "drought"];
+      this.weather = options[Math.floor(Math.random() * options.length)]!;
+      this.weatherEndAt = now + 12000 + Math.random() * 8000;
+      this.banner.show({ ...bannerFarmingWeather(this.uiLocale, this.weather), ms: 2200 });
+      const icons: Record<WeatherType, string> = { rain: "🌧", sun: "☀️", drought: "🌵", normal: "" };
+      this.weatherText.setText(icons[this.weather]);
+      playBleep(this.weather === "drought" ? "hit" : "pickup");
+      this.soundscape?.setTension(this.weather === "drought" ? 0.6 : 0.2);
+      this.nextWeatherAt = this.weatherEndAt + 18000 + Math.random() * 12000;
+    } else if (this.weather !== "normal" && now >= this.weatherEndAt) {
+      this.weather = "normal";
+      this.banner.show({ ...bannerFarmingWeather(this.uiLocale, "normal"), ms: 1500 });
+      this.weatherText.setText("");
+      this.soundscape?.setTension(0);
+    }
+
+    if (now >= this.nextMarketAt) {
+      const up = Math.random() > 0.45;
+      const mult = up ? 1.3 : 0.8;
+      for (const c of this.bp.crops) {
+        this.livePrices[c.id] = Math.round(c.sellPrice * mult);
+      }
+      this.banner.show({ ...bannerFarmingMarket(this.uiLocale, up ? "up" : "down"), ms: 2000 });
+      playBleep(up ? "pickup" : "hit");
+      this.time.delayedCall(15000 + Math.random() * 10000, () => {
+        for (const c of this.bp.crops) {
+          this.livePrices[c.id] = c.sellPrice;
+        }
+      });
+      this.nextMarketAt = now + 35000 + Math.random() * 20000;
+    }
+
+    if (now >= this.nextPestAt) {
+      const growingTiles = this.tiles.filter((t) => t.state === "growing");
+      if (growingTiles.length > 0) {
+        const target = growingTiles[Math.floor(Math.random() * growingTiles.length)]!;
+        target.state = "pest";
+        this.refreshTileVisual(target);
+        this.banner.show({ ...bannerFarmingPest(this.uiLocale), ms: 1800 });
+        playBleep("hit");
+      }
+      this.nextPestAt = now + 28000 + Math.random() * 12000;
+    }
+
     const sec = dt / 1000;
+    const base = this.autoWater ? 1.35 : 1;
+    const rate = this.weather === "rain" ? base * 2 : this.weather === "drought" ? base * 0.5 : base;
     for (const tile of this.tiles) {
       if (this.autoWater && tile.state === "seeded") tile.state = "growing";
       if (tile.state !== "growing") continue;
       const crop = this.cropForTile(tile);
       if (!crop) continue;
-      const rate = this.autoWater ? 1.35 : 1;
       tile.progress += (sec / crop.growSec) * rate;
       if (tile.progress >= 1) {
         tile.state = "ready";
@@ -431,11 +534,50 @@ export class FarmingScene extends Phaser.Scene {
       }
       this.refreshTileVisual(tile);
     }
+
+    if (this.weather === "sun") {
+      this.sunDrip += dt * 0.0008;
+      if (this.sunDrip >= 1) {
+        const drip = Math.floor(this.sunDrip);
+        this.coins += drip;
+        this.sunDrip -= drip;
+        this.coinText.setText(hudFarmingCoins(this.uiLocale, this.coins));
+      }
+    }
+
+    // Crisis edge vignette: drought or many pest tiles
+    const pestCount = this.tiles.filter((t) => t.state === "pest").length;
+    const isDrought = this.weather === "drought";
+    const crisisLevel = isDrought ? 1 : pestCount >= 3 ? 0.7 : pestCount >= 1 ? 0.35 : 0;
+    const targetAlpha = crisisLevel * (0.25 + Math.sin(now * 0.004) * 0.12);
+    const curAlpha = this.crisisGfx.alpha;
+    if (Math.abs(curAlpha - targetAlpha) > 0.005) {
+      this.crisisGfx.setAlpha(curAlpha + (targetAlpha - curAlpha) * 0.08);
+    }
+    if (crisisLevel > 0) {
+      const cw = this.scale.width;
+      const ch = this.scale.height;
+      const color = isDrought ? 0xff6b00 : 0xff2a44;
+      this.crisisGfx.clear();
+      const t = 48;
+      for (let i = 0; i < 5; i++) {
+        const off = Math.floor((t * i) / 4);
+        const a = (1 - i / 4) * 0.38;
+        this.crisisGfx.fillStyle(color, a);
+        this.crisisGfx.fillRect(0, 0, cw, 4 + off / 5);
+        this.crisisGfx.fillRect(0, ch - 4 - off / 5, cw, 4 + off / 5);
+        this.crisisGfx.fillRect(0, 0, 4 + off / 5, ch);
+        this.crisisGfx.fillRect(cw - 4 - off / 5, 0, 4 + off / 5, ch);
+      }
+    } else {
+      this.crisisGfx.clear();
+    }
   }
 
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.cameras.main.shake(won ? 320 : 260, won ? 0.008 : 0.010);
     if (won) {
       juiceWin(this, {
         x: this.scale.width / 2,
@@ -457,3 +599,4 @@ export class FarmingScene extends Phaser.Scene {
     this.time.delayedCall(2200, () => this.onEnd({ score: this.harvests * 10 + this.coins, won }));
   }
 }
+

@@ -94,14 +94,22 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const availability = getImageGenAvailability();
   const encoder = new TextEncoder();
+  // P1 修复：AbortController——客户端断连时取消进行中的配图生成
+  const abortController = new AbortController();
   const { title: storyTitle, summary: storySummary, genre: storyGenre } =
     await resolveComicStoryContext(row, uiLocale);
   let coverPath = row.coverPath;
 
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
       const send = (obj: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(sseData(obj)));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(sseData(obj)));
+        } catch {
+          closed = true;
+        }
       };
 
       try {
@@ -227,7 +235,24 @@ export async function POST(req: Request, ctx: RouteContext) {
           error: apiErrorTextForLocale(uiLocale, "comicPanelRenderFailed"),
         });
       } finally {
-        controller.close();
+        // P0 修复：controller.close() 加 try-catch + abort 配图生成
+        try {
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
+        } catch {
+          // stream already closed
+        }
+        if (!abortController.signal.aborted) {
+          abortController.abort();
+        }
+      }
+    },
+    cancel() {
+      // P1 修复：客户端断连时 abort 配图生成
+      if (!abortController.signal.aborted) {
+        abortController.abort();
       }
     },
   });

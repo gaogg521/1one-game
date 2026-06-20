@@ -112,6 +112,10 @@ export async function streamLongNovelContinue(params: {
   /** 本次最多写几章；null = 写完所有待写章 */
   maxChaptersToWrite?: number | null;
   polish?: boolean;
+  /** P0 修复：每段写完后回调，用于 atomic checkpoint 持久化 */
+  onSegmentCheckpoint?: (opts: { index: number; content: string; meta: NovelGenerationMeta }) => Promise<void>;
+  /** P1 修复：外部 AbortSignal，客户端断连时取消 LLM fetch */
+  signal?: AbortSignal;
 }): Promise<LongNovelGenerateResult> {
   const { model, promptTrim, titleTrim, existingContent, lengthTier, emit } = params;
   const uiLocale = params.uiLocale ?? "zh-Hans";
@@ -260,6 +264,17 @@ export async function streamLongNovelContinue(params: {
     emit,
     uiLocale,
     stopWhenLength: hardMax,
+    onSegmentDone: params.onSegmentCheckpoint
+      ? async (index, segContent) => {
+          const partialMeta: NovelGenerationMeta = {
+            ...meta,
+            segmentCount: (meta.segmentCount ?? 0) + index + 1,
+            createdAt: meta.createdAt,
+          };
+          await params.onSegmentCheckpoint!({ index, content: segContent, meta: partialMeta });
+        }
+      : undefined,
+    signal: params.signal,
   });
 
   const finalContent = fitNovelContentToMaxChars(writeResult.content, hardMax);

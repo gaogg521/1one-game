@@ -1,0 +1,15 @@
+{
+  "at": "2026-06-18T06:21:10.980Z",
+  "pass": true,
+  "offline": {
+    "ok": true,
+    "rows": [
+      "Browser Bench：STAGING 默认开启 ✅",
+      "Browser Bench Repair：STAGING 默认开启 ✅",
+      "Comfy 精灵：GAME_SPRITE_COMFY=1 ✅"
+    ]
+  },
+  "httpOk": true,
+  "httpDetail": "Agentic 路由 OK · template=platformer · recap bench=yes",
+  "base": "http://127.0.0.1:8888"
+}
