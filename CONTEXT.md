@@ -11,15 +11,19 @@
 - `npx tsc --noEmit` → **src/ 零错误**（e2e/ + definitions.ts + messages.ts 有预存错误，均与本次改动无关）
 - 新增 CreateQuickStart 组件 TS 通过；5 locale JSON 全部校验 OK
 
-### 本会话修改文件（Session 32 · 后台 Bug 修复 + i18n 补全）
+### 本会话修改文件（Session 32 · 后台 Bug 修复 + 社交管理补全）
 | 文件 | 改动摘要 |
 |------|----------|
 | `src/components/admin/GenErrorsPanel.tsx` | 修复 i18n 命名空间 `"admin"` → `"adminPage"`；添加 `headers` prop 并在 fetch 时携带认证头 |
-| `src/components/admin/AdminConsolePage.tsx` | 传入 `headers={headers}` 给 `<GenErrorsPanel />` |
-| `src/app/api/admin/analytics/route.ts` | 修复 `paidAt` null fallback：过滤空值再 map |
-| `src/messages/zh-Hant.json` | 补充 `adminPage.cacheManagement` 对象（繁体中文，约 40 key） |
-| `src/messages/ms.json` | 补充 `adminPage.cacheManagement` 对象（马来语） |
-| `src/messages/th.json` | 补充 `adminPage.cacheManagement` 对象（泰语） |
+| `src/components/admin/AdminConsolePage.tsx` | 传入 `headers={headers}` 给 `<GenErrorsPanel />`；import + 接入 `<ReferralRewardsPanel />` 至 shares tab |
+| `src/app/api/admin/analytics/route.ts` | 修复 `paidAt` null fallback；漏斗 stage key `paidOrders` → `allPaidOrders` |
+| `src/app/api/admin/referral-rewards/route.ts` | 新建：GET 端点，返回 summary + 推荐奖励流水（带推荐人/被推荐人信息） |
+| `src/components/admin/ReferralRewardsPanel.tsx` | 新建：推荐奖励面板（summary stats + 流水表格，自加载，支持 headers prop） |
+| `src/messages/en.json` | 漏斗 subtitle/kpiPaidConversion/allPaidOrders + 14 个 referralRewards* key |
+| `src/messages/zh-Hans.json` | 同步上述中文翻译 |
+| `src/messages/zh-Hant.json` | 补充 cacheManagement 对象 + referralRewards* + allPaidOrders 等 |
+| `src/messages/ms.json` | 补充 cacheManagement + referralRewards* + allPaidOrders（马来语） |
+| `src/messages/th.json` | 补充 cacheManagement + referralRewards* + allPaidOrders（泰语） |
 
 ### 本会话修改文件（Session 31 · 创作台快速入口 + 实时主题预览）
 - 新建 `src/components/CreateQuickStart.tsx`（416 行）：8 真玩法大卡片（mahjong/tetris/endless-runner/fruit-ninja/mahjong-solitaire/dou-dizhu/breakout/merge2048）+ 60 模板分类 chip（11 分类 tab）+ prompt 实时主题预览（debounce 300ms 调 fingerprintPrompt + adaptThemeFromFingerprint + detectTemplateFromPrompt）
@@ -1697,3 +1701,43 @@ src/messages/{locale}.json            # i18n 文本（5语言）
    - **Q2**：漫画配图阶段也加 checkpoint（当前仅分镜阶段有 checkpoint）
    - **Q3**：漫画角色表跨章节复用强化（当前已有 roster merge，可加缓存）
 5. 提醒：LLM 网关需要 `OPENAI_BASE_URL=https://litellm-internal.123u.com` 可用
+
+---
+
+### 2026-06-20 · 会话 37 · 后台 Bug 修复续篇 + e2e TS 全清 + CDN 持久化
+
+**承接会话 32 遗留任务，全部完成。**
+
+#### e2e TS 错误全清（13 错误 → 0）✅
+| 文件 | 修复内容 |
+|---|---|
+| `e2e/test.ts` | 新增 `export type { Page, APIRequestContext } from "@playwright/test"` |
+| `e2e/astrocade-agentic.smoke.spec.ts` | import `GameSpec`；cast `saved.spec` 为 `GameSpec` |
+| `e2e/astrocade-duplicate-phaser.smoke.spec.ts` | import `GameSpec`；cast `saved.spec` 为 `GameSpec` |
+| `e2e/create-generate-stream-agentic.spec.ts` | import `GameSpec`；cast `saved.spec` 为 `GameSpec` |
+| `e2e/competitor-clone.smoke.spec.ts` | import `GameSpec`；cast `body.spec` 为 `GameSpec` |
+| `e2e/platform-complex-agentic.smoke.spec.ts` | import `GameSpec`；cast `saved.spec` 为 `GameSpec` |
+| `e2e/godot-templates-matrix.spec.ts` | 修复 `iframe > 0`（boolean > number）→ `iframe`（已是 boolean） |
+| `e2e/templates-handtest.spec.ts` | 修复 `project!.id` → `project!.id!`（`string\|undefined` → `string`） |
+
+#### CDN Config 持久化（内存 Map → AES-GCM 加密 DB）✅
+- `src/lib/runtime-config.ts`：
+  - 新增 `CdnConfigStored` 类型（移至此处，作为唯一来源）
+  - `RuntimeSecretsPayload` 追加 `cdnConfig?: CdnConfigStored`
+  - 新增 `readCdnConfigFromDb()` / `saveCdnConfigToDb()` 辅助函数（通过 `PlatformRuntimeConfig.secretsEnc` AES-GCM 加密存储）
+- `src/app/api/admin/cache-management/cdn-config/route.ts`：
+  - 重写 GET/PATCH：改用 DB 持久化（替换原内存 `Map`）
+  - GET 掩码敏感字段（accessKey/secretKey → `"***"`）
+  - PATCH 识别 `"***"` 哨兵，保留现有 secrets
+  - POST（连通性验证）逻辑不变
+
+**编译状态**：`npx tsc --noEmit` → 全局零错误（含 e2e/）
+
+**下次启动清单（会话 37 更新）**
+1. `npx tsc --noEmit` ✓ 全局零错误（含 e2e/）
+2. **已完成**：e2e TS 全清 + CDN 持久化 + 后台 Bug 修复全套（会话 32-37）
+3. **下一步候选**：
+   - **R1**：浏览器实测管理后台 CDN 配置页（重启服务后配置是否保留）
+   - **R2**：漫画配图 checkpoint（Q2 遗留）
+   - **R3**：真实 CDN SDK 集成（AWS S3 / Cloudflare API）
+4. 提醒：LLM 网关需要 `OPENAI_BASE_URL=https://litellm-internal.123u.com` 可用

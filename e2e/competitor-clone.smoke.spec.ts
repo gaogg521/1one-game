@@ -11,6 +11,7 @@ import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { ensureOwnerSession } from "./helpers/owner";
 import { gotoPlay } from "./helpers/play";
+import type { GameSpec } from "@/lib/game-spec";
 
 function pickCloneSmoke(count: number): typeof SAMPLES {
   const day = process.env.COMPETITOR_PICK_SEED ?? new Date().toISOString().slice(0, 10);
@@ -54,7 +55,7 @@ for (const row of CLONE_SMOKE) {
 
     const get = await page.request.get(`/api/projects/${project!.id}`);
     const body = (await get.json()) as {
-      spec?: { templateId?: string; agenticModule?: unknown; samplePlayProfile?: { variantId?: string } };
+      spec?: GameSpec;
     };
     expect(body.spec?.agenticModule).toBeFalsy();
     expect(shouldUseAgenticRuntime(body.spec!)).toBe(false);

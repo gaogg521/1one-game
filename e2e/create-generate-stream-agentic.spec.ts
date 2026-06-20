@@ -7,6 +7,7 @@ import {
 } from "./helpers/generate-stream-stub";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
+import type { GameSpec } from "@/lib/game-spec";
 
 /** 创作页闭环：/create → SSE generate/stream → dedicated Scene → 保存试玩 canvas */
 test.describe.configure({ mode: "serial" });
@@ -52,9 +53,7 @@ test("创作页 generate/stream 闭环并试玩 PhysicsScene canvas", async ({ p
 
   const get = await page.request.get(`/api/projects/${projectId}`);
   expect(get.ok()).toBeTruthy();
-  const saved = (await get.json()) as {
-    spec?: { agenticModule?: { source?: string }; templateId?: string };
-  };
+  const saved = (await get.json()) as { spec?: GameSpec };
   expect(shouldUseAgenticRuntime(saved.spec!)).toBe(false);
   expect(saved.spec?.agenticModule?.source).toBeUndefined();
   expect(expectedPhaserSceneName(saved.spec!)).toBe("PhysicsScene");

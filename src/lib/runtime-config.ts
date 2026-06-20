@@ -43,6 +43,15 @@ export type RuntimeModelsOverride = {
   geminiFallbacks?: string[];
 };
 
+export type CdnConfigStored = {
+  provider: "aws-s3" | "cloudflare" | "custom";
+  endpoint: string;
+  accessKey?: string;
+  secretKey?: string;
+  bucket?: string;
+  ttlSeconds: number;
+};
+
 export type RuntimeSecretsPayload = {
   openaiApiKey?: string;
   openaiBaseUrl?: string;
@@ -54,6 +63,7 @@ export type RuntimeSecretsPayload = {
   models?: RuntimeModelsOverride;
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
+  cdnConfig?: CdnConfigStored;
 };
 
 export type RuntimeSecretField =
@@ -469,4 +479,22 @@ export async function saveRuntimeConfig(
   invalidateRuntimeConfigCache();
   await loadRuntimeConfig();
   return getRuntimeConfigPublicView();
+}
+
+export async function readCdnConfigFromDb(): Promise<CdnConfigStored | null> {
+  const row = await prisma.platformRuntimeConfig.findFirst({ where: { id: ROW_ID } });
+  const payload = parseDbPayload(row?.secretsEnc);
+  return payload.cdnConfig ?? null;
+}
+
+export async function saveCdnConfigToDb(config: CdnConfigStored): Promise<void> {
+  const row = await prisma.platformRuntimeConfig.findFirst({ where: { id: ROW_ID } });
+  const current = parseDbPayload(row?.secretsEnc);
+  const next: RuntimeSecretsPayload = { ...current, cdnConfig: config };
+  await prisma.platformRuntimeConfig.upsert({
+    where: { id: ROW_ID },
+    create: { id: ROW_ID, secretsEnc: encryptRuntimeSecrets(JSON.stringify(next)) },
+    update: { secretsEnc: encryptRuntimeSecrets(JSON.stringify(next)) },
+  });
+  invalidateRuntimeConfigCache();
 }

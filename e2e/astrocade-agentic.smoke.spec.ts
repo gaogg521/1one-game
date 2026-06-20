@@ -3,6 +3,7 @@ import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { gotoPlay } from "./helpers/play";
+import type { GameSpec } from "@/lib/game-spec";
 
 /** Astrocade 用户路径：POST 走 dedicated Scene（与样品馆一致）→ 试玩 canvas */
 test.describe.configure({ mode: "serial" });
@@ -26,7 +27,7 @@ test("POST 项目 template-first 路由 PhysicsScene 且试玩加载 canvas", as
   const id = project!.id!;
 
   const get = await page.request.get(`/api/projects/${id}`);
-  const saved = (await get.json()) as { spec?: { agenticModule?: { source?: string }; templateId?: string } };
+  const saved = (await get.json()) as { spec?: GameSpec };
   expect(saved.spec?.agenticModule?.source).toBeUndefined();
   expect(shouldUseAgenticRuntime(saved.spec!)).toBe(false);
   expect(expectedPhaserSceneName(saved.spec!)).toBe("PhysicsScene");

@@ -156,10 +156,7 @@ export async function GET(req: Request) {
       funnel: [
         { stage: "shareEvents", value: shareTotal },
         { stage: "referralSignups", value: referralSignups },
-        {
-          stage: "paidOrders",
-          value: paidOrders.length,
-        },
+        { stage: "allPaidOrders", value: paidOrders.length },
       ],
     },
     commerce: {

@@ -33,7 +33,7 @@ async function createAndOpenPlay(page: Page, prompt: string) {
   }
   const { project } = (await res.json()) as { project?: { id?: string } };
   expect(project?.id).toBeTruthy();
-  await gotoPlay(page, project!.id);
+  await gotoPlay(page, project!.id!);
   await expect(page.getByText(/继续共创|Keep co-creating/i)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("canvas").first()).toBeVisible({ timeout: 25_000 });
   return { id: project!.id!, spec, prompt };

@@ -3,6 +3,7 @@ import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { gotoPlay } from "./helpers/play";
+import type { GameSpec } from "@/lib/game-spec";
 
 /** 复制体 + 旧 agenticModule → 规范化 → Phaser PlatformerScene */
 test.describe.configure({ mode: "serial" });
@@ -39,7 +40,7 @@ test("duplicate 剥离 agenticModule 且 Phaser 平台专用 Scene 可玩", asyn
   expect(clone?.id).toBeTruthy();
 
   const get = await page.request.get(`/api/projects/${clone!.id}`);
-  const saved = (await get.json()) as { spec?: { agenticModule?: { source?: string }; templateId?: string } };
+  const saved = (await get.json()) as { spec?: GameSpec };
   expect(saved.spec?.agenticModule?.source).toBeUndefined();
   expect(shouldUseAgenticRuntime(saved.spec!)).toBe(false);
   expect(expectedPhaserSceneName(saved.spec!)).toBe("PlatformerScene");

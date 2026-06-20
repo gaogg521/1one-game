@@ -37,7 +37,7 @@ async function godotSurfaceVisible(page: import("@playwright/test").Page): Promi
     (await page.getByText("在线版构建失败").isVisible().catch(() => false)) ||
     (await page.getByText("导出失败").isVisible().catch(() => false)) ||
     (await page.getByText("build failed", { exact: false }).isVisible().catch(() => false));
-  return loading || iframe > 0 || cached || ready || err;
+  return loading || iframe || cached || ready || err;
 }
 
 for (const templateId of PRODUCT.godot.supportedTemplates) {

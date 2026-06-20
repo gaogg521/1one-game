@@ -5,6 +5,7 @@ import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { gotoPlay } from "./helpers/play";
+import type { GameSpec } from "@/lib/game-spec";
 
 /** Phase A 缺口：复杂 Agentic 路由入库 → AgenticScene 试玩 canvas */
 test.describe.configure({ mode: "serial" });
@@ -37,9 +38,7 @@ test("Agentic 复杂路由 persist 后试玩 AgenticScene", async ({ page }) => 
   const id = project!.id!;
 
   const get = await page.request.get(`/api/projects/${id}`);
-  const saved = (await get.json()) as {
-    spec?: { agenticModule?: { source?: string }; agenticPlayRoute?: string };
-  };
+  const saved = (await get.json()) as { spec?: GameSpec };
   expect(shouldUseAgenticRuntime(saved.spec!)).toBe(true);
   expect(saved.spec?.agenticPlayRoute).toBe("agentic");
 
