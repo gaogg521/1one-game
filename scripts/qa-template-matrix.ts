@@ -25,10 +25,10 @@ const CORE_MATRIX: Array<{
   { id: "shooter", prompt: "飞船射击消灭敌机" },
   { id: "coaster", prompt: "空中轨道过山车竞速" },
   { id: "puzzle", prompt: "色彩消除益智 match3" },
-  { id: "farming", prompt: "种植花园浇水收获" },
+  { id: "farming", prompt: "星露谷种地农场农业灌溉收获" },
   { id: "physics", prompt: "打击 dummy 假人解压" },
   { id: "chess", prompt: "国际象棋对弈" },
-  { id: "customization", prompt: "汽车涂色调色盘定制" },
+  { id: "customization", prompt: "汽车换装角色自定义造型定制 avatar maker" },
   { id: "strategy", prompt: "地图征服派兵占领区域" },
 ];
 

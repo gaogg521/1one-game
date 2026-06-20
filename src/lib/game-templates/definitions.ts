@@ -158,7 +158,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     godotExport: true,
     defaultSubtitle: "涂色定制 · 随机配色",
     llmSummary: "涂色/调色盘定制",
-    infer: [{ pattern: /涂色|调色|color palette|填色|配色定制/i, priority: 87 }],
+    infer: [{ pattern: /涂色|调色|color palette|填色|配色定制|换装|角色自定义|造型定制|avatar maker|捏脸|服装设计/i, priority: 87 }],
   },
   {
     id: "physics",
