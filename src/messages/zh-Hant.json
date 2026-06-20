@@ -1992,6 +1992,13 @@
     "fieldDisplayName": "顯示名稱",
     "fieldEmail": "電子郵件",
     "fieldRole": "角色",
+    "changePasswordTitle": "修改密碼",
+    "changePasswordCurrent": "目前密碼",
+    "changePasswordNew": "新密碼",
+    "changePasswordSubmit": "確認修改",
+    "changePasswordSuccess": "密碼已修改",
+    "changePasswordFailed": "修改失敗，請確認目前密碼是否正確",
+    "changePasswordNotSupported": "OAuth 帳號不支援在此修改密碼",
     "walletSummary": "目前 {balance} 點 · 方案 {plan}",
     "walletGuest": "暫無額度資訊，請前往方案頁。"
   },
@@ -2229,6 +2236,10 @@
     "quotaUpdated": "額度已更新",
     "quotaGrantFailed": "額度發放失敗",
     "grantQuota": "發額度",
+    "resetPassword": "重設密碼",
+    "resetPasswordPrompt": "請輸入新密碼（至少 8 位）",
+    "resetPasswordSuccess": "密碼已重設",
+    "resetPasswordFailed": "密碼重設失敗",
     "confirmHide": "確認隱藏該內容？隱藏後用戶將無法查看。",
     "conversionRateHint": "轉化率 {rate}%",
     "shareChannels": {
@@ -2589,6 +2600,7 @@
     "auditAction_work_moderate": "作品審核",
     "auditAction_work_moderate_batch": "批量審核",
     "auditAction_user_role": "角色變更",
+    "auditAction_user_reset_password": "密碼重設",
     "auditAction_runtime_config_update": "執行時配置",
     "auditAction_email_config_update": "郵件配置"
   },

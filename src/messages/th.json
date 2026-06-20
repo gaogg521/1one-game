@@ -1992,6 +1992,13 @@
     "fieldDisplayName": "ชื่อที่แสดง",
     "fieldEmail": "อีเมล",
     "fieldRole": "บทบาท",
+    "changePasswordTitle": "เปลี่ยนรหัสผ่าน",
+    "changePasswordCurrent": "รหัสผ่านปัจจุบัน",
+    "changePasswordNew": "รหัสผ่านใหม่",
+    "changePasswordSubmit": "บันทึก",
+    "changePasswordSuccess": "เปลี่ยนรหัสผ่านสำเร็จ",
+    "changePasswordFailed": "ล้มเหลว — ตรวจสอบรหัสผ่านปัจจุบัน",
+    "changePasswordNotSupported": "บัญชี OAuth ไม่สามารถเปลี่ยนรหัสผ่านได้",
     "walletSummary": "{balance} เครดิต · แพ็ก {plan}",
     "walletGuest": "ไม่มีข้อมูลโควตา — เปิดหน้าการเรียกเก็บเงิน"
   },
@@ -2229,6 +2236,10 @@
     "quotaUpdated": "อัปเดตโควตาแล้ว",
     "quotaGrantFailed": "การให้โควตาล้มเหลว",
     "grantQuota": "ให้โควตา",
+    "resetPassword": "รีเซ็ตรหัสผ่าน",
+    "resetPasswordPrompt": "กรุณาใส่รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)",
+    "resetPasswordSuccess": "รีเซ็ตรหัสผ่านสำเร็จ",
+    "resetPasswordFailed": "รีเซ็ตรหัสผ่านล้มเหลว",
     "confirmHide": "ซ่อนเนื้อหานี้? จะไม่สามารถมองเห็นได้โดยสาธารณะ",
     "conversionRateHint": "Conversion {rate}%",
     "shareChannels": {
@@ -2589,6 +2600,7 @@
     "auditAction_work_moderate": "Work moderation",
     "auditAction_work_moderate_batch": "Batch moderation",
     "auditAction_user_role": "Role change",
+    "auditAction_user_reset_password": "Password reset",
     "auditAction_runtime_config_update": "Runtime config",
     "auditAction_email_config_update": "Email config"
   },

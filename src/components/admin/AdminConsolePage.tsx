@@ -1742,6 +1742,23 @@ function UserActions({
       >
         {t("grantQuota")}
       </button>
+      <button
+        type="button"
+        className="text-sm text-yellow-400"
+        onClick={async () => {
+          const newPwd = window.prompt(t("resetPasswordPrompt"));
+          if (!newPwd || newPwd.length < 8) return;
+          const res = await fetch("/api/admin/users/reset-password", {
+            method: "POST",
+            headers: { ...headers(), "Content-Type": "application/json" },
+            body: JSON.stringify({ id: user.id, password: newPwd }),
+          });
+          if (res.ok) onNotice({ kind: "ok", text: t("resetPasswordSuccess") });
+          else onNotice({ kind: "error", text: t("resetPasswordFailed") });
+        }}
+      >
+        {t("resetPassword")}
+      </button>
     </div>
   );
 }

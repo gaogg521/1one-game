@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -73,6 +73,10 @@ export function UserProfilePanel() {
   const t = useTranslations("userConsole");
   const locale = useLocale() as AppLocale;
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const currentPwdRef = useRef<HTMLInputElement>(null);
+  const newPwdRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void fetch("/api/auth/session", { headers: mergeLocaleHeaders(locale) })
@@ -91,17 +95,88 @@ export function UserProfilePanel() {
     { label: t("fieldRole"), value: user.role },
   ];
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    const currentPassword = currentPwdRef.current?.value ?? "";
+    const newPassword = newPwdRef.current?.value ?? "";
+    if (!currentPassword || !newPassword) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { ...mergeLocaleHeaders(locale), "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (res.ok) {
+        setNotice({ kind: "ok", text: t("changePasswordSuccess") });
+        if (currentPwdRef.current) currentPwdRef.current.value = "";
+        if (newPwdRef.current) newPwdRef.current.value = "";
+      } else {
+        setNotice({ kind: "error", text: t("changePasswordFailed") });
+      }
+    } catch {
+      setNotice({ kind: "error", text: t("changePasswordFailed") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <section className="max-w-lg space-y-4 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
-      <h2 className="text-lg font-semibold">{t("tabProfile")}</h2>
-      <dl className="space-y-3">
-        {rows.map((row) => (
-          <div key={row.label} className="flex flex-col gap-0.5 border-b border-[color:var(--gc-border)] pb-3 last:border-0">
-            <dt className="text-xs text-[var(--gc-text-faint)]">{row.label}</dt>
-            <dd className="text-sm text-[var(--gc-text)]">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
+    <section className="max-w-lg space-y-6">
+      <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
+        <h2 className="text-lg font-semibold">{t("tabProfile")}</h2>
+        <dl className="mt-4 space-y-3">
+          {rows.map((row) => (
+            <div key={row.label} className="flex flex-col gap-0.5 border-b border-[color:var(--gc-border)] pb-3 last:border-0">
+              <dt className="text-xs text-[var(--gc-text-faint)]">{row.label}</dt>
+              <dd className="text-sm text-[var(--gc-text)]">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {user.username ? (
+        <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
+          <h2 className="text-base font-semibold">{t("changePasswordTitle")}</h2>
+          <form className="mt-4 space-y-3" onSubmit={(e) => void handleChangePassword(e)}>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-[var(--gc-text-faint)]">{t("changePasswordCurrent")}</label>
+              <input
+                ref={currentPwdRef}
+                type="password"
+                autoComplete="current-password"
+                required
+                minLength={8}
+                className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-3 py-2 text-sm text-[var(--gc-text)] outline-none focus:ring-1 focus:ring-[color:var(--gc-accent)]"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-[var(--gc-text-faint)]">{t("changePasswordNew")}</label>
+              <input
+                ref={newPwdRef}
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-3 py-2 text-sm text-[var(--gc-text)] outline-none focus:ring-1 focus:ring-[color:var(--gc-accent)]"
+              />
+            </div>
+            {notice ? (
+              <p className={`text-sm ${notice.kind === "ok" ? "text-emerald-400" : "text-rose-400"}`}>{notice.text}</p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {saving ? "…" : t("changePasswordSubmit")}
+            </button>
+          </form>
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--gc-muted)]">{t("changePasswordNotSupported")}</p>
+      )}
     </section>
   );
 }

@@ -1,6 +1,6 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-20（会话 32 · 后台管理 Bug 修复 + 社交板块审计）
+**最后更新**：2026-06-21（会话 34 · 模板路由系统级重构 + Creative Brief 牌桌感知 + i18n 关键词）
 **项目**：游戏生成与创意内容平台（Next.js + Phaser + Prisma）
 
 ---
@@ -8,8 +8,53 @@
 ## 当前状态
 
 ### 编译状态
-- `npx tsc --noEmit` → **src/ 零错误**（e2e/ + definitions.ts + messages.ts 有预存错误，均与本次改动无关）
-- 新增 CreateQuickStart 组件 TS 通过；5 locale JSON 全部校验 OK
+- `npx tsc --noEmit` → **src/ 零错误**
+- `npx tsx scripts/test-template-routing.ts` → **68/68 通过**（含 11 个英文 i18n 用例）
+- `npx tsx scripts/test-template-selector.ts` → **102/102 通过**（既有测试无回归）
+
+### 本会话修改文件（Session 34 · 模板路由系统级重构）
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/generate-spec.ts` | **applyTemplateHint** 新增 stale blueprint body 剥离逻辑（旧 templateId 的 blueprint 字段在新 templateId 下不再适用时删除，避免 LLM 输出 towerDefense body 后被改成 dou-dizhu 仍渲染塔防）；**finalizeSpec** 扩展为全模板回填（覆盖 towerDefense/puzzle/chess family/shooter/collector/survivor/avoider/platformer/farming/strategy/coaster/customization/rhythm/sports/card family/fighting/moba/horror/mahjong/tetris/endless-runner/fruit-ninja）；**SYSTEM prompt 决策树**重写为覆盖全部 59 模板（旧版只覆盖 ~15 个，斗地主/麻将/UNO 等完全没出现），去重（红警/星露谷/文明原各重复 2 次），修矛盾（CF→shooter vs 狙击→sniper）；新增示例 F（斗地主）+ 示例 G（4 人麻将）教 LLM 卡牌真玩法 spec 怎么写（winScore=1、中性占位数值、弱节奏 director）；新增卡牌专项说明段（禁止套用动作游戏波次叙事） |
+| `src/lib/game-templates/definitions.ts` | infer 优先级系统调整：斗地主 96→125（+115 次级）、麻将 95→110/120、麻将接龙 96→125、UNO 96→125、poker 96→115、solitaire 96→115、blackjack 96→115、endless-runner 95→115、strategy 86→95（补红警/星际/帝国等关键词）、sniper 92→115（补狙击精英/狙击手/瞄准镜）、physics 96→110（补愤怒小鸟/弹射/弹球）、garden 92→110、pokemon-battle 95→115、breakout 96→115、turn-based 92→110；斗地主+麻将补英文关键词（fight the landlord/three player card/bid landlord/spring counter/four player mahjong） |
+| `src/lib/template-selector.ts` | 斗地主 priority 98→125 + 移除过泛的"出牌"关键词（会误夺 UNO）；UNO 96→125；mahjong 96→110（高于 pong 96，因 pong 碰是麻将术语）；mahjong-solitaire 97→115（高于 mahjong）；garden 92→110（高于 tycoon）；towerDefense 补英文（plants vs zombies/tower defense/defend against waves）；shooter 补英文（raiden/vertical shooter/shmup/aircraft battle）；斗地主补英文（fight the landlord/landlord card/bid landlord/spring counter/three player poker） |
+| `src/lib/creative-brief/genre-packs.ts` | tower-defense regex 收紧（移除过泛的 `波次\|防线\|萝卜` 独立词，避免误夺含"波次"的非塔防 prompt）；**新增 card-table genre pack**（卡牌/棋类真玩法专用：斗地主/麻将/UNO/扑克/接龙/21点/象棋/跳棋/军棋/飞行棋）—— world/scenes/factions/units 全部改用牌桌语义（"牌桌对局场景/手牌/出牌区/AI 对手"），不再输出"边境要塞/守军/箭塔"等动作世界观；gameplayHints 明确禁止套用 shooter/towerDefense 波次叙事；补英文关键词（three player card/fight the landlord/four player mahjong） |
+| `scripts/test-template-routing.ts` | **新建**：模板路由回归夹具，68 个用例（57 中文 + 11 英文 i18n），断言三套检测器（detectTemplateFromPrompt/inferTemplateFromPrompt/selectGenrePack）一致命中预期 templateId |
+
+### 根因分析（Session 34 解决的系统性问题）
+
+**问题 A · 路由漂移**：3 套并行检测器（template-selector.ts / game-templates/infer.ts / creative-brief/genre-packs.ts）规则和优先级互不一致，链路混用导致同一 prompt 在三层得到不同结论。
+
+**问题 B · stale blueprint body**：applyTemplateHint 只改 templateId 标签不清理旧 blueprint body —— LLM 无视【系统强制】前缀输出 towerDefense body 后，applyTemplateHint 把 templateId 改成 dou-dizhu 但 spec.towerDefense 字段还在，运行时可能据此渲染塔防。
+
+**问题 C · finalizeSpec 回填不全**：只为 7 个模板回填 blueprint，dou-dizhu/mahjong/tetris 等 15+ 模板即使 templateId 正确 blueprint 也是空的。
+
+**问题 D · LLM SYSTEM prompt 覆盖不足**：决策树只覆盖 ~15 个模板（共 59 个），斗地主/麻将/UNO 等完全没出现，LLM 收到这类 prompt 只能瞎编或套到最近模板；决策树还有重复条目（红警/星露谷/文明各 2 次）和矛盾（CF→shooter vs 狙击→sniper）。
+
+**问题 E · Creative Brief 动作游戏中心化**：每个 genre pack 强制输出 world/scenes/factions/units/weapons/vfx，对卡牌/棋类无意义；这份 brief 还会格式化后塞给 game-spec LLM 当上下文 —— LLM 收到"边境要塞/守军/箭塔"当斗地主上下文，扩写当然乱套。
+
+**问题 F · i18n 缺口**：关键词规则严重偏中文，英文 prompt（如 "three player card game bid for landlord"）无法触发 dou-dizhu。
+
+### 下次启动清单
+1. `npm run dev`（端口 8888）→ 访问 `http://localhost:8888/zh-Hans/create`
+2. 测试斗地主：输入"斗地主三人扑克，叫地主出牌比大小，支持春天反春，AI 互助配合" → 确认生成的游戏是斗地主（不是塔防）
+3. 测试英文：切英文 UI，输入 "Three player card game, bid for landlord, play cards to compare" → 确认触发 dou-dizhu
+4. 测试麻将/UNO/象棋等卡牌棋类 → 确认 brief 不再输出"边境要塞/守军/箭塔"
+5. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
+6. 生产部署后回归 17 款样品玩法审计
+
+---
+
+## 历史会话记录
+
+### 本会话修改文件（Session 33 · 管理后台密码重置 + 用户自改密码）
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/app/api/admin/users/reset-password/route.ts` | 新建：管理员重置任意用户密码（POST），需有 username，写入审计日志 |
+| `src/app/api/auth/change-password/route.ts` | 新建：用户自改密码（POST），需验证旧密码，仅限 username 登录账号 |
+| `src/components/admin/AdminConsolePage.tsx` | UserActions 新增「重置密码」黄色按钮，prompt 输入新密码后 POST 到 reset-password |
+| `src/components/admin/UserConsolePanels.tsx` | UserProfilePanel 拆分为信息展示 + 修改密码表单两个卡片；username 账号才显示改密码表单 |
+| `src/messages/{en,zh-Hans,zh-Hant,ms,th}.json` | 新增 adminPage.resetPassword* 和 userConsole.changePassword* 及 auditAction_user_reset_password key（5语言全覆盖） |
 
 ### 本会话修改文件（Session 32 · 后台 Bug 修复 + 社交管理补全）
 | 文件 | 改动摘要 |

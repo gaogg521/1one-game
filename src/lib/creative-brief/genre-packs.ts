@@ -99,7 +99,7 @@ export const GENRE_PACKS: GenrePack[] = [
   {
     id: "tower-defense",
     label: "塔防防线",
-    match: [/塔防|保卫|波次|箭塔|炮塔|防线|萝卜|植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙|tower\s*defense|\btd\b/i],
+    match: [/塔防|保卫萝卜|植物大战僵尸|pvz|plants\s*vs\s*zombies|植物塔防|豌豆射手|向日葵|坚果墙|箭塔|炮塔|防御塔|tower\s*defense|\btd\b/i],
     defaultTemplate: "towerDefense",
     defaultTone: "neutral",
     logline: (u) => `沿固定路线抵御 ${u.slice(0, 24) || "敌军"} 的多波进攻，建造与升级防御塔守住基地。`,
@@ -417,6 +417,53 @@ export const GENRE_PACKS: GenrePack[] = [
       musicProfile: "organic",
     },
     negatives: ["血腥", "恐怖", "高饱和霓虹"],
+  },
+  // ── 牌桌对局（卡牌/棋类真玩法：斗地主/麻将/UNO/扑克/接龙/21点/象棋/跳棋等）
+  // 这类游戏不需要"世界观/势力/武器"，brief 字段全部改用牌桌语义，
+  // 避免把动作游戏的"边境要塞/守军/箭塔"塞给卡牌游戏（导致 LLM 扩写乱套）。
+  {
+    id: "card-table",
+    label: "牌桌对局",
+    match: [
+      /斗地主|叫地主|春天反春|三人扑克|三人牌|dou\s*dizhu|fight\s*the\s*landlord|three\s*player\s*card|three\s*player\s*poker|bid\s*landlord/i,
+      /麻将|mahjong|碰杠胡|riichi|国标麻将|日本麻将/i,
+      /\buno\b|乌诺牌|优诺牌/i,
+      /扑克|poker|德州扑克|texas\s*hold|梭哈/i,
+      /纸牌接龙|solitaire|klondike|蜘蛛纸牌/i,
+      /21\s*点|blackjack|二十一点/i,
+      /中国象棋|象棋|围棋|国际象棋|\bchess\b|五子棋/i,
+      /国际跳棋|跳棋|checkers|draughts/i,
+      /中国跳棋|chinese\s*checkers/i,
+      /军棋|陆战棋|junqi/i,
+      /飞行棋|飞机棋|aeroplane\s*chess/i,
+    ],
+    defaultTemplate: "auto",
+    defaultTone: "neutral",
+    logline: (u) => `牌桌对局：${u.slice(0, 36) || "按规则出牌比胜负"}，AI 对手配合，一局定胜负。`,
+    world: "牌桌/棋盘对局场景，2-4 人围坐，规则清晰可读。",
+    scenes: ["发牌/起手配牌阶段", "叫牌/出牌/走棋博弈阶段", "终局结算与胜负判定"],
+    factions: ["玩家", "AI 对手"],
+    units: ["手牌/棋子", "出牌区/棋盘", "底牌/牌堆"],
+    weapons: [],
+    vfx: ["出牌/落子动画", "得分提示", "胜负结算特效"],
+    artStyle: ["牌桌清晰可读", "卡牌/棋子图标明确", "适度对比", "无动作游戏式爆炸光效"],
+    mood: ["专注", "博弈", "胜负分明"],
+    gameplayHints: [
+      "templateId 必须精确（斗地主=dou-dizhu，4人麻将=mahjong，麻将接龙=mahjong-solitaire，UNO=uno，扑克=poker，接龙=solitaire，21点=blackjack，象棋=chess 等）",
+      "winScore 通常为 1（一局定胜负）；lives 为 1",
+      "playerSpeed/hazardSpeed/jumpStrength/gravity 填中性占位（如 200/100/420/980），不要套动作游戏数值",
+      "director 节奏弱化：intensity 0.3-0.5，events 4-5 个即可",
+      "labels 贴合玩法：player=对局角色，hazard=对手，collectible=牌/番数/底牌",
+      "禁止套用 shooter/towerDefense 的波次/编队/弹幕叙事",
+    ],
+    themeHints: {
+      backgroundColor: "#1a1a2e",
+      playerColor: "#fbbf24",
+      hazardColor: "#ef4444",
+      collectibleColor: "#a3e635",
+      musicProfile: "organic",
+    },
+    negatives: ["动作游戏式波次叙事", "边境要塞/守军/箭塔等动作世界观", "高饱和霓虹", "弹幕爆炸光效", "畸形人体"],
   },
 ];
 

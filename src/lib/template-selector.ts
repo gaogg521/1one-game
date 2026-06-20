@@ -18,10 +18,11 @@ const RULES: Rule[] = [
     templateId: "towerDefense",
     priority: 100,
     keywords: [
-      "保卫萝卜", "植物大战僵尸", "pvz", "豌豆射手", "豌豆", "向日葵", "坚果墙", "寒冰菇",
+      "保卫萝卜", "植物大战僵尸", "pvz", "plants vs zombies", "豌豆射手", "豌豆", "向日葵", "坚果墙", "寒冰菇",
       "kingdom rush", "王国保卫战", "皇家守卫军", "猴子塔防", "bloons", "btd",
       "放置防守", "造塔", "建塔", "塔防", "箭塔", "波次敌人", "建防线",
       "路径防守", "迎击波次", "种植物打僵尸", "炮塔防守",
+      "tower defense", "tower defence", "defense tower", "plant tower", "defend against waves",
     ],
   },
   // ── 平台跳跃
@@ -42,9 +43,10 @@ const RULES: Rule[] = [
       "雷电", "1942", "太空侵略者", "space invaders", "东方project", "弹幕射击",
       "合金弹头", "metal slug", "星际飞机", "飞机大战", "飞船", "太空战",
       "消灭敌机", "竖版飞行", "竖版射击", "击落敌机",
+      "raiden", "vertical shooter", "shoot em up", "shmup", "aircraft battle", "plane shooter",
       // 经典俯视角射击（Battle City 风格）
       "坦克大战", "坦克战", "经典坦克", "战车大战", "战车对战", "battle city",
-      "battlecity", "tank battle", "坦克射击", "俯视角射击",
+      "battlecity", "tank battle", "坦克射击", "俯视角射击", "tank shooter",
     ],
   },
   // ── 吸血鬼幸存者类
@@ -393,28 +395,35 @@ const RULES: Rule[] = [
   // 麻将（4 人麻将）
   {
     templateId: "mahjong",
-    priority: 96,
+    priority: 110,
     keywords: [
       "国标麻将", "日本麻将", "riichi", "richi麻将", "麻将对局", "打麻将",
-      "四人麻将", "麻将", "mahjong",
+      "四人麻将", "麻将", "mahjong", "four player mahjong", "4 player mahjong",
     ],
   },
   // 麻将接龙/消除（priority 97 高于 solitaire 96 避免"接龙"误夺）
   {
     templateId: "mahjong-solitaire",
-    priority: 97,
+    priority: 115,
     keywords: ["麻将接龙", "麻将消除", "麻将连连看", "mahjong solitaire", "mahjong connect"],
   },
-  // 斗地主（priority 97 高于 poker 96 避免"扑克"误夺）
+  // 斗地主（priority 125 高于 poker 96 避免"扑克"误夺；priority 125 高于 card 88 避免被"卡牌"误夺）
+  // 注：不放"出牌"——太泛，会误夺 UNO/扑克等其他出牌类
   {
     templateId: "dou-dizhu",
-    priority: 97,
-    keywords: ["斗地主", "dou dizhu", "dou di zhu", "斗地主游戏"],
+    priority: 125,
+    keywords: [
+      "斗地主", "都斗地主", "dou dizhu", "dou di zhu", "斗地主游戏",
+      "fight the landlord", "landlord card",
+      "叫地主", "春天反春", "春反", "地主牌", "农民",
+      "三人牌", "三人扑克", "三人斗地主",
+      "bid landlord", "spring counter", "three player poker", "three player card",
+    ],
   },
   // UNO
   {
     templateId: "uno",
-    priority: 96,
+    priority: 125,
     keywords: ["uno", "乌诺牌", "优诺牌"],
   },
   // 跳棋（国际跳棋）
@@ -468,10 +477,10 @@ const RULES: Rule[] = [
     priority: 92,
     keywords: ["填色", "涂色", "coloring", "color by number", "数字填色", "涂色画"],
   },
-  // 花园种植
+  // 花园种植（priority 110 高于 tycoon 92 避免"经营"误夺）
   {
     templateId: "garden",
-    priority: 92,
+    priority: 110,
     keywords: ["花园", "garden game", "种花", "花园经营", "花园模拟"],
   },
   // 咖啡馆（priority 93 高于 tycoon 92 避免"经营"误夺）
@@ -495,12 +504,22 @@ const RULES: Rule[] = [
 export function detectTemplateFromPrompt(prompt: string): GameTemplateId | null {
   const normalized = prompt.toLowerCase().replace(/\s+/g, "");
   let best: Rule | null = null;
+  const matches: Array<{ templateId: GameTemplateId; priority: number; keyword: string }> = [];
 
   for (const rule of RULES) {
     const hit = rule.keywords.some((kw) => normalized.includes(kw.toLowerCase().replace(/\s+/g, "")));
-    if (hit && (!best || rule.priority > best.priority)) {
-      best = rule;
+    if (hit) {
+      const hitKeyword = rule.keywords.find((kw) => normalized.includes(kw.toLowerCase().replace(/\s+/g, ""))) || "";
+      matches.push({ templateId: rule.templateId, priority: rule.priority, keyword: hitKeyword });
+      if (!best || rule.priority > best.priority) {
+        best = rule;
+      }
     }
+  }
+
+  // 调试日志：当有多个匹配时，记录详情（便于诊断路由错误）
+  if (matches.length > 1) {
+    console.debug(`[template-selector] 多个匹配: ${matches.map((m) => `${m.templateId}(${m.priority}|"${m.keyword}"`).join(", ")}; 选中: ${best?.templateId}`);
   }
 
   return best?.templateId ?? null;

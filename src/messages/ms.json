@@ -1992,6 +1992,13 @@
     "fieldDisplayName": "Nama paparan",
     "fieldEmail": "E-mel",
     "fieldRole": "Peranan",
+    "changePasswordTitle": "Tukar Kata Laluan",
+    "changePasswordCurrent": "Kata laluan semasa",
+    "changePasswordNew": "Kata laluan baru",
+    "changePasswordSubmit": "Simpan",
+    "changePasswordSuccess": "Kata laluan ditukar",
+    "changePasswordFailed": "Gagal — semak kata laluan semasa anda",
+    "changePasswordNotSupported": "Akaun OAuth tidak boleh menukar kata laluan di sini",
     "walletSummary": "{balance} kredit · pelan {plan}",
     "walletGuest": "Tiada maklumat kuota — buka halaman bil."
   },
@@ -2229,6 +2236,10 @@
     "quotaUpdated": "Kuota dikemas kini",
     "quotaGrantFailed": "Pemberian kuota gagal",
     "grantQuota": "Beri kuota",
+    "resetPassword": "Set semula kata laluan",
+    "resetPasswordPrompt": "Masukkan kata laluan baru (min 8 aksara)",
+    "resetPasswordSuccess": "Kata laluan ditetapkan semula",
+    "resetPasswordFailed": "Tetapan semula kata laluan gagal",
     "confirmHide": "Sembunyikan kandungan ini? Ia tidak akan kelihatan kepada umum.",
     "conversionRateHint": "Conversion {rate}%",
     "shareChannels": {
@@ -2589,6 +2600,7 @@
     "auditAction_work_moderate": "Work moderation",
     "auditAction_work_moderate_batch": "Batch moderation",
     "auditAction_user_role": "Role change",
+    "auditAction_user_reset_password": "Password reset",
     "auditAction_runtime_config_update": "Runtime config",
     "auditAction_email_config_update": "Email config"
   },

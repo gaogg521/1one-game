@@ -18,6 +18,21 @@ import { buildShooterBlueprint } from "@/lib/shooter-blueprint";
 import { buildCollectorBlueprint } from "@/lib/collector-blueprint";
 import { buildSurvivorBlueprint } from "@/lib/survivor-blueprint";
 import { buildAvoiderBlueprint } from "@/lib/avoider-blueprint";
+import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
+import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildStrategyBlueprint } from "@/lib/strategy-blueprint";
+import { buildCoasterBlueprint } from "@/lib/coaster-blueprint";
+import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
+import { buildRhythmBlueprint } from "@/lib/rhythm-blueprint";
+import { buildSportsBlueprint } from "@/lib/sports-blueprint";
+import { buildCardBlueprint } from "@/lib/card-blueprint";
+import { buildFightingBlueprint } from "@/lib/fighting-blueprint";
+import { buildMobaBlueprint } from "@/lib/moba-blueprint";
+import { buildHorrorBlueprint } from "@/lib/horror-blueprint";
+import { buildMahjongBlueprint } from "@/lib/mahjong-blueprint";
+import { buildTetrisBlueprint } from "@/lib/tetris-blueprint";
+import { buildEndlessRunnerBlueprint } from "@/lib/endless-runner-blueprint";
+import { buildFruitNinjaBlueprint } from "@/lib/fruit-ninja-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
@@ -137,45 +152,96 @@ ${buildLlmTemplateCatalogLines()}
 【示例 E · 植物大战僵尸风格塔防 → 卡通自然风】
 {"version":1,"templateId":"towerDefense","title":"向日葵保卫战 · 植物抗尸录","theme":{"backgroundColor":"#1a2a0e","playerColor":"#86efac","hazardColor":"#78350f","collectibleColor":"#fde047","particleTint":"#bbf7d0"},"presentation":{"assetStyle":"cute-cartoon","musicProfile":"organic","hudFontStyle":"handwritten"},"gameplay":{"playerSpeed":220,"hazardSpeed":140,"spawnIntervalMs":680,"winScore":10,"lives":3,"arenaPadding":40,"jumpStrength":420,"gravity":980,"startingCoins":150,"baseHealth":50},"labels":{"player":"豌豆射手","hazard":"腐烂僵尸","collectible":"阳光","subtitle":"植物守护家园，波波僵尸来袭，用阳光造更多炮台！"},"director":{"intensity":0.62,"acts":[{"at":0,"label":"开场","modifiers":["小僵热身"]},{"at":0.33,"label":"加速","modifiers":["elite","rush"]},{"at":0.66,"label":"变奏","modifiers":["armored","doubleSpawn"]},{"at":1,"label":"终局","modifiers":["boss","rush"]}],"events":[{"at":0.18,"type":"coinRain","strength":0.6,"durationMs":4500,"title":"阳光爆发","message":"快速收集阳光，双倍资源"},{"at":0.38,"type":"miniBoss","strength":0.72,"durationMs":9000,"title":"铁桶僵尸","message":"重甲僵尸入侵，集火击破"},{"at":0.58,"type":"breathingRoom","strength":0.4,"durationMs":4000,"title":"喘息时机","message":"波次间隙，赶快补充防线"},{"at":0.78,"type":"finalBarrage","strength":0.9,"durationMs":12000,"title":"僵尸潮","message":"全图压境，坚守到最后"}]}}
 
-五个示例之间**几乎没有共用片段**：模板、风格、配色、节奏、事件类型、文案、HUD 字体倾向全部不同。你应当从中学到「按 prompt 给完全不同的设计稿」的能力，而不是套同一组数值。
+【示例 F · 斗地主 → 真玩法卡牌风（非动作/塔防）】
+{"version":1,"templateId":"dou-dizhu","title":"三人斗地主 · 叫牌比大小","theme":{"backgroundColor":"#1a1a2e","playerColor":"#fbbf24","hazardColor":"#ef4444","collectibleColor":"#a3e635","particleTint":"#64748b"},"presentation":{"assetStyle":"cute-cartoon","musicProfile":"organic","hudFontStyle":"sans"},"gameplay":{"playerSpeed":200,"hazardSpeed":100,"spawnIntervalMs":1000,"winScore":1,"lives":1,"arenaPadding":36,"jumpStrength":420,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"地主","hazard":"农民联盟","collectible":"底牌","subtitle":"3 人扑克 · 叫地主 · 出牌比大小 · 支持春天反春"},"director":{"intensity":0.45,"acts":[{"at":0,"label":"开场","modifiers":["发牌"]},{"at":0.33,"label":"加速","modifiers":["叫地主"]},{"at":0.66,"label":"变奏","modifiers":["出牌博弈"]},{"at":1,"label":"终局","modifiers":["决胜负"]}],"events":[{"at":0.15,"type":"breathingRoom","strength":0.4,"durationMs":4000,"title":"理牌","message":"整理手牌，规划出牌顺序"},{"at":0.4,"type":"comboBonus","strength":0.6,"durationMs":4000,"title":"连对奖励","message":"连出对子，压迫对手"},{"at":0.65,"type":"goalShift","strength":0.7,"durationMs":4000,"title":"炸弹时机","message":"关键时刻扔炸弹翻盘"},{"at":0.9,"type":"finalBarrage","strength":0.85,"durationMs":6000,"title":"终局出牌","message":"出完手牌即胜"}]}}
 
-## 模板路由决策树（优先级从高到低，命中即停止）
+【示例 G · 4 人麻将 → 真玩法牌桌风】
+{"version":1,"templateId":"mahjong","title":"四人麻将 · 碰杠胡","theme":{"backgroundColor":"#0f1f1a","playerColor":"#fde047","hazardColor":"#f87171","collectibleColor":"#86efac","particleTint":"#475569"},"presentation":{"assetStyle":"cute-cartoon","musicProfile":"organic","hudFontStyle":"sans"},"gameplay":{"playerSpeed":200,"hazardSpeed":100,"spawnIntervalMs":1000,"winScore":1,"lives":1,"arenaPadding":36,"jumpStrength":420,"gravity":980,"startingCoins":120,"baseHealth":48},"labels":{"player":"玩家","hazard":"对手","collectible":"番数","subtitle":"4 人对局 · 万条筒 108 张 · 摸打碰杠胡 · 听牌提示"},"director":{"intensity":0.42,"acts":[{"at":0,"label":"开场","modifiers":["起手配牌"]},{"at":0.33,"label":"加速","modifiers":["中盘博弈"]},{"at":0.66,"label":"变奏","modifiers":["听牌阶段"]},{"at":1,"label":"终局","modifiers":["和牌决胜负"]}],"events":[{"at":0.2,"type":"breathingRoom","strength":0.4,"durationMs":4000,"title":"理牌","message":"整理手牌规划牌路"},{"at":0.45,"type":"comboBonus","strength":0.6,"durationMs":4000,"title":"碰杠连击","message":"连续碰杠加快节奏"},{"at":0.7,"type":"goalShift","strength":0.7,"durationMs":4000,"title":"听牌","message":"单等一张和牌"},{"at":0.92,"type":"finalBarrage","strength":0.85,"durationMs":5000,"title":"和牌","message":"率先和牌胜出"}]}}
 
-**【第一优先：专有游戏名/品牌词直接映射】**
-- 保卫萝卜 / 保卫 / 萝卜 / 植物大战僵尸 / PvZ / 豌豆射手 / 豌豆 / 向日葵 / 坚果墙 / 寒冰菇 / Kingdom Rush / 王国保卫战 / 皇家守卫军 / 猴子塔防 / Bloons / BTD → **towerDefense**
-- 超级玛丽 / 马里奥 / Super Mario / 索尼克 / Sonic / 恶魔城 / Castlevania / 银河恶魔城 / Metroidvania / 几何冲刺 / Geometry Dash / 空洞骑士 / Hollow Knight / 蔚蓝 / Celeste → **platformer**
-- 雷电 / 1942 / 太空侵略者 / Space Invaders / 东方 Project / 弹幕射击 / 合金弹头 / Metal Slug / 火力全开 / 星际飞机 → **shooter**
-- 坦克大战 / Battle City / 经典坦克战 / 战车对战 / 俯视角坦克射击 → **shooter**（俯视角自动开火，把"敌舰"理解为"敌方坦克"）
-- 红警 / 红色警戒 / 命令与征服 / 星际争霸 / 魔兽争霸 / 帝国时代 → **strategy**
+七个示例之间**几乎没有共用片段**：模板、风格、配色、节奏、事件类型、文案、HUD 字体倾向全部不同。你应当从中学到「按 prompt 给完全不同的设计稿」的能力，而不是套同一组数值。**注意示例 F/G 是卡牌真玩法，gameplay 数值是中性占位、winScore=1、director 偏弱节奏 —— 不要把动作游戏的波次/弹幕叙事套到卡牌上。**
+
+## 模板路由决策树（覆盖全部 ${59} 个模板，优先级从高到低，命中即停止）
+
+**【第零优先：明确点名专有 IP/品牌词直接映射】**
+- 保卫萝卜 / 植物大战僵尸 / PvZ / 豌豆射手 / 向日葵 / 坚果墙 / 寒冰菇 → **towerDefense**
+- 超级玛丽 / 马里奥 / Super Mario / 索尼克 / Sonic / 恶魔城 / 银河恶魔城 / Metroidvania / 几何冲刺 / Geometry Dash / 空洞骑士 / Hollow Knight / 蔚蓝 / Celeste → **platformer**
+- 雷电 / 1942 / 太空侵略者 / Space Invaders / 东方 Project / 合金弹头 / Metal Slug → **shooter**
+- 魂斗罗 / Contra / Run and Gun → **run-and-gun**
+- 坦克大战 / Battle City → **shooter**（俯视角自动开火，"敌舰"理解为"敌方坦克"）
+- 红警 / 红色警戒 / 命令与征服 / 星际争霸 / 魔兽争霸 / 帝国时代 / Civilization / 文明 → **strategy**
+- 部落冲突 / Clash of Clans → **strategy**
 - 吸血鬼幸存者 / Vampire Survivors / 黎明前20分钟 / 20 Minutes Till Dawn / 弹壳特攻队 → **survivor**
-- 消消乐 / 三消 / Candy Crush / 宝石迷阵 / Bejeweled / 连连看 / 记忆翻牌 / 数独 → **puzzle**
+- 暗黑 / Diablo / Hack and Slash / 刷装备 / 地牢爬塔 / Dungeon Crawler → **hack-and-slash**
+- 愤怒的小鸟 / Angry Birds → **physics**
+- 神庙逃亡 / Temple Run / 地铁跑酷 / Subway Surfers → **endless-runner**
+- 水果忍者 / Fruit Ninja → **fruit-ninja**
+- 割绳子 / Cut the Rope → **cut-the-rope**
+- 宝可梦 / Pokemon / 口袋妖怪 / 宠物对战 / 宠物小精灵 → **pokemon-battle**
+- 玩具熊的五夜后宫 / Five Nights at Freddy's / FNAF / Freddy → **horror**
+- 自走棋 / Auto Battler / Auto Chess / TFT / Teamfight Tactics / 云顶之弈 → **auto-battler**
+- 火焰纹章 / Fire Emblem / 高级战争 / Advance Wars → **turn-based**
+- 太鼓达人 / Taiko / OSU / Cytus / Deemo / Beat Saber / 节奏光剑 → **rhythm**
+- 我的世界 / Minecraft / 史蒂夫 / 苦力怕 → **platformer**（blocky-pixel 风格）
+- 过山车 / 过山车大亨 / RollerCoaster Tycoon → **coaster**
+- 模拟城市 / Sim City / Theme Park / 大亨 / Tycoon → **tycoon**
+- 星露谷 / Stardew Valley → **farming**
+- 开心消消乐 / Candy Crush / 宝石迷阵 / Bejeweled → **puzzle**（match3 模式）
+- 2048 / Suika / 西瓜合成 / 合成西瓜 / 数字合成 / Number Merge → **merge**
+- 俄罗斯方块 / Tetris → **tetris**
+- 打砖块 / Breakout / Arkanoid / Brick Breaker → **breakout**
+- Pong / 乒乓 → **pong**
+- 打地鼠 / Whack a Mole → **whack-a-mole**
+- 推箱子 / Sokoban / 华容道 / 扫雷 / Minesweeper → **puzzle**
+- 数独 / 拼图 / 记忆翻牌 / 连连看 → **puzzle**
+- 字谜 / Wordle / Crossword / 填字 / 猜词 → **word-game**
+- 密室逃脱 / Escape Room → **escape-room**
+- 找茬 / Hidden Object / Spot the Difference → **hidden-object**
+- 推理 / 侦探 / 破案 / 悬疑 / Mystery / Detective → **mystery**
 - 中国象棋 / 象棋 / 围棋 / 国际象棋 / Chess / 五子棋 → **chess**
-- 过山车 / 过山车大亨 / RollerCoaster Tycoon / 矿车竞速 / 3D 轨道 → **coaster**
-- 星露谷 / Stardew Valley / 种地 / 农场 / 农业 / 灌溉 / 收获 / 丰收 / 开心农场 → **farming**
-- 文明 / Civilization / 部落冲突 / Clash of Clans / 即时战略 / RTS / 占领 / 领地 / 节点控制 → **strategy**
-- 红警 / 红色警戒 / 命令与征服 / 星际争霸 / 魔兽争霸 / 帝国时代 → **strategy**
-- 赛车 / 竞速 / F1 / 卡丁车 / 马里奥赛车 / 极品飞车 → **racing**
-- 狙击 / Sniper Elite / 精准瞄准 / 狙击手 → **sniper**
-- 潜行 / 隐身 / 刺杀 / 合金装备 / Splinter Cell / 不被发现 → **stealth**
-- 愤怒的小鸟 / 弹射 / 弹球 / 碰碰球 / 台球 → **physics**
-- 捏脸 / 换装 / 角色自定义 / 服装设计 / avatar maker → **customization**
-- 星露谷 / Stardew Valley / 种地 / 农场 / 农业 / 灌溉 / 收获 / 丰收 / 开心农场 → **farming**
-- 文明 / Civilization / 部落冲突 / Clash of Clans / 即时战略 / RTS / 占领 / 领地 / 节点控制 → **strategy**
-- 穿越火线 / 狙击 / CF / 枪战 / 射击游戏但以枪为主武器+第一视角 → **shooter**（注：竖版飞机>shooter；FPS词汇>shooter）
-
-**【第二优先：玩法描述词映射】**
-- 放置防守 / 波次 / 建防线 / 造塔 / 塔防 / 箭塔 / 种植物打 / 抵御波次 / 路径防守 / 迎击波次 → **towerDefense**
-- 横版 / 跳跃 / 平台 / 闯关 / 多层地形 / 上下跳 / 跑酷关卡 / 收集道具过关 / 关卡地图 → **platformer**
-- 飞船 / 飞机 / 太空战 / 弹幕 / 消灭敌机 / 竖版飞行 / 击落 → **shooter**
-- 坦克 / 战车 / 战车对战 / 俯视角坦克 / 坦克射击 → **shooter**（Battle City 风格；非塔防）
-- 推箱子 / 华容道 / 扫雷 / 2048 → **puzzle**
-- 炸弹人 / 泡泡龙 → **avoider**
+- 国际跳棋 / Checkers / Draughts → **checkers**
+- 中国跳棋 / Chinese Checkers / 六角跳棋 → **chinese-checkers**
+- 军棋 / 陆战棋 → **junqi**
+- 飞行棋 / 飞机棋 → **aeroplane-chess**
+- 国标麻将 / 日本麻将 / Riichi / 四人麻将 / 打麻将 / Mahjong → **mahjong**
+- 麻将接龙 / 麻将消除 / 麻将连连看 / Mahjong Solitaire / Mahjong Connect → **mahjong-solitaire**
+- 斗地主 / Dou Dizhu / 三人扑克 / 叫地主 / 春天反春 → **dou-dizhu**
+- UNO / 乌诺牌 → **uno**
+- 扑克 / Poker / 德州扑克 / Texas Hold / 梭哈 → **poker**
+- 接龙 / Solitaire / Klondike / 蜘蛛纸牌 / Spider Solitaire → **solitaire**
+- 21 点 / Blackjack / 二十一点 → **blackjack**
+- 街霸 / Street Fighter / 拳皇 / KOF / 真人快打 / Mortal Kombat / 格斗 → **fighting**
+- 英雄联盟 / League of Legends / LoL / Dota / 王者荣耀 / MOBA / 5v5 → **moba**
+- 狙击 / Sniper Elite / 狙击精英 / 狙击手 / 瞄准镜 → **sniper**
+- 潜行 / 隐身 / 刺杀 / 合金装备 / Metal Gear / Splinter Cell / 细胞分裂 → **stealth**
+- 捏脸 / 换装 / 角色自定义 / 服装设计 / Avatar Maker → **customization**
+- 赛车 / 竞速 / F1 / 卡丁车 / 马里奥赛车 / 极品飞车 / Need for Speed → **racing**
+- 滑雪 / Skiing / 阿尔卑斯 / Downhill Ski → **skiing**
+- 体育 / 足球 / 篮球 / 乒乓 / 网球 / 投篮 / 射门 / 点球 / 保龄球 / 高尔夫 → **sports**
+- 篮球 / 投篮 / 三分球 / 扣篮 → **sports**
+- 烹饪 / 做饭 / 厨房 / 料理 / 餐厅 / Restaurant → **cooking**
+- 咖啡馆 / 咖啡店 / Cafe / Coffee Shop → **cafe**
+- 宠物 / 养成宠物 / Tamagotchi / 电子宠物 / 拓麻歌子 / 养猫 / 养狗 → **pet**
+- 恋爱模拟 / Dating Sim / 视觉小说 / Visual Novel / Galgame / 乙女 / 相亲 → **dating-sim**
+- 沙盒 / Sandbox / Minecraft Creative / 创造模式 → **sandbox**
+- 填色 / 涂色 / Coloring / Color by Number / 数字填色 → **coloring**
+- 花园 / 种花 / 花园经营 → **garden**
+- 放置 / 挂机 / Idle / Clicker / Cookie Clicker / 点击游戏 → **idle**
+- 弹射 / 弹球 / 碰碰球 / 台球 → **physics**
+- 炸弹人 / Bomberman / 泡泡龙 / Puzzle Bobble → **avoider**
 - 收集 / 金币 / 宝石 / 拾取 / 吃豆 / 贪食 → **collector**
 - 生存 / 尽量久 / 割草 / 多条命 / 不断刷怪 / 坚持 → **survivor**
-- 躲避 / 闪避 / 避开 / dodge → **avoider**
-- 三消 / 消除 / 翻牌记忆 / 拼图 → **puzzle**
+- 躲避 / 闪避 / 避开 / Dodge → **avoider**
 
-**【第三优先：冲突情景解歧】**
+**【第一优先：玩法描述词映射（无 IP 名时）】**
+- 放置防守 / 建防线 / 造塔 / 塔防 / 箭塔 / 炮塔 / 抵御波次 / 路径防守 / 迎击波次 / 波次防守 → **towerDefense**
+- 横版 / 跳跃 / 平台 / 闯关 / 多层地形 / 上下跳 / 跑酷关卡 / 收集道具过关 → **platformer**
+- 飞船 / 飞机 / 太空战 / 弹幕 / 消灭敌机 / 竖版飞行 / 击落 → **shooter**
+- 坦克 / 战车 / 战车对战 / 俯视角坦克 / 坦克射击 → **shooter**（Battle City 风；非塔防）
+- 三消 / 消除 / 翻牌记忆 / 拼图 → **puzzle**
+- 经营 / 大亨 → **tycoon**
+- 节奏 / 音游 → **rhythm**
+
+**【第二优先：冲突情景解歧】**
 - 僵尸入侵但玩家是炮塔/植物/防守方 → **必须 towerDefense**，绝不能做 survivor/avoider
 - 僵尸入侵但玩家主动移动割草消灭 → **survivor**
 - 射击 + 波次敌人 + 竖版视角 → **shooter**（不是 towerDefense）
@@ -183,15 +249,30 @@ ${buildLlmTemplateCatalogLines()}
 - 打怪 + 爬塔 + 关卡通关 → **platformer** 或 **shooter**（看视角）
 - **坦克/战车 + 自由移动 + 射击 → 必须 shooter**（Battle City 风格俯视角战车射击，**绝不是 towerDefense**）。判别：用户操控单辆坦克移动+开火 = shooter；用户造塔守家 = towerDefense
 - **僵尸/植物 + 玩家造炮塔 → 必须 towerDefense**（不要因为"坦克/炮塔"字眼误判为 shooter）
+- **卡牌 + 三人 + 叫地主 → 必须 dou-dizhu**（不要因为"扑克"误判为 poker，不要因为"出牌"误判为 card）
+- **四人 + 麻将 + 碰杠胡 → 必须 mahjong**（不要因为"麻将"二字误判为 mahjong-solitaire）
+- **配对消除 + 麻将牌 → 必须 mahjong-solitaire**（不是 mahjong）
 
-**【第四优先：弱体验模板限制（极重要）】**
+**【第三优先：弱体验模板限制（极重要）】**
 以下模板体验相对单薄，**仅在用户明确点名时才选**，不得作为模糊 prompt 的默认选项：
-- **chess**：仅用于「象棋 / 围棋 / 五子棋 / 国际象棋 / Chess / 棋类」等明确棋盘类意图。其他含「策略/对战」词汇 → strategy 或 towerDefense。
-- **physics**：仅用于「物理 / 弹射 / 弹球 / 碰碰球 / 台球 / 愤怒的小鸟」等明确物理玩法意图。含糊的「有趣/刺激」→ avoider/shooter。
-- **customization**：仅用于「捏脸 / 换装 / 角色自定义 / 服装设计」等明确装扮意图。含糊时 → collector。
-- **racing**：仅用于「赛车 / 竞速 / F1 / 卡丁车」等明确竞速意图。含糊时 → coaster 或 platformer。
-- **sniper**：仅用于「狙击 / 精准射击 / 瞄准」等明确狙击意图。含糊的射击 → shooter。
-- **stealth**：仅用于「潜行 / 隐身 / 刺杀 / 不被发现」等明确潜行意图。含糊的跑酷 → platformer。
+- **chess/checkers/chinese-checkers/junqi/aeroplane-chess**：仅用于明确棋盘类意图。其他含「策略/对战」词汇 → strategy 或 towerDefense。
+- **physics**：仅用于明确物理玩法（弹射/弹球/台球/愤怒的小鸟）。含糊的「有趣/刺激」→ avoider/shooter。
+- **customization**：仅用于明确装扮意图（捏脸/换装/服装设计）。含糊时 → collector。
+- **racing/skiing**：仅用于明确竞速意图。含糊时 → coaster 或 platformer。
+- **sniper**：仅用于明确狙击意图。含糊的射击 → shooter。
+- **stealth**：仅用于明确潜行意图。含糊的跑酷 → platformer。
+- **pong/whack-a-mole/word-game/escape-room/hidden-object/mystery**：仅用于明确点名玩法。
+
+**【斗地主 / 麻将 / UNO / 接龙 / 21 点 等"真玩法"卡牌类专项说明（极重要）】**
+这类模板是**真实对局玩法**，不是动作/塔防/收集。LLM 输出 spec 时：
+- **templateId 必须精确**（斗地主=**dou-dizhu**，4 人麻将=**mahjong**，麻将接龙消除=**mahjong-solitaire**，UNO=**uno**，扑克=**poker**，纸牌接龙=**solitaire**，21 点=**blackjack**）
+- **gameplay 数值不要照搬动作游戏**：winScore 通常是 1（一局定胜负）或少量；lives 通常是 1；spawnIntervalMs 不适用时可填 1000 占位；playerSpeed/hazardSpeed/jumpStrength/gravity 都填中性占位（如 200/100/420/980）
+- **labels 必须贴合玩法**：
+  - 斗地主：player「地主/农民」hazard「对手」collectible「底牌」subtitle「3 人扑克 · 叫地主 · 出牌比大小」
+  - 4 人麻将：player「玩家」hazard「对手」collectible「番数」subtitle「4 人对局 · 万条筒 · 碰杠胡」
+  - UNO：player「玩家」hazard「对手」collectible「手牌」subtitle「颜色/数字匹配 · 剩 1 张喊 UNO」
+- **director 节奏弱化**：这类游戏节奏由对局本身决定，director.intensity 偏低（0.3-0.5），events 可只放 4-5 个，type 可用 coinRain（高分对局窗口）/ breathingRoom（理牌喘息）/ comboBonus（连出奖励）等
+- **不要套用 shooter/towerDefense 的波次/编队/弹幕叙事**
 
 **【默认】** 描述含糊、无法归类 → **avoider**`;
 
@@ -418,13 +499,23 @@ async function withGenerationLocale<T>(locale: AppLocale, fn: () => Promise<T>):
 /** LLM 的 strict JSON 通常不含 director/systems；缺口在此用 `buildDirector` / `buildSystems`（及塔防蓝图）补齐 —— 与 `finalizePatchedSpec`（patch/refine）语义一致。 */
 function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   let next = spec;
-  if (spec.templateId === "towerDefense" && !spec.towerDefense) {
+  // 统一回填：所有有 blueprint builder 的模板都按 templateId 补齐字段，
+  // 避免 LLM 漏填或被剥离后留下空 spec。family-shared 字段（card/chess）按 templateId 触发。
+  if (next.templateId === "towerDefense" && !next.towerDefense) {
     next = { ...next, towerDefense: buildTowerDefenseBlueprint({ prompt, spec: next }) };
   }
   if (next.templateId === "puzzle" && !next.puzzle) {
     next = { ...next, puzzle: buildPuzzleBlueprint({ prompt, spec: next }) };
   }
-  if (next.templateId === "chess" && !next.chess) {
+  // chess family：chess/checkers/chinese-checkers/junqi/aeroplane-chess 共享 spec.chess
+  if (
+    (next.templateId === "chess" ||
+      next.templateId === "checkers" ||
+      next.templateId === "chinese-checkers" ||
+      next.templateId === "junqi" ||
+      next.templateId === "aeroplane-chess") &&
+    !next.chess
+  ) {
     next = { ...next, chess: buildChessBlueprint({ prompt, spec: next }) };
   }
   if (next.templateId === "shooter" && !next.shooter) {
@@ -438,6 +529,60 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   }
   if (next.templateId === "avoider" && !next.avoider) {
     next = { ...next, avoider: buildAvoiderBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "platformer" && !next.platformer) {
+    next = { ...next, platformer: buildPlatformerBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "farming" && !next.farming) {
+    next = { ...next, farming: buildFarmingBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "strategy" && !next.strategy) {
+    next = { ...next, strategy: buildStrategyBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "coaster" && !next.coaster) {
+    next = { ...next, coaster: buildCoasterBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "customization" && !next.customization) {
+    next = { ...next, customization: buildCustomizationBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "rhythm" && !next.rhythm) {
+    next = { ...next, rhythm: buildRhythmBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "sports" && !next.sports) {
+    next = { ...next, sports: buildSportsBlueprint({ prompt, spec: next }) };
+  }
+  // card family：uno/poker/solitaire/blackjack/dou-dizhu 共享 spec.card
+  if (
+    (next.templateId === "card" ||
+      next.templateId === "uno" ||
+      next.templateId === "poker" ||
+      next.templateId === "solitaire" ||
+      next.templateId === "blackjack" ||
+      next.templateId === "dou-dizhu") &&
+    !next.card
+  ) {
+    next = { ...next, card: buildCardBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "fighting" && !next.fighting) {
+    next = { ...next, fighting: buildFightingBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "moba" && !next.moba) {
+    next = { ...next, moba: buildMobaBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "horror" && !next.horror) {
+    next = { ...next, horror: buildHorrorBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "mahjong" && !next.mahjong) {
+    next = { ...next, mahjong: buildMahjongBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "tetris" && !next.tetris) {
+    next = { ...next, tetris: buildTetrisBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "endless-runner" && !next.endlessRunner) {
+    next = { ...next, endlessRunner: buildEndlessRunnerBlueprint({ prompt, spec: next }) };
+  }
+  if (next.templateId === "fruit-ninja" && !next.fruitNinja) {
+    next = { ...next, fruitNinja: buildFruitNinjaBlueprint({ prompt, spec: next }) };
   }
   if (!next.director) {
     next = { ...next, director: buildDirector({ prompt, spec: next, locale: activeGenerationLocale }) };
@@ -760,11 +905,71 @@ function resolveEffectiveTemplateHint(
   return "auto";
 }
 
+/**
+ * templateId → GameSpec 上的 blueprint 字段名（用于清理 stale body）。
+ * - 直接同名的：towerDefense/puzzle/chess/shooter/platformer/farming/strategy/collector/survivor/avoider/coaster/customization/rhythm/sports/card/fighting/moba/horror/mahjong/tetris
+ * - camelCase：endless-runner → endlessRunner；fruit-ninja → fruitNinja
+ * - 共享 family blueprint：uno/poker/solitaire/blackjack → card；checkers/chinese-checkers/junqi/aeroplane-chess → chess；merge → puzzle
+ * - 无 schema 字段（运行时计算）：dou-dizhu/mahjong-solitaire/breakout/whack-a-mole/word-game/escape-room/hidden-object/mystery/sandbox/idle/cooking/tycoon/pet/dating-sim/auto-battler/turn-based/skiing/coloring/garden/cafe/pokemon-battle/snipper/run-and-gun/hack-and-slash/sniper/stealth/physics/avoider(collector family)
+ */
+const TEMPLATE_BLUEPRINT_FIELD: Partial<Record<string, keyof GameSpec>> = {
+  towerDefense: "towerDefense",
+  coaster: "coaster",
+  customization: "customization",
+  puzzle: "puzzle",
+  chess: "chess",
+  shooter: "shooter",
+  platformer: "platformer",
+  farming: "farming",
+  strategy: "strategy",
+  collector: "collector",
+  survivor: "survivor",
+  avoider: "avoider",
+  rhythm: "rhythm",
+  sports: "sports",
+  card: "card",
+  fighting: "fighting",
+  moba: "moba",
+  horror: "horror",
+  mahjong: "mahjong",
+  tetris: "tetris",
+  "endless-runner": "endlessRunner",
+  "fruit-ninja": "fruitNinja",
+  // family-shared blueprint（同字段共享；切换 templateId 时不剥离，避免破坏 family 内切换）
+  uno: "card",
+  poker: "card",
+  solitaire: "card",
+  blackjack: "card",
+  "dou-dizhu": "card",
+  checkers: "chess",
+  "chinese-checkers": "chess",
+  junqi: "chess",
+  "aeroplane-chess": "chess",
+  merge: "puzzle",
+};
+
+function blueprintFieldForTemplateId(id: string): keyof GameSpec | undefined {
+  return TEMPLATE_BLUEPRINT_FIELD[id];
+}
+
 function applyTemplateHint(spec: GameSpec, hint: "auto" | GameSpec["templateId"]): GameSpec {
   if (hint === "auto") return spec;
   if (spec.templateId === hint) return spec;
 
   const next: GameSpec = { ...spec, templateId: hint };
+
+  // 清理 stale blueprint body：旧 templateId 的 blueprint 字段在新 templateId 下不再适用，
+  // 必须剥离，否则运行时可能按旧 blueprint 渲染（例：LLM 输出 towerDefense body，
+  // applyTemplateHint 把 templateId 改成 dou-dizhu，但 spec.towerDefense 还在 → 渲染成塔防）。
+  // family-shared 字段（uno/poker/blackjack 共享 card）不剥离。
+  const oldField = blueprintFieldForTemplateId(spec.templateId);
+  const newField = blueprintFieldForTemplateId(hint);
+  if (oldField && oldField !== newField && oldField in next) {
+    const stripped = { ...next } as Record<string, unknown>;
+    delete stripped[oldField as string];
+    Object.assign(next, stripped);
+  }
+
   if (hint === "platformer") {
     next.gameplay = {
       ...next.gameplay,

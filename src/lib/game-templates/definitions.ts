@@ -77,7 +77,9 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     godotExport: true,
     defaultSubtitle: "狙击瞄准 · 有限子弹 · 星级评价",
     llmSummary: "狙击/瞄准射击关卡（映射 shooter 运行时）",
-    infer: [{ pattern: /blocky sniper|低多边形狙击|狙击猎人/i, priority: 92 }],
+    infer: [
+      { pattern: /blocky\s*sniper|低多边形狙击|狙击猎人|狙击精英|sniper\s*elite|狙击手|狙击枪|瞄准镜|远程狙击|精准射击|狙击游戏/i, priority: 115 },
+    ],
   },
   {
     id: "platformer",
@@ -111,7 +113,9 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     blueprint: "strategy",
     defaultSubtitle: "区域争夺 · 派兵占领",
     llmSummary: "地图节点征服/派兵策略",
-    infer: [{ pattern: /征服|策略|派兵|占领.*区域|state conquest|地图.*节点/i, priority: 86 }],
+    infer: [
+      { pattern: /征服|策略|派兵|占领.*区域|state conquest|地图.*节点|红警|红色警戒|命令与征服|星际争霸|魔兽争霸|帝国时代|civilization|文明|部落冲突|clash\s*of\s*clans|即时战略|\brts\b|领地控制|节点控制|战略扩张|starcraft|warcraft|age\s*of\s*empires/i, priority: 95 },
+    ],
   },
   {
     id: "farming",
@@ -167,7 +171,9 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     godotExport: true,
     defaultSubtitle: "物理发泄 · 连击反馈",
     llmSummary: "物理互动/打击假人/解压",
-    infer: [{ pattern: /dummy|假人|解压|物理.*打|smash|发泄|连击.*粒子/i, priority: 96 }],
+    infer: [
+      { pattern: /dummy|假人|解压|物理.*打|smash|发泄|连击.*粒子|愤怒的小鸟|angry\s*birds|弹射|弹球|碰碰球|台球|弹弓|投掷物理|弹射游戏/i, priority: 110 },
+    ],
   },
   {
     id: "survivor",
@@ -333,7 +339,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     blueprint: "breakout",
     defaultSubtitle: "弹球打砖块 · 经典街机",
     llmSummary: "真打砖块：挡板 + 弹球 + 砖块消除 + 多关卡",
-    infer: [{ pattern: /打砖块|breakout|arkanoid|brick\s*breaker/i, priority: 96 }],
+    infer: [{ pattern: /打砖块|breakout|arkanoid|brick\s*breaker/i, priority: 115 }],
   },
   // 乒乓（复用 physics）
   {
@@ -456,7 +462,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "回合制策略 · 移动攻击",
     llmSummary: "回合制策略：网格移动 + 单位攻击（复用 chess family）",
     infer: [
-      { pattern: /回合制|turn\s*based|fire\s*emblem|火焰纹章|advance\s*wars|高级战争|文明.*回合/i, priority: 92 },
+      { pattern: /回合制|turn\s*based|fire\s*emblem|火焰纹章|advance\s*wars|高级战争|文明.*回合/i, priority: 110 },
     ],
   },
   // 沙盒建造（复用 customization）
@@ -492,7 +498,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "扑克 · 牌型比大小",
     llmSummary: "扑克：手牌组合 + 比大小 + 押注（复用 card family）",
     infer: [
-      { pattern: /扑克|poker|德州扑克|texas\s*hold|梭哈|stud\s*poker/i, priority: 96 },
+      { pattern: /扑克|poker|德州扑克|texas\s*hold|梭哈|stud\s*poker/i, priority: 115 },
     ],
   },
   // 接龙（复用 card）
@@ -504,7 +510,8 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "纸牌接龙 · 经典单机",
     llmSummary: "接龙：堆叠排序 + 完成花色（复用 card family）",
     infer: [
-      { pattern: /接龙|solitaire|klondike|蜘蛛纸牌|spider\s*solitaire/i, priority: 96 },
+      { pattern: /纸牌接龙|solitaire|klondike|蜘蛛纸牌|spider\s*solitaire/i, priority: 115 },
+      { pattern: /接龙/i, priority: 100 },
     ],
   },
   // 21 点（复用 card）
@@ -516,7 +523,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "21 点 · 庄家对赌",
     llmSummary: "21 点：要牌 + 比点数 + 庄家 AI（复用 card family）",
     infer: [
-      { pattern: /21\s*点|blackjack|二十一点/i, priority: 96 },
+      { pattern: /21\s*点|blackjack|二十一点/i, priority: 115 },
     ],
   },
   // 字谜（复用 puzzle）
@@ -607,8 +614,8 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "麻将 · 4 人对局 · 万条筒 · 碰杠胡",
     llmSummary: "真麻将：4 人对局 + 万条筒 108 张 + 摸打碰杠胡 + 听牌提示 + 和风 BGM",
     infer: [
-      { pattern: /国标麻将|日本麻将|riichi|richi麻将|麻将对局|打麻将|四人麻将/i, priority: 96 },
-      { pattern: /麻将|mahjong/i, priority: 92 },
+      { pattern: /国标麻将|日本麻将|riichi|richi麻将|麻将对局|打麻将|四人麻将/i, priority: 120 },
+      { pattern: /麻将|mahjong/i, priority: 110 },
     ],
   },
   // 麻将接龙/消除（独立 family，真配对消除玩法）
@@ -621,7 +628,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "麻将接龙 · 配对消除",
     llmSummary: "真麻将接龙：选相同牌配对消除 + 层叠解锁",
     infer: [
-      { pattern: /麻将接龙|麻将消除|麻将连连看|mahjong solitaire|mahjong connect/i, priority: 96 },
+      { pattern: /麻将接龙|麻将消除|麻将连连看|mahjong solitaire|mahjong connect/i, priority: 125 },
     ],
   },
   // 斗地主（独立 family，真 3 人扑克玩法）
@@ -634,7 +641,8 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "斗地主 · 3 人扑克 · 叫地主",
     llmSummary: "真斗地主：3 人扑克 + 叫地主 + 出牌比大小 + 春天/反春",
     infer: [
-      { pattern: /斗地主|dou\s*dizhu|dou\s*di\s*zhu|斗地主游戏/i, priority: 96 },
+      { pattern: /斗地主|dou\s*dizhu|dou\s*di\s*zhu|都斗地主|斗地主游戏|fight\s*the\s*landlord|landlord\s*card|three\s*player\s*card/i, priority: 125 },
+      { pattern: /叫地主|春天反春|春反|三人扑克|三人牌|三人斗地主|bid\s*landlord|spring\s*counter|three\s*player\s*poker/i, priority: 115 },
     ],
   },
   // UNO（卡牌，复用 card）
@@ -646,7 +654,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "UNO · 卡牌出牌 · 剩 1 张喊 UNO",
     llmSummary: "UNO：颜色/数字匹配出牌 + 特殊牌（复用 card family）",
     infer: [
-      { pattern: /\buno\b|乌诺牌|优诺牌/i, priority: 96 },
+      { pattern: /\buno\b|乌诺牌|优诺牌/i, priority: 125 },
     ],
   },
   // 跳棋（国际跳棋，复用 chess）
@@ -707,7 +715,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "无尽跑酷 · 左右闪避 · 收集金币",
     llmSummary: "真无尽跑酷：3 道左右切换 + 跳跃滑铲 + 金币 combo + 速度递增",
     infer: [
-      { pattern: /神庙逃亡|temple\s*run|地铁跑酷|subway\s*surfers|无尽跑酷|endless\s*runner|酷跑|跑酷游戏/i, priority: 95 },
+      { pattern: /神庙逃亡|temple\s*run|地铁跑酷|subway\s*surfers|无尽跑酷|endless\s*runner|酷跑|跑酷游戏/i, priority: 115 },
     ],
   },
   // 水果忍者（独立 family，真切水果玩法）
@@ -756,7 +764,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "花园种植 · 种花 · 装饰",
     llmSummary: "花园种植：种花 + 浇水 + 装饰花园（复用 farming family）",
     infer: [
-      { pattern: /花园|garden\s*game|种花|花园经营|花园模拟/i, priority: 92 },
+      { pattern: /花园|garden\s*game|种花|花园经营|花园模拟/i, priority: 110 },
     ],
   },
   // 咖啡馆（咖啡馆经营，复用 farming）
@@ -780,7 +788,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "宠物对战 · 回合制 · 属性克制",
     llmSummary: "宠物对战：回合制 + 属性克制 + 技能选择（复用 chess/turn-based family）",
     infer: [
-      { pattern: /宝可梦|pokemon|口袋妖怪|宠物对战|宠物小精灵|精灵对战/i, priority: 95 },
+      { pattern: /宝可梦|pokemon|口袋妖怪|宠物对战|宠物小精灵|精灵对战/i, priority: 115 },
     ],
   },
 ];
