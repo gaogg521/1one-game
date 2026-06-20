@@ -1,12 +1,12 @@
 /**
  * Phase D：Comfy 256 快预览 → sharp 放大至 512/1024（游戏精灵 workflow）
  */
-import sharp from "sharp";
 import {
   comfyImageUrl,
   type ComfyTxt2ImgOptions,
 } from "@/lib/comfy-image-gen";
 import { getComfyBaseUrl } from "@/lib/orchestration/comfy-gateway";
+import { loadSharp } from "@/lib/sharp-loader";
 
 const PREVIEW = 256;
 const DEFAULT_OUTPUT = 512;
@@ -133,6 +133,7 @@ export async function generateComfySpritePngBuffer(
     if (preview.length < 256) return null;
 
     const outputPx = resolveSpriteOutputPx();
+    const sharp = await loadSharp();
     return sharp(preview)
       .resize(outputPx, outputPx, { kernel: sharp.kernel.lanczos3 })
       .png()

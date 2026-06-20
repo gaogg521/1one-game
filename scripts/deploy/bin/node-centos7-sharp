@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# CentOS 7：让 node 子进程（含 next build worker）加载 devtoolset libstdc++，供 sharp 使用
+set -euo pipefail
+DS="/opt/rh/devtoolset-7/root/usr/lib64"
+export LD_LIBRARY_PATH="${DS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+REAL_NODE="$(readlink -f "$(command -v node)")"
+exec "$REAL_NODE" "$@"
