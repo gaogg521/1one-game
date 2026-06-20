@@ -112,7 +112,7 @@ export const PRODUCT = {
   },
 
   godot: {
-    enabled: true,
+    enabled: false,
     /** 全模板走 ai-mother-universal；列表由 game-templates/registry 驱动 */
     supportedTemplates: godotExportTemplateIds(),
     /** 新用户默认运行时（可被 localStorage 覆盖） */
