@@ -356,6 +356,7 @@ export class CardScene extends Phaser.Scene {
     }
     this.playerMana -= def.cost;
     this.applyCardEffect(def, "player");
+    this.showPlayedCard(def, "player");
     this.removeCardFromHand(view);
     this.layoutHand();
     this.refreshHud();
@@ -427,6 +428,26 @@ export class CardScene extends Phaser.Scene {
     });
   }
 
+  /** 出牌历史可见性：在出牌方头像旁显示牌名+类型 1.6s，让玩家看见自己/AI 打了什么 */
+  private playedCardBanner?: Phaser.GameObjects.Text;
+  private showPlayedCard(def: CardDef, caster: "player" | "ai") {
+    if (this.playedCardBanner) this.playedCardBanner.destroy();
+    const isPlayer = caster === "player";
+    const x = this.scale.width / 2;
+    const y = isPlayer ? this.scale.height * 0.62 : this.scale.height * 0.38;
+    const kindLabel = def.kind === "attack" ? "攻击" : def.kind === "heal" ? "治疗" : def.kind === "shield" ? "护盾" : def.kind;
+    const txt = this.add.text(x, y, `${isPlayer ? "你" : "AI"}: ${def.name}(${kindLabel} ${def.value})`, {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "14px",
+      fontStyle: "700",
+      color: isPlayer ? "#7dd3fc" : "#fca5a5",
+      backgroundColor: "rgba(0,0,0,0.55)",
+      padding: { x: 8, y: 4 },
+    }).setOrigin(0.5).setDepth(60);
+    this.playedCardBanner = txt;
+    this.time.delayedCall(1600, () => { txt.destroy(); if (this.playedCardBanner === txt) this.playedCardBanner = undefined; });
+  }
+
   private endPlayerTurn() {
     if (this.finished) return;
     this.isPlayerTurn = false;
@@ -463,6 +484,7 @@ export class CardScene extends Phaser.Scene {
       }
       aiMana -= pick.cost;
       this.applyCardEffect(pick, "ai");
+      this.showPlayedCard(pick, "ai");
       playBleep("hit");
       this.refreshHud();
       if (this.playerHp <= 0) {

@@ -280,7 +280,8 @@ export class DouDizhuScene extends Phaser.Scene {
   // 手牌 UI
   private cardSprites: Phaser.GameObjects.Container[] = [];
   private aiCountLabels: Phaser.GameObjects.Text[] = [];
-  private playAreaText: Phaser.GameObjects.Text[] = []; // 各 seat 上一手出牌文本
+  private playAreaText: Phaser.GameObjects.Text[] = []; // 各 seat 上一手出牌文本（"不要"等状态）
+  private playAreaCards: Phaser.GameObjects.Container[][] = [[], [], []]; // 各 seat 上一手出牌的牌图形
   private roleLabels: Phaser.GameObjects.Text[] = [];
 
   // 叫地主 + 出牌/不要 按钮
@@ -969,18 +970,55 @@ export class DouDizhuScene extends Phaser.Scene {
 
   private showPlayOnSeat(seat: Seat, pattern: PlayPattern | null) {
     const t = this.playAreaText[seat]!;
+    // 清旧牌图形
+    for (const c of this.playAreaCards[seat] ?? []) c.destroy();
+    this.playAreaCards[seat] = [];
     if (pattern == null) {
       t.setText(this.uiLocale === "zh-Hans" ? "不要" : "Pass");
       t.setColor("#fca5a5");
     } else {
-      t.setText(this.describePattern(pattern));
-      t.setColor("#fde68a");
+      t.setText("");
+      // 画出牌图形（小牌横排），让玩家看得见自己/AI 打了什么
+      const cards = pattern.cards;
+      const smallW = 30;
+      const smallH = 42;
+      const gap = 4;
+      const totalW = cards.length * smallW + (cards.length - 1) * gap;
+      const cx = this.seatX(seat);
+      const cy = this.seatY(seat) + 44;
+      const startX = cx - totalW / 2 + smallW / 2;
+      cards.forEach((card, i) => {
+        const isJoker = card.v >= 16;
+        const isRed = card.s === 1 || card.s === 3 || card.v === 17;
+        const cont = this.add.container(startX + i * (smallW + gap), cy).setDepth(17);
+        const bg = this.add.rectangle(0, 0, smallW, smallH, 0xfafafa, 1)
+          .setStrokeStyle(1, 0x334155);
+        const rankStr = RANK_NAMES[card.v] ?? "";
+        const glyph = isJoker ? (card.v === 17 ? "大" : "小") : SUIT_GLYPHS[card.s] ?? "";
+        const rt = this.add.text(0, -smallH / 2 + 8, rankStr, {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "11px",
+          fontStyle: "700",
+          color: isRed ? "#dc2626" : "#0f172a",
+        }).setOrigin(0.5);
+        const st = this.add.text(0, 4, glyph, {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "14px",
+          color: isRed ? "#dc2626" : "#0f172a",
+        }).setOrigin(0.5);
+        cont.add([bg, rt, st]);
+        this.playAreaCards[seat]!.push(cont);
+      });
     }
     // 1.6s 后该位出牌文字保持显示直到下一轮清理
   }
 
   private clearPlayAreas() {
     for (const t of this.playAreaText) t.setText("");
+    for (const arr of this.playAreaCards) {
+      for (const c of arr) c.destroy();
+    }
+    this.playAreaCards = [[], [], []];
   }
 
   private describePattern(p: PlayPattern): string {
