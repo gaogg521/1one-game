@@ -282,6 +282,7 @@ export class DouDizhuScene extends Phaser.Scene {
   private aiCountLabels: Phaser.GameObjects.Text[] = [];
   private playAreaText: Phaser.GameObjects.Text[] = []; // 各 seat 上一手出牌文本（"不要"等状态）
   private playAreaCards: Phaser.GameObjects.Container[][] = [[], [], []]; // 各 seat 上一手出牌的牌图形
+  private lastPlayCards: Phaser.GameObjects.Container[] = []; // 当前轮上一手有效出牌（跨家保留）
   private roleLabels: Phaser.GameObjects.Text[] = [];
 
   // 叫地主 + 出牌/不要 按钮
@@ -569,6 +570,8 @@ export class DouDizhuScene extends Phaser.Scene {
     this.clearActionButtons();
     const ids = new Set(pattern.cards.map((c) => c.id));
     this.seats[seat]!.hand = this.seats[seat]!.hand.filter((c) => !ids.has(c.id));
+    // 新一轮有效出牌：清掉所有 seat 的旧出牌显示（上一轮的），再显示当前出牌
+    this.clearPlayAreas();
     this.lastPlay = pattern;
     this.lastPlaySeat = seat;
     this.passCount = 0;
@@ -970,7 +973,7 @@ export class DouDizhuScene extends Phaser.Scene {
 
   private showPlayOnSeat(seat: Seat, pattern: PlayPattern | null) {
     const t = this.playAreaText[seat]!;
-    // 清旧牌图形
+    // 清该 seat 旧牌图形
     for (const c of this.playAreaCards[seat] ?? []) c.destroy();
     this.playAreaCards[seat] = [];
     if (pattern == null) {
@@ -978,39 +981,44 @@ export class DouDizhuScene extends Phaser.Scene {
       t.setColor("#fca5a5");
     } else {
       t.setText("");
-      // 画出牌图形（小牌横排），让玩家看得见自己/AI 打了什么
-      const cards = pattern.cards;
-      const smallW = 30;
-      const smallH = 42;
-      const gap = 4;
-      const totalW = cards.length * smallW + (cards.length - 1) * gap;
-      const cx = this.seatX(seat);
-      const cy = this.seatY(seat) + 44;
-      const startX = cx - totalW / 2 + smallW / 2;
-      cards.forEach((card, i) => {
-        const isJoker = card.v >= 16;
-        const isRed = card.s === 1 || card.s === 3 || card.v === 17;
-        const cont = this.add.container(startX + i * (smallW + gap), cy).setDepth(17);
-        const bg = this.add.rectangle(0, 0, smallW, smallH, 0xfafafa, 1)
-          .setStrokeStyle(1, 0x334155);
-        const rankStr = RANK_NAMES[card.v] ?? "";
-        const glyph = isJoker ? (card.v === 17 ? "大" : "小") : SUIT_GLYPHS[card.s] ?? "";
-        const rt = this.add.text(0, -smallH / 2 + 8, rankStr, {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          fontStyle: "700",
-          color: isRed ? "#dc2626" : "#0f172a",
-        }).setOrigin(0.5);
-        const st = this.add.text(0, 4, glyph, {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "14px",
-          color: isRed ? "#dc2626" : "#0f172a",
-        }).setOrigin(0.5);
-        cont.add([bg, rt, st]);
-        this.playAreaCards[seat]!.push(cont);
-      });
+      // 画出牌图形（小牌横排）在该 seat 旁，让玩家看见自己/AI 打了什么
+      this.drawPlayCards(seat, pattern.cards);
     }
     // 1.6s 后该位出牌文字保持显示直到下一轮清理
+  }
+
+  /** 在指定 seat 旁画小牌横排（出牌图形） */
+  private drawPlayCards(seat: Seat, cards: Card[]) {
+    const smallW = 30;
+    const smallH = 42;
+    const gap = 4;
+    const totalW = cards.length * smallW + (cards.length - 1) * gap;
+    const cx = this.seatX(seat);
+    // seat 0（玩家，底部）出牌画在头像上方；seat 1/2（AI）画在头像下方
+    const cy = seat === 0 ? this.seatY(seat) - 70 : this.seatY(seat) + 44;
+    const startX = cx - totalW / 2 + smallW / 2;
+    cards.forEach((card, i) => {
+      const isJoker = card.v >= 16;
+      const isRed = card.s === 1 || card.s === 3 || card.v === 17;
+      const cont = this.add.container(startX + i * (smallW + gap), cy).setDepth(17);
+      const bg = this.add.rectangle(0, 0, smallW, smallH, 0xfafafa, 1)
+        .setStrokeStyle(1, 0x334155);
+      const rankStr = RANK_NAMES[card.v] ?? "";
+      const glyph = isJoker ? (card.v === 17 ? "大" : "小") : SUIT_GLYPHS[card.s] ?? "";
+      const rt = this.add.text(0, -smallH / 2 + 8, rankStr, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "11px",
+        fontStyle: "700",
+        color: isRed ? "#dc2626" : "#0f172a",
+      }).setOrigin(0.5);
+      const st = this.add.text(0, 4, glyph, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "14px",
+        color: isRed ? "#dc2626" : "#0f172a",
+      }).setOrigin(0.5);
+      cont.add([bg, rt, st]);
+      this.playAreaCards[seat]!.push(cont);
+    });
   }
 
   private clearPlayAreas() {
@@ -1050,7 +1058,8 @@ export class DouDizhuScene extends Phaser.Scene {
       const x = startX + i * spacing;
       const selected = this.selectedIds.has(card.id);
       const cont = this.add.container(x, selected ? baseY - 14 : baseY);
-      cont.setDepth(20 + i);
+      // 选中的牌 depth 大幅提高，确保浮在未选中牌之上，点击不被遮挡
+      cont.setDepth(selected ? 200 + i : 20 + i);
       const isJoker = card.v >= 16;
       const isRed = card.s === 1 || card.s === 3 || card.v === 17;
       const bg = this.add.rectangle(0, 0, cardW, cardH, 0xfafafa, 1)
@@ -1074,13 +1083,10 @@ export class DouDizhuScene extends Phaser.Scene {
         .setOrigin(0.5);
       cont.add([bg, rankText, suitText]);
       cont.setSize(cardW, cardH);
-      // 每张牌的独占点击区 = 左边缘起 spacing 宽（末张取整牌宽），防止相邻高层牌拦截
-      // 用 bg rectangle 自身 setInteractive（比 container Geom hit area 在 Phaser 4 更可靠）
-      const isLast = i === hand.length - 1;
-      const hitW = isLast ? cardW : spacing;
-      const hitOffsetX = -cardW / 2; // 独占带从牌左边缘开始
+      // 手牌交互：bg rectangle 自身 setInteractive（Phaser 4 比 container Geom hit 可靠）
+      // 用整牌宽 hit area，按 depth 从高到低命中（右侧牌 depth 更高，点重叠区会选中右侧牌——符合视觉预期）
       bg.setInteractive(
-        new Phaser.Geom.Rectangle(hitOffsetX, -cardH / 2, hitW, cardH),
+        new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH),
         Phaser.Geom.Rectangle.Contains,
       );
       bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
