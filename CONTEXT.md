@@ -1,6 +1,6 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 48 · 斗地主语言修复 + QQ 风格 UI）
+**最后更新**：2026-06-21（会话 49 · ChessScene/CardScene i18n Bug 修复 + QQ 风格）
 
 ---
 
@@ -25,9 +25,37 @@
 - `/en/play/cmqnl5p2v0000ys3pnta2nw6u`：绿色桌面 ✅、英文"Bid 1/2/3/Pass"✅、"Kitty"底牌展示 ✅、"Sm"/"Lg" Joker ✅、"Hint"按钮 ✅
 - TypeScript `tsc --noEmit`：零错误 ✅
 
+---
+
+## Session 49 · ChessScene/CardScene i18n Bug 修复 + QQ 风格
+
+### 完成内容
+1. **ChessScene.ts i18n bug 修复（4 处）**
+   - `refreshCheckStatus()`: 将军提示 `=== "zh-Hans"` → `tMessage(checkAlertXiangqi/checkAlertIntl)`
+   - `finishCheckmate()`: 将死标题/消息 → `tMessage(checkmateBlack/checkmateMsgWin/RedLose/WhiteLose)`
+   - `goApplyPlay()`: 提子消息 → `tMessage(goCaptureMsg, {b, w})`
+   - `refreshGoStatus()`: 提子计数 → `tMessage(goCapsLine, {b, w})`
+2. **CardScene.ts i18n bug 修复**
+   - `refreshHud()`: 回合提示 `=== "zh-Hans"` → `tMessage(yourTurnHint / aiThinking)`
+3. **QQ 棋牌风格 — ChessScene**
+   - 国际象棋棋盘色：灰色 → 木质色 (0xf0d9b5/0xb58863)，并添加双层木框
+   - 五子棋：背景色 0xdcb45a + 格线 + 天元/星位小圆点
+   - 玩家/AI 标签（底部金色"你（白方/红方/黑子）"，顶部红色"AI 对手"）
+4. **QQ 棋牌风格 — CardScene**
+   - HP 条（玩家/AI），动态颜色（绿/黄/红）
+   - 法力宝石（蓝色=有法力，深色=空）
+5. **i18n 新增 key（5 locale，26 个新 key）**
+   - sceneGame.chess: +12 keys（checkAlertXiangqi/checkAlertIntl/checkmateBlack/checkmateMsgWin/checkmateMsgRedLose/checkmateMsgWhiteLose/goCaptureMsg/goCapsLine/playerSideWhite/playerSideRed/playerSideFirst/aiSide）
+   - sceneGame.card: +4 keys（yourTurnHint/aiThinking/hp/mana）
+6. **TypeScript `tsc --noEmit` 零错误** ✅
+7. **commit `d1845548` + push** ✅
+
 ### 下次启动清单
 1. `npm run dev`（port 8888）
 2. 打开英文斗地主游戏，确认叫地主后底牌淡出、出炸弹后倍数显示
+3. 打开国际象棋（/en/play/…），确认木质棋盘 + 双层边框 + 玩家/AI 标签
+4. 打开卡牌游戏，确认 HP 条 + 法力宝石 + 英文 "Your turn" / "AI thinking…"
+5. 打开五子棋，确认木色背景 + 网格线 + 天元星位
 3. 可进一步优化：AI 玩家扑克扇形背面显示（类 QQ 风格）、计时器
 
 ---
