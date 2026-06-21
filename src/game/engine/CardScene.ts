@@ -9,6 +9,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { buildCardBlueprint } from "@/lib/card-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
+import { tMessage } from "@/lib/i18n/messages";
 import type { CohesivePresentation } from "@/lib/cohesive-presentation";
 import { hudCardState, bannerCardWin } from "@/lib/i18n/game-hud-labels";
 import { showControlsHint, cardControlLines } from "@/game/engine/controls-hint";
@@ -117,7 +118,7 @@ export class CardScene extends Phaser.Scene {
     // 中央分隔线 + 对手区
     this.add.rectangle(viewW / 2, viewH * 0.28, viewW - 80, 2, 0x334155, 0.6).setDepth(0);
     this.add
-      .text(viewW / 2, 70, this.uiLocale === "zh-Hans" ? "对手" : "Opponent", {
+      .text(viewW / 2, 70, tMessage(this.uiLocale, "sceneGame.card.opponent"), {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
         color: "#f87171",
@@ -156,7 +157,7 @@ export class CardScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x60a5fa, 0.9)
       .setInteractive({ useHandCursor: true });
     this.endTurnLabel = this.add
-      .text(btnX, btnY, this.uiLocale === "zh-Hans" ? "结束回合" : "End Turn", {
+      .text(btnX, btnY, tMessage(this.uiLocale, "sceneGame.card.endTurn"), {
         fontFamily: "system-ui, sans-serif",
         fontSize: "15px",
         fontStyle: "bold",
@@ -177,7 +178,7 @@ export class CardScene extends Phaser.Scene {
     }
 
     this.isPlayerTurn = true;
-    this.showBanner(this.uiLocale === "zh-Hans" ? "你的回合" : "Your Turn");
+    this.showBanner(tMessage(this.uiLocale, "sceneGame.card.yourTurn"));
     this.refreshHud();
     this.layoutHand();
     showControlsHint(this, cardControlLines(this.uiLocale));
@@ -194,31 +195,31 @@ export class CardScene extends Phaser.Scene {
         const dmg = 2 + Math.floor(i / 9) + (i % 3); // 2..6
         def = {
           id: this.nextCardId++,
-          name: this.uiLocale === "zh-Hans" ? `打击 ${dmg}` : `Strike ${dmg}`,
+          name: tMessage(this.uiLocale, "sceneGame.card.strike", { n: dmg }),
           cost: Math.max(1, Math.min(this.maxMana, Math.ceil(dmg / 2))),
           kind: "attack",
           value: dmg,
-          desc: this.uiLocale === "zh-Hans" ? `对对手造成 ${dmg} 点伤害` : `Deal ${dmg} to opponent`,
+          desc: tMessage(this.uiLocale, "sceneGame.card.dealDmg", { n: dmg }),
         };
       } else if (roll < 7) {
         const heal = 3 + (i % 4); // 3..6
         def = {
           id: this.nextCardId++,
-          name: this.uiLocale === "zh-Hans" ? `治疗 ${heal}` : `Heal ${heal}`,
+          name: tMessage(this.uiLocale, "sceneGame.card.healN", { n: heal }),
           cost: 2,
           kind: "heal",
           value: heal,
-          desc: this.uiLocale === "zh-Hans" ? `恢复 ${heal} 点生命` : `Restore ${heal} HP`,
+          desc: tMessage(this.uiLocale, "sceneGame.card.restoreHp", { n: heal }),
         };
       } else {
         const sh = 2 + (i % 3); // 2..4
         def = {
           id: this.nextCardId++,
-          name: this.uiLocale === "zh-Hans" ? `护盾 ${sh}` : `Shield ${sh}`,
+          name: tMessage(this.uiLocale, "sceneGame.card.shieldN", { n: sh }),
           cost: 1,
           kind: "shield",
           value: sh,
-          desc: this.uiLocale === "zh-Hans" ? `获得 ${sh} 点护盾` : `Gain ${sh} shield`,
+          desc: tMessage(this.uiLocale, "sceneGame.card.gainShield", { n: sh }),
         };
       }
       out.push(def);
@@ -350,7 +351,7 @@ export class CardScene extends Phaser.Scene {
   private playPlayerCard(view: CardView) {
     const def = view.def;
     if (def.cost > this.playerMana) {
-      this.showBanner(this.uiLocale === "zh-Hans" ? "法力不足" : "Not enough mana", true);
+      this.showBanner(tMessage(this.uiLocale, "sceneGame.card.notEnoughMana"), true);
       playBleep("hit");
       return;
     }
@@ -435,8 +436,17 @@ export class CardScene extends Phaser.Scene {
     const isPlayer = caster === "player";
     const x = this.scale.width / 2;
     const y = isPlayer ? this.scale.height * 0.62 : this.scale.height * 0.38;
-    const kindLabel = def.kind === "attack" ? "攻击" : def.kind === "heal" ? "治疗" : def.kind === "shield" ? "护盾" : def.kind;
-    const txt = this.add.text(x, y, `${isPlayer ? "你" : "AI"}: ${def.name}(${kindLabel} ${def.value})`, {
+    const kindLabel = def.kind === "attack"
+      ? tMessage(this.uiLocale, "sceneGame.card.attack")
+      : def.kind === "heal"
+        ? tMessage(this.uiLocale, "sceneGame.card.heal")
+        : def.kind === "shield"
+          ? tMessage(this.uiLocale, "sceneGame.card.shield")
+          : def.kind;
+    const who = isPlayer
+      ? tMessage(this.uiLocale, "sceneGame.card.you")
+      : tMessage(this.uiLocale, "sceneGame.card.ai");
+    const txt = this.add.text(x, y, `${who}: ${def.name}(${kindLabel} ${def.value})`, {
       fontFamily: "system-ui, sans-serif",
       fontSize: "14px",
       fontStyle: "700",
@@ -451,7 +461,7 @@ export class CardScene extends Phaser.Scene {
   private endPlayerTurn() {
     if (this.finished) return;
     this.isPlayerTurn = false;
-    this.showBanner(this.uiLocale === "zh-Hans" ? "对手回合" : "Opponent Turn");
+    this.showBanner(tMessage(this.uiLocale, "sceneGame.card.opponentTurn"));
     // AI 行动延迟，给玩家观察时间
     this.time.delayedCall(700, () => this.aiTurn());
   }
@@ -503,7 +513,7 @@ export class CardScene extends Phaser.Scene {
     this.drawCardForPlayer();
     this.layoutHand();
     this.refreshHud();
-    this.showBanner(this.uiLocale === "zh-Hans" ? "你的回合" : "Your Turn");
+    this.showBanner(tMessage(this.uiLocale, "sceneGame.card.yourTurn"));
     playBleep("pickup");
   }
 
@@ -513,7 +523,7 @@ export class CardScene extends Phaser.Scene {
     if (roll < 0.55) {
       return {
         id: this.nextCardId++,
-        name: this.uiLocale === "zh-Hans" ? `打击 ${dmg}` : `Strike ${dmg}`,
+        name: tMessage(this.uiLocale, "sceneGame.card.strike", { n: dmg }),
         cost: Math.max(1, Math.ceil(dmg / 2)),
         kind: "attack",
         value: dmg,
@@ -524,7 +534,7 @@ export class CardScene extends Phaser.Scene {
       const h = 3 + Math.floor(roll * 3);
       return {
         id: this.nextCardId++,
-        name: this.uiLocale === "zh-Hans" ? `治疗 ${h}` : `Heal ${h}`,
+        name: tMessage(this.uiLocale, "sceneGame.card.healN", { n: h }),
         cost: 2,
         kind: "heal",
         value: h,
@@ -534,7 +544,7 @@ export class CardScene extends Phaser.Scene {
     const s = 2 + Math.floor(roll * 2);
     return {
       id: this.nextCardId++,
-      name: this.uiLocale === "zh-Hans" ? `护盾 ${s}` : `Shield ${s}`,
+      name: tMessage(this.uiLocale, "sceneGame.card.shieldN", { n: s }),
       cost: 1,
       kind: "shield",
       value: s,
@@ -568,7 +578,7 @@ export class CardScene extends Phaser.Scene {
       score: this.playerHp,
       lives: this.playerShield,
       right: state,
-      actLabel: this.uiLocale === "zh-Hans" ? `回合 ${this.turn}` : `Turn ${this.turn}`,
+      actLabel: tMessage(this.uiLocale, "sceneGame.card.turn", { n: this.turn }),
       skill: state,
     });
     this.statusText.setText(
@@ -584,7 +594,7 @@ export class CardScene extends Phaser.Scene {
     this.statusText.setText("");
     const winBanner = bannerCardWin(this.uiLocale);
     this.hud.setBottomHint(
-      payload.won ? winBanner.message : this.uiLocale === "zh-Hans" ? "失败 · 再试一次" : "Defeat · try again",
+      payload.won ? winBanner.message : tMessage(this.uiLocale, "sceneGame.card.defeat"),
     );
     if (payload.won) {
       this.cameras.main.shake(280, 0.008);
@@ -602,7 +612,7 @@ export class CardScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: this.spec.theme.hazardColor,
-        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        text: tMessage(this.uiLocale, "sceneGame.card.fail"),
         textColorCss: this.cohesive.hud.danger,
       });
     }

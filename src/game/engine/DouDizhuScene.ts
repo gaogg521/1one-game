@@ -11,6 +11,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
+import { tMessage } from "@/lib/i18n/messages";
 
 type EndPayload = { score: number; won: boolean };
 
@@ -407,7 +408,7 @@ export class DouDizhuScene extends Phaser.Scene {
       return;
     }
     this.hud.flashBanner({
-      title: this.uiLocale === "zh-Hans" ? "叫地主" : "Bid for Landlord",
+      title: tMessage(this.uiLocale, "sceneGame.douDizhu.bid"),
       message: this.uiLocale === "zh-Hans"
         ? `当前最高 ${this.highestBid} 分，点击下方按钮或按 1/2/3/0`
         : `Current highest: ${this.highestBid}. Click buttons below or press 1/2/3/0`,
@@ -423,10 +424,10 @@ export class DouDizhuScene extends Phaser.Scene {
     const viewH = this.scale.height;
     const btnY = viewH - 116;
     const options: Array<{ label: string; bid: number; color: number }> = [
-      { label: this.uiLocale === "zh-Hans" ? "1分" : "Bid 1", bid: 1, color: 0x2563eb },
-      { label: this.uiLocale === "zh-Hans" ? "2分" : "Bid 2", bid: 2, color: 0x7c3aed },
-      { label: this.uiLocale === "zh-Hans" ? "3分" : "Bid 3", bid: 3, color: 0xb45309 },
-      { label: this.uiLocale === "zh-Hans" ? "不叫" : "Pass",  bid: 0, color: 0x475569 },
+      { label: tMessage(this.uiLocale, "sceneGame.douDizhu.bid1"), bid: 1, color: 0x2563eb },
+      { label: tMessage(this.uiLocale, "sceneGame.douDizhu.bid2"), bid: 2, color: 0x7c3aed },
+      { label: tMessage(this.uiLocale, "sceneGame.douDizhu.bid3"), bid: 3, color: 0xb45309 },
+      { label: tMessage(this.uiLocale, "sceneGame.douDizhu.bidPass"),  bid: 0, color: 0x475569 },
     ];
     const spacing = 82;
     const startX = viewW / 2 - (spacing * (options.length - 1)) / 2;
@@ -446,8 +447,8 @@ export class DouDizhuScene extends Phaser.Scene {
     if (!this.bidPhase || this.bidTurn !== 0) return;
     if (bid !== 0 && bid <= this.highestBid) {
       this.hud.flashBanner({
-        title: this.uiLocale === "zh-Hans" ? "叫分太低" : "Bid too low",
-        message: this.uiLocale === "zh-Hans" ? `必须大于 ${this.highestBid}` : `Must exceed ${this.highestBid}`,
+        title: tMessage(this.uiLocale, "sceneGame.douDizhu.bidTooLow"),
+        message: tMessage(this.uiLocale, "sceneGame.douDizhu.bidMustExceed", { n: this.highestBid }),
         ms: 1400,
       });
       this.showBidPrompt();
@@ -481,8 +482,8 @@ export class DouDizhuScene extends Phaser.Scene {
     if (this.highestBidSeat == null) {
       // 全员不叫 → 流局，重新发牌
       this.hud.flashBanner({
-        title: this.uiLocale === "zh-Hans" ? "流局" : "Re-deal",
-        message: this.uiLocale === "zh-Hans" ? "全员不叫，重新发牌" : "All passed, re-dealing",
+        title: tMessage(this.uiLocale, "sceneGame.douDizhu.redeal"),
+        message: tMessage(this.uiLocale, "sceneGame.douDizhu.redealMsg"),
         ms: 1600,
       });
       this.time.delayedCall(1600, () => {
@@ -507,10 +508,10 @@ export class DouDizhuScene extends Phaser.Scene {
     this.lastPlaySeat = null;
     this.passCount = 0;
 
-    const role = this.uiLocale === "zh-Hans" ? "地主" : "Landlord";
+    const role = tMessage(this.uiLocale, "sceneGame.douDizhu.landlord");
     const who = this.landlordSeat === 0
-      ? (this.uiLocale === "zh-Hans" ? "你是地主" : "You are Landlord")
-      : (this.uiLocale === "zh-Hans" ? `${this.seatName(this.landlordSeat)} 当地主` : `${this.seatName(this.landlordSeat)} is Landlord`);
+      ? (tMessage(this.uiLocale, "sceneGame.douDizhu.youLandlord"))
+      : tMessage(this.uiLocale, "sceneGame.douDizhu.isLandlord", { name: this.seatName(this.landlordSeat) });
     this.hud.flashBanner({ title: role, message: who, ms: 2200 });
     playBleep("win");
 
@@ -533,7 +534,7 @@ export class DouDizhuScene extends Phaser.Scene {
     const pattern = identifyPattern(sel);
     if (!pattern) {
       this.hud.flashBanner({
-        title: this.uiLocale === "zh-Hans" ? "牌型不合法" : "Invalid combo",
+        title: tMessage(this.uiLocale, "sceneGame.douDizhu.invalidCombo"),
         message: "",
         ms: 1200,
       });
@@ -542,7 +543,7 @@ export class DouDizhuScene extends Phaser.Scene {
     }
     if (this.lastPlay && this.lastPlaySeat !== 0 && !canBeat(this.lastPlay, pattern)) {
       this.hud.flashBanner({
-        title: this.uiLocale === "zh-Hans" ? "管不上" : "Cannot beat",
+        title: tMessage(this.uiLocale, "sceneGame.douDizhu.cannotBeat"),
         message: "",
         ms: 1200,
       });
@@ -557,7 +558,7 @@ export class DouDizhuScene extends Phaser.Scene {
     if (this.lastPlaySeat == null || this.lastPlaySeat === 0) {
       // 自己起头不能 pass
       this.hud.flashBanner({
-        title: this.uiLocale === "zh-Hans" ? "你先出牌" : "You lead",
+        title: tMessage(this.uiLocale, "sceneGame.douDizhu.youLead"),
         message: "",
         ms: 1000,
       });
@@ -909,9 +910,9 @@ export class DouDizhuScene extends Phaser.Scene {
     return viewH * 0.32;
   }
   private seatName(seat: Seat): string {
-    if (seat === 0) return this.uiLocale === "zh-Hans" ? "你" : "You";
-    if (seat === 1) return this.uiLocale === "zh-Hans" ? "右家" : "Right";
-    return this.uiLocale === "zh-Hans" ? "左家" : "Left";
+    if (seat === 0) return tMessage(this.uiLocale, "sceneGame.card.you");
+    if (seat === 1) return tMessage(this.uiLocale, "sceneGame.douDizhu.right");
+    return tMessage(this.uiLocale, "sceneGame.douDizhu.left");
   }
 
   private buildSeatLabels() {
@@ -944,8 +945,8 @@ export class DouDizhuScene extends Phaser.Scene {
       }
       // 角色标签
       const role = this.seats[seat]!.isLandlord
-        ? (this.uiLocale === "zh-Hans" ? "地主" : "Landlord")
-        : (this.uiLocale === "zh-Hans" ? "农民" : "Farmer");
+        ? (tMessage(this.uiLocale, "sceneGame.douDizhu.landlord"))
+        : (tMessage(this.uiLocale, "sceneGame.douDizhu.farmer"));
       const roleColor = this.seats[seat]!.isLandlord ? "#fbbf24" : "#86efac";
       const rt = this.add
         .text(this.seatX(seat), this.seatY(seat) + 24, role, {
@@ -977,7 +978,7 @@ export class DouDizhuScene extends Phaser.Scene {
     for (const c of this.playAreaCards[seat] ?? []) c.destroy();
     this.playAreaCards[seat] = [];
     if (pattern == null) {
-      t.setText(this.uiLocale === "zh-Hans" ? "不要" : "Pass");
+      t.setText(tMessage(this.uiLocale, "sceneGame.douDizhu.pass"));
       t.setColor("#fca5a5");
     } else {
       t.setText("");
@@ -1106,17 +1107,17 @@ export class DouDizhuScene extends Phaser.Scene {
       this.hud.update({
         score: this.highestBid,
         lives: this.seats[0]!.hand.length,
-        right: this.uiLocale === "zh-Hans" ? "叫地主中" : "Bidding",
-        actLabel: this.uiLocale === "zh-Hans" ? "叫地主" : "Bid",
+        right: tMessage(this.uiLocale, "sceneGame.douDizhu.bidding"),
+        actLabel: tMessage(this.uiLocale, "sceneGame.douDizhu.bid"),
       });
       return;
     }
     const myRole = this.seats[0]!.isLandlord
-      ? (this.uiLocale === "zh-Hans" ? "地主" : "Landlord")
-      : (this.uiLocale === "zh-Hans" ? "农民" : "Farmer");
+      ? (tMessage(this.uiLocale, "sceneGame.douDizhu.landlord"))
+      : (tMessage(this.uiLocale, "sceneGame.douDizhu.farmer"));
     const turn = this.currentSeat === 0
-      ? (this.uiLocale === "zh-Hans" ? "你的回合" : "Your turn")
-      : (this.uiLocale === "zh-Hans" ? `${this.seatName(this.currentSeat)} 出牌` : `${this.seatName(this.currentSeat)} turn`);
+      ? (tMessage(this.uiLocale, "sceneGame.card.yourTurn"))
+      : tMessage(this.uiLocale, "sceneGame.douDizhu.seatTurn", { name: this.seatName(this.currentSeat) });
     this.hud.update({
       score: this.seats[0]!.hand.length,
       lives: this.seats[0]!.hand.length,
@@ -1150,7 +1151,7 @@ export class DouDizhuScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: this.spec.theme.hazardColor,
-        text: this.uiLocale === "zh-Hans" ? "失败" : "Fail",
+        text: tMessage(this.uiLocale, "sceneGame.card.fail"),
         textColorCss: "#fca5a5",
       });
       playBleep("hit");

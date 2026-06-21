@@ -4,6 +4,7 @@ import { HudBanner } from "@/game/engine/HudBanner";
 import { styleHudText } from "@/game/engine/hudTextStyle";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { AppLocale } from "@/i18n/routing";
+import { tMessage } from "@/lib/i18n/messages";
 import { type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import type { GameSpec } from "@/lib/game-spec";
@@ -119,30 +120,30 @@ export class ChessScene extends Phaser.Scene {
 
     if (chessPf?.isometricHints) {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans" ? "3D 视角 · 白方先行 · 点击走子" : "3D view · White to move",
+        tMessage(this.uiLocale, "sceneGame.chess.3dView"),
       );
     } else if (this.ruleset === "xiangqi") {
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "红方先行 · 点击棋子走子" : "Red to move · tap a piece");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.xiangqiHint"));
       this.checkTarget = this.xiangqiInCheck("w", this.pieces) ? "w" : null;
       if (this.checkTarget === "w") this.refreshCheckStatus();
     } else if (this.ruleset === "international") {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans" ? "白方先行 · 点击棋子走子" : "White to move · tap a piece",
+        tMessage(this.uiLocale, "sceneGame.chess.intlHint"),
       );
       this.checkTarget = this.intlInCheck("w", this.pieces) ? "w" : null;
       if (this.checkTarget === "w") this.refreshCheckStatus();
     } else if (this.ruleset === "go") {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans" ? "围棋 · 提子有气 · 打劫禁入" : "Go · capture · ko rule",
+        tMessage(this.uiLocale, "sceneGame.chess.goHint"),
       );
     } else if (this.ruleset === "jungle") {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans" ? "斗兽棋 · 鼠能过河 · 狮虎可跳河" : "Jungle · rat swims · lion/tiger jump",
+        tMessage(this.uiLocale, "sceneGame.chess.jungleHint"),
       );
     } else if (this.ruleset === "gomoku") {
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "五子棋 · 黑先 · 连五即胜" : "Gomoku · connect 5 to win");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.gomokuHint"));
     } else if (this.ruleset === "junqi") {
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "军棋 · 等级吃子 · 夺旗胜" : "Junqi · rank capture · seize flag");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.junqiHint"));
     }
 
     this.publishQaState();
@@ -437,8 +438,8 @@ export class ChessScene extends Phaser.Scene {
 
     if (enemyInCheck) {
       this.banner.show({
-        title: this.uiLocale === "zh-Hans" ? "将军！" : "Check!",
-        message: this.uiLocale === "zh-Hans" ? "对方必须应将" : "Opponent must respond",
+        title: tMessage(this.uiLocale, "sceneGame.chess.check"),
+        message: tMessage(this.uiLocale, "sceneGame.chess.checkMsg"),
         ms: 1400,
       });
       juiceShake(this, { intensity: 0.012, durationMs: 160 });
@@ -455,11 +456,11 @@ export class ChessScene extends Phaser.Scene {
     if (!this.whiteTurn) {
       if (this.checkTarget === "b") {
         this.statusText.setText(
-          this.uiLocale === "zh-Hans" ? "黑方应将中…" : "Black escaping check…",
+          tMessage(this.uiLocale, "sceneGame.chess.blackEscaping"),
         );
         return;
       }
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "黑方思考…" : "Black thinking…");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackThinking"));
       return;
     }
     if (this.checkTarget === "w") {
@@ -520,8 +521,8 @@ export class ChessScene extends Phaser.Scene {
 
   private finishStalemate() {
     this.banner.show({
-      title: this.uiLocale === "zh-Hans" ? "困毙 · 和棋" : "Stalemate · Draw",
-      message: this.uiLocale === "zh-Hans" ? "无子可动且未被将军" : "No legal moves without check",
+      title: tMessage(this.uiLocale, "sceneGame.chess.stalemate"),
+      message: tMessage(this.uiLocale, "sceneGame.chess.stalemateMsg"),
       ms: 2400,
     });
     this.finish(false);
@@ -801,7 +802,7 @@ export class ChessScene extends Phaser.Scene {
     else this.goCapturesB += sim.captured;
     if (sim.captured > 0) {
       this.banner.show({
-        title: this.uiLocale === "zh-Hans" ? `提子 ×${sim.captured}` : `Capture ×${sim.captured}`,
+        title: tMessage(this.uiLocale, "sceneGame.chess.capture", { n: sim.captured }),
         message:
           this.uiLocale === "zh-Hans"
             ? `黑提 ${this.goCapturesW} · 白提 ${this.goCapturesB}`
@@ -812,8 +813,8 @@ export class ChessScene extends Phaser.Scene {
     }
     if (sim.ko) {
       this.banner.show({
-        title: this.uiLocale === "zh-Hans" ? "打劫" : "Ko",
-        message: this.uiLocale === "zh-Hans" ? "对方下一手不可立即回提" : "Recapture forbidden next turn",
+        title: tMessage(this.uiLocale, "sceneGame.chess.ko"),
+        message: tMessage(this.uiLocale, "sceneGame.chess.koMsg"),
         ms: 1100,
       });
     }
@@ -828,11 +829,11 @@ export class ChessScene extends Phaser.Scene {
         : `Caps B${this.goCapturesB}:W${this.goCapturesW}`;
     if (this.whiteTurn) {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans" ? `你的回合 · ${cap}` : `Your turn · ${cap}`,
+        tMessage(this.uiLocale, "sceneGame.chess.yourTurnCap", { cap }),
       );
       return;
     }
-    this.statusText.setText(this.uiLocale === "zh-Hans" ? `黑方思考… · ${cap}` : `Black… · ${cap}`);
+    this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackCap", { cap }));
   }
 
   private buildJunglePieces(): Piece[] {
@@ -1013,12 +1014,12 @@ export class ChessScene extends Phaser.Scene {
     if (this.ruleset === "jungle") {
       this.riverTexts.push(styleHudText(
         this.add
-          .text(this.ox + this.cell * 2.05, this.oy + this.cell * 4.3, this.uiLocale === "zh-Hans" ? "河流" : "River", { fontSize: "14px", color: "#0f172a" })
+          .text(this.ox + this.cell * 2.05, this.oy + this.cell * 4.3, tMessage(this.uiLocale, "sceneGame.chess.river"), { fontSize: "14px", color: "#0f172a" })
           .setDepth(2),
       ));
       this.riverTexts.push(styleHudText(
         this.add
-          .text(this.ox + this.cell * 2.8, this.oy + this.cell * 0.05, this.uiLocale === "zh-Hans" ? "兽穴" : "Den", { fontSize: "13px", color: "#7f1d1d" })
+          .text(this.ox + this.cell * 2.8, this.oy + this.cell * 0.05, tMessage(this.uiLocale, "sceneGame.chess.den"), { fontSize: "13px", color: "#7f1d1d" })
           .setDepth(2),
       ));
     }
@@ -1195,8 +1196,8 @@ export class ChessScene extends Phaser.Scene {
       if (hit) return;
       if (!this.goApplyPlay(row, col, "w")) {
         this.banner.show({
-          title: this.uiLocale === "zh-Hans" ? "禁着点" : "Illegal",
-          message: this.uiLocale === "zh-Hans" ? "自杀或打劫禁入" : "Suicide or ko",
+          title: tMessage(this.uiLocale, "sceneGame.chess.illegal"),
+          message: tMessage(this.uiLocale, "sceneGame.chess.illegalMsg"),
           ms: 1000,
         });
         return;
@@ -1226,7 +1227,7 @@ export class ChessScene extends Phaser.Scene {
         return;
       }
       this.whiteTurn = false;
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "黑方思考中…" : "Black thinking…");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackThinkingGomoku"));
       this.redraw();
       this.time.delayedCall(360, () => this.blackMove());
       return;
@@ -1235,7 +1236,7 @@ export class ChessScene extends Phaser.Scene {
       // 军棋：点击己方棋子选中，点击目标格移动/吃子；首次接触翻开暗棋
       if (!this.selected && hit?.color === "w") {
         this.selected = hit;
-        this.statusText.setText(this.uiLocale === "zh-Hans" ? "已选中，点目标格" : "Selected, tap target");
+        this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.selected"));
         this.redraw();
         return;
       }
@@ -1252,7 +1253,7 @@ export class ChessScene extends Phaser.Scene {
             return;
           }
           this.whiteTurn = false;
-          this.statusText.setText(this.uiLocale === "zh-Hans" ? "黑方思考中…" : "Black thinking…");
+          this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackThinkingGomoku"));
           this.redraw();
           this.time.delayedCall(500, () => this.blackMove());
           return;
@@ -1373,7 +1374,7 @@ export class ChessScene extends Phaser.Scene {
         }
       }
       this.whiteTurn = true;
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "你的回合（白）" : "Your turn (White)");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.yourTurnWhite"));
       this.redraw();
       this.publishQaState();
       return;
@@ -1394,7 +1395,7 @@ export class ChessScene extends Phaser.Scene {
       const chosen = candidates[Math.floor(this.runtimeRng() * candidates.length)]!;
       this.junqiApplyMove(chosen.piece, chosen.move);
       this.whiteTurn = true;
-      this.statusText.setText(this.uiLocale === "zh-Hans" ? "你的回合" : "Your turn");
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.card.yourTurn"));
       this.redraw();
       this.publishQaState();
       if (this.junqiCheckWin()) return;
@@ -1593,7 +1594,7 @@ export class ChessScene extends Phaser.Scene {
       if (piece.type === "炸弹" || target.type === "炸弹") {
         // 炸弹同归：双方都消失
         this.pieces = this.pieces.filter((x) => x !== piece && x !== target);
-        this.banner.show({ title: this.uiLocale === "zh-Hans" ? "炸弹！" : "Bomb!", message: this.uiLocale === "zh-Hans" ? "同归于尽" : "Mutual destroy", ms: 1000 });
+        this.banner.show({ title: tMessage(this.uiLocale, "sceneGame.chess.bomb"), message: tMessage(this.uiLocale, "sceneGame.chess.mutualDestroy"), ms: 1000 });
         return;
       }
       if (target.type === "军旗") {
@@ -1602,7 +1603,7 @@ export class ChessScene extends Phaser.Scene {
         piece.row = move.row;
         piece.col = move.col;
         this.finish(piece.color === "w");
-        this.banner.show({ title: piece.color === "w" ? (this.uiLocale === "zh-Hans" ? "夺旗胜！" : "Flag captured!") : (this.uiLocale === "zh-Hans" ? "军旗被夺" : "Flag lost"), message: "", ms: 1500 });
+        this.banner.show({ title: piece.color === "w" ? (tMessage(this.uiLocale, "sceneGame.chess.flagCaptured")) : (tMessage(this.uiLocale, "sceneGame.chess.flagLost")), message: "", ms: 1500 });
         return;
       }
       if (target.type === "地雷") {
@@ -1611,11 +1612,11 @@ export class ChessScene extends Phaser.Scene {
           this.pieces = this.pieces.filter((x) => x !== target);
           piece.row = move.row;
           piece.col = move.col;
-          this.banner.show({ title: this.uiLocale === "zh-Hans" ? "排雷成功" : "Mine cleared", message: "", ms: 800 });
+          this.banner.show({ title: tMessage(this.uiLocale, "sceneGame.chess.mineCleared"), message: "", ms: 800 });
         } else {
           // 踩雷亡
           this.pieces = this.pieces.filter((x) => x !== piece);
-          this.banner.show({ title: this.uiLocale === "zh-Hans" ? "踩雷阵亡" : "Stepped on mine", message: "", ms: 800 });
+          this.banner.show({ title: tMessage(this.uiLocale, "sceneGame.chess.steppedMine"), message: "", ms: 800 });
         }
         return;
       }
