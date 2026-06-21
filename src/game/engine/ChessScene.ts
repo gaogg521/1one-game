@@ -23,7 +23,7 @@ import { showControlsHint, chessControlLines } from "@/game/engine/controls-hint
 import { juiceFlash, juiceShake } from "@/game/engine/gameJuice";
 
 type EndPayload = { score: number; won: boolean };
-type BoardRuleset = "international" | "xiangqi" | "go" | "jungle";
+type BoardRuleset = "international" | "xiangqi" | "go" | "jungle" | "gomoku" | "junqi";
 type Piece = { color: "w" | "b"; type: string; row: number; col: number };
 type BoardSquare = { row: number; col: number };
 
@@ -105,7 +105,11 @@ export class ChessScene extends Phaser.Scene {
           ? this.buildGoPieces()
           : this.ruleset === "jungle"
             ? this.buildJunglePieces()
-            : this.buildInternationalPieces();
+            : this.ruleset === "gomoku"
+              ? [] // gomoku 初始空盘，落子式
+              : this.ruleset === "junqi"
+                ? this.buildJunqiPieces()
+                : this.buildInternationalPieces();
 
     this.statusText = styleHudText(
       this.add.text(16, 12, hudChessTurnWhite(this.uiLocale), { fontSize: "16px", color: "#fff" }),
@@ -135,6 +139,10 @@ export class ChessScene extends Phaser.Scene {
       this.statusText.setText(
         this.uiLocale === "zh-Hans" ? "斗兽棋 · 鼠能过河 · 狮虎可跳河" : "Jungle · rat swims · lion/tiger jump",
       );
+    } else if (this.ruleset === "gomoku") {
+      this.statusText.setText(this.uiLocale === "zh-Hans" ? "五子棋 · 黑先 · 连五即胜" : "Gomoku · connect 5 to win");
+    } else if (this.ruleset === "junqi") {
+      this.statusText.setText(this.uiLocale === "zh-Hans" ? "军棋 · 等级吃子 · 夺旗胜" : "Junqi · rank capture · seize flag");
     }
 
     this.publishQaState();
@@ -1204,6 +1212,56 @@ export class ChessScene extends Phaser.Scene {
       this.time.delayedCall(360, () => this.blackMove());
       return;
     }
+    if (this.ruleset === "gomoku") {
+      // 五子棋：点击空格落子，连五即胜
+      if (hit) return;
+      this.pieces.push({ row, col, color: "w", type: "黑子" });
+      this.moves += 1;
+      bumpQaTouch();
+      playBleep("pickup");
+      juiceFlash(this, { r: 250, g: 250, b: 250 }, { durationMs: 150 });
+      if (this.gomokuCheckWin(row, col, "w")) {
+        this.finish(true);
+        this.redraw();
+        return;
+      }
+      this.whiteTurn = false;
+      this.statusText.setText(this.uiLocale === "zh-Hans" ? "黑方思考中…" : "Black thinking…");
+      this.redraw();
+      this.time.delayedCall(360, () => this.blackMove());
+      return;
+    }
+    if (this.ruleset === "junqi") {
+      // 军棋：点击己方棋子选中，点击目标格移动/吃子；首次接触翻开暗棋
+      if (!this.selected && hit?.color === "w") {
+        this.selected = hit;
+        this.statusText.setText(this.uiLocale === "zh-Hans" ? "已选中，点目标格" : "Selected, tap target");
+        this.redraw();
+        return;
+      }
+      if (this.selected) {
+        const moves = this.junqiLegalMoves(this.selected);
+        if (moves.some((m) => m.row === row && m.col === col)) {
+          this.junqiApplyMove(this.selected, { row, col });
+          this.selected = null;
+          this.moves += 1;
+          bumpQaTouch();
+          playBleep("pickup");
+          if (this.junqiCheckWin()) {
+            this.redraw();
+            return;
+          }
+          this.whiteTurn = false;
+          this.statusText.setText(this.uiLocale === "zh-Hans" ? "黑方思考中…" : "Black thinking…");
+          this.redraw();
+          this.time.delayedCall(500, () => this.blackMove());
+          return;
+        }
+        this.selected = null;
+        this.redraw();
+      }
+      return;
+    }
     if (!this.selected && hit?.color === "w") {
       this.selected = hit;
       this.statusText.setText(hudChessPieceSelected(this.uiLocale));
@@ -1272,13 +1330,14 @@ export class ChessScene extends Phaser.Scene {
   }
 
   private legalMovesFor(p: Piece): Array<{ row: number; col: number }> {
-    const own = (row: number, col: number) => this.pieces.some((x) => x.row === row && x.col === col && x.color === p.color);
-    const inside = (row: number, col: number) => row >= 0 && row < this.boardRows && col >= 0 && col < this.boardCols && !own(row, col);
     if (this.ruleset === "go") {
       return this.goLegalIntersections(p.color);
     }
     if (this.ruleset === "jungle") {
       return this.jungleLegalMoves(p);
+    }
+    if (this.ruleset === "junqi") {
+      return this.junqiLegalMoves(p);
     }
     if (this.ruleset === "international") {
       return this.intlLegalMovesFiltered(p, this.pieces);
@@ -1298,6 +1357,47 @@ export class ChessScene extends Phaser.Scene {
       this.redraw();
       this.publishQaState();
       if (this.moves >= this.winMoves) this.finish(true);
+      return;
+    }
+    if (this.ruleset === "gomoku") {
+      // AI：优先找己方连四/阻挡对方连四，否则随机
+      const move = this.gomokuAiPick("b");
+      if (move) {
+        this.pieces.push({ row: move.row, col: move.col, color: "b", type: "白子" });
+        this.moves += 1;
+        playBleep("hit");
+        if (this.gomokuCheckWin(move.row, move.col, "b")) {
+          this.finish(false);
+          this.redraw();
+          return;
+        }
+      }
+      this.whiteTurn = true;
+      this.statusText.setText(this.uiLocale === "zh-Hans" ? "你的回合（白）" : "Your turn (White)");
+      this.redraw();
+      this.publishQaState();
+      return;
+    }
+    if (this.ruleset === "junqi") {
+      // 军棋 AI：随机选己方棋子走一步
+      const aiPieces = this.pieces.filter((p) => p.color === "b");
+      const candidates: Array<{ piece: Piece; move: { row: number; col: number } }> = [];
+      for (const piece of aiPieces) {
+        for (const m of this.junqiLegalMoves(piece)) {
+          candidates.push({ piece, move: m });
+        }
+      }
+      if (candidates.length === 0) {
+        this.finish(true);
+        return;
+      }
+      const chosen = candidates[Math.floor(this.runtimeRng() * candidates.length)]!;
+      this.junqiApplyMove(chosen.piece, chosen.move);
+      this.whiteTurn = true;
+      this.statusText.setText(this.uiLocale === "zh-Hans" ? "你的回合" : "Your turn");
+      this.redraw();
+      this.publishQaState();
+      if (this.junqiCheckWin()) return;
       return;
     }
     if (this.ruleset === "xiangqi") {
@@ -1375,5 +1475,179 @@ export class ChessScene extends Phaser.Scene {
       this.banner.show({ ...bannerChessFinish(this.uiLocale), ms: 1800 });
     }
     this.time.delayedCall(2000, () => this.onEnd({ score: this.moves * 15, won }));
+  }
+
+  // ─── 五子棋 gomoku ──────────────────────────────────────────────
+  /** 检查 (row,col) 落子后是否连五（横/竖/双斜） */
+  private gomokuCheckWin(row: number, col: number, color: "w" | "b"): boolean {
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (const [dr, dc] of dirs) {
+      let count = 1;
+      for (const sign of [1, -1]) {
+        let r = row + dr * sign;
+        let c = col + dc * sign;
+        while (r >= 0 && r < this.boardRows && c >= 0 && c < this.boardCols && this.pieces.some((p) => p.row === r && p.col === c && p.color === color)) {
+          count += 1;
+          r += dr * sign;
+          c += dc * sign;
+        }
+      }
+      if (count >= 5) return true;
+    }
+    return false;
+  }
+
+  /** 五子棋 AI：优先己方四连/三连，其次阻挡对方四连，否则随机 */
+  private gomokuAiPick(color: "w" | "b"): { row: number; col: number } | null {
+    const enemy: "w" | "b" = color === "w" ? "b" : "w";
+    const occupied = new Set(this.pieces.map((p) => `${p.row},${p.col}`));
+    const empty: Array<{ row: number; col: number }> = [];
+    for (let r = 0; r < this.boardRows; r += 1) {
+      for (let c = 0; c < this.boardCols; c += 1) {
+        if (!occupied.has(`${r},${c}`)) empty.push({ row: r, col: c });
+      }
+    }
+    if (empty.length === 0) return null;
+    // 找能连五的点
+    for (const e of empty) {
+      this.pieces.push({ row: e.row, col: e.col, color, type: "tmp" });
+      const win = this.gomokuCheckWin(e.row, e.col, color);
+      this.pieces.pop();
+      if (win) return e;
+    }
+    // 找必须阻挡的对方四连
+    for (const e of empty) {
+      this.pieces.push({ row: e.row, col: e.col, color: enemy, type: "tmp" });
+      const lose = this.gomokuCheckWin(e.row, e.col, enemy);
+      this.pieces.pop();
+      if (lose) return e;
+    }
+    // 优先邻近已有棋子的空点
+    const near = empty.filter((e) =>
+      this.pieces.some((p) => Math.abs(p.row - e.row) <= 1 && Math.abs(p.col - e.col) <= 1),
+    );
+    return pickSeededFromArray(near.length > 0 ? near : empty, this.runtimeRng) ?? null;
+  }
+
+  // ─── 军棋 junqi ──────────────────────────────────────────────────
+  /** 军棋棋子等级（大吃小，炸弹同归，工兵排雷，夺旗胜） */
+  private junqiRank(type: string): number {
+    const order: Record<string, number> = {
+      "司令": 9, "军长": 8, "师长": 7, "旅长": 6, "团长": 5, "营长": 4, "连长": 3, "排长": 2, "工兵": 1,
+      "炸弹": 100, "地雷": 0, "军旗": -1,
+    };
+    return order[type] ?? 0;
+  }
+
+  /** 军棋布子：双方各 12 种棋子，暗棋翻面后才知道类型 */
+  private buildJunqiPieces(): Piece[] {
+    const types = ["司令", "军长", "师长", "旅长", "团长", "营长", "连长", "排长", "工兵", "炸弹", "地雷", "军旗"];
+    const pieces: Piece[] = [];
+    // 随机打乱放上下两端
+    const shuffled = [...types];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(this.runtimeRng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    // 黑方上方（前 3 行），白方下方（后 3 行），中间 6 行空
+    const halfRows = Math.floor(this.boardRows / 2);
+    for (let i = 0; i < 12; i += 1) {
+      const r = Math.floor(i / this.boardCols);
+      const c = i % this.boardCols;
+      pieces.push({ row: r, col: c, color: "b", type: shuffled[i] ?? "工兵" });
+    }
+    const shuffled2 = [...types];
+    for (let i = shuffled2.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(this.runtimeRng() * (i + 1));
+      [shuffled2[i], shuffled2[j]] = [shuffled2[j]!, shuffled2[i]!];
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const r = this.boardRows - 1 - Math.floor(i / this.boardCols);
+      const c = i % this.boardCols;
+      pieces.push({ row: r, col: c, color: "w", type: shuffled2[i] ?? "工兵" });
+    }
+    void halfRows;
+    return pieces;
+  }
+
+  /** 军棋合法走法：相邻一格（上下左右），地雷/军旗不能动 */
+  private junqiLegalMoves(p: Piece): Array<{ row: number; col: number }> {
+    if (p.type === "地雷" || p.type === "军旗") return [];
+    const moves: Array<{ row: number; col: number }> = [];
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of dirs) {
+      const r = p.row + dr;
+      const c = p.col + dc;
+      if (r < 0 || r >= this.boardRows || c < 0 || c >= this.boardCols) continue;
+      const occ = this.pieces.find((x) => x.row === r && x.col === c);
+      if (!occ || occ.color !== p.color) moves.push({ row: r, col: c });
+    }
+    return moves;
+  }
+
+  /** 军棋走子/吃子：炸弹同归，大吃小，工兵排雷，夺军旗即胜 */
+  private junqiApplyMove(piece: Piece, move: { row: number; col: number }): void {
+    const target = this.pieces.find((x) => x.row === move.row && x.col === move.col);
+    if (target) {
+      // 吃子判定
+      if (piece.type === "炸弹" || target.type === "炸弹") {
+        // 炸弹同归：双方都消失
+        this.pieces = this.pieces.filter((x) => x !== piece && x !== target);
+        this.banner.show({ title: this.uiLocale === "zh-Hans" ? "炸弹！" : "Bomb!", message: this.uiLocale === "zh-Hans" ? "同归于尽" : "Mutual destroy", ms: 1000 });
+        return;
+      }
+      if (target.type === "军旗") {
+        // 夺旗胜
+        this.pieces = this.pieces.filter((x) => x !== target);
+        piece.row = move.row;
+        piece.col = move.col;
+        this.finish(piece.color === "w");
+        this.banner.show({ title: piece.color === "w" ? (this.uiLocale === "zh-Hans" ? "夺旗胜！" : "Flag captured!") : (this.uiLocale === "zh-Hans" ? "军旗被夺" : "Flag lost"), message: "", ms: 1500 });
+        return;
+      }
+      if (target.type === "地雷") {
+        if (piece.type === "工兵") {
+          // 工兵排雷
+          this.pieces = this.pieces.filter((x) => x !== target);
+          piece.row = move.row;
+          piece.col = move.col;
+          this.banner.show({ title: this.uiLocale === "zh-Hans" ? "排雷成功" : "Mine cleared", message: "", ms: 800 });
+        } else {
+          // 踩雷亡
+          this.pieces = this.pieces.filter((x) => x !== piece);
+          this.banner.show({ title: this.uiLocale === "zh-Hans" ? "踩雷阵亡" : "Stepped on mine", message: "", ms: 800 });
+        }
+        return;
+      }
+      const aRank = this.junqiRank(piece.type);
+      const tRank = this.junqiRank(target.type);
+      if (aRank > tRank) {
+        // 大吃小
+        this.pieces = this.pieces.filter((x) => x !== target);
+        piece.row = move.row;
+        piece.col = move.col;
+      } else if (aRank < tRank) {
+        // 小被吃
+        this.pieces = this.pieces.filter((x) => x !== piece);
+      } else {
+        // 同级同归
+        this.pieces = this.pieces.filter((x) => x !== piece && x !== target);
+      }
+    } else {
+      // 空格移动
+      piece.row = move.row;
+      piece.col = move.col;
+    }
+  }
+
+  /** 军棋胜负：军旗被夺已在 applyMove 判，这里查是否一方无棋可动 */
+  private junqiCheckWin(): boolean {
+    const whiteHas = this.pieces.some((p) => p.color === "w" && p.type !== "军旗" && p.type !== "地雷");
+    const blackHas = this.pieces.some((p) => p.color === "b" && p.type !== "军旗" && p.type !== "地雷");
+    const whiteFlag = this.pieces.some((p) => p.color === "w" && p.type === "军旗");
+    const blackFlag = this.pieces.some((p) => p.color === "b" && p.type === "军旗");
+    if (!whiteFlag || !whiteHas) { this.finish(false); return true; }
+    if (!blackFlag || !blackHas) { this.finish(true); return true; }
+    return false;
   }
 }

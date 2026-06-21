@@ -129,9 +129,9 @@ const PuzzleBlueprintSchema = z.object({
 });
 
 const ChessBlueprintSchema = z.object({
-  ruleset: z.enum(["international", "xiangqi", "go", "jungle"]),
-  boardCols: z.number().min(7).max(19),
-  boardRows: z.number().min(8).max(19),
+  ruleset: z.enum(["international", "xiangqi", "go", "jungle", "gomoku", "junqi"]),
+  boardCols: z.number().min(5).max(19),
+  boardRows: z.number().min(8).max(20),
   pieceSet: z.array(z.string().min(1).max(16)).min(2).max(32),
   aiDepth: z.number().min(0).max(4),
   showLegalMoves: z.boolean().optional(),
