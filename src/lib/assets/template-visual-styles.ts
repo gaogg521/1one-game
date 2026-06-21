@@ -18,6 +18,15 @@ export const TEMPLATE_VISUAL_STYLES: Partial<Record<GameSpec["templateId"], stri
   customization: "car showroom studio, clean floor, soft studio lighting",
   strategy: "strategy war map table, nodes and territories, tactical mood",
   stealth: "shadowy platformer rooftops, patrol lights, night mood",
+  // 卡牌/棋类
+  "dou-dizhu": "green felt card table, playing cards layout, cozy indoor lighting",
+  poker: "casino card table, green felt, poker chips and cards",
+  "mahjong-solitaire": "mahjong tile board, Chinese tile pattern, lantern lighting",
+  mahjong: "mahjong round table, tiles stacked, cozy Chinese interior",
+  uno: "colorful UNO card table, bright game-night mood",
+  "chess-board": "elegant chess board, stylized pieces, soft indoor lighting",
+  blackjack: "casino blackjack table, green felt, cards and chips",
+  solitaire: "solitaire card layout, clean table, calm game mood",
 };
 
 export function templateVisualStyle(

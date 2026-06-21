@@ -4,6 +4,7 @@ import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
 import { getComfyBaseUrl, probeComfyHealthDetailed } from "@/lib/orchestration/comfy-gateway";
+import { createDirectorLedger, seedStandardLedger } from "@/lib/orchestration/director-ledger";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-model-route";
 import type { RuntimeSceneKey } from "@/lib/runtime-providers";
@@ -1426,6 +1427,16 @@ export async function generateGameSpecWithMeta(
       orchestration: orch,
     });
   }
+
+  // Director Ledger：记录 skill-loading / reference / asset / phase 四张账本（移植自 threejs-game-skills）
+  const ledgerRec = createDirectorLedger();
+  const effectiveHintForLedger = (options?.templateHint && options.templateHint !== "auto")
+    ? options.templateHint
+    : (briefPre?.brief?.intent?.templateHint ?? detectTemplateFromPrompt(prompt.trim()) ?? "avoider");
+  seedStandardLedger(ledgerRec, effectiveHintForLedger, prompt);
+  ledgerRec.setPhase("brief", briefPre ? "done" : "skipped", briefPre ? `packId=${briefPre.brief.packId}` : "creativeBriefExpand disabled");
+  ledgerRec.setPhase("spec", "running", "");
+
   const genOpts: GenerateOptions = { ...options, creativeBriefPreExpanded: briefPre };
 
   if (orch) {
@@ -1484,6 +1495,13 @@ export async function generateGameSpecWithMeta(
     let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
     const hint = resolveEffectiveTemplateHint(options?.templateHint, briefPre ?? null);
     spec = applyTemplateHint(spec, hint);
+
+    // Director Ledger：spec 定型后 finalize（含 visual scorecard），写入 orchestration trace
+    ledgerRec.setPhase("spec", "done", `templateId=${spec.templateId}; title=${spec.title}`);
+    ledgerRec.finalizeWithScorecard(spec);
+    ledgerRec.setPhase("quality", "done", ledgerRec.toLedger().scorecard ? "scored" : "skipped");
+    orch?.note("director_ledger", ledgerRec.toLedger() as unknown as Record<string, unknown>);
+
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {
       const complexity = classifyPromptComplexity(prompt.trim(), spec);

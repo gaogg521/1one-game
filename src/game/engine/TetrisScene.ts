@@ -351,6 +351,9 @@ export class TetrisScene extends Phaser.Scene {
     this.refreshSidePanel();
     this.refreshHud();
 
+    // 触控按钮（移动设备 / 鼠标备用）
+    this.buildTouchButtons(viewW, viewH);
+
     initQaState({ qaTouches: 0 });
     setPhaserQaState({ playerX: Math.round(this.boardX) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(this.boardX) });
@@ -360,6 +363,33 @@ export class TetrisScene extends Phaser.Scene {
       this.uiLocale === "zh-Hans" ? "↓ 软降  空格 硬降" : "↓ Soft  Space Hard",
       this.uiLocale === "zh-Hans" ? `消行 ${this.targetLines} 通关` : `Clear ${this.targetLines} lines`,
     ]);
+  }
+
+  private buildTouchButtons(viewW: number, viewH: number) {
+    const btns = [
+      { label: "←", action: () => this.tryMove(-1) },
+      { label: "→", action: () => this.tryMove(1) },
+      { label: "↻", action: () => this.tryRotate() },
+      { label: "⬇⬇", action: () => this.hardDrop() },
+      { label: "⏸", action: () => this.togglePause() },
+    ];
+    const bw = 56, bh = 42, gap = 8;
+    const total = btns.length * bw + (btns.length - 1) * gap;
+    let bx = (viewW - total) / 2;
+    const by = viewH - 28;
+    for (const btn of btns) {
+      const bg = this.add.rectangle(bx + bw / 2, by, bw - 2, bh - 2, 0x1e293b, 0.88)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      const txt = this.add.text(bx + bw / 2, by, btn.label, {
+        fontFamily: "system-ui, sans-serif", fontSize: "17px", color: "#e2e8f0",
+      }).setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      bg.on("pointerdown", () => { btn.action(); txt.setColor("#facc15"); });
+      bg.on("pointerup", () => txt.setColor("#e2e8f0"));
+      bg.on("pointerout", () => txt.setColor("#e2e8f0"));
+      bg.on("pointerover", () => bg.setFillStyle(0x334155, 0.95));
+      bg.on("pointerleave", () => bg.setFillStyle(0x1e293b, 0.88));
+      bx += bw + gap;
+    }
   }
 
   // ── 方块逻辑 ──────────────────────────────────────────────────────
@@ -612,17 +642,24 @@ export class TetrisScene extends Phaser.Scene {
     const y = this.boardY + r * this.cellPx;
     const s = this.cellPx;
     const pad = 1;
+    const bevel = Math.max(3, Math.floor(s * 0.16));
+    const light = Math.min(0xffffff, color + 0x404040);
+    const dark = (color & 0xfefefe) >> 1;
+    const darker = (dark & 0xfefefe) >> 1;
     // 主体
     g.fillStyle(color, active ? 1 : 0.92);
-    g.fillRect(x + pad, y + pad, s - pad * 2, s - pad * 2);
-    // 高光（左上）
-    g.fillStyle(0xffffff, 0.18);
-    g.fillRect(x + pad, y + pad, s - pad * 2, Math.max(2, Math.floor(s * 0.22)));
-    // 暗边（右下）
-    const dark = (color & 0xfefefe) >> 1;
-    g.fillStyle(dark, 0.55);
-    g.fillRect(x + pad, y + s - Math.max(2, Math.floor(s * 0.18)) - pad, s - pad * 2, Math.max(2, Math.floor(s * 0.18)));
-    g.fillRect(x + s - Math.max(2, Math.floor(s * 0.18)) - pad, y + pad, Math.max(2, Math.floor(s * 0.18)), s - pad * 2);
+    g.fillRoundedRect(x + pad, y + pad, s - pad * 2, s - pad * 2, 3);
+    // 顶/左高光斜面
+    g.fillStyle(light, 0.5);
+    g.fillRect(x + pad + 2, y + pad + 2, s - pad * 2 - 4, bevel);
+    g.fillRect(x + pad + 2, y + pad + 2, bevel, s - pad * 2 - 4);
+    // 右/下暗边斜面
+    g.fillStyle(dark, 0.6);
+    g.fillRect(x + pad + 2, y + s - pad - bevel - 2, s - pad * 2 - 4, bevel);
+    g.fillRect(x + s - pad - bevel - 2, y + pad + 2, bevel, s - pad * 2 - 4);
+    // 内描边
+    g.lineStyle(1, darker, 0.7);
+    g.strokeRoundedRect(x + pad, y + pad, s - pad * 2, s - pad * 2, 3);
   }
 
   private drawCellGhost(g: Phaser.GameObjects.Graphics, r: number, c: number, color: number): void {

@@ -282,6 +282,12 @@ export class DouDizhuScene extends Phaser.Scene {
   private playAreaText: Phaser.GameObjects.Text[] = []; // 各 seat 上一手出牌文本
   private roleLabels: Phaser.GameObjects.Text[] = [];
 
+  // 叫地主 + 出牌/不要 按钮
+  private bidButtons: Phaser.GameObjects.Container[] = [];
+  private actionButtons: Phaser.GameObjects.Container[] = [];
+  // AI 座位头像
+  private avatarGraphics: Phaser.GameObjects.Text[] = [];
+
   // AI 节奏
   private aiActAt = 0;
 
@@ -336,10 +342,11 @@ export class DouDizhuScene extends Phaser.Scene {
 
     this.hud.setBottomHint(
       this.uiLocale === "zh-Hans"
-        ? "点击手牌选/取消 · Enter 出牌 · Space/P 不要 · 叫分 1/2/3 或 0 不叫"
-        : "Click cards to toggle · Enter play · Space/P pass · Bid 1/2/3 or 0 skip",
+        ? "点击手牌选/取消 · 点击「出牌」或「不要」按钮"
+        : "Click cards to select · Click Play or Pass buttons",
     );
 
+    this.buildAvatars();
     setPhaserQaState({ playerX: Math.round(viewW / 2) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(viewW / 2) });
 
@@ -385,7 +392,8 @@ export class DouDizhuScene extends Phaser.Scene {
   }
 
   private showBidPrompt() {
-    // 清掉残留的 once 监听，避免低分重试时叠加
+    this.clearBidButtons();
+    // 清掉残留的 once 键盘监听，避免低分重试时叠加
     this.input.keyboard?.off("keydown-ONE");
     this.input.keyboard?.off("keydown-TWO");
     this.input.keyboard?.off("keydown-THREE");
@@ -395,23 +403,43 @@ export class DouDizhuScene extends Phaser.Scene {
       this.aiActAt = this.time.now + 900;
       return;
     }
-    const opts = [1, 2, 3].map(
-      (b) => `${b}分`,
-    ).join("  ");
     this.hud.flashBanner({
       title: this.uiLocale === "zh-Hans" ? "叫地主" : "Bid for Landlord",
       message: this.uiLocale === "zh-Hans"
-        ? `按 1/2/3 叫分（必须大于当前 ${this.highestBid}）或 0 不叫 · ${opts}`
-        : `Press 1/2/3 to bid (> ${this.highestBid}) or 0 to pass`,
-      ms: 4000,
+        ? `当前最高 ${this.highestBid} 分，点击下方按钮或按 1/2/3/0`
+        : `Current highest: ${this.highestBid}. Click buttons below or press 1/2/3/0`,
+      ms: 6000,
     });
+    // 键盘备用
     this.input.keyboard?.once("keydown-ONE", () => this.playerBid(1));
     this.input.keyboard?.once("keydown-TWO", () => this.playerBid(2));
     this.input.keyboard?.once("keydown-THREE", () => this.playerBid(3));
     this.input.keyboard?.once("keydown-ZERO", () => this.playerBid(0));
+    // 可点击按钮
+    const viewW = this.scale.width;
+    const viewH = this.scale.height;
+    const btnY = viewH - 116;
+    const options: Array<{ label: string; bid: number; color: number }> = [
+      { label: this.uiLocale === "zh-Hans" ? "1分" : "Bid 1", bid: 1, color: 0x2563eb },
+      { label: this.uiLocale === "zh-Hans" ? "2分" : "Bid 2", bid: 2, color: 0x7c3aed },
+      { label: this.uiLocale === "zh-Hans" ? "3分" : "Bid 3", bid: 3, color: 0xb45309 },
+      { label: this.uiLocale === "zh-Hans" ? "不叫" : "Pass",  bid: 0, color: 0x475569 },
+    ];
+    const spacing = 82;
+    const startX = viewW / 2 - (spacing * (options.length - 1)) / 2;
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i]!;
+      const disabled = opt.bid > 0 && opt.bid <= this.highestBid;
+      const btn = this.makeLabelButton(startX + i * spacing, btnY, opt.label, disabled ? 0x334155 : opt.color, () => {
+        if (!disabled) this.playerBid(opt.bid);
+      });
+      if (disabled) btn.setAlpha(0.4);
+      this.bidButtons.push(btn);
+    }
   }
 
   private playerBid(bid: number) {
+    this.clearBidButtons();
     if (!this.bidPhase || this.bidTurn !== 0) return;
     if (bid !== 0 && bid <= this.highestBid) {
       this.hud.flashBanner({
@@ -446,6 +474,7 @@ export class DouDizhuScene extends Phaser.Scene {
   }
 
   private finalizeBidding() {
+    this.clearBidButtons();
     if (this.highestBidSeat == null) {
       // 全员不叫 → 流局，重新发牌
       this.hud.flashBanner({
@@ -488,6 +517,8 @@ export class DouDizhuScene extends Phaser.Scene {
 
     if (this.currentSeat !== 0) {
       this.aiActAt = this.time.now + 1200;
+    } else {
+      this.updateActionButtons();
     }
   }
 
@@ -533,6 +564,7 @@ export class DouDizhuScene extends Phaser.Scene {
   }
 
   private commitPlay(seat: Seat, pattern: PlayPattern) {
+    this.clearActionButtons();
     const ids = new Set(pattern.cards.map((c) => c.id));
     this.seats[seat]!.hand = this.seats[seat]!.hand.filter((c) => !ids.has(c.id));
     this.lastPlay = pattern;
@@ -554,6 +586,7 @@ export class DouDizhuScene extends Phaser.Scene {
   }
 
   private commitPass(seat: Seat) {
+    this.clearActionButtons();
     this.passCount += 1;
     this.showPlayOnSeat(seat, null); // 显示 "不要"
     playBleep("hit");
@@ -572,6 +605,8 @@ export class DouDizhuScene extends Phaser.Scene {
     this.refreshHud();
     if (this.currentSeat !== 0) {
       this.aiActAt = this.time.now + 1100;
+    } else {
+      this.updateActionButtons();
     }
   }
 
@@ -790,6 +825,78 @@ export class DouDizhuScene extends Phaser.Scene {
     this.applyBid(seat, bid);
   }
 
+  // ─── 按钮辅助 ───
+  private clearBidButtons() {
+    for (const b of this.bidButtons) b.destroy();
+    this.bidButtons = [];
+  }
+
+  private clearActionButtons() {
+    for (const b of this.actionButtons) b.destroy();
+    this.actionButtons = [];
+  }
+
+  private makeLabelButton(
+    x: number, y: number, label: string, color: number, onClick: () => void,
+  ): Phaser.GameObjects.Container {
+    const w = 76, h = 36;
+    const bg = this.add.rectangle(0, 0, w, h, color, 0.92)
+      .setStrokeStyle(1.5, 0xffffff, 0.4);
+    const text = this.add.text(0, 0, label, {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "14px",
+      fontStyle: "700",
+      color: "#ffffff",
+    }).setOrigin(0.5);
+    const cont = this.add.container(x, y, [bg, text]);
+    cont.setSize(w, h);
+    cont.setInteractive(
+      new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    cont.setDepth(55);
+    cont.on("pointerdown", onClick);
+    cont.on("pointerover", () => { bg.setAlpha(1); bg.setStrokeStyle(2, 0xfbbf24, 0.9); });
+    cont.on("pointerout", () => { bg.setAlpha(0.92); bg.setStrokeStyle(1.5, 0xffffff, 0.4); });
+    return cont;
+  }
+
+  private updateActionButtons() {
+    this.clearActionButtons();
+    if (this.finished || this.bidPhase || this.currentSeat !== 0) return;
+    const viewW = this.scale.width;
+    const viewH = this.scale.height;
+    const btnY = viewH - 116;
+    const isZh = this.uiLocale === "zh-Hans";
+    const canLead = this.lastPlaySeat == null || this.lastPlaySeat === 0;
+    const playBtn = this.makeLabelButton(viewW / 2 + 44, btnY, isZh ? "出牌" : "Play", 0x16a34a, () => this.onPlaySelected());
+    this.actionButtons.push(playBtn);
+    if (!canLead) {
+      const passBtn = this.makeLabelButton(viewW / 2 - 44, btnY, isZh ? "不要" : "Pass", 0x475569, () => this.onPass());
+      this.actionButtons.push(passBtn);
+    }
+  }
+
+  private buildAvatars() {
+    for (const g of this.avatarGraphics) g.destroy();
+    this.avatarGraphics = [];
+    const emoji = ["🧑", "🤖", "🧓"]; // 玩家/AI 下家/AI 上家
+    const tints = [0x7c3aed, 0xbe185d, 0x0ea5e9];
+    for (const seat of [0, 1, 2] as const) {
+      const x = this.seatX(seat as never);
+      const y = (this.seatY(seat as never) ?? 0) - 14;
+      const t = this.add
+        .text(x, y, emoji[seat] ?? "🧑", {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+          fontSize: "40px",
+        })
+        .setOrigin(0.5)
+        .setTint(tints[seat] ?? 0xffffff)
+        .setDepth(11);
+      this.avatarGraphics.push(t);
+    }
+  }
+
   // ─── UI ───
   private seatX(seat: Seat): number {
     const viewW = this.scale.width;
@@ -902,7 +1009,7 @@ export class DouDizhuScene extends Phaser.Scene {
     const maxW = viewW - 80;
     const cardW = 46;
     const cardH = 64;
-    const spacing = Math.min(28, maxW / Math.max(1, hand.length));
+    const spacing = Math.min(32, maxW / Math.max(1, hand.length));
     const totalW = (hand.length - 1) * spacing;
     const startX = viewW / 2 - totalW / 2;
 
@@ -935,7 +1042,10 @@ export class DouDizhuScene extends Phaser.Scene {
         .setOrigin(0.5);
       cont.add([bg, rankText, suitText]);
       cont.setSize(cardW, cardH);
-      cont.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
+      // 每张牌的独占点击区 = 左边缘起 spacing 宽（末张取整牌宽），防止相邻高层牌拦截
+      const isLast = i === hand.length - 1;
+      const hitW = isLast ? cardW : spacing;
+      cont.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, hitW, cardH), Phaser.Geom.Rectangle.Contains);
       cont.on("pointerdown", () => {
         if (this.finished || this.bidPhase || this.currentSeat !== 0) return;
         if (this.selectedIds.has(card.id)) this.selectedIds.delete(card.id);

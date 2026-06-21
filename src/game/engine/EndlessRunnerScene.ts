@@ -75,7 +75,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
     lane: number;
     passed: boolean;
   }> = [];
-  private coins: Array<{ obj: Phaser.GameObjects.Arc; lane: number; collected: boolean }> = [];
+  private coins: Array<{ obj: Phaser.GameObjects.Text; lane: number; collected: boolean }> = [];
 
   // 计分 / 生命
   private score = 0;
@@ -310,7 +310,6 @@ export class EndlessRunnerScene extends Phaser.Scene {
 
   private buildPlayer(): Phaser.GameObjects.Container {
     const playerColor = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
-    const dark = (playerColor & 0xfefefe) >> 1;
     const container = this.add.container(this.playerScreenX, this.roadBotY - 60).setDepth(50);
 
     // 阴影（椭圆，固定在地面）
@@ -318,21 +317,15 @@ export class EndlessRunnerScene extends Phaser.Scene {
     container.add(shadow);
     container.setData("shadow", shadow);
 
-    // 身体（圆角矩形）
-    const body = this.add.graphics();
-    body.fillStyle(playerColor, 1);
-    body.fillRoundedRect(-18, -30, 36, 50, 10);
-    body.lineStyle(2, dark, 0.8);
-    body.strokeRoundedRect(-18, -30, 36, 50, 10);
-    // 头
-    body.fillStyle(playerColor, 1);
-    body.fillCircle(0, -38, 12);
-    body.lineStyle(2, dark, 0.8);
-    body.strokeCircle(0, -38, 12);
-    // 眼睛
-    body.fillStyle(0x0f172a, 1);
-    body.fillCircle(-4, -40, 2);
-    body.fillCircle(4, -40, 2);
+    // 跑者：用 emoji 代替矩形+圆头几何形
+    const body = this.add
+      .text(0, -10, "🏃", {
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+        fontSize: "56px",
+      })
+      .setOrigin(0.5)
+      .setTint(playerColor)
+      .setDepth(50);
     container.add(body);
     container.setData("body", body);
 
@@ -407,38 +400,19 @@ export class EndlessRunnerScene extends Phaser.Scene {
     const kindRoll = rnd(seed, this.score * 7 + this.obstacles.length * 13 + 3);
     const kind: "barrier" | "high" | "low" = kindRoll < 0.4 ? "barrier" : kindRoll < 0.7 ? "high" : "low";
     const hazardCol = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
-    const dark = (hazardCol & 0xfefefe) >> 1;
 
     const container = this.add.container(0, 0).setDepth(40);
-    const g = this.add.graphics();
-    if (kind === "barrier") {
-      // 路障：高矩形（撞到 = 扣血）
-      g.fillStyle(hazardCol, 1);
-      g.fillRoundedRect(-22, -50, 44, 50, 6);
-      g.lineStyle(2, dark, 0.8);
-      g.strokeRoundedRect(-22, -50, 44, 50, 6);
-      // 警示条纹
-      g.fillStyle(0xfde047, 0.85);
-      g.fillRect(-22, -40, 44, 6);
-      g.fillRect(-22, -20, 44, 6);
-    } else if (kind === "high") {
-      // 高栏：必须滑铲过（顶部横杆 + 立柱）
-      g.fillStyle(hazardCol, 1);
-      g.fillRect(-22, -50, 44, 8); // 顶部横杆
-      g.fillRect(-22, -50, 6, 50); // 左立柱
-      g.fillRect(16, -50, 6, 50); // 右立柱
-      g.lineStyle(1.5, dark, 0.7);
-      g.strokeRect(-22, -50, 44, 8);
-    } else {
-      // 低栏：必须跳过（矮矩形）
-      g.fillStyle(hazardCol, 1);
-      g.fillRoundedRect(-22, -22, 44, 22, 4);
-      g.lineStyle(2, dark, 0.8);
-      g.strokeRoundedRect(-22, -22, 44, 22, 4);
-      g.fillStyle(0xfde047, 0.7);
-      g.fillRect(-22, -16, 44, 4);
-    }
-    container.add(g);
+    // 障碍用 emoji：路障🚧/高栏🚷/低栏♿，比纯矩形更可读
+    const emoji = kind === "barrier" ? "🚧" : kind === "high" ? "🚷" : "♿";
+    const body = this.add
+      .text(0, -20, emoji, {
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+        fontSize: "48px",
+      })
+      .setOrigin(0.5)
+      .setTint(hazardCol)
+      .setDepth(40);
+    container.add(body);
     // 初始 screenX：屏幕右端外
     const initScreenX = this.viewW + 60;
     container.setData("screenX", initScreenX);
@@ -452,8 +426,10 @@ export class EndlessRunnerScene extends Phaser.Scene {
       (this.spec.theme.collectibleColor ?? "#fcd34d").replace("#", ""),
       16,
     );
-    const coin = this.add.circle(0, 0, 12, collectCol, 1).setDepth(35);
-    coin.setStrokeStyle(2, 0xffffff, 0.6);
+    const coin = this.add.text(0, 0, "🪙", {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: "28px",
+    }).setOrigin(0.5).setDepth(35);
     // 旋转闪烁动画
     this.tweens.add({
       targets: coin,
@@ -558,7 +534,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
    * - scale：近端 1.0，远端 0.4
    */
   private applyPerspective(
-    obj: Phaser.GameObjects.Container | Phaser.GameObjects.Arc,
+    obj: Phaser.GameObjects.Container | Phaser.GameObjects.Text,
     screenX: number,
     lane: number,
     yLift = 0,
@@ -638,7 +614,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
 
   // ─── 事件 ────────────────────────────────────────────────────────────
 
-  private onCollectCoin(co: { obj: Phaser.GameObjects.Arc; lane: number }) {
+  private onCollectCoin(co: { obj: Phaser.GameObjects.Text; lane: number }) {
     this.combo += 1;
     this.comboResetAt = this.time.now + 1500;
     const comboBonus = Math.min(this.combo, 5);

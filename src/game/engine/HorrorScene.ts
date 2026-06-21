@@ -39,7 +39,7 @@ type CameraView = {
   scanGfx: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
   /** 怪物圆球（按需显隐） */
-  monster: Phaser.GameObjects.Arc;
+  monster: Phaser.GameObjects.Text;
   /** 门关闭时的红色覆盖条 */
   doorBar: Phaser.GameObjects.Rectangle;
 };
@@ -167,7 +167,11 @@ export class HorrorScene extends Phaser.Scene {
         .setDepth(3);
 
       const monster = this.add
-        .circle(cx, cy, Math.min(hw, hh) * 0.32, 0xdc2626, 0.9)
+        .text(cx, cy, "👻", {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+          fontSize: `${Math.round(Math.min(hw, hh) * 0.5)}px`,
+        })
+        .setOrigin(0.5)
         .setDepth(3)
         .setVisible(false);
 
@@ -225,11 +229,45 @@ export class HorrorScene extends Phaser.Scene {
     setPhaserQaState({ night: this.night, power: Math.round(this.power) });
     schedulePhaserPlayReady(this, 300, { night: this.night });
 
+    this.buildTouchControls(viewW, viewH);
+
     const hintLines: string[] =
       this.uiLocale === "zh-Hans"
         ? ["1-6 切换摄像头", "空格 关门（阻挡当前摄像头怪物）", "撑过 3 夜 = 胜利"]
         : ["1-6 switch camera", "Space close door (block monster)", "Survive 3 nights to win"];
     showControlsHint(this, hintLines);
+  }
+
+  private buildTouchControls(viewW: number, viewH: number) {
+    const camCount = this.bp.cameras;
+    const bw = 48, bh = 36, gap = 6;
+    const total = camCount * bw + (camCount - 1) * gap;
+    let bx = Math.max(10, (viewW - total) / 2);
+    const by = viewH - 22;
+
+    for (let i = 0; i < camCount; i += 1) {
+      const idx = i;
+      const bg = this.add.rectangle(bx + bw / 2, by, bw - 2, bh - 2, 0x0f172a, 0.9)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      this.add.text(bx + bw / 2, by, `CAM${i + 1}`, {
+        fontFamily: "monospace", fontSize: "12px", color: "#7dd3fc",
+      }).setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      bg.on("pointerdown", () => this.switchCam(idx));
+      bg.on("pointerover", () => bg.setFillStyle(0x1e293b, 0.95));
+      bg.on("pointerout", () => bg.setFillStyle(0x0f172a, 0.9));
+      bx += bw + gap;
+    }
+
+    // 关门按钮（右下角）
+    const doorLabel = this.uiLocale === "zh-Hans" ? "关门" : "Door";
+    const doorBg = this.add.rectangle(viewW - 44, by, 80, bh - 2, 0x7f1d1d, 0.9)
+      .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(viewW - 44, by, doorLabel, {
+      fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#fca5a5",
+    }).setOrigin(0.5).setDepth(31).setScrollFactor(0);
+    doorBg.on("pointerdown", () => this.tryCloseDoor());
+    doorBg.on("pointerover", () => doorBg.setFillStyle(0xb91c1c, 0.95));
+    doorBg.on("pointerout", () => doorBg.setFillStyle(0x7f1d1d, 0.9));
   }
 
   private drawScanlines(g: Phaser.GameObjects.Graphics, cx: number, cy: number, hw: number, hh: number) {

@@ -38,7 +38,7 @@ type MoveDef = {
 
 /** 单个 fighter 的运行时状态 */
 type Fighter = {
-  body: Phaser.GameObjects.Rectangle;
+  body: Phaser.GameObjects.Text;
   /** 出招时短暂出现的判定 / 视觉冲击框 */
   hitFx: Phaser.GameObjects.Rectangle;
   hp: number;
@@ -100,6 +100,11 @@ export class FightingScene extends Phaser.Scene {
   private keyK!: Phaser.Input.Keyboard.Key;
   private keyL!: Phaser.Input.Keyboard.Key;
   private keyU!: Phaser.Input.Keyboard.Key;
+
+  // 触控移动状态标志
+  private touchLeft = false;
+  private touchRight = false;
+  private touchBlock = false;
 
   private roundsTotal = 3;
   private roundsToWin = 2;
@@ -187,16 +192,61 @@ export class FightingScene extends Phaser.Scene {
     this.hud.setBottomHint(hint);
 
     this.startRound(0);
+    this.buildTouchControls(viewW, viewH);
     setPhaserQaState({ roundIndex: 0, playerWins: 0, aiWins: 0 });
     schedulePhaserPlayReady(this, 350, { roundIndex: 0 });
   }
 
+  private buildTouchControls(viewW: number, viewH: number) {
+    const by = viewH - 26;
+    const bh = 44;
+
+    // 左侧：← →
+    const moveBtns = [
+      { label: "←", x: 44, down: () => { this.touchLeft = true; }, up: () => { this.touchLeft = false; } },
+      { label: "→", x: 100, down: () => { this.touchRight = true; }, up: () => { this.touchRight = false; } },
+    ];
+    for (const b of moveBtns) {
+      const bg = this.add.rectangle(b.x, by, 48, bh, 0x1e3a5f, 0.85)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      this.add.text(b.x, by, b.label, { fontFamily: "system-ui", fontSize: "20px", color: "#93c5fd" })
+        .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      bg.on("pointerdown", b.down);
+      bg.on("pointerup", b.up);
+      bg.on("pointerout", b.up);
+      bg.on("pointerover", () => bg.setFillStyle(0x1d4ed8, 0.9));
+      bg.on("pointerleave", () => bg.setFillStyle(0x1e3a5f, 0.85));
+    }
+
+    // 右侧：格挡 轻拳 重拳 特殊技
+    const now = () => this.time.now;
+    const attackBtns = [
+      { label: this.uiLocale === "zh-Hans" ? "格挡" : "Block", x: viewW - 180,
+        color: 0x374151, down: () => { this.touchBlock = true; }, up: () => { this.touchBlock = false; } },
+      { label: this.uiLocale === "zh-Hans" ? "轻拳" : "Light", x: viewW - 124,
+        color: 0x065f46, down: () => this.tryMove(this.player, "light", now()), up: () => {} },
+      { label: this.uiLocale === "zh-Hans" ? "重拳" : "Heavy", x: viewW - 68,
+        color: 0x7c2d12, down: () => this.tryMove(this.player, "heavy", now()), up: () => {} },
+      { label: this.uiLocale === "zh-Hans" ? "必杀" : "Spec", x: viewW - 12,
+        color: 0x4c1d95, down: () => this.tryMove(this.player, "special", now()), up: () => {} },
+    ];
+    for (const b of attackBtns) {
+      const bg = this.add.rectangle(b.x, by, 48, bh, b.color, 0.88)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      this.add.text(b.x, by, b.label, { fontFamily: "system-ui", fontSize: "12px", color: "#e2e8f0" })
+        .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      bg.on("pointerdown", b.down);
+      bg.on("pointerup", b.up);
+      bg.on("pointerout", b.up);
+    }
+  }
+
   private makeFighter(x: number, groundY: number, color: number, facing: 1 | -1): Fighter {
-    const body = this.add.rectangle(x, groundY, FIGHTER_W, FIGHTER_H, color).setDepth(10);
-    // 头部圆
-    this.add.circle(x, groundY - FIGHTER_H / 2 + 8, 14, color).setDepth(11);
-    // 边框
-    this.add.rectangle(x, groundY, FIGHTER_W, FIGHTER_H).setStrokeStyle(2, 0x000000, 0.4).setDepth(11);
+    const body = this.add.text(x, groundY, facing === 1 ? "🥷" : "🤺", {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: `${FIGHTER_H}px`,
+    }).setOrigin(0.5, 1).setDepth(10);
+    body.setTint(color);
     // 命中 FX（默认不可见）
     const hitFx = this.add
       .rectangle(x, groundY, 0, 0, 0xffffff, 0)
@@ -289,8 +339,8 @@ export class FightingScene extends Phaser.Scene {
     }
     // 移动
     let vx = 0;
-    if (this.keyA.isDown) vx -= FIGHTER_SPEED;
-    if (this.keyD.isDown) vx += FIGHTER_SPEED;
+    if (this.keyA.isDown || this.touchLeft) vx -= FIGHTER_SPEED;
+    if (this.keyD.isDown || this.touchRight) vx += FIGHTER_SPEED;
     // 不允许穿过 AI
     const nextX = p.body.x + (vx * this.game.loop.delta) / 1000;
     const minGap = FIGHTER_W; // 两 fighter 中心最小间距
@@ -303,8 +353,8 @@ export class FightingScene extends Phaser.Scene {
     clampedX = Phaser.Math.Clamp(clampedX, ARENA_LEFT, this.scale.width - ARENA_LEFT);
     p.body.setX(clampedX);
 
-    // 格挡（按住 L）
-    p.blocking = this.keyL.isDown && now >= p.cooldownUntil;
+    // 格挡（按住 L 或触控格挡键）
+    p.blocking = (this.keyL.isDown || this.touchBlock) && now >= p.cooldownUntil;
 
     // 出招（按下边沿触发）
     if (Phaser.Input.Keyboard.JustDown(this.keyJ)) this.tryMove(p, "light", now);
@@ -469,10 +519,10 @@ export class FightingScene extends Phaser.Scene {
 
   private applyFlash(f: Fighter, now: number) {
     if (now < f.flashUntil) {
-      f.body.setFillStyle(0xffffff, 1);
+      f.body.setTint(0xffffff);
     } else {
       const baseColor = f === this.player ? PLAYER_COLOR : AI_COLOR;
-      f.body.setFillStyle(baseColor, 1);
+      f.body.setTint(baseColor);
     }
   }
 

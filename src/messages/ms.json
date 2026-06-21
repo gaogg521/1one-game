@@ -1216,7 +1216,20 @@
     "labelPlayer": "Player / tower",
     "labelHazard": "Threat",
     "labelCollectible": "Collectible / currency",
-    "debugAct": "Debug"
+    "debugAct": "Debug",
+    "aiDifficulty": "Kesukaran AI (0=mudah 1=sukar)",
+    "rounds": "Bilangan pusingan",
+    "fighterHp": "HP pemain",
+    "mobaTowers": "Menara untuk dihancurkan",
+    "horrorNights": "Malam untuk bertahan",
+    "horrorPower": "Had kuasa",
+    "tetrisLines": "Sasaran baris",
+    "tetrisSpeed": "Kelajuan jatuh (ms)",
+    "rhythmSpeed": "Pengganda kelajuan nota",
+    "sportsTarget": "Mata untuk menang",
+    "sportsTime": "Tempoh (saat)",
+    "runnerSpeed": "Kelajuan larian (px/s)",
+    "runnerDensity": "Ketumpatan halangan (0~1)"
   },
   "samples": {
     "hot": "Hot",
@@ -3015,6 +3028,48 @@
           "addon0": "Multi-chapter platform levels + transitions",
           "addon1": "Short HUD goals; long copy not in top bar",
           "addon2": "“{fantasy}” visible each chapter"
+        }
+      },
+      "fruitNinja": {
+        "target": {
+          "title": "Berapa skor sasaran?",
+          "summary": "Tetapkan “potong ke X mata untuk menang” — sasaran, masa, nyawa jelas.",
+          "bullet0": "winScore 50-100, masa 60-90s, nyawa 3",
+          "bullet1": "Gagal: masa habis di bawah sasaran / 0 nyawa",
+          "addonHeader": "[Pilihan] Sasaran menang jelas",
+          "addon0": "templat fruit-ninja: buah parabola + potong-tarik + combo + bom",
+          "addon1": "HUD tunjuk skor / sasaran / nyawa / saat baki",
+          "addon2": "Namakan buah & bom mengikut “{fantasy}”"
+        },
+        "pace": {
+          "title": "Sepat mana spawn?",
+          "summary": "Selang spawn buah/bom & pecutan akhir tentukan tahap gelojoh.",
+          "bullet0": "spawnIntervalMs 800-1200, pecut +25% lewat",
+          "bullet1": "tetingkap combo 700ms, 3+ rantaian bonus",
+          "addonHeader": "[Pilihan] Rentak & combo",
+          "addon0": "templat fruit-ninja: selang spawn pecut mikro dari masa",
+          "addon1": "combo 3-rantaian +5, 4-rantaian +10… gelung puas",
+          "addon2": "Jejak bilah + zarah percikan jus"
+        },
+        "bomb": {
+          "title": "Padat mana bom?",
+          "summary": "Bom ialah penalti — memotong satu kos nyawa + gegar + flash merah.",
+          "bullet0": "bombChance 0.15-0.25 (santai ke hardcore)",
+          "bullet1": "Bom kongsi arka buah, paksa potong tepat",
+          "addonHeader": "[Pilihan] Kekuatan penalti bom",
+          "addon0": "templat fruit-ninja: bombChance kawal kepadatan",
+          "addon1": "Potong bom → -1 nyawa + flash merah + gegar + combo reset",
+          "addon2": "0 nyawa = gagal terus, HUD tahap bahaya"
+        },
+        "theme": {
+          "title": "Kekalkan tema buah ini?",
+          "summary": "Pelbagai buah, latar, palet disatukan supaya v1 rasa satu dunia.",
+          "bullet0": "🍉🍊🍎🍇🍓🥝🍌🍑 emoji buah jelas",
+          "bullet1": "Latar: dapur / gerai / kebun, palet cerah",
+          "addonHeader": "[Pilihan] Pendalaman tema buah",
+          "addon0": "{fantasy} sebagai teras menyatukan jenis & nama buah",
+          "addon1": "Jejak bilah lancar, percikan jus sewarna",
+          "addon2": "Prompt seni sepadan tema (buah, bukan blob rawak)"
         }
       },
       "fallback": {

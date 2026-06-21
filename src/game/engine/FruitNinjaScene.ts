@@ -16,8 +16,26 @@ type EndPayload = { score: number; won: boolean };
 
 type FruitKind = "fruit" | "bomb";
 
+interface FruitDef {
+  emoji: string;
+  color: number;
+}
+
+const FRUIT_DEFS: FruitDef[] = [
+  { emoji: "🍉", color: 0x22c55e }, // watermelon
+  { emoji: "🍊", color: 0xf97316 }, // orange
+  { emoji: "🍎", color: 0xef4444 }, // apple
+  { emoji: "🍇", color: 0x8b5cf6 }, // grape
+  { emoji: "🍓", color: 0xec4899 }, // strawberry
+  { emoji: "🥝", color: 0x84cc16 }, // kiwi
+  { emoji: "🍌", color: 0xfacc15 }, // banana
+  { emoji: "🍑", color: 0xfb7185 }, // peach
+];
+
+const BOMB_EMOJI = "💣";
+
 interface FruitEntry {
-  spr: Phaser.GameObjects.Arc;
+  spr: Phaser.GameObjects.Text;
   vx: number;
   vy: number;
   rot: number;
@@ -31,7 +49,7 @@ interface FruitEntry {
 }
 
 interface SliceHalf {
-  spr: Phaser.GameObjects.Arc;
+  spr: Phaser.GameObjects.Text;
   vx: number;
   vy: number;
   rot: number;
@@ -47,16 +65,6 @@ interface SplashBit {
   life: number;
   color: number;
 }
-
-const FRUIT_COLORS = [
-  0xef4444, // red apple
-  0xf97316, // orange
-  0xfacc15, // banana yellow
-  0x22c55e, // green melon
-  0x8b5cf6, // grape
-  0xec4899, // pink dragon
-  0x06b6d4, // cyan kiwi
-];
 
 /**
  * 真水果忍者：划屏切水果玩法。
@@ -300,8 +308,12 @@ export class FruitNinjaScene extends Phaser.Scene {
   }
 
   private spawnHalf(f: FruitEntry, dirAngle: number, speed: number) {
-    const half = this.add.circle(f.spr.x, f.spr.y, f.radius * 0.7, f.color, 1).setDepth(20);
-    half.setStrokeStyle(2, 0x000000, 0.25);
+    // 半片：用同款 emoji 但加斜向裂痕感（scale 0.7 + 偏移 + 旋转）
+    const half = this.add.text(f.spr.x, f.spr.y, f.spr.text, {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: `${Math.round(f.radius * 1.4)}px`,
+    }).setOrigin(0.5).setScale(0.7).setDepth(20);
+    half.setStroke("#000000", 1);
     const vx = Math.cos(dirAngle) * speed + f.vx * 0.4;
     const vy = Math.sin(dirAngle) * speed + f.vy * 0.4;
     this.halves.push({
@@ -335,15 +347,18 @@ export class FruitNinjaScene extends Phaser.Scene {
     const viewH = this.scale.height;
     const isBomb = Math.random() < this.bombChance;
     const radius = isBomb ? 26 : Phaser.Math.Between(22, 34);
-    const color = isBomb ? 0x1f2937 : FRUIT_COLORS[Phaser.Math.Between(0, FRUIT_COLORS.length - 1)]!;
+    const def = isBomb ? null : FRUIT_DEFS[Phaser.Math.Between(0, FRUIT_DEFS.length - 1)]!;
+    const color = isBomb ? 0x1f2937 : def!.color;
+    const emoji = isBomb ? BOMB_EMOJI : def!.emoji;
 
     const x = Phaser.Math.Between(80, viewW - 80);
     const y = viewH + radius + 10;
-    const spr = this.add.circle(x, y, radius, color, 1).setDepth(20);
-    spr.setStrokeStyle(2, isBomb ? 0xef4444 : 0x000000, 0.3);
+    const spr = this.add.text(x, y, emoji, {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: `${Math.round(radius * 1.8)}px`,
+    }).setOrigin(0.5).setDepth(20);
     if (isBomb) {
-      // 炸弹引线视觉
-      spr.setFillStyle(color, 1);
+      spr.setTint(0xff6666);
     }
 
     // 抛物线：向上初速度 + 横向偏向中心，重力在 update 里施加
@@ -370,10 +385,10 @@ export class FruitNinjaScene extends Phaser.Scene {
     });
 
     if (isBomb) {
-      // 炸弹引线小火星
+      // 炸弹引线小火星：脉动
       this.tweens.add({
         targets: spr,
-        scale: { from: 1, to: 1.06 },
+        scale: { from: 1, to: 1.12 },
         duration: 220,
         yoyo: true,
         repeat: -1,

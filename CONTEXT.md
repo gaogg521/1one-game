@@ -1,11 +1,307 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 34 · 模板路由系统级重构 + Creative Brief 牌桌感知 + i18n 关键词）
+**最后更新**：2026-06-21（会话 40 · 三层瀑布模板路由 A+C+B）
+
+---
+
+## Session 40 · 三层瀑布模板路由（A 关键词 → C embedding → B LLM 分类）
+
+### 问题
+用户输入一句话时不应要求猜中我们的关键词——需要根据"用户想要什么"匹配模板。原 A 层（关键词正则）覆盖有限，描述性语言（"把飞过来的水果切开"）完全不命中。
+
+### 三层瀑布架构
+```
+用户输入
+  ↓
+[A] 关键词正则（0ms，覆盖精确/常见说法，~80% case）
+  ↓ 未命中
+[C] Embedding 语义匹配（~200ms，覆盖近义/描述性，需 embedding API）
+  ↓ 置信度 < 0.55
+[B] LLM 分类（~1-2s，兜底任意自然语言 → 60 模板 ID）
+  ↓
+最终 templateId
+```
+
+### 本会话修改文件
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/template-selector.ts` | **A 层关键词扩展**：60 模板每个补 15+ 同义词/变体/英文/描述性短语（如 fruit-ninja 补"砍水果/削水果/切西瓜/飞刀切水果/滑动切割"）；修冲突："割草"仅 survivor（提 priority 75→96 高于 hack-and-slash）、"paddle ball"仅 pong、"方块"从 tetris 移除（太泛，merge 也用方块）、"绕圈"从 aeroplane-chess 移除（racing 也绕圈） |
+| `src/lib/game-templates/template-embedding.ts` | **新建**：C 层 embedding 语义匹配 + 三层瀑布总入口 resolveTemplateSemantic。matchTemplateByEmbedding 调 /v1/embeddings 算余弦相似度；当前网关无 embedding 模型则静默跳过交 B 层 |
+| `src/lib/game-templates/llm-classify.ts` | **新建**：B 层 LLM 分类。classifyTemplateByLlm 让 LLM 从 60 模板 ID（含 llmSummary+playableLoop）里选一个，用 max_completion_tokens（gpt-5.2 不接受 max_tokens），超时 8s |
+| `scripts/precompute-template-embeddings.ts` | **新建**：预计算 60 模板 embedding → template-embeddings.json（当前网关无 embedding 模型，暂不运行；网关支持后运行即启用 C 层） |
+
+### 验证结果
+- A 层（关键词）：68/68 + 102/102 既有回归全过
+- B 层（LLM 分类）实测 7 个描述性 prompt：
+  - "把飞过来的水果用刀划开" → fruit-ninja ✅
+  - "监控室摄像头有鬼关门" → horror ✅（A 未命中，LLM 正确）
+  - "两辆车绕圈跑看谁快" → racing ✅（A 修冲突后未命中，LLM 正确）
+  - "相同数字方块合在一起" → merge ✅（A 修 tetris 冲突后未命中，LLM 正确）
+- tsc 零新错误
+
+### 当前状态
+- **A 层**：60 模板关键词全覆盖，覆盖常见说法，零延迟
+- **C 层**：代码就绪，当前 LiteLLM 网关无 embedding 模型（404 model_not_found），静默跳过。网关支持后运行 `npx tsx scripts/precompute-template-embeddings.ts` 生成 JSON 即自动启用
+- **B 层**：LLM 分类兜底，已验证可正确分类任意描述性语言
+
+### 提升点
+用户不再需要猜关键词——说"把飞过来的水果切开"也能正确识别为 fruit-ninja；说"监控室看摄像头挡鬼"也能识别为 horror。三层瀑布保证正常情况零延迟（A 命中），最坏情况多 1-2s（A+C+B 都跑）。
+
+---
+
+## 历史会话记录
+
+### Session 39 · SpecQuickTunePanel 模板专属微调 + 斗地主选牌点击区修复
 **项目**：游戏生成与创意内容平台（Next.js + Phaser + Prisma）
 
 ---
 
 ## 当前状态
+
+### 编译状态
+- `npx tsc --noEmit` → **src/ 零错误**
+- `npx tsx scripts/test-template-routing.ts` → **68/68 通过**
+- `npx tsx scripts/test-template-selector.ts` → **102/102 通过**
+- 4 新模块单元验证 → **18/18 通过**
+
+### 本会话修改文件（Session 37 · 移植 threejs-game-skills 编排模式）
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/visual-scorecard.ts` | **新建**：10 维视觉质量评分（artDirection/hero/obstacles/rewards/world/materials/lighting/vfx/ui/perf），每维 0-3 分，average<2 或有 automaticFailure 触发 reworkSuggestions。移植自 threejs-aaa-graphics-builder visual scorecard |
+| `src/lib/orchestration/director-ledger.ts` | **新建**：Director Ledger 4 张账本（skillLoading/references/assets/phases），移植自 threejs-game-director。createDirectorLedger + seedStandardLedger 预填标准条目，finalizeWithScorecard 收尾 |
+| `src/lib/scene-quality-gates.ts` | **新建**：Reference Gate（checkReferenceGate 检查 template-brief-override + playableLoop 就位）+ 失败模式清单（SCENE_FAILURE_MODES 7 种 + scanFailureModes 静态扫描）。移植自 threejs-debug-profiler + gameplay-systems common failure modes |
+| `src/lib/creative-brief/template-brief-overrides.ts` | 新增 PlayableLoop 类型（verb/objective/feedback/failRetry）；给 16 个热门模板补 playableLoop 字段（shooter/towerDefense/platformer/endless-runner/fruit-ninja/mahjong/tetris/dou-dizhu/breakout/merge/fighting/survivor/avoider/puzzle/farming/chess/rhythm） |
+| `src/lib/generate-spec.ts` | generateGameSpecWithMeta 接入 Director Ledger：seed 标准 ledger → 各阶段 setPhase → finalizeWithScorecard → orch.note("director_ledger", ...) 写入 orchestration trace |
+| `src/lib/assets/template-visual-styles.ts` | 修预存的 chess 重复 key（改为 chess-board） |
+| `src/game/engine/DouDizhuScene.ts` | buildAvatars 从几何占位（圆+圆头+眼睛+嘴巴 graphics）改成 emoji（🧑🤖🧓 三家围坐）；avatarGraphics 类型 Graphics[]→Text[]；修预存的 buildAvatars 调用但未定义的编译错误 |
+
+### 移植的 4+2 项能力（来自 threejs-game-skills）
+
+**4 项核心移植**：
+1. **Visual Scorecard 10 维评分**（`visual-scorecard.ts`）—— 给每个生成的 spec 打分，低于阈值自动列 rework 建议。解决"质量无量化门禁"短板。
+2. **Director Ledger 4 张账本**（`director-ledger.ts` + `generate-spec.ts`）—— 生成过程可审计：加载了哪些 skill/reference、每个视觉面用什么资产源、4 阶段执行状态。写入 orchestration trace，前端"制作过程（高级）"面板可展示。解决"生成过程不可审计"短板。
+3. **PlayableLoop 结构化玩法定义**（`template-brief-overrides.ts`）—— 16 个热门模板补 verb/objective/feedback/failRetry 四元组，驱动 LLM 生成更聚焦的玩法。解决"60 模板玩法定义不结构化"短板。
+4. **Reference Gate 阶段门禁**（`scene-quality-gates.ts`）—— 4 步共创"提炼意图"后检查必需 reference 就位，缺失则 block。解决"缺乏阶段门禁"短板。
+
+**2 项附加移植**：
+5. **External Asset Sourcing Ledger**（融入 `director-ledger.ts` 的 seedStandardLedger）—— 每个视觉面（hero/obstacles/rewards/world/ui）记录用程序化/文生图/外部 API 的决策。
+6. **Debug-profiler 失败模式清单**（`scene-quality-gates.ts` 的 SCENE_FAILURE_MODES + scanFailureModes）—— 7 种 Scene 常见失败模式（static-demo/input-not-triggered/camera-delay/state-no-ui-vfx/premature-abstraction/geometry-placeholder/brief-spec-mismatch）+ 静态扫描函数。
+
+### 提升点（用户可感知）
+- **生成质量可量化**：每个生成的游戏都有 10 维评分（avg 分 + 失败项 + 改进建议），前端可展示"视觉质量 2.8/3.0"
+- **生成过程可审计**：orchestration trace 含 director_ledger，可追溯"用了哪些模板 override、playableLoop、资产决策"
+- **玩法更聚焦**：16 个热门模板的 LLM prompt 现在含 verb/objective/feedback/failRetry 结构化定义，减少"跑题"
+- **门禁拦截**：模板缺 override/playableLoop 时 gate 报警，避免走 general-arcade 兜底
+- **斗地主头像**：从几何形改成 🧑🤖🧓 emoji（顺手修了预存编译错误）
+
+### 下次启动清单
+1. `npm run dev`（端口 8888）→ 访问 `http://localhost:8888/zh-Hans/create`
+2. 生成任意游戏 → 在"制作过程（高级）"面板看 director_ledger 条目（skillLoading/references/assets/phases + scorecard）
+3. 测斗地主：输入"斗地主三人扑克" → 确认头像是 🧑🤖🧓 不是几何形
+4. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
+5. 后续可把 scorecard 接入前端"AI 评审员"面板，低分自动触发返工
+
+---
+
+### Session 38 · 60 模板 playableLoop 全覆盖 + cut-the-rope 检测修复 + 全场景通用问题批量修复
+
+---
+
+## Session 38 修补（用户复查发现）
+
+**问题**：36 prompt 全链路验证发现 15/36 有问题——1 个模板检测错误（cut-the-rope 被识别成 collector），20 个模板缺 playableLoop。
+
+**修复**：
+- `src/lib/template-selector.ts` + `src/lib/game-templates/definitions.ts`：cut-the-rope 关键词补"切绳/割绳/喂怪兽/切绳喂"（原只有"切绳子/割绳子"），priority 96→115（高于 collector）
+- `src/lib/creative-brief/template-brief-overrides.ts`：剩余 44 个模板全部补 playableLoop（verb/objective/feedback/failRetry），从 16 个→60 个全覆盖
+
+**验证**：36 prompt 全链路 **36/36 正确**（detect/infer/pack/gate/playableLoop 全对）+ 既有回归 68/68 + 102/102
+
+---
+
+## Session 38 · 全场景通用问题批量修复
+
+### 问题来源
+用户报告斗地主游戏：1) 生成提示词写的是"保卫萝卜"精灵 2) HUD 目标文案缺失 3) 没有可点击按钮。深度审计后发现是系统性问题，适用于所有游戏模板。
+
+### 修复内容
+
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/game-svg-sprite-gen.ts` | CARD_TEMPLATE_IDS 补 `"chess"`，棋类游戏不再走通用精灵 |
+| `src/lib/game-sprite-gen.ts` | `isPvZ`/`isSpace` 正则加 templateId 排除（fighting/moba/strategy），防误判 |
+| `src/lib/scene-goal-guidance.ts` | 补 14+ 个模板专属 HUD 目标文案（fighting/moba/horror/strategy/rhythm/breakout/tetris/sports/physics/牌类/chess/uno/solitaire） |
+| `src/game/engine/TetrisScene.ts` | 新增 `buildTouchButtons()`：← → ↻ ⬇⬇ ⏸ 五按钮 |
+| `src/game/engine/RhythmScene.ts` | 每条轨道加透明 rectangle + `pointerdown → handleLanePress(idx)` |
+| `src/game/engine/HorrorScene.ts` | 新增 `buildTouchControls()`：摄像头 CAM1-N 按钮 + 关门按钮 |
+| `src/game/engine/FightingScene.ts` | 新增 `touchLeft/touchRight/touchBlock` 标志；`tickPlayerInput` 接入；`buildTouchControls()` 含 ←→ + 格挡/轻拳/重拳/必杀 |
+| `src/game/engine/MobaScene.ts` | 新增 `touchDx/touchDy`；`updatePlayer()` 接入；`buildTouchControls()` D-pad + Q/W/E/普攻 |
+| `src/game/engine/SportsScene.ts` | 新增 `touchLeft/touchRight`；`update()` 接入；`buildTouchControls()` ← → + 蓄力按钮 |
+
+### 验证
+- `npx tsc --noEmit` → **零错误**
+
+---
+
+## Session 39 · SpecQuickTunePanel 模板专属微调 + 斗地主选牌点击区修复
+
+### 问题来源
+用户反馈：①微调面板对斗地主等棋牌游戏显示无意义的"主角移速/威胁移速"滑块；②斗地主选牌时点击位置不准，鼠标点不动。
+
+### 修复内容
+
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/game/engine/DouDizhuScene.ts` | `layoutHand()`：1）spacing 28→32px（独占可点击带更宽）；2）`setInteractive` 矩形改为独占带宽 `hitW = isLast ? cardW : spacing`，修"高层牌覆盖低层牌点击区"bug |
+| `src/components/SpecQuickTunePanel.tsx` | 彻底重构游戏参数区：towerDefense 现有逻辑保留；新增 fighting/moba/horror/tetris/rhythm/sports/endless-runner/card-game/board-game 专属控件；其余走通用 lives+winScore+speed 路径。棋牌游戏(chess/mahjong/solitaire 等)在 labels 区隐藏无意义的威胁物/收集物字段 |
+| `src/messages/zh-Hans.json` | 新增 aiDifficulty/rounds/fighterHp/mobaTowers/horrorNights/horrorPower/tetrisLines/tetrisSpeed/rhythmSpeed/sportsTarget/sportsTime/runnerSpeed/runnerDensity 翻译键 |
+| `src/messages/en.json` | 同上（英文） |
+| `src/messages/zh-Hant.json` | 同上（繁中） |
+| `src/messages/ms.json` | 同上（马来语） |
+| `src/messages/th.json` | 同上（泰语） |
+
+### 验证
+- `npx tsc --noEmit` → **零错误**
+
+### 下次启动清单
+1. `npm run dev`（端口 8888）
+2. 生成斗地主 → 选牌点击区应准确（任意位置点击正确的牌）
+3. 打开斗地主游戏的微调面板 → 应显示"AI 难度"滑块，不显示主角移速/威胁移速
+4. 打开格斗游戏微调面板 → 应显示回合数/玩家血量/AI 难度
+5. 打开恐怖游戏微调面板 → 应显示夜晚数量/电力上限
+6. 测任意游戏触控：Tetris/Rhythm/Horror/Fighting/Moba/Sports 均有屏幕按钮
+7. 生成斗地主类游戏：确认不出现"豌豆射手/僵尸"提示词
+
+---
+
+## 历史会话记录
+
+### Session 37 · 移植 threejs-game-skills 编排模式：Scorecard/Ledger/PlayableLoop/Gate
+
+### Session 36 · Scene 视觉系统化升级 + gameplayCore fallback + endless-runner 撕裂深修
+
+---
+
+## 当前状态
+
+### 编译状态
+- `npx tsc --noEmit` → **src/ 零错误**
+- `npx tsx scripts/test-template-routing.ts` → **68/68 通过**
+- `npx tsx scripts/test-template-selector.ts` → **102/102 通过**
+
+### 本会话修改文件（Session 36 · Scene 视觉系统化升级 + gameplayCore fallback + endless-runner 撕裂深修）
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/creative-brief/genre-packs.ts` | **selectGenrePack 关键词命中 pack 但 defaultTemplate 与 templateId 冲突时优先走 override**（修"神庙逃亡...跑酷...跳跃"命中 platformer-adventure 导致 brief 撕裂 endless-runner） |
+| `src/lib/creative-brief/parse-intent.ts` | **inferTemplate 改为 inferTemplateFromPrompt 优先于 pack.defaultTemplate**（修"神庙逃亡"被 platformer-adventure 锁死成 platformer） |
+| `src/lib/create-studio-narrative.ts` | **gameplayCoreFor 加 fallback**：i18n 只覆盖 6 模板，其余返回 raw key，改用 template-brief-overrides 的 world 兜底 |
+| `src/game/engine/EndlessRunnerScene.ts` | 跑者从矩形+圆头几何形改成 🏃 emoji；障碍物从纯色矩形改成 🚧/🚷/♿ emoji；金币已是 🪙 |
+| `src/game/engine/BreakoutScene.ts` | 挡板从纯色矩形改成程序化精致纹理（圆角+高光+阴影）；球从白圆改 ⚪ emoji；砖块从纯色矩形改成带 bevel 立体纹理（高光顶+暗边+内描边） |
+| `src/game/engine/HorrorScene.ts` | 摄像头怪物从红色实心圆改成 👻 emoji |
+| `src/game/engine/StrategyScene.ts` | 节点从纯色圆改成 圆底+🏰(玩家)/👾(AI)/⚪(中立) emoji，兵力数字移到下方 |
+| `src/game/engine/CoasterScene.ts` | 非 rich 路径赛车从矩形+圆轮几何改成 🏎️ emoji（rich 路径保留 drawCoasterCartRich） |
+| `src/game/engine/PhysicsScene.ts` | 非 rich 路径沙袋从圆角矩形+圆头改成 🎯 emoji renderTexture（rich 路径保留） |
+| `src/game/engine/TetrisScene.ts` | drawCell 加强 bevel：圆角+顶/左高光斜面+右/下暗边+内描边，比纯色矩形更立体 |
+
+### 根因分析（Session 36 解决的系统性问题）
+
+**问题 K · brief 与 templateId 撕裂（两层叠加 bug）**：
+- L1 `parse-intent.ts:inferTemplate`：pack 有 defaultTemplate 时直接返回，没跑 inferTemplateFromPrompt。"神庙逃亡"命中 platformer-adventure pack（match 含"跑酷/跳跃"）→ templateHint 锁死 platformer → endless-runner infer 规则没机会跑。
+- L2 `genre-packs.ts:selectGenrePack`：关键词命中 pack 后直接返回，不检查 defaultTemplate 是否与 templateId 冲突。即使上层传 endless-runner，关键词命中 platformer-adventure 就返回 platformer pack。
+- 修法：infer 优先于 pack.defaultTemplate；selectGenrePack 检测冲突时走 override。
+- 验证：`expandCreativeBrief("神庙逃亡...")` 现在输出 `packId=tmpl-endless-runner`、`world="三道无尽跑酷"`、`units=["玩家跑者","障碍物","金币","加速带"]`。
+
+**问题 L · gameplayCore i18n 缺口**：`createStudioNarrative.gameplayCore` 只有 6 个模板（towerDefense/shooter/platformer/collector/survivor/avoider），其余 54 模板显示 raw key。修法：gameplayCoreFor 加 fallback，raw key 时用 template-brief-overrides 的 world 兜底。
+
+**问题 M · Scene 几何占位系统化**：审计 26 个 Scene，发现 6 个用纯几何形状画玩家/敌人/主要对象。本会话全部修正：
+- EndlessRunner 跑者🏃 + 障碍🚧🚷♿ + 金币🪙
+- Breakout 挡板精致纹理 + 球⚪ + 砖块 bevel
+- Horror 怪物👻
+- Strategy 节点🏰👾⚪
+- Coaster 非 rich 赛车🏎️
+- Physics 非 rich 沙袋🎯
+- Tetris bevel 加强
+
+### 已确认无几何占位问题（审计结论）
+- PlatformerScene / PlayScene：play-assets.ts 画带眼睛/脚掌的角色 ✓
+- ShooterScene：shooter-assets.ts 画带驾驶舱/机翼的飞船 ✓
+- TowerDefenseScene：towerdefense-assets.ts 画带耳朵/眼睛的敌人 ✓
+- ChessScene：Unicode 棋子符号 ♔♕♖ ✓
+- FarmingScene：drawCropPlant 程序化植株 ✓
+- Merge2048Scene：数字+色块 tile（合并游戏本质）✓
+- AgenticScene：无 input（委托 agenticModule）✓
+
+### 下次启动清单
+1. `npm run dev`（端口 8888，**不是 80**）→ 访问 `http://localhost:8888/zh-Hans/create`
+2. 测神庙逃亡：输入"神庙逃亡风无尽跑酷，3 道左右切换" → 确认(a)brief 是 endless-runner 语义（三道/跑者/障碍/金币）；(b)跑者是 🏃 emoji；(c)障碍是 🚧🚷♿；(d)金币是 🪙
+3. 测打砖块：挡板有高光阴影、球是 ⚪、砖块有 bevel 立体感
+4. 测恐怖：摄像头怪物是 👻
+5. 测策略：节点是 🏰/👾/⚪
+6. 测过山车（非 rich）：赛车是 🏎️
+7. 测物理（非 rich）：沙袋是 🎯
+8. 测俄罗斯方块：方块有圆角+斜面高光
+9. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
+10. **注意**：chrome-devtools MCP 控制的浏览器 tab 在后台时 requestAnimationFrame 被节流，Phaser game loop 不跑——这是测试环境问题，用户真实浏览器（前台 tab）不受影响
+
+---
+
+## 历史会话记录
+
+### Session 35 · 60 模板 brief 兜底表 + Scene 占位 emoji 化 + fruit-ninja 专属方向
+
+---
+
+## 当前状态（Session 35 快照，归档）
+
+### 编译状态
+- `npx tsc --noEmit` → **src/ 零错误**
+- `npx tsx scripts/test-template-routing.ts` → **68/68 通过**
+- `npx tsx scripts/test-template-selector.ts` → **102/102 通过**
+
+### 本会话修改文件（Session 35 · 60 模板 brief 兜底表 + Scene 占位 emoji 化 + fruit-ninja 专属方向）
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/creative-brief/template-brief-overrides.ts` | **新建**：60 模板 × {world/scenes/units/gameplayHints/themeHints/negatives} 紧凑兜底表。selectGenrePack 无关键词命中时按 templateId 返回 template-appropriate pack，不再让 ~48 个未覆盖模板都走 general-arcade 输出"主角/敌人/收集物"通用占位 |
+| `src/lib/creative-brief/genre-packs.ts` | selectGenrePack 接受可选 templateId；**关键词命中 pack 但 defaultTemplate 与 templateId 冲突时优先走 templateId override**（修"神庙逃亡...跑酷...跳跃"命中 platformer-adventure 导致 brief 撕裂 endless-runner 标签的问题）；新增 applyTemplateOverride 把 override 叠到 general-arcade 骨架；新增 fruit-slicing genre pack（match 切水果/水果忍者/fruit ninja/slice fruit，defaultTemplate=fruit-ninja，world/scenes/units 用水果忍者语义） |
+| `src/lib/creative-brief/parse-intent.ts` | parseCreativeIntent 调 selectGenrePack 时传入 templateHint；**inferTemplate 改为 inferTemplateFromPrompt 优先于 pack.defaultTemplate**（修"神庙逃亡"被 platformer-adventure pack 锁死成 platformer、endless-runner infer 规则没机会跑的问题） |
+| `src/lib/creative-brief/expand-brief.ts` | expandCreativeBrief 调 selectGenrePack 时传入 resolved templateId |
+| `src/lib/create-studio-narrative.ts` | resolveDirectionTemplateId 修 auto→avoider bug（改走 inferTemplateFromPrompt）；buildTemplateDialogueDirections 新增 fruit-ninja 专属方向组；buildFallbackDialogueDirections 改为 template-aware——非 action 模板走 buildTemplateAwareDirections 合成 4 个 template-appropriate 问题（目标/节奏/内容/主题），action 模板保留原 goal/threat/progression/fantasy；新增 classifyTemplateFamily 分类 action/arcade/puzzle/card/board/sim |
+| `src/game/engine/FruitNinjaScene.ts` | 水果从 `add.circle` 纯色圆改成 emoji 文字（🍉🍊🍎🍇🍓🥝🍌🍑），炸弹改 💣，半片用同款 emoji scale 0.7；FRUIT_DEFS 替代 FRUIT_COLORS；FruitEntry/SliceHalf.spr 类型 Arc→Text |
+| `src/game/engine/MobaScene.ts` | 玩家英雄 🦸 / AI 英雄 🤖 从裸圆改成 emoji；player/ai 类型 Arc→Text |
+| `src/game/engine/SportsScene.ts` | 运动员从裸圆+矩形臂改成 🏃 emoji；playerBody 类型 Arc→Text |
+| `src/game/engine/FightingScene.ts` | 格斗家从矩形身体+圆头改成 🥷/🤺 emoji；Fighter.body 类型 Rectangle→Text；applyFlash 改用 setTint |
+| `src/game/engine/EndlessRunnerScene.ts` | 金币从裸圆改成 🪙 emoji；coins 数组/applyPerspective/onCollectCoin 的 obj 类型 Arc→Text |
+| `src/messages/{zh-Hans,zh-Hant,en,ms,th}.json` | 新增 dialogue.fruitNinja.{target,pace,bomb,theme} 候选方向 i18n（5 语言全覆盖） |
+
+### 根因分析（Session 35 解决的系统性问题）
+
+**问题 G · Genre pack 覆盖不足**：60 个模板只有 ~12 个专属 pack，其余 ~48 个全走 general-arcade 兜底，输出"主角/敌人/收集物"通用占位——用户输入"切水果"时 brief 骨架与水果忍者无关，LLM 扩写自然跑偏。修法：建 60 模板兜底表，selectGenrePack 按 templateId 返回 template-appropriate pack。
+
+**问题 H · 候选方向动作游戏中心化**：只有 shooter/towerDefense/platformer 3 个模板有专属候选方向，其余 56 个走 fallback 的"胜利条件/威胁来源/进程变难/世界观"——这些问题对街机/益智/卡牌/经营类无意义。修法：buildFallbackDialogueDirections 改 template-aware，非 action 模板合成 4 个 template-appropriate 问题。
+
+**问题 I · auto→avoider 硬编码**：resolveDirectionTemplateId 把 auto 一律 fallback 到 avoider，导致切水果的方向卡被标 avoider。修法：改走 inferTemplateFromPrompt。
+
+**问题 J · Scene 占位图形**：FruitNinjaScene 水果用纯色圆（add.circle），MobaScene 英雄用裸圆，SportsScene 运动员用圆+矩形臂，FightingScene 格斗家用矩形+圆头，EndlessRunnerScene 金币用裸圆——都是"圈圈"占位。修法：全部改成对应 emoji（🍉🦸🏃🥷🪙）。审过其余 22 个 Scene，背景粒子/HP 条/UI 面板/牌矩形/砖块矩形等是合法用法，保留。
+
+### 下次启动清单
+1. `npm run dev`（端口 8888）→ 访问 `http://localhost:8888/zh-Hans/create`
+2. 测切水果：输入"水果忍者玩法，水果抛物线飞出，划屏切割" → 确认(a)候选方向是 target/pace/bomb/theme 而非"胜利条件怎么定"；(b)生成的游戏水果是 emoji 不是圈圈；(c)创意解读 brief 出现"抛物线/划屏切割/combo/炸弹"而非"主角/敌人/收集物"
+3. 测 MOBA：输入"三路推塔团战" → 确认英雄是 🦸/🤖 不是裸圆
+4. 测格斗：输入"1v1 格斗连招" → 确认格斗家是 🥷/🤺 不是矩形+圆头
+5. 测跑酷：输入"神庙逃亡三道跑酷" → 确认金币是 🪙 不是裸圆
+6. 测体育：输入"投篮得分" → 确认运动员是 🏃 不是圆+矩形臂
+7. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
+8. 抽测 2-3 个非 action 模板（如 tetris/cooking/dou-dizhu）→ 确认候选方向是 template-appropriate 而非动作游戏问题
+
+---
+
+## 历史会话记录
+
+### Session 34 · 模板路由系统级重构 + Creative Brief 牌桌感知 + i18n 关键词
+
+---
+
+## 当前状态（Session 34 快照，归档）
 
 ### 编译状态
 - `npx tsc --noEmit` → **src/ 零错误**

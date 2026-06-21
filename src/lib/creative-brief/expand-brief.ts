@@ -80,7 +80,7 @@ export async function expandCreativeBrief(
   if (promptHasCreativeBriefBlock(userPrompt, medium)) {
     const head = userPrompt.split("\n")[0]?.trim() ?? userPrompt.slice(0, 120);
     const intent = parseCreativeIntent(head, templateHint);
-    const pack = selectGenrePack(head);
+    const pack = selectGenrePack(head, templateHint === "auto" ? intent.templateHint : templateHint);
     let brief = briefFromPack(head, pack, intent, detectBriefInputLocale(head));
     if (params.userRevision) brief = mergeBriefRevision(brief, params.userRevision);
     const revBlock = params.userRevision ? formatRevisionBlock(params.userRevision) : "";
@@ -95,9 +95,10 @@ export async function expandCreativeBrief(
   }
 
   const intent = parseCreativeIntent(userPrompt, templateHint);
+  const resolvedTemplateId = templateHint === "auto" ? intent.templateHint : templateHint;
   const pack = params.packId
-    ? GENRE_PACKS.find((p) => p.id === params.packId) ?? selectGenrePack(userPrompt)
-    : selectGenrePack(userPrompt);
+    ? GENRE_PACKS.find((p) => p.id === params.packId) ?? selectGenrePack(userPrompt, resolvedTemplateId)
+    : selectGenrePack(userPrompt, resolvedTemplateId);
 
   let brief = briefFromPack(userPrompt, pack, intent, inputLocale);
   if (params.userRevision) brief = mergeBriefRevision(brief, params.userRevision);

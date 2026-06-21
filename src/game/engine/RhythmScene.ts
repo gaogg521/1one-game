@@ -202,6 +202,17 @@ export class RhythmScene extends Phaser.Scene {
       this.laneKeys.push(kb.addKey(LANE_KEYS[i]!));
     }
 
+    // 触控点击区：整条轨道可点击，判定同键盘
+    for (let i = 0; i < this.lanes; i += 1) {
+      const lx = this.trackLeft + i * this.laneWidth;
+      const touchZone = this.add
+        .rectangle(lx + this.laneWidth / 2, this.viewH / 2, this.laneWidth - 2, this.viewH, 0xffffff, 0)
+        .setDepth(6)
+        .setInteractive({ useHandCursor: false });
+      const idx = i;
+      touchZone.on("pointerdown", () => this.handleLanePress(idx));
+    }
+
     // HUD
     const ui = buildSceneCohesion(this.spec);
     const guidance = buildSceneGoalGuidance(this.spec, this.uiLocale);

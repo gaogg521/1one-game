@@ -104,12 +104,30 @@ export class PhysicsScene extends Phaser.Scene {
     }
     this.dummy = this.physics.add.image(dummyX, dummyY, texKey);
     if (!this.textures.exists(texKey)) {
+      // 非 rich 兜底：画靶心纹理（同心圆 + 中心点），比纯圆角矩形+圆头更可读
       const g = this.make.graphics({ x: 0, y: 0 }, false);
-      g.fillStyle(Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 1);
-      g.fillRoundedRect(0, 0, 72, 120, 12);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(36, 28, 18);
-      g.generateTexture(texKey, this.richArena ? 88 : 72, this.richArena ? 136 : 120);
+      const pc = Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color;
+      const w = this.richArena ? 88 : 72;
+      const h = this.richArena ? 136 : 120;
+      if (this.richArena) {
+        g.fillStyle(pc, 1);
+        g.fillRoundedRect(0, 0, 72, 120, 12);
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(36, 28, 18);
+      } else {
+        // 靶心：外圈深色 + 中圈主题色 + 内圈白 + 中心红
+        const cx = w / 2;
+        const cy = h / 2;
+        g.fillStyle(0x1f2937, 1);
+        g.fillCircle(cx, cy, Math.min(w, h) / 2 - 2);
+        g.fillStyle(pc, 1);
+        g.fillCircle(cx, cy, Math.min(w, h) / 2 - 10);
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(cx, cy, Math.min(w, h) / 2 - 20);
+        g.fillStyle(0xdc2626, 1);
+        g.fillCircle(cx, cy, 6);
+      }
+      g.generateTexture(texKey, w, h);
       g.destroy();
       this.dummy.setTexture(texKey);
     }

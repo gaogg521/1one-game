@@ -221,15 +221,26 @@ export class StrategyScene extends Phaser.Scene {
       if (this.richMap) {
         drawStrategyNode(this.gfx, nx, ny, radius, col, n.id === this.selected, n.owner);
       } else {
+        // 节点底色圆 + owner emoji（🏰 玩家 / 👾 AI / ⚪ 中立），比纯色圆更可读
         if (n.owner === "player") {
           this.gfx.lineStyle(3, Phaser.Display.Color.HexStringToColor(this.spec.theme.playerColor).color, 0.35);
           this.gfx.strokeCircle(nx, ny, 34);
         }
         this.gfx.fillStyle(Phaser.Display.Color.HexStringToColor(col).color, 1);
         this.gfx.fillCircle(nx, ny, radius);
+        const emoji = n.owner === "player" ? "🏰" : n.owner === "ai" ? "👾" : "⚪";
+        const t2 = styleHudText(
+          this.add
+            .text(nx, ny - 1, emoji, {
+              fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+              fontSize: `${Math.round(radius * 1.1)}px`,
+            })
+            .setOrigin(0.5),
+        );
+        this.labels.push(t2);
       }
       const t = styleHudText(
-        this.add.text(nx, ny, String(Math.round(n.troops)), { fontSize: "13px", color: "#fff" }).setOrigin(0.5),
+        this.add.text(nx, ny + radius + 8, String(Math.round(n.troops)), { fontSize: "13px", color: "#fff" }).setOrigin(0.5),
       );
       this.labels.push(t);
     }

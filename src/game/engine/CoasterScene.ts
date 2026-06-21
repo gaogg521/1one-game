@@ -164,6 +164,7 @@ export class CoasterScene extends Phaser.Scene {
   private trackGfx!: Phaser.GameObjects.Graphics;
   private decorGfx!: Phaser.GameObjects.Graphics;
   private cartGfx!: Phaser.GameObjects.Graphics;
+  private cartEmoji!: Phaser.GameObjects.Text;
   private clouds: Array<{ x: number; y: number; r: number; sp: number }> = [];
 
   private keyBoost!: Phaser.Input.Keyboard.Key;
@@ -303,6 +304,15 @@ export class CoasterScene extends Phaser.Scene {
     this.trackGfx = this.add.graphics().setDepth(2);
     this.decorGfx = this.add.graphics().setDepth(1);
     this.cartGfx = this.add.graphics().setDepth(5);
+    // 非 rich 路径用 emoji 赛车兜底（rich 路径走 drawCoasterCartRich 精细程序化）
+    this.cartEmoji = this.add
+      .text(0, 0, "🏎️", {
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+        fontSize: "44px",
+      })
+      .setOrigin(0.5)
+      .setDepth(6)
+      .setVisible(false);
 
     for (let i = 0; i < 14; i += 1) {
       this.clouds.push({
@@ -996,18 +1006,11 @@ export class CoasterScene extends Phaser.Scene {
 
     if (this.richVisuals) {
       drawCoasterCartRich(this.cartGfx, cartX, cartY, cartW, cartH, pc.color, this.thirdPerson);
+      this.cartEmoji.setVisible(false);
     } else {
-      this.cartGfx.fillStyle(pc.color, 1);
-      this.cartGfx.fillRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
-      this.cartGfx.fillStyle(0x1f2937, 1);
-      this.cartGfx.fillCircle(cartX - cartW * 0.32, cartY + 4, 7);
-      this.cartGfx.fillCircle(cartX + cartW * 0.32, cartY + 4, 7);
-      if (this.thirdPerson) {
-        this.cartGfx.fillStyle(0xfbbf24, 1);
-        this.cartGfx.fillRect(cartX - 8, cartY - cartH - 14, 16, 14);
-      }
-      this.cartGfx.lineStyle(2, 0xffffff, 0.25);
-      this.cartGfx.strokeRoundedRect(cartX - cartW / 2, cartY - cartH, cartW, cartH, 6);
+      // 非 rich：用 🏎️ emoji 替代矩形+圆轮几何占位
+      this.cartGfx.clear();
+      this.cartEmoji.setPosition(cartX, cartY - cartH / 2).setVisible(true).setTint(pc.color);
     }
 
     if (Math.abs(bank) > 0.05) {

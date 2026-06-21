@@ -1216,7 +1216,20 @@
     "labelPlayer": "Player / tower",
     "labelHazard": "Threat",
     "labelCollectible": "Collectible / currency",
-    "debugAct": "Debug"
+    "debugAct": "Debug",
+    "aiDifficulty": "ความยากของ AI (0=ง่าย 1=ยาก)",
+    "rounds": "จำนวนรอบ",
+    "fighterHp": "HP ผู้เล่น",
+    "mobaTowers": "หอคอยที่ต้องทำลาย",
+    "horrorNights": "คืนที่ต้องอยู่รอด",
+    "horrorPower": "งบพลังงาน",
+    "tetrisLines": "เป้าหมายแถว",
+    "tetrisSpeed": "ความเร็วตก (ms)",
+    "rhythmSpeed": "ตัวคูณความเร็ว",
+    "sportsTarget": "คะแนนเพื่อชนะ",
+    "sportsTime": "ระยะเวลา (วินาที)",
+    "runnerSpeed": "ความเร็ววิ่ง (px/s)",
+    "runnerDensity": "ความหนาแน่นอุปสรรค (0~1)"
   },
   "samples": {
     "hot": "Hot",
@@ -3015,6 +3028,48 @@
           "addon0": "Multi-chapter platform levels + transitions",
           "addon1": "Short HUD goals; long copy not in top bar",
           "addon2": "“{fantasy}” visible each chapter"
+        }
+      },
+      "fruitNinja": {
+        "target": {
+          "title": "คะแนนเป้ากี่แต้ม?",
+          "summary": "ตัดชัด “สับถึง X คะแนนเพื่อชนะ” — เป้า เวลา ชีวิต ชัดเจน",
+          "bullet0": "winScore 50-100, เวลา 60-90s, ชีวิต 3",
+          "bullet1": "ล้มเหลว: หมดเวลาต่ำกว่าเป้า / ชีวิต 0",
+          "addonHeader": "[ตัวเลือก] เป้าชนะชัดเจน",
+          "addon0": "เทมเพลต fruit-ninja: ผล้วงโค้งพาราโบลา + ลากสับ + combo + ระเบิด",
+          "addon1": "HUD แสดง คะแนน/เป้า/ชีวิต/วินาทีที่เหลือ",
+          "addon2": "ตั้งชื่อผลไม้ & ระเบิด ตาม “{fantasy}”"
+        },
+        "pace": {
+          "title": "เร็วแค่ไหน spawn?",
+          "summary": "ช่วง spawn ผลไม้/ระเบิด & เร่งช่วงท้าย กำหนดความวุ่นวาย",
+          "bullet0": "spawnIntervalMs 800-1200, เร่ง +25% ช่วงท้าย",
+          "bullet1": "หน้าต่าง combo 700ms, 3+ ลูกโซ่โบนัส",
+          "addonHeader": "[ตัวเลือก] จังหวะ & combo",
+          "addon0": "เทมเพลต fruit-ninja: ช่วง spawn เร่งขึ้นเล็กน้อยตามเวลา",
+          "addon1": "combo 3-ลูกโซ่ +5, 4-ลูกโซ่ +10… ลูปเด็ด",
+          "addon2": "รอยดาบ + อนุภาคน้ำผลไม้กระเด็น"
+        },
+        "bomb": {
+          "title": "ระเบิดหนาแค่ไหน?",
+          "summary": "ระเบิดคือโทษ — สับโดนเสียชีวิต + สั่น + แฟลชแดง",
+          "bullet0": "bombChance 0.15-0.25 (สบาย ถึง ฮาร์ดคอร์)",
+          "bullet1": "ระเบิดใช้วิถีเดียวกับผลไม้ บังคับสับให้แม่น",
+          "addonHeader": "[ตัวเลือก] ความหนักโทษระเบิด",
+          "addon0": "เทมเพลต fruit-ninja: bombChance ควบความหนาแน่น",
+          "addon1": "สับระเบิด → -1 ชีวิต + แฟลชแดง + สั่น + combo รีเซ็ต",
+          "addon2": "ชีวิต 0 = ล้มเหลวทันที, HUD ระดับอันตราย"
+        },
+        "theme": {
+          "title": "ใช้ธีมผลไม้นี้ต่อ?",
+          "summary": "ความหลากผลไม้ ฉากหลัง ชุดสี รวมเป็นหนึ่งโลก",
+          "bullet0": "🍉🍊🍎🍇🍓🥝🍌🍑 emoji ผลไม้อ่านง่าย",
+          "bullet1": "ฉากหลัง: ครัว / แผง / สวน ชุดสีสดใส",
+          "addonHeader": "[ตัวเลือก] ลึกธีมผลไม้",
+          "addon0": "{fantasy} เป็นแกนกลางรวมชนิด & ชื่อผลไม้",
+          "addon1": "รอยดาบลื่นไหล น้ำผลไม้กระเด็นตรงสี",
+          "addon2": "prompt ภาพ ตรงธีม (ผลไม้ ไม่ใช่ก้อนสุ่ม)"
         }
       },
       "fallback": {

@@ -1216,7 +1216,20 @@
     "labelPlayer": "主角/塔",
     "labelHazard": "威脅物",
     "labelCollectible": "收集物/货币",
-    "debugAct": "调试"
+    "debugAct": "调试",
+    "aiDifficulty": "AI 難度（0=簡單 1=困難）",
+    "rounds": "回合數",
+    "fighterHp": "玩家血量",
+    "mobaTowers": "需推塔數",
+    "horrorNights": "夜晚數量",
+    "horrorPower": "電力上限",
+    "tetrisLines": "目標消行數",
+    "tetrisSpeed": "起始下落速度（ms）",
+    "rhythmSpeed": "音符下落速度倍率",
+    "sportsTarget": "投/射目標分",
+    "sportsTime": "比賽時長（秒）",
+    "runnerSpeed": "跑酷速度（px/s）",
+    "runnerDensity": "障礙密度（0~1）"
   },
   "samples": {
     "hot": "热门",
@@ -1518,7 +1531,7 @@
     "variantsOnce": "一次生成 3 套備選",
     "updatingAndPlay": "更新專案并試玩",
     "saveAndPlay": "保存并試玩",
-    "spriteWait": "正在生成专属游戏貼圖（豌豆射手、僵尸、背景等），约需 2-3 分鐘，完成后自动跳转試玩頁…",
+    "spriteWait": "正在生成專屬遊戲貼圖（角色、場景、背景等），約需 2-3 分鐘，完成後自動跳轉試玩頁…",
     "autoCoverReady": "Brief 自動封面已生成，保存後可在作品庫與廣場展示。",
     "ingestBusy": "素材解析进行中…（上傳優先于剪貼簿）",
     "previewAria": "試玩預覽",
@@ -3015,6 +3028,48 @@
           "addon0": "多章节平台关卡 + 章节过渡字幕",
           "addon1": "HUD 目标短句，长文案不进顶栏",
           "addon2": "世界观「{fantasy}」在每章视觉中体现"
+        }
+      },
+      "fruitNinja": {
+        "target": {
+          "title": "目標分數定多少？",
+          "summary": "先釘死「切到多少分通關」——目標分、時長、命數寫清楚。",
+          "bullet0": "winScore 50-100，時長 60-90s，命數 3",
+          "bullet1": "失敗條件：時間到未達標 / 命 0",
+          "addonHeader": "【共創選擇】明確通關目標",
+          "addon0": "fruit-ninja 模板：拋物線水果 + 劃屏切割 + combo + 炸彈",
+          "addon1": "HUD 顯示 分數/目標分/命/剩餘秒",
+          "addon2": "貼合「{fantasy}」命名水果與炸彈"
+        },
+        "pace": {
+          "title": "拋出節奏怎麼調？",
+          "summary": "水果/炸彈拋出間隔與後期加速，決定手忙腳亂程度。",
+          "bullet0": "spawnIntervalMs 800-1200，後期加速 25%",
+          "bullet1": "combo 視窗 700ms，3 連擊以上加分",
+          "addonHeader": "【共創選擇】節奏與 combo",
+          "addon0": "fruit-ninja 模板：spawn 間隔隨時間微加速",
+          "addon1": "combo 3 連擊 +5、4 連擊 +10…爽感循環",
+          "addon2": "刀光軌跡 + 果汁飛濺粒子反饋"
+        },
+        "bomb": {
+          "title": "炸彈密度定多少？",
+          "summary": "炸彈是懲罰壓力源——切到扣命 + 屏震 + 紅屏閃。",
+          "bullet0": "bombChance 0.15-0.25（休閒到硬核）",
+          "bullet1": "炸彈與水果同拋物線，逼玩家精準切",
+          "addonHeader": "【共創選擇】炸彈懲罰強度",
+          "addon0": "fruit-ninja 模板：bombChance 控制密度",
+          "addon1": "切炸彈扣 1 命 + 紅屏閃 + 屏震 + combo 歸零",
+          "addon2": "命 0 立即失敗，HUD 危險等級提示"
+        },
+        "theme": {
+          "title": "主題包裝就按這個方向？",
+          "summary": "水果種類、背景、配色統一，讓首版就像同一個世界。",
+          "bullet0": "🍉🍊🍎🍇🍓🥝🍌🍑 水果 emoji 清晰可辨",
+          "bullet1": "背景廚房/水果攤/果園擇一，配色明亮",
+          "addonHeader": "【共創選擇】水果主題深化",
+          "addon0": "以「{fantasy}」為核心統一水果種類與命名",
+          "addon1": "刀光軌跡流暢，果汁飛濺同色系",
+          "addon2": "貼圖 prompt 對齊主題（水果而非無關萌塊）"
         }
       },
       "fallback": {

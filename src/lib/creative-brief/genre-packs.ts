@@ -1,4 +1,5 @@
 import type { ParsedIntent } from "@/lib/creative-brief/types";
+import { getTemplateBriefOverride, type TemplateBriefOverride } from "@/lib/creative-brief/template-brief-overrides";
 
 export type GenrePack = {
   id: string;
@@ -355,6 +356,62 @@ export const GENRE_PACKS: GenrePack[] = [
     },
     negatives: ["写实转播照片", "暴力格斗", "畸形人体", "真实球星肖像"],
   },
+  // ── 切水果/划屏切片（fruit-ninja 真玩法：抛物线 + 划屏切割 + combo + 炸弹惩罚）
+  // 这类游戏核心是"切割手感"而非"世界观/势力/武器"，brief 字段改用水果与刀法语义，
+  // 避免走 general-arcade 兜底输出"主角/敌人/收集物"等与水果忍者无关的占位。
+  {
+    id: "fruit-slicing",
+    label: "切水果街机",
+    match: [
+      /水果忍者|切水果|切水果忍者|划屏切|划屏切割|切片水果|抛物线.*水果|水果.*抛物线|半片分裂|fruit\s*ninja|slice\s*fruit|fruit\s*slic(?:e|ing)|ninja\s*fruit|切水果游戏/i,
+    ],
+    defaultTemplate: "fruit-ninja",
+    defaultTone: "casual",
+    logline: (u) =>
+      `划屏切水果：${u.slice(0, 36) || "水果从底部抛物线飞出，鼠标拖拽切割，切到炸弹扣命，达成目标分通关"}。`,
+    world: "明亮厨房或水果摊背景，水果从屏幕底部抛物线飞出、旋转飞行、落出底部消失。",
+    scenes: [
+      "水果从底部抛物线抛出的起飞瞬间",
+      "划屏切割瞬间——水果分裂成两半 + 果汁飞溅粒子",
+      "连续切割 combo 高光（3 连击以上加分提示）",
+      "切到炸弹的红屏闪 + 屏震惩罚反馈",
+    ],
+    factions: ["玩家（刀法）", "水果", "炸弹（惩罚）"],
+    units: ["🍉 西瓜", "🍊 橙子", "🍎 苹果", "🍇 葡萄", "🍓 草莓", "🥝 猕猴桃", "🍌 香蕉", "💣 炸弹"],
+    weapons: ["鼠标拖拽划线（刀光轨迹）"],
+    vfx: [
+      "切割刀光轨迹（渐变线 + 头部高亮）",
+      "水果切成两半的分裂动画",
+      "果汁飞溅粒子（同色系）",
+      "combo 加分数字弹出",
+      "炸弹红屏闪 + 屏震",
+    ],
+    artStyle: [
+      "emoji 水果图标清晰可辨",
+      "明亮饱和色调",
+      "刀光轨迹流畅有手感",
+      "手游切水果街机风格",
+    ],
+    mood: ["爽快", "节奏感", "combo 成就", "炸弹紧张"],
+    gameplayHints: [
+      "templateId=fruit-ninja（必须精确，不要套 shooter/avoider）",
+      "水果/炸弹从底部抛物线抛出，向上初速度 + 重力下落，落出底部消失",
+      "鼠标/触摸拖拽划线，轨迹经过水果即切片（点到线段距离判定）",
+      "切 1 水果 +10 分；combo（700ms 内连续切）3 连击以上加分",
+      "切到炸弹扣 1 命 + 屏震 + 红屏闪；命 0 失败",
+      "winScore=目标分（50-100）；timeLimitMs 60-90s；bombChance 0.15-0.25",
+      "director 弱化：intensity 0.4-0.6，无波次叙事，仅 spawn 节奏随时间微加速",
+      "禁止套用 shooter/towerDefense 的波次/编队/弹幕叙事",
+    ],
+    themeHints: {
+      backgroundColor: "#0f172a",
+      playerColor: "#38bdf8",
+      hazardColor: "#ef4444",
+      collectibleColor: "#22c55e",
+      musicProfile: "pulse",
+    },
+    negatives: ["写实血腥切割", "动作游戏式波次叙事", "边境要塞/守军/箭塔等动作世界观", "高饱和霓虹", "畸形人体"],
+  },
   {
     id: "puzzle-logic",
     label: "解谜逻辑",
@@ -487,10 +544,61 @@ export const DEFAULT_GENRE_PACK: GenrePack = {
   negatives: ["畸形", "模糊", "杂乱", "版权 IP 复刻"],
 };
 
-export function selectGenrePack(prompt: string): GenrePack {
+export function selectGenrePack(prompt: string, templateId?: string): GenrePack {
   const p = prompt.trim();
-  for (const pack of GENRE_PACKS) {
-    if (pack.match.some((re) => re.test(p))) return pack;
+  const matched = GENRE_PACKS.find((pack) => pack.match.some((re) => re.test(p)));
+
+  // 关键词命中 pack，但若该 pack 的 defaultTemplate 与传入 templateId 冲突
+  // （例如"神庙逃亡...跑酷...跳跃"命中 platformer-adventure，但 infer 已判定 endless-runner），
+  // 优先用 templateId 的 override，避免 brief 主体与 templateId 标签撕裂。
+  if (matched && templateId && templateId !== "auto") {
+    const packDefault = matched.defaultTemplate;
+    const conflicts = packDefault !== "auto" && packDefault !== templateId;
+    if (conflicts) {
+      const override = getTemplateBriefOverride(templateId);
+      if (override) {
+        return applyTemplateOverride(DEFAULT_GENRE_PACK, override, templateId);
+      }
+    }
+    return matched;
+  }
+  if (matched) return matched;
+
+  // 无关键词命中：按 templateId 返回 template-aware fallback，避免所有未覆盖模板
+  // 都走 general-arcade 输出"主角/敌人/收集物"通用占位（导致创意解读与提示词无关）
+  const override = getTemplateBriefOverride(templateId);
+  if (override) {
+    return applyTemplateOverride(DEFAULT_GENRE_PACK, override, templateId!);
   }
   return DEFAULT_GENRE_PACK;
+}
+
+/**
+ * 把 template-aware override 叠到 general-arcade 骨架上，生成一个合成的 GenrePack。
+ * packId 用 `tmpl-<templateId>` 标识，label 用模板名，让前端能显示"已识别为 XX 模板"。
+ */
+function applyTemplateOverride(
+  base: GenrePack,
+  ov: TemplateBriefOverride,
+  templateId: string,
+): GenrePack {
+  return {
+    ...base,
+    id: `tmpl-${templateId}`,
+    label: `模板·${templateId}`,
+    defaultTemplate: templateId as ParsedIntent["templateHint"],
+    logline: (u) =>
+      `按「${templateId}」模板落地：${u.slice(0, 40) || ov.world.slice(0, 40)}`,
+    world: ov.world,
+    scenes: ov.scenes,
+    factions: ["玩家", "对手/障碍"],
+    units: ov.units,
+    weapons: [],
+    vfx: ["命中反馈", "拾取反馈", "通关高光"],
+    artStyle: ["现代扁平", "可读优先", "适度对比", "贴合模板语义"],
+    mood: ["清晰", "反馈及时"],
+    gameplayHints: ov.gameplayHints,
+    themeHints: ov.themeHints,
+    negatives: ov.negatives,
+  };
 }

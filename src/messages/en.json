@@ -1181,8 +1181,8 @@
     }
   },
   "specTune": {
-    "summary": "⚡ Live tune panel — coins, enemies, colors, rates",
-    "desc": "Changes reload the left play preview immediately. Tune coins, enemy strength, colors, speed; save uses current debug values.",
+    "summary": "⚡ Live tune panel",
+    "desc": "Changes reload the left play preview immediately. Adjust colors, difficulty, and game params; save uses current values.",
     "colors": "Colors",
     "colorBg": "Background",
     "colorPlayer": "Player / tower",
@@ -1216,7 +1216,20 @@
     "labelPlayer": "Player / tower",
     "labelHazard": "Threat",
     "labelCollectible": "Collectible / currency",
-    "debugAct": "Debug"
+    "debugAct": "Debug",
+    "aiDifficulty": "AI difficulty (0=easy 1=hard)",
+    "rounds": "Number of rounds",
+    "fighterHp": "Player HP",
+    "mobaTowers": "Towers to destroy",
+    "horrorNights": "Nights to survive",
+    "horrorPower": "Power budget",
+    "tetrisLines": "Target lines to clear",
+    "tetrisSpeed": "Start fall speed (ms, lower=faster)",
+    "rhythmSpeed": "Note fall speed multiplier",
+    "sportsTarget": "Score to win",
+    "sportsTime": "Match duration (seconds)",
+    "runnerSpeed": "Run speed (px/s)",
+    "runnerDensity": "Obstacle density (0~1)"
   },
   "samples": {
     "hot": "Hot",
@@ -3320,6 +3333,48 @@
           "addon0": "Multi-chapter platform levels + transitions",
           "addon1": "Short HUD goals; long copy not in top bar",
           "addon2": "“{fantasy}” visible each chapter"
+        }
+      },
+      "fruitNinja": {
+        "target": {
+          "title": "What's the target score?",
+          "summary": "Pin “slice to X points to win” — target, time, lives explicit.",
+          "bullet0": "winScore 50-100, time 60-90s, lives 3",
+          "bullet1": "Fail: time out under target / 0 lives",
+          "addonHeader": "[Choice] Clear win target",
+          "addon0": "fruit-ninja template: parabola fruit + drag-slice + combo + bombs",
+          "addon1": "HUD shows score / target / lives / seconds left",
+          "addon2": "Name fruits & bombs to fit “{fantasy}”"
+        },
+        "pace": {
+          "title": "How fast to spawn?",
+          "summary": "Fruit/bomb spawn interval & late-game accel set the frenzy level.",
+          "bullet0": "spawnIntervalMs 800-1200, +25% accel late",
+          "bullet1": "combo window 700ms, 3+ chain bonus",
+          "addonHeader": "[Choice] Pace & combo",
+          "addon0": "fruit-ninja template: spawn interval micro-accel over time",
+          "addon1": "combo 3-chain +5, 4-chain +10… satisfying loop",
+          "addon2": "Blade trail + juice splash particle feedback"
+        },
+        "bomb": {
+          "title": "How dense the bombs?",
+          "summary": "Bombs are the penalty — slicing one costs a life + shake + red flash.",
+          "bullet0": "bombChance 0.15-0.25 (casual to hardcore)",
+          "bullet1": "Bombs share the fruit arc, forcing precise slices",
+          "addonHeader": "[Choice] Bomb penalty strength",
+          "addon0": "fruit-ninja template: bombChance controls density",
+          "addon1": "Slice bomb → -1 life + red flash + shake + combo reset",
+          "addon2": "0 lives = instant fail, HUD danger level hint"
+        },
+        "theme": {
+          "title": "Keep this fruit theme?",
+          "summary": "Fruit variety, background, palette unified so v1 feels like one world.",
+          "bullet0": "🍉🍊🍎🍇🍓🥝🍌🍑 fruit emoji legible",
+          "bullet1": "Background: kitchen / stall / orchard, bright palette",
+          "addonHeader": "[Choice] Fruit theme depth",
+          "addon0": "{fantasy} as core to unify fruit kinds & naming",
+          "addon1": "Smooth blade trail, juice splash same color family",
+          "addon2": "Art prompts match theme (fruits, not random blobs)"
         }
       },
       "fallback": {

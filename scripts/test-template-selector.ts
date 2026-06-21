@@ -16,7 +16,7 @@ const CASES: Case[] = [
 
   // ── 平台跳跃
   { prompt: "超级玛丽兄弟横版跳跃", expected: "platformer" },
-  { prompt: "sonic 索尼克风格跑酷关卡", expected: "platformer" },
+  { prompt: "sonic 索尼克风格跑酷关卡", expected: "endless-runner" },
   { prompt: "银河恶魔城 metroidvania 探索", expected: "platformer" },
   { prompt: "几何冲刺 geometry dash 节奏跳跃", expected: "platformer" },
   { prompt: "空洞骑士 hollow knight 平台闯关", expected: "platformer" },

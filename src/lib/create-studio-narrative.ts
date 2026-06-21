@@ -4,6 +4,7 @@
 
 import type { AppLocale } from "@/i18n/routing";
 import { inferTemplateFromPrompt, type GameTemplateId } from "@/lib/game-templates";
+import { getTemplateBriefOverride } from "@/lib/creative-brief/template-brief-overrides";
 import { tMessage } from "@/lib/i18n/messages";
 
 export type StudioGenerateFlags = {
@@ -139,7 +140,15 @@ function inferFantasy(prompt: string, locale: AppLocale): string {
 }
 
 function gameplayCoreFor(templateId: CoCreationIntent["templateId"], locale: AppLocale): string {
-  return tr(locale, `gameplayCore.${templateId === "auto" ? "avoider" : templateId}`);
+  const resolved = templateId === "auto" ? "avoider" : templateId;
+  const fromI18n = tr(locale, `gameplayCore.${resolved}`);
+  // i18n 只覆盖了 6 个模板；其余返回 raw key，改用 template-brief-overrides 的 world 作 fallback
+  if (fromI18n && !fromI18n.startsWith("createStudioNarrative.gameplayCore.")) {
+    return fromI18n;
+  }
+  const ov = getTemplateBriefOverride(resolved);
+  if (ov) return ov.world;
+  return tr(locale, "gameplayCore.avoider");
 }
 
 export function buildCoCreationIntent(
@@ -208,8 +217,12 @@ function dialogueDirection(
   };
 }
 
-function resolveDirectionTemplateId(intent: CoCreationIntent): GameTemplateId {
-  return intent.templateId === "auto" ? "avoider" : intent.templateId;
+function resolveDirectionTemplateId(intent: CoCreationIntent, prompt: string): GameTemplateId {
+  if (intent.templateId === "auto") {
+    const inferred = inferTemplateFromPrompt(prompt.trim());
+    return inferred ?? "avoider";
+  }
+  return intent.templateId;
 }
 
 function buildTemplateDialogueDirections(
@@ -242,17 +255,32 @@ function buildTemplateDialogueDirections(
       dialogueDirection(locale, "plat-chapters", "platformer", "dialogue.platformer.chapters", fantasy),
     ];
   }
+  if (templateId === "fruit-ninja") {
+    return [
+      dialogueDirection(locale, "fn-target", "fruit-ninja", "dialogue.fruitNinja.target", fantasy),
+      dialogueDirection(locale, "fn-pace", "fruit-ninja", "dialogue.fruitNinja.pace", fantasy),
+      dialogueDirection(locale, "fn-bomb", "fruit-ninja", "dialogue.fruitNinja.bomb", fantasy),
+      dialogueDirection(locale, "fn-theme", "fruit-ninja", "dialogue.fruitNinja.theme", fantasy),
+    ];
+  }
   return null;
 }
 
 function buildFallbackDialogueDirections(
   intent: CoCreationIntent,
   locale: AppLocale,
+  prompt: string,
 ): CoCreationDirection[] {
-  const templateId = resolveDirectionTemplateId(intent);
+  const templateId = resolveDirectionTemplateId(intent, prompt);
   const fantasy = intent.fantasy;
-  const out: CoCreationDirection[] = [];
 
+  // 非 action 模板：按 templateId 合成 template-appropriate 方向，不再一律问 goal/threat/progression
+  const synthesized = buildTemplateAwareDirections(templateId, locale, fantasy);
+  if (synthesized.length) return synthesized;
+
+  // action 模板（shooter/towerDefense/platformer/sniper/hack-and-slash/survivor/fighting/moba 等）
+  // 保留原有 goal/threat/progression/fantasy——这些问题对动作游戏是对的
+  const out: CoCreationDirection[] = [];
   if (intent.risks.includes(tr(locale, "intent.riskGoal"))) {
     out.push(dialogueDirection(locale, "fb-goal", templateId, "dialogue.fallback.goal", fantasy));
   }
@@ -274,16 +302,114 @@ function buildFallbackDialogueDirections(
   }).slice(0, 4);
 }
 
+/** 模板族分类：决定走 action fallback 还是 template-aware 合成方向 */
+const ACTION_TEMPLATES = new Set<string>([
+  "shooter", "sniper", "towerDefense", "platformer", "hack-and-slash", "run-and-gun",
+  "fighting", "moba", "stealth", "survivor", "horror", "pokemon-battle",
+]);
+
+/**
+ * 非 action 模板的候选方向：从 TEMPLATE_BRIEF_OVERRIDES 合成 4 个 template-appropriate 问题，
+ * 避免"胜利条件/威胁来源/进程变难"这类动作游戏中心化问题强加给街机/益智/卡牌/经营类。
+ */
+function buildTemplateAwareDirections(
+  templateId: GameTemplateId,
+  locale: AppLocale,
+  fantasy: string,
+): CoCreationDirection[] {
+  if (ACTION_TEMPLATES.has(templateId)) return [];
+  const ov = getTemplateBriefOverride(templateId);
+  if (!ov) return [];
+
+  const isZh = locale === "zh-Hans" || locale === "zh-Hant";
+  const family = classifyTemplateFamily(templateId);
+
+  const titleObjective = isZh ? "目标怎么定？" : "What's the objective?";
+  const titlePace = isZh ? "节奏与难度？" : "Pace & difficulty?";
+  const titleContent = isZh ? "内容重点放哪？" : "Content focus?";
+  const titleTheme = isZh ? "主题包装方向？" : "Theme direction?";
+
+  const summaryObjective = isZh
+    ? `先钉死「怎么算赢/通关」——${ov.gameplayHints.find((h) => /winScore|通关|胜|赢|抵达|夺|吃光|出完|全歼|守住|存活|目标/.test(h)) ?? "目标分/条件写清楚"}`
+    : `Pin "how to win" — ${ov.gameplayHints.find((h) => /winScore|通关|胜|赢|抵达|夺|吃光|出完|全歼|守住|存活|目标/.test(h)) ?? "make target/condition explicit"}`;
+  const summaryPace = isZh
+    ? `${family === "card" || family === "board" ? "AI 对手强度与一局节奏" : family === "sim" ? "经营节奏，无强失败" : "抛出/生成节奏与难度曲线"}`
+    : `${family === "card" || family === "board" ? "AI strength & round pace" : family === "sim" ? "Sim pace, no hard fail" : "Spawn pace & difficulty curve"}`;
+  const summaryContent = isZh
+    ? `内容重点：${ov.scenes.slice(0, 2).join(" / ")}`
+    : `Focus: ${ov.scenes.slice(0, 2).join(" / ")}`;
+  const summaryTheme = isZh
+    ? `统一命名、配色、${ov.units.slice(0, 2).join("/")}称呼`
+    : `Unify naming, palette, ${ov.units.slice(0, 2).join("/")}`;
+
+  const bulletsObjective = ov.gameplayHints.slice(0, 2);
+  const bulletsPace = ov.gameplayHints.slice(2, 4).length >= 1
+    ? ov.gameplayHints.slice(2, 4)
+    : ov.gameplayHints.slice(1, 3);
+  const bulletsContent = ov.scenes.slice(0, 2);
+  const bulletsTheme = ov.units.slice(0, 2);
+
+  const addonHeader = isZh ? `【共创选择】${templateId} 方向` : `[Choice] ${templateId} direction`;
+
+  return [
+    {
+      id: `ta-objective`,
+      title: titleObjective,
+      summary: summaryObjective,
+      templateId,
+      bullets: bulletsObjective,
+      promptAddon: `${addonHeader}\n- ${bulletsObjective.join("\n- ")}`,
+    },
+    {
+      id: `ta-pace`,
+      title: titlePace,
+      summary: summaryPace,
+      templateId,
+      bullets: bulletsPace,
+      promptAddon: `${addonHeader}\n- ${bulletsPace.join("\n- ")}`,
+    },
+    {
+      id: `ta-content`,
+      title: titleContent,
+      summary: summaryContent,
+      templateId,
+      bullets: bulletsContent,
+      promptAddon: `${addonHeader}\n- ${bulletsContent.join("\n- ")}`,
+    },
+    {
+      id: `ta-theme`,
+      title: titleTheme,
+      summary: summaryTheme,
+      templateId,
+      bullets: bulletsTheme,
+      promptAddon: `${addonHeader}\n- 贴合「${fantasy}」\n- ${bulletsTheme.join("\n- ")}`,
+    },
+  ];
+}
+
+function classifyTemplateFamily(templateId: string): "action" | "arcade" | "puzzle" | "card" | "board" | "sim" {
+  if (ACTION_TEMPLATES.has(templateId)) return "action";
+  const CARD = new Set(["card", "poker", "solitaire", "blackjack", "mahjong", "mahjong-solitaire", "dou-dizhu", "uno"]);
+  const BOARD = new Set(["chess", "checkers", "chinese-checkers", "junqi", "aeroplane-chess", "turn-based", "auto-battler", "strategy"]);
+  const SIM = new Set(["farming", "garden", "cafe", "cooking", "tycoon", "pet", "idle", "customization", "dating-sim", "sandbox", "coloring"]);
+  const PUZZLE = new Set(["puzzle", "physics", "cut-the-rope", "escape-room", "hidden-object", "word-game", "mystery"]);
+  if (CARD.has(templateId)) return "card";
+  if (BOARD.has(templateId)) return "board";
+  if (SIM.has(templateId)) return "sim";
+  if (PUZZLE.has(templateId)) return "puzzle";
+  return "arcade";
+}
+
 export function buildCoCreationDirections(
   intent: CoCreationIntent,
   locale: AppLocale = "zh-Hans",
   prompt = "",
 ): CoCreationDirection[] {
   const templateId =
-    intent.templateId === "auto" ? inferTemplateFromPrompt(prompt.trim()) : intent.templateId;
+    intent.templateId === "auto" ? (inferTemplateFromPrompt(prompt.trim()) ?? "avoider") : intent.templateId;
   const themed = buildTemplateDialogueDirections(templateId, intent, locale);
   if (themed?.length) return themed;
-  return buildFallbackDialogueDirections(intent, locale);
+  return buildFallbackDialogueDirections(intent, locale, prompt);
 }
 
 export function describeQueuedAssetSummary(

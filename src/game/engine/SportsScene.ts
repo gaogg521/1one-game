@@ -48,7 +48,7 @@ export class SportsScene extends Phaser.Scene {
   private hud!: HudFrame;
 
   private player!: Phaser.GameObjects.Container;
-  private playerBody!: Phaser.GameObjects.Arc;
+  private playerBody!: Phaser.GameObjects.Text;
   private ballGroup!: Phaser.Physics.Arcade.Group;
   private goal!: Phaser.GameObjects.Container;
   /** 目标命中半径（手动距离判定用） */
@@ -59,6 +59,10 @@ export class SportsScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
+
+  // 触控方向标志
+  private touchLeft = false;
+  private touchRight = false;
 
   private score = 0;
   private lives = 3;
@@ -130,8 +134,11 @@ export class SportsScene extends Phaser.Scene {
       this.add.image(viewW / 2, viewH / 2, "bgTex").setDepth(-10).setAlpha(0.5);
     }
 
-    // ── 玩家（地面发射器）──
-    this.playerBody = this.add.circle(0, 0, 18, playerColorNum, 1);
+    // ── 玩家（运动员）──
+    this.playerBody = this.add.text(0, 0, "🏃", {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: "40px",
+    }).setOrigin(0.5).setTint(playerColorNum);
     this.add.existing(this.playerBody);
     const arm = this.add.rectangle(0, -22, 6, 22, playerColorNum, 1).setOrigin(0.5, 1);
     this.add.existing(arm);
@@ -183,9 +190,46 @@ export class SportsScene extends Phaser.Scene {
 
     this.startAt = this.time.now;
     this.refreshHud();
+    this.buildTouchControls(viewW, viewH);
 
     schedulePhaserPlayReady(this, 300, { score: this.score });
     setPhaserQaState({ score: this.score });
+  }
+
+  private buildTouchControls(viewW: number, viewH: number) {
+    const by = viewH - 26;
+    const bh = 44;
+    const zh = this.uiLocale === "zh-Hans";
+
+    // 左移按钮
+    const leftBg = this.add.rectangle(44, by, 72, bh, 0x1e3a5f, 0.85)
+      .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(44, by, "←", { fontFamily: "system-ui", fontSize: "22px", color: "#93c5fd" })
+      .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+    leftBg.on("pointerdown", () => { this.touchLeft = true; });
+    leftBg.on("pointerup", () => { this.touchLeft = false; });
+    leftBg.on("pointerout", () => { this.touchLeft = false; });
+
+    // 右移按钮
+    const rightBg = this.add.rectangle(viewW - 44, by, 72, bh, 0x1e3a5f, 0.85)
+      .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(viewW - 44, by, "→", { fontFamily: "system-ui", fontSize: "22px", color: "#93c5fd" })
+      .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+    rightBg.on("pointerdown", () => { this.touchRight = true; });
+    rightBg.on("pointerup", () => { this.touchRight = false; });
+    rightBg.on("pointerout", () => { this.touchRight = false; });
+
+    // 蓄力投篮按钮（中央）
+    const chargeLabel = zh ? "按住蓄力" : "Hold=Charge";
+    const chargeBg = this.add.rectangle(viewW / 2, by, 120, bh, 0x065f46, 0.88)
+      .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(viewW / 2, by, chargeLabel, { fontFamily: "system-ui", fontSize: "13px", color: "#6ee7b7" })
+      .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+    chargeBg.on("pointerdown", () => this.startCharge());
+    chargeBg.on("pointerup", () => this.releaseCharge());
+    chargeBg.on("pointerout", () => this.releaseCharge());
+    chargeBg.on("pointerover", () => chargeBg.setFillStyle(0x047857, 0.95));
+    chargeBg.on("pointerleave", () => chargeBg.setFillStyle(0x065f46, 0.88));
   }
 
   private buildGoal(viewW: number, viewH: number, goalColorNum: number) {
@@ -305,7 +349,7 @@ export class SportsScene extends Phaser.Scene {
   update() {
     if (this.finished) return;
     const speed = this.spec.gameplay.playerSpeed ?? 220;
-    const dir = (this.keyRight.isDown || this.keyD.isDown ? 1 : 0) - (this.keyLeft.isDown || this.keyA.isDown ? 1 : 0);
+    const dir = ((this.keyRight.isDown || this.keyD.isDown || this.touchRight) ? 1 : 0) - ((this.keyLeft.isDown || this.keyA.isDown || this.touchLeft) ? 1 : 0);
     const nx = Phaser.Math.Clamp(this.player.x + dir * speed * (this.game.loop.delta / 1000), 60, this.scale.width - 60);
     this.player.x = nx;
 

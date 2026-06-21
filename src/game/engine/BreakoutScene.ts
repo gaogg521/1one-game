@@ -48,8 +48,9 @@ export class BreakoutScene extends Phaser.Scene {
   private blueprint!: BreakoutBlueprint;
   private cohesive!: CohesivePresentation;
 
-  private paddle!: Phaser.GameObjects.Rectangle;
-  private ball!: Phaser.GameObjects.Arc;
+  private paddle!: Phaser.GameObjects.Image;
+  private ball!: Phaser.GameObjects.Text;
+  private ballRadius = 8;
   private ballVel = new Phaser.Math.Vector2(0, 0);
   private ballLaunched = false;
 
@@ -69,7 +70,6 @@ export class BreakoutScene extends Phaser.Scene {
   private hud!: HudFrame;
 
   private paddleSpeed = 520;
-  private ballRadius = 8;
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("BreakoutScene");
@@ -134,34 +134,76 @@ export class BreakoutScene extends Phaser.Scene {
       0xa78bfa, // violet
       0xf472b6, // pink
     ];
+    // 砖块纹理（程序化 bevel：高光顶边 + 阴影底边，比纯色矩形更立体）
+    const brickTexKey = "texBreakoutBrick";
+    if (!this.textures.exists(brickTexKey)) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.generateTexture(brickTexKey, this.brickW, this.brickH);
+      g.destroy();
+    }
     for (let r = 0; r < rows; r += 1) {
       const color = rowColors[r % rowColors.length] ?? 0x38bdf8;
+      const dark = (color & 0xfefefe) >> 1;
+      const light = Math.min(0xffffff, color + 0x303030);
       const value = Math.max(1, rows - r); // 顶行分值最高
+      // 每行一个纹理（颜色不同）
+      const rowTexKey = `texBrickRow${r}`;
+      if (!this.textures.exists(rowTexKey)) {
+        const g = this.make.graphics({ x: 0, y: 0 });
+        g.fillStyle(0x000000, 0.25);
+        g.fillRoundedRect(1, 1, this.brickW - 2, this.brickH - 2, 3);
+        g.fillStyle(dark, 1);
+        g.fillRoundedRect(0, 0, this.brickW - 1, this.brickH - 1, 3);
+        g.fillStyle(color, 1);
+        g.fillRoundedRect(0, 0, this.brickW - 1, this.brickH - 3, 3);
+        g.fillStyle(light, 0.6);
+        g.fillRoundedRect(2, 1, this.brickW - 5, 2, 1);
+        g.generateTexture(rowTexKey, this.brickW, this.brickH);
+        g.destroy();
+      }
       for (let c = 0; c < cols; c += 1) {
         const bx = wallLeft + c * (this.brickW + gap) + this.brickW / 2;
         const by = gridTop + r * (this.brickH + gap) + this.brickH / 2;
-        const brick = this.add.rectangle(bx, by, this.brickW - 1, this.brickH - 1, color, 0.95);
-        brick.setDepth(5);
-        brick.setStrokeStyle(1, 0x000000, 0.25);
+        const brick = this.add.image(bx, by, rowTexKey).setDepth(5);
         brick.setData("value", value);
         brick.setData("alive", true);
-        this.bricks.push(brick);
+        this.bricks.push(brick as unknown as Phaser.GameObjects.Rectangle);
       }
     }
 
-    // ─── 挡板 ───
+    // ─── 挡板（程序化精致绘制：圆角 + 高光 + 阴影）───
     const paddleW = this.blueprint.paddleWidth;
     const paddleH = 14;
     const paddleY = viewH - 40;
     const paddleCol = parseInt(this.spec.theme.playerColor.replace("#", ""), 16);
-    this.paddle = this.add.rectangle(viewW / 2, paddleY, paddleW, paddleH, Number.isFinite(paddleCol) ? paddleCol : 0x38bdf8, 1);
-    this.paddle.setDepth(20);
-    this.paddle.setStrokeStyle(2, 0xffffff, 0.45);
+    const paddleTexKey = "texBreakoutPaddle";
+    if (!this.textures.exists(paddleTexKey)) {
+      const pc = Number.isFinite(paddleCol) ? paddleCol : 0x38bdf8;
+      const pd = (pc & 0xfefefe) >> 1;
+      const pl = Math.min(0xffffff, pc + 0x404040);
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x000000, 0.3);
+      g.fillRoundedRect(2, 4, paddleW, paddleH, 6);
+      g.fillStyle(pd, 1);
+      g.fillRoundedRect(0, 0, paddleW, paddleH, 6);
+      g.fillStyle(pc, 1);
+      g.fillRoundedRect(0, 0, paddleW, paddleH - 2, 5);
+      g.fillStyle(pl, 0.5);
+      g.fillRoundedRect(4, 2, paddleW - 8, 3, 2);
+      g.generateTexture(paddleTexKey, paddleW + 4, paddleH + 6);
+      g.destroy();
+    }
+    this.paddle = this.add.image(viewW / 2, paddleY, paddleTexKey).setDepth(20);
 
-    // ─── 弹球 ───
+    // ─── 弹球（⚪ emoji，比纯白圆更可读）───
     this.ballRadius = 8;
-    this.ball = this.add.circle(viewW / 2, paddleY - this.ballRadius - 2, this.ballRadius, 0xffffff, 1);
-    this.ball.setDepth(25);
+    this.ball = this.add
+      .text(viewW / 2, paddleY - this.ballRadius - 6, "⚪", {
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+        fontSize: "20px",
+      })
+      .setOrigin(0.5)
+      .setDepth(25);
     this.ballLaunched = false;
     this.ballVel.set(0, 0);
 

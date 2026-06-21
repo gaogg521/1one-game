@@ -51,8 +51,8 @@ export class MobaScene extends Phaser.Scene {
   private bp!: MobaBlueprint;
   private cohesive!: CohesivePresentation;
 
-  private player!: Phaser.GameObjects.Arc;
-  private ai!: Phaser.GameObjects.Arc;
+  private player!: Phaser.GameObjects.Text;
+  private ai!: Phaser.GameObjects.Text;
   private playerHp = 200;
   private playerMaxHp = 200;
   private aiHp = 200;
@@ -68,6 +68,10 @@ export class MobaScene extends Phaser.Scene {
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyQ!: Phaser.Input.Keyboard.Key;
   private keyE!: Phaser.Input.Keyboard.Key;
+
+  // 触控方向状态
+  private touchDx = 0;
+  private touchDy = 0;
 
   private abilities: Ability[] = [];
 
@@ -149,14 +153,18 @@ export class MobaScene extends Phaser.Scene {
     const midY = viewH / 2;
 
     const playerColor = parseInt(this.spec.theme.playerColor.replace("#", ""), 16) || 0x38bdf8;
-    this.player = this.add.circle(this.playerSideX, midY, 18, playerColor, 1);
-    this.player.setStrokeStyle(2, 0xffffff, 0.7);
-    this.player.setDepth(20);
+    this.player = this.add.text(this.playerSideX, midY, "🦸", {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: "36px",
+    }).setOrigin(0.5).setDepth(20);
+    this.player.setTint(playerColor);
 
     const aiColor = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16) || 0xef4444;
-    this.ai = this.add.circle(this.aiSideX, midY, 18, aiColor, 1);
-    this.ai.setStrokeStyle(2, 0xffffff, 0.7);
-    this.ai.setDepth(20);
+    this.ai = this.add.text(this.aiSideX, midY, "🤖", {
+      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+      fontSize: "36px",
+    }).setOrigin(0.5).setDepth(20);
+    this.ai.setTint(aiColor);
 
     // 塔布置：双方各 towersToWin+1 座塔（最多 3 座），玩家推完所有 AI 塔通关
     const towerCount = Math.min(3, Math.max(2, this.bp.towersToWin + 1));
@@ -188,7 +196,56 @@ export class MobaScene extends Phaser.Scene {
     );
 
     this.cameras.main.setRoundPixels(true);
+    this.buildTouchControls(viewW, viewH);
     this.refreshHud();
+  }
+
+  private buildTouchControls(viewW: number, viewH: number) {
+    const by = viewH - 26;
+    const bh = 44;
+    const zh = this.uiLocale === "zh-Hans";
+
+    // D-pad 左侧
+    const dirBtns = [
+      { label: "←", x: 44, dx: -1, dy: 0 },
+      { label: "→", x: 100, dx: 1, dy: 0 },
+      { label: "↑", x: 72, dx: 0, dy: -1 },
+      { label: "↓", x: 72, dx: 0, dy: 1 },
+    ];
+    const byUp = by - 46;
+    const byDn = by + 0;
+    const posMap: Record<string, { x: number; y: number }> = {
+      "←": { x: 44, y: by }, "→": { x: 100, y: by },
+      "↑": { x: 72, y: byUp }, "↓": { x: 72, y: byDn },
+    };
+    for (const b of dirBtns) {
+      const pos = posMap[b.label]!;
+      const bg = this.add.rectangle(pos.x, pos.y, 44, 36, 0x1e3a5f, 0.85)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      this.add.text(pos.x, pos.y, b.label, { fontFamily: "system-ui", fontSize: "18px", color: "#93c5fd" })
+        .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      const dx = b.dx, dy = b.dy;
+      bg.on("pointerdown", () => { this.touchDx = dx; this.touchDy = dy; });
+      bg.on("pointerup", () => { this.touchDx = 0; this.touchDy = 0; });
+      bg.on("pointerout", () => { this.touchDx = 0; this.touchDy = 0; });
+    }
+
+    // 技能与攻击按钮 右侧
+    const skillBtns = [
+      { label: zh ? "普攻" : "Atk", x: viewW - 12, color: 0x065f46, action: () => this.doPlayerAttack() },
+      { label: "Q", x: viewW - 68, color: 0x1e3a5f, action: () => this.castQ() },
+      { label: "W", x: viewW - 124, color: 0x4c1d95, action: () => this.castW() },
+      { label: "E", x: viewW - 180, color: 0x7c2d12, action: () => this.castE() },
+    ];
+    for (const b of skillBtns) {
+      const bg = this.add.rectangle(b.x, by, 48, bh, b.color, 0.88)
+        .setDepth(30).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      this.add.text(b.x, by, b.label, { fontFamily: "system-ui", fontSize: "13px", color: "#e2e8f0" })
+        .setOrigin(0.5).setDepth(31).setScrollFactor(0);
+      bg.on("pointerdown", b.action);
+      bg.on("pointerover", () => bg.setAlpha(0.95));
+      bg.on("pointerout", () => bg.setAlpha(0.88));
+    }
   }
 
   private buildTowers(count: number, midY: number) {
@@ -242,10 +299,10 @@ export class MobaScene extends Phaser.Scene {
   private updatePlayer() {
     let dx = 0;
     let dy = 0;
-    if (this.keyA.isDown || this.cursors.left.isDown) dx -= 1;
-    if (this.keyD.isDown || this.cursors.right.isDown) dx += 1;
-    if (this.keyW.isDown || this.cursors.up.isDown) dy -= 1;
-    if (this.keyS.isDown || this.cursors.down.isDown) dy += 1;
+    if (this.keyA.isDown || this.cursors.left.isDown || this.touchDx < 0) dx -= 1;
+    if (this.keyD.isDown || this.cursors.right.isDown || this.touchDx > 0) dx += 1;
+    if (this.keyW.isDown || this.cursors.up.isDown || this.touchDy < 0) dy -= 1;
+    if (this.keyS.isDown || this.cursors.down.isDown || this.touchDy > 0) dy += 1;
     if (dx !== 0 && dy !== 0) {
       const inv = 1 / Math.SQRT2;
       dx *= inv;

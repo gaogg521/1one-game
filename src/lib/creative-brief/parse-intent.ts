@@ -39,10 +39,15 @@ function inferTemplate(
   templateHint: "auto" | GameSpec["templateId"],
 ): ParsedIntent["templateHint"] {
   if (templateHint !== "auto") return templateHint as GameTemplateId;
+  // infer（精确模板关键词）优先于 pack.defaultTemplate（粗粒度题材匹配）。
+  // 否则"神庙逃亡"会因命中 platformer-adventure pack（match 含"跑酷/跳跃"）
+  // 被锁死成 platformer，endless-runner 的 infer 规则没机会跑。
+  const inferred = inferTemplateFromPrompt(prompt);
+  if (inferred) return inferred;
   if (pack.defaultTemplate !== "auto" && pack.defaultTemplate !== undefined) {
     return pack.defaultTemplate as GameTemplateId;
   }
-  return inferTemplateFromPrompt(prompt);
+  return "avoider";
 }
 
 /** 规则层：从一句话解析玩法与题材倾向（不调用 LLM） */
@@ -50,7 +55,7 @@ export function parseCreativeIntent(
   prompt: string,
   templateHint: "auto" | GameSpec["templateId"] = "auto",
 ): ParsedIntent {
-  const pack = selectGenrePack(prompt);
+  const pack = selectGenrePack(prompt, templateHint === "auto" ? undefined : templateHint);
   const tone = inferTone(prompt, pack);
   return {
     genreId: pack.id,

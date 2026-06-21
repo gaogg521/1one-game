@@ -34,6 +34,9 @@ function detectTheme(spec: GameSpec): string {
   ]
     .join(" ")
     .toLowerCase();
+  const CARD_TEMPLATE_IDS = ["dou-dizhu", "poker", "mahjong", "mahjong-solitaire", "uno", "blackjack", "solitaire", "chess"];
+  if (CARD_TEMPLATE_IDS.includes(spec.templateId)) return "card";
+  if (/斗地主|扑克|麻将|牌桌|叫地主|card\s*game|poker|mahjong|blackjack|solitaire/.test(allText)) return "card";
   if (/植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant/.test(allText)) return "pvz";
   if (/太空|宇宙|星际|飞船|space|star|galaxy|飞机|战机|shooter/.test(allText) || spec.templateId === "shooter") return "space";
   if (/武侠|江湖|剑客|sword|wuxia/.test(allText)) return "wuxia";
@@ -119,6 +122,13 @@ function buildSvgPrompt(spec: GameSpec, kind: SvgSpriteKind): string {
       gem: `a gold coin collectible, round with star imprint, color ${cc}`,
       power: `a bomb or upgrade orb power-up, round badge, color #f97316`,
       boss: `a heavily armored boss enemy, chunky tank-like creature, color ${hc}`,
+    },
+    card: {
+      player: `a playing card back symbol or player token, bold graphic, color ${pc}`,
+      hazard: `an opponent player avatar icon for a card game, stylized face or badge, color ${hc}`,
+      gem: `a poker chip or score token collectible, round shiny metallic, color ${cc}`,
+      power: `a joker card or wildcard icon, special card badge, color #a78bfa`,
+      boss: `a large ace or joker boss card symbol, dramatic and bold, color ${hc}`,
     },
     generic: {
       player: `a cute hero character sprite named "${label}", simple cartoon, rounded friendly shapes, color ${pc}`,
