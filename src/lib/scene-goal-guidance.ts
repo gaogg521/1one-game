@@ -11,7 +11,7 @@ export type SceneGoalGuidance = {
 };
 
 function isZh(locale: AppLocale): boolean {
-  return locale === "zh-Hans";
+  return locale.startsWith("zh");
 }
 
 function fallback(value: string | null | undefined, zh: string, en: string, locale: AppLocale): string {

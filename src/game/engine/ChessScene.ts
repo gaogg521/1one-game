@@ -177,6 +177,19 @@ export class ChessScene extends Phaser.Scene {
       }
     }
     showControlsHint(this, chessControlLines(this.uiLocale));
+
+    // QQ 棋牌风格：玩家/对手标签
+    const playerKey = this.ruleset === "xiangqi" || this.ruleset === "junqi"
+      ? "sceneGame.chess.playerSideRed"
+      : this.ruleset === "international"
+        ? "sceneGame.chess.playerSideWhite"
+        : "sceneGame.chess.playerSideFirst";
+    this.add.text(w / 2, h - 18, tMessage(this.uiLocale, playerKey), {
+      fontFamily: "system-ui, sans-serif", fontSize: "12px", color: "#fbbf24", fontStyle: "700",
+    }).setOrigin(0.5).setDepth(10);
+    this.add.text(w / 2, 56, tMessage(this.uiLocale, "sceneGame.chess.aiSide"), {
+      fontFamily: "system-ui, sans-serif", fontSize: "12px", color: "#f87171",
+    }).setOrigin(0.5).setDepth(10);
   }
 
   private buildInternationalPieces(): Piece[] {
@@ -455,9 +468,7 @@ export class ChessScene extends Phaser.Scene {
     const isXiangqi = this.ruleset === "xiangqi";
     if (!this.whiteTurn) {
       if (this.checkTarget === "b") {
-        this.statusText.setText(
-          tMessage(this.uiLocale, "sceneGame.chess.blackEscaping"),
-        );
+        this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackEscaping"));
         return;
       }
       this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackThinking"));
@@ -465,54 +476,31 @@ export class ChessScene extends Phaser.Scene {
     }
     if (this.checkTarget === "w") {
       this.statusText.setText(
-        this.uiLocale === "zh-Hans"
-          ? isXiangqi
-            ? "⚠ 你被将军！必须应将"
-            : "⚠ 白方被将军！必须应将"
-          : "⚠ You are in check!",
+        isXiangqi
+          ? tMessage(this.uiLocale, "sceneGame.chess.checkAlertXiangqi")
+          : tMessage(this.uiLocale, "sceneGame.chess.checkAlertIntl"),
       );
       return;
     }
     this.statusText.setText(
-      isXiangqi
-        ? this.uiLocale === "zh-Hans"
-          ? "红方行棋 · 点击棋子"
-          : "Red to move"
-        : hudChessTurnWhite(this.uiLocale),
+      isXiangqi ? tMessage(this.uiLocale, "sceneGame.chess.redMove") : hudChessTurnWhite(this.uiLocale),
     );
   }
 
   private finishCheckmate(winner: "w" | "b") {
     const playerWon = winner === "w";
     const isXiangqi = this.ruleset === "xiangqi";
+    const titleKey = winner === "w"
+      ? isXiangqi ? "sceneGame.chess.checkmateRed" : "sceneGame.chess.checkmateWhite"
+      : "sceneGame.chess.checkmateBlack";
+    const msgKey = playerWon
+      ? "sceneGame.chess.checkmateMsgWin"
+      : isXiangqi
+        ? "sceneGame.chess.checkmateMsgRedLose"
+        : "sceneGame.chess.checkmateMsgWhiteLose";
     this.banner.show({
-      title:
-        winner === "w"
-          ? isXiangqi
-            ? this.uiLocale === "zh-Hans"
-              ? "将死！红方胜"
-              : "Checkmate! Red wins"
-            : this.uiLocale === "zh-Hans"
-              ? "将死！白方胜"
-              : "Checkmate! White wins"
-          : isXiangqi
-            ? this.uiLocale === "zh-Hans"
-              ? "将死！黑方胜"
-              : "Checkmate! Black wins"
-            : this.uiLocale === "zh-Hans"
-              ? "将死！黑方胜"
-              : "Checkmate! Black wins",
-      message: playerWon
-        ? this.uiLocale === "zh-Hans"
-          ? "绝杀成功"
-          : "Decisive checkmate"
-        : isXiangqi
-          ? this.uiLocale === "zh-Hans"
-            ? "红帅被将死"
-            : "Red general trapped"
-          : this.uiLocale === "zh-Hans"
-            ? "白王被将死"
-            : "White king trapped",
+      title: tMessage(this.uiLocale, titleKey),
+      message: tMessage(this.uiLocale, msgKey),
       ms: 2800,
     });
     juiceFlash(this, { r: 251, g: 191, b: 36 }, { durationMs: 220 });
@@ -803,10 +791,7 @@ export class ChessScene extends Phaser.Scene {
     if (sim.captured > 0) {
       this.banner.show({
         title: tMessage(this.uiLocale, "sceneGame.chess.capture", { n: sim.captured }),
-        message:
-          this.uiLocale === "zh-Hans"
-            ? `黑提 ${this.goCapturesW} · 白提 ${this.goCapturesB}`
-            : `B ${this.goCapturesB} · W ${this.goCapturesW}`,
+        message: tMessage(this.uiLocale, "sceneGame.chess.goCaptureMsg", { b: this.goCapturesB, w: this.goCapturesW }),
         ms: 900,
       });
       juiceShake(this, { intensity: 0.008, durationMs: 100 });
@@ -823,14 +808,9 @@ export class ChessScene extends Phaser.Scene {
 
   private refreshGoStatus() {
     if (this.ruleset !== "go" || this.finished) return;
-    const cap =
-      this.uiLocale === "zh-Hans"
-        ? `提子 黑${this.goCapturesW}:白${this.goCapturesB}`
-        : `Caps B${this.goCapturesB}:W${this.goCapturesW}`;
+    const cap = tMessage(this.uiLocale, "sceneGame.chess.goCapsLine", { b: this.goCapturesB, w: this.goCapturesW });
     if (this.whiteTurn) {
-      this.statusText.setText(
-        tMessage(this.uiLocale, "sceneGame.chess.yourTurnCap", { cap }),
-      );
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.yourTurnCap", { cap }));
       return;
     }
     this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.blackCap", { cap }));
@@ -980,6 +960,13 @@ export class ChessScene extends Phaser.Scene {
         }
       }
     }
+    if (this.ruleset === "international") {
+      // QQ 棋牌风格木质边框
+      this.boardGfx.lineStyle(5, 0x92400e, 0.9);
+      this.boardGfx.strokeRoundedRect(this.ox - 5, this.oy - 5, this.cell * this.boardCols + 10, this.cell * this.boardRows + 10, 4);
+      this.boardGfx.lineStyle(2, 0x7c2d12, 0.35);
+      this.boardGfx.strokeRoundedRect(this.ox - 10, this.oy - 10, this.cell * this.boardCols + 20, this.cell * this.boardRows + 20, 6);
+    }
     if (this.ruleset === "xiangqi") {
       this.boardGfx.lineStyle(2, 0x92400e, 0.6);
       this.boardGfx.strokeRect(this.ox, this.oy, this.cell * this.boardCols, this.cell * this.boardRows);
@@ -993,6 +980,26 @@ export class ChessScene extends Phaser.Scene {
           .text(this.ox + this.cell * 5.5, this.oy + this.cell * 4.55, "汉界", { fontSize: "18px", color: "#fbbf24" })
           .setDepth(2),
       ));
+    }
+    if (this.ruleset === "gomoku") {
+      // QQ 五子棋风格网格线
+      this.boardGfx.lineStyle(1, 0x5f3b17, 0.75);
+      for (let r = 0; r < this.boardRows; r += 1) {
+        const y = this.oy + r * this.cell + this.cell / 2;
+        this.boardGfx.lineBetween(this.ox + this.cell / 2, y, this.ox + (this.boardCols - 0.5) * this.cell, y);
+      }
+      for (let c = 0; c < this.boardCols; c += 1) {
+        const x = this.ox + c * this.cell + this.cell / 2;
+        this.boardGfx.lineBetween(x, this.oy + this.cell / 2, x, this.oy + (this.boardRows - 0.5) * this.cell);
+      }
+      // 天元与星位
+      const stars = this.boardRows === 15
+        ? [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]]
+        : [[3, 3], [3, 5], [5, 4], [5, 3], [5, 5]];
+      for (const [sr, sc] of stars) {
+        this.boardGfx.fillStyle(0x5f3b17, 0.85);
+        this.boardGfx.fillCircle(this.ox + (sc! + 0.5) * this.cell, this.oy + (sr! + 0.5) * this.cell, Math.max(2, this.cell * 0.09));
+      }
     }
     if (this.ruleset === "go") {
       this.boardGfx.lineStyle(1, 0x5f3b17, 0.88);
@@ -1104,10 +1111,10 @@ export class ChessScene extends Phaser.Scene {
   }
 
   private boardTileColor(r: number, c: number, light: boolean): number {
-    if (this.ruleset === "go") return 0xf3b562;
+    if (this.ruleset === "go" || this.ruleset === "gomoku") return 0xdcb45a;
     if (this.ruleset === "jungle") return this.jungleTileColor(r, c, light);
     if (this.isometricHints) return light ? 0xe7e5e4 : 0x78716c;
-    return light ? 0xd6d3d1 : 0x57534e;
+    return light ? 0xf0d9b5 : 0xb58863; // QQ 棋牌经典木质色
   }
 
   private jungleTileColor(r: number, c: number, light: boolean): number {

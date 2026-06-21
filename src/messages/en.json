@@ -568,7 +568,10 @@
     "justNow": "Just now",
     "minutesAgo": "{n}m ago",
     "hoursAgo": "{n}h ago",
-    "daysAgo": "{n}d ago"
+    "daysAgo": "{n}d ago",
+    "loading": "Loading…",
+    "submitError": "Failed to post. Please try again.",
+    "guestName": "Guest"
   },
   "adaptation": {
     "title": "Serial adaptation progress",
@@ -3696,10 +3699,16 @@
       "yourTurn": "Your turn",
       "seatTurn": "{name} turn",
       "win": "Win",
+      "winMsg": "You win! Refresh to retry",
       "lose": "You lost. Refresh to retry",
       "hint": "Click cards to select · Click Play or Pass buttons",
       "bidMsg": "Current highest: {n}. Click buttons below or press 1/2/3/0",
-      "fail": "Fail"
+      "fail": "Fail",
+      "hintBtn": "Hint",
+      "multiplier": "×{n}",
+      "jokerBig": "Lg",
+      "jokerSmall": "Sm",
+      "bottomCards": "Kitty"
     },
     "chess": {
       "gomokuHint": "Gomoku · connect 5 to win",
@@ -3736,7 +3745,19 @@
       "river": "River",
       "den": "Den",
       "illegal": "Illegal",
-      "illegalMsg": "Suicide or ko"
+      "illegalMsg": "Suicide or ko",
+      "checkmateBlack": "Checkmate! Black wins",
+      "checkmateMsgWin": "Decisive checkmate",
+      "checkmateMsgRedLose": "Red general trapped",
+      "checkmateMsgWhiteLose": "White king trapped",
+      "checkAlertXiangqi": "⚠ You are in check!",
+      "checkAlertIntl": "⚠ You are in check!",
+      "goCaptureMsg": "B {b} · W {w}",
+      "goCapsLine": "Caps B{b}:W{w}",
+      "playerSideWhite": "You (White)",
+      "playerSideRed": "You (Red)",
+      "playerSideFirst": "You (Black)",
+      "aiSide": "AI"
     },
     "card": {
       "opponent": "Opponent",
@@ -3757,7 +3778,11 @@
       "defeat": "Defeat · try again",
       "fail": "Fail",
       "you": "You",
-      "ai": "AI"
+      "ai": "AI",
+      "yourTurnHint": "Your turn · click a card",
+      "aiThinking": "AI thinking…",
+      "hp": "HP",
+      "mana": "Mana"
     }
   }
 }

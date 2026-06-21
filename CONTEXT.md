@@ -1,6 +1,64 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 46 · Scene i18n 5 语言全覆盖 + 误匹配修复）
+**最后更新**：2026-06-21（会话 48 · 斗地主语言修复 + QQ 风格 UI）
+
+---
+
+## Session 48 · 斗地主语言修复 + QQ 风格 UI 改造
+
+### 完成内容
+1. **5 个 locale 文件补 key**（zh-Hans/zh-Hant/en/ms/th）：`winMsg`、`hintBtn`、`multiplier`、`jokerBig`、`jokerSmall`、`bottomCards`
+2. **scene-goal-guidance.ts `isZh` 修复**：`=== "zh-Hans"` → `startsWith("zh")`，zh-Hant 不再走英文 fallback
+3. **DouDizhuScene.ts 全面 i18n**：
+   - `updateActionButtons()` 硬编码 `isZh?"出牌":"Play"` → `tMessage(...play/pass/hintBtn)`
+   - `refreshHud()` actLabel 硬编码 → `tMessage(...bid)`
+   - `endGame()` 胜负提示 → `winMsg`/`lose`
+   - `create()` 底部提示 → `tMessage(...hint)`
+4. **Joker 牌名多语言**：新增 `rankLabel(card)` 方法，v=16 → `jokerSmall`，v=17 → `jokerBig`（英文为 "Sm"/"Lg"）
+5. **绿色毡布牌桌**：删除原主题色椭圆，改为棕色木边（`0x7b4f2e`）+ 绿毡（`0x166534`）双层椭圆
+6. **底牌（Kitty）展示**：叫地主阶段顶部中央正面展示 3 张底牌（附 locale 标签），地主确定后淡出
+7. **倍数显示**：右上角金色文字，叫地主倍数 = 叫分值，炸弹/王炸 ×2，`multiplier` i18n
+8. **提示按钮（Hint）**：Play 旁蓝色按钮，调用 AI 选牌逻辑高亮推荐出牌
+9. **评论系统 bug 修复**（上次会话结果）：5 处硬编码中文 → `t()` i18n；存空字符串而非"访客"；游标分页 null guard
+
+### 验证（视觉截图确认）
+- `/en/play/cmqnl5p2v0000ys3pnta2nw6u`：绿色桌面 ✅、英文"Bid 1/2/3/Pass"✅、"Kitty"底牌展示 ✅、"Sm"/"Lg" Joker ✅、"Hint"按钮 ✅
+- TypeScript `tsc --noEmit`：零错误 ✅
+
+### 下次启动清单
+1. `npm run dev`（port 8888）
+2. 打开英文斗地主游戏，确认叫地主后底牌淡出、出炸弹后倍数显示
+3. 可进一步优化：AI 玩家扑克扇形背面显示（类 QQ 风格）、计时器
+
+---
+
+## Session 47 · 评论系统全局上线（game / novel / comic 三类内容）
+
+### 完成内容
+1. **Prisma Comment 模型** — `prisma/schema.prisma` 加 Comment 表，`prisma db push` 同步 SQLite
+2. **API 路由**
+   - `src/app/api/comments/route.ts` — GET（游标分页）+ POST（ownerKey 鉴权）
+   - `src/app/api/comments/[id]/route.ts` — DELETE（ownerKey 校验）
+3. **UI 组件** — `src/components/work/WorkCommentSection.tsx`：昵称输入 + 自动撑高 textarea + 发表 + 删除 + 加载更多 + 相对时间
+4. **i18n** — `workComment` namespace 写入 5 个语言文件（zh-Hans/zh-Hant/en/ms/th）
+5. **集成三页**
+   - 游戏：`src/app/play/[id]/PlayGameClient.tsx`（`workId={id}`）
+   - 小说：`src/app/novel/[id]/page.tsx`
+   - 漫画：`src/app/comic/[id]/page.tsx`
+
+### 技术关键
+- Prisma v5 binary 客户端：`runtimeDataModel` 已包含 Comment，`getPrismaClient(config)` 动态生成代理，无需显式 `get comment()` 方法
+- 上一会话 `prisma generate` EPERM 问题：dev server 重启后新会话直接可用（index.js 已正确包含 Comment 模型）
+- API GET 无 Cookie 可正常返回 200 空列表；POST 无 ownerKey Cookie 返回 401（设计正确）
+
+### 验证
+- `GET /api/comments?workType=game&workId=sample-smash-the-dummy&limit=20 → 200 OK`
+- 游戏页面 `/zh-Hans/play/sample-smash-the-dummy` — 评论区 a11y tree 可见，API 自动调用确认
+
+### 下次启动清单
+1. `npm run dev`（port 8888）
+2. 打开任意游戏/小说/漫画页，确认评论区可正常发表、显示
+3. 如需继续：关注 arcade /arcade 页面的功能完善、或用户反馈
 
 ---
 

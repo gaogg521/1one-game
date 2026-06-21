@@ -568,7 +568,10 @@
     "justNow": "Baru sahaja",
     "minutesAgo": "{n} min lalu",
     "hoursAgo": "{n} jam lalu",
-    "daysAgo": "{n} hari lalu"
+    "daysAgo": "{n} hari lalu",
+    "loading": "Memuatkan…",
+    "submitError": "Gagal hantar. Cuba lagi.",
+    "guestName": "Tetamu"
   },
   "adaptation": {
     "title": "Kemajuan adaptasi bersiri",
@@ -3696,10 +3699,16 @@
       "yourTurn": "Giliran anda",
       "seatTurn": "Giliran {name}",
       "win": "Menang",
+      "winMsg": "Anda menang! Muat semula",
       "lose": "Anda kalah. Muat semula",
       "hint": "Klik kad untuk pilih · Klik Main atau Lalui",
       "bidMsg": "Tertinggi: {n}. Klik butang di bawah atau tekan 1/2/3/0",
-      "fail": "Gagal"
+      "fail": "Gagal",
+      "hintBtn": "Petunjuk",
+      "multiplier": "×{n}",
+      "jokerBig": "Bsr",
+      "jokerSmall": "Kcs",
+      "bottomCards": "Bawah"
     },
     "chess": {
       "gomokuHint": "Gomoku · sambung 5 untuk menang",
@@ -3736,7 +3745,19 @@
       "river": "Sungai",
       "den": "Sarang",
       "illegal": "Tidak sah",
-      "illegalMsg": "Bunuh diri atau ko"
+      "illegalMsg": "Bunuh diri atau ko",
+      "checkmateBlack": "Skak mat! Hitam menang",
+      "checkmateMsgWin": "Skak mat muktamad",
+      "checkmateMsgRedLose": "Jeneral merah terperangkap",
+      "checkmateMsgWhiteLose": "Raja putih terperangkap",
+      "checkAlertXiangqi": "⚠ Anda dalam skak!",
+      "checkAlertIntl": "⚠ Anda dalam skak!",
+      "goCaptureMsg": "H {b} · P {w}",
+      "goCapsLine": "Tangkap H{b}:P{w}",
+      "playerSideWhite": "Anda (Putih)",
+      "playerSideRed": "Anda (Merah)",
+      "playerSideFirst": "Anda (Hitam)",
+      "aiSide": "AI"
     },
     "card": {
       "opponent": "Lawan",
@@ -3757,7 +3778,11 @@
       "defeat": "Kalah · cuba lagi",
       "fail": "Gagal",
       "you": "Anda",
-      "ai": "AI"
+      "ai": "AI",
+      "yourTurnHint": "Giliran anda · klik kad",
+      "aiThinking": "AI berfikir…",
+      "hp": "HP",
+      "mana": "Mana"
     }
   }
 }

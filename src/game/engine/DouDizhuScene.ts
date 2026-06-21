@@ -298,6 +298,11 @@ export class DouDizhuScene extends Phaser.Scene {
   private aiDifficulty = 0.6;
   private startingBid: 1 | 2 | 3 = 2;
 
+  // 倍数与底牌显示
+  private multiplier = 1;
+  private multiplierText: Phaser.GameObjects.Text | null = null;
+  private bottomCardContainer: Phaser.GameObjects.Container | null = null;
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("DouDizhuScene");
     this.spec = spec;
@@ -330,9 +335,9 @@ export class DouDizhuScene extends Phaser.Scene {
         }
       });
     }
-    // 牌桌椭圆
-    const tableColor = parseInt((this.spec.theme.collectibleColor ?? "#1e3a5f").replace("#", ""), 16);
-    this.add.ellipse(viewW / 2, viewH / 2, viewW * 0.85, viewH * 0.55, tableColor, 0.55).setDepth(-5);
+    // 绿色毡布牌桌（QQ 斗地主风格）
+    this.add.ellipse(viewW / 2, viewH / 2, viewW * 0.87, viewH * 0.575, 0x7b4f2e, 1).setDepth(-6);
+    this.add.ellipse(viewW / 2, viewH / 2, viewW * 0.85, viewH * 0.555, 0x166534, 1).setDepth(-5);
 
     this.hud = new HudFrame(this, { title: this.spec.title }, guidance, ui);
 
@@ -344,13 +349,18 @@ export class DouDizhuScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-ENTER", () => this.onPlaySelected());
     this.input.keyboard?.on("keydown-P", () => this.onPass());
 
-    this.hud.setBottomHint(
-      this.uiLocale === "zh-Hans"
-        ? "点击手牌选/取消 · 点击「出牌」或「不要」按钮"
-        : "Click cards to select · Click Play or Pass buttons",
-    );
+    this.hud.setBottomHint(tMessage(this.uiLocale, "sceneGame.douDizhu.hint"));
 
     this.buildAvatars();
+    this.multiplierText = this.add.text(viewW - 12, 36, "", {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "22px",
+      fontStyle: "700",
+      color: "#fbbf24",
+      stroke: "#000000",
+      strokeThickness: 2,
+    }).setOrigin(1, 0.5).setDepth(20);
+    this.showBottomCardsDisplay();
     setPhaserQaState({ playerX: Math.round(viewW / 2) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(viewW / 2) });
 
@@ -488,6 +498,7 @@ export class DouDizhuScene extends Phaser.Scene {
         this.dealCards();
         this.layoutHand();
         this.startBidding();
+        this.showBottomCardsDisplay();
       });
       return;
     }
@@ -505,6 +516,9 @@ export class DouDizhuScene extends Phaser.Scene {
     this.lastPlay = null;
     this.lastPlaySeat = null;
     this.passCount = 0;
+    this.multiplier = this.highestBid;
+    this.refreshMultiplierText();
+    this.hideBottomCardsDisplay();
 
     const role = tMessage(this.uiLocale, "sceneGame.douDizhu.landlord");
     const who = this.landlordSeat === 0
@@ -567,6 +581,10 @@ export class DouDizhuScene extends Phaser.Scene {
 
   private commitPlay(seat: Seat, pattern: PlayPattern) {
     this.clearActionButtons();
+    if (pattern.type === "bomb" || pattern.type === "rocket") {
+      this.multiplier = (this.multiplier || 1) * 2;
+      this.refreshMultiplierText();
+    }
     const ids = new Set(pattern.cards.map((c) => c.id));
     this.seats[seat]!.hand = this.seats[seat]!.hand.filter((c) => !ids.has(c.id));
     // 新一轮有效出牌：清掉所有 seat 的旧出牌显示（上一轮的），再显示当前出牌
@@ -871,14 +889,89 @@ export class DouDizhuScene extends Phaser.Scene {
     const viewW = this.scale.width;
     const viewH = this.scale.height;
     const btnY = viewH - 116;
-    const isZh = this.uiLocale === "zh-Hans";
     const canLead = this.lastPlaySeat == null || this.lastPlaySeat === 0;
-    const playBtn = this.makeLabelButton(viewW / 2 + 44, btnY, isZh ? "出牌" : "Play", 0x16a34a, () => this.onPlaySelected());
-    this.actionButtons.push(playBtn);
+    const playLabel = tMessage(this.uiLocale, "sceneGame.douDizhu.play");
+    const hintLabel = tMessage(this.uiLocale, "sceneGame.douDizhu.hintBtn");
+    const playBtn = this.makeLabelButton(viewW / 2 + 88, btnY, playLabel, 0x16a34a, () => this.onPlaySelected());
+    const hintBtn = this.makeLabelButton(viewW / 2 + 8, btnY, hintLabel, 0x0284c7, () => this.onHint());
+    this.actionButtons.push(playBtn, hintBtn);
     if (!canLead) {
-      const passBtn = this.makeLabelButton(viewW / 2 - 44, btnY, isZh ? "不要" : "Pass", 0x475569, () => this.onPass());
+      const passLabel = tMessage(this.uiLocale, "sceneGame.douDizhu.pass");
+      const passBtn = this.makeLabelButton(viewW / 2 - 72, btnY, passLabel, 0x475569, () => this.onPass());
       this.actionButtons.push(passBtn);
     }
+  }
+
+  private onHint() {
+    if (this.finished || this.bidPhase || this.currentSeat !== 0) return;
+    const hand = this.seats[0]!.hand;
+    const lead = this.lastPlaySeat == null || this.lastPlaySeat === 0;
+    const hint = lead ? this.aiPickLead(hand) : this.aiPickFollow(hand, this.lastPlay!);
+    if (!hint) return;
+    this.selectedIds.clear();
+    for (const c of hint.cards) this.selectedIds.add(c.id);
+    this.layoutHand();
+    playBleep("pickup");
+  }
+
+  private rankLabel(card: Card): string {
+    if (card.v === 17) return tMessage(this.uiLocale, "sceneGame.douDizhu.jokerBig");
+    if (card.v === 16) return tMessage(this.uiLocale, "sceneGame.douDizhu.jokerSmall");
+    return RANK_NAMES[card.v] ?? "";
+  }
+
+  private refreshMultiplierText() {
+    if (!this.multiplierText) return;
+    if (this.multiplier > 1) {
+      this.multiplierText.setText(tMessage(this.uiLocale, "sceneGame.douDizhu.multiplier", { n: this.multiplier }));
+    } else {
+      this.multiplierText.setText("");
+    }
+  }
+
+  private showBottomCardsDisplay() {
+    if (this.bottomCardContainer) { this.bottomCardContainer.destroy(); this.bottomCardContainer = null; }
+    if (this.bottomCards.length === 0) return;
+    const viewW = this.scale.width;
+    const viewH = this.scale.height;
+    const cont = this.add.container(viewW / 2, viewH * 0.14).setDepth(20);
+    const label = this.add.text(0, -36, tMessage(this.uiLocale, "sceneGame.douDizhu.bottomCards"), {
+      fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#fde68a",
+    }).setOrigin(0.5);
+    cont.add(label);
+    const cardW = 36, cardH = 52, gap = 6;
+    const totalW = this.bottomCards.length * cardW + (this.bottomCards.length - 1) * gap;
+    this.bottomCards.forEach((card, i) => {
+      const x = -totalW / 2 + cardW / 2 + i * (cardW + gap);
+      const isJoker = card.v >= 16;
+      const isRed = card.s === 1 || card.s === 3 || card.v === 17;
+      const cardCont = this.add.container(x, 0);
+      const bg = this.add.rectangle(0, 0, cardW, cardH, 0xfafafa).setStrokeStyle(1, 0x334155);
+      const rank = this.add.text(0, -cardH / 2 + 8, this.rankLabel(card), {
+        fontFamily: "system-ui, sans-serif", fontSize: "12px", fontStyle: "700",
+        color: isRed ? "#dc2626" : "#0f172a",
+      }).setOrigin(0.5);
+      const glyph = this.add.text(0, 5, isJoker ? "★" : (SUIT_GLYPHS[card.s] ?? ""), {
+        fontFamily: "system-ui, sans-serif", fontSize: "14px",
+        color: isRed ? "#dc2626" : "#0f172a",
+      }).setOrigin(0.5);
+      cardCont.add([bg, rank, glyph]);
+      cont.add(cardCont);
+    });
+    this.bottomCardContainer = cont;
+  }
+
+  private hideBottomCardsDisplay() {
+    if (!this.bottomCardContainer) return;
+    const target = this.bottomCardContainer;
+    this.bottomCardContainer = null;
+    this.tweens.add({
+      targets: target,
+      alpha: 0,
+      y: target.y - 18,
+      duration: 380,
+      onComplete: () => target.destroy(),
+    });
   }
 
   private buildAvatars() {
@@ -1002,8 +1095,8 @@ export class DouDizhuScene extends Phaser.Scene {
       const cont = this.add.container(startX + i * (smallW + gap), cy).setDepth(17);
       const bg = this.add.rectangle(0, 0, smallW, smallH, 0xfafafa, 1)
         .setStrokeStyle(1, 0x334155);
-      const rankStr = RANK_NAMES[card.v] ?? "";
-      const glyph = isJoker ? (card.v === 17 ? "大" : "小") : SUIT_GLYPHS[card.s] ?? "";
+      const rankStr = this.rankLabel(card);
+      const glyph = isJoker ? "★" : (SUIT_GLYPHS[card.s] ?? "");
       const rt = this.add.text(0, -smallH / 2 + 8, rankStr, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "11px",
@@ -1063,8 +1156,8 @@ export class DouDizhuScene extends Phaser.Scene {
       const isRed = card.s === 1 || card.s === 3 || card.v === 17;
       const bg = this.add.rectangle(0, 0, cardW, cardH, 0xfafafa, 1)
         .setStrokeStyle(1.5, selected ? 0xfbbf24 : 0x334155);
-      const glyph = isJoker ? "JOKER" : SUIT_GLYPHS[card.s] ?? "";
-      const rankStr = RANK_NAMES[card.v] ?? "";
+      const glyph = isJoker ? "★" : (SUIT_GLYPHS[card.s] ?? "");
+      const rankStr = this.rankLabel(card);
       const rankText = this.add
         .text(0, -cardH / 2 + 10, rankStr, {
           fontFamily: "system-ui, sans-serif",
@@ -1120,7 +1213,7 @@ export class DouDizhuScene extends Phaser.Scene {
       score: this.seats[0]!.hand.length,
       lives: this.seats[0]!.hand.length,
       right: `${myRole} · ${turn}`,
-      actLabel: this.uiLocale === "zh-Hans" ? "斗地主" : "DouDizhu",
+      actLabel: tMessage(this.uiLocale, "sceneGame.douDizhu.bid"),
     });
   }
 
@@ -1155,9 +1248,9 @@ export class DouDizhuScene extends Phaser.Scene {
       playBleep("hit");
     }
     this.hud.setBottomHint(
-      this.uiLocale === "zh-Hans"
-        ? (playerWon ? "你赢了！刷新重开" : "你输了。刷新重开")
-        : (playerWon ? "You win! Refresh to retry" : "You lost. Refresh to retry"),
+      playerWon
+        ? tMessage(this.uiLocale, "sceneGame.douDizhu.winMsg")
+        : tMessage(this.uiLocale, "sceneGame.douDizhu.lose"),
     );
     this.onEnd({ score, won: playerWon });
   }

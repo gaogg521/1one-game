@@ -66,6 +66,15 @@ export class CardScene extends Phaser.Scene {
   private deck: CardDef[] = [];
   private nextCardId = 1;
   private aiDifficulty = 0.5;
+  private maxHp = 30;
+
+  private playerHpBar!: Phaser.GameObjects.Rectangle;
+  private playerHpBarBg!: Phaser.GameObjects.Rectangle;
+  private aiHpBar!: Phaser.GameObjects.Rectangle;
+  private aiHpBarBg!: Phaser.GameObjects.Rectangle;
+  private manaOrbs: Phaser.GameObjects.Arc[] = [];
+  private playerHpLabel!: Phaser.GameObjects.Text;
+  private aiHpLabel!: Phaser.GameObjects.Text;
 
   private banner!: Phaser.GameObjects.Text;
   private endTurnBtn!: Phaser.GameObjects.Rectangle;
@@ -94,7 +103,8 @@ export class CardScene extends Phaser.Scene {
     const viewH = this.scale.height;
     const bp = this.spec.card ?? buildCardBlueprint({ spec: this.spec });
     this.playerHp = bp.playerHp;
-    this.aiHp = bp.playerHp; // 对手同血量，简化平衡
+    this.aiHp = bp.playerHp;
+    this.maxHp = bp.playerHp;
     this.maxMana = bp.maxMana;
     this.aiDifficulty = bp.aiDifficulty;
     this.playerMana = 1;
@@ -125,6 +135,42 @@ export class CardScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(1);
+
+    // QQ 棋牌风格 —— AI HP 条
+    const barW = Math.min(200, viewW - 60);
+    const barH = 10;
+    const aiBarY = 90;
+    const playerBarY = viewH * 0.72;
+    this.aiHpBarBg = this.add.rectangle(viewW / 2, aiBarY, barW, barH, 0x1e293b)
+      .setStrokeStyle(1, 0x475569).setDepth(5);
+    this.aiHpBar = this.add.rectangle(viewW / 2 - barW / 2, aiBarY, barW, barH, 0xef4444)
+      .setOrigin(0, 0.5).setDepth(6);
+    this.aiHpLabel = this.add.text(viewW / 2 + barW / 2 + 6, aiBarY, "", {
+      fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#fca5a5",
+    }).setOrigin(0, 0.5).setDepth(6);
+
+    // 玩家 HP 条
+    this.playerHpBarBg = this.add.rectangle(viewW / 2, playerBarY, barW, barH, 0x1e293b)
+      .setStrokeStyle(1, 0x475569).setDepth(5);
+    this.playerHpBar = this.add.rectangle(viewW / 2 - barW / 2, playerBarY, barW, barH, 0x22c55e)
+      .setOrigin(0, 0.5).setDepth(6);
+    this.playerHpLabel = this.add.text(viewW / 2 + barW / 2 + 6, playerBarY, "", {
+      fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#86efac",
+    }).setOrigin(0, 0.5).setDepth(6);
+
+    // 法力宝石（玩家区上方）
+    const orbR = 7;
+    const orbGap = orbR * 2 + 4;
+    const orbsY = playerBarY - 22;
+    const orbTotalW = (this.maxMana - 1) * orbGap;
+    this.manaOrbs = [];
+    for (let i = 0; i < this.maxMana; i += 1) {
+      const orb = this.add.arc(
+        viewW / 2 - orbTotalW / 2 + i * orbGap, orbsY,
+        orbR, 0, 360, false, 0x1e3a8a,
+      ).setDepth(7);
+      this.manaOrbs.push(orb);
+    }
 
     this.statusText = this.add
       .text(viewW / 2, viewH * 0.5, "", {
@@ -582,10 +628,28 @@ export class CardScene extends Phaser.Scene {
       skill: state,
     });
     this.statusText.setText(
-      this.uiLocale === "zh-Hans"
-        ? `${this.isPlayerTurn ? "你的回合 · 点击手牌出牌" : "对手思考中…"}`
-        : `${this.isPlayerTurn ? "Your turn · click a card" : "AI thinking…"}`,
+      this.isPlayerTurn
+        ? tMessage(this.uiLocale, "sceneGame.card.yourTurnHint")
+        : tMessage(this.uiLocale, "sceneGame.card.aiThinking"),
     );
+    this.refreshQqBars();
+  }
+
+  private refreshQqBars() {
+    if (!this.playerHpBar) return;
+    const barW = this.playerHpBarBg.width;
+    const pRatio = Math.max(0, Math.min(1, this.playerHp / this.maxHp));
+    const aRatio = Math.max(0, Math.min(1, this.aiHp / this.maxHp));
+    this.playerHpBar.setScale(pRatio, 1);
+    this.aiHpBar.setScale(aRatio, 1);
+    this.playerHpBar.setFillStyle(pRatio > 0.5 ? 0x22c55e : pRatio > 0.25 ? 0xfbbf24 : 0xef4444);
+    this.aiHpBar.setFillStyle(aRatio > 0.5 ? 0x22c55e : aRatio > 0.25 ? 0xfbbf24 : 0xef4444);
+    this.playerHpLabel.setText(`${this.playerHp}`);
+    this.aiHpLabel.setText(`${this.aiHp}`);
+    // 法力宝石：蓝色=有法力，灰色=无
+    for (let i = 0; i < this.manaOrbs.length; i += 1) {
+      this.manaOrbs[i]?.setFillStyle(i < this.playerMana ? 0x3b82f6 : 0x1e293b);
+    }
   }
 
   private finish(payload: EndPayload) {

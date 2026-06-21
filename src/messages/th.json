@@ -568,7 +568,10 @@
     "justNow": "เมื่อกี้",
     "minutesAgo": "{n} นาทีที่แล้ว",
     "hoursAgo": "{n} ชั่วโมงที่แล้ว",
-    "daysAgo": "{n} วันที่แล้ว"
+    "daysAgo": "{n} วันที่แล้ว",
+    "loading": "กำลังโหลด…",
+    "submitError": "โพสต์ไม่สำเร็จ กรุณาลองใหม่",
+    "guestName": "แขก"
   },
   "adaptation": {
     "title": "ความคืบหน้าการดัดแปลงต่อเนื่อง",
@@ -3696,10 +3699,16 @@
       "yourTurn": "ตาคุณ",
       "seatTurn": "ตา {name}",
       "win": "ชนะ",
+      "winMsg": "คุณชนะ! รีเฟรชเพื่อเล่นใหม่",
       "lose": "คุณแพ้ รีเฟรช",
       "hint": "แตะไพ่เพื่อเลือก · แตะเล่นหรือไม่",
       "bidMsg": "สูงสุด: {n} แตะปุ่มด้านล่างหรือกด 1/2/3/0",
-      "fail": "ล้มเหลว"
+      "fail": "ล้มเหลว",
+      "hintBtn": "คำใบ้",
+      "multiplier": "×{n}",
+      "jokerBig": "ใหญ่",
+      "jokerSmall": "เล็ก",
+      "bottomCards": "ไพ่ล่าง"
     },
     "chess": {
       "gomokuHint": "หมากล้อม · ต่อ 5 เพื่อชนะ",
@@ -3736,7 +3745,19 @@
       "river": "แม่น้ำ",
       "den": "รังสัตว์",
       "illegal": "ต้องห้าม",
-      "illegalMsg": "ฆ่าตัวตายหรือโค"
+      "illegalMsg": "ฆ่าตัวตายหรือโค",
+      "checkmateBlack": "รุก! ฝ่ายดำชนะ",
+      "checkmateMsgWin": "หมากรุกสำเร็จ",
+      "checkmateMsgRedLose": "แม่ทัพแดงถูกรุก",
+      "checkmateMsgWhiteLose": "กษัตริย์ขาวถูกรุก",
+      "checkAlertXiangqi": "⚠ คุณถูกรุก!",
+      "checkAlertIntl": "⚠ คุณถูกรุก!",
+      "goCaptureMsg": "ด {b} · ข {w}",
+      "goCapsLine": "จับ ด{b}:ข{w}",
+      "playerSideWhite": "คุณ (ขาว)",
+      "playerSideRed": "คุณ (แดง)",
+      "playerSideFirst": "คุณ (ดำ)",
+      "aiSide": "AI"
     },
     "card": {
       "opponent": "คู่แข่ง",
@@ -3757,7 +3778,11 @@
       "defeat": "แพ้ · ลองอีกครั้ง",
       "fail": "ล้มเหลว",
       "you": "คุณ",
-      "ai": "AI"
+      "ai": "AI",
+      "yourTurnHint": "ตาของคุณ · คลิกไพ่",
+      "aiThinking": "AI กำลังคิด…",
+      "hp": "HP",
+      "mana": "มานา"
     }
   }
 }

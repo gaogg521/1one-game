@@ -568,7 +568,10 @@
     "justNow": "剛剛",
     "minutesAgo": "{n} 分鐘前",
     "hoursAgo": "{n} 小時前",
-    "daysAgo": "{n} 天前"
+    "daysAgo": "{n} 天前",
+    "loading": "載入中…",
+    "submitError": "發表失敗，請稍後再試",
+    "guestName": "訪客"
   },
   "adaptation": {
     "title": "連載改編進度",
@@ -3696,10 +3699,16 @@
       "yourTurn": "你的回合",
       "seatTurn": "{name} 出牌",
       "win": "勝利",
+      "winMsg": "你贏了！刷新重開",
       "lose": "你輸了。刷新重開",
       "hint": "點擊手牌選/取消 · 點擊「出牌」或「不要」按鈕",
       "bidMsg": "當前最高 {n} 分，點擊下方按鈕或按 1/2/3/0",
-      "fail": "失敗"
+      "fail": "失敗",
+      "hintBtn": "提示",
+      "multiplier": "×{n}",
+      "jokerBig": "大",
+      "jokerSmall": "小",
+      "bottomCards": "底牌"
     },
     "chess": {
       "gomokuHint": "五子棋 · 黑先 · 連五即勝",
@@ -3736,7 +3745,19 @@
       "river": "河流",
       "den": "獸穴",
       "illegal": "禁著點",
-      "illegalMsg": "自殺或打劫禁入"
+      "illegalMsg": "自殺或打劫禁入",
+      "checkmateBlack": "將死！黑方勝",
+      "checkmateMsgWin": "絕殺成功",
+      "checkmateMsgRedLose": "紅帥被將死",
+      "checkmateMsgWhiteLose": "白王被將死",
+      "checkAlertXiangqi": "⚠ 你被將軍！必須應將",
+      "checkAlertIntl": "⚠ 白方被將軍！必須應將",
+      "goCaptureMsg": "黑提 {b} · 白提 {w}",
+      "goCapsLine": "提子 黑{b}:白{w}",
+      "playerSideWhite": "你（白方）",
+      "playerSideRed": "你（紅方）",
+      "playerSideFirst": "你（黑子）",
+      "aiSide": "AI 對手"
     },
     "card": {
       "opponent": "對手",
@@ -3757,7 +3778,11 @@
       "defeat": "失敗 · 再試一次",
       "fail": "失敗",
       "you": "你",
-      "ai": "AI"
+      "ai": "AI",
+      "yourTurnHint": "你的回合 · 點擊手牌出牌",
+      "aiThinking": "對手思考中…",
+      "hp": "HP",
+      "mana": "法力"
     }
   }
 }
