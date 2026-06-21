@@ -4,7 +4,6 @@ import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
 import { getComfyBaseUrl, probeComfyHealthDetailed } from "@/lib/orchestration/comfy-gateway";
-import { createDirectorLedger, seedStandardLedger, finalizeLedgerForSpec } from "@/lib/orchestration/director-ledger";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-model-route";
 import type { RuntimeSceneKey } from "@/lib/runtime-providers";
@@ -1185,13 +1184,8 @@ export async function generateGameSpecDraftWithMeta(
     : await runDraftChain();
   if (fromLlm) {
     const hinted = applyTemplateHint(fromLlm.spec, hint);
-    const spec = finalizeSpec(clean, hinted);
-    // Director Ledger：draft 入口也记录（标记为 draft 阶段）
-    const draftRec = createDirectorLedger();
-    seedStandardLedger(draftRec, spec.templateId, clean);
-    finalizeLedgerForSpec(draftRec, spec, options?.orchestration, Boolean(briefResult));
     return {
-      spec,
+      spec: finalizeSpec(clean, hinted),
       source: fromLlm.source,
       web,
       debug: attachBriefToDebug(
@@ -1211,13 +1205,8 @@ export async function generateGameSpecDraftWithMeta(
   }
 
   const hinted = applyTemplateHint(mock, hint);
-  const spec = finalizeSpec(clean, hinted);
-  // mock 兜底也记 ledger
-  const mockRec = createDirectorLedger();
-  seedStandardLedger(mockRec, spec.templateId, clean);
-  finalizeLedgerForSpec(mockRec, spec, options?.orchestration, Boolean(briefResult));
   return {
-    spec,
+    spec: finalizeSpec(clean, hinted),
     source: "mock",
     web,
     debug: attachBriefToDebug(
@@ -1272,13 +1261,8 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
 
   if (enhanced) {
     const hinted = applyTemplateHint(enhanced.spec, hint);
-    const spec = finalizeSpec(clean, hinted);
-    // Director Ledger：enhance 入口也记录
-    const enhRec = createDirectorLedger();
-    seedStandardLedger(enhRec, spec.templateId, clean);
-    finalizeLedgerForSpec(enhRec, spec, orch, true);
     return {
-      spec,
+      spec: finalizeSpec(clean, hinted),
       source: enhanced.source,
       web,
       debug: {
@@ -1297,13 +1281,8 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   orch?.note("spec_enhance_fallback", { reason: "timeout_or_models" });
 
   const hinted = applyTemplateHint(draft, hint);
-  const spec = finalizeSpec(clean, hinted);
-  // 兜底也记 ledger
-  const fbRec = createDirectorLedger();
-  seedStandardLedger(fbRec, spec.templateId, clean);
-  finalizeLedgerForSpec(fbRec, spec, orch, true);
   return {
-    spec,
+    spec: finalizeSpec(clean, hinted),
     source: params.draftSource,
     web,
     debug: {
@@ -1447,16 +1426,6 @@ export async function generateGameSpecWithMeta(
       orchestration: orch,
     });
   }
-
-  // Director Ledger：记录 skill-loading / reference / asset / phase 四张账本（移植自 threejs-game-skills）
-  const ledgerRec = createDirectorLedger();
-  const effectiveHintForLedger = (options?.templateHint && options.templateHint !== "auto")
-    ? options.templateHint
-    : (briefPre?.brief?.intent?.templateHint ?? detectTemplateFromPrompt(prompt.trim()) ?? "avoider");
-  seedStandardLedger(ledgerRec, effectiveHintForLedger, prompt);
-  ledgerRec.setPhase("brief", briefPre ? "done" : "skipped", briefPre ? `packId=${briefPre.brief.packId}` : "creativeBriefExpand disabled");
-  ledgerRec.setPhase("spec", "running", "");
-
   const genOpts: GenerateOptions = { ...options, creativeBriefPreExpanded: briefPre };
 
   if (orch) {
@@ -1515,10 +1484,6 @@ export async function generateGameSpecWithMeta(
     let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
     const hint = resolveEffectiveTemplateHint(options?.templateHint, briefPre ?? null);
     spec = applyTemplateHint(spec, hint);
-
-    // Director Ledger：spec 定型后 finalize（含 visual scorecard），写入 orchestration trace
-    finalizeLedgerForSpec(ledgerRec, spec, orch, Boolean(briefPre));
-
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {
       const complexity = classifyPromptComplexity(prompt.trim(), spec);

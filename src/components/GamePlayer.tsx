@@ -18,8 +18,12 @@ export function GamePlayer(props: {
   immersive?: boolean;
   /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
   previewMode?: boolean;
+  /** Arcade Feed 模式：拉伸容器填满父元素高度 */
+  arcadeMode?: boolean;
   /** 结算画面"继续调整"回调 */
   onIterate?: (instruction: string) => void;
+  /** 游戏结算回调 */
+  onEnd?: (result: { won: boolean; score: number }) => void;
 }) {
   return <GamePlayerInner {...props} />;
 }

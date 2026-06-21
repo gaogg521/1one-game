@@ -21,6 +21,7 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ResultMomentBanner } from "@/components/ResultMomentBanner";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
@@ -615,6 +616,9 @@ export function PlayGameClient({ id }: { id: string }) {
             ) : null}
               </>
             )}
+          {spec && meta && (
+            <WorkCommentSection workType="game" workId={id} />
+          )}
           </>
         )}
       </main>

@@ -342,6 +342,23 @@ model Comic {
   @@index([visibility, createdAt])
 }
 
+/// 用户评论（game / novel / comic 三类内容通用；匿名 ownerKey 识别作者）
+model Comment {
+  id        String   @id @default(cuid())
+  /// "game" | "novel" | "comic"
+  workType  String
+  workId    String
+  /// 匿名作者标识（来自 gcreator_owner cookie）
+  ownerKey  String
+  /// 显示昵称（未登录时默认"访客"）
+  nickname  String   @default("访客")
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([workType, workId, createdAt])
+  @@index([ownerKey])
+}
+
 /// 生成失败日志：game / novel / comic 三类内容的生成错误记录
 model GenerationError {
   id          String   @id @default(cuid())

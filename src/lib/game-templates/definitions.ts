@@ -740,7 +740,7 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     defaultSubtitle: "割绳子 · 物理益智 · 喂小怪兽",
     llmSummary: "割绳子：物理摆动 + 切绳 + 收集星星 + 喂怪兽（复用 physics family）",
     infer: [
-      { pattern: /割绳子|割绳|切绳子|切绳|cut\s*the\s*rope|cut\s*rope|喂小怪兽|喂怪兽/i, priority: 115 },
+      { pattern: /割绳子|cut\s*the\s*rope|喂小怪兽|切绳子/i, priority: 96 },
     ],
   },
   // 填色（儿童填色，复用 customization）

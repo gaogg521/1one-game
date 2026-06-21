@@ -30,11 +30,6 @@ function ensureDir(projectId: string) {
 
 type SpriteKind = "player" | "hazard" | "gem" | "power" | "boss";
 
-const CARD_GAME_TEMPLATE_IDS = new Set([
-  "dou-dizhu", "poker", "mahjong", "mahjong-solitaire", "uno",
-  "blackjack", "solitaire", "chess",
-]);
-
 export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
   const templateCtx = templateVisualStyle(spec.templateId, "casual arcade game");
@@ -48,60 +43,13 @@ export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
   const subtitle = (labels.subtitle || "").toLowerCase();
   const allText = `${title} ${playerLabel} ${hazardLabel} ${collLabel} ${subtitle}`;
 
-  // 卡牌/棋类游戏：贴图主体是牌背/棋子图标，不需要 action 角色精灵
-  const isCardGame = CARD_GAME_TEMPLATE_IDS.has(spec.templateId);
-  if (isCardGame) {
-    const pc = spec.theme.playerColor || "#fbbf24";
-    const hc = spec.theme.hazardColor || "#ef4444";
-    const cc = spec.theme.collectibleColor || "#a3e635";
-    switch (kind) {
-      case "player":
-        return [
-          `2D card game icon, front-facing card back or token symbol, bold graphic style`,
-          `dominant color ${pc}, clean flat vector design`,
-          `solid ${bgColor} background, suitable for ${templateCtx}`,
-          `no text, no UI overlay, 1:1 aspect ratio`,
-        ].join(", ");
-      case "hazard":
-        return [
-          `2D card game opponent icon, stylized player avatar or card symbol`,
-          `dominant color ${hc}, flat clean vector`,
-          `solid ${bgColor} background, suitable for ${templateCtx}`,
-          `no text, no UI overlay, 1:1 aspect ratio`,
-        ].join(", ");
-      case "gem":
-      case "power":
-        return [
-          `2D card game collectible icon, poker chip or score token`,
-          `dominant color ${cc}, shiny metallic round token`,
-          `solid ${bgColor} background, flat vector style`,
-          `no text, no UI overlay, 1:1 aspect ratio`,
-        ].join(", ");
-      case "boss":
-        return [
-          `2D card game boss icon, large stylized joker or ace card symbol`,
-          `dramatic design, dominant color ${hc}, bold graphic style`,
-          `solid ${bgColor} background, flat vector`,
-          `no text, 1:1 aspect ratio`,
-        ].join(", ");
-    }
-  }
-
   // 检测具体游戏风格，生成更有针对性的提示词
-  // 注：fighting/moba/strategy 模板排除在外，防止 fighter/射手/防线 等词误触
-  const isPvZ =
-    spec.templateId !== "strategy" &&
-    spec.templateId !== "fighting" &&
-    spec.templateId !== "moba" &&
-    /植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant|温室|阳光|腐化|变异/.test(allText);
+  // 扩展：覆盖 LLM 抽象后的常见 PvZ 词汇（温室、防线、射手、阳光、塔、波等）
+  const isPvZ = /植物|僵尸|pvz|豌豆|向日葵|坚果|zombie|plant|温室|防线|射手|阳光|塔防|腐化|变异|植/.test(allText);
   const isSpace =
-    spec.templateId !== "fighting" &&
-    spec.templateId !== "moba" &&
-    spec.templateId !== "strategy" &&
-    (/太空|宇宙|星际|飞船|space|galaxy|星云|战舰|飞机|战机|敌机|空战|弹幕|打飞机|plane|aircraft|dogfight/i.test(
+    /太空|宇宙|星际|飞船|space|star|galaxy|星云|战舰|飞机|战机|敌机|空战|弹幕|打飞机|plane|aircraft|fighter|jet|dogfight/i.test(
       allText,
-    ) ||
-      spec.templateId === "shooter");
+    ) || spec.templateId === "shooter";
   const isWuxia = /武侠|江湖|剑客|sword|wuxia|门派|内力/.test(allText);
   const isAnime = /二次元|动漫|anime|少女|萌|机甲|manga/.test(allText);
   const isCyber = /赛博|霓虹|cyber|neon|全息|机甲/.test(allText);

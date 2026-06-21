@@ -17,6 +17,7 @@ import { formatImageGenElapsed } from "@/lib/format-duration";
 import { avgPanelMsFromSession, estimateComicPanelEtaMs } from "@/lib/comic-panel-eta";
 import { consumeSSE } from "@/lib/read-sse";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
+import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -833,6 +834,9 @@ export default function ComicDetailPage() {
               )}
             </>
           )}
+          <div className="mt-4 px-4">
+            <WorkCommentSection workType="comic" workId={comic.id} />
+          </div>
         </div>
       </main>
       </AppMain>

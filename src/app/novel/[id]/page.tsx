@@ -36,6 +36,7 @@ import {
 import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { WorkLikeButton } from "@/components/work/WorkLikeButton";
+import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
 import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/novel/NovelReadCoverThumb";
 import { NovelCharacterRosterPanel } from "@/components/literary/NovelCharacterRosterPanel";
@@ -512,6 +513,9 @@ export default function NovelDetailPage() {
             onThemeChange={setReaderTheme}
           />
         )}
+        <div className="mx-auto max-w-2xl px-4 pb-10 lg:px-6">
+          <WorkCommentSection workType="novel" workId={novel.id} />
+        </div>
       </div>
       </AppMain>
     </AppPageShell>

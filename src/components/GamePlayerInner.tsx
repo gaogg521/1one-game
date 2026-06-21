@@ -33,7 +33,9 @@ export default function GamePlayerInner({
   promptHint,
   immersive = false,
   previewMode = false,
+  arcadeMode = false,
   onIterate,
+  onEnd,
 }: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
@@ -42,8 +44,12 @@ export default function GamePlayerInner({
   immersive?: boolean;
   /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
   previewMode?: boolean;
+  /** Arcade Feed 模式：拉伸容器填满父元素高度，结算时通知父组件 */
+  arcadeMode?: boolean;
   /** 结算画面显示"继续调整"输入框，提交后以此 instruction 再次生成 */
   onIterate?: (instruction: string) => void;
+  /** 游戏结算回调（arcadeMode 自动切换下一关） */
+  onEnd?: (result: { won: boolean; score: number }) => void;
 }) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
@@ -201,6 +207,7 @@ export default function GamePlayerInner({
     const refPayloads = readReferenceImagePayloadsFromSession();
     const handle = createPhaserGame(el, spec, (r) => {
       setResult(r);
+      onEnd?.({ won: r.won, score: r.score });
       if (!previewMode) {
         recordGameResult(spec.templateId, r.won);
         const isNewBest = recordScore(spec.templateId, r.score);
@@ -286,11 +293,11 @@ export default function GamePlayerInner({
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className={arcadeMode ? "h-full" : "space-y-4"}>
       <div
         ref={shellRef}
         style={shellStyle}
-        className="group relative overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"
+        className={`group relative overflow-hidden ${arcadeMode ? "h-full rounded-none border-0 shadow-none" : "rounded-2xl border border-[color:var(--gc-border)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"} bg-[var(--gc-bg-elevated)]`}
       >
         {showCohesiveSnapshot ? (
           <div className="pointer-events-none absolute left-3 top-3 z-[6] flex max-w-[calc(100%-10rem)] flex-wrap items-center gap-2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1.5 text-[10px] text-[var(--gc-muted)] backdrop-blur-md">
@@ -311,7 +318,7 @@ export default function GamePlayerInner({
           tabIndex={0}
           role="application"
           aria-label={t("gameAria")}
-          className="aspect-[920/560] w-full max-h-[min(70vh,620px)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)]"
+          className={`w-full bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] ${arcadeMode ? "h-full" : "aspect-[920/560] max-h-[min(70vh,620px)]"}`}
         />
         {!playReady && !result ? (
           <div
