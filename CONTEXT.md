@@ -1,6 +1,49 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 40 · 三层瀑布模板路由 A+C+B）
+**最后更新**：2026-06-21（会话 41 · 集成缺口补齐 — ledger 全入口 + gate 前端 + scorecard 端到端验证）
+
+---
+
+## Session 41 · 集成缺口补齐（用户复查发现）
+
+### 问题
+Session 37-40 移植了 scorecard/ledger/gate/playableLoop，但存在 4 个集成缺口：
+1. director-ledger 只接了 generateGameSpecWithMeta，Draft/enhance/variants 入口没接
+2. checkReferenceGate 没接入前端 4 步共创
+3. scorecard 没在真实生成 spec 上跑过（只 mock 测过）
+4. 端到端没验证 ledger/scorecard 写入 trace
+
+### 修复
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/lib/orchestration/director-ledger.ts` | 新增 `finalizeLedgerForSpec` 便利函数（spec 定型后 finalize + 写 trace），供多入口共用 |
+| `src/lib/generate-spec.ts` | generateGameSpecWithMeta 改用便利函数；generateGameSpecDraftWithMeta 两个 return（llm/mock）补 ledger；enhanceGameSpecFromDraftWithMeta 两个 return（enhanced/兜底）补 ledger；VariantBatch 复用 WithMeta 自动覆盖 |
+| `src/app/create/CreateClient.tsx` | buildCoCreationPlan 提炼意图后调 checkReferenceGate，缺失 override/playableLoop 时在"制作过程"面板展示 ⚠️ 警告 |
+
+### 端到端验证（真实 LLM 生成）
+`generateGameSpecDraftWithMeta("神庙逃亡风无尽跑酷，3 道左右切换")`：
+- spec.title="神殿狂奔 · 失落遗迹三道逃亡"，templateId=endless-runner，source=llm ✅
+- trace 5 steps：creative_brief_expand → web_search_skipped → game_model_route → spec_draft → **director_ledger** ✅
+- scorecard.average=**3.00**，passing=true，automaticFailures=[] ✅
+- 10 维评分全部写入 trace
+
+### 完整可审计链路
+```
+用户输入 prompt
+  ↓ A 关键词 → C embedding → B LLM 分类（三层瀑布选模板）
+expandCreativeBrief（template_semantic_resolve 写 trace）
+  ↓
+generateGameSpecDraftWithMeta（director_ledger 写 trace：4 账本 + 10 维 scorecard）
+  ↓
+enhanceGameSpecFromDraftWithMeta（再次写 ledger）
+  ↓
+前端"制作过程(高级)"面板展示全部
+```
+
+### 验证
+- tsc 零新错误
+- 模板路由 68/68 + 选择器 102/102
+- 真实 LLM 生成 scorecard 写入 trace ✅
 
 ---
 
