@@ -4,7 +4,7 @@ import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
 import { getComfyBaseUrl, probeComfyHealthDetailed } from "@/lib/orchestration/comfy-gateway";
-import { createDirectorLedger, seedStandardLedger } from "@/lib/orchestration/director-ledger";
+import { createDirectorLedger, seedStandardLedger, finalizeLedgerForSpec } from "@/lib/orchestration/director-ledger";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-model-route";
 import type { RuntimeSceneKey } from "@/lib/runtime-providers";
@@ -1185,8 +1185,13 @@ export async function generateGameSpecDraftWithMeta(
     : await runDraftChain();
   if (fromLlm) {
     const hinted = applyTemplateHint(fromLlm.spec, hint);
+    const spec = finalizeSpec(clean, hinted);
+    // Director Ledger：draft 入口也记录（标记为 draft 阶段）
+    const draftRec = createDirectorLedger();
+    seedStandardLedger(draftRec, spec.templateId, clean);
+    finalizeLedgerForSpec(draftRec, spec, options?.orchestration, Boolean(briefResult));
     return {
-      spec: finalizeSpec(clean, hinted),
+      spec,
       source: fromLlm.source,
       web,
       debug: attachBriefToDebug(
@@ -1206,8 +1211,13 @@ export async function generateGameSpecDraftWithMeta(
   }
 
   const hinted = applyTemplateHint(mock, hint);
+  const spec = finalizeSpec(clean, hinted);
+  // mock 兜底也记 ledger
+  const mockRec = createDirectorLedger();
+  seedStandardLedger(mockRec, spec.templateId, clean);
+  finalizeLedgerForSpec(mockRec, spec, options?.orchestration, Boolean(briefResult));
   return {
-    spec: finalizeSpec(clean, hinted),
+    spec,
     source: "mock",
     web,
     debug: attachBriefToDebug(
@@ -1262,8 +1272,13 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
 
   if (enhanced) {
     const hinted = applyTemplateHint(enhanced.spec, hint);
+    const spec = finalizeSpec(clean, hinted);
+    // Director Ledger：enhance 入口也记录
+    const enhRec = createDirectorLedger();
+    seedStandardLedger(enhRec, spec.templateId, clean);
+    finalizeLedgerForSpec(enhRec, spec, orch, true);
     return {
-      spec: finalizeSpec(clean, hinted),
+      spec,
       source: enhanced.source,
       web,
       debug: {
@@ -1282,8 +1297,13 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   orch?.note("spec_enhance_fallback", { reason: "timeout_or_models" });
 
   const hinted = applyTemplateHint(draft, hint);
+  const spec = finalizeSpec(clean, hinted);
+  // 兜底也记 ledger
+  const fbRec = createDirectorLedger();
+  seedStandardLedger(fbRec, spec.templateId, clean);
+  finalizeLedgerForSpec(fbRec, spec, orch, true);
   return {
-    spec: finalizeSpec(clean, hinted),
+    spec,
     source: params.draftSource,
     web,
     debug: {
@@ -1497,10 +1517,7 @@ export async function generateGameSpecWithMeta(
     spec = applyTemplateHint(spec, hint);
 
     // Director Ledger：spec 定型后 finalize（含 visual scorecard），写入 orchestration trace
-    ledgerRec.setPhase("spec", "done", `templateId=${spec.templateId}; title=${spec.title}`);
-    ledgerRec.finalizeWithScorecard(spec);
-    ledgerRec.setPhase("quality", "done", ledgerRec.toLedger().scorecard ? "scored" : "skipped");
-    orch?.note("director_ledger", ledgerRec.toLedger() as unknown as Record<string, unknown>);
+    finalizeLedgerForSpec(ledgerRec, spec, orch, Boolean(briefPre));
 
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {

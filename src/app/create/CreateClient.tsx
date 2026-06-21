@@ -24,6 +24,7 @@ import {
   describeQueuedAssetSummary,
   summarizePromptForStudio,
 } from "@/lib/create-studio-narrative";
+import { checkReferenceGate } from "@/lib/scene-quality-gates";
 import { buildOpenGameRecapFromTrace, buildGameModelRecapFromTrace } from "@/lib/opengame-skills/generation-trace";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import type { GameSpec } from "@/lib/game-spec";
@@ -338,6 +339,17 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     });
     if (intent.risks.length) {
       appendStudioLog({ kind: "sse", title: t("log.risksRemain"), bullets: intent.risks });
+    }
+    // Reference Gate：检查 template-brief-override + playableLoop 就位，缺失则警告
+    const gate = checkReferenceGate(prompt, templateHint);
+    if (!gate.passed || gate.warnings.length) {
+      const bullets = [
+        ...gate.missing.map((m) => `⚠️ ${m}`),
+        ...gate.warnings.map((w) => `⚠️ ${w}`),
+      ];
+      if (bullets.length) {
+        appendStudioLog({ kind: "sse", title: "参考门禁检查", bullets });
+      }
     }
   }, [appendStudioLog, locale, prompt, t, templateHint]);
 

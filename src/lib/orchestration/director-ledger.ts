@@ -10,6 +10,7 @@
  * 不改变生成结果，只记录过程，供前端"制作过程（高级）"面板与 QA 审计使用。
  */
 import type { GameSpec } from "@/lib/game-spec";
+import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { getTemplateBriefOverride } from "@/lib/creative-brief/template-brief-overrides";
 import { scoreVisualQuality, type VisualScorecard } from "@/lib/visual-scorecard";
 
@@ -142,4 +143,23 @@ export function seedStandardLedger(
   rec.setPhase("brief", "pending", "");
   rec.setPhase("spec", "pending", "");
   rec.setPhase("quality", "pending", "");
+}
+
+/**
+ * 便利函数：spec 定型后 finalize ledger（含 visual scorecard）并写入 orchestration trace。
+ * 供 generateGameSpecWithMeta / generateGameSpecDraftWithMeta / enhanceGameSpecFromDraftWithMeta 共用。
+ * 返回填充后的 ledger（调用方可读 scorecard）。
+ */
+export function finalizeLedgerForSpec(
+  rec: LedgerRecorder,
+  spec: GameSpec,
+  orch: RunTraceRecorder | undefined,
+  briefDone = true,
+): DirectorLedger {
+  rec.setPhase("brief", briefDone ? "done" : "skipped", briefDone ? "brief expanded" : "skipped");
+  rec.setPhase("spec", "done", `templateId=${spec.templateId}; title=${spec.title}`);
+  rec.finalizeWithScorecard(spec);
+  rec.setPhase("quality", "done", rec.toLedger().scorecard ? "scored" : "skipped");
+  orch?.note("director_ledger", rec.toLedger() as unknown as Record<string, unknown>);
+  return rec.toLedger();
 }
