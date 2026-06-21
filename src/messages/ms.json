@@ -3695,9 +3695,11 @@
       "bid": "Bida",
       "yourTurn": "Giliran anda",
       "seatTurn": "Giliran {name}",
-      "win": "Anda menang! Muat semula",
+      "win": "Menang",
       "lose": "Anda kalah. Muat semula",
-      "hint": "Klik kad untuk pilih · Klik Main atau Lalui"
+      "hint": "Klik kad untuk pilih · Klik Main atau Lalui",
+      "bidMsg": "Tertinggi: {n}. Klik butang di bawah atau tekan 1/2/3/0",
+      "fail": "Gagal"
     },
     "chess": {
       "gomokuHint": "Gomoku · sambung 5 untuk menang",

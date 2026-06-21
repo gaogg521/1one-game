@@ -408,10 +408,8 @@ export class DouDizhuScene extends Phaser.Scene {
       return;
     }
     this.hud.flashBanner({
-      title: tMessage(this.uiLocale, "sceneGame.douDizhu.bid"),
-      message: this.uiLocale === "zh-Hans"
-        ? `当前最高 ${this.highestBid} 分，点击下方按钮或按 1/2/3/0`
-        : `Current highest: ${this.highestBid}. Click buttons below or press 1/2/3/0`,
+      title: tMessage(this.uiLocale, "sceneGame.douDizhu.bidTitle"),
+      message: tMessage(this.uiLocale, "sceneGame.douDizhu.bidMsg", { n: this.highestBid }),
       ms: 6000,
     });
     // 键盘备用
@@ -910,7 +908,7 @@ export class DouDizhuScene extends Phaser.Scene {
     return viewH * 0.32;
   }
   private seatName(seat: Seat): string {
-    if (seat === 0) return tMessage(this.uiLocale, "sceneGame.card.you");
+    if (seat === 0) return tMessage(this.uiLocale, "sceneGame.douDizhu.you");
     if (seat === 1) return tMessage(this.uiLocale, "sceneGame.douDizhu.right");
     return tMessage(this.uiLocale, "sceneGame.douDizhu.left");
   }
@@ -1116,7 +1114,7 @@ export class DouDizhuScene extends Phaser.Scene {
       ? (tMessage(this.uiLocale, "sceneGame.douDizhu.landlord"))
       : (tMessage(this.uiLocale, "sceneGame.douDizhu.farmer"));
     const turn = this.currentSeat === 0
-      ? (tMessage(this.uiLocale, "sceneGame.card.yourTurn"))
+      ? tMessage(this.uiLocale, "sceneGame.douDizhu.yourTurn")
       : tMessage(this.uiLocale, "sceneGame.douDizhu.seatTurn", { name: this.seatName(this.currentSeat) });
     this.hud.update({
       score: this.seats[0]!.hand.length,
@@ -1141,7 +1139,7 @@ export class DouDizhuScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: themeParticleHex(this.spec),
-        text: this.uiLocale === "zh-Hans" ? "胜利" : "Win",
+        text: tMessage(this.uiLocale, "sceneGame.douDizhu.win"),
         textColorCss: "#fde68a",
       });
       playBleep("win");
@@ -1151,7 +1149,7 @@ export class DouDizhuScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: this.spec.theme.hazardColor,
-        text: tMessage(this.uiLocale, "sceneGame.card.fail"),
+        text: tMessage(this.uiLocale, "sceneGame.douDizhu.fail"),
         textColorCss: "#fca5a5",
       });
       playBleep("hit");

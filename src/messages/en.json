@@ -3695,9 +3695,11 @@
       "bid": "Bid",
       "yourTurn": "Your turn",
       "seatTurn": "{name} turn",
-      "win": "You win! Refresh to retry",
+      "win": "Win",
       "lose": "You lost. Refresh to retry",
-      "hint": "Click cards to select · Click Play or Pass buttons"
+      "hint": "Click cards to select · Click Play or Pass buttons",
+      "bidMsg": "Current highest: {n}. Click buttons below or press 1/2/3/0",
+      "fail": "Fail"
     },
     "chess": {
       "gomokuHint": "Gomoku · connect 5 to win",

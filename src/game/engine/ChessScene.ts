@@ -1395,7 +1395,7 @@ export class ChessScene extends Phaser.Scene {
       const chosen = candidates[Math.floor(this.runtimeRng() * candidates.length)]!;
       this.junqiApplyMove(chosen.piece, chosen.move);
       this.whiteTurn = true;
-      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.card.yourTurn"));
+      this.statusText.setText(tMessage(this.uiLocale, "sceneGame.chess.yourTurn"));
       this.redraw();
       this.publishQaState();
       if (this.junqiCheckWin()) return;
