@@ -842,24 +842,24 @@ export class DouDizhuScene extends Phaser.Scene {
     x: number, y: number, label: string, color: number, onClick: () => void,
   ): Phaser.GameObjects.Container {
     const w = 76, h = 36;
+    const cont = this.add.container(x, y).setDepth(55);
+    // bg 在 container 内 (0,0)，用自身 setInteractive（rectangle 天然 hit，比 container Geom 可靠）
     const bg = this.add.rectangle(0, 0, w, h, color, 0.92)
-      .setStrokeStyle(1.5, 0xffffff, 0.4);
+      .setStrokeStyle(1.5, 0xffffff, 0.4)
+      .setInteractive({ useHandCursor: true });
     const text = this.add.text(0, 0, label, {
       fontFamily: "system-ui, sans-serif",
       fontSize: "14px",
       fontStyle: "700",
       color: "#ffffff",
     }).setOrigin(0.5);
-    const cont = this.add.container(x, y, [bg, text]);
-    cont.setSize(w, h);
-    cont.setInteractive(
-      new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    cont.setDepth(55);
-    cont.on("pointerdown", onClick);
-    cont.on("pointerover", () => { bg.setAlpha(1); bg.setStrokeStyle(2, 0xfbbf24, 0.9); });
-    cont.on("pointerout", () => { bg.setAlpha(0.92); bg.setStrokeStyle(1.5, 0xffffff, 0.4); });
+    cont.add([bg, text]);
+    bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
+      ptr.event.stopPropagation();
+      onClick();
+    });
+    bg.on("pointerover", () => { bg.setAlpha(1); bg.setStrokeStyle(2, 0xfbbf24, 0.9); });
+    bg.on("pointerout", () => { bg.setAlpha(0.92); bg.setStrokeStyle(1.5, 0xffffff, 0.4); });
     return cont;
   }
 
@@ -1075,10 +1075,16 @@ export class DouDizhuScene extends Phaser.Scene {
       cont.add([bg, rankText, suitText]);
       cont.setSize(cardW, cardH);
       // 每张牌的独占点击区 = 左边缘起 spacing 宽（末张取整牌宽），防止相邻高层牌拦截
+      // 用 bg rectangle 自身 setInteractive（比 container Geom hit area 在 Phaser 4 更可靠）
       const isLast = i === hand.length - 1;
       const hitW = isLast ? cardW : spacing;
-      cont.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, hitW, cardH), Phaser.Geom.Rectangle.Contains);
-      cont.on("pointerdown", () => {
+      const hitOffsetX = -cardW / 2; // 独占带从牌左边缘开始
+      bg.setInteractive(
+        new Phaser.Geom.Rectangle(hitOffsetX, -cardH / 2, hitW, cardH),
+        Phaser.Geom.Rectangle.Contains,
+      );
+      bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
+        ptr.event.stopPropagation();
         if (this.finished || this.bidPhase || this.currentSeat !== 0) return;
         if (this.selectedIds.has(card.id)) this.selectedIds.delete(card.id);
         else this.selectedIds.add(card.id);
