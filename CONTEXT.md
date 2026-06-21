@@ -1,8 +1,70 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 41 · 集成缺口补齐 — ledger 全入口 + gate 前端 + scorecard 端到端验证）
+**最后更新**：2026-06-21（会话 46 · Scene i18n 5 语言全覆盖 + 误匹配修复）
 
 ---
+
+## Session 46 · Scene i18n 5 语言全覆盖 + 误匹配修复
+
+### 问题
+DouDizhuScene/ChessScene/CardScene 的 UI 文案用 `uiLocale==="zh-Hans"?中:英` 三元判断，只覆盖中英，ms/th 用户看英文兜底，zh-Hant 看到简体中文。
+
+### 修复（长期架构）
+1. **建 sceneGame i18n 命名空间**：5 个 messages.json 各加 sceneGame 嵌套对象，84 key × 5 语言 = 420 条文案
+   - douDizhu.* 30 个（叫地主/出牌/不要/地主/农民/回合/胜负/bidMsg 等）
+   - chess.* 25 个（五子棋/军棋/象棋/围棋/斗兽棋提示 + 将军/将死/炸弹/夺旗/排雷等）
+   - card.* 19 个（对手/回合/攻击/治疗/护盾/打击/法力不足/胜负等）
+2. **三 Scene 迁移**：DouDizhuScene 28 处 + ChessScene 31 处 + CardScene 23 处三元判断 → `tMessage(locale, "sceneGame.xxx")`
+3. **修复 raw key 显示**：sceneGame 扁平 key（"douDizhu.bid"含点）与 tMessage 的 split(".") 分层查找不兼容 → 转成嵌套对象
+4. **修复误匹配**：批量替换脚本按中文值反查 key 时，通用词（"你"/"你的回合"/"失败"）在多命名空间重复，误匹配到错误 key
+   - DouDizhuScene.seatName(0) card.you → douDizhu.you
+   - DouDizhuScene yourTurn card.yourTurn → douDizhu.yourTurn
+   - ChessScene junqi yourTurn card.yourTurn → chess.yourTurn
+   - DouDizhuScene fail card.fail → douDizhu.fail（新补 key）
+   - DouDizhuScene bidTitle 被误替换成 bid → 改回 bidTitle
+
+### 验证
+- tsc 零错误
+- 模板路由 68/68 + 选择器 102/102
+- grep 确认 ChessScene/DouDizhuScene 不再含 sceneGame.card. 误引用
+
+### 仍待迁移（非 bug，仅 ms/th 看英文兜底）
+其余 20 个 Scene（Breakout/Coaster/Fighting/Mahjong/Moba/Puzzle/Shooter/Sports/Tetris 等）116 处三元判断未迁，不会显示 raw key，按需分批。
+
+---
+
+## Session 45 · 五子棋 gomoku + 军棋 junqi ruleset
+
+- chess-blueprint.ts：ChessRuleset 加 gomoku/junqi + inferChessRuleset 关键词 + buildChessBlueprint 配置
+- ChessScene.ts：gomoku（15x15 落子+连五判定+AI）/ junqi（5x12 等级吃子+炸弹同归+工兵排雷+夺旗）规则实现
+- game-spec.ts：schema enum + board 尺寸约束放宽
+
+---
+
+## Session 44 · 斗地主出牌/选牌/可见性多轮修复
+
+- 出牌显示牌图形（不再只显示文字）
+- 手牌点击用 bg rectangle 自身 setInteractive（修 Phaser 4 container Geom hit 失效）
+- 选中牌 depth 提到 200+i 支持多选
+- 出牌图形跨家保留到下一手
+- 头像用 drawAvatar 通用工具（五官人脸）
+
+---
+
+## Session 43 · 棋牌出牌可见性 + CardScene 出牌历史
+
+- DouDizhuScene showPlayOnSeat 显示实际牌图形
+- CardScene showPlayedCard 出牌时显示牌名+类型 1.6s
+
+---
+
+## Session 42 · TikTok 式游戏 Feed /arcade（另一会话）
+
+---
+
+## 历史会话记录
+
+### Session 41 · 集成缺口补齐 — ledger 全入口 + gate 前端 + scorecard 端到端验证
 
 ## Session 41 · 集成缺口补齐（用户复查发现）
 
@@ -138,11 +200,34 @@ enhanceGameSpecFromDraftWithMeta（再次写 ledger）
 - **斗地主头像**：从几何形改成 🧑🤖🧓 emoji（顺手修了预存编译错误）
 
 ### 下次启动清单
-1. `npm run dev`（端口 8888）→ 访问 `http://localhost:8888/zh-Hans/create`
-2. 生成任意游戏 → 在"制作过程（高级）"面板看 director_ledger 条目（skillLoading/references/assets/phases + scorecard）
-3. 测斗地主：输入"斗地主三人扑克" → 确认头像是 🧑🤖🧓 不是几何形
-4. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
-5. 后续可把 scorecard 接入前端"AI 评审员"面板，低分自动触发返工
+1. `npm run dev`（端口 8888）→ 访问 `http://localhost:8888/zh-Hans/arcade` 验证 TikTok 滑动效果
+2. 在手机上测试 `/arcade` 页面（上划切换游戏、游戏结束自动跳下一个）
+3. 可将 `/arcade` 链接加入首页导航，提升可发现性
+4. 生成任意游戏 → 在"制作过程（高级）"面板看 director_ledger 条目（scorecard）
+5. 跑 `npx tsx scripts/test-template-routing.ts` 确认 68/68 通过
+
+---
+
+## Session 42 · TikTok 式游戏 Feed — /arcade 页面
+
+### 需求
+用户希望手机上可以像抖音一样，上往下滑动就能自动玩下一个游戏。
+
+### 实现
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/app/api/arcade/feed/route.ts` | **新建**：paginated feed API，返回 public+ready 游戏（featured desc, playCount desc, createdAt desc），cursor 分页 |
+| `src/app/arcade/page.tsx` | **新建**：Server Component，metadata 设置 |
+| `src/app/arcade/ArcadeFeedClient.tsx` | **新建**：Client Component，TikTok 式 snap scroll feed。`fixed inset-0 z-40 overflow-y-scroll snap-y snap-mandatory`；每卡 `h-screen snap-start flex flex-col`；IntersectionObserver 追踪当前卡；游戏结束 3s 自动滚到下一个；懒挂载（±1 范围外用封面占位）；键盘 ↑↓/jk 支持；点赞、详情链接、进度点导航 |
+| `src/components/GamePlayer.tsx` | 新增 `arcadeMode?: boolean` 和 `onEnd?` props pass-through |
+| `src/components/GamePlayerInner.tsx` | arcadeMode 下外层 wrapper 改 `h-full`，shell 改 `h-full rounded-none border-0`，canvas 改 `h-full`（替代 aspect-[920/560]）；游戏结束回调 `onEnd?.()` |
+| `src/components/SiteFooterGate.tsx` | 新增 `HIDE_FOOTER_SEGMENTS = ["arcade"]`，用 path segment 检查（locale-agnostic，匹配 `/zh-Hans/arcade`） |
+
+### 验证
+- 桌面浏览器：Feed 加载 10 个游戏，snap scroll 工作，游戏运行，信息栏显示，无 footer ✅
+- 手机视口（390×844）：游戏居中渲染，横屏提示显示，底部信息栏完整 ✅
+- 游戏结束覆盖层："再玩一次"/"下一个↓" 按钮，3s 自动切换 ✅
+- tsc 零新错误 ✅
 
 ---
 
