@@ -6,6 +6,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import { drawAvatar, AVATAR_COLORS } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -286,7 +287,7 @@ export class DouDizhuScene extends Phaser.Scene {
   private bidButtons: Phaser.GameObjects.Container[] = [];
   private actionButtons: Phaser.GameObjects.Container[] = [];
   // AI 座位头像
-  private avatarGraphics: Phaser.GameObjects.Text[] = [];
+  private avatarGraphics: Phaser.GameObjects.Graphics[] = [];
 
   // AI 节奏
   private aiActAt = 0;
@@ -880,20 +881,13 @@ export class DouDizhuScene extends Phaser.Scene {
   private buildAvatars() {
     for (const g of this.avatarGraphics) g.destroy();
     this.avatarGraphics = [];
-    const emoji = ["🧑", "🤖", "🧓"]; // 玩家/AI 下家/AI 上家
-    const tints = [0x7c3aed, 0xbe185d, 0x0ea5e9];
+    // 三家人物头像（五官人脸）：玩家(蓝) + AI 下家(紫) + AI 上家(粉)
+    const colors = [AVATAR_COLORS.player, AVATAR_COLORS.ai1, AVATAR_COLORS.ai2];
     for (const seat of [0, 1, 2] as const) {
-      const x = this.seatX(seat as never);
-      const y = (this.seatY(seat as never) ?? 0) - 14;
-      const t = this.add
-        .text(x, y, emoji[seat] ?? "🧑", {
-          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
-          fontSize: "40px",
-        })
-        .setOrigin(0.5)
-        .setTint(tints[seat] ?? 0xffffff)
-        .setDepth(11);
-      this.avatarGraphics.push(t);
+      const x = this.seatX(seat);
+      const y = this.seatY(seat) - 14;
+      const g = drawAvatar(this, x, y, { bodyColor: colors[seat]!, radius: 20, depth: 11 });
+      this.avatarGraphics.push(g);
     }
   }
 

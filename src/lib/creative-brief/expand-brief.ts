@@ -95,7 +95,27 @@ export async function expandCreativeBrief(
   }
 
   const intent = parseCreativeIntent(userPrompt, templateHint);
-  const resolvedTemplateId = templateHint === "auto" ? intent.templateHint : templateHint;
+  let resolvedTemplateId = templateHint === "auto" ? intent.templateHint : templateHint;
+
+  // 三层瀑布兜底：A 层（关键词，已在 parseCreativeIntent 走）未命中且 templateHint=auto 时，
+  // 走 C 层（embedding）+ B 层（LLM 分类），避免描述性语言落到 general-arcade 兜底
+  if (templateHint === "auto" && (!resolvedTemplateId || resolvedTemplateId === "avoider")) {
+    try {
+      const { resolveTemplateSemantic } = await import("@/lib/game-templates/template-embedding");
+      const semantic = await resolveTemplateSemantic(userPrompt);
+      if (semantic.templateId && semantic.source !== "keyword") {
+        resolvedTemplateId = semantic.templateId;
+        params.orchestration?.note("template_semantic_resolve", {
+          source: semantic.source,
+          templateId: semantic.templateId,
+          confidence: semantic.confidence,
+        });
+      }
+    } catch {
+      // 语义匹配失败不阻塞，继续用原 resolvedTemplateId
+    }
+  }
+
   const pack = params.packId
     ? GENRE_PACKS.find((p) => p.id === params.packId) ?? selectGenrePack(userPrompt, resolvedTemplateId)
     : selectGenrePack(userPrompt, resolvedTemplateId);

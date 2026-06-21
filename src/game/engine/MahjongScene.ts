@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playBleep } from "@/game/audio/webBleeps";
 import { HudFrame } from "@/game/engine/HudFrame";
+import { drawAvatar, AVATAR_COLORS } from "@/game/engine/avatar-draw";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import type { GameSpec } from "@/lib/game-spec";
@@ -960,6 +961,10 @@ export class MahjongScene extends Phaser.Scene {
     for (const s of seats) {
       const p = this.players[s.seat];
       if (!p) continue;
+      // AI 人物头像（五官人脸）：紫/粉/青区分三家
+      const aiColors = [AVATAR_COLORS.ai1, AVATAR_COLORS.ai2, AVATAR_COLORS.ai3];
+      const idx = seats.indexOf(s);
+      drawAvatar(this, s.x, s.y - 28, { bodyColor: aiColors[idx] ?? AVATAR_COLORS.ai1, radius: 16, depth: 8 });
       // 牌背示意（横向小条）
       const bg = this.add
         .rectangle(s.x, s.y, 90, 36, 0x0f766e, 0.9)
@@ -977,6 +982,8 @@ export class MahjongScene extends Phaser.Scene {
         .setDepth(9);
       void txt;
     }
+    // 玩家自己（南，底部）也画头像（蓝色）
+    drawAvatar(this, viewW / 2, viewH - 40, { bodyColor: AVATAR_COLORS.player, radius: 16, depth: 8 });
   }
 
   /** 河牌区：中央显示各家打出的最近一张 */
