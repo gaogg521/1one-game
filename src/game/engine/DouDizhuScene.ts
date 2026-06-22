@@ -6,7 +6,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { drawAvatar, AVATAR_COLORS } from "@/game/engine/avatar-draw";
+import { drawAvatar, drawQqCharacter, preloadQqCharacterTextures, AVATAR_COLORS } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -290,7 +290,7 @@ export class DouDizhuScene extends Phaser.Scene {
   private bidButtons: Phaser.GameObjects.Container[] = [];
   private actionButtons: Phaser.GameObjects.Container[] = [];
   // AI 座位头像
-  private avatarGraphics: Phaser.GameObjects.Graphics[] = [];
+  private avatarGraphics: Phaser.GameObjects.GameObject[] = [];
 
   // AI 节奏
   private aiActAt = 0;
@@ -311,6 +311,7 @@ export class DouDizhuScene extends Phaser.Scene {
   }
 
   preload() {
+    preloadQqCharacterTextures(this);
     if (this.backgroundUrl) {
       this.load.image("bgTex", this.backgroundUrl);
     }
@@ -980,23 +981,27 @@ export class DouDizhuScene extends Phaser.Scene {
     for (const g of this.avatarGraphics) g.destroy();
     this.avatarGraphics = [];
 
-    // 玩家（seat 0）
+    const viewW = this.scale.width;
+    const viewH = this.scale.height;
+    const sc = Math.min(viewW, viewH) / 480;
+
+    // 玩家（seat 0）：小圆头像
     this.avatarGraphics.push(drawAvatar(this, this.seatX(0), this.seatY(0) - 14, {
       bodyColor: AVATAR_COLORS.player,
       radius: 20,
       depth: 11,
     }));
-    // AI 左侧（seat 1）
-    this.avatarGraphics.push(drawAvatar(this, this.seatX(1), this.seatY(1) - 14, {
-      bodyColor: AVATAR_COLORS.ai1,
-      radius: 20,
+    // AI 左侧（seat 1）：SVG 头像（女生）
+    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(1), this.seatY(1), "girl", {
+      scale: sc,
       depth: 11,
-    }));
-    // AI 右侧（seat 2）
-    this.avatarGraphics.push(drawAvatar(this, this.seatX(2), this.seatY(2) - 14, {
-      bodyColor: AVATAR_COLORS.ai2,
-      radius: 20,
+      headOnly: true,
+    }) as Phaser.GameObjects.Graphics);
+    // AI 右侧（seat 2）：SVG 头像（大叔）
+    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(2), this.seatY(2), "man", {
+      scale: sc,
       depth: 11,
+      headOnly: true,
     }));
   }
 
