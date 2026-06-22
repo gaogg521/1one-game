@@ -15,8 +15,11 @@ import { hudMahjongState, hudMahjongTenpai, bannerMahjongWin } from "@/lib/i18n/
 type EndPayload = { score: number; won: boolean };
 
 // ─── 牌型系统 ─────────────────────────────────────────────────────────
-/** 简化麻将：3 花色（万/条/筒）× 9 数字 × 4 张 = 108 张，无字牌 */
-type Suit = "man" | "tiao" | "tong";
+/** 麻将：3 花色（万/条/筒）× 9 数字 × 4 张 + 7 种字牌 × 4 张 = 136 张 */
+type Suit = "man" | "tiao" | "tong" | "honor";
+
+/** 字牌 rank 1-7 对应：东南西北中发白 */
+const HONOR_NAMES = ["东", "南", "西", "北", "中", "发", "白"];
 
 interface MahjongTile {
   suit: Suit;
@@ -48,12 +51,14 @@ const SUIT_LABEL: Record<Suit, string> = {
   man: "万",
   tiao: "条",
   tong: "筒",
+  honor: "",
 };
 
 const SUIT_COLOR: Record<Suit, number> = {
   man: 0x2563eb, // blue
   tiao: 0x16a34a, // green
   tong: 0xdc2626, // red
+  honor: 0x92400e, // amber/brown for honor tiles
 };
 
 const SEAT_NAME = ["南(你)", "东", "北", "西"];
@@ -89,6 +94,13 @@ export class MahjongScene extends Phaser.Scene {
   private round = 1;
   /** 玩家累计分数差（用于总分结算） */
   private playerTotalDelta = 0;
+  /** 四川血战到底：本局已胡牌的座位（多家胡继续打） */
+  private sichuanWonSeats = new Set<number>();
+
+  /** 是否四川血战到底模式 */
+  private get isSichuan(): boolean {
+    return this.spec.templateId === "mahjong-sichuan";
+  }
 
   /** 玩家手牌按钮（点击出牌） */
   private handButtons: Phaser.GameObjects.Container[] = [];
@@ -175,6 +187,7 @@ export class MahjongScene extends Phaser.Scene {
     this.lastDiscardBy = -1;
     this.currentSeat = 1; // 东家起手
     this.awaitingPlayerReaction = false;
+    this.sichuanWonSeats = new Set();
     this.drawRiver();
     this.redrawAll();
     this.setStatus(this.uiLocale === "zh-Hans"
@@ -188,7 +201,7 @@ export class MahjongScene extends Phaser.Scene {
     this.time.delayedCall(500, () => this.beginTurn());
   }
 
-  /** 构建 108 张牌墙并洗牌 */
+  /** 构建 136 张牌墙（108 数牌 + 28 字牌）并洗牌 */
   private buildWall(): MahjongTile[] {
     const tiles: MahjongTile[] = [];
     const suits: Suit[] = ["man", "tiao", "tong"];
@@ -201,6 +214,13 @@ export class MahjongScene extends Phaser.Scene {
         }
       }
     }
+    // 字牌：东(1)南(2)西(3)北(4)中(5)发(6)白(7) × 4
+    for (let rank = 1; rank <= 7; rank += 1) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        tiles.push({ suit: "honor", rank, id: `t${counter}` });
+        counter += 1;
+      }
+    }
     // Fisher-Yates 洗牌
     for (let i = tiles.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -211,10 +231,17 @@ export class MahjongScene extends Phaser.Scene {
     return tiles;
   }
 
+  private suitOrder(suit: Suit): number {
+    if (suit === "man") return 0;
+    if (suit === "tiao") return 1;
+    if (suit === "tong") return 2;
+    return 3; // honor
+  }
+
   private sortHand(p: PlayerState) {
     p.hand.sort((a, b) => {
-      const sa = a.suit === "man" ? 0 : a.suit === "tiao" ? 1 : 2;
-      const sb = b.suit === "man" ? 0 : b.suit === "tiao" ? 1 : 2;
+      const sa = this.suitOrder(a.suit);
+      const sb = this.suitOrder(b.suit);
       if (sa !== sb) return sa - sb;
       return a.rank - b.rank;
     });
@@ -224,6 +251,12 @@ export class MahjongScene extends Phaser.Scene {
 
   private beginTurn() {
     if (this.finished) return;
+    // 四川血战到底：跳过已胡座位
+    if (this.isSichuan && this.sichuanWonSeats.has(this.currentSeat)) {
+      this.nextSeat();
+      this.time.delayedCall(100, () => this.beginTurn());
+      return;
+    }
     if (this.wall.length === 0) {
       this.handleExhaustiveDraw();
       return;
@@ -320,6 +353,11 @@ export class MahjongScene extends Phaser.Scene {
     // 优先检查玩家（人）
     const player = this.players[0]!;
     if (this.currentSeat === 0) return; // safety
+    // 四川血战到底：已胡牌的座位不参与反应
+    if (this.isSichuan && this.sichuanWonSeats.has(0)) {
+      this.aiEvaluateReaction();
+      return;
+    }
     const reaction = this.evaluateReaction(player, this.lastDiscard);
     if (reaction.canWin || reaction.canGang || reaction.canPeng) {
       this.awaitingPlayerReaction = true;
@@ -467,6 +505,8 @@ export class MahjongScene extends Phaser.Scene {
     // 跳过出牌者自己
     for (let seat = 1; seat <= 3; seat += 1) {
       if (seat === this.lastDiscardBy) continue;
+      // 四川血战到底：已胡牌的座位不参与
+      if (this.isSichuan && this.sichuanWonSeats.has(seat)) continue;
       const p = this.players[seat]!;
       const reaction = this.evaluateReaction(p, this.lastDiscard);
       // 能胡必胡
@@ -649,8 +689,8 @@ export class MahjongScene extends Phaser.Scene {
   }
 
   private tileCmp(a: MahjongTile, b: MahjongTile): number {
-    const sa = a.suit === "man" ? 0 : a.suit === "tiao" ? 1 : 2;
-    const sb = b.suit === "man" ? 0 : b.suit === "tiao" ? 1 : 2;
+    const sa = this.suitOrder(a.suit);
+    const sb = this.suitOrder(b.suit);
     if (sa !== sb) return sa - sb;
     return a.rank - b.rank;
   }
@@ -677,6 +717,7 @@ export class MahjongScene extends Phaser.Scene {
     sorted: MahjongTile[],
     first: MahjongTile,
   ): { rest: MahjongTile[] } | null {
+    if (first.suit === "honor") return null; // 字牌不能组顺子
     if (first.rank > 7) return null; // 8/9 不能起顺
     const r1 = first.rank;
     const r2 = r1 + 1;
@@ -763,13 +804,70 @@ export class MahjongScene extends Phaser.Scene {
         ? `${winName} ${selfDraw ? "自摸" : "胡牌"} · 得 ${total} 点`
         : `${winName} wins ${selfDraw ? "(self-draw)" : ""} · +${total}`,
     );
+
+    // 四川血战到底：多家胡——胡牌者清手牌，其他人继续打
+    if (this.isSichuan) {
+      this.sichuanWonSeats.add(winnerSeat);
+      // 清除该家手牌（已胡，退出轮流）
+      winner.hand = [];
+      winner.melds = [];
+      this.lastDiscard = null;
+      this.lastDiscardBy = -1;
+      // 所有未胡的家（扣除已胡座位）仍有牌才继续
+      const stillActive = this.players.filter((p) => !this.sichuanWonSeats.has(p.seat) && p.hand.length > 0);
+      if (stillActive.length >= 2 || (stillActive.length === 1 && this.wall.length > 0)) {
+        this.time.delayedCall(2400, () => {
+          this.nextSeat();
+          // 跳过已胡座位
+          while (this.sichuanWonSeats.has(this.currentSeat)) this.nextSeat();
+          this.beginTurn();
+        });
+        return;
+      }
+      // 只剩≤1人或无牌可摸 → 本局结束
+      this.time.delayedCall(2400, () => this.nextRoundOrFinish());
+      return;
+    }
+
     // 进入下一局或结算
     this.time.delayedCall(2400, () => this.nextRoundOrFinish());
   }
 
   private handleExhaustiveDraw() {
     if (this.finished) return;
-    // 流局：听牌者得分（简化：玩家若听则 +3，否则 0）
+
+    // 四川血战到底：流局查花猪
+    if (this.isSichuan) {
+      // 花猪 = 手牌同时含有万/条/筒三种花色 → 罚分
+      const isHuazhu = (p: PlayerState) => {
+        const suits = new Set(p.hand.map((t) => t.suit));
+        return suits.has("man") && suits.has("tiao") && suits.has("tong");
+      };
+      let huazhuMsg = "";
+      for (const p of this.players) {
+        if (!this.sichuanWonSeats.has(p.seat) && isHuazhu(p)) {
+          // 花猪扣 10 点，其余家各得分
+          const penalty = 10;
+          p.points -= penalty * 3;
+          for (const other of this.players) {
+            if (other.seat !== p.seat) other.points += penalty;
+          }
+          this.playerTotalDelta += p.seat === 0 ? -penalty * 3 : penalty;
+          const name = SEAT_NAME[p.seat]!;
+          huazhuMsg += `${name}花猪 -${penalty * 3} `;
+        }
+      }
+      const msg = huazhuMsg || (this.uiLocale === "zh-Hans" ? "无花猪" : "No Huazhu");
+      this.hud.flashBanner({
+        title: this.uiLocale === "zh-Hans" ? "流局 · 查花猪" : "Draw · Huazhu Check",
+        message: msg,
+        ms: 2400,
+      });
+      this.time.delayedCall(2600, () => this.nextRoundOrFinish());
+      return;
+    }
+
+    // 普通流局：听牌者得分（简化：玩家若听则 +3，否则 0）
     const player = this.players[0]!;
     const tenpai = this.isTenpai(player);
     if (tenpai) {
@@ -805,6 +903,9 @@ export class MahjongScene extends Phaser.Scene {
       for (let rank = 1; rank <= 9; rank += 1) {
         out.push({ suit, rank, id: `cand-${suit}-${rank}` });
       }
+    }
+    for (let rank = 1; rank <= 7; rank += 1) {
+      out.push({ suit: "honor", rank, id: `cand-honor-${rank}` });
     }
     return out;
   }
@@ -916,26 +1017,32 @@ export class MahjongScene extends Phaser.Scene {
     player.hand.forEach((tile, i) => {
       const x = startX + i * (tileW + gap);
       const c = this.add.container(x, y).setDepth(10);
+      const isHonor = tile.suit === "honor";
+      const honorName = isHonor ? (HONOR_NAMES[tile.rank - 1] ?? "") : "";
+      const tileColor = SUIT_COLOR[tile.suit];
+      const tileColorHex = `#${tileColor.toString(16).padStart(6, "0")}`;
       const bg = this.add
-        .rectangle(0, 0, tileW, tileH, 0xf8fafc, 1)
-        .setStrokeStyle(1.5, SUIT_COLOR[tile.suit], 1)
+        .rectangle(0, 0, tileW, tileH, isHonor ? 0xfef3c7 : 0xf8fafc, 1)
+        .setStrokeStyle(1.5, tileColor, 1)
         .setOrigin(0);
       const rankTxt = this.add
-        .text(tileW / 2, tileH * 0.32, String(tile.rank), {
+        .text(tileW / 2, tileH * (isHonor ? 0.5 : 0.32), isHonor ? honorName : String(tile.rank), {
           fontFamily: "system-ui, sans-serif",
-          fontSize: "18px",
+          fontSize: isHonor ? "20px" : "18px",
           fontStyle: "700",
-          color: `#${SUIT_COLOR[tile.suit].toString(16).padStart(6, "0")}`,
+          color: tileColorHex,
         })
         .setOrigin(0.5);
-      const suitTxt = this.add
-        .text(tileW / 2, tileH * 0.72, SUIT_LABEL[tile.suit], {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          color: "#0f172a",
-        })
-        .setOrigin(0.5);
-      c.add([bg, rankTxt, suitTxt]);
+      const suitTxt = isHonor
+        ? null
+        : this.add
+            .text(tileW / 2, tileH * 0.72, SUIT_LABEL[tile.suit], {
+              fontFamily: "system-ui, sans-serif",
+              fontSize: "11px",
+              color: "#0f172a",
+            })
+            .setOrigin(0.5);
+      c.add(suitTxt ? [bg, rankTxt, suitTxt] : [bg, rankTxt]);
       if (this.currentSeat === 0 && !this.awaitingPlayerReaction && !this.finished) {
         bg.setInteractive({ useHandCursor: true });
         bg.on("pointerover", () => bg.setFillStyle(0xfde68a, 1));
@@ -1008,28 +1115,32 @@ export class MahjongScene extends Phaser.Scene {
       if (!last) continue;
       const tw = 30;
       const th = 40;
-      this.riverGfx.fillStyle(0xf8fafc, 1);
+      const lastIsHonor = last.suit === "honor";
+      const lastHonorName = lastIsHonor ? (HONOR_NAMES[last.rank - 1] ?? "") : "";
+      const lastColorHex = `#${SUIT_COLOR[last.suit].toString(16).padStart(6, "0")}`;
+      this.riverGfx.fillStyle(lastIsHonor ? 0xfef3c7 : 0xf8fafc, 1);
       this.riverGfx.fillRect(s.x - tw / 2, s.y - th / 2, tw, th);
       this.riverGfx.lineStyle(1.5, SUIT_COLOR[last.suit], 1);
       this.riverGfx.strokeRect(s.x - tw / 2, s.y - th / 2, tw, th);
-      // 文本数字
       this.add
-        .text(s.x, s.y - 4, String(last.rank), {
+        .text(s.x, lastIsHonor ? s.y : s.y - 4, lastIsHonor ? lastHonorName : String(last.rank), {
           fontFamily: "system-ui, sans-serif",
-          fontSize: "14px",
+          fontSize: lastIsHonor ? "16px" : "14px",
           fontStyle: "700",
-          color: `#${SUIT_COLOR[last.suit].toString(16).padStart(6, "0")}`,
+          color: lastColorHex,
         })
         .setOrigin(0.5)
         .setDepth(3);
-      this.add
-        .text(s.x, s.y + 12, SUIT_LABEL[last.suit], {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "9px",
-          color: "#0f172a",
-        })
-        .setOrigin(0.5)
-        .setDepth(3);
+      if (!lastIsHonor) {
+        this.add
+          .text(s.x, s.y + 12, SUIT_LABEL[last.suit], {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "9px",
+            color: "#0f172a",
+          })
+          .setOrigin(0.5)
+          .setDepth(3);
+      }
     }
   }
 }

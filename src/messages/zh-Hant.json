@@ -3698,7 +3698,11 @@
       "multiplier": "×{n}",
       "jokerBig": "大",
       "jokerSmall": "小",
-      "bottomCards": "底牌"
+      "bottomCards": "底牌",
+      "spring": "春天！×{n}",
+      "springMsg": "農民一張未出，地主春天！",
+      "antiSpring": "反春天！×{n}",
+      "antiSpringMsg": "地主僅出一手，農民反春天！"
     },
     "chess": {
       "gomokuHint": "五子棋 · 黑先 · 連五即勝",

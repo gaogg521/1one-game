@@ -26,6 +26,10 @@ import type { MahjongSolitaireScene } from "@/game/engine/MahjongSolitaireScene"
 import type { DouDizhuScene } from "@/game/engine/DouDizhuScene";
 import type { BreakoutScene } from "@/game/engine/BreakoutScene";
 import type { Merge2048Scene } from "@/game/engine/Merge2048Scene";
+import type { BlackjackScene } from "@/game/engine/BlackjackScene";
+import type { ZhaJinHuaScene } from "@/game/engine/ZhaJinHuaScene";
+import type { NiuNiuScene } from "@/game/engine/NiuNiuScene";
+import type { ShuangKouScene } from "@/game/engine/ShuangKouScene";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
@@ -125,6 +129,14 @@ export function toPhaserPlaySpec(spec: GameSpec): GameSpec {
       return { ...spec, templateId: "breakout" };
     case "merge2048":
       return { ...spec, templateId: "merge" };
+    case "blackjack":
+      return { ...spec, templateId: "blackjack" };
+    case "zhaJinHua":
+      return { ...spec, templateId: "zha-jin-hua" };
+    case "niuNiu":
+      return { ...spec, templateId: "niu-niu" };
+    case "shuangKou":
+      return { ...spec, templateId: "shuang-kou" };
     case "agentic":
       return spec;
     default:
@@ -163,6 +175,10 @@ export type PhaserSceneImports = {
   DouDizhuScene: typeof DouDizhuScene;
   BreakoutScene: typeof BreakoutScene;
   Merge2048Scene: typeof Merge2048Scene;
+  BlackjackScene: typeof BlackjackScene;
+  ZhaJinHuaScene: typeof ZhaJinHuaScene;
+  NiuNiuScene: typeof NiuNiuScene;
+  ShuangKouScene: typeof ShuangKouScene;
   AgenticScene: typeof AgenticScene;
 };
 
@@ -192,6 +208,10 @@ export type PhaserSceneInstance =
   | DouDizhuScene
   | BreakoutScene
   | Merge2048Scene
+  | BlackjackScene
+  | ZhaJinHuaScene
+  | NiuNiuScene
+  | ShuangKouScene
   | AgenticScene;
 
 export function createPhaserSceneForSpec(
@@ -257,6 +277,14 @@ export function createPhaserSceneForSpec(
       return new imports.BreakoutScene(playSpec, onEnd, sfxOpt);
     case "merge2048":
       return new imports.Merge2048Scene(playSpec, onEnd, sfxOpt);
+    case "blackjack":
+      return new imports.BlackjackScene(playSpec, onEnd, sfxOpt);
+    case "zhaJinHua":
+      return new imports.ZhaJinHuaScene(playSpec, onEnd, sfxOpt);
+    case "niuNiu":
+      return new imports.NiuNiuScene(playSpec, onEnd, sfxOpt);
+    case "shuangKou":
+      return new imports.ShuangKouScene(playSpec, onEnd, sfxOpt);
     case "arena":
     default:
       return new imports.PlayScene(playSpec, onEnd, sfxOpt);
@@ -296,6 +324,10 @@ export function expectedPhaserSceneName(spec: GameSpec): string {
     douDizhu: "DouDizhuScene",
     breakout: "BreakoutScene",
     merge2048: "Merge2048Scene",
+    blackjack: "BlackjackScene",
+    zhaJinHua: "ZhaJinHuaScene",
+    niuNiu: "NiuNiuScene",
+    shuangKou: "ShuangKouScene",
     agentic: "AgenticScene",
   };
   return map[family] ?? "PlayScene";

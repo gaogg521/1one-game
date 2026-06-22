@@ -514,16 +514,28 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
       { pattern: /接龙/i, priority: 100 },
     ],
   },
-  // 21 点（复用 card）
+  // 21 点（专用 BlackjackScene）
   {
     id: "blackjack",
-    phaser: "card",
+    phaser: "blackjack",
     godot: "card",
     godotExport: true,
-    defaultSubtitle: "21 点 · 庄家对赌",
-    llmSummary: "21 点：要牌 + 比点数 + 庄家 AI（复用 card family）",
+    defaultSubtitle: "21 点 · 要牌停牌 · 庄家 AI",
+    llmSummary: "21 点：A=1/11，要牌/停牌，庄家≥17停，黑杰克判定",
     infer: [
       { pattern: /21\s*点|blackjack|二十一点/i, priority: 115 },
+    ],
+  },
+  // 炸金花（专用 ZhaJinHuaScene）
+  {
+    id: "zhaJinHua",
+    phaser: "zhaJinHua",
+    godot: "card",
+    godotExport: true,
+    defaultSubtitle: "炸金花 · 三张牌比大小",
+    llmSummary: "炸金花：3 张牌，豹子/顺金/金花/顺子/对子/散牌",
+    infer: [
+      { pattern: /炸金花|三张牌|三张.*比|zha\s*jin\s*hua|three\s*card.*poker/i, priority: 120 },
     ],
   },
   // 字谜（复用 puzzle）
@@ -618,6 +630,20 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
       { pattern: /麻将|mahjong/i, priority: 110 },
     ],
   },
+  // 四川血战到底麻将（复用 mahjong family，spec.templateId === "mahjong-sichuan" 触发方言规则）
+  {
+    id: "mahjong-sichuan",
+    phaser: "mahjong",
+    godot: "mahjong",
+    godotExport: true,
+    blueprint: "mahjong",
+    defaultSubtitle: "四川血战到底 · 无吃 · 多家胡 · 查花猪",
+    llmSummary: "四川血战到底麻将：无吃牌、多家胡、流局查花猪，单门花色胡牌",
+    infer: [
+      { pattern: /四川麻将|血战到底|血战麻将|sichuan.*mah|川麻/i, priority: 130 },
+      { pattern: /无吃.*麻将|多家胡|查花猪|单门/i, priority: 115 },
+    ],
+  },
   // 麻将接龙/消除（独立 family，真配对消除玩法）
   {
     id: "mahjong-solitaire",
@@ -643,6 +669,30 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     infer: [
       { pattern: /斗地主|dou\s*dizhu|dou\s*di\s*zhu|都斗地主|斗地主游戏|fight\s*the\s*landlord|landlord\s*card|three\s*player\s*card/i, priority: 125 },
       { pattern: /叫地主|春天反春|春反|三人扑克|三人牌|三人斗地主|bid\s*landlord|spring\s*counter|three\s*player\s*poker/i, priority: 115 },
+    ],
+  },
+  // 牛牛（专用 NiuNiuScene）
+  {
+    id: "niu-niu",
+    phaser: "niuNiu",
+    godot: "card",
+    godotExport: true,
+    defaultSubtitle: "牛牛 · 五张牌 · 凑10算牛",
+    llmSummary: "牛牛：5 张牌凑 10 倍数，尾数为牛几，五花牛>四花牛>牛牛>牛X>无牛",
+    infer: [
+      { pattern: /牛牛|niu\s*niu|斗牛|凑10|凑牛|niú\s*niú/i, priority: 120 },
+    ],
+  },
+  // 双扣（专用 ShuangKouScene）
+  {
+    id: "shuang-kou",
+    phaser: "shuangKou",
+    godot: "card",
+    godotExport: true,
+    defaultSubtitle: "双扣 · 4 人 2 队 · 先清手牌",
+    llmSummary: "双扣：4 人 2 队 2 副牌，天王炸/炸弹/飞机/连对，先清牌队胜",
+    infer: [
+      { pattern: /双扣|双升|shuang\s*kou|升级.*4人|双升级/i, priority: 120 },
     ],
   },
   // UNO（卡牌，复用 card）

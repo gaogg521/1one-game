@@ -3698,7 +3698,11 @@
       "multiplier": "×{n}",
       "jokerBig": "ใหญ่",
       "jokerSmall": "เล็ก",
-      "bottomCards": "ไพ่ล่าง"
+      "bottomCards": "ไพ่ล่าง",
+      "spring": "สปริง! ×{n}",
+      "springMsg": "ชาวนาไม่ออกไพ่ — เจ้าของที่ดินสปริง!",
+      "antiSpring": "แอนตี้สปริง! ×{n}",
+      "antiSpringMsg": "เจ้าของที่ดินออกรอบเดียว — ชาวนาแอนตี้สปริง!"
     },
     "chess": {
       "gomokuHint": "หมากล้อม · ต่อ 5 เพื่อชนะ",

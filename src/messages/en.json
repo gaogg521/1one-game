@@ -3698,7 +3698,11 @@
       "multiplier": "×{n}",
       "jokerBig": "Lg",
       "jokerSmall": "Sm",
-      "bottomCards": "Kitty"
+      "bottomCards": "Kitty",
+      "spring": "Spring! ×{n}",
+      "springMsg": "Farmers played nothing — Landlord Spring!",
+      "antiSpring": "Anti-Spring! ×{n}",
+      "antiSpringMsg": "Landlord only played once — Farmers Anti-Spring!"
     },
     "chess": {
       "gomokuHint": "Gomoku · connect 5 to win",

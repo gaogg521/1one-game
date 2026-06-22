@@ -36,6 +36,10 @@ import { MahjongSolitaireScene } from "@/game/engine/MahjongSolitaireScene";
 import { DouDizhuScene } from "@/game/engine/DouDizhuScene";
 import { BreakoutScene } from "@/game/engine/BreakoutScene";
 import { Merge2048Scene } from "@/game/engine/Merge2048Scene";
+import { BlackjackScene } from "@/game/engine/BlackjackScene";
+import { ZhaJinHuaScene } from "@/game/engine/ZhaJinHuaScene";
+import { NiuNiuScene } from "@/game/engine/NiuNiuScene";
+import { ShuangKouScene } from "@/game/engine/ShuangKouScene";
 import { AgenticScene } from "@/game/engine/AgenticScene";
 import { createPhaserSceneForSpec } from "@/lib/game-templates/runtime";
 import { resolveRuntimeAssets } from "@/lib/assets/asset-runtime-resolver";
@@ -221,6 +225,10 @@ export function createPhaserGame(
     DouDizhuScene,
     BreakoutScene,
     Merge2048Scene,
+    BlackjackScene,
+    ZhaJinHuaScene,
+    NiuNiuScene,
+    ShuangKouScene,
     AgenticScene,
   });
   scene.backgroundUrl = assets.backgroundUrl ?? null;

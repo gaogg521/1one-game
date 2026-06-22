@@ -3698,7 +3698,11 @@
       "multiplier": "×{n}",
       "jokerBig": "Bsr",
       "jokerSmall": "Kcs",
-      "bottomCards": "Bawah"
+      "bottomCards": "Bawah",
+      "spring": "Musim Semi! ×{n}",
+      "springMsg": "Petani tiada bermain — Tuan Tanah Musim Semi!",
+      "antiSpring": "Anti-Musim Semi! ×{n}",
+      "antiSpringMsg": "Tuan Tanah hanya bermain sekali — Petani Anti-Musim Semi!"
     },
     "chess": {
       "gomokuHint": "Gomoku · sambung 5 untuk menang",

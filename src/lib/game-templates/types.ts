@@ -25,6 +25,10 @@ export type PhaserRuntimeFamily =
   | "douDizhu"
   | "breakout"
   | "merge2048"
+  | "blackjack"
+  | "zhaJinHua"
+  | "niuNiu"
+  | "shuangKou"
   | "agentic";
 
 /** Godot ai-mother-universal 运行时场景键 */

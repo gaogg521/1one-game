@@ -2396,3 +2396,34 @@ src/messages/{locale}.json            # i18n 文本（5语言）
    - **R2**：漫画配图 checkpoint（Q2 遗留）
    - **R3**：真实 CDN SDK 集成（AWS S3 / Cloudflare API）
 4. 提醒：LLM 网关需要 `OPENAI_BASE_URL=https://litellm-internal.123u.com` 可用
+
+---
+
+## 会话记录 · 2026-06-22 · 会话 N+1（棋牌规则 P0-P3 全补齐）
+
+### 完成内容
+
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/game/engine/DouDizhuScene.ts` | 春天/反春天判定：地主赢且农民未出牌=春天×2；农民赢且地主仅出1手=反春天×2 |
+| `src/game/engine/MahjongScene.ts` | 字牌（东南西北中发白）：honor suit 7种×4张=28张，总牌数108→136；禁止字牌组顺子；四川血战到底：无吃、多家胡、流局查花猪 |
+| `src/game/engine/BlackjackScene.ts` | 新建：21点专用场景；A=1/11双值自动折叠；庄家≥17停；黑杰克立即判定 |
+| `src/game/engine/ZhaJinHuaScene.ts` | 新建：炸金花专用场景；3张牌豹子/顺金/金花/顺子/对子/散牌判定 |
+| `src/game/engine/NiuNiuScene.ts` | 新建：牛牛专用场景；5张牌凑10倍数；五花牛/四花牛/牛牛/牛X/无牛 |
+| `src/game/engine/ShuangKouScene.ts` | 新建：双扣专用场景；4人2队2副108张；轮流出牌先清手牌队胜 |
+| `src/game/engine/createPhaserGame.ts` | 新增 BlackjackScene/ZhaJinHuaScene/NiuNiuScene/ShuangKouScene 导入及注入 |
+| `src/lib/game-templates/types.ts` | PhaserRuntimeFamily 新增 blackjack/zhaJinHua/niuNiu/shuangKou |
+| `src/lib/game-templates/definitions.ts` | 新增 niu-niu/shuang-kou/mahjong-sichuan 模板条目；blackjack→phaser:blackjack |
+| `src/lib/game-templates/runtime.ts` | 新增4个场景的 imports/instance/switch case |
+| `src/messages/*.json` | 斗地主 spring/antiSpring i18n keys（5个语言文件） |
+
+### 状态
+
+- `npx tsc --noEmit` → 零错误 ✅
+- 所有 P0-P3 功能实现完毕
+
+### 下次启动清单
+
+1. `npx tsc --noEmit` 验证零错误
+2. 可选：启动 dev 测试各新场景（blackjack/niuNiu/zhaJinHua/shuangKou/mahjong-sichuan）
+3. 下一方向候选：UI 细化、音效、或其他棋牌功能

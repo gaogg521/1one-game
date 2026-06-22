@@ -303,6 +303,10 @@ export class DouDizhuScene extends Phaser.Scene {
   private multiplierText: Phaser.GameObjects.Text | null = null;
   private bottomCardContainer: Phaser.GameObjects.Container | null = null;
 
+  // 春天/反春天追踪（叫地主结束后重置）
+  private landlordPlayRounds = 0; // 地主实际出牌手数（≥1 即至少出过牌）
+  private farmerPlayedAny = false; // 任意农民是否出过牌
+
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape?: GameSoundscape) {
     super("DouDizhuScene");
     this.spec = spec;
@@ -520,6 +524,9 @@ export class DouDizhuScene extends Phaser.Scene {
     this.lastPlaySeat = null;
     this.passCount = 0;
     this.multiplier = this.highestBid;
+    // 春天/反春天计数器随叫地主结束重置
+    this.landlordPlayRounds = 0;
+    this.farmerPlayedAny = false;
     this.refreshMultiplierText();
     // 叫地主完成后渐入背景音乐（此时用户已有手势交互，startInteractive 已完成）
     this.time.delayedCall(800, () => { this.soundscape?.setTension(0.4); });
@@ -589,6 +596,12 @@ export class DouDizhuScene extends Phaser.Scene {
     if (pattern.type === "bomb" || pattern.type === "rocket") {
       this.multiplier = (this.multiplier || 1) * 2;
       this.refreshMultiplierText();
+    }
+    // 春天/反春天追踪
+    if (this.seats[seat]!.isLandlord) {
+      this.landlordPlayRounds += 1;
+    } else {
+      this.farmerPlayedAny = true;
     }
     const ids = new Set(pattern.cards.map((c) => c.id));
     this.seats[seat]!.hand = this.seats[seat]!.hand.filter((c) => !ids.has(c.id));
@@ -1268,14 +1281,28 @@ export class DouDizhuScene extends Phaser.Scene {
     const playerIsLandlord = this.seats[0]!.isLandlord;
     // 玩家胜利条件：玩家是地主且地主赢；或玩家是农民且农民赢
     const playerWon = playerIsLandlord ? winnerIsLandlord : !winnerIsLandlord;
-    const score = playerWon ? 100 : 0;
+
+    // 春天/反春天判定（叫地主结束后的出牌统计）
+    // 春天: 地主赢且农民一张未出
+    const isSpring = winnerIsLandlord && !this.farmerPlayedAny;
+    // 反春天: 农民赢且地主仅出过 1 手牌
+    const isAntiSpring = !winnerIsLandlord && this.landlordPlayRounds <= 1;
+    if (isSpring || isAntiSpring) {
+      this.multiplier = (this.multiplier || 1) * 2;
+      this.refreshMultiplierText();
+    }
+    const score = playerWon ? Math.max(100, this.multiplier * 10) : 0;
 
     if (playerWon) {
       juiceWin(this, {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: themeParticleHex(this.spec),
-        text: tMessage(this.uiLocale, "sceneGame.douDizhu.win"),
+        text: isSpring
+          ? tMessage(this.uiLocale, "sceneGame.douDizhu.spring", { n: String(this.multiplier) })
+          : isAntiSpring
+            ? tMessage(this.uiLocale, "sceneGame.douDizhu.antiSpring", { n: String(this.multiplier) })
+            : tMessage(this.uiLocale, "sceneGame.douDizhu.win"),
         textColorCss: "#fde68a",
       });
       playBleep("win");
@@ -1285,15 +1312,25 @@ export class DouDizhuScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         colorHex: this.spec.theme.hazardColor,
-        text: tMessage(this.uiLocale, "sceneGame.douDizhu.fail"),
+        text: isSpring
+          ? tMessage(this.uiLocale, "sceneGame.douDizhu.spring", { n: String(this.multiplier) })
+          : isAntiSpring
+            ? tMessage(this.uiLocale, "sceneGame.douDizhu.antiSpring", { n: String(this.multiplier) })
+            : tMessage(this.uiLocale, "sceneGame.douDizhu.fail"),
         textColorCss: "#fca5a5",
       });
       playBleep("hit");
     }
+    const springHint = isSpring
+      ? tMessage(this.uiLocale, "sceneGame.douDizhu.springMsg")
+      : isAntiSpring
+        ? tMessage(this.uiLocale, "sceneGame.douDizhu.antiSpringMsg")
+        : null;
     this.hud.setBottomHint(
-      playerWon
+      springHint ??
+      (playerWon
         ? tMessage(this.uiLocale, "sceneGame.douDizhu.winMsg")
-        : tMessage(this.uiLocale, "sceneGame.douDizhu.lose"),
+        : tMessage(this.uiLocale, "sceneGame.douDizhu.lose")),
     );
     this.onEnd({ score, won: playerWon });
   }
