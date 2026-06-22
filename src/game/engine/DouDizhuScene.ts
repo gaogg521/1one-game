@@ -6,7 +6,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { drawAvatar, drawQqCharacter, preloadQqCharacterTextures, AVATAR_COLORS } from "@/game/engine/avatar-draw";
+import { drawQqCharacter, preloadQqCharacterTextures } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -1010,24 +1010,24 @@ export class DouDizhuScene extends Phaser.Scene {
     const viewH = this.scale.height;
     const sc = Math.min(viewW, viewH) / 480;
 
-    // 玩家（seat 0）：小圆头像
-    this.avatarGraphics.push(drawAvatar(this, this.seatX(0), this.seatY(0) - 14, {
-      bodyColor: AVATAR_COLORS.player,
-      radius: 20,
-      depth: 11,
-    }));
-    // AI 左侧（seat 1）：SVG 头像（女生）
-    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(1), this.seatY(1), "girl", {
+    // 玩家（seat 0）：SVG 圆框头像，上移至牌桌下缘内侧以保持可见
+    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(0), this.seatY(0) - 44, "girl", {
       scale: sc,
-      depth: 11,
+      depth: 12,
       headOnly: true,
-    }) as Phaser.GameObjects.Graphics);
-    // AI 右侧（seat 2）：SVG 头像（大叔）
-    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(2), this.seatY(2), "man", {
+    }) as Phaser.GameObjects.GameObject);
+    // AI 左侧（seat 1）：SVG 头像（大叔）
+    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(1), this.seatY(1), "man", {
       scale: sc,
-      depth: 11,
+      depth: 12,
       headOnly: true,
-    }));
+    }) as Phaser.GameObjects.GameObject);
+    // AI 右侧（seat 2）：SVG 头像（女生）
+    this.avatarGraphics.push(drawQqCharacter(this, this.seatX(2), this.seatY(2), "girl", {
+      scale: sc,
+      depth: 12,
+      headOnly: true,
+    }) as Phaser.GameObjects.GameObject);
   }
 
   // ─── UI ───

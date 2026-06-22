@@ -154,37 +154,39 @@ const GIRL_HEAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 16 90 
   <defs><clipPath id="ghc"><circle cx="50" cy="52" r="36"/></clipPath></defs>
   <circle cx="50" cy="52" r="36" fill="#fde8c8"/>
   <g clip-path="url(#ghc)">
-    <circle cx="50" cy="46" r="25" fill="#3d1a0a"/>
-    <circle cx="24" cy="36" r="13" fill="#3d1a0a"/>
-    <circle cx="76" cy="36" r="13" fill="#3d1a0a"/>
-    <circle cx="24" cy="36" r="7" fill="#ef4444"/>
-    <circle cx="76" cy="36" r="7" fill="#ef4444"/>
-    <circle cx="22" cy="34" r="2" fill="#fca5a5" opacity="0.8"/>
-    <circle cx="74" cy="34" r="2" fill="#fca5a5" opacity="0.8"/>
-    <circle cx="50" cy="46" r="22" fill="#fde8c8"/>
-    <rect x="30" y="26" width="40" height="14" rx="5" fill="#3d1a0a"/>
-    <circle cx="30" cy="36" r="6" fill="#3d1a0a"/>
-    <circle cx="70" cy="36" r="6" fill="#3d1a0a"/>
-    <ellipse cx="37" cy="52" rx="8" ry="5" fill="#fca5a5" opacity="0.65"/>
-    <ellipse cx="63" cy="52" rx="8" ry="5" fill="#fca5a5" opacity="0.65"/>
-    <ellipse cx="41" cy="45" rx="7" ry="8.5" fill="white"/>
-    <ellipse cx="41" cy="46" rx="5.5" ry="7" fill="#1565c0"/>
-    <ellipse cx="41" cy="47" rx="3.5" ry="5" fill="#0d0d1a"/>
-    <circle cx="43" cy="42.5" r="2.5" fill="white"/>
-    <circle cx="39" cy="46" r="1.2" fill="white" opacity="0.6"/>
-    <ellipse cx="59" cy="45" rx="7" ry="8.5" fill="white"/>
-    <ellipse cx="59" cy="46" rx="5.5" ry="7" fill="#1565c0"/>
-    <ellipse cx="59" cy="47" rx="3.5" ry="5" fill="#0d0d1a"/>
-    <circle cx="61" cy="42.5" r="2.5" fill="white"/>
-    <circle cx="57" cy="46" r="1.2" fill="white" opacity="0.6"/>
-    <path d="M34,39 Q41,35 48,39" stroke="#0d0d1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-    <path d="M52,39 Q59,35 66,39" stroke="#0d0d1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-    <path d="M34,37 Q41,32 48,36" stroke="#3d1a0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <path d="M52,36 Q59,32 66,37" stroke="#3d1a0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <ellipse cx="50" cy="54" rx="2" ry="1.5" fill="#e8b89a" opacity="0.7"/>
-    <path d="M43,61 Q47,66 50,63 Q53,66 57,61" stroke="#c62828" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <polygon points="44,74 56,74 53,88 47,88" fill="white"/>
-    <polygon points="33,76 67,76 70,90 30,90" fill="#e91e8c"/>
+    <g transform="translate(10 10.4) scale(0.80)">
+      <circle cx="50" cy="46" r="25" fill="#3d1a0a"/>
+      <circle cx="24" cy="36" r="13" fill="#3d1a0a"/>
+      <circle cx="76" cy="36" r="13" fill="#3d1a0a"/>
+      <circle cx="24" cy="36" r="7" fill="#ef4444"/>
+      <circle cx="76" cy="36" r="7" fill="#ef4444"/>
+      <circle cx="22" cy="34" r="2" fill="#fca5a5" opacity="0.8"/>
+      <circle cx="74" cy="34" r="2" fill="#fca5a5" opacity="0.8"/>
+      <circle cx="50" cy="46" r="22" fill="#fde8c8"/>
+      <rect x="30" y="26" width="40" height="14" rx="5" fill="#3d1a0a"/>
+      <circle cx="30" cy="36" r="6" fill="#3d1a0a"/>
+      <circle cx="70" cy="36" r="6" fill="#3d1a0a"/>
+      <ellipse cx="37" cy="52" rx="8" ry="5" fill="#fca5a5" opacity="0.65"/>
+      <ellipse cx="63" cy="52" rx="8" ry="5" fill="#fca5a5" opacity="0.65"/>
+      <ellipse cx="41" cy="45" rx="7" ry="8.5" fill="white"/>
+      <ellipse cx="41" cy="46" rx="5.5" ry="7" fill="#1565c0"/>
+      <ellipse cx="41" cy="47" rx="3.5" ry="5" fill="#0d0d1a"/>
+      <circle cx="43" cy="42.5" r="2.5" fill="white"/>
+      <circle cx="39" cy="46" r="1.2" fill="white" opacity="0.6"/>
+      <ellipse cx="59" cy="45" rx="7" ry="8.5" fill="white"/>
+      <ellipse cx="59" cy="46" rx="5.5" ry="7" fill="#1565c0"/>
+      <ellipse cx="59" cy="47" rx="3.5" ry="5" fill="#0d0d1a"/>
+      <circle cx="61" cy="42.5" r="2.5" fill="white"/>
+      <circle cx="57" cy="46" r="1.2" fill="white" opacity="0.6"/>
+      <path d="M34,39 Q41,35 48,39" stroke="#0d0d1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M52,39 Q59,35 66,39" stroke="#0d0d1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M34,37 Q41,32 48,36" stroke="#3d1a0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M52,36 Q59,32 66,37" stroke="#3d1a0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="50" cy="54" rx="2" ry="1.5" fill="#e8b89a" opacity="0.7"/>
+      <path d="M43,61 Q47,66 50,63 Q53,66 57,61" stroke="#c62828" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="44,74 56,74 53,88 47,88" fill="white"/>
+      <polygon points="33,76 67,76 70,90 30,90" fill="#e91e8c"/>
+    </g>
   </g>
   <circle cx="50" cy="52" r="36" fill="none" stroke="#e91e8c" stroke-width="3"/>
 </svg>`;
@@ -193,27 +195,29 @@ const MAN_HEAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 24 90 7
   <defs><clipPath id="mhc"><circle cx="50" cy="60" r="36"/></clipPath></defs>
   <circle cx="50" cy="60" r="36" fill="#f5d5a0"/>
   <g clip-path="url(#mhc)">
-    <rect x="36" y="32" width="28" height="22" rx="4" fill="#f8fafc"/>
-    <rect x="36" y="50" width="28" height="4" rx="1" fill="#cbd5e1"/>
-    <rect x="32" y="52" width="36" height="8" rx="3" fill="#e2e8f0"/>
-    <circle cx="50" cy="66" r="21" fill="#f5d5a0"/>
-    <circle cx="37" cy="70" r="6" fill="#fca5a5" opacity="0.3"/>
-    <circle cx="63" cy="70" r="6" fill="#fca5a5" opacity="0.3"/>
-    <ellipse cx="41" cy="63" rx="6.5" ry="5" fill="white"/>
-    <ellipse cx="59" cy="63" rx="6.5" ry="5" fill="white"/>
-    <ellipse cx="41" cy="64" rx="4.5" ry="3.5" fill="#0d0d1a"/>
-    <ellipse cx="59" cy="64" rx="4.5" ry="3.5" fill="#0d0d1a"/>
-    <circle cx="43" cy="62" r="2" fill="white"/>
-    <circle cx="61" cy="62" r="2" fill="white"/>
-    <path d="M34,55 L48,53" stroke="#3d2010" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <path d="M52,53 L66,55" stroke="#3d2010" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <ellipse cx="50" cy="70" rx="2.5" ry="2" fill="#e8b89a" opacity="0.8"/>
-    <ellipse cx="42" cy="77" rx="9" ry="5" fill="#4b3728" opacity="0.9"/>
-    <ellipse cx="58" cy="77" rx="9" ry="5" fill="#4b3728" opacity="0.9"/>
-    <ellipse cx="50" cy="83" rx="10" ry="4" fill="#4b3728" opacity="0.75"/>
-    <path d="M44,74 Q50,78 56,74" stroke="#7c3f00" stroke-width="2" fill="none" stroke-linecap="round"/>
-    <rect x="30" y="82" width="40" height="20" rx="4" fill="#f1f5f9"/>
-    <line x1="50" y1="84" x2="50" y2="102" stroke="#cbd5e1" stroke-width="1.5"/>
+    <g transform="translate(10 12) scale(0.80)">
+      <rect x="36" y="32" width="28" height="22" rx="4" fill="#f8fafc"/>
+      <rect x="36" y="50" width="28" height="4" rx="1" fill="#cbd5e1"/>
+      <rect x="32" y="52" width="36" height="8" rx="3" fill="#e2e8f0"/>
+      <circle cx="50" cy="66" r="21" fill="#f5d5a0"/>
+      <circle cx="37" cy="70" r="6" fill="#fca5a5" opacity="0.3"/>
+      <circle cx="63" cy="70" r="6" fill="#fca5a5" opacity="0.3"/>
+      <ellipse cx="41" cy="63" rx="6.5" ry="5" fill="white"/>
+      <ellipse cx="59" cy="63" rx="6.5" ry="5" fill="white"/>
+      <ellipse cx="41" cy="64" rx="4.5" ry="3.5" fill="#0d0d1a"/>
+      <ellipse cx="59" cy="64" rx="4.5" ry="3.5" fill="#0d0d1a"/>
+      <circle cx="43" cy="62" r="2" fill="white"/>
+      <circle cx="61" cy="62" r="2" fill="white"/>
+      <path d="M34,55 L48,53" stroke="#3d2010" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M52,53 L66,55" stroke="#3d2010" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="50" cy="70" rx="2.5" ry="2" fill="#e8b89a" opacity="0.8"/>
+      <ellipse cx="42" cy="77" rx="9" ry="5" fill="#4b3728" opacity="0.9"/>
+      <ellipse cx="58" cy="77" rx="9" ry="5" fill="#4b3728" opacity="0.9"/>
+      <ellipse cx="50" cy="83" rx="10" ry="4" fill="#4b3728" opacity="0.75"/>
+      <path d="M44,74 Q50,78 56,74" stroke="#7c3f00" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <rect x="30" y="82" width="40" height="20" rx="4" fill="#f1f5f9"/>
+      <line x1="50" y1="84" x2="50" y2="102" stroke="#cbd5e1" stroke-width="1.5"/>
+    </g>
   </g>
   <circle cx="50" cy="60" r="36" fill="none" stroke="#0f172a" stroke-width="3"/>
 </svg>`;
