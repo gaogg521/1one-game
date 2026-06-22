@@ -286,6 +286,24 @@ export const SAMPLES: Sample[] = [
     badge: "hot",
     photoCover: true,
   },
+  {
+    id: "dou-dizhu",
+    title: "枭牌·三席残局",
+    subtitle: "斗地主 · 叫地主出牌 · 春天反春",
+    prompt:
+      "斗地主三人扑克，叫地主出牌比大小，支持春天反春，AI 互助配合",
+    tags: ["斗地主", "扑克", "棋牌", "三人"],
+    coverImageSrc: "/samples/dou-dizhu.jpg",
+    coverAlt: "Dou Dizhu — three-player landlord poker cover",
+    coverGradient: "linear-gradient(145deg, #581c87 0%, #7e22ce 38%, #c084fc 72%, #fde68a 100%)",
+    accentGlow: "rgba(192, 132, 252, 0.42)",
+    emoji: "🃏",
+    plays: "72K",
+    creator: "operone",
+    shelf: "featured",
+    badge: "new",
+    photoCover: true,
+  },
 ];
 
 const SHELF_META: Record<
