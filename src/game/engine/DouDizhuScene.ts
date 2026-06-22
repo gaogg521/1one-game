@@ -6,7 +6,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { drawAvatar, drawQqCharacter, AVATAR_COLORS } from "@/game/engine/avatar-draw";
+import { drawAvatar, AVATAR_COLORS } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -340,6 +340,8 @@ export class DouDizhuScene extends Phaser.Scene {
     this.add.ellipse(viewW / 2, viewH / 2, viewW * 0.85, viewH * 0.555, 0x166534, 1).setDepth(-5);
 
     this.hud = new HudFrame(this, { title: this.spec.title }, guidance, ui);
+    // 斗地主有专属叫地主 UI，通用 Goal 卡片在此干扰布局，立即关闭
+    this.time.delayedCall(100, () => this.hud.dismissGoal());
 
     this.dealCards();
     this.buildSeatLabels();
@@ -934,7 +936,7 @@ export class DouDizhuScene extends Phaser.Scene {
     if (this.bottomCards.length === 0) return;
     const viewW = this.scale.width;
     const viewH = this.scale.height;
-    const cont = this.add.container(viewW / 2, viewH * 0.14).setDepth(20);
+    const cont = this.add.container(viewW / 2, viewH * 0.27).setDepth(190);
     const label = this.add.text(0, -36, tMessage(this.uiLocale, "sceneGame.douDizhu.bottomCards"), {
       fontFamily: "system-ui, sans-serif", fontSize: "11px", color: "#fde68a",
     }).setOrigin(0.5);
@@ -978,29 +980,24 @@ export class DouDizhuScene extends Phaser.Scene {
     for (const g of this.avatarGraphics) g.destroy();
     this.avatarGraphics = [];
 
-    const viewW = this.scale.width;
-    const viewH = this.scale.height;
-    const sc = Math.min(viewW, viewH) / 480; // 自适应缩放
-
-    // 玩家（seat 0）：底部中间，小头像
-    const g0 = drawAvatar(this, this.seatX(0), this.seatY(0) - 14, {
+    // 玩家（seat 0）
+    this.avatarGraphics.push(drawAvatar(this, this.seatX(0), this.seatY(0) - 14, {
       bodyColor: AVATAR_COLORS.player,
       radius: 20,
       depth: 11,
-    });
-    this.avatarGraphics.push(g0);
-
-    // AI 左侧（seat 1）：全身女孩角色，贴桌子左侧
-    const leftX = viewW * 0.08;
-    const leftFootY = viewH * 0.7;
-    const g1 = drawQqCharacter(this, leftX, leftFootY, "girl", { scale: sc, depth: 210 });
-    this.avatarGraphics.push(g1);
-
-    // AI 右侧（seat 2）：全身大叔角色，贴桌子右侧
-    const rightX = viewW * 0.92;
-    const rightFootY = viewH * 0.7;
-    const g2 = drawQqCharacter(this, rightX, rightFootY, "man", { scale: sc, depth: 210 });
-    this.avatarGraphics.push(g2);
+    }));
+    // AI 左侧（seat 1）
+    this.avatarGraphics.push(drawAvatar(this, this.seatX(1), this.seatY(1) - 14, {
+      bodyColor: AVATAR_COLORS.ai1,
+      radius: 20,
+      depth: 11,
+    }));
+    // AI 右侧（seat 2）
+    this.avatarGraphics.push(drawAvatar(this, this.seatX(2), this.seatY(2) - 14, {
+      bodyColor: AVATAR_COLORS.ai2,
+      radius: 20,
+      depth: 11,
+    }));
   }
 
   // ─── UI ───
@@ -1273,6 +1270,8 @@ export class DouDizhuScene extends Phaser.Scene {
 
   update() {
     if (this.finished) return;
+    // 驱动 goal/banner 淡出计时器（仅在 refreshHud 之外的帧也能正常淡出）
+    this.hud.update({});
     if (this.bidPhase) {
       // AI 叫分
       if (this.bidTurn !== 0 && this.time.now >= this.aiActAt && this.aiActAt > 0) {
