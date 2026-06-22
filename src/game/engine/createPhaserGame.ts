@@ -231,7 +231,7 @@ export function createPhaserGame(
   const config = {
     type: Phaser.AUTO,
     parent,
-    width: Math.min(920, Math.max(640, parent.clientWidth || 920)),
+    width: Math.min(1280, Math.max(640, parent.clientWidth || 920)),
     height: 560,
     backgroundColor: specPlay.theme.backgroundColor,
     resolution: dpr,

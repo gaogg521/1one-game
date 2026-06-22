@@ -993,13 +993,13 @@ export class DouDizhuScene extends Phaser.Scene {
     // AI 左侧（seat 1）：全身女孩角色，贴桌子左侧
     const leftX = viewW * 0.08;
     const leftFootY = viewH * 0.7;
-    const g1 = drawQqCharacter(this, leftX, leftFootY, "girl", { scale: sc, depth: 11 });
+    const g1 = drawQqCharacter(this, leftX, leftFootY, "girl", { scale: sc, depth: 210 });
     this.avatarGraphics.push(g1);
 
     // AI 右侧（seat 2）：全身大叔角色，贴桌子右侧
     const rightX = viewW * 0.92;
     const rightFootY = viewH * 0.7;
-    const g2 = drawQqCharacter(this, rightX, rightFootY, "man", { scale: sc, depth: 11 });
+    const g2 = drawQqCharacter(this, rightX, rightFootY, "man", { scale: sc, depth: 210 });
     this.avatarGraphics.push(g2);
   }
 
