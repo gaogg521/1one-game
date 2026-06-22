@@ -521,6 +521,8 @@ export class DouDizhuScene extends Phaser.Scene {
     this.passCount = 0;
     this.multiplier = this.highestBid;
     this.refreshMultiplierText();
+    // 叫地主完成后渐入背景音乐（此时用户已有手势交互，startInteractive 已完成）
+    this.time.delayedCall(800, () => { this.soundscape?.setTension(0.4); });
     this.hideBottomCardsDisplay();
 
     const role = tMessage(this.uiLocale, "sceneGame.douDizhu.landlord");
@@ -596,8 +598,31 @@ export class DouDizhuScene extends Phaser.Scene {
     this.lastPlaySeat = seat;
     this.passCount = 0;
     this.selectedIds.clear();
-    playBleep(seat === 0 ? "pickup" : "hit");
-    juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 10);
+    // 按牌型播放对应音效
+    if (pattern.type === "rocket") {
+      playBleep("boss");
+      this.soundscape?.triggerEvent("boss");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 28);
+    } else if (pattern.type === "bomb") {
+      playBleep("explode");
+      this.soundscape?.triggerEvent("boss");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 20);
+    } else if (pattern.type === "plane" || pattern.type === "planeWithSingles" || pattern.type === "planeWithPairs") {
+      playBleep("levelUp");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 14);
+    } else if (pattern.type === "straight" || pattern.type === "pairStraight") {
+      playBleep("power");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 12);
+    } else if (pattern.type === "tripleWithSingle" || pattern.type === "tripleWithPair" || pattern.type === "triple") {
+      playBleep("fire");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 10);
+    } else if (pattern.type === "pair") {
+      playBleep("hit");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 6);
+    } else {
+      playBleep(seat === 0 ? "pickup" : "hit");
+      juiceBurst(this, this.seatX(seat), this.seatY(seat) - 30, themeParticleHex(this.spec), 4);
+    }
     this.showPlayOnSeat(seat, pattern);
     this.buildSeatLabels();
     if (seat === 0) this.layoutHand();
@@ -1193,10 +1218,10 @@ export class DouDizhuScene extends Phaser.Scene {
         .setOrigin(0.5);
       cont.add([bg, rankText, suitText]);
       cont.setSize(cardW, cardH);
-      // 手牌交互：bg rectangle 自身 setInteractive（Phaser 4 比 container Geom hit 可靠）
-      // 用整牌宽 hit area，按 depth 从高到低命中（右侧牌 depth 更高，点重叠区会选中右侧牌——符合视觉预期）
+      // 只保留可见区域为命中区：非最末牌的 hit 宽度缩为 spacing，避免重叠区命中右侧相邻牌
+      const hitW = i < hand.length - 1 ? spacing : cardW;
       bg.setInteractive(
-        new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH),
+        new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, hitW, cardH),
         Phaser.Geom.Rectangle.Contains,
       );
       bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {

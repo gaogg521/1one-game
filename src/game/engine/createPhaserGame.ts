@@ -147,6 +147,8 @@ export function createPhaserGame(
           ? "organic"     // 农场/消除偏舒缓
           : templateId === "chess"
             ? "minimal"   // 棋类极简
+            : templateId === "douDizhu" || templateId === "mahjong" || templateId === "mahjongSolitaire"
+            ? "shuffle"   // 斗地主/麻将牌桌
             : templateId === "rhythm"
               ? "chime"   // 节奏音游清脆
               : templateId === "sports"
