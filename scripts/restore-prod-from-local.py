@@ -174,8 +174,8 @@ def main() -> int:
     client = connect()
     ensure_git_safe(client, repo)
 
-    # 1) Stop service + upload database
-    run(client, "systemctl stop operone || true")
+    if not args.sprites_only:
+        run(client, "systemctl stop operone || true")
     if not args.skip_db:
         remote_db = f"{repo}/prisma/prod.db"
         sftp = client.open_sftp()
@@ -236,6 +236,16 @@ def main() -> int:
             mb = sprites_tar.stat().st_size / 1024 / 1024
             print(f"Sprite batch {batch_no}/{total_batches}: {len(batch)} dirs, {file_count} files, {mb:.1f} MB")
             remote_sprites = f"{repo}/data/restore-sprites-{batch_no:03d}.tar.gz"
+            _, exists = run_output(client, f"test -f {remote_sprites} && echo SKIP || echo UPLOAD")
+            if "SKIP" in (exists or ""):
+                print(f"Sprite batch {batch_no}/{total_batches}: already on server, extracting if needed…")
+                run(
+                    client,
+                    f"cd {repo} && tar -xzf {remote_sprites} && chown -R www-data:www-data {repo}/public/game-sprites",
+                    timeout=7200,
+                )
+                sprites_tar.unlink(missing_ok=True)
+                continue
             try:
                 upload_tar(client, sprites_tar, remote_sprites)
             except Exception:

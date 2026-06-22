@@ -114,11 +114,14 @@ python scripts/backup-prod-for-migration.py --include-tools
 curl -fsSL https://raw.githubusercontent.com/gaogg521/1one-game/main/scripts/deploy/install.sh | bash
 ```
 
-或 Docker：
+或 **整站 Docker 部署**（可选，与下方 Godot 无关）：
 
 ```bash
 curl -fsSL .../install-docker.sh | bash
 ```
+
+> **Godot 导出**：仅 **CentOS 7** 因 glibc 过旧才用 `GODOT_USE_DOCKER=1` + Docker 镜像。  
+> **Rocky / Ubuntu** 使用原生 `GODOT_BIN` + 导出模板即可，**不必安装 Docker**。
 
 装完后应有：
 

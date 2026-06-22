@@ -21,6 +21,15 @@ def parse_json_line(text: str) -> dict:
     return {}
 
 
+def godot_uses_docker(client) -> bool:
+    """Docker Godot export is legacy CentOS 7 only; Rocky/Ubuntu use native GODOT_BIN."""
+    code, text = run_output(
+        client,
+        "grep -q 'GODOT_USE_DOCKER=1' /etc/systemd/system/operone.service 2>/dev/null && echo docker_mode",
+    )
+    return code == 0 and "docker_mode" in text
+
+
 def main() -> int:
     remote = deploy_repo()
     port = deploy_app_port()
@@ -28,26 +37,52 @@ def main() -> int:
     print_target("production smoke test")
     client = connect()
 
-    local_df = REPO_ROOT / "scripts" / "deploy" / "Dockerfile.godot"
-    sftp = client.open_sftp()
-    sftp.put(str(local_df), f"{remote}/scripts/deploy/Dockerfile.godot")
-    sftp.close()
-    print("Uploaded Dockerfile.godot")
-
     results: list[tuple[str, bool]] = []
+    use_docker = godot_uses_docker(client)
 
-    code, text = run_output(
-        client,
-        f"cd {remote} && docker build --no-cache -f scripts/deploy/Dockerfile.godot -t operone-godot:4.4.1 .",
-        timeout=3600,
-    )
-    results.append(("godot docker build", code == 0))
+    if use_docker:
+        local_df = REPO_ROOT / "scripts" / "deploy" / "Dockerfile.godot"
+        sftp = client.open_sftp()
+        sftp.put(str(local_df), f"{remote}/scripts/deploy/Dockerfile.godot")
+        sftp.close()
+        print("Godot export: Docker (CentOS 7 legacy)")
 
-    code, text = run_output(client, "docker run --rm operone-godot:4.4.1 --version")
-    results.append(("godot docker --version", code == 0 and "4.4.1" in text))
+        code, text = run_output(
+            client,
+            f"cd {remote} && docker build --no-cache -f scripts/deploy/Dockerfile.godot -t operone-godot:4.4.1 .",
+            timeout=3600,
+        )
+        results.append(("godot docker build", code == 0))
 
-    code, text = run_output(client, f"cd {remote} && sudo -u www-data bash scripts/godot-docker-run.sh . --version")
-    results.append(("www-data godot-docker-run", code == 0 and "4.4.1" in text))
+        code, text = run_output(client, "docker run --rm operone-godot:4.4.1 --version")
+        results.append(("godot docker --version", code == 0 and "4.4.1" in text))
+
+        code, text = run_output(
+            client, f"cd {remote} && sudo -u www-data bash scripts/godot-docker-run.sh . --version"
+        )
+        results.append(("www-data godot-docker-run", code == 0 and "4.4.1" in text))
+
+        code, text = run_output(client, "sudo -u www-data docker ps >/dev/null 2>&1 && echo DOCKER_OK")
+        results.append(("www-data can docker", code == 0 and "DOCKER_OK" in text))
+    else:
+        print("Godot export: native binary (no Docker required)")
+        code, text = run_output(
+            client,
+            "grep GODOT_BIN= /etc/systemd/system/operone.service 2>/dev/null | head -1",
+        )
+        m = None
+        for part in text.strip().split():
+            if part.startswith("GODOT_BIN="):
+                m = part.split("=", 1)[1]
+                break
+        if not m and "GODOT_BIN=" in text:
+            m = text.strip().split("GODOT_BIN=", 1)[1].split()[0]
+        godot_bin = m or ""
+        if godot_bin:
+            code, text = run_output(client, f"test -x {godot_bin} && {godot_bin} --version 2>&1 | head -1")
+            results.append(("godot native --version", code == 0 and "4.4.1" in text))
+        else:
+            results.append(("godot native --version", False))
 
     http_checks: list[tuple[str, str, callable[[str], bool] | None]] = [
         ("health", f"curl -sf {base}/api/health", lambda t: "db" in t.lower() or "ok" in t.lower()),
@@ -80,17 +115,11 @@ def main() -> int:
     code, text = run_output(client, "systemctl is-active operone")
     results.append(("systemd operone active", code == 0 and "active" in text))
 
-    code, text = run_output(client, "grep GODOT_USE_DOCKER /etc/systemd/system/operone.service || true")
-    results.append(("GODOT_USE_DOCKER=1", "GODOT_USE_DOCKER=1" in text))
-
     code, text = run_output(
         client,
         f"test -d {remote}/.local/share/godot/export_templates/4.4.1.stable && echo TEMPLATES_OK",
     )
     results.append(("godot export templates", code == 0 and "TEMPLATES_OK" in text))
-
-    code, text = run_output(client, "sudo -u www-data docker ps >/dev/null 2>&1 && echo DOCKER_OK")
-    results.append(("www-data can docker", code == 0 and "DOCKER_OK" in text))
 
     passed = sum(1 for _, ok in results if ok)
     total = len(results)
