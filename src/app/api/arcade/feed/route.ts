@@ -33,11 +33,33 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
+    const sampleFirst = !cursor;
+    let page = rows;
+    if (sampleFirst) {
+      const samples = await prisma.project.findMany({
+        where: { visibility: "public", status: "ready", id: { startsWith: "sample-" } },
+        orderBy: [{ featured: "desc" }, { playCount: "desc" }],
+        select: {
+          id: true,
+          title: true,
+          prompt: true,
+          specJson: true,
+          coverPath: true,
+          playCount: true,
+          likeCount: true,
+          createdAt: true,
+        },
+      });
+      const sampleIds = new Set(samples.map((s) => s.id));
+      const rest = rows.filter((r) => !sampleIds.has(r.id));
+      page = [...samples, ...rest].slice(0, limit + 1);
+    }
+
+    const hasMore = page.length > limit;
+    const items = hasMore ? page.slice(0, limit) : page;
 
     return NextResponse.json({
-      items: page.map((p) => ({
+      items: items.map((p) => ({
         id: p.id,
         title: p.title,
         prompt: p.prompt.length > 120 ? p.prompt.slice(0, 117) + "…" : p.prompt,
@@ -46,7 +68,7 @@ export async function GET(req: NextRequest) {
         playCount: p.playCount,
         likeCount: p.likeCount,
       })),
-      nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
+      nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null,
     });
   } catch (err) {
     console.error("[arcade/feed]", err);

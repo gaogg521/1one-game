@@ -16,6 +16,7 @@ import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 import { DiscoverSortBar, type NovelDiscoverSort } from "@/components/work/DiscoverSortBar";
 import { DiscoverListSkeleton } from "@/components/work/DiscoverListSkeleton";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
@@ -218,6 +219,10 @@ export default function NovelDiscoverPage() {
 
           <div className="mb-6">
             <DiscoverIntakeBanner />
+          </div>
+
+          <div className="mb-6">
+            <MobileSwipeFeedPromo kind="novel" />
           </div>
 
           <div className="mb-6">

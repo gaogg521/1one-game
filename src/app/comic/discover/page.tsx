@@ -15,6 +15,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { comicCoverFromImageUrls } from "@/lib/comic-display";
 import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { comicCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 import { ComicNovelSourceMeta } from "@/components/comic/ComicNovelSourceMeta";
 import { DiscoverSortBar, type ComicDiscoverSort } from "@/components/work/DiscoverSortBar";
 import { DiscoverListSkeleton } from "@/components/work/DiscoverListSkeleton";
@@ -213,6 +214,10 @@ export default function ComicDiscoverPage() {
 
           <div className="mb-6">
             <DiscoverIntakeBanner />
+          </div>
+
+          <div className="mb-6">
+            <MobileSwipeFeedPromo kind="comic" />
           </div>
 
           <div className="mb-6">

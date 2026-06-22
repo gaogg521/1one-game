@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { ArcadeFeedClient } from "./ArcadeFeedClient";
 
 export const metadata: Metadata = {
-  title: "Arcade — 游戏广场",
-  description: "上划切换，无限畅玩",
+  title: "刷游戏 — OperOne",
+  description: "上滑切换，像刷短视频一样试玩小游戏",
 };
 
 export default function ArcadePage() {

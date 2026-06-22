@@ -6,7 +6,7 @@ import { getAdminConsolePathClient } from "@/lib/admin-console-path";
 
 const HIDE_FOOTER_PREFIXES = ["/admin", "/studio", "/billing"];
 /** Path segments (locale-agnostic) that suppress the footer */
-const HIDE_FOOTER_SEGMENTS = ["arcade"];
+const HIDE_FOOTER_SEGMENTS = ["arcade", "feed"];
 
 export function SiteFooterGate() {
   const pathname = usePathname();

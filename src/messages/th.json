@@ -3615,5 +3615,50 @@
     "avoid": "อย่าเขียน",
     "narrativeModeRetelling": "Classic retelling (lead tells the source tale)",
     "narrativeModeListenerExtension": "After-listening extension (child + friends learn the moral)"
+  },
+  "mobileDock": {
+    "games": "เกม",
+    "novels": "นิยาย",
+    "comics": "การ์ตูน",
+    "home": "หน้าแรก",
+    "aria": "การนำทางมือถือ",
+    "swipePromoTitle": "ฟีดปัด",
+    "swipePromoNovel": "ค้นพบนิยายแบบวิดีโอสั้น",
+    "swipePromoComic": "ค้นพบการ์ตูนแบบวิดีโอสั้น",
+    "swipePromoGame": "ลองเล่นเกมแบบวิดีโอสั้น",
+    "swipePromoCta": "เปิด"
+  },
+  "mobileArcade": {
+    "back": "กลับ",
+    "create": "สร้าง",
+    "like": "ถูกใจ",
+    "detail": "รายละเอียด",
+    "share": "แชร์",
+    "next": "ถัดไป",
+    "emptyGames": "ยังไม่มีเกม",
+    "loadFailed": "โหลดไม่สำเร็จ โปรดลองอีกครั้ง",
+    "retry": "ลองอีกครั้ง",
+    "goSamples": "ไปที่ตัวอย่าง",
+    "playCount": "เล่น {count} ครั้ง",
+    "swipeContinue": "ปัดขึ้น · เกมถัดไป",
+    "swipeHint": "ปัดขึ้นเพื่อเปลี่ยนเกม",
+    "loadMore": "กำลังโหลดเพิ่ม…"
+  },
+  "mobileFeed": {
+    "novelFeedTitle": "ฟีดนิยาย — OperOne",
+    "novelFeedDesc": "ปัดขึ้นเพื่อค้นพบนิยาย",
+    "comicFeedTitle": "ฟีดการ์ตูน — OperOne",
+    "comicFeedDesc": "ปัดขึ้นเพื่อค้นพบการ์ตูน",
+    "readNovel": "อ่าน",
+    "readComic": "ดู",
+    "emptyNovels": "ยังไม่มีนิยาย",
+    "emptyComics": "ยังไม่มีการ์ตูน",
+    "browseList": "ดูรายการ",
+    "readsCount": "อ่าน {count}",
+    "adaptedFrom": "ดัดแปลจาก · {title}",
+    "back": "กลับ",
+    "like": "ถูกใจ",
+    "next": "ถัดไป",
+    "loadFailed": "โหลดไม่สำเร็จ"
   }
 }

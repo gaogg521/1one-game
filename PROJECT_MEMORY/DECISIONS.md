@@ -1,6 +1,30 @@
 # DECISIONS
 
-更新时间：**2026-06-18**
+更新时间：**2026-06-22**
+
+## 2026-06-22 — 生产部署必须同步运行时素材（不进 Git）
+
+**背景**：`public/covers/`、`public/game-sprites/`、`public/game-bg/` 被 `.gitignore` 排除；`git pull + build` 只更新代码，**不会**带上本机生成的封面/精灵/背景。生产 DB 的 `coverPath` / 样品 `sample-*` 路径会 404。
+
+**决策 — 每次推生产后在本机执行（有本地 `public/` 的机器）**：
+
+| 步骤 | 脚本 | 同步内容 |
+|------|------|----------|
+| 1 | `python scripts/deploy-prod-cee8b1d.py` | 代码、migrate、build、seed:samples |
+| 2 | `python scripts/sync-sample-assets-to-prod.py` | 样品 `sample-*` 精灵 + 背景 |
+| 3 | `python scripts/sync-literary-covers-to-prod.py` | 生产 DB 引用的 `/covers/*`（小说/漫画封面） |
+
+**一键**：`python scripts/deploy-prod-with-assets.py`（按序跑 1→2→3）。
+
+**不同步**：用户自创 `cmq…` 项目整包 `public/`（DB ID 不一致）；仅同步 prod DB 实际引用的路径。
+
+**仍可能无封面**：DB 里 `coverPath` 为空的 Novel/Comic 需在创作台重新生成封面。
+
+**后续若漫画分镜缺图**：按 Comic `imageUrls` 扩展同步脚本（待补）。
+
+---
+
+## 2026-06-18 — coerceGameSpec 保留 Agentic 字段（迭代一百零二）
 
 ## 2026-06-18 — coerceGameSpec 保留 Agentic 字段（迭代一百零二）
 

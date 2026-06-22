@@ -3615,5 +3615,50 @@
     "avoid": "Jangan tulis",
     "narrativeModeRetelling": "Classic retelling (lead tells the source tale)",
     "narrativeModeListenerExtension": "After-listening extension (child + friends learn the moral)"
+  },
+  "mobileDock": {
+    "games": "Permainan",
+    "novels": "Novel",
+    "comics": "Komik",
+    "home": "Laman utama",
+    "aria": "Navigasi layar mudah alih",
+    "swipePromoTitle": "Suapan leret",
+    "swipePromoNovel": "Temui novel seperti video pendek",
+    "swipePromoComic": "Temui komik seperti video pendek",
+    "swipePromoGame": "Cuba permainan seperti video pendek",
+    "swipePromoCta": "Buka"
+  },
+  "mobileArcade": {
+    "back": "Kembali",
+    "create": "Cipta",
+    "like": "Suka",
+    "detail": "Butiran",
+    "share": "Kongsi",
+    "next": "Seterusnya",
+    "emptyGames": "Tiada permainan lagi",
+    "loadFailed": "Gagal dimuatkan, sila cuba lagi",
+    "retry": "Cuba lagi",
+    "goSamples": "Layari sampel",
+    "playCount": "{count} main",
+    "swipeContinue": "Leret ke atas · permainan seterusnya",
+    "swipeHint": "Leret ke atas untuk tukar permainan",
+    "loadMore": "Memuatkan lagi…"
+  },
+  "mobileFeed": {
+    "novelFeedTitle": "Suapan novel — OperOne",
+    "novelFeedDesc": "Leret ke atas untuk temui novel",
+    "comicFeedTitle": "Suapan komik — OperOne",
+    "comicFeedDesc": "Leret ke atas untuk temui komik",
+    "readNovel": "Baca",
+    "readComic": "Lihat",
+    "emptyNovels": "Tiada novel lagi",
+    "emptyComics": "Tiada komik lagi",
+    "browseList": "Layari senarai",
+    "readsCount": "{count} bacaan",
+    "adaptedFrom": "Berdasarkan · {title}",
+    "back": "Kembali",
+    "like": "Suka",
+    "next": "Seterusnya",
+    "loadFailed": "Gagal dimuatkan"
   }
 }

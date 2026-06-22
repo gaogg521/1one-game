@@ -10,6 +10,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { comicCoverFromImageUrls } from "@/lib/comic-display";
 import { comicCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 import { ComicNovelSourceMeta } from "@/components/comic/ComicNovelSourceMeta";
 
 interface ComicWork {
@@ -117,6 +118,8 @@ export default function ComicsPage() {
             <p className="text-xs text-[var(--gc-muted)]">{t("comicsDesc")}</p>
           </div>
         </div>
+
+        <MobileSwipeFeedPromo kind="comic" />
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-0.5">

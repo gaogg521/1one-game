@@ -3612,5 +3612,50 @@
     "avoid": "别写",
     "narrativeModeRetelling": "典故复述（主人公讲源故事）",
     "narrativeModeListenerExtension": "听后延伸（孩子+伙伴学寓意）"
+  },
+  "mobileDock": {
+    "games": "游戏",
+    "novels": "小说",
+    "comics": "漫画",
+    "home": "首页",
+    "aria": "手机浏览导航",
+    "swipePromoTitle": "竖滑浏览",
+    "swipePromoNovel": "像刷短视频一样发现小说",
+    "swipePromoComic": "像刷短视频一样发现漫画",
+    "swipePromoGame": "像刷短视频一样试玩游戏",
+    "swipePromoCta": "进入"
+  },
+  "mobileArcade": {
+    "back": "返回",
+    "create": "创作",
+    "like": "点赞",
+    "detail": "详情",
+    "share": "分享",
+    "next": "下一个",
+    "emptyGames": "暂无游戏",
+    "loadFailed": "加载失败，请重试",
+    "retry": "重试",
+    "goSamples": "前往样品馆",
+    "playCount": "{count} 次游玩",
+    "swipeContinue": "上滑继续 · 下一个游戏",
+    "swipeHint": "上滑切换游戏",
+    "loadMore": "加载更多…"
+  },
+  "mobileFeed": {
+    "novelFeedTitle": "刷小说 — OperOne",
+    "novelFeedDesc": "上滑切换，像刷短视频一样发现小说",
+    "comicFeedTitle": "刷漫画 — OperOne",
+    "comicFeedDesc": "上滑切换，像刷短视频一样发现漫画",
+    "readNovel": "读",
+    "readComic": "看",
+    "emptyNovels": "暂无小说",
+    "emptyComics": "暂无漫画",
+    "browseList": "浏览列表",
+    "readsCount": "{count} 读过",
+    "adaptedFrom": "改编自 · {title}",
+    "back": "返回",
+    "like": "点赞",
+    "next": "下一个",
+    "loadFailed": "加载失败"
   }
 }

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Deploy origin/main (cee8b1d+) to production with migrate + seed."""
+"""Deploy origin/main to production with migrate + seed.
+
+After this script, also run from local dev machine (assets are NOT in git):
+  python scripts/sync-sample-assets-to-prod.py
+  python scripts/sync-literary-covers-to-prod.py
+Or use the all-in-one wrapper:
+  python scripts/deploy-prod-with-assets.py
+"""
 from __future__ import annotations
 
 import re

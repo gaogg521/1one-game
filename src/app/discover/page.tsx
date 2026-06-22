@@ -13,6 +13,7 @@ import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { listDiscoverTemplateIds } from "@/lib/game-templates/registry";
+import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 
 type DiscoverProject = {
   id: string;
@@ -223,6 +224,10 @@ export default function DiscoverPage() {
         </div>
 
         <DiscoverIntakeBanner />
+
+        <div className="mb-6 mt-6">
+          <MobileSwipeFeedPromo kind="game" />
+        </div>
 
         {/* Template filter chips */}
         <div className="flex flex-wrap gap-2">

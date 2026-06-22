@@ -1,6 +1,33 @@
 # 项目工作进度快照
 
-**最后更新**：2026-06-21（会话 49 · ChessScene/CardScene i18n Bug 修复 + QQ 风格）
+**最后更新**：2026-06-18（会话 50 · 手机端竖滑 Feed v2 — 游戏/小说/漫画）
+
+---
+
+## Session 50 · 手机端竖滑 Feed v2（游戏 + 小说 + 漫画）
+
+### 背景
+Session 42 首版 `/arcade` 有底栏、横屏锁、大结算层；用户反馈「不像抖音」。本会话在 Session 42 之上做 v2 精简，并扩展到小说/漫画。
+
+### 完成内容
+
+| 文件 | 改动摘要 |
+|------|----------|
+| `src/app/arcade/ArcadeFeedClient.tsx` | v2 全屏 + 右侧操作栏；顶栏 `MobileFeedTabs` + 页码；`FeedScrollRail`；i18n `mobileArcade` |
+| `src/components/GamePlayerInner.tsx` | `arcadeMode` 隐藏大结算；右上角小 spinner |
+| `src/app/api/arcade/feed/route.ts` | 首屏优先 `sample-*` |
+| `src/components/mobile/*` | LiterarySwipeFeed、MobileBrowseDock、FeedScrollRail、Promo 组件 |
+| `src/app/novel/feed/*`、`src/app/comic/feed/*` | 小说/漫画竖滑页 |
+| `src/app/layout.tsx` | 手机底栏 + safe padding |
+| `src/components/SiteFooterGate.tsx` | 隐藏 `feed` segment |
+| 列表/发现/首页 | 竖滑入口 promo |
+
+### 路由
+- `/arcade` · `/novel/feed` · `/comic/feed`
+
+### 状态
+- `tsc --noEmit` ✅
+- **未 commit**（叠加 Session 42 已 commit 代码）
 
 ---
 

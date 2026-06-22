@@ -4,6 +4,7 @@ import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { HomeFeaturedSections } from "@/components/HomeFeaturedSections";
 import { HomeLiteraryPipelineSection } from "@/components/HomeLiteraryPipelineSection";
+import { MobileFeedPromoStrip } from "@/components/mobile/MobileFeedPromoStrip";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { getProductPromise, getWowSteps } from "@/lib/product-ia";
@@ -66,6 +67,8 @@ export default async function Home() {
                   {t("home.workspaceCta")}
                 </Link>
               </div>
+
+              <MobileFeedPromoStrip />
             </div>
 
             <aside className="relative min-w-0 rounded-3xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-8 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:p-9 xl:p-10">

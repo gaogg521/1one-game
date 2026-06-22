@@ -322,14 +322,18 @@ export default function GamePlayerInner({
         />
         {!playReady && !result ? (
           <div
-            className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center gap-3 bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,#000)] backdrop-blur-sm"
+            className={`pointer-events-none absolute z-[5] flex items-center justify-center bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,#000)] backdrop-blur-sm ${
+              arcadeMode
+                ? "inset-auto right-3 top-3 h-8 w-8 rounded-full"
+                : "inset-0 flex-col gap-3"
+            }`}
             aria-live="polite"
           >
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--gc-border)] border-t-[color:color-mix(in_srgb,var(--gc-accent)_80%,white)]" />
-            <p className="text-xs text-[var(--gc-muted)]">{t("loading")}</p>
+            {!arcadeMode ? <p className="text-xs text-[var(--gc-muted)]">{t("loading")}</p> : null}
           </div>
         ) : null}
-        {audioHint && !result ? (
+        {audioHint && !result && !arcadeMode ? (
           <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1 text-[10px] text-[var(--gc-muted)] backdrop-blur-sm">
             {t("audioHint")}
           </p>
@@ -353,7 +357,7 @@ export default function GamePlayerInner({
           </div>
         ) : null}
 
-        {result ? (
+        {result && !arcadeMode ? (
           <div
             className={`pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center backdrop-blur-md transition-colors duration-700 ${
               result.won

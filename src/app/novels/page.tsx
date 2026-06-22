@@ -10,6 +10,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { displayNovelSummary, normalizeNovelTitle } from "@/lib/novel-display";
 import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
+import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 
 interface NovelWork {
   id: string;
@@ -113,6 +114,8 @@ export default function NovelsPage() {
             <p className="text-xs text-[var(--gc-muted)]">{t("novelsDesc")}</p>
           </div>
         </div>
+
+        <MobileSwipeFeedPromo kind="novel" />
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-1 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-0.5">

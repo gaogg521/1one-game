@@ -3615,5 +3615,50 @@
     "avoid": "Avoid writing",
     "narrativeModeRetelling": "Classic retelling (lead tells the source tale)",
     "narrativeModeListenerExtension": "After-listening extension (child + friends learn the moral)"
+  },
+  "mobileDock": {
+    "games": "Games",
+    "novels": "Novels",
+    "comics": "Comics",
+    "home": "Home",
+    "aria": "Mobile browse navigation",
+    "swipePromoTitle": "Swipe feed",
+    "swipePromoNovel": "Discover novels like short videos",
+    "swipePromoComic": "Discover comics like short videos",
+    "swipePromoGame": "Try games like short videos",
+    "swipePromoCta": "Open"
+  },
+  "mobileArcade": {
+    "back": "Back",
+    "create": "Create",
+    "like": "Like",
+    "detail": "Details",
+    "share": "Share",
+    "next": "Next",
+    "emptyGames": "No games yet",
+    "loadFailed": "Failed to load, please retry",
+    "retry": "Retry",
+    "goSamples": "Browse samples",
+    "playCount": "{count} plays",
+    "swipeContinue": "Swipe up · next game",
+    "swipeHint": "Swipe up to switch games",
+    "loadMore": "Loading more…"
+  },
+  "mobileFeed": {
+    "novelFeedTitle": "Novel feed — OperOne",
+    "novelFeedDesc": "Swipe up to discover novels",
+    "comicFeedTitle": "Comic feed — OperOne",
+    "comicFeedDesc": "Swipe up to discover comics",
+    "readNovel": "Read",
+    "readComic": "View",
+    "emptyNovels": "No novels yet",
+    "emptyComics": "No comics yet",
+    "browseList": "Browse list",
+    "readsCount": "{count} reads",
+    "adaptedFrom": "Based on · {title}",
+    "back": "Back",
+    "like": "Like",
+    "next": "Next",
+    "loadFailed": "Failed to load"
   }
 }

@@ -1,4 +1,20 @@
-更新时间：**2026-06-18**（迭代一百零九 · 创作台质量与模型路由）
+更新时间：**2026-06-22**（生产部署 · 运行时素材同步）
+
+## 生产部署 checklist（必做 · 2026-06-22 起）
+
+代码 push 后在本机执行：
+
+```bash
+python scripts/deploy-prod-with-assets.py
+```
+
+或分步：`deploy-prod-cee8b1d.py` → `sync-sample-assets-to-prod.py` → `sync-literary-covers-to-prod.py`
+
+验收：`check-prod-literary-covers.py` · `/novels` `/comics` `/samples` 封面不 404。
+
+详见 `PROJECT_MEMORY/DECISIONS.md` · 2026-06-22。
+
+---
 
 ## 迭代一百零九（当前）
 
