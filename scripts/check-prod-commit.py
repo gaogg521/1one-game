@@ -1,35 +1,23 @@
 #!/usr/bin/env python3
-import re
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
-import paramiko
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-HOST = "43.163.105.71"
-REPO = "/opt/operone"
-
-
-def load_password() -> str:
-    p = Path(__file__).parent / "upload-literary-samples-to-server.py"
-    if p.is_file():
-        m = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', p.read_text(encoding="utf-8"), re.M)
-        if m:
-            return m.group(1)
-    sys.exit("no password")
+from prod_ssh import connect, deploy_app_port, deploy_repo, run_output
 
 
 def main() -> None:
-    pw = load_password()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, 22, "root", pw, timeout=30, allow_agent=False, look_for_keys=False)
+    repo = deploy_repo()
+    port = deploy_app_port()
+    client = connect()
     for cmd in [
-        f"cd {REPO} && git log -1 --oneline",
-        f"cd {REPO} && git merge-base --is-ancestor 3d8c065 HEAD && echo '3d8c065:included' || echo '3d8c065:MISSING'",
-        "curl -sf http://127.0.0.1:3000/api/health",
+        f"cd {repo} && git log -1 --oneline",
+        f"curl -sf http://127.0.0.1:{port}/api/health",
     ]:
-        _, stdout, stderr = client.exec_command(cmd, timeout=30)
-        out = (stdout.read() + stderr.read()).decode("utf-8", "replace").strip()
+        _, out = run_output(client, cmd)
         print(out)
     client.close()
 

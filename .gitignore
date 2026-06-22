@@ -2,6 +2,12 @@
 /backups/
 /backups/**
 
+# deploy credentials (copy from scripts/deploy.local.env.example)
+scripts/deploy.local.env
+
+# QA reports (may contain production URLs from local runs)
+/qa-output/
+
 # dependencies
 /node_modules
 /.pnp

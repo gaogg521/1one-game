@@ -1,6 +1,6 @@
 /**
  * 生产环境样品馆玩法实机审计
- * PLAYWRIGHT_BASE_URL=http://43.163.105.71:6666 npm run qa:prod-sample-play-audit
+ * PLAYWRIGHT_BASE_URL=http://your-prod-host npm run qa:prod-sample-play-audit
  */
 import path from "node:path";
 import { healthOk, runSampleGameplayInteractionAudit } from "@/lib/qa/run-sample-gameplay-interaction-audit";

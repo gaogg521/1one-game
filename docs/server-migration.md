@@ -1,7 +1,7 @@
 # 生产服务器迁移指南
 
 > **读者**：运维、开发者、接续本项目的 AI Agent。  
-> **目标**：从旧机（如 CentOS 7）迁到新机（推荐 Ubuntu 22.04 / Rocky 9），**保留用户、作品、封面、密钥**，停机约 30–90 分钟。
+> **目标**：从旧机（如 CentOS 7）迁到新机（推荐 Ubuntu 22.04 / Rocky 9 / **Rocky 10**），**保留用户、作品、封面、密钥**，停机约 30–90 分钟。
 
 ---
 
@@ -22,26 +22,30 @@
 
 默认安装目录 **`/opt/operone`**，systemd 服务名 **`operone`**，应用端口 **`80`**。
 
-当前生产（撰写时）：`43.163.105.71` · 域名 `operone.1oneclaw.com`。
+**真实生产 IP、域名、SSH 密码/密钥不得写入 Git。** 在本机配置 `scripts/deploy.local.env`（从 `scripts/deploy.local.env.example` 复制，已 gitignore）。
 
 ---
 
 ## 2. 环境变量（所有部署/迁移脚本共用）
 
-在**执行脚本的机器**上设置（PowerShell / bash 均可）：
+在**执行脚本的机器**上配置，二选一：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `OPERONE_DEPLOY_HOST` | `43.163.105.71` | SSH 目标 IP |
+1. **推荐**：复制 `scripts/deploy.local.env.example` → `scripts/deploy.local.env`，填入真实值（该文件已在 `.gitignore`）。
+2. **CI / 临时**：在 shell 中 `export` / `$env:` 同名变量。
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `OPERONE_DEPLOY_HOST` | — | **必填** SSH 目标 IP 或主机名 |
+| `OPERONE_DEPLOY_PASSWORD` | — | SSH 密码（与密钥二选一） |
+| `OPERONE_DEPLOY_KEY_PATH` | — | SSH 私钥路径（与密码二选一） |
 | `OPERONE_DEPLOY_USER` | `root` | SSH 用户 |
 | `OPERONE_DEPLOY_REPO` | `/opt/operone` | 服务器上的仓库根 |
 | `OPERONE_DEPLOY_APP_PORT` | `80` | 应用监听端口 |
-| `OPERONE_DEPLOY_DOMAIN` | `operone.1oneclaw.com` | 日志提示用 |
-| `OPERONE_DEPLOY_PASSWORD` | — | SSH 密码（**必填**，勿写入 Git） |
+| `OPERONE_DEPLOY_DOMAIN` | — | 可选，仅用于成功日志中的 URL 提示 |
 
 实现：`scripts/prod_ssh.py`（`deploy-prod-cee8b1d.py`、`sync-*.py`、备份/恢复脚本均引用）。
 
-**换机后**：只需把 `OPERONE_DEPLOY_HOST` 改成新 IP，其余脚本无需改代码。
+**换机后**：只需更新 `deploy.local.env` 里的 `OPERONE_DEPLOY_HOST`（及密码/密钥），脚本代码无需改。
 
 ---
 
@@ -53,7 +57,7 @@ Git 有                          Git 没有（靠备份或 sync）
 src/、prisma/migrations/       prisma/prod.db（用户/作品/订单）
 scripts/deploy/                .env（API Key、管理员密钥）
 package.json                   public/covers/*.jpg（多数封面）
-                               public/game-sprites/sample-*
+scripts/deploy.local.env       public/game-sprites/sample-*
                                public/game-bg/sample-*
 ```
 
@@ -65,11 +69,11 @@ package.json                   public/covers/*.jpg（多数封面）
 
 ### 阶段 A — 旧机备份（迁移前 1 天内）
 
-在**有 SSH 权限的本机**（仓库根目录）：
+在**有 SSH 权限的本机**（仓库根目录），确保 `scripts/deploy.local.env` 指向**旧机**：
 
 ```bash
-# bash
-export OPERONE_DEPLOY_HOST=43.163.105.71   # 旧机 IP
+# bash — 若未用 deploy.local.env，可临时 export
+export OPERONE_DEPLOY_HOST=<old-server-ip>
 export OPERONE_DEPLOY_PASSWORD='***'
 
 python scripts/backup-prod-for-migration.py
@@ -78,7 +82,7 @@ python scripts/backup-prod-for-migration.py
 
 ```powershell
 # PowerShell
-$env:OPERONE_DEPLOY_HOST = "43.163.105.71"
+$env:OPERONE_DEPLOY_HOST = "<old-server-ip>"
 $env:OPERONE_DEPLOY_PASSWORD = "***"
 python scripts/backup-prod-for-migration.py
 ```
@@ -125,7 +129,7 @@ curl -fsSL .../install-docker.sh | bash
 绑定域名 + HTTPS（DNS 已指向新机后）：
 
 ```bash
-export OPERONE_DOMAIN='operone.1oneclaw.com'
+export OPERONE_DOMAIN='your.domain.example'
 export CERTBOT_EMAIL='ops@example.com'
 sudo bash /opt/operone/scripts/deploy/linux-ubuntu22-full.sh
 ```
@@ -136,10 +140,10 @@ sudo bash /opt/operone/scripts/deploy/linux-ubuntu22-full.sh
 
 ### 阶段 C — 恢复数据到新机
 
-在本机（**指向新机 IP**）：
+在本机把 `deploy.local.env` 改为**新机**，或临时设置环境变量：
 
 ```bash
-export OPERONE_DEPLOY_HOST=<新机公网IP>
+export OPERONE_DEPLOY_HOST=<new-server-ip>
 export OPERONE_DEPLOY_PASSWORD='***'
 
 python scripts/restore-prod-migration.py \
@@ -163,9 +167,6 @@ python scripts/restore-prod-migration.py \
 恢复后拉最新 `main` 并同步本机样品/封面（防止 bundle 略旧）：
 
 ```bash
-export OPERONE_DEPLOY_HOST=<新机IP>
-export OPERONE_DEPLOY_PASSWORD='***'
-
 python scripts/deploy-prod-with-assets.py
 ```
 
@@ -179,11 +180,11 @@ python scripts/deploy-prod-with-assets.py
 
 ### 阶段 E — 切 DNS + 验收
 
-1. 将 `operone.1oneclaw.com` A 记录指向新机 IP（TTL 过期前可双机并行测 IP 直连）。
+1. 将域名 A 记录指向新机 IP（TTL 过期前可双机并行测 IP 直连）。
 2. 验收清单：
 
 ```bash
-curl -s https://operone.1oneclaw.com/api/health
+curl -s https://your.domain.example/api/health
 # 浏览器：/arcade、/novel/feed、/play/sample-dou-dizhu
 python scripts/check-prod-literary-covers.py
 python scripts/verify-prod-doudizhu.py
@@ -198,6 +199,7 @@ python scripts/verify-prod-doudizhu.py
 | 脚本 | 作用 |
 |------|------|
 | `scripts/prod_ssh.py` | 统一 SSH 主机/密码/路径 |
+| `scripts/deploy.local.env.example` | 本地配置模板（复制为 `deploy.local.env`） |
 | `scripts/backup-prod-for-migration.py` | 旧机 → 本地 `.tgz` |
 | `scripts/restore-prod-migration.py` | 本地 `.tgz` → 新机 |
 | `scripts/deploy-prod-cee8b1d.py` | 仅代码部署 |
@@ -216,7 +218,7 @@ cd /opt/operone
 tar czf /tmp/operone-migrate.tgz \
   .env prisma/prod.db \
   public/covers public/game-sprites public/game-bg data
-scp root@旧机:/tmp/operone-migrate.tgz ./
+scp user@<old-host>:/tmp/operone-migrate.tgz ./
 ```
 
 在新机解压：
@@ -258,9 +260,30 @@ systemctl start operone
 - 用 `sync-literary-covers-to-prod.py` 按 **生产 DB `coverPath`** 补图。
 - DB 里 `coverPath` 为空的记录需在创作台重新生成封面。
 
-### Q: `OPERONE_DEPLOY_PASSWORD` 放哪？
+### Q: SSH 密码/密钥放哪？
 
-优先环境变量。本地 fallback 读取 `scripts/upload-literary-samples-to-server.py` 内 `PASSWORD=`（历史原因）；**新环境请只用环境变量**。
+**仅** `scripts/deploy.local.env` 或环境变量。勿写入任何会被 Git 跟踪的文件。若密钥曾误提交，请轮换密码并考虑 `git filter-repo` 清理历史。
+
+### Q: Rocky 10 一键部署常见问题（脚本已内置修复）
+
+| 现象 | 原因 | 脚本修复 |
+|------|------|----------|
+| `/opt/operone 非空` | `install.sh` 先建用户目录再 clone | 已改为 **先 clone 再 ensure_app_user** |
+| `export: '/opt/operone': not a valid identifier` | Rocky 上 `%q` + `runuser` + `bash -lc` | `app_user_bash_env` 改用单引号 export |
+| `dubious ownership` | root 在 www-data 仓库里 git | `ensure_git_safe_directory`（install + deploy） |
+| `.env: $'\r': command not found` | Windows 上传的 CRLF | `sanitize_env_file` + deploy 脚本 `sed` |
+| Prisma `Invalid client engine type` | 本机 `PRISMA_CLIENT_ENGINE_TYPE=binary` | 生产 `.env` 自动删除该行 |
+| `sqlite3: command not found` | Rocky 默认无 sqlite | `install_build_deps` 安装 sqlite |
+| `seed:samples` 缺 `bgmNotesJson` | schema 有列但缺迁移 | 迁移 `20260622120000_project_bgm_notes` |
+| HTTPS 单独配置 | 误用 `--phase nginx` | 用 `--nginx-only` / `--ssl-only` |
+
+重装后仅补 HTTPS 示例：
+
+```bash
+export OPERONE_DOMAIN=your.domain.example
+export CERTBOT_EMAIL=ops@example.com
+sudo bash /opt/operone/scripts/deploy/linux-ubuntu22-full.sh --ssl-only
+```
 
 ---
 
@@ -282,6 +305,7 @@ systemctl start operone
 ```
 scripts/
   prod_ssh.py
+  deploy.local.env.example   → copy to deploy.local.env (gitignored)
   backup-prod-for-migration.py
   restore-prod-migration.py
   deploy-prod-with-assets.py

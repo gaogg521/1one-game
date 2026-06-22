@@ -1,6 +1,6 @@
 /**
  * 样品 AI 修改链路实机验收（访客 /api/generate/patch + 试玩页 UI）
- * PLAYWRIGHT_BASE_URL=http://43.163.105.71:6666 npm run qa:sample-ai-patch-audit
+ * PLAYWRIGHT_BASE_URL=http://your-prod-host npm run qa:sample-ai-patch-audit
  */
 import fs from "node:fs";
 import http from "node:http";

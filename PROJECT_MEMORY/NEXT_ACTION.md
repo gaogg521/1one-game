@@ -10,6 +10,8 @@ python scripts/deploy-prod-with-assets.py
 
 或分步：`deploy-prod-cee8b1d.py` → `sync-sample-assets-to-prod.py` → `sync-literary-covers-to-prod.py`
 
+**SSH 配置**：复制 `scripts/deploy.local.env.example` → `scripts/deploy.local.env`（gitignore），填入 `OPERONE_DEPLOY_HOST` 等；真实 IP/密码不得提交 Git。
+
 验收：`check-prod-literary-covers.py` · `/novels` `/comics` `/samples` 封面不 404。
 
 详见 `PROJECT_MEMORY/DECISIONS.md` · 2026-06-22。
@@ -238,7 +240,7 @@ python scripts/deploy-prod-with-assets.py
 2. ✅ **生产部署**
    - `deploy-prod-playability-fix.py` → `git reset --hard origin/main` @ `5460b16`
    - `PORT=80` · setcap · build ✅ · `curl /api/health` → 200
-   - 访问：`http://operone.1oneclaw.com`
+   - 访问：生产域名（见 `scripts/deploy.local.env` 中 `OPERONE_DEPLOY_DOMAIN`）
 3. **验收建议**
    - `/zh-Hans/create` 创作台（勿用 `:6666`）
    - `/play/sample-color-bloom` 消消乐 HUD + 三关

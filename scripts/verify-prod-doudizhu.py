@@ -1,40 +1,33 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
-import paramiko
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-HOST = "43.163.105.71"
-REPO = "/opt/operone"
-
-
-def load_password() -> str:
-    p = Path(__file__).parent / "upload-literary-samples-to-server.py"
-    m = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', p.read_text(encoding="utf-8"), re.M)
-    return m.group(1) if m else sys.exit("no password")
-
-
-def run(client, cmd):
-    _, o, e = client.exec_command(cmd, timeout=60)
-    return (o.read() + e.read()).decode("utf-8", "replace").strip()
+from prod_ssh import connect, deploy_app_port, deploy_repo, print_target, run_output
 
 
 def main() -> int:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, 22, "root", load_password(), timeout=30, allow_agent=False, look_for_keys=False)
+    repo = deploy_repo()
+    port = deploy_app_port()
+    print_target("verify dou-dizhu sample")
+    client = connect()
     checks = [
-        f"sqlite3 {REPO}/prisma/prod.db \"SELECT id, title, coverPath FROM Project WHERE id='sample-dou-dizhu';\"",
-        f"test -f {REPO}/public/samples/dou-dizhu.jpg && echo cover_ok",
-        f"test -d {REPO}/public/game-sprites/sample-dou-dizhu && ls {REPO}/public/game-sprites/sample-dou-dizhu | wc -l",
-        f"test -f {REPO}/public/game-bg/sample-dou-dizhu.png && echo bg_ok",
-        "curl -sf http://127.0.0.1:80/api/samples | python3 -c \"import sys,json; d=json.load(sys.stdin); ids=[x.get('id') for x in d.get('samples',[])]; print('dou-dizhu' in ids, len(ids))\"",
+        f"sqlite3 {repo}/prisma/prod.db \"SELECT id, title, coverPath FROM Project WHERE id='sample-dou-dizhu';\"",
+        f"test -f {repo}/public/samples/dou-dizhu.jpg && echo cover_ok",
+        f"test -d {repo}/public/game-sprites/sample-dou-dizhu && ls {repo}/public/game-sprites/sample-dou-dizhu | wc -l",
+        f"test -f {repo}/public/game-bg/sample-dou-dizhu.png && echo bg_ok",
+        (
+            f"curl -sf http://127.0.0.1:{port}/api/samples | python3 -c "
+            "\"import sys,json; d=json.load(sys.stdin); ids=[x.get('id') for x in d.get('samples',[])]; "
+            "print('dou-dizhu' in ids, len(ids))\""
+        ),
     ]
     for cmd in checks:
-        print(run(client, cmd))
+        _, out = run_output(client, cmd)
+        print(out)
     client.close()
     return 0
 

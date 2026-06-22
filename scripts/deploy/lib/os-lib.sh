@@ -308,8 +308,8 @@ install_bootstrap_pkgs() {
   os_detect
   pkg_update
   case "$OS_FAMILY" in
-    debian) pkg_install curl ca-certificates git ;;
-    rhel)   pkg_install curl ca-certificates git ;;
+    debian) pkg_install curl ca-certificates git sqlite3 ;;
+    rhel)   pkg_install curl ca-certificates git sqlite ;;
   esac
 }
 
@@ -319,16 +319,16 @@ install_build_deps() {
 
   case "$OS_FAMILY" in
     debian)
-      pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils unzip
+      pkg_install curl ca-certificates git build-essential openssl rsync procps dnsutils unzip sqlite3
       ;;
     rhel)
       ensure_epel
       ensure_rhel_build_repos
       # CentOS 7 无 gcc-c++ 包名差异
       if [[ "$OS_ID" == centos && "$OS_VERSION_MAJOR" -eq 7 ]]; then
-        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip sqlite
       else
-        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip
+        pkg_install curl ca-certificates git gcc gcc-c++ make openssl rsync procps-ng bind-utils unzip sqlite
       fi
       ;;
   esac
@@ -519,6 +519,8 @@ refresh_deploy_scripts() {
 # 继续安装前同步仓库；旧 git 用 cd && git，不用 git -C
 sync_operone_repo() {
   local dir="${1:-${OPERONE_DIR:-/opt/operone}}" branch="${2:-main}" user="${3:-${OPERONE_USER:-www-data}}"
+
+  ensure_git_safe_directory "$dir" "$user"
 
   if [[ -d "$dir/.git" ]]; then
     os_warn "同步最新代码（含部署脚本）…"
@@ -718,6 +720,26 @@ run_as_app_user() {
   else
     sudo -u "$user" "$@"
   fi
+}
+
+# root 与 app 用户 git pull 时避免「dubious ownership」（Rocky/Ubuntu 常见）
+ensure_git_safe_directory() {
+  local dir="${1:-${OPERONE_DIR:-/opt/operone}}" user="${2:-${OPERONE_USER:-www-data}}"
+  [[ -d "$dir/.git" ]] || return 0
+  git config --global --add safe.directory "$dir" 2>/dev/null || true
+  if id "$user" &>/dev/null; then
+    run_as_app_user "$user" git config --global --add safe.directory "$dir" 2>/dev/null || true
+  fi
+}
+
+# 迁移/备份脚本依赖 sqlite3 CLI（Rocky 默认未装）
+ensure_sqlite_cli() {
+  command -v sqlite3 >/dev/null 2>&1 && return 0
+  os_detect
+  case "$OS_FAMILY" in
+    debian) pkg_install sqlite3 ;;
+    rhel)   pkg_install sqlite ;;
+  esac
 }
 
 # 预检入口（install / full 共用）

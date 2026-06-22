@@ -1,34 +1,39 @@
 #!/usr/bin/env python3
 """Re-run literary sample import on production."""
-import re
+from __future__ import annotations
+
 import sys
+from pathlib import Path
 
-import paramiko
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-raw = open("scripts/upload-literary-samples-to-server.py", encoding="utf-8").read()
-pw = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', raw, re.M).group(1)
+from prod_ssh import connect, deploy_app_port, deploy_repo, run_output
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect("43.163.105.71", 22, "root", pw, timeout=30, allow_agent=False, look_for_keys=False)
 
-cmds = [
-    "cd /opt/operone && python3 scripts/import-literary-samples.py --in /opt/operone/data/literary-samples-bundle",
-    "chown -R www-data:www-data /opt/operone/public /opt/operone/data",
-    "curl -sf 'http://127.0.0.1:6666/api/novel?limit=2'",
-    "curl -sf 'http://127.0.0.1:6666/api/comic?limit=2'",
-]
+def main() -> int:
+    repo = deploy_repo()
+    port = deploy_app_port()
+    bundle = f"{repo}/data/literary-samples-bundle"
+    client = connect()
+    cmds = [
+        f"cd {repo} && python3 scripts/import-literary-samples.py --in {bundle}",
+        f"chown -R www-data:www-data {repo}/public {repo}/data",
+        f"curl -sf 'http://127.0.0.1:{port}/api/novel?limit=2'",
+        f"curl -sf 'http://127.0.0.1:{port}/api/comic?limit=2'",
+    ]
+    for cmd in cmds:
+        print(">>>", cmd)
+        code, out = run_output(client, cmd, timeout=120)
+        if out:
+            print(out)
+        print(f"[exit {code}]")
+        if code != 0 and "import-literary" in cmd:
+            client.close()
+            return code
+    client.close()
+    print("DONE")
+    return 0
 
-for cmd in cmds:
-    print(">>>", cmd)
-    _, stdout, stderr = client.exec_command(cmd, timeout=120)
-    out = (stdout.read() + stderr.read()).decode("utf-8", "replace").strip()
-    code = stdout.channel.recv_exit_status()
-    if out:
-        print(out)
-    print(f"[exit {code}]")
-    if code != 0 and "import-literary" in cmd:
-        sys.exit(code)
 
-client.close()
-print("DONE")
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -2,16 +2,14 @@
 """Hot-deploy username auth to production server."""
 from __future__ import annotations
 
-import os
-import re
 import sys
+from pathlib import Path
 
-import paramiko
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-HOST = os.environ.get("OPERONE_DEPLOY_HOST", "43.163.105.71")
-USER = os.environ.get("OPERONE_DEPLOY_USER", "root")
-REMOTE = "/opt/operone"
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from prod_ssh import connect, deploy_app_port, deploy_repo, print_target, run
+
+REPO = Path(__file__).resolve().parent.parent
 
 UPLOAD_REL = [
     "prisma/schema.prisma",
@@ -29,46 +27,20 @@ UPLOAD_REL = [
     "scripts/deploy/Dockerfile.godot",
     "scripts/deploy-prod-smoke-test.py",
 ]
-UPLOAD_REL += [f"src/messages/{f}" for f in os.listdir(os.path.join(REPO, "src/messages")) if f.endswith(".json")]
-
-
-def password() -> str:
-    pw = os.environ.get("OPERONE_DEPLOY_PASSWORD", "")
-    if pw:
-        return pw
-    raw = open(os.path.join(REPO, "scripts/upload-literary-samples-to-server.py"), encoding="utf-8").read()
-    m = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', raw, re.M)
-    return m.group(1) if m else ""
-
-
-def run(client, cmd, timeout=3600):
-    print("\n>>>", cmd[:160])
-    _, o, e = client.exec_command(cmd, timeout=timeout)
-    out = o.read().decode("utf-8", "replace")
-    err = e.read().decode("utf-8", "replace")
-    code = o.channel.recv_exit_status()
-    text = (out + err).strip()
-    if text:
-        print(text[-5000:] if len(text) > 5000 else text)
-    print(f"[exit {code}]")
-    return code
+UPLOAD_REL += [f"src/messages/{f.name}" for f in (REPO / "src/messages").glob("*.json")]
 
 
 def main() -> int:
-    pw = password()
-    if not pw:
-        print("Set OPERONE_DEPLOY_PASSWORD", file=sys.stderr)
-        return 2
-
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, 22, USER, pw, timeout=30, allow_agent=False, look_for_keys=False)
+    remote = deploy_repo()
+    port = deploy_app_port()
+    print_target("username auth deploy")
+    client = connect()
     sftp = client.open_sftp()
 
     for rel in UPLOAD_REL:
-        local = os.path.join(REPO, rel.replace("/", os.sep))
-        remote = f"{REMOTE}/{rel.replace(chr(92), '/')}"
-        remote_dir = os.path.dirname(remote).replace("\\", "/")
+        local = REPO / rel
+        remote_path = f"{remote}/{rel.replace(chr(92), '/')}"
+        remote_dir = str(Path(remote_path).parent).replace("\\", "/")
         parts = remote_dir.split("/")
         cur = ""
         for p in parts:
@@ -80,14 +52,17 @@ def main() -> int:
             except OSError:
                 sftp.mkdir(cur)
         print("upload", rel)
-        sftp.put(local, remote)
+        sftp.put(str(local), remote_path)
     sftp.close()
 
     cmds = [
-        f"cd {REMOTE} && set -a && . ./.env && set +a && npx prisma migrate deploy",
-        f"cd {REMOTE} && runuser -u www-data -- bash -lc 'export PATH=/usr/local/bin:/usr/bin:$PATH; npx prisma generate && npm run build'",
-        f"bash {REMOTE}/scripts/deploy/linux-ubuntu22-full.sh --systemd-only",
-        f"cd {REMOTE} && AUTH_TEST_BASE_URL=http://127.0.0.1:6666 runuser -u www-data -- bash -lc 'export PATH=/usr/local/bin:/usr/bin:$PATH; npx tsx scripts/qa-username-auth.ts'",
+        f"cd {remote} && set -a && . ./.env && set +a && npx prisma migrate deploy",
+        f"cd {remote} && runuser -u www-data -- bash -lc 'export PATH=/usr/local/bin:/usr/bin:$PATH; npx prisma generate && npm run build'",
+        f"bash {remote}/scripts/deploy/linux-ubuntu22-full.sh --systemd-only",
+        (
+            f"cd {remote} && AUTH_TEST_BASE_URL=http://127.0.0.1:{port} runuser -u www-data -- bash -lc "
+            f"'export PATH=/usr/local/bin:/usr/bin:$PATH; npx tsx scripts/qa-username-auth.ts'"
+        ),
     ]
     for cmd in cmds:
         if run(client, cmd, timeout=7200) != 0:

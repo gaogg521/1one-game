@@ -49,16 +49,21 @@ generate_secret() {
   openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 64
 }
 
-# 兼容 CentOS 7 等旧 git（1.8.3 不支持 git -C）
+# 兼容 CentOS 7 等旧 git（1.8.3 不支持 git -C）；Rocky 上统一走 app_user_bash_env
 git_as_user_in_repo() {
   local user="$1"
   shift
-  run_as_app_user "$user" bash -lc "cd $(printf '%q' "$OPERONE_DIR") && git $*"
+  if [[ "$user" == "$OPERONE_USER" ]]; then
+    run_app_shell_as_user "git $*"
+  else
+    run_as_app_user "$user" bash -lc "$(app_user_bash_env) cd $(printf '%q' "$OPERONE_DIR") && git $*"
+  fi
 }
 
 # www-data/nginx 等系统用户默认家目录常为 /var/www（不可写）→ npm 报 EACCES
 app_user_bash_env() {
-  printf 'export HOME=%q NPM_CONFIG_CACHE=%q npm_config_cache=%q PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' \
+  # 单行 export；避免 %q + bash -lc + runuser 在 RHEL/Rocky 上拆成 `export /opt/operone`
+  printf "export HOME='%s' NPM_CONFIG_CACHE='%s' npm_config_cache='%s' PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; " \
     "$OPERONE_DIR" "$OPERONE_DIR/.npm-cache" "$OPERONE_DIR/.npm-cache"
 }
 
@@ -313,6 +318,7 @@ phase_deps() {
   log "[1/5] 安装系统依赖 …"
   is_centos7 && fix_centos7_vault_repos
   install_build_deps
+  ensure_sqlite_cli
   install_centos7_devtoolset || true
 
   # 内存 < 4GB 且 swap 不足时加 2G swap，避免 next build OOM（CentOS 7 常见 3.7GB）
@@ -358,6 +364,7 @@ ensure_operone_dir() {
 
 clone_or_update_repo() {
   ensure_operone_dir
+  ensure_git_safe_directory "$OPERONE_DIR" "$OPERONE_USER"
   if [[ -d "$OPERONE_DIR/.git" ]]; then
     log "仓库已存在，git pull …"
     git_as_user_in_repo "$OPERONE_USER" fetch origin
@@ -377,6 +384,7 @@ clone_or_update_repo() {
     mkdir -p "$(dirname "$OPERONE_DIR")"
     git clone --branch "$GIT_BRANCH" --depth 1 "$GIT_REPO" "$OPERONE_DIR"
     chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+    ensure_git_safe_directory "$OPERONE_DIR" "$OPERONE_USER"
     return 0
   fi
 
@@ -395,6 +403,20 @@ clone_or_update_repo() {
   fi
 
   die "无法获取源码：请设置 GIT_REPO=... 或在仓库根目录执行本脚本"
+}
+
+# 生产 .env 规范化：去掉 Windows CRLF、移除仅 Windows 有效的 Prisma 引擎设置
+sanitize_env_file() {
+  local env_file="${1:-$OPERONE_DIR/.env}"
+  [[ -f "$env_file" ]] || return 0
+  sed -i 's/\r$//' "$env_file"
+  sed -i '/^PRISMA_CLIENT_ENGINE_TYPE=/d' "$env_file"
+  sed -i '/^# Prisma on Windows may hit EPERM/d' "$env_file"
+}
+
+# systemd / bash source .env 时使用（避免 CRLF 导致 `$'\r'` 报错）
+shell_source_env() {
+  printf 'set -a && . <(sed "s/\\r$//" %q) && set +a' "$OPERONE_DIR/.env"
 }
 
 write_env_if_missing() {
@@ -444,6 +466,9 @@ write_env_if_missing() {
     append_env "GAME_SPRITE_COMFY" "1"
     log "OPERONE_STAGING=1 → Browser Bench + QA routes + Comfy sprite pipeline"
   fi
+
+  sanitize_env_file "$env_file"
+  chown "$OPERONE_USER:$OPERONE_USER" "$env_file" 2>/dev/null || true
 }
 
 merge_env_key() {
@@ -465,6 +490,7 @@ phase_app() {
 
   clone_or_update_repo
   write_env_if_missing
+  sanitize_env_file
 
   merge_env_key "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   merge_env_key "OPENAI_BASE_URL" "${OPENAI_BASE_URL:-}"

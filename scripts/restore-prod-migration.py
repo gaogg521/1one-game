@@ -49,7 +49,11 @@ def restore_on_server(remote_tar: str, skip_migrate: bool, skip_restart: bool) -
         f"chown www-data:www-data {repo}/.env 2>/dev/null || true",
     ]
     if not skip_migrate:
-        steps.append(f"cd {repo} && set -a && . ./.env && set +a && npx prisma migrate deploy")
+        steps.append(
+            f"cd {repo} && sed -i 's/\\r$//' .env 2>/dev/null; "
+            f"sed -i '/^PRISMA_CLIENT_ENGINE_TYPE=/d' .env 2>/dev/null || true; "
+            f"set -a && . <(sed 's/\\r$//' {repo}/.env) && set +a && npx prisma migrate deploy"
+        )
     if not skip_restart:
         steps.extend(
             [

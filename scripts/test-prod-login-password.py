@@ -1,20 +1,46 @@
 #!/usr/bin/env python3
-import re
-import paramiko
+"""Test production login API (credentials via env only).
 
-raw = open("scripts/upload-literary-samples-to-server.py", encoding="utf-8").read()
-pw = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', raw, re.M).group(1)
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect("43.163.105.71", 22, "root", pw, timeout=30, allow_agent=False, look_for_keys=False)
+Set before run:
+  OPERONE_TEST_ACCOUNT
+  OPERONE_TEST_PASSWORD
+"""
+from __future__ import annotations
 
-cmds = [
-    "sqlite3 /opt/operone/prisma/prod.db \"SELECT id, username, role, legacyOwnerKey FROM User;\"",
-    """curl -sS -m 20 -w '\\nHTTP:%{http_code}\\n' -X POST http://127.0.0.1:6666/api/auth/login -H 'Content-Type: application/json' -H 'Cookie: operone_owner=anon-test-key-12345' -d '{\"account\":\"allenzhao\",\"password\":\"40725f30d9c3162e2e9c20\"}'""",
-    """curl -sS -m 20 -w '\\nHTTP:%{http_code}\\n' -X POST http://127.0.0.1:6666/api/auth/login -H 'Content-Type: application/json' -d '{\"account\":\"allenzhao\",\"password\":\"40725f30d9c3162e2e9c20\"}'""",
-]
-for cmd in cmds:
-    print(">>>", cmd[:100])
-    _, o, e = client.exec_command(cmd, timeout=30)
-    print((o.read()+e.read()).decode()[:2000])
-client.close()
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from prod_ssh import connect, deploy_app_port, deploy_repo, run_output
+
+
+def main() -> int:
+    account = os.environ.get("OPERONE_TEST_ACCOUNT", "").strip()
+    password = os.environ.get("OPERONE_TEST_PASSWORD", "").strip()
+    if not account or not password:
+        print("Set OPERONE_TEST_ACCOUNT and OPERONE_TEST_PASSWORD", file=sys.stderr)
+        return 1
+
+    repo = deploy_repo()
+    port = deploy_app_port()
+    client = connect()
+    cmds = [
+        f"sqlite3 {repo}/prisma/prod.db \"SELECT id, username, role FROM User LIMIT 10;\"",
+        (
+            f"curl -sS -m 20 -w '\\nHTTP:%{{http_code}}\\n' -X POST http://127.0.0.1:{port}/api/auth/login "
+            f"-H 'Content-Type: application/json' "
+            f"-d '{{\"account\":\"{account}\",\"password\":\"{password}\"}}'"
+        ),
+    ]
+    for cmd in cmds:
+        print(">>>", cmd[:100])
+        _, out = run_output(client, cmd)
+        print(out[:2000])
+    client.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

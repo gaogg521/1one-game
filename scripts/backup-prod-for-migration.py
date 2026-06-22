@@ -9,7 +9,7 @@ Usage (from repo root, on a machine with SSH access):
   python scripts/backup-prod-for-migration.py --output backups/my-migrate.tgz
 
 Optional — backup a different (old) host before cutover:
-  set OPERONE_DEPLOY_HOST=43.163.105.71
+  set OPERONE_DEPLOY_HOST=<old-server-ip>
   python scripts/backup-prod-for-migration.py
 
 See docs/server-migration.md

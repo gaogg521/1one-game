@@ -76,7 +76,7 @@ Operone 一键部署（内部脚本，用户请用 install.sh）
   OPERONE_USER    运行用户，默认 www-data
   GIT_REPO        源码仓库地址
 
-高级选项：--update  --systemd-only  --no-nginx  --no-ssl  --interactive  -h
+高级选项：--update  --systemd-only  --nginx-only  --ssl-only  --no-nginx  --no-ssl  --interactive  -h
 EOF
 }
 
@@ -117,6 +117,17 @@ parse_args() {
         ;;
       --systemd-only)
         MODE="systemd-only"
+        shift
+        ;;
+      --nginx-only)
+        MODE="nginx-only"
+        ENABLE_NGINX=1
+        shift
+        ;;
+      --ssl-only)
+        MODE="ssl-only"
+        ENABLE_NGINX=1
+        ENABLE_SSL=1
         shift
         ;;
       -h|--help)
@@ -259,6 +270,28 @@ run_update() {
   print_deploy_summary
 }
 
+run_nginx_only() {
+  need_root
+  [[ -d "$OPERONE_DIR" ]] || die "未找到 $OPERONE_DIR"
+  [[ -n "${OPERONE_DOMAIN:-}" ]] || die "请设置 OPERONE_DOMAIN"
+  collect_config
+  log "════════ 仅配置 Nginx ════════"
+  phase_nginx
+  print_deploy_summary
+}
+
+run_ssl_only() {
+  need_root
+  [[ -d "$OPERONE_DIR" ]] || die "未找到 $OPERONE_DIR"
+  [[ -n "${OPERONE_DOMAIN:-}" ]] || die "请设置 OPERONE_DOMAIN"
+  [[ -n "${CERTBOT_EMAIL:-}" ]] || die "请设置 CERTBOT_EMAIL"
+  collect_config
+  log "════════ 仅申请 HTTPS ════════"
+  phase_nginx
+  phase_ssl || warn "HTTPS 申请失败，可稍后: certbot --nginx -d $OPERONE_DOMAIN"
+  print_deploy_summary
+}
+
 run_full_install() {
   preflight
   collect_config
@@ -290,6 +323,8 @@ main() {
   case "$MODE" in
     update) run_update ;;
     systemd-only) run_systemd_only ;;
+    nginx-only) run_nginx_only ;;
+    ssl-only) run_ssl_only ;;
     *) run_full_install ;;
   esac
 }

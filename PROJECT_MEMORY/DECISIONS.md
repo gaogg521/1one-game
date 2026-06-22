@@ -4,13 +4,13 @@
 
 ## 2026-06-22 — 生产服务器可迁移性（备份/恢复脚本）
 
-**背景**：生产在 CentOS 7（`43.163.105.71`），未来需迁到 Ubuntu 22 / Rocky 9 等新机。
+**背景**：生产在 CentOS 7，未来需迁到 Ubuntu 22 / Rocky 9 等新机。SSH 目标通过 `scripts/deploy.local.env`（gitignore）或 `OPERONE_DEPLOY_*` 环境变量配置，**真实 IP/密码不得写入 Git**。
 
 **决策**：
 
 | 能力 | 路径 |
 |------|------|
-| 统一 SSH 目标 | `scripts/prod_ssh.py` + 环境变量 `OPERONE_DEPLOY_*` |
+| 统一 SSH 目标 | `scripts/prod_ssh.py` + `scripts/deploy.local.env` / `OPERONE_DEPLOY_*` |
 | 旧机备份 | `scripts/backup-prod-for-migration.py` → `backups/*.tgz` |
 | 新机恢复 | `scripts/restore-prod-migration.py --bundle ...` |
 | 完整文档 | `docs/server-migration.md`（给 AI / 运维） |

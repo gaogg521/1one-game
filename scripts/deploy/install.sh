@@ -5,7 +5,7 @@
 #    curl -fsSL .../install.sh | bash
 #
 #  权限：已是 root 直接装；普通用户自动 sudo（会提示输入密码）
-#  支持：Ubuntu / Debian / Rocky / Alma / RHEL / CentOS 7（均默认源码 install.sh）
+#  支持：Ubuntu / Debian / Rocky / Alma / RHEL 8+ / Rocky 10 / CentOS 7（均默认源码 install.sh）
 #  Docker 可选：OPERONE_USE_DOCKER=1 或 install-docker.sh
 #
 #  自定义目录（默认 /opt/operone）：
@@ -163,7 +163,6 @@ log "拉取代码: $GIT_REPO → $OPERONE_DIR"
 
 os_preflight
 install_bootstrap_pkgs
-ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"
 
 if [[ -d "$OPERONE_DIR" ]]; then
   if [[ -d "$OPERONE_DIR/.git" ]]; then
@@ -178,7 +177,10 @@ fi
 if [[ ! -f "$FULL_SH" ]]; then
   mkdir -p "$(dirname "$OPERONE_DIR")"
   git clone --branch "$GIT_BRANCH" --depth 1 "$GIT_REPO" "$OPERONE_DIR"
-  chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
 fi
+
+ensure_app_user "$OPERONE_USER" "$OPERONE_DIR"
+chown -R "$OPERONE_USER:$OPERONE_USER" "$OPERONE_DIR"
+git config --global --add safe.directory "$OPERONE_DIR" 2>/dev/null || true
 
 exec bash "$OPERONE_DIR/scripts/deploy/linux-ubuntu22-full.sh" "$@"
