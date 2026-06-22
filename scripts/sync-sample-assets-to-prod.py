@@ -2,37 +2,17 @@
 """Sync local sample game assets (sprites + backgrounds) to production."""
 from __future__ import annotations
 
-import re
 import sys
 import tarfile
 import tempfile
 from pathlib import Path
 
-import paramiko
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-HOST = "43.163.105.71"
-USER = "root"
-REPO = "/opt/operone"
+from prod_ssh import connect, deploy_repo, print_target, run_output
+
+REPO = deploy_repo()
 REMOTE_TAR = f"{REPO}/data/sample-assets-bundle.tar.gz"
-
-
-def load_password() -> str:
-    if pw := __import__("os").environ.get("OPERONE_DEPLOY_PASSWORD"):
-        return pw
-    p = Path(__file__).parent / "upload-literary-samples-to-server.py"
-    m = re.search(r'^PASSWORD\s*=\s*"([^"]*)"', p.read_text(encoding="utf-8"), re.M)
-    return m.group(1) if m else sys.exit("Set OPERONE_DEPLOY_PASSWORD")
-
-
-def run(client: paramiko.SSHClient, cmd: str, timeout: int = 600) -> tuple[int, str]:
-    print("\n>>>", cmd[:220])
-    _, stdout, stderr = client.exec_command(cmd, timeout=timeout)
-    out = (stdout.read() + stderr.read()).decode("utf-8", "replace").strip()
-    code = stdout.channel.recv_exit_status()
-    if out:
-        print(out[-4000:])
-    print(f"[exit {code}]")
-    return code, out
 
 
 def collect_local_assets(root: Path) -> list[Path]:
@@ -63,6 +43,7 @@ def build_tar(repo: Path, dest: Path) -> tuple[int, int]:
 
 def main() -> int:
     repo = Path(__file__).resolve().parent.parent
+    print_target("sync samples")
     items = collect_local_assets(repo)
     if not items:
         print("No local sample assets found.")
@@ -81,11 +62,8 @@ def main() -> int:
     size_mb = tar_path.stat().st_size / (1024 * 1024)
     print(f"Bundle: {roots} roots, {files} files, {size_mb:.1f} MB")
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, 22, USER, load_password(), timeout=30, allow_agent=False, look_for_keys=False)
-
-    run(client, f"mkdir -p {REPO}/data")
+    client = connect()
+    run_output(client, f"mkdir -p {REPO}/data")
     sftp = client.open_sftp()
     print(f"Uploading -> {REMOTE_TAR}")
     sftp.put(str(tar_path), REMOTE_TAR)
@@ -100,7 +78,7 @@ def main() -> int:
         f"du -sh {REPO}/public/game-sprites {REPO}/public/game-bg",
     ]
     for cmd in steps:
-        code, _ = run(client, cmd)
+        code, _ = run_output(client, cmd)
         if code != 0 and "grep" not in cmd:
             client.close()
             return code

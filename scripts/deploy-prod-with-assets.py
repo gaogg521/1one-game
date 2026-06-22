@@ -8,6 +8,8 @@ Order:
   3. sync-literary-covers-to-prod.py — public/covers/* referenced by prod Novel/Comic DB
 
 Run from repo root on a machine that has local public/ assets (typically dev laptop).
+
+Target: OPERONE_DEPLOY_HOST (see docs/server-migration.md).
 """
 from __future__ import annotations
 

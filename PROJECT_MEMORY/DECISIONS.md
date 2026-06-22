@@ -2,6 +2,23 @@
 
 更新时间：**2026-06-22**
 
+## 2026-06-22 — 生产服务器可迁移性（备份/恢复脚本）
+
+**背景**：生产在 CentOS 7（`43.163.105.71`），未来需迁到 Ubuntu 22 / Rocky 9 等新机。
+
+**决策**：
+
+| 能力 | 路径 |
+|------|------|
+| 统一 SSH 目标 | `scripts/prod_ssh.py` + 环境变量 `OPERONE_DEPLOY_*` |
+| 旧机备份 | `scripts/backup-prod-for-migration.py` → `backups/*.tgz` |
+| 新机恢复 | `scripts/restore-prod-migration.py --bundle ...` |
+| 完整文档 | `docs/server-migration.md`（给 AI / 运维） |
+
+**迁移口诀**：备份 → 新机 `install.sh` → restore → `deploy-prod-with-assets.py` → 切 DNS。
+
+---
+
 ## 2026-06-22 — 生产部署必须同步运行时素材（不进 Git）
 
 **背景**：`public/covers/`、`public/game-sprites/`、`public/game-bg/` 被 `.gitignore` 排除；`git pull + build` 只更新代码，**不会**带上本机生成的封面/精灵/背景。生产 DB 的 `coverPath` / 样品 `sample-*` 路径会 404。
