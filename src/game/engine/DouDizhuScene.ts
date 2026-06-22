@@ -6,7 +6,7 @@ import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
-import { drawAvatar, AVATAR_COLORS } from "@/game/engine/avatar-draw";
+import { drawAvatar, drawQqCharacter, AVATAR_COLORS } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildDouDizhuBlueprint } from "@/lib/dou-dizhu-blueprint";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
@@ -977,14 +977,30 @@ export class DouDizhuScene extends Phaser.Scene {
   private buildAvatars() {
     for (const g of this.avatarGraphics) g.destroy();
     this.avatarGraphics = [];
-    // 三家人物头像（五官人脸）：玩家(蓝) + AI 下家(紫) + AI 上家(粉)
-    const colors = [AVATAR_COLORS.player, AVATAR_COLORS.ai1, AVATAR_COLORS.ai2];
-    for (const seat of [0, 1, 2] as const) {
-      const x = this.seatX(seat);
-      const y = this.seatY(seat) - 14;
-      const g = drawAvatar(this, x, y, { bodyColor: colors[seat]!, radius: 20, depth: 11 });
-      this.avatarGraphics.push(g);
-    }
+
+    const viewW = this.scale.width;
+    const viewH = this.scale.height;
+    const sc = Math.min(viewW, viewH) / 480; // 自适应缩放
+
+    // 玩家（seat 0）：底部中间，小头像
+    const g0 = drawAvatar(this, this.seatX(0), this.seatY(0) - 14, {
+      bodyColor: AVATAR_COLORS.player,
+      radius: 20,
+      depth: 11,
+    });
+    this.avatarGraphics.push(g0);
+
+    // AI 左侧（seat 1）：全身女孩角色，贴桌子左侧
+    const leftX = viewW * 0.08;
+    const leftFootY = viewH * 0.7;
+    const g1 = drawQqCharacter(this, leftX, leftFootY, "girl", { scale: sc, depth: 11 });
+    this.avatarGraphics.push(g1);
+
+    // AI 右侧（seat 2）：全身大叔角色，贴桌子右侧
+    const rightX = viewW * 0.92;
+    const rightFootY = viewH * 0.7;
+    const g2 = drawQqCharacter(this, rightX, rightFootY, "man", { scale: sc, depth: 11 });
+    this.avatarGraphics.push(g2);
   }
 
   // ─── UI ───
