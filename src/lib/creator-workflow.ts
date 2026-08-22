@@ -6,6 +6,16 @@ export type CreatorQualityReport = {
   verdict: "ready" | "needs_polish" | "blocked";
   score?: number;
   evidence: string[];
+  /** 作品内部可独立修复的章节或页面；游戏保持为空。 */
+  units?: CreatorQualityUnit[];
+};
+
+export type CreatorQualityUnit = {
+  id: string;
+  label: string;
+  verdict: CreatorQualityReport["verdict"];
+  score: number;
+  evidence: string[];
 };
 
 export function resolveCreatorWorkStage(input: {

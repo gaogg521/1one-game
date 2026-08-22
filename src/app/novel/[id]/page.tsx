@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -42,6 +42,7 @@ import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/nov
 import { NovelCharacterRosterPanel } from "@/components/literary/NovelCharacterRosterPanel";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import type { CreatorQualityReport } from "@/lib/creator-workflow";
 
 interface Novel {
   id: string;
@@ -64,20 +65,33 @@ interface Novel {
   remainingChapterCount?: number;
   status?: string;
   characterRoster?: ComicCharacterRoster | null;
+  quality?: CreatorQualityReport;
 }
 
 export default function NovelDetailPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const locale = useLocale() as AppLocale;
   const t = useTranslations("novelRead");
   const tc = useTranslations("common");
+  const ts = useTranslations("studio");
+  const requestedChapter = Number(searchParams.get("comicChapter"));
+  const requestedChapterNumber = Number.isFinite(requestedChapter) && requestedChapter >= 1 ? requestedChapter : null;
+  const requestedResumeComic = searchParams.get("resumeComic")?.trim() || undefined;
   const [novel, setNovel] = useState<Novel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [comicSetupOpen, setComicSetupOpen] = useState(false);
-  const [initialChapterScope, setInitialChapterScope] = useState<ComicChapterScope | null>(null);
-  const [resumeComicId, setResumeComicId] = useState<string | undefined>();
+  const [comicSetupOpen, setComicSetupOpen] = useState(
+    () => searchParams.get("adaptComic") === "1" || Boolean(requestedResumeComic) || requestedChapterNumber !== null,
+  );
+  const [initialChapterScope, setInitialChapterScope] = useState<ComicChapterScope | null>(() =>
+    requestedChapterNumber === null
+      ? null
+      : { fromChapter: requestedChapterNumber, toChapter: requestedChapterNumber, label: t("chapterLabel", { num: requestedChapterNumber }) },
+  );
+  const [resumeComicId, setResumeComicId] = useState<string | undefined>(() => requestedResumeComic);
   const [editing, setEditing] = useState(false);
+  const [repairChapter, setRepairChapter] = useState<number | null>(null);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
   const [readerTheme, setReaderTheme] = useState<NovelReaderThemeId>("paper");
   const coverRef = useRef<NovelReadCoverHandle>(null);
@@ -102,29 +116,6 @@ export default function NovelDetailPage() {
       );
     });
   }, [id, locale, t]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const ch = params.get("comicChapter")?.trim();
-    if (params.get("adaptComic") === "1") {
-      setComicSetupOpen(true);
-    }
-    const resume = params.get("resumeComic")?.trim();
-    if (resume) {
-      setResumeComicId(resume);
-      setComicSetupOpen(true);
-    }
-    if (!ch) return;
-    const num = parseInt(ch, 10);
-    if (!Number.isFinite(num) || num < 1) return;
-    setComicSetupOpen(true);
-    setInitialChapterScope({
-      fromChapter: num,
-      toChapter: num,
-      label: t("chapterLabel", { num }),
-    });
-  }, []);
 
   const displayMeta = useMemo(() => {
     if (!novel) return null;
@@ -254,7 +245,10 @@ export default function NovelDetailPage() {
                   {novel.isOwner ? (
                     <button
                       type="button"
-                      onClick={() => setEditing(true)}
+                      onClick={() => {
+                        setRepairChapter(null);
+                        setEditing(true);
+                      }}
                       className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs font-medium text-[var(--gc-muted)] transition hover:text-[var(--gc-text)]"
                     >
                       {t("editContent")}
@@ -313,7 +307,10 @@ export default function NovelDetailPage() {
               {novel.isOwner && !editing && (
                 <button
                   type="button"
-                  onClick={() => setEditing(true)}
+                  onClick={() => {
+                    setRepairChapter(null);
+                    setEditing(true);
+                  }}
                   className="rounded-lg border px-3 py-2 text-xs font-medium transition"
                   style={{
                     borderColor: `${readPalette.tocActive}55`,
@@ -423,6 +420,42 @@ export default function NovelDetailPage() {
           )}
         </header>
 
+        {!editing && novel.isOwner && novel.quality?.units?.length ? (
+          <section className="mx-auto max-w-2xl px-4 pb-4 lg:px-6" data-testid="novel-chapter-quality">
+            <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)]">{ts("qualityReview")}</p>
+              <div className="mt-3 space-y-2">
+                {novel.quality.units.map((unit) => {
+                  const chapter = Number(unit.id.replace("chapter-", ""));
+                  const needsRepair = unit.verdict !== "ready";
+                  return (
+                    <div key={unit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs">
+                      <div className="min-w-0">
+                        <span className={needsRepair ? "text-amber-300" : "text-emerald-400"}>
+                          {unit.label} · {ts("qualityScore", { score: unit.score })}
+                        </span>
+                        {unit.evidence[0] ? <p className="mt-0.5 truncate font-mono text-[10px] text-[var(--gc-text-faint)]">{unit.evidence[0]}</p> : null}
+                      </div>
+                      {needsRepair && Number.isFinite(chapter) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRepairChapter(chapter);
+                            setEditing(true);
+                          }}
+                          className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 font-medium text-amber-300 hover:bg-amber-400/15"
+                        >
+                          {ts("repairNow")}
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         {!editing && novel.isOwner && novel.chapterAdaptation ? (
           <div className="mx-auto max-w-2xl px-4 pb-3 lg:px-6">
             <ComicChapterAdaptationBanner
@@ -482,6 +515,7 @@ export default function NovelDetailPage() {
             novelId={novel.id}
             initialTitle={novel.title}
             initialContent={novel.content}
+            initialFocusChapter={repairChapter}
             onSaved={(data) => {
               setNovel((prev) =>
                 prev
@@ -494,9 +528,13 @@ export default function NovelDetailPage() {
                   : prev,
               );
               setEditing(false);
+              setRepairChapter(null);
               setError("");
             }}
-            onCancel={() => setEditing(false)}
+            onCancel={() => {
+              setEditing(false);
+              setRepairChapter(null);
+            }}
           />
         ) : isChildrenReader ? (
           <ChildrenNovelReader

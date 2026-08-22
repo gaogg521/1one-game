@@ -29,6 +29,7 @@ import { ComicDetailCoverPreview } from "@/components/comic/ComicDetailCoverPrev
 import { ComicStoryboardOutline } from "@/components/literary/ComicStoryboardOutline";
 import { inferStoryGenre } from "@/lib/cover-genre";
 import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-user";
+import type { CreatorQualityReport } from "@/lib/creator-workflow";
 
 interface Comic {
   id: string;
@@ -45,16 +46,18 @@ interface Comic {
   status?: string;
   panelsWithImage?: number;
   panelsTotal?: number;
+  quality?: CreatorQualityReport;
 }
 
 export default function ComicDetailPage() {
   const tr = useTranslations("comicRead");
   const tStory = useTranslations("storyboardOutline");
+  const ts = useTranslations("studio");
   const locale = useLocale() as AppLocale;
   const { id } = useParams();
   const searchParams = useSearchParams();
   const autoRenderStarted = useRef(false);
-  const renderSessionStartWithImage = useRef(0);
+  const [renderSessionStartWithImage, setRenderSessionStartWithImage] = useState(0);
   const [comic, setComic] = useState<Comic | null>(null);
   const [pages, setPages] = useState<ComicPage[]>([]);
   const [stylePreset, setStylePreset] = useState<ComicStylePresetId | undefined>();
@@ -133,7 +136,7 @@ export default function ComicDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadComic]);
+  }, [loadComic, tr]);
 
   useEffect(() => {
     if (!id) return;
@@ -172,14 +175,14 @@ export default function ComicDetailPage() {
     if (remaining <= 0) return null;
     const completedThisSession = Math.max(
       0,
-      renderProgress.withImage - renderSessionStartWithImage.current,
+      renderProgress.withImage - renderSessionStartWithImage,
     );
     const avgMs = avgPanelMsFromSession({
       panelsCompletedThisSession: completedThisSession,
       elapsedMs: renderProgress.elapsedMs ?? 0,
     });
     return formatImageGenElapsed(estimateComicPanelEtaMs(remaining, avgMs), locale);
-  }, [renderProgress, locale]);
+  }, [renderProgress, locale, renderSessionStartWithImage]);
 
   const handleRenderPanels = useCallback(
     async (opts?: { regenerate?: boolean; page?: number; panel?: number }) => {
@@ -187,7 +190,7 @@ export default function ComicDetailPage() {
       setRendering(true);
       setRenderMsg(null);
       setError("");
-      renderSessionStartWithImage.current = panelStats.withImage;
+      setRenderSessionStartWithImage(panelStats.withImage);
     const regenPage = opts?.page;
     setRenderProgress({
       total: panelStats.total || comic.panelsTotal || 4,
@@ -510,6 +513,7 @@ export default function ComicDetailPage() {
   if (!comic) return null;
 
   const page = pages[currentPage];
+  const currentPageQuality = comic.quality?.units?.find((unit) => unit.id === `page-${page?.page}`);
   const total = pages.length;
   const heading = comic.displayTitle ?? comic.title;
   const linkedNovel = comic.novel;
@@ -745,6 +749,30 @@ export default function ComicDetailPage() {
             <p className="mb-4 text-sm text-[color:var(--gc-accent)]">{renderMsg}</p>
           ) : null}
           {error && rendering ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
+
+          {comic.isOwner && currentPageQuality ? (
+            <section className="mb-4 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4" data-testid="comic-page-quality">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)]">{ts("qualityReview")}</p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className={currentPageQuality.verdict === "ready" ? "text-emerald-400" : "text-amber-300"}>
+                    {currentPageQuality.label} · {ts("qualityScore", { score: currentPageQuality.score })}
+                  </span>
+                  {currentPageQuality.evidence[0] ? <p className="mt-1 font-mono text-[10px] text-[var(--gc-text-faint)]">{currentPageQuality.evidence[0]}</p> : null}
+                </div>
+                {currentPageQuality.verdict !== "ready" && panelStats.withImage > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => confirmRegenerate("page")}
+                    disabled={rendering}
+                    className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 font-medium text-amber-300 hover:bg-amber-400/15 disabled:opacity-50"
+                  >
+                    {tr("regenPage")}
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           {total === 0 ? (
             <p className="text-[var(--gc-muted)]">{tr("noPanels")}</p>

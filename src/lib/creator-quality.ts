@@ -1,6 +1,6 @@
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { parseComicImageUrls, type ComicDocument } from "@/lib/comic-format";
-import { buildCreatorQualityReport, type CreatorQualityReport } from "@/lib/creator-workflow";
+import { buildCreatorQualityReport, type CreatorQualityReport, type CreatorQualityUnit } from "@/lib/creator-workflow";
 import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
 import type { GameSpec } from "@/lib/game-spec";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
@@ -77,9 +77,29 @@ export function assessNovelCreatorQuality(input: {
   if (firstChapter.length < 300) evidence.push("opening_hook_needs_review");
   if (paragraphUniqueness < 0.85) evidence.push("repetition_needs_review");
 
-  return {
-    report: buildCreatorQualityReport({ kind: "novel", score, evidence }),
-  };
+  const units: CreatorQualityUnit[] = chapters.map((chapter, index) => {
+    const body = chapter.body.trim();
+    const chapterUniqueness = uniqueParagraphRatio(body);
+    let chapterScore = 0;
+    if (body.length >= 180) chapterScore += 40;
+    if (body.length >= 500) chapterScore += 20;
+    if (chapter.title.trim().length > 0) chapterScore += 10;
+    if (index === 0 && body.length >= 300) chapterScore += 15;
+    if (chapterUniqueness >= 0.85) chapterScore += 15;
+    const chapterReport = buildCreatorQualityReport({
+      kind: "novel",
+      score: chapterScore,
+      evidence: [
+        `chapter_chars:${body.length}`,
+        `chapter_uniqueness:${Math.round(chapterUniqueness * 100)}%`,
+        ...(index === 0 && body.length < 300 ? ["opening_hook_needs_review"] : []),
+        ...(body.length < 180 ? ["chapter_body_needs_expansion"] : []),
+      ],
+    });
+    return { id: `chapter-${chapter.num}`, label: `chapter:${chapter.num}`, ...chapterReport, score: chapterScore };
+  });
+
+  return { report: { ...buildCreatorQualityReport({ kind: "novel", score, evidence }), units } };
 }
 
 function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
@@ -114,5 +134,31 @@ function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
 }
 
 export function assessComicCreatorQuality(rawDocument: string): CreatorQualityAssessment {
-  return { report: assessComicDocument(parseComicImageUrls(rawDocument)) };
+  const doc = parseComicImageUrls(rawDocument);
+  const report = assessComicDocument(doc);
+  const units: CreatorQualityUnit[] = doc.pages.map((page) => {
+    const panels = page.panels;
+    const rendered = panels.filter((panel) => Boolean(panel.imageUrl?.trim())).length;
+    const readable = panels.filter(
+      (panel) => panel.caption.trim().length > 0 && panel.caption.length <= 180 && panel.prompt.trim().length > 0,
+    ).length;
+    let score = 0;
+    if (panels.length > 0) score += 25;
+    if (panels.length >= 2) score += 20;
+    if (readable === panels.length && panels.length > 0) score += 25;
+    if (rendered === panels.length && panels.length > 0) score += 30;
+    const pageReport = buildCreatorQualityReport({
+      kind: "comic",
+      score,
+      evidence: [
+        `page_panels:${panels.length}`,
+        `page_rendered_panels:${rendered}/${panels.length}`,
+        `page_readable_panels:${readable}/${panels.length}`,
+        ...(rendered < panels.length ? ["page_rendering_incomplete"] : []),
+        ...(readable < panels.length ? ["page_text_or_prompt_needs_review"] : []),
+      ],
+    });
+    return { id: `page-${page.page}`, label: `page:${page.page}`, ...pageReport, score };
+  });
+  return { report: { ...report, units } };
 }

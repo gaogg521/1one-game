@@ -10,6 +10,8 @@ const novel = assessNovelCreatorQuality({
   content: `${"小熊在清晨听见花园里传来细小的哭声。它循着声音找到了失去颜色的花朵，于是邀请朋友们一起浇水、唱歌、等待阳光。".repeat(7)}\n\n${"傍晚时，花园重新开满颜色。小熊明白，照顾朋友和耐心等待都会带来温暖的结果。".repeat(3)}`,
 });
 assert(novel.report.score !== undefined && novel.report.score >= 75, "complete children's novel should be quality-ready");
+assert(novel.report.units?.length === 1, "novel quality should include one repairable chapter unit");
+assert(novel.report.units?.[0]?.verdict === "ready", "complete chapter should be quality-ready");
 
 const comic = assessComicCreatorQuality(JSON.stringify({
   formatVersion: 3,
@@ -27,7 +29,10 @@ const comic = assessComicCreatorQuality(JSON.stringify({
   ],
 }));
 assert(comic.report.verdict === "ready", "anchored fully rendered comic should be quality-ready");
+assert(comic.report.units?.length === 2, "comic quality should include one repairable unit per page");
+assert(comic.report.units?.every((unit) => unit.verdict === "ready"), "rendered pages should be quality-ready");
 
 const incompleteComic = assessComicCreatorQuality(JSON.stringify({ formatVersion: 2, pageCount: 1, pages: [{ page: 1, panels: [] }] }));
 assert(incompleteComic.report.verdict === "blocked", "empty storyboard should require quality review");
+assert(incompleteComic.report.units?.[0]?.verdict === "blocked", "empty page should require page repair");
 console.log("[OK] qa-creator-quality");

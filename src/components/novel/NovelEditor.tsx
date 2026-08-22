@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -18,11 +18,12 @@ interface NovelEditorProps {
   novelId: string;
   initialTitle: string;
   initialContent: string;
+  initialFocusChapter?: number | null;
   onSaved: (data: { title: string; content: string; summary?: string | null }) => void;
   onCancel: () => void;
 }
 
-export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, onCancel }: NovelEditorProps) {
+export function NovelEditor({ novelId, initialTitle, initialContent, initialFocusChapter, onSaved, onCancel }: NovelEditorProps) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("novelEditor");
   const parsed = useMemo(() => parseNovelChapters(initialContent, locale), [initialContent, locale]);
@@ -36,6 +37,14 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!initialFocusChapter) return;
+    document.getElementById(`novel-editor-chapter-${initialFocusChapter}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [initialFocusChapter]);
 
   function updateChapter(index: number, patch: Partial<ChapterEdit>) {
     setChapters((prev) => prev.map((ch, i) => (i === index ? { ...ch, ...patch } : ch)));
@@ -115,6 +124,7 @@ export function NovelEditor({ novelId, initialTitle, initialContent, onSaved, on
         {chapters.map((ch, idx) => (
           <section
             key={idx}
+            id={`novel-editor-chapter-${ch.num}`}
             className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5"
           >
             <div className="mb-3 flex items-center gap-3">
