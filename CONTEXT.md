@@ -350,7 +350,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 线上站点：`https://operone.1oneclaw.com/zh-Hans` 可访问，页面标题为 `Operone - AI 创作`，首页主标题正常渲染。
 - 本机存在有效的 `scripts/deploy.local.env` SSH 发布配置；可连接生产服务器，服务器仓库为 `/opt/operone`。
-- 生产服务器 `operone` 和 `nginx` systemd 服务均为 `active`；生产仓库当前提交为 `e32cc87 feat(card-games): P0-P3 棋牌规则全补齐`。
+- 生产服务器 `operone` 和 `nginx` systemd 服务均为 `active`；生产仓库当前提交为 `b4228f65 fix(proxy): use HTTP for internal locale rewrite`。
 - 日常发布脚本是 `python scripts/deploy-prod-with-assets.py`：先让服务器同步 `origin/main`、迁移、构建、重启，再同步样品资产和文学封面。
 - **关键约束**：底层部署脚本在服务器执行 `git reset --hard origin/main`。因此必须先在本机只暂存本次拥有的文件、提交并推送到 `origin/main`；绝不能把未提交本地代码或他人工作区改动直接当成可发布内容。
 - 发布自检已修复并验证：服务器的健康检查现在通过 `--resolve operone.1oneclaw.com:443:127.0.0.1` 在回环地址访问正式 HTTPS 虚拟主机，确认返回 `{"ok":true,"db":"up","email":"configured"}`。这避免了 Nginx 默认虚拟主机的 404 和 HTTP→HTTPS 301 被误判为成功；该检查可作为后续发布硬门禁。
+- 本次已完成完整资产发布与代码上线：生产数据库 24 条迁移均为 up to date，样品精灵/背景与文学封面已同步。发布配置的应用监听端口已校正为 `8888`，与 Nginx 上游一致；线上首页此前的 HTTPS loopback 重写导致 500，已由 `b4228f65` 改为 HTTP loopback 后恢复。最终桌面与移动端 HTTPS 首页均返回正确标题和内容，服务健康检查通过。
