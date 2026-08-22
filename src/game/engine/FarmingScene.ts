@@ -30,6 +30,7 @@ import {
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { showControlsHint, farmingControlLines } from "@/game/engine/controls-hint";
 import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { RuntimeActorStateMachine } from "@/game/engine/runtime-actor-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 
@@ -91,6 +92,7 @@ export class FarmingScene extends Phaser.Scene {
   private nextPestAt = 0;
   private sunDrip = 0;
   private crisisGfx!: Phaser.GameObjects.Graphics;
+  private actorState = new RuntimeActorStateMachine();
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "FarmingScene" });
@@ -216,6 +218,7 @@ export class FarmingScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-SPACE", () => this.cycleCrop());
 
     this.pulseTutorialTile();
+    this.actorState.set("idle", this.time.now);
     this.refreshCropSelector();
     this.publishQaState();
     schedulePhaserPlayReady(this, 400, {
@@ -378,6 +381,7 @@ export class FarmingScene extends Phaser.Scene {
     if (this.finished) return;
     const tile = this.tiles[idx]!;
     const crop = this.bp.crops[this.selectedCrop]!;
+    this.actorState.set("action", this.time.now, 180);
 
     if (tile.state === "pest") {
       tile.state = "growing";
@@ -459,11 +463,17 @@ export class FarmingScene extends Phaser.Scene {
 
   private publishQaState() {
     const plantedTiles = this.tiles.filter((t) => t.state !== "empty").length;
+    if (!this.finished) {
+      this.actorState.set(this.tiles.some((t) => t.state === "pest") ? "hit" : plantedTiles > 0 ? "action" : "idle", this.time.now);
+    }
+    const actor = this.actorState.snapshot();
     setPhaserQaState({
       coins: this.coins,
       harvests: this.harvests,
       plantedTiles,
       startingCoins: this.bp.startingCoins,
+      actorState: actor.state,
+      actorStateTransitions: actor.transitions,
     });
   }
 
@@ -577,6 +587,9 @@ export class FarmingScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.actorState.set(won ? "victory" : "defeat", this.time.now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
     this.cameras.main.shake(won ? 320 : 260, won ? 0.008 : 0.010);
     if (won) {
       juiceWin(this, {
@@ -599,4 +612,3 @@ export class FarmingScene extends Phaser.Scene {
     this.time.delayedCall(2200, () => this.onEnd({ score: this.harvests * 10 + this.coins, won }));
   }
 }
-

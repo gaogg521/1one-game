@@ -22,6 +22,7 @@ import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { showControlsHint, puzzleControlLines } from "@/game/engine/controls-hint";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { RuntimeActorStateMachine } from "@/game/engine/runtime-actor-state";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
 import { buildSceneGoalGuidance, introBannerWhenGoalPanel } from "@/lib/scene-goal-guidance";
 import {
@@ -154,6 +155,7 @@ export class PuzzleScene extends Phaser.Scene {
   private specialTilesCreated = 0;
   private merge2048Grid: number[][] = [];
   private merge2048Texts: Phaser.GameObjects.Text[] = [];
+  private actorState = new RuntimeActorStateMachine();
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "PuzzleScene" });
@@ -177,6 +179,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     const bp = this.spec.puzzle ?? buildPuzzleBlueprint({ spec: this.spec });
     this.mode = bp.mode;
+    this.actorState.set("idle", this.time.now);
     this.target = bp.targetScore;
     this.moveLimit = bp.moveLimit;
     this.jigsawCols = bp.cols;
@@ -463,6 +466,7 @@ export class PuzzleScene extends Phaser.Scene {
     const zh = this.uiLocale === "zh-Hans";
     if (won && this.anipopMode && this.anipopLevel < this.anipopMaxLevel) {
       this.finished = true;
+      this.actorState.set("victory", this.time.now);
       const stars =
         this.score >= this.target * 1.4 ? 3 : this.score >= this.target * 1.12 ? 2 : 1;
       this.playAnipopStarFlyIn(stars, () => {
@@ -483,6 +487,7 @@ export class PuzzleScene extends Phaser.Scene {
         this.time.delayedCall(1600, () => {
           this.advanceAnipopLevel();
           this.finished = false;
+          this.actorState.set("idle", this.time.now);
           this.banner.show({
             title: zh ? `第 ${this.anipopLevel} 关` : `Level ${this.anipopLevel}`,
             message: zh ? "目标已更新，继续消除吧！" : "New goals — keep matching!",
@@ -493,6 +498,9 @@ export class PuzzleScene extends Phaser.Scene {
       return;
     }
     this.finished = true;
+    this.actorState.set(won ? "victory" : "defeat", this.time.now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
     const base = bannerPuzzleFinish(this.uiLocale, won);
     if (won && this.anipopMode) {
       const stars =
@@ -533,6 +541,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private addMove(cost = 1) {
+    this.actorState.set("action", this.time.now, 140);
     this.moves += cost;
     if (this.mode !== "merge2048") {
       this.moveText.setText(hudPuzzleMoves(this.uiLocale, this.moves, this.moveLimit));
@@ -544,6 +553,8 @@ export class PuzzleScene extends Phaser.Scene {
 
   private publishQaState() {
     const flippedCards = this.cards.filter((c) => c.face && !c.matched).length;
+    if (!this.finished) this.actorState.set(this.selectedMatch3Cell ? "action" : "idle", this.time.now);
+    const actor = this.actorState.snapshot();
     setPhaserQaState({
       puzzleScore: this.score,
       puzzleMoves: this.moves,
@@ -553,6 +564,8 @@ export class PuzzleScene extends Phaser.Scene {
       match3Specials: this.match3Specials.size,
       specialTilesCreated: this.specialTilesCreated,
       merge2048Max: Math.max(0, ...this.merge2048Grid.flat()),
+      actorState: actor.state,
+      actorStateTransitions: actor.transitions,
     });
   }
 

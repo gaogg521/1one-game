@@ -52,6 +52,7 @@ import { spawnDamageNumber } from "@/game/engine/damage-number";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { RuntimeActorStateMachine } from "@/game/engine/runtime-actor-state";
 import { applySpritesOverAliasMap, assetBackgroundAlpha, fitSpriteDisplay, preloadSpriteSet } from "@/game/engine/phaser-loaded-sprites";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
@@ -237,6 +238,7 @@ export class PlatformerScene extends Phaser.Scene {
   // Procedural character animation state
   private wasGrounded = true;
   private hurtFlashUntil = 0;
+  private actorState = new RuntimeActorStateMachine();
 
   // Player movement trail
   private playerTrail: Array<{ x: number; y: number; t: number }> = [];
@@ -552,6 +554,7 @@ export class PlatformerScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(140, 80);
 
     this.refreshHud();
+    this.actorState.set("idle", this.time.now);
 
     this.cameras.main.setScroll(Math.max(0, this.player.x - viewW / 2), 0);
     setPhaserQaState({ playerX: Math.round(this.player.x) });
@@ -1066,6 +1069,7 @@ export class PlatformerScene extends Phaser.Scene {
       this.refreshHud();
       return;
     }
+    this.actorState.set("hit", this.time.now, 300);
     this.fxDamage();
     this.lives -= 1;
     this.refreshHud();
@@ -1141,6 +1145,9 @@ export class PlatformerScene extends Phaser.Scene {
     if (this.finished) return;
     this.hud.update({ dangerLevel: 0 });
     this.finished = true;
+    this.actorState.set(payload.won ? "victory" : "defeat", this.time.now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
     this.physics.pause();
     this.hud.setBottomHint(platformerFinishText(this.uiLocale, payload.won));
     if (payload.won) {
@@ -1392,6 +1399,19 @@ export class PlatformerScene extends Phaser.Scene {
     } else {
       this.player.clearTint();
     }
+
+    const actionState = now < this.hurtFlashUntil
+      ? "hit"
+      : now < this.dashUntil
+        ? "dash"
+        : !grounded
+          ? "jump"
+          : Math.abs(vx) > 20
+            ? "move"
+            : "idle";
+    this.actorState.set(actionState, now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
 
     // Running bob: slight vertical oscillation when grounded and moving
     if (grounded && Math.abs(vx) > 20) {

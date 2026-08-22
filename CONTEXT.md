@@ -355,3 +355,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - **关键约束**：底层部署脚本在服务器执行 `git reset --hard origin/main`。因此必须先在本机只暂存本次拥有的文件、提交并推送到 `origin/main`；绝不能把未提交本地代码或他人工作区改动直接当成可发布内容。
 - 发布自检已修复并验证：服务器的健康检查现在通过 `--resolve operone.1oneclaw.com:443:127.0.0.1` 在回环地址访问正式 HTTPS 虚拟主机，确认返回 `{"ok":true,"db":"up","email":"configured"}`。这避免了 Nginx 默认虚拟主机的 404 和 HTTP→HTTPS 301 被误判为成功；该检查可作为后续发布硬门禁。
 - 本次已完成完整资产发布与代码上线：生产数据库 24 条迁移均为 up to date，样品精灵/背景与文学封面已同步。发布配置的应用监听端口已校正为 `8888`，与 Nginx 上游一致；线上首页此前的 HTTPS loopback 重写导致 500，已由 `b4228f65` 改为 HTTP loopback 后恢复。最终桌面与移动端 HTTPS 首页均返回正确标题和内容，服务健康检查通过。
+
+## 12. 续接：旗舰模板运行时角色状态机（进行中）
+
+- 新增 `src/game/engine/runtime-actor-state.ts`，统一 `intro / idle / move / jump / dash / action / hit / victory / defeat` 生命周期；短暂命中/动作不会被下一帧移动覆盖，结算状态保持可观察。
+- 跑酷、躲避/收集、物理解压、消除、农场五类场景已接入并把 `actorState`、`actorStateTransitions` 写入 Phaser QA 状态，作为后续真实运行质量门禁的数据基础。
+- 验证通过：TypeScript、`qa:runtime-actor-state`、`qa:game-vertical-slice` 与五类既有 semantic-juice QA。下一步将把运行时状态/首分钟遥测汇入作品发布前的质量门禁；商户支付和财务计费仍依赖外部商户与定价规则，不能用模拟支付冒充完成。

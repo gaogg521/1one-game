@@ -39,6 +39,8 @@ import { translateDirectorEvent } from "@/game/engine/director-translator";
 import { inferThemeMood } from "@/game/engine/template-theme-visual";
 import { showControlsHint, playSceneControlLines } from "@/game/engine/controls-hint";
 import { spawnDamageNumber } from "@/game/engine/damage-number";
+import { RuntimeActorStateMachine } from "@/game/engine/runtime-actor-state";
+import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import {
   bannerActStage,
   bannerBossDefeated,
@@ -150,6 +152,7 @@ export class PlayScene extends Phaser.Scene {
   private powerupTimer!: Phaser.Time.TimerEvent;
 
   private finished = false;
+  private actorState = new RuntimeActorStateMachine();
 
   private invulnUntil = 0;
 
@@ -725,6 +728,8 @@ export class PlayScene extends Phaser.Scene {
 
     this.refreshHud();
     this.spawnWave();
+    this.actorState.set("idle", this.time.now);
+    this.publishActorState();
 
     // Danger vignette overlay (hidden until low HP) — corner gradient effect
     this.dangerVignette = this.add.graphics();
@@ -1905,6 +1910,8 @@ export class PlayScene extends Phaser.Scene {
       this.dangerVignette.setAlpha(0);
     }
     this.finished = true;
+    this.actorState.set(payload.won ? "victory" : "defeat", this.time.now);
+    this.publishActorState();
     this.spawnTimer.remove(false);
     this.physics.pause();
     this.hintText.setText(playFinishText(this.uiLocale, this.spec.templateId, payload.won));
@@ -1984,6 +1991,8 @@ export class PlayScene extends Phaser.Scene {
       let vx = axis.x * speed;
       let vy = axis.y * speed;
       this.player.setVelocity(vx, vy);
+      this.actorState.set(Math.abs(vx) + Math.abs(vy) > 8 ? "move" : "idle", this.time.now);
+      this.publishActorState();
 
       // 磁铁：吸附收集物
       if (this.time.now < this.magnetUntil) {
@@ -2015,6 +2024,8 @@ export class PlayScene extends Phaser.Scene {
     const ptrX = pointerSteerX(this, this.player.x);
     const vx = (kb.x !== 0 ? kb.x : ptrX) * speed;
     this.player.setVelocityX(vx);
+    this.actorState.set(this.time.now < this.invulnUntil ? "hit" : Math.abs(vx) > 8 ? "move" : "idle", this.time.now);
+    this.publishActorState();
     this.player.setVelocityY(0);
     this.player.y = height - this.pad;
 
@@ -2100,6 +2111,11 @@ export class PlayScene extends Phaser.Scene {
     } else if (this.playerTrail.length > 0) {
       this.playerTrail.shift();
     }
+  }
+
+  private publishActorState() {
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
   }
 
   private showFloater(x: number, y: number, message: string, color: string) {    const floater = this.add

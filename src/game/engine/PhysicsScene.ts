@@ -13,6 +13,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { bannerPhysicsFinish, floaterCombo, hudPhysicsControls, hudScore } from "@/lib/i18n/game-hud-labels";
 import { runtimeSeedFromSpec, seededRandom } from "@/lib/runtime-seed";
 import { bumpQaTouch, setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { RuntimeActorStateMachine } from "@/game/engine/runtime-actor-state";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { showControlsHint } from "@/game/engine/controls-hint";
 import { assetBackgroundAlpha } from "@/game/engine/phaser-loaded-sprites";
@@ -52,6 +53,7 @@ export class PhysicsScene extends Phaser.Scene {
   private richArena = false;
   private progressGfx!: Phaser.GameObjects.Graphics;
   private runtimeRng!: () => number;
+  private actorState = new RuntimeActorStateMachine();
 
   constructor(spec: GameSpec, onEnd: (r: EndPayload) => void, soundscape: GameSoundscape | null) {
     super({ key: "PhysicsScene" });
@@ -152,6 +154,7 @@ export class PhysicsScene extends Phaser.Scene {
     }
 
     setPhaserQaState({ qaTouches: 0 });
+    this.actorState.set("idle", this.time.now);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
     setPhaserQaClickHints([{ x: dummyX / w, y: dummyY / h }]);
     schedulePhaserPlayReady(this, 400, {});
@@ -183,6 +186,7 @@ export class PhysicsScene extends Phaser.Scene {
     if (dist > 120) return;
 
     const force = Phaser.Math.Clamp(280 - dist, 120, 420) * this.hitImpulse;
+    this.actorState.set("hit", this.time.now, 180);
     const nx = dx / (dist || 1);
     const ny = dy / (dist || 1);
     this.dummy.setVelocity(nx * force, ny * force - 80);
@@ -227,7 +231,9 @@ export class PhysicsScene extends Phaser.Scene {
   update(_t: number, dt: number) {
     this.goalPanel?.update();
     this.banner.tick();
-    setPhaserQaState({ qaTouches: this.hits, hits: this.hits });
+    this.actorState.set(this.combo > 0 ? "action" : "idle", this.time.now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ qaTouches: this.hits, hits: this.hits, actorState: actor.state, actorStateTransitions: actor.transitions });
     if (this.finished) return;
     if (this.time.now > this.comboUntil && this.combo > 0) {
       this.combo = 0;
@@ -240,6 +246,9 @@ export class PhysicsScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.actorState.set(won ? "victory" : "defeat", this.time.now);
+    const actor = this.actorState.snapshot();
+    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
     this.cameras.main.shake(won ? 280 : 220, won ? 0.007 : 0.009);
     if (won) {
       juiceWin(this, {
