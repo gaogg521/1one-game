@@ -212,6 +212,7 @@
     "test:e2e:admin-runtime-config": "playwright test e2e/admin-runtime-config.smoke.spec.ts",
     "test:e2e:admin-console-sso": "playwright test e2e/admin-console-sso.smoke.spec.ts",
     "test:e2e:studio-batch-delete": "playwright test e2e/studio-batch-delete.smoke.spec.ts",
+    "test:e2e:first-minute": "playwright test e2e/flagship-first-minute.spec.ts --workers=1",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push"

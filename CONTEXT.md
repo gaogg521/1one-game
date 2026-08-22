@@ -327,6 +327,13 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 3. 建设成本账本、转化漏斗与毛利报表，并基于真实数据校准套餐权益。
 4. 真实支付、生产迁移/部署需在具备商户凭据、财务规则和发布窗口后单独执行；不得以当前开发模拟支付替代。
 
+## 本轮续接：运行时兼容与真实首分钟验收（待提交）
+
+- 对旧 Prisma Client 增加安全降级：长驻进程尚未加载 `GameplayEvent` 时，游戏详情与后台分析仍可工作并报告零样本；遥测写入返回非阻断 503，避免把作品误判为损坏。
+- 新增五个旗舰模板的 `e2e/flagship-first-minute.spec.ts`，每条真实等待 61 秒，随后检查启动、首次操作和首分钟事件已进入质量报告；`e2e/global-setup.ts` 改为直接运行本地 Prisma CLI，不再依赖 Windows `npx` shim。
+- 验证：`node node_modules/typescript/bin/tsc --noEmit`、定向 ESLint、`qa:creator-quality`、`qa:gameplay-telemetry`、已有 avoider 试玩 E2E 均通过。
+- 未通过项：avoider 的真实首分钟 E2E 实际等待完成后仍为零样本。原因是当前 8888 开发进程持有迁移前的 Prisma Client；绝不能以 fake timer 或缩短阈值替代。需在允许维护窗口内安全重启该服务、运行普通 `prisma generate`（不要 `--no-engine`），再运行 `npm run test:e2e:first-minute` 完成五模板验收。
+
 ## 11. 生产发布状态（2026-08-22 已核验）
 
 - 线上站点：`https://operone.1oneclaw.com/zh-Hans` 可访问，页面标题为 `Operone - AI 创作`，首页主标题正常渲染。

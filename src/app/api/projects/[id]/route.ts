@@ -52,10 +52,15 @@ export async function GET(req: Request, ctx: RouteContext) {
       creativeBrief = parseStoredCreativeBrief(briefRaw);
     }
 
-    const gameplayEvents = await prisma.gameplayEvent.findMany({
-      where: { projectId: id },
-      select: { event: true, sessionId: true, elapsedMs: true, won: true },
-    });
+    // A Windows process can retain a Prisma Client generated before the
+    // GameplayEvent migration. Do not make an otherwise playable work appear
+    // corrupt while that process is waiting for a safe restart/regeneration.
+    const gameplayEvents = prisma.gameplayEvent
+      ? await prisma.gameplayEvent.findMany({
+          where: { projectId: id },
+          select: { event: true, sessionId: true, elapsedMs: true, won: true },
+        })
+      : [];
     const startedSessions = new Set(gameplayEvents.filter((event) => event.event === "start").map((event) => event.sessionId));
     const firstActionSessions = new Set(gameplayEvents.filter((event) => event.event === "first_action").map((event) => event.sessionId));
     const firstMinuteSessions = new Set(gameplayEvents.filter((event) => event.event === "first_minute").map((event) => event.sessionId));
@@ -93,7 +98,8 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
     });
-  } catch {
+  } catch (error) {
+    console.error("[GET /api/projects/:id]", error);
     return localizedJsonError(req, "corruptWork", 500);
   }
 }

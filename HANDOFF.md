@@ -11,7 +11,7 @@
 → 可发布检查 → 发布/分发 → 作品消费数据 → 商业权益与成本账本
 ```
 
-已完成三条线的质量 API 接入，并完成工作台的跨媒介质量汇总与详情修复跳转；但**章节/页级定向修复、支付成本账本和生产发布仍未完成**。不要把当前状态当成整项产品改造已经完成。
+已完成三条线的质量 API 接入、工作台跨媒介质量汇总、章节/页级定向修复和消费数据质量证据；但**真实首分钟遥测验收、支付成本账本和生产发布仍未完成**。不要把当前状态当成整项产品改造已经完成。
 
 ## 本轮已改动（仅下列为本轮明确拥有的代码）
 
@@ -109,6 +109,14 @@ curl -fsS --connect-timeout 10 \
 
 - 详情质量报告新增 `engagement` 汇总：游戏复用匿名 `GameplayEvent` 的启动、首操作、首分钟、重试、失败时长；小说复用现有阅读/点赞计数，漫画复用点赞计数。该字段不含身份、输入或设备指纹，且不改变评分/发布决策。
 - `npx tsc --noEmit`、目标 ESLint、`qa:creator-quality`、`qa:gameplay-telemetry` 均通过。开发 API 已实测公开小说/漫画的非空 `engagement` 外壳；测试 owner 下无游戏，未能实测非空游戏事件聚合。
+
+## 续接完成：运行时兼容与首分钟验收基础（待提交）
+
+- 已修复旧 Prisma Client 的降级路径：若长驻 Windows 进程仍使用 `GameplayEvent` 迁移之前生成的 Client，作品详情和后台概览会将遥测视为零样本，不再把可试玩作品误报为“损坏”；遥测写入保持非阻断并返回 503，等待安全重启后恢复。
+- `e2e/global-setup.ts` 不再依赖 Windows 的 `npx prisma` shim，直接调用已安装的 Prisma CLI；新增 `e2e/flagship-first-minute.spec.ts` 和 `npm run test:e2e:first-minute`，五个旗舰模板均真实等待 61 秒并检查 `start`、首次操作和 `first_minute` 的聚合结果。
+- 已验证：恢复后 `node node_modules/typescript/bin/tsc --noEmit`、定向 ESLint、`qa:creator-quality`、`qa:gameplay-telemetry` 通过；已有 avoider 试玩 Playwright 用例通过。
+- 真实 avoider 首分钟用例确实运行到 61 秒，但当前 8888 进程持有旧 Client，`GameplayEvent` delegate 不存在，故遥测写入按设计返回 503，详情显示零样本，断言未通过。**不要用 fake timer 或降低 60 秒阈值掩盖该结果。**
+- 接手前先在允许的维护窗口停止/重启占用 query engine 的开发服务，运行普通 `prisma generate`（不要使用 `--no-engine`，该参数会生成浏览器/WASM Client），然后以 `npm run test:e2e:first-minute` 复跑五个模板。
 
 ## 生产状态与发布规则
 

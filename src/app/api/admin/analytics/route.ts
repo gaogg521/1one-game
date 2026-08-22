@@ -14,6 +14,14 @@ export async function GET(req: Request) {
   since.setDate(since.getDate() - (days - 1));
 
   const dayKeys = buildDayRange(days);
+  // Keep the admin overview available during a rolling restart where Prisma
+  // Client predates the optional GameplayEvent model.
+  const gameplayEventQuery = prisma.gameplayEvent
+    ? prisma.gameplayEvent.findMany({
+        where: { createdAt: { gte: since } },
+        select: { templateId: true, event: true, sessionId: true, elapsedMs: true, won: true, verticalSliceScore: true },
+      })
+    : Promise.resolve([]);
 
   const [
     shareRows,
@@ -77,10 +85,7 @@ export async function GET(req: Request) {
     prisma.project.count({ where: { featured: true } }),
     prisma.novel.count({ where: { featured: true } }),
     prisma.comic.count({ where: { featured: true } }),
-    prisma.gameplayEvent.findMany({
-      where: { createdAt: { gte: since } },
-      select: { templateId: true, event: true, sessionId: true, elapsedMs: true, won: true, verticalSliceScore: true },
-    }),
+    gameplayEventQuery,
   ]);
 
   const planName = new Map(plans.map((p) => [p.id, p.name]));

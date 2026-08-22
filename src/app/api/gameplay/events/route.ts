@@ -21,8 +21,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_event" }, { status: 400 });
   }
 
+  const gameplayEvent = prisma.gameplayEvent;
+  if (!gameplayEvent) {
+    // A long-running process may still hold a Client generated before this
+    // model was added. Telemetry is intentionally non-blocking; retry after a
+    // safe restart rather than failing the game itself.
+    return NextResponse.json({ ok: false }, { status: 503 });
+  }
+
   try {
-    await prisma.gameplayEvent.create({ data: parsed.data });
+    await gameplayEvent.create({ data: parsed.data });
   } catch {
     // The client deliberately treats this telemetry route as non-blocking.
     return NextResponse.json({ ok: false }, { status: 503 });
