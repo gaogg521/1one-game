@@ -85,7 +85,7 @@ curl -fsS --connect-timeout 10 \
 - `npx prisma migrate diff --from-migrations ... --to-schema-datamodel ...` 仍显示 **既有** `PlatformEmailConfig` 与若干 unique-index 的迁移/Schema 漂移；不要把该输出误判为本轮 `GameplayEvent` migration 的失败。
 - 全仓 `npm run lint` 没有跑绿。本轮定向 lint 的新增文件通过；`GamePlayerInner.tsx` 有既有的 React `set-state-in-effect` 两个 error 及一个依赖 warning，需在单独修复任务中处理。
 
-## 续接完成（2026-08-22，提交 `57a83075`，未推送）
+## 续接完成（2026-08-22，提交 `ae00cd48`，未推送）
 
 - `src/lib/creator-quality.ts` 已将三条线的现有确定性证据收敛为统一质量报告：游戏复用 vertical slice；小说检查完整性、章节、开篇/结尾长度和段落重复；漫画检查页格、可读文案、角色/场景锚点和配图完成度。
 - 游戏保存/详情、小说普通生成/流式生成/详情、漫画生成/详情均返回 `{ workflow: { stage }, quality: { verdict, score?, evidence[] } }`。这仍是可观察的建议，不会阻断发布。
@@ -101,7 +101,7 @@ curl -fsS --connect-timeout 10 \
 - 发布入口：`python scripts/deploy-prod-with-assets.py`。
 - **高风险规则**：底层发布脚本在服务器执行 `git fetch origin && git reset --hard origin/main`。
   因此必须只暂存本次拥有的文件、提交、推送 `origin/main`，再部署；服务器不会带上未提交本地改动。
-- 交接初始改动曾未提交；随后质量基础提交 `7ab2b0d6` 与本次统一质量 API 提交 `57a83075` 均仅在本地，尚未推送、迁移生产库或部署。
+- 交接初始改动曾未提交；随后质量基础提交 `7ab2b0d6` 与本次统一质量 API 提交 `ae00cd48` 均仅在本地，尚未推送、迁移生产库或部署。
 
 ## 当前工作区风险
 
