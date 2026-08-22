@@ -19,7 +19,7 @@ import { normalizeNovelTitle } from "@/lib/novel-display";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
-import { assessComicCreatorQuality } from "@/lib/creator-quality";
+import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -40,7 +40,11 @@ export async function GET(req: Request, ctx: RouteContext) {
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
   const doc = parseComicDocument(row.imageUrls);
   const panelStats = countPanelsWithImages(doc);
-  const { report: quality } = assessComicCreatorQuality(row.imageUrls);
+  const baseQuality = assessComicCreatorQuality(row.imageUrls).report;
+  const quality = withCreatorEngagementQuality(baseQuality, {
+    sampleSize: row.likeCount,
+    likes: row.likeCount,
+  });
 
   const uiLocale = resolveRequestLocaleSync(req);
 

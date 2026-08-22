@@ -23,7 +23,7 @@ import {
   serializeCreativeBrief,
 } from "@/lib/project-creative-brief-parse";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
-import { assessGameCreatorQuality } from "@/lib/creator-quality";
+import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -52,7 +52,27 @@ export async function GET(req: Request, ctx: RouteContext) {
       creativeBrief = parseStoredCreativeBrief(briefRaw);
     }
 
-    const { report: quality } = assessGameCreatorQuality(spec, creativeBrief);
+    const gameplayEvents = await prisma.gameplayEvent.findMany({
+      where: { projectId: id },
+      select: { event: true, sessionId: true, elapsedMs: true, won: true },
+    });
+    const startedSessions = new Set(gameplayEvents.filter((event) => event.event === "start").map((event) => event.sessionId));
+    const firstActionSessions = new Set(gameplayEvents.filter((event) => event.event === "first_action").map((event) => event.sessionId));
+    const firstMinuteSessions = new Set(gameplayEvents.filter((event) => event.event === "first_minute").map((event) => event.sessionId));
+    const retries = gameplayEvents.filter((event) => event.event === "retry").length;
+    const failedEnds = gameplayEvents.filter((event) => event.event === "end" && event.won === false);
+    const sampleSize = startedSessions.size;
+    const baseQuality = assessGameCreatorQuality(spec, creativeBrief).report;
+    const quality = withCreatorEngagementQuality(baseQuality, {
+      sampleSize,
+      starts: sampleSize,
+      ...(sampleSize > 0 ? { firstActionRate: Math.round((firstActionSessions.size / sampleSize) * 1000) / 10 } : {}),
+      ...(sampleSize > 0 ? { firstMinuteRate: Math.round((firstMinuteSessions.size / sampleSize) * 1000) / 10 } : {}),
+      ...(sampleSize > 0 ? { retryRate: Math.round((retries / sampleSize) * 1000) / 10 } : {}),
+      ...(failedEnds.length > 0
+        ? { averageFailureSec: Math.round(failedEnds.reduce((sum, event) => sum + (event.elapsedMs ?? 0), 0) / failedEnds.length / 1000) }
+        : {}),
+    });
     return NextResponse.json({
       project: {
         id: row.id,

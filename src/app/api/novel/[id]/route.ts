@@ -22,7 +22,7 @@ import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
-import { assessNovelCreatorQuality } from "@/lib/creator-quality";
+import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -65,10 +65,15 @@ export async function GET(req: Request, ctx: RouteContext) {
     uiLocale,
   });
   const characterRoster = isOwner ? await loadNovelCharacterRoster(id) : null;
-  const { report: quality } = assessNovelCreatorQuality({
+  const baseQuality = assessNovelCreatorQuality({
     content: row.content,
     prompt: row.prompt,
     lengthTier: row.lengthTier,
+  }).report;
+  const quality = withCreatorEngagementQuality(baseQuality, {
+    sampleSize: row.playCount + row.likeCount,
+    reads: row.playCount,
+    likes: row.likeCount,
   });
   return NextResponse.json({
     novel: {

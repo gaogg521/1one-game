@@ -1,6 +1,11 @@
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { parseComicImageUrls, type ComicDocument } from "@/lib/comic-format";
-import { buildCreatorQualityReport, type CreatorQualityReport, type CreatorQualityUnit } from "@/lib/creator-workflow";
+import {
+  buildCreatorQualityReport,
+  type CreatorQualityEngagement,
+  type CreatorQualityReport,
+  type CreatorQualityUnit,
+} from "@/lib/creator-workflow";
 import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
 import type { GameSpec } from "@/lib/game-spec";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
@@ -11,6 +16,23 @@ export type CreatorQualityAssessment = {
   report: CreatorQualityReport;
   scorecard?: GameVerticalSliceScorecard;
 };
+
+/** Attach observed consumption signals without recalibrating the static score. */
+export function withCreatorEngagementQuality(
+  report: CreatorQualityReport,
+  engagement: CreatorQualityEngagement,
+): CreatorQualityReport {
+  const evidence = [
+    ...(engagement.reads !== undefined ? [`reads:${engagement.reads}`] : []),
+    ...(engagement.likes !== undefined ? [`likes:${engagement.likes}`] : []),
+    ...(engagement.starts !== undefined ? [`play_starts:${engagement.starts}`] : []),
+    ...(engagement.firstActionRate !== undefined ? [`first_action_rate:${engagement.firstActionRate}%`] : []),
+    ...(engagement.firstMinuteRate !== undefined ? [`first_minute_rate:${engagement.firstMinuteRate}%`] : []),
+    ...(engagement.retryRate !== undefined ? [`retry_rate:${engagement.retryRate}%`] : []),
+    ...(engagement.averageFailureSec !== undefined ? [`average_failure_sec:${engagement.averageFailureSec}`] : []),
+  ];
+  return { ...report, evidence: [...report.evidence, ...evidence], engagement };
+}
 
 /**
  * Convert existing product-line checks into the platform's shared quality

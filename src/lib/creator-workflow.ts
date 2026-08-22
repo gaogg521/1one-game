@@ -8,6 +8,7 @@ export type CreatorQualityReport = {
   evidence: string[];
   /** 作品内部可独立修复的章节或页面；游戏保持为空。 */
   units?: CreatorQualityUnit[];
+  engagement?: CreatorQualityEngagement;
 };
 
 export type CreatorQualityUnit = {
@@ -16,6 +17,18 @@ export type CreatorQualityUnit = {
   verdict: CreatorQualityReport["verdict"];
   score: number;
   evidence: string[];
+};
+
+/** 仅存汇总消费信号，不包含账号、提示词、输入或设备指纹。 */
+export type CreatorQualityEngagement = {
+  sampleSize: number;
+  reads?: number;
+  likes?: number;
+  starts?: number;
+  firstActionRate?: number;
+  firstMinuteRate?: number;
+  retryRate?: number;
+  averageFailureSec?: number;
 };
 
 export function resolveCreatorWorkStage(input: {

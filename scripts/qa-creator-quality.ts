@@ -1,4 +1,4 @@
-import { assessComicCreatorQuality, assessNovelCreatorQuality } from "../src/lib/creator-quality";
+import { assessComicCreatorQuality, assessNovelCreatorQuality, withCreatorEngagementQuality } from "../src/lib/creator-quality";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -35,4 +35,13 @@ assert(comic.report.units?.every((unit) => unit.verdict === "ready"), "rendered 
 const incompleteComic = assessComicCreatorQuality(JSON.stringify({ formatVersion: 2, pageCount: 1, pages: [{ page: 1, panels: [] }] }));
 assert(incompleteComic.report.verdict === "blocked", "empty storyboard should require quality review");
 assert(incompleteComic.report.units?.[0]?.verdict === "blocked", "empty page should require page repair");
+
+const withEngagement = withCreatorEngagementQuality(comic.report, {
+  sampleSize: 10,
+  starts: 10,
+  firstActionRate: 80,
+  firstMinuteRate: 60,
+});
+assert(withEngagement.score === comic.report.score, "observed signals must not silently recalibrate quality score");
+assert(withEngagement.evidence.includes("first_minute_rate:60%"), "observed signals should be visible as evidence");
 console.log("[OK] qa-creator-quality");
