@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     featuredG,
     featuredN,
     featuredC,
+    gameplayEvents,
   ] = await Promise.all([
     prisma.shareEvent.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
     prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
@@ -76,6 +77,10 @@ export async function GET(req: Request) {
     prisma.project.count({ where: { featured: true } }),
     prisma.novel.count({ where: { featured: true } }),
     prisma.comic.count({ where: { featured: true } }),
+    prisma.gameplayEvent.findMany({
+      where: { createdAt: { gte: since } },
+      select: { templateId: true, event: true, sessionId: true, elapsedMs: true, won: true, verticalSliceScore: true },
+    }),
   ]);
 
   const planName = new Map(plans.map((p) => [p.id, p.name]));
@@ -108,6 +113,26 @@ export async function GET(req: Request) {
 
   const conversionRate =
     shareTotal > 0 ? Math.round((referralSignups / shareTotal) * 1000) / 10 : 0;
+  const gameplayStarts = gameplayEvents.filter((event) => event.event === "start");
+  const startedSessions = new Set(gameplayStarts.map((event) => event.sessionId));
+  const firstMinuteSessions = new Set(gameplayEvents.filter((event) => event.event === "first_minute").map((event) => event.sessionId));
+  const firstActionSessions = new Set(gameplayEvents.filter((event) => event.event === "first_action").map((event) => event.sessionId));
+  const failedEnds = gameplayEvents.filter((event) => event.event === "end" && event.won === false);
+  const firstMinuteRate = startedSessions.size ? Math.round((firstMinuteSessions.size / startedSessions.size) * 1000) / 10 : 0;
+  const firstActionRate = startedSessions.size ? Math.round((firstActionSessions.size / startedSessions.size) * 1000) / 10 : 0;
+  const averageFailureSec = failedEnds.length
+    ? Math.round(failedEnds.reduce((sum, event) => sum + (event.elapsedMs ?? 0), 0) / failedEnds.length / 1000)
+    : 0;
+  const qualityScores = gameplayStarts.map((event) => event.verticalSliceScore).filter((score): score is number => typeof score === "number");
+  const averageQualityScore = qualityScores.length ? Math.round(qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length) : 0;
+  const gameplayByTemplate = new Map<string, { starts: Set<string>; firstMinute: Set<string>; retries: number }>();
+  for (const event of gameplayEvents) {
+    const row = gameplayByTemplate.get(event.templateId) ?? { starts: new Set<string>(), firstMinute: new Set<string>(), retries: 0 };
+    if (event.event === "start") row.starts.add(event.sessionId);
+    if (event.event === "first_minute") row.firstMinute.add(event.sessionId);
+    if (event.event === "retry") row.retries += 1;
+    gameplayByTemplate.set(event.templateId, row);
+  }
 
   return NextResponse.json({
     days,
@@ -175,6 +200,22 @@ export async function GET(req: Request) {
         paidOrders.filter((o) => o.paidAt).map((o) => o.paidAt!),
         dayKeys,
       ),
+    },
+    gameplay: {
+      starts: startedSessions.size,
+      firstMinuteRate,
+      firstActionRate,
+      retries: gameplayEvents.filter((event) => event.event === "retry").length,
+      averageFailureSec,
+      averageQualityScore,
+      byTemplate: [...gameplayByTemplate.entries()]
+        .map(([templateId, row]) => ({
+          templateId,
+          starts: row.starts.size,
+          firstMinuteRate: row.starts.size ? Math.round((row.firstMinute.size / row.starts.size) * 1000) / 10 : 0,
+          retries: row.retries,
+        }))
+        .sort((a, b) => b.starts - a.starts),
     },
   });
 }

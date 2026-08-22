@@ -19,14 +19,14 @@ export default async function Home() {
       <SiteHeader />
       <AppMain>
       <main className="@container/main relative flex min-h-full w-full flex-col">
-        <section className="relative min-h-[min(92vh,880px)] overflow-hidden px-6 pb-24 pt-20 sm:px-10 sm:pb-28 sm:pt-24 lg:min-h-[min(88vh,920px)] lg:px-14 lg:pb-32 lg:pt-28 xl:px-20 2xl:px-28">
+        <section className="relative overflow-hidden px-5 pb-12 pt-10 sm:px-10 sm:pb-28 sm:pt-24 lg:min-h-[min(88vh,920px)] lg:px-14 lg:pb-32 lg:pt-28 xl:px-20 2xl:px-28">
           <div aria-hidden className="pointer-events-none absolute inset-0">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_70%_at_50%_-30%,rgba(124,58,237,0.18),transparent_55%),radial-gradient(ellipse_80%_50%_at_100%_10%,rgba(34,211,238,0.1),transparent_50%),radial-gradient(ellipse_70%_45%_at_0%_80%,rgba(244,114,182,0.06),transparent_50%)]" />
             <div className="gc-home-noise" />
             <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[var(--gc-bg)] to-transparent" />
           </div>
 
-          <div className="relative grid min-w-0 gap-16 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-start xl:gap-x-16 2xl:gap-x-24">
+          <div className="relative grid min-w-0 gap-8 sm:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-start xl:gap-x-16 2xl:gap-x-24">
             <div className="min-w-0 pl-0 xl:pl-8 2xl:pl-10">
               <p className="inline-flex items-center gap-2 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.32em] text-[var(--gc-muted)] shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)] backdrop-blur-sm">
                 <span
@@ -37,32 +37,32 @@ export default async function Home() {
               </p>
 
               <h1
-                className="gc-theme-hero mt-10 max-w-3xl text-pretty bg-gradient-to-br from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text py-2 font-normal leading-[1.12] tracking-[0.02em] text-transparent sm:mt-12 [filter:drop-shadow(0_4px_48px_color-mix(in_srgb,var(--gc-text)_14%,transparent))]"
-                style={{ fontSize: "clamp(1.5rem, 0.5rem + 2.8cqi, 3.75rem)" }}
+                className="gc-theme-hero mt-6 max-w-3xl text-pretty bg-gradient-to-br from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text py-2 font-normal leading-[1.1] tracking-[0.01em] text-transparent sm:mt-12 [filter:drop-shadow(0_4px_48px_color-mix(in_srgb,var(--gc-text)_14%,transparent))]"
+                style={{ fontSize: "clamp(2rem, 1rem + 2.8cqi, 3.75rem)" }}
               >
                 {productPromise.headline}
               </h1>
 
-              <p className="mt-8 max-w-2xl text-pretty text-[15px] leading-[1.8] text-[var(--gc-muted)] sm:text-base lg:mt-10 lg:text-[17px] lg:leading-8">
+              <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-[1.75] text-[var(--gc-muted)] sm:mt-8 sm:text-base lg:mt-10 lg:text-[17px] lg:leading-8">
                 {productPromise.subhead}
               </p>
 
-              <div className="mt-12 flex flex-wrap items-center gap-3 sm:mt-14 sm:gap-4">
+              <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-14 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
                 <Link
                   href={withLocalePath("/start", locale)}
-                  className="gc-theme-cta inline-flex items-center justify-center px-9 py-4 text-sm font-semibold transition duration-300 hover:scale-[1.02]"
+                  className="gc-theme-cta col-span-2 inline-flex min-h-[52px] items-center justify-center px-6 py-4 text-sm font-semibold transition duration-300 hover:scale-[1.02] sm:px-9"
                 >
                   {productPromise.primaryCta}
                 </Link>
                 <Link
                   href={withLocalePath("/samples", locale)}
-                  className="inline-flex items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-8 py-4 text-sm font-medium text-[var(--gc-text)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--gc-text)_10%,transparent)] backdrop-blur-md transition duration-300 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)]"
+                  className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3 text-sm font-medium text-[var(--gc-text)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--gc-text)_10%,transparent)] backdrop-blur-md transition duration-300 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:px-8 sm:py-4"
                 >
                   {productPromise.secondaryCta}
                 </Link>
                 <Link
                   href={withLocalePath("/studio", locale)}
-                  className="inline-flex items-center justify-center rounded-full px-7 py-4 text-sm font-medium text-[var(--gc-muted)] transition duration-300 hover:text-[var(--gc-text)]"
+                  className="inline-flex min-h-[48px] items-center justify-center rounded-full px-3 py-3 text-sm font-medium text-[var(--gc-muted)] transition duration-300 hover:text-[var(--gc-text)] sm:px-7 sm:py-4"
                 >
                   {t("home.workspaceCta")}
                 </Link>
@@ -71,10 +71,10 @@ export default async function Home() {
               <MobileFeedPromoStrip />
             </div>
 
-            <aside className="relative min-w-0 rounded-3xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-8 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:p-9 xl:p-10">
+            <aside className="relative min-w-0 rounded-2xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-5 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:rounded-3xl sm:p-9 xl:p-10">
               <h2 className="text-[13px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">{t("home.firstExperience")}</h2>
               <p className="mt-2 text-base font-medium tracking-wide text-[var(--gc-text)]">{t("home.wowMoment")}</p>
-              <ol className="mt-8 space-y-7 border-t border-[color:var(--gc-border)] pt-8">
+              <ol className="mt-5 space-y-5 border-t border-[color:var(--gc-border)] pt-5 sm:mt-8 sm:space-y-7 sm:pt-8">
                 {wowSteps.map((step) => (
                   <li key={step.n} className="group flex gap-4">
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] font-mono text-[11px] tabular-nums text-[var(--gc-muted)] transition group-hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] group-hover:text-[color:color-mix(in_srgb,var(--gc-accent)_90%,var(--gc-text))]">

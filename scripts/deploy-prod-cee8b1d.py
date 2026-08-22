@@ -22,6 +22,7 @@ from prod_ssh import (
     deploy_domain,
     deploy_repo,
     ensure_git_safe,
+    local_health_check_command,
     print_target,
     run,
     shell_source_env,
@@ -59,7 +60,7 @@ def main() -> int:
         f"cd {repo} && {env} && npm run seed:samples",
         "systemctl restart operone || true",
         "sleep 6",
-        f"curl -sf http://127.0.0.1:{port}/api/health",
+        local_health_check_command(),
     ]
 
     try:

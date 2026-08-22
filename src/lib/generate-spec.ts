@@ -36,6 +36,7 @@ import { buildFruitNinjaBlueprint } from "@/lib/fruit-ninja-blueprint";
 import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
+import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { fetchUrlPlainText } from "@/lib/fetch-url-text";
 import { tavilySearch } from "@/lib/web-search/tavily";
@@ -481,6 +482,8 @@ export type GenerationDebug = {
   orchestrationTrace?: OrchestrationRunTrace;
   /** AI 评审员评分 + 建议（可空，失败时不阻塞主链路） */
   criticVerdict?: import("@/lib/game-quality-critic").GameCriticVerdict;
+  /** 确定性首分钟体验评分卡；仅作质量可观察性，不改变运行时规格。 */
+  verticalSlice?: GameVerticalSliceScorecard;
 };
 
 /** 单次生成请求内 finalize/director 文案 locale（避免层层传参）。 */
@@ -1576,9 +1579,20 @@ export async function generateGameSpecWithMeta(
       }
     }
 
-    const debugWithCritic: GenerationDebug = criticVerdict
-      ? { ...r.debug, criticVerdict }
-      : r.debug;
+    const verticalSlice = evaluateGameVerticalSlice(spec, briefPre?.brief);
+    orch?.note("game_vertical_slice", {
+      templateId: verticalSlice.templateId,
+      score: verticalSlice.score,
+      verdict: verticalSlice.verdict,
+      dimensions: verticalSlice.dimensions,
+      reasons: verticalSlice.reasons,
+    });
+
+    const debugWithCritic: GenerationDebug = {
+      ...r.debug,
+      ...(criticVerdict ? { criticVerdict } : {}),
+      verticalSlice,
+    };
 
     return withTrace({ ...r, spec, debug: debugWithCritic });
   };
@@ -1667,4 +1681,3 @@ export async function generateGameSpec(prompt: string): Promise<GameSpec> {
   const { spec } = await generateGameSpecWithMeta(prompt);
   return spec;
 }
-

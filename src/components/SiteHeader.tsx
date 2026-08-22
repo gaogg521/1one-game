@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 import { withLocalePath } from "@/i18n/navigation";
@@ -109,32 +109,45 @@ function buildNav(locale: AppLocale, t: ReturnType<typeof useTranslations>) {
   return { gameNav, novelNav, comicNav, metaNav, mobileNavSections };
 }
 
-function MobilePrimaryNav({ sections }: { sections: NavSection[] }) {
+/**
+ * 手机端不再把全部产品线塞进首屏横向滚动条：保留所有入口，但收进一个可展开的导航面板。
+ * 首屏只让用户看到品牌、账户与明确的创作动作，避免导航先于产品价值占满屏幕。
+ */
+function MobileCompactNav({ sections }: { sections: NavSection[] }) {
   const t = useTranslations();
   const pathname = stripLocale(typeof window !== "undefined" ? window.location.pathname : "/");
-  const linkBase =
-    "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition min-h-[40px] sm:min-h-[44px]";
 
   return (
-    <nav className="gc-mobile-nav-scroll flex items-stretch gap-2 overflow-x-auto pb-2 pt-0.5" aria-label={t("common.mainNav")}>
-      {sections.map((section, si) => (
-        <Fragment key={section.title}>
-          {si > 0 ? <span className="my-2 w-px shrink-0 bg-[color:var(--gc-border)] opacity-70" aria-hidden /> : null}
-          <div className="flex shrink-0 flex-col justify-center gap-1.5 rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-border)_65%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_55%,transparent)] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <span className="flex items-center gap-1 px-0.5 text-[11px] font-bold tracking-tight text-[var(--gc-muted)]">
+    <details className="group relative shrink-0">
+      <summary
+        className="flex min-h-[40px] min-w-[40px] cursor-pointer list-none items-center justify-center rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] text-[var(--gc-text)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))] [&::-webkit-details-marker]:hidden"
+        aria-label={t("common.mainNav")}
+      >
+        <IconHubMini className="h-[18px] w-[18px]" />
+      </summary>
+      <nav
+        className="fixed inset-x-3 top-[calc(3.75rem+env(safe-area-inset-top))] z-50 grid max-h-[min(72dvh,38rem)] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_94%,black)] p-2.5 shadow-2xl backdrop-blur-2xl"
+        aria-label={t("common.mainNav")}
+      >
+        {sections.map((section) => (
+          <section
+            key={section.title}
+            className="rounded-xl border border-[color:color-mix(in_srgb,var(--gc-border)_70%,transparent)] bg-[var(--gc-surface-glass)] p-2"
+          >
+            <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-bold text-[var(--gc-muted)]">
               <span className="text-[var(--gc-accent)]">{section.icon}</span>
               {section.title}
-            </span>
-            <div className="flex flex-nowrap items-center gap-1">
+            </p>
+            <div className="flex flex-col gap-0.5">
               {section.items.map((item) => {
                 const active = item.match(pathname);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`${linkBase} ${
+                    className={`flex min-h-[40px] items-center rounded-lg px-2 text-xs font-medium transition ${
                       active
-                        ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)] text-[var(--gc-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]"
+                        ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_20%,transparent)] text-[var(--gc-text)]"
                         : "text-[var(--gc-muted)] active:bg-[color:color-mix(in_srgb,var(--gc-accent)_14%,transparent)] hover:text-[var(--gc-text)]"
                     }`}
                   >
@@ -143,10 +156,10 @@ function MobilePrimaryNav({ sections }: { sections: NavSection[] }) {
                 );
               })}
             </div>
-          </div>
-        </Fragment>
-      ))}
-    </nav>
+          </section>
+        ))}
+      </nav>
+    </details>
   );
 }
 
@@ -247,11 +260,9 @@ export function SiteHeader() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-1.5 px-3 pb-2 sm:gap-2 sm:px-4">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:gap-2">
             <BrandBlock compact touchNav />
-            <div className="hidden shrink-0 sm:block">
-              <ThemeSwitcher touchFriendly />
-            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <MobileCompactNav sections={mobileNavSections} />
             <LocaleSwitcher compact />
             <AccountMenu compact />
             <Link
@@ -261,13 +272,6 @@ export function SiteHeader() {
               {t("nav.createCta")}
             </Link>
           </div>
-        </div>
-        <div className="mx-auto w-full max-w-6xl min-w-0 px-3 pb-2 sm:px-4">
-          <MobilePrimaryNav sections={mobileNavSections} />
-        </div>
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-center gap-1 border-t border-[color:color-mix(in_srgb,var(--gc-border)_55%,transparent)] px-3 py-2 sm:hidden">
-          <span className="text-[10px] text-[var(--gc-text-faint)]">{t("common.theme")}</span>
-          <ThemeSwitcher touchFriendly />
         </div>
       </header>
 

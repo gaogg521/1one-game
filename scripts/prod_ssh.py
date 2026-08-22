@@ -19,6 +19,7 @@ Optional:
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -89,6 +90,27 @@ def deploy_app_port() -> str:
 
 def deploy_domain() -> str:
     return _optional("OPERONE_DEPLOY_DOMAIN")
+
+
+def deploy_host_header() -> str:
+    """Return the hostname used by the reverse proxy virtual host."""
+    domain = deploy_domain().removeprefix("https://").removeprefix("http://")
+    return domain.split("/", 1)[0]
+
+
+def local_health_check_command() -> str:
+    """Health request on the server loopback through the public HTTPS vhost."""
+    port = deploy_app_port()
+    host = deploy_host_header()
+    if host:
+        # --resolve keeps this check on the production server while exercising
+        # the exact TLS SNI + Nginx virtual host used by the public domain.
+        resolve = shlex.quote(f"{host}:443:127.0.0.1")
+        return (
+            "curl -fsS --connect-timeout 10 "
+            f"--resolve {resolve} https://{shlex.quote(host)}/api/health"
+        )
+    return f"curl -fsS --connect-timeout 10 http://127.0.0.1:{port}/api/health"
 
 
 def deploy_key_path() -> str | None:

@@ -217,6 +217,28 @@ model ShareEvent {
   @@index([referrerUserId])
 }
 
+/// 匿名试玩质量事件。只记录模板、作品、时长与结果；不存提示词、输入内容或身份资料。
+model GameplayEvent {
+  id                 String   @id @default(cuid())
+  /// 已保存作品时关联 Project id；创作台预览可为空。
+  projectId          String?
+  templateId         String
+  /// start | first_action | first_minute | end | retry
+  event              String
+  /// 每个浏览器试玩回合生成的随机 UUID，不与账户或设备标识关联。
+  sessionId          String
+  elapsedMs          Int?
+  score              Int?
+  won                Boolean?
+  /// 生成时的静态首分钟质量分，便于校准质量评分与真实留存之间的关系。
+  verticalSliceScore Int?
+  createdAt          DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([templateId, event, createdAt])
+  @@index([sessionId])
+}
+
 /// 平台运行时配置（密钥加密存储；模型等可覆盖 product-config 默认值）
 model PlatformRuntimeConfig {
   id              String   @id @default("default")

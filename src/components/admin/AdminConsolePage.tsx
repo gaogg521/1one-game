@@ -126,6 +126,10 @@ type Analytics = {
     quotaByReason: { reason: string; events: number; deltaSum: number }[];
     paymentsByDay: DayPoint[];
   };
+  gameplay: {
+    starts: number; firstMinuteRate: number; firstActionRate: number; retries: number; averageFailureSec: number; averageQualityScore: number;
+    byTemplate: { templateId: string; starts: number; firstMinuteRate: number; retries: number }[];
+  };
 };
 
 const ADMIN_PAGE_SIZE = 12;
@@ -644,6 +648,13 @@ export default function AdminConsolePage({
                       label: t("kpiFeaturedWorks"),
                       value: analytics.product.featured,
                     },
+                    { label: t("kpiGameplayStarts"), value: analytics.gameplay.starts, hint: t("kpiGameplayFirstAction", { rate: analytics.gameplay.firstActionRate }) },
+                    {
+                      label: t("kpiGameplayFirstMinute"),
+                      value: `${analytics.gameplay.firstMinuteRate}%`,
+                      hint: t("kpiGameplayQuality", { score: analytics.gameplay.averageQualityScore }),
+                      tone: analytics.gameplay.starts >= 10 && analytics.gameplay.firstMinuteRate < 45 ? ("warn" as const) : ("accent" as const),
+                    },
                     ...(stats.sampleGallery
                       ? [
                           {
@@ -794,6 +805,32 @@ export default function AdminConsolePage({
 
                 <ChartPanel title={t("chartSocialFunnel")} subtitle={t("chartSocialFunnelSubtitle")}>
                   <AdminFunnelChart stages={analytics.social.funnel} />
+                </ChartPanel>
+
+                <ChartPanel title={t("chartGameplayQuality")} subtitle={t("chartGameplayQualitySubtitle", { days: analytics.days })}>
+                  <AdminKpiStrip
+                    items={[
+                      { label: t("kpiGameplayRetries"), value: analytics.gameplay.retries },
+                      { label: t("kpiGameplayFailureTime"), value: `${analytics.gameplay.averageFailureSec}s` },
+                      { label: t("kpiGameplayFirstAction"), value: `${analytics.gameplay.firstActionRate}%` },
+                      { label: t("kpiGameplayQuality"), value: analytics.gameplay.averageQualityScore },
+                    ]}
+                  />
+                </ChartPanel>
+
+                <ChartPanel title={t("chartGameplayByTemplate")} subtitle={t("chartGameplayByTemplateSubtitle")}>
+                  {analytics.gameplay.byTemplate.length > 0 ? (
+                    <AdminRankBars
+                      items={analytics.gameplay.byTemplate.map((row) => ({
+                        label: row.templateId,
+                        value: row.starts,
+                        hint: t("chartGameplayByTemplateHint", { rate: row.firstMinuteRate, retries: row.retries }),
+                      }))}
+                      valueSuffix={t("timesSuffix")}
+                    />
+                  ) : (
+                    <p className="text-sm text-[var(--gc-text-faint)]">{t("chartGameplayNoData")}</p>
+                  )}
                 </ChartPanel>
               </div>
             ) : null}

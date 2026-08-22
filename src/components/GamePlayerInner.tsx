@@ -19,6 +19,8 @@ import {
 } from "@/lib/runner-cloud-leaderboard.client";
 import { recordGameResult } from "@/game/engine/win-rate-guard";
 import { recordScore, getHighScore } from "@/game/engine/local-highscore";
+import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
+import { createGameplayTelemetrySession } from "@/lib/gameplay-telemetry.client";
 
 function formatRecapTime(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -71,8 +73,10 @@ export default function GamePlayerInner({
   const [newLocalBest, setNewLocalBest] = useState(false);
   const [iterateInput, setIterateInput] = useState("");
   const [playReady, setPlayReady] = useState(false);
+  const telemetryRef = useRef<ReturnType<typeof createGameplayTelemetrySession> | null>(null);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
+  const verticalSliceScore = useMemo(() => evaluateGameVerticalSlice(spec).score, [spec]);
   const cohesiveSnapshot = useMemo(() => describeCohesiveExperience(cohesive), [cohesive]);
   /**
    * 调试用 chip（"共享体验层 music:neon · tier:standard ..."）只在显式调试开关下显示。
@@ -204,9 +208,19 @@ export default function GamePlayerInner({
     setResult(null);
     setCloudBoard(null);
     setNewLocalBest(false);
+    const telemetry = previewMode
+      ? null
+      : createGameplayTelemetrySession({ spec, projectId, verticalSliceScore });
+    telemetryRef.current = telemetry;
+    telemetry?.start();
+    const recordFirstAction = () => telemetry?.firstAction();
+    el.addEventListener("pointerdown", recordFirstAction, { once: true });
+    el.addEventListener("keydown", recordFirstAction, { once: true });
+    const firstMinuteTimer = window.setTimeout(() => telemetry?.firstMinute(), 60_000);
     const refPayloads = readReferenceImagePayloadsFromSession();
     const handle = createPhaserGame(el, spec, (r) => {
       setResult(r);
+      telemetry?.end(r.won, r.score);
       onEnd?.({ won: r.won, score: r.score });
       if (!previewMode) {
         recordGameResult(spec.templateId, r.won);
@@ -229,11 +243,15 @@ export default function GamePlayerInner({
       setAudioHint(false);
     }
     return () => {
+      window.clearTimeout(firstMinuteTimer);
+      el.removeEventListener("pointerdown", recordFirstAction);
+      el.removeEventListener("keydown", recordFirstAction);
+      if (telemetryRef.current === telemetry) telemetryRef.current = null;
       handle.game.destroy(true);
       gameRef.current = null;
       bootAudioRef.current = null;
     };
-  }, [spec, session, locale, effectiveProjectId, resolvedPromptHint]);
+  }, [spec, session, locale, effectiveProjectId, projectId, resolvedPromptHint, previewMode, verticalSliceScore]);
 
   /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
   useEffect(() => {
@@ -277,6 +295,7 @@ export default function GamePlayerInner({
 
   const restart = useCallback(() => {
     armAudioBoot();
+    telemetryRef.current?.retry();
     setResult(null);
     setNewLocalBest(false);
     setSession((s) => s + 1);
