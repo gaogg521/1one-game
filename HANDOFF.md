@@ -11,7 +11,7 @@
 → 可发布检查 → 发布/分发 → 作品消费数据 → 商业权益与成本账本
 ```
 
-已开始搭建其中的“质量报告、试玩数据、统一作品状态”基础，但**尚未完成平台层 API 接入、统一创作台 UI、支付成本账本或生产发布**。不要把当前状态当成整项产品改造已经完成。
+已完成三条线的质量 API 接入，并完成工作台的跨媒介质量汇总与详情修复跳转；但**章节/页级定向修复、支付成本账本和生产发布仍未完成**。不要把当前状态当成整项产品改造已经完成。
 
 ## 本轮已改动（仅下列为本轮明确拥有的代码）
 
@@ -93,6 +93,12 @@ curl -fsS --connect-timeout 10 \
 - 新迁移在全新临时 SQLite 库完成 `prisma migrate deploy`，确认包含 `GameplayEvent`；临时库已清除，生产尚未迁移。
 - `npm run build` 已完成并生成 `.next/BUILD_ID` 与生产 manifests。全仓 lint、全量 E2E、生产部署均未执行。
 
+## 续接完成：工作台质量修复闭环（待提交）
+
+- 新增 `src/app/api/studio/quality/route.ts`：仅以 owner cookie 查询最近 100 项作品，在服务端评估并返回小型 `workflow` / `quality` 摘要；小说正文不会随列表传到浏览器。
+- `src/app/studio/page.tsx` 与 `src/components/CreatorCenterPanel.tsx`：显示质量判定、分数和证据；未达标作品优先进入质量检查区并可直达详情页修复。离开详情再返回工作台会重新评估。
+- 五种 locale 已补齐文案。验证通过：`npx tsc --noEmit`、目标 ESLint、JSON 解析、`qa:creator-quality`、`qa:creator-workflow`；开发服务的质量接口对无 cookie 为 401、owner cookie 为 200。浏览器会话没有现成作品，因此仅实测了工作台空态加载，无前端错误。
+
 ## 生产状态与发布规则
 
 - 正式站点：`https://operone.1oneclaw.com/zh-Hans`，已确认可访问。
@@ -105,7 +111,7 @@ curl -fsS --connect-timeout 10 \
 
 ## 当前工作区风险
 
-当前分支 `main`，HEAD `e32cc87d`。工作区本来就很脏，以下文件/目录并非都属于本轮：
+当前分支 `main`，提交 `8118b197`、`ae00cd48`、`7ab2b0d6` 均仅在本地，工作台闭环改动待提交。工作区本来就很脏，以下文件/目录并非都属于本轮：
 
 - 明确不要顺手提交：`.claude/launch.json`、`README.md`、`src/proxy.ts`、PNG、`dev.db`、`prisma/prisma/ci.sqlite*`、`temp-*.json`、`scripts/deploy-*-www.py`、`scripts/upload-1onework-releases.py`、`docs/_build_1one_roadshow.py`、`test-template-selector.ts`、`scripts/__pycache__/` 等。
 - `CONTEXT.md` 是本轮明确按用户要求重写的最新上下文，应保留。
@@ -117,7 +123,7 @@ curl -fsS --connect-timeout 10 \
 2. 对 `GameplayEvent` 在新 SQLite 临时库/干净 worktree 做 `prisma migrate deploy` 验证，再决定是否上生产。
 3. 把 `creator-workflow.ts` 接到三条线的**详情 API 和生成响应**：统一返回 `{ workflow: { stage }, quality: { verdict, score?, evidence[] } }`，但先不要硬拦截公开。
 4. 给小说做章节级质量报告（开篇钩子、角色一致性、章节完整性、可继续生成）；给漫画做页级报告（角色/场景一致性、文字安全区、分镜连续性、局部重绘）。这两者必须与游戏的质量报告使用同一平台外壳。
-5. 统一创作台为“Brief → 生成 → 质量反馈 → 局部修改 → 发布”的跨媒介流程；避免只在游戏详情页加指标。
+5. 补齐小说逐章、漫画逐页的质量和局部修复，并使工作台的详情跳转定位到当前章/页；避免只在游戏详情页加指标。
 6. 在已有事件数据稳定后，按媒介建立首成品率、编辑完成率、质量通过率、发布率、消费完成率、分享率、付费转化与单作品成本；再决定质量门禁阈值和套餐权益。
 7. 最后才启用真正的发布硬门禁、支付/成本账本和生产发布。
 

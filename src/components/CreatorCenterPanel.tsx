@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import type { CreatorQualityReport, CreatorWorkStage } from "@/lib/creator-workflow";
 
 type WorkSnapshot = {
   id: string;
@@ -14,6 +15,8 @@ type WorkSnapshot = {
   likeCount: number;
   updatedAt: string;
   lastRefinement?: { mode: "patch" | "regenerate"; instruction: string };
+  workflow?: { stage: CreatorWorkStage };
+  quality?: CreatorQualityReport;
 };
 
 function workHref(type: WorkSnapshot["type"], id: string, locale: AppLocale) {
@@ -34,9 +37,12 @@ export function CreatorCenterPanel({ works }: { works: WorkSnapshot[] }) {
   if (works.length === 0) return null;
 
   const recent = works.slice(0, 3);
-  const needsCover = works.filter((w) => !w.coverPath).slice(0, 3);
+  const needsQuality = works
+    .filter((w) => w.quality && w.quality.verdict !== "ready")
+    .sort((a, b) => (a.quality?.score ?? -1) - (b.quality?.score ?? -1))
+    .slice(0, 3);
   const worthPolish = [...works]
-    .filter((w) => w.likeCount > 0 || w.status !== "ready" || w.lastRefinement)
+    .filter((w) => w.quality?.verdict !== "ready" || w.likeCount > 0 || w.status !== "ready" || w.lastRefinement)
     .sort((a, b) => b.likeCount - a.likeCount)
     .slice(0, 2);
 
@@ -71,19 +77,25 @@ export function CreatorCenterPanel({ works }: { works: WorkSnapshot[] }) {
       </div>
 
       <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--gc-text-faint)]">{t("todo")}</p>
-        {needsCover.length === 0 ? (
-          <p className="mt-3 text-sm text-[var(--gc-muted)]">{t("coversReady")}</p>
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--gc-text-faint)]">{t("qualityReview")}</p>
+        {needsQuality.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--gc-muted)]">{t("qualityReady")}</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {needsCover.map((w) => (
-              <li key={`cover-${w.type}-${w.id}`}>
+            {needsQuality.map((w) => (
+              <li key={`quality-${w.type}-${w.id}`}>
                 <Link
                   href={workHref(w.type, w.id, locale)}
                   className="block rounded-lg px-2 py-1.5 text-sm text-[var(--gc-text-soft)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,transparent)]"
                 >
                   <span className="line-clamp-1">{w.title}</span>
-                  <span className="text-[10px] text-amber-400/90">{t("fixCover")}</span>
+                  <span className="block text-[10px] text-amber-400/90">
+                    {w.quality?.verdict === "blocked" ? t("qualityBlocked") : t("qualityNeedsPolish")}
+                    {w.quality?.score == null ? "" : ` · ${t("qualityScore", { score: w.quality.score })}`}
+                  </span>
+                  {w.quality?.evidence[0] ? (
+                    <span className="block truncate font-mono text-[10px] text-[var(--gc-text-faint)]">{w.quality.evidence[0]}</span>
+                  ) : null}
                 </Link>
               </li>
             ))}

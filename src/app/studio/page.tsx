@@ -21,6 +21,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { comicCoverFromImageUrls } from "@/lib/comic-display";
 import { studioWorkCoverLinkClass } from "@/lib/cover-display-sizes";
 import { prefetchGameProjectsByIds } from "@/lib/studio-godot-prefetch.client";
+import type { CreatorQualityReport, CreatorWorkStage } from "@/lib/creator-workflow";
 
 type WorkType = "project" | "novel" | "comic";
 
@@ -59,6 +60,8 @@ type WorkRow = BaseRow & {
   /** 漫画绑定的小说 id；独立漫画为 null */
   linkedNovelId?: string | null;
   lastRefinement?: { mode: "patch" | "regenerate"; instruction: string; at: string };
+  workflow?: { stage: CreatorWorkStage };
+  quality?: CreatorQualityReport;
 };
 
 function formatWhen(iso: string, localeTag: string) {
@@ -219,15 +222,51 @@ export default function StudioPage() {
 
       try {
         const headers = mergeLocaleHeaders(locale);
-        const [projectsRes, novelsRes, comicsRes] = await Promise.all([
+        const [projectsRes, novelsRes, comicsRes, qualityRes] = await Promise.all([
           fetch("/api/projects", { headers }),
           fetch("/api/novel?limit=100&mine=1", { headers }),
           fetch("/api/comic?limit=100&mine=1", { headers }),
+          fetch("/api/studio/quality", { headers }),
         ]);
 
         const projectsPayload = await readApiJson(projectsRes);
         const novelsPayload = await readApiJson(novelsRes);
         const comicsPayload = await readApiJson(comicsRes);
+        const qualityPayload = await readApiJson(qualityRes);
+        const qualityByWork = new Map<string, { workflow: { stage: CreatorWorkStage }; quality: CreatorQualityReport }>();
+        if (
+          qualityRes.ok &&
+          qualityPayload &&
+          typeof qualityPayload === "object" &&
+          Array.isArray((qualityPayload as { works?: unknown }).works)
+        ) {
+          for (const item of (qualityPayload as { works: unknown[] }).works) {
+            if (!item || typeof item !== "object") continue;
+            const row = item as {
+              id?: unknown;
+              type?: unknown;
+              workflow?: { stage?: unknown };
+              quality?: { verdict?: unknown; score?: unknown; evidence?: unknown };
+            };
+            if (
+              typeof row.id !== "string" ||
+              (row.type !== "project" && row.type !== "novel" && row.type !== "comic") ||
+              !row.workflow ||
+              typeof row.workflow.stage !== "string" ||
+              !row.quality ||
+              (row.quality.verdict !== "ready" && row.quality.verdict !== "needs_polish" && row.quality.verdict !== "blocked") ||
+              !Array.isArray(row.quality.evidence)
+            ) continue;
+            qualityByWork.set(workKey(row.type, row.id), {
+              workflow: { stage: row.workflow.stage as CreatorWorkStage },
+              quality: {
+                verdict: row.quality.verdict,
+                ...(typeof row.quality.score === "number" ? { score: row.quality.score } : {}),
+                evidence: row.quality.evidence.filter((e): e is string => typeof e === "string"),
+              },
+            });
+          }
+        }
 
         const projectsRaw =
           projectsRes.ok &&
@@ -317,11 +356,15 @@ export default function StudioPage() {
                       : "",
                 }
               : undefined;
-          allWorks.push({ ...row, type: "project", ...(lastRefinement ? { lastRefinement } : {}) });
+          const quality = qualityByWork.get(workKey("project", row.id));
+          allWorks.push({ ...row, type: "project", ...(lastRefinement ? { lastRefinement } : {}), ...quality });
         }
         for (const n of novelsRaw) {
           const row = normalizeWorkRow(n, {});
-          if (row) allWorks.push({ ...row, type: "novel" });
+          if (row) {
+            const quality = qualityByWork.get(workKey("novel", row.id));
+            allWorks.push({ ...row, type: "novel", ...quality });
+          }
         }
         for (const c of comicsRaw) {
           const row = normalizeWorkRow(c, { playCount: 0 });
@@ -333,6 +376,7 @@ export default function StudioPage() {
             allWorks.push({
               ...row,
               type: "comic",
+              ...qualityByWork.get(workKey("comic", row.id)),
               panelCoverFallback: imageUrls ? comicCoverFromImageUrls(imageUrls) : null,
               linkedNovelId:
                 (c as { novel?: { id?: string } | null }).novel?.id ?? null,
@@ -742,6 +786,17 @@ export default function StudioPage() {
                           : t("studio.lastRefinementPatch", { instruction: r.lastRefinement.instruction })}
                       </p>
                     ) : null}
+                    {r.quality ? (
+                      <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-2.5 py-1.5 text-[11px] text-[var(--gc-text-soft)]" data-testid="studio-quality-report">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className={r.quality.verdict === "ready" ? "text-emerald-400" : r.quality.verdict === "blocked" ? "text-red-400" : "text-amber-400"}>
+                            {r.quality.verdict === "ready" ? t("studio.qualityReady") : r.quality.verdict === "blocked" ? t("studio.qualityBlocked") : t("studio.qualityNeedsPolish")}
+                          </span>
+                          {r.quality.score != null ? <span>{t("studio.qualityScore", { score: r.quality.score })}</span> : null}
+                        </div>
+                        {r.quality.evidence.length > 0 ? <p className="mt-1 line-clamp-2 font-mono text-[10px] text-[var(--gc-text-faint)]">{r.quality.evidence.slice(0, 2).join(" · ")}</p> : null}
+                      </div>
+                    ) : null}
                     {r.shareCode ? (
                       <p className="font-mono text-[11px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
                         {t("studio.shortLink", { code: r.shareCode })}
@@ -763,6 +818,14 @@ export default function StudioPage() {
                       >
                         {t("studio.open")}
                       </Link>
+                      {r.quality?.verdict !== "ready" ? (
+                        <Link
+                          href={getWorkLink(r.type, r.id, locale)}
+                          className="rounded-full border border-amber-400/35 bg-amber-400/10 px-4 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-400/15"
+                        >
+                          {t("studio.repairNow")}
+                        </Link>
+                      ) : null}
                       {r.type === "project" && (
                         <>
                           <Link
