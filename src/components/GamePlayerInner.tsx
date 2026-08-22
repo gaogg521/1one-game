@@ -74,6 +74,11 @@ export default function GamePlayerInner({
   const [iterateInput, setIterateInput] = useState("");
   const [playReady, setPlayReady] = useState(false);
   const telemetryRef = useRef<ReturnType<typeof createGameplayTelemetrySession> | null>(null);
+  const onEndRef = useRef(onEnd);
+
+  useEffect(() => {
+    onEndRef.current = onEnd;
+  }, [onEnd]);
 
   const cohesive = useMemo(() => buildCohesivePresentation(spec), [spec]);
   const verticalSliceScore = useMemo(() => evaluateGameVerticalSlice(spec).score, [spec]);
@@ -166,7 +171,6 @@ export default function GamePlayerInner({
 
   useEffect(() => {
     if (!result?.runnerLeaderboard) {
-      setCloudBoard(null);
       return;
     }
     const variantId =
@@ -212,16 +216,29 @@ export default function GamePlayerInner({
       ? null
       : createGameplayTelemetrySession({ spec, projectId, verticalSliceScore });
     telemetryRef.current = telemetry;
-    telemetry?.start();
-    const recordFirstAction = () => telemetry?.firstAction();
+    // React Strict Mode intentionally mounts, cleans up, and mounts again in
+    // development. Defer session activation by one task so its probe mount is
+    // cancelled before it can become a false `start` denominator.
+    let telemetryStarted = false;
+    let firstMinuteTimer: number | null = null;
+    const activateTelemetry = () => {
+      if (!telemetry || telemetryStarted) return;
+      telemetryStarted = true;
+      telemetry.start();
+      firstMinuteTimer = window.setTimeout(() => telemetry.firstMinute(), 60_000);
+    };
+    const deferredStartTimer = window.setTimeout(activateTelemetry, 0);
+    const recordFirstAction = () => {
+      activateTelemetry();
+      telemetry?.firstAction();
+    };
     el.addEventListener("pointerdown", recordFirstAction, { once: true });
     el.addEventListener("keydown", recordFirstAction, { once: true });
-    const firstMinuteTimer = window.setTimeout(() => telemetry?.firstMinute(), 60_000);
     const refPayloads = readReferenceImagePayloadsFromSession();
     const handle = createPhaserGame(el, spec, (r) => {
       setResult(r);
       telemetry?.end(r.won, r.score);
-      onEnd?.({ won: r.won, score: r.score });
+      onEndRef.current?.({ won: r.won, score: r.score });
       if (!previewMode) {
         recordGameResult(spec.templateId, r.won);
         const isNewBest = recordScore(spec.templateId, r.score);
@@ -243,7 +260,8 @@ export default function GamePlayerInner({
       setAudioHint(false);
     }
     return () => {
-      window.clearTimeout(firstMinuteTimer);
+      window.clearTimeout(deferredStartTimer);
+      if (firstMinuteTimer !== null) window.clearTimeout(firstMinuteTimer);
       el.removeEventListener("pointerdown", recordFirstAction);
       el.removeEventListener("keydown", recordFirstAction);
       if (telemetryRef.current === telemetry) telemetryRef.current = null;
@@ -255,7 +273,7 @@ export default function GamePlayerInner({
 
   /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
   useEffect(() => {
-    setPlayReady(false);
+    const reset = window.setTimeout(() => setPlayReady(false), 0);
     const poll = window.setInterval(() => {
       if ((window as unknown as { __PHASER_PLAY_READY__?: boolean }).__PHASER_PLAY_READY__) {
         setPlayReady(true);
@@ -263,6 +281,7 @@ export default function GamePlayerInner({
     }, 80);
     const fallback = window.setTimeout(() => setPlayReady(true), 4500);
     return () => {
+      window.clearTimeout(reset);
       window.clearInterval(poll);
       window.clearTimeout(fallback);
     };

@@ -340,6 +340,12 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 验证：`node node_modules/typescript/bin/tsc --noEmit`、定向 ESLint、`qa:creator-quality`、`qa:gameplay-telemetry`、已有 avoider 试玩 E2E 均通过。
 - 未通过项：avoider 的真实首分钟 E2E 实际等待完成后仍为零样本。原因是当前 8888 开发进程持有迁移前的 Prisma Client；绝不能以 fake timer 或缩短阈值替代。需在允许维护窗口内安全重启该服务、运行普通 `prisma generate`（不要 `--no-engine`），再运行 `npm run test:e2e:first-minute` 完成五模板验收。
 
+## 本轮续接：开发库与真实五模板验收已完成（待提交）
+
+- 已安全停止并重启本地 8888 开发链，普通 `prisma generate` 成功恢复二进制 Client；修复脚本现覆盖 `Comment`/`bgmNotesJson` 的历史迁移漂移并不依赖 `npx` shim。`dev.db` 的 24 条迁移已全部应用。
+- Strict Mode 探测挂载不再制造额外 `start` 遥测分母；同时修复 `GamePlayerInner` 的目标 effect lint。`npm run test:e2e:first-minute` 在当前源码下完整通过五个模板、每条真实等待 61 秒，耗时 7.6 分钟。
+- 运行中捕获并修复 BGM 路由对 JSON 文本直接校验的错误；真实测试项目的缓存 BGM 接口已返回成功。TypeScript、目标 ESLint、垂直切片/质量/遥测和四类 semantic-juice QA 均通过。
+
 ## 11. 生产发布状态（2026-08-22 已核验）
 
 - 线上站点：`https://operone.1oneclaw.com/zh-Hans` 可访问，页面标题为 `Operone - AI 创作`，首页主标题正常渲染。

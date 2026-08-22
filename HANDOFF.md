@@ -124,6 +124,14 @@ curl -fsS --connect-timeout 10 \
 - 游戏模板维度把静态质量均分/就绪数与匿名试玩启动量、首分钟率并列；零样本明确显示为无数据，不能作为发布门禁。无法解析的历史 spec 不会被伪造成低分样本。
 - `AdminConsolePage` 已显示媒介概览和模板质量/首分钟对照，五份 locale 已补齐。验证通过：TypeScript、定向 ESLint、五语 JSON、`qa:creator-quality`、`qa:gameplay-telemetry`。
 
+## 续接完成：开发库恢复与五旗舰首分钟验收（待提交）
+
+- 已在明确停止 `D:\game` 的 8888 开发进程后执行普通 `prisma generate`，恢复二进制 Prisma Client；`scripts/fix-dev-db-migrations.ts` 现直接调用本地 Prisma CLI，并覆盖已有 `Comment` 表和 `Project.bgmNotesJson` 列的历史迁移漂移。`dev.db` 的 24 条迁移现已全部对齐，包含 `GameplayEvent`。
+- `GamePlayerInner` 将试玩会话延后一项任务再激活，Strict Mode 的探测挂载会在上报 `start` 前被取消；同时清理了两处 effect 同步 setState 和 `onEnd` 依赖 lint。避免开发态伪造额外启动会话，把真实首分钟率错误压成 50%。
+- `e2e/flagship-first-minute.spec.ts` 的农场 fixture 使用注册表正式 `farming` ID；`npm run test:e2e:first-minute` 已完整通过 avoider、puzzle、physics、platformer、farming 五条真实 61 秒用例（7.6 分钟）。
+- 修复 `GET /api/projects/[id]/bgm`：持久化的 `specJson` 先 `JSON.parse` 再校验。对真实测试项目预置缓存旋律后，公开 BGM 接口实测正常返回，无 Zod 错误。
+- 本轮质量验证还包括：`npx tsc --noEmit`、目标 ESLint、`qa:game-vertical-slice`、`qa:game-quality-contracts`、`qa:gameplay-telemetry`、`qa:creator-quality`、physics/puzzle/platformer/farming 四类 semantic-juice QA，全部通过。
+
 ## 生产状态与发布规则
 
 - 正式站点：`https://operone.1oneclaw.com/zh-Hans`，已确认可访问。

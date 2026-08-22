@@ -4,7 +4,8 @@
  *
  * 见 docs/local-database.md
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 const dbUrl = process.env.DATABASE_URL?.trim() || "file:./dev.db";
 
@@ -22,6 +23,8 @@ const DRIFT_CHECKS: Array<
   { kind: "column", migration: "20260614100000_email_auth", table: "User", column: "passwordHash" },
   { kind: "table", migration: "20260614180000_platform_email_config", table: "PlatformEmailConfig" },
   { kind: "column", migration: "20260615100000_username_auth", table: "User", column: "username" },
+  { kind: "table", migration: "20260621161000_add_comment", table: "Comment" },
+  { kind: "column", migration: "20260622120000_project_bgm_notes", table: "Project", column: "bgmNotesJson" },
 ];
 
 const FAILED_MIGRATIONS_TO_ROLLBACK = ["20260614100000_email_auth", "20260614090000_user_auth_foundation"];
@@ -50,16 +53,18 @@ async function columnExists(table: string, column: string): Promise<boolean> {
   }
 }
 
-function run(cmd: string, quiet = false) {
-  execSync(cmd, {
+const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
+
+function run(args: string[], quiet = false) {
+  execFileSync(process.execPath, [prismaCli, ...args], {
     stdio: quiet ? "pipe" : "inherit",
     env: { ...process.env, DATABASE_URL: dbUrl },
   });
 }
 
-function runQuiet(cmd: string): boolean {
+function runQuiet(args: string[]): boolean {
   try {
-    run(cmd, true);
+    run(args, true);
     return true;
   } catch {
     return false;
@@ -68,7 +73,7 @@ function runQuiet(cmd: string): boolean {
 
 async function resolveFailedMigrations(): Promise<void> {
   for (const name of FAILED_MIGRATIONS_TO_ROLLBACK) {
-    if (runQuiet(`npx prisma migrate resolve --rolled-back ${name}`)) {
+    if (runQuiet(["migrate", "resolve", "--rolled-back", name])) {
       console.log(`✓ ${name} → rolled-back（可重试 deploy）`);
     }
   }
@@ -82,7 +87,7 @@ async function resolveDrift(): Promise<void> {
       : await tableExists(check.table);
     if (!exists) continue;
     console.log(`✓ ${check.migration} 目标已存在 → migrate resolve --applied`);
-    runQuiet(`npx prisma migrate resolve --applied ${check.migration}`);
+    runQuiet(["migrate", "resolve", "--applied", check.migration]);
   }
 }
 
@@ -90,7 +95,7 @@ async function ensureSchemaViaPush(): Promise<void> {
   const hasUser = await tableExists("User");
   if (hasUser) return;
   console.log("→ dev.db 缺少 User 等表，执行 prisma db push 对齐 schema…");
-  run("npx prisma db push --skip-generate");
+  run(["db", "push", "--skip-generate"]);
 }
 
 async function main() {
@@ -102,7 +107,7 @@ async function main() {
     await ensureSchemaViaPush();
     await resolveDrift();
     try {
-      run("npx prisma migrate deploy");
+      run(["migrate", "deploy"]);
       console.log("\n[OK] dev.db migrations aligned\n");
       return;
     } catch {
@@ -114,7 +119,7 @@ async function main() {
   console.log("→ 最后尝试 db push + resolve 全部 pending…");
   await ensureSchemaViaPush();
   await resolveDrift();
-  run("npx prisma db push --skip-generate");
+  run(["db", "push", "--skip-generate"]);
   console.log("\n[OK] dev.db schema synced via db push\n");
 }
 

@@ -14,7 +14,7 @@ const FLAGSHIPS = [
   { templateId: "puzzle", prompt: "色彩消除益智 match3" },
   { templateId: "physics", prompt: "打击 dummy 假人解压" },
   { templateId: "platformer", prompt: "横版闯关跳跃收集钥匙过关" },
-  { templateId: "farming", prompt: "种植花园浇水收获" },
+  { templateId: "farming", prompt: "治愈农场经营，种植、浇水并收获作物" },
 ] as const;
 
 async function createProject(page: Page, prompt: string): Promise<{ id: string; templateId: string }> {

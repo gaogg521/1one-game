@@ -32,9 +32,13 @@ export async function GET(req: Request, ctx: RouteContext) {
     }
   }
 
-  // 生成并缓存
-  const spec = parseGameSpec(row.specJson);
-  if (!spec) return NextResponse.json({ error: "invalid spec" }, { status: 500 });
+  // specJson is persisted JSON text; parse it before validating the object.
+  let spec;
+  try {
+    spec = parseGameSpec(JSON.parse(row.specJson));
+  } catch {
+    return NextResponse.json({ error: "invalid spec" }, { status: 500 });
+  }
 
   const notes = await generateBgmNotesFromSpec(spec);
   if (!notes) return NextResponse.json({ error: "generation failed" }, { status: 500 });
