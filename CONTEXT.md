@@ -361,3 +361,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `src/game/engine/runtime-actor-state.ts`，统一 `intro / idle / move / jump / dash / action / hit / victory / defeat` 生命周期；短暂命中/动作不会被下一帧移动覆盖，结算状态保持可观察。
 - 跑酷、躲避/收集、物理解压、消除、农场五类场景已接入并把 `actorState`、`actorStateTransitions` 写入 Phaser QA 状态，作为后续真实运行质量门禁的数据基础。
 - 验证通过：TypeScript、`qa:runtime-actor-state`、`qa:game-vertical-slice` 与五类既有 semantic-juice QA。下一步将把运行时状态/首分钟遥测汇入作品发布前的质量门禁；商户支付和财务计费仍依赖外部商户与定价规则，不能用模拟支付冒充完成。
+
+## 13. 续接：真实首分钟回归稳定性（2026-08-23）
+
+- `e2e/flagship-first-minute.spec.ts` 的总时限由 100 秒调整为 150 秒：保留生产同等的 61 秒真实等待和 12 秒落库轮询，只补足项目创建与 Phaser 冷启动的时间预算。
+- `ensureOwnerSession` 改为等待 `domcontentloaded` 而非非关键资源的完整 `load`，避免首页字体/展示资源拖垮后续 API 会话验收。
+- 完整 `npm run test:e2e:first-minute` 已通过 5/5（avoider、puzzle、physics、platformer、farming，7.3 分钟）；每条均验证 `start`、`first_action` 和 `first_minute` 已回写项目质量报告。

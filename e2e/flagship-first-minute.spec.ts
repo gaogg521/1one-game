@@ -7,7 +7,9 @@ import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { ensureOwnerSession } from "./helpers/owner";
 import { gotoPlay } from "./helpers/play";
 
-test.describe.configure({ mode: "serial", timeout: 100_000 });
+// 真实首分钟验收本身占用 61 秒，且还需容纳项目创建、Phaser 首次启动与
+// 12 秒的遥测落库轮询。100 秒会在本地冷启动时把正确的回写截断。
+test.describe.configure({ mode: "serial", timeout: 150_000 });
 
 const FLAGSHIPS = [
   { templateId: "avoider", prompt: "躲开从天而降的陨石" },
