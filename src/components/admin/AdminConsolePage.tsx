@@ -130,6 +130,11 @@ type Analytics = {
     starts: number; firstMinuteRate: number; firstActionRate: number; retries: number; averageFailureSec: number; averageQualityScore: number;
     byTemplate: { templateId: string; starts: number; firstMinuteRate: number; retries: number }[];
   };
+  quality: {
+    sampleLimitPerMedium: number;
+    byMedium: { kind: "game" | "novel" | "comic"; evaluated: number; ready: number; needsPolish: number; blocked: number; averageScore: number | null }[];
+    byTemplate: { templateId: string; evaluated: number; ready: number; averageScore: number | null; starts: number; firstMinuteRate: number | null }[];
+  };
 };
 
 const ADMIN_PAGE_SIZE = 12;
@@ -825,6 +830,44 @@ export default function AdminConsolePage({
                         label: row.templateId,
                         value: row.starts,
                         hint: t("chartGameplayByTemplateHint", { rate: row.firstMinuteRate, retries: row.retries }),
+                      }))}
+                      valueSuffix={t("timesSuffix")}
+                    />
+                  ) : (
+                    <p className="text-sm text-[var(--gc-text-faint)]">{t("chartGameplayNoData")}</p>
+                  )}
+                </ChartPanel>
+
+                <ChartPanel title={t("chartQualityByMedium")} subtitle={t("chartQualityByMediumSubtitle", { limit: analytics.quality.sampleLimitPerMedium })}>
+                  <AdminRankBars
+                    items={analytics.quality.byMedium.map((row) => ({
+                      label: row.kind === "game" ? t("typeGame") : row.kind === "novel" ? t("typeNovel") : t("typeComic"),
+                      value: row.ready,
+                      hint: t("chartQualityByMediumHint", {
+                        ready: row.ready,
+                        evaluated: row.evaluated,
+                        score: row.averageScore ?? "—",
+                        needsPolish: row.needsPolish,
+                        blocked: row.blocked,
+                      }),
+                    }))}
+                    valueSuffix={t("timesSuffix")}
+                  />
+                </ChartPanel>
+
+                <ChartPanel title={t("chartQualityByTemplate")} subtitle={t("chartQualityByTemplateSubtitle")}>
+                  {analytics.quality.byTemplate.length > 0 ? (
+                    <AdminRankBars
+                      items={analytics.quality.byTemplate.map((row) => ({
+                        label: row.templateId,
+                        value: row.evaluated,
+                        hint: t("chartQualityByTemplateHint", {
+                          ready: row.ready,
+                          evaluated: row.evaluated,
+                          score: row.averageScore ?? "—",
+                          starts: row.starts,
+                          rate: row.firstMinuteRate == null ? "—" : `${row.firstMinuteRate}%`,
+                        }),
                       }))}
                       valueSuffix={t("timesSuffix")}
                     />

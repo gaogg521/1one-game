@@ -1,7 +1,29 @@
 import { NextResponse } from "next/server";
 import { buildDayRange, clampDays, countByDay, toDayKey } from "@/lib/admin/analytics";
 import { requireAdmin } from "@/lib/auth/admin";
+import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreatorQuality } from "@/lib/creator-quality";
+import type { CreatorQualityReport, CreatorWorkKind } from "@/lib/creator-workflow";
+import { parseGameSpec } from "@/lib/game-spec";
 import { prisma } from "@/lib/prisma";
+
+type QualityRow = { kind: CreatorWorkKind; templateId?: string; report: CreatorQualityReport };
+
+function roundScore(total: number, count: number): number | null {
+  return count ? Math.round((total / count) * 10) / 10 : null;
+}
+
+function summarizeQuality(rows: QualityRow[], kind: CreatorWorkKind) {
+  const matching = rows.filter((row) => row.kind === kind);
+  const scoreRows = matching.filter((row) => row.report.score !== undefined);
+  return {
+    kind,
+    evaluated: matching.length,
+    ready: matching.filter((row) => row.report.verdict === "ready").length,
+    needsPolish: matching.filter((row) => row.report.verdict === "needs_polish").length,
+    blocked: matching.filter((row) => row.report.verdict === "blocked").length,
+    averageScore: roundScore(scoreRows.reduce((sum, row) => sum + (row.report.score ?? 0), 0), scoreRows.length),
+  };
+}
 
 export async function GET(req: Request) {
   const gate = await requireAdmin(req);
@@ -44,6 +66,9 @@ export async function GET(req: Request) {
     featuredN,
     featuredC,
     gameplayEvents,
+    qualityProjects,
+    qualityNovels,
+    qualityComics,
   ] = await Promise.all([
     prisma.shareEvent.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
     prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
@@ -86,6 +111,21 @@ export async function GET(req: Request) {
     prisma.novel.count({ where: { featured: true } }),
     prisma.comic.count({ where: { featured: true } }),
     gameplayEventQuery,
+    prisma.project.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+      select: { specJson: true },
+    }),
+    prisma.novel.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+      select: { content: true, prompt: true, lengthTier: true },
+    }),
+    prisma.comic.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+      select: { imageUrls: true },
+    }),
   ]);
 
   const planName = new Map(plans.map((p) => [p.id, p.name]));
@@ -138,6 +178,42 @@ export async function GET(req: Request) {
     if (event.event === "retry") row.retries += 1;
     gameplayByTemplate.set(event.templateId, row);
   }
+
+  // Admin receives aggregates only: no prompt, story text, image URL, owner
+  // or work id leaves this route. Bad legacy specs are excluded rather than
+  // silently treated as a low-quality score.
+  const qualityRows: QualityRow[] = [];
+  for (const project of qualityProjects) {
+    try {
+      const spec = parseGameSpec(JSON.parse(project.specJson));
+      qualityRows.push({ kind: "game", templateId: spec.templateId, report: assessGameCreatorQuality(spec).report });
+    } catch {
+      // Corrupt historical rows belong in the repair queue, not this score denominator.
+    }
+  }
+  for (const novel of qualityNovels) {
+    qualityRows.push({
+      kind: "novel",
+      report: assessNovelCreatorQuality({ content: novel.content, prompt: novel.prompt, lengthTier: novel.lengthTier }).report,
+    });
+  }
+  for (const comic of qualityComics) {
+    qualityRows.push({ kind: "comic", report: assessComicCreatorQuality(comic.imageUrls).report });
+  }
+
+  const templateQuality = new Map<string, { evaluated: number; ready: number; scoreTotal: number; scoreCount: number }>();
+  for (const row of qualityRows) {
+    if (row.kind !== "game" || !row.templateId) continue;
+    const current = templateQuality.get(row.templateId) ?? { evaluated: 0, ready: 0, scoreTotal: 0, scoreCount: 0 };
+    current.evaluated += 1;
+    current.ready += row.report.verdict === "ready" ? 1 : 0;
+    if (row.report.score !== undefined) {
+      current.scoreTotal += row.report.score;
+      current.scoreCount += 1;
+    }
+    templateQuality.set(row.templateId, current);
+  }
+  const templateIds = new Set([...templateQuality.keys(), ...gameplayByTemplate.keys()]);
 
   return NextResponse.json({
     days,
@@ -221,6 +297,26 @@ export async function GET(req: Request) {
           retries: row.retries,
         }))
         .sort((a, b) => b.starts - a.starts),
+    },
+    quality: {
+      sampleLimitPerMedium: 200,
+      byMedium: (["game", "novel", "comic"] as const).map((kind) => summarizeQuality(qualityRows, kind)),
+      byTemplate: [...templateIds]
+        .map((templateId) => {
+          const quality = templateQuality.get(templateId);
+          const telemetry = gameplayByTemplate.get(templateId);
+          return {
+            templateId,
+            evaluated: quality?.evaluated ?? 0,
+            ready: quality?.ready ?? 0,
+            averageScore: quality ? roundScore(quality.scoreTotal, quality.scoreCount) : null,
+            starts: telemetry?.starts.size ?? 0,
+            firstMinuteRate: telemetry?.starts.size
+              ? Math.round((telemetry.firstMinute.size / telemetry.starts.size) * 1000) / 10
+              : null,
+          };
+        })
+        .sort((a, b) => b.evaluated - a.evaluated || b.starts - a.starts || a.templateId.localeCompare(b.templateId)),
     },
   });
 }

@@ -118,6 +118,12 @@ curl -fsS --connect-timeout 10 \
 - 真实 avoider 首分钟用例确实运行到 61 秒，但当前 8888 进程持有旧 Client，`GameplayEvent` delegate 不存在，故遥测写入按设计返回 503，详情显示零样本，断言未通过。**不要用 fake timer 或降低 60 秒阈值掩盖该结果。**
 - 接手前先在允许的维护窗口停止/重启占用 query engine 的开发服务，运行普通 `prisma generate`（不要使用 `--no-engine`，该参数会生成浏览器/WASM Client），然后以 `npm run test:e2e:first-minute` 复跑五个模板。
 
+## 续接完成：后台媒介/模板质量明细（待提交）
+
+- `GET /api/admin/analytics` 现在对每种媒介至多读取最近 200 部作品，在服务端生成质量聚合：已评估、就绪、待润色、阻断和平均分。响应仅包含这些计数和分数，**不会返回**正文、prompt、作品 ID、owner 或图片 URL。
+- 游戏模板维度把静态质量均分/就绪数与匿名试玩启动量、首分钟率并列；零样本明确显示为无数据，不能作为发布门禁。无法解析的历史 spec 不会被伪造成低分样本。
+- `AdminConsolePage` 已显示媒介概览和模板质量/首分钟对照，五份 locale 已补齐。验证通过：TypeScript、定向 ESLint、五语 JSON、`qa:creator-quality`、`qa:gameplay-telemetry`。
+
 ## 生产状态与发布规则
 
 - 正式站点：`https://operone.1oneclaw.com/zh-Hans`，已确认可访问。
