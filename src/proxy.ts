@@ -19,7 +19,39 @@ import { parseDevCanonicalOriginRaw } from "@/lib/dev-canonical-origin";
 /** Next.js 16+：原 middleware 更名为 proxy，运行在请求边界上。 */
 const LOCALE_HEADER = "x-app-locale";
 
+/** Absolute rewrite target that talks HTTP to the local Node listener (never https://localhost). */
+function internalRewriteDestination(request: NextRequest, pathname: string): URL {
+  const dest = request.nextUrl.clone();
+  dest.pathname = pathname || "/";
+  dest.protocol = "http:";
+  const listenHost = process.env.HOSTNAME?.trim();
+  dest.hostname =
+    !listenHost || listenHost === "0.0.0.0" ? "127.0.0.1" : listenHost;
+  const listenPort = process.env.PORT?.trim();
+  if (listenPort) dest.port = listenPort;
+  return dest;
+}
+
 export function proxy(request: NextRequest) {
+  // Absolute locale rewrites are followed as a loopback proxy request; do not
+  // re-apply the bare-path → /{locale} redirect on that subrequest.
+  if (request.headers.has("x-middleware-subrequest")) {
+    const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
+    const headerLocale = request.headers.get(LOCALE_HEADER);
+    const activeLocale = isAppLocale(headerLocale)
+      ? headerLocale
+      : isAppLocale(cookieLocale)
+        ? cookieLocale
+        : detectLocaleFromAcceptLanguage(request.headers.get("accept-language"));
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(LOCALE_HEADER, activeLocale);
+    const res = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    res.headers.set("x-app-locale", activeLocale);
+    return res;
+  }
+
   const canon =
     process.env.NODE_ENV !== "production" ? parseDevCanonicalOriginRaw(process.env.NEXT_PUBLIC_DEV_CANONICAL_ORIGIN) : null;
   const forceCanon = process.env.DEV_FORCE_CANONICAL_ORIGIN === "1" && canon;
@@ -106,6 +138,18 @@ export function proxy(request: NextRequest) {
   const hasLocalePrefix = pathnameLocale !== null;
 
   if (!hasLocalePrefix) {
+    // Locale already applied via rewrite request headers (loopback proxy follow-up).
+    const rewriteLocale = request.headers.get(LOCALE_HEADER);
+    if (isAppLocale(rewriteLocale)) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set(LOCALE_HEADER, rewriteLocale);
+      const passthrough = NextResponse.next({
+        request: { headers: requestHeaders },
+      });
+      passthrough.headers.set("x-app-locale", rewriteLocale);
+      return passthrough;
+    }
+
     const target = new URL(`${localePrefix}${pathname === "/" ? "" : pathname}${request.nextUrl.search}`, request.url);
     const redirectRes = NextResponse.redirect(target, 307);
     if (!request.cookies.get(LOCALE_COOKIE)?.value) {
@@ -139,8 +183,9 @@ export function proxy(request: NextRequest) {
   }
 
   const activeLocale = pathnameLocale ?? defaultLocale;
-  const rewrittenUrl = request.nextUrl.clone();
-  rewrittenUrl.pathname = rewrittenPathname;
+  // Behind nginx TLS, request.nextUrl is https://127.0.0.1:PORT/… — rewriting to
+  // that https URL 500s (EPROTO). Always rewrite to the local HTTP listener.
+  const rewrittenUrl = internalRewriteDestination(request, rewrittenPathname);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(LOCALE_HEADER, activeLocale);
   const res = NextResponse.rewrite(rewrittenUrl, {
