@@ -14,6 +14,9 @@ import { comicStoryboardQualityWarning } from "@/lib/comic-safety";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { assessComicCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 export const maxDuration = 3600;
 
@@ -109,11 +112,26 @@ export async function POST(req: Request) {
       forceLightStoryboard: body.forceLightStoryboard === true,
       uiLocale,
     });
+    const persisted = await prisma.comic.findUnique({
+      where: { id: result.comicId },
+      select: { imageUrls: true, status: true, visibility: true },
+    });
+    const { report: quality } = assessComicCreatorQuality(persisted?.imageUrls ?? "");
 
     return NextResponse.json(
       {
         ok: true,
-        comic: { id: result.comicId },
+        comic: {
+          id: result.comicId,
+          workflow: {
+            stage: resolveCreatorWorkStage({
+              status: persisted?.status,
+              visibility: persisted?.visibility,
+              quality,
+            }),
+          },
+          quality,
+        },
         pageCount: result.pageCount,
         panelCount: result.panelCount,
         panelsRendered: result.panelsRendered,

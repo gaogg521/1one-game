@@ -22,6 +22,8 @@ import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
+import { assessNovelCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -63,6 +65,11 @@ export async function GET(req: Request, ctx: RouteContext) {
     uiLocale,
   });
   const characterRoster = isOwner ? await loadNovelCharacterRoster(id) : null;
+  const { report: quality } = assessNovelCreatorQuality({
+    content: row.content,
+    prompt: row.prompt,
+    lengthTier: row.lengthTier,
+  });
   return NextResponse.json({
     novel: {
       id: row.id,
@@ -79,6 +86,8 @@ export async function GET(req: Request, ctx: RouteContext) {
       playCount: row.playCount,
       likeCount: row.likeCount,
       status: row.status,
+      workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
+      quality,
       isOwner: Boolean(isOwner),
       canDelete,
       canContinue: Boolean(isOwner) && continuation.canContinue,

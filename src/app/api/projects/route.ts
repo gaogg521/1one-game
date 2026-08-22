@@ -16,6 +16,8 @@ import { PRODUCT } from "@/lib/product-config";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
+import { assessGameCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -119,8 +121,15 @@ export async function POST(req: Request) {
       brief,
       uiLocale: "zh-Hans",
     });
+    const { report: quality } = assessGameCreatorQuality(spec, brief);
     return NextResponse.json({
-      project: { id: project.id, title: project.title, shareCode: project.shareCode },
+      project: {
+        id: project.id,
+        title: project.title,
+        shareCode: project.shareCode,
+        workflow: { stage: resolveCreatorWorkStage({ status: project.status, visibility: project.visibility, quality }) },
+        quality,
+      },
     });
   } catch (e) {
     return NextResponse.json({ error: apiErrorFromUnknown(req, e, "saveFailed") }, { status: 400 });

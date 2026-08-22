@@ -95,6 +95,7 @@
     "qa:game-vertical-slice": "tsx scripts/qa-game-vertical-slice.ts",
     "qa:gameplay-telemetry": "tsx scripts/qa-gameplay-telemetry.ts",
     "qa:creator-workflow": "tsx scripts/qa-creator-workflow.ts",
+    "qa:creator-quality": "tsx scripts/qa-creator-quality.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
     "qa:xiangqi-commercial-runtime": "tsx scripts/qa-xiangqi-commercial-runtime.ts",
     "qa:board-showcase-samples": "tsx scripts/qa-board-showcase-samples.ts",

@@ -47,8 +47,6 @@ import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale
 import {
   parseChildrenCreativeBrief,
   parseNovelCreativeBrief,
-  type ChildrenBriefUserRevision,
-  type NovelBriefUserRevision,
 } from "@/lib/literary-brief";
 import { buildChildrenBriefSeed } from "@/lib/literary-brief/children-brief-types";
 import {
@@ -79,6 +77,8 @@ import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { shouldChargeNovelStreamQuota } from "@/lib/literary-safety";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-message";
+import { assessNovelCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 /** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
 export const maxDuration = 3600;
@@ -434,6 +434,11 @@ export async function POST(req: Request) {
                 await saveNovelCreativeBriefJson(draftNovelId, briefJsonToPersist);
               }
               const novel = await prisma.novel.findUnique({ where: { id: draftNovelId } });
+              const { report: quality } = assessNovelCreatorQuality({
+                content,
+                prompt: promptTrim,
+                lengthTier,
+              });
               emitGenerateServeLog({
                 phase: resumeNovelId ? "novel_generate_resume_stream" : "novel_generate_stream",
                 requestId,
@@ -446,6 +451,14 @@ export async function POST(req: Request) {
               send({
                 step: "done",
                 novel,
+                workflow: {
+                  stage: resolveCreatorWorkStage({
+                    status: novel?.status,
+                    visibility: novel?.visibility,
+                    quality,
+                  }),
+                },
+                quality,
                 coverPath: null,
                 model,
                 provider: providerLabel,
@@ -592,6 +605,11 @@ export async function POST(req: Request) {
               visibility: defaultWorkVisibility(),
             },
           });
+          const { report: quality } = assessNovelCreatorQuality({
+            content: finalContent,
+            prompt: promptTrim,
+            lengthTier,
+          });
           await persistNovelLengthTier(novel.id, lengthTier);
           if (lengthOpts?.childrenTargetAge !== undefined) {
             await persistChildrenNovelMeta(novel.id, {
@@ -622,6 +640,14 @@ export async function POST(req: Request) {
           send({
             step: "done",
             novel,
+            workflow: {
+              stage: resolveCreatorWorkStage({
+                status: novel.status,
+                visibility: novel.visibility,
+                quality,
+              }),
+            },
+            quality,
             coverPath: null,
             model,
             provider: providerLabel,

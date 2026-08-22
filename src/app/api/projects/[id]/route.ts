@@ -22,7 +22,9 @@ import {
   parseCreativeBriefBody,
   serializeCreativeBrief,
 } from "@/lib/project-creative-brief-parse";
-import { localizedApiErrorText, localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
+import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
+import { assessGameCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -50,6 +52,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       creativeBrief = parseStoredCreativeBrief(briefRaw);
     }
 
+    const { report: quality } = assessGameCreatorQuality(spec, creativeBrief);
     return NextResponse.json({
       project: {
         id: row.id,
@@ -60,6 +63,9 @@ export async function GET(req: Request, ctx: RouteContext) {
         coverPath: row.coverPath,
         likeCount,
         playCount: row.playCount,
+        status: row.status,
+        workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
+        quality,
         isOwner: Boolean(isOwner),
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
       },

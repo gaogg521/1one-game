@@ -64,6 +64,8 @@ import {
   generateChildrenNovelRaw,
 } from "@/lib/novel-completeness-repair";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { assessNovelCreatorQuality } from "@/lib/creator-quality";
+import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 
 export const maxDuration = 3600;
 
@@ -404,6 +406,11 @@ export async function POST(req: Request) {
     const novelOut = coverPath
       ? await prisma.novel.findUnique({ where: { id: novel.id } })
       : novel;
+    const { report: quality } = assessNovelCreatorQuality({
+      content: finalContent,
+      prompt: promptTrim,
+      lengthTier,
+    });
 
     emitGenerateServeLog({
       phase: "novel_generate",
@@ -416,7 +423,21 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(
-      { ok: true, novel: novelOut ?? novel, coverPath: coverPath ?? null, provider: providerUsed, model: modelUsed },
+      {
+        ok: true,
+        novel: novelOut ?? novel,
+        workflow: {
+          stage: resolveCreatorWorkStage({
+            status: (novelOut ?? novel).status,
+            visibility: (novelOut ?? novel).visibility,
+            quality,
+          }),
+        },
+        quality,
+        coverPath: coverPath ?? null,
+        provider: providerUsed,
+        model: modelUsed,
+      },
       { headers: ridHeaders(requestId) },
     );
   } catch (err) {
