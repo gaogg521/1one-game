@@ -79,6 +79,7 @@ import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-message";
 import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 
 /** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
 export const maxDuration = 3600;
@@ -591,6 +592,11 @@ export async function POST(req: Request) {
             uiLocale,
           });
 
+          const { report: quality } = assessNovelCreatorQuality({
+            content: finalContent,
+            prompt: promptTrim,
+            lengthTier,
+          });
           const novel = await prisma.novel.create({
             data: {
               ownerKey,
@@ -602,13 +608,8 @@ export async function POST(req: Request) {
                   ? `${summary ?? ""}\n\n${getChildrenAgeTier(parseChildrenTargetAge(lengthOpts.childrenTargetAge)).closingMark}\n${parentReadingTip}`.trim()
                   : summary,
               status: "ready",
-              visibility: defaultWorkVisibility(),
+              visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
             },
-          });
-          const { report: quality } = assessNovelCreatorQuality({
-            content: finalContent,
-            prompt: promptTrim,
-            lengthTier,
           });
           await persistNovelLengthTier(novel.id, lengthTier);
           if (lengthOpts?.childrenTargetAge !== undefined) {

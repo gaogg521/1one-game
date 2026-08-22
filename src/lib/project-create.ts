@@ -1,4 +1,4 @@
-import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
+import { defaultWorkVisibility, type WorkVisibility } from "@/lib/auth/work-visibility";
 import { ApiKeyedError } from "@/lib/api/api-keyed-error";
 import { prisma } from "@/lib/prisma";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
@@ -10,6 +10,7 @@ type CreateArgs = {
   prompt: string;
   specJson: string;
   status?: string;
+  visibility?: WorkVisibility;
   creativeBriefJson?: string | null;
 };
 
@@ -26,7 +27,7 @@ export async function createProjectRecord(args: CreateArgs) {
           specJson: args.specJson,
           creativeBriefJson: args.creativeBriefJson ?? null,
           status,
-          visibility: defaultWorkVisibility(),
+          visibility: args.visibility ?? defaultWorkVisibility(),
           shareCode: newShareCode(),
         },
       });

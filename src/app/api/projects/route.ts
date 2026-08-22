@@ -18,6 +18,8 @@ import { getThrottleKey } from "@/lib/request-key";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 import { assessGameCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
+import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -104,6 +106,7 @@ export async function POST(req: Request) {
     }
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
+    const { report: quality } = assessGameCreatorQuality(spec, brief);
     const project = await createProjectRecord({
       ownerKey,
       title: spec.title,
@@ -111,6 +114,7 @@ export async function POST(req: Request) {
       specJson: JSON.stringify(spec),
       creativeBriefJson: briefJson,
       status: "ready",
+      visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
     });
     if (briefJson && !project.creativeBriefJson) {
       await saveCreativeBriefJson(project.id, briefJson);
@@ -121,7 +125,6 @@ export async function POST(req: Request) {
       brief,
       uiLocale: "zh-Hans",
     });
-    const { report: quality } = assessGameCreatorQuality(spec, brief);
     return NextResponse.json({
       project: {
         id: project.id,

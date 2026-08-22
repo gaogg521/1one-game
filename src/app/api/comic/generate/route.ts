@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { assessComicCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 
 export const maxDuration = 3600;
 
@@ -112,11 +113,21 @@ export async function POST(req: Request) {
       forceLightStoryboard: body.forceLightStoryboard === true,
       uiLocale,
     });
-    const persisted = await prisma.comic.findUnique({
+    let persisted = await prisma.comic.findUnique({
       where: { id: result.comicId },
       select: { imageUrls: true, status: true, visibility: true },
     });
     const { report: quality } = assessComicCreatorQuality(persisted?.imageUrls ?? "");
+    const guardedVisibility = persisted
+      ? visibilityWithQualityGuard(persisted.visibility, quality)
+      : undefined;
+    if (persisted && guardedVisibility !== persisted.visibility) {
+      persisted = await prisma.comic.update({
+        where: { id: result.comicId },
+        data: { visibility: guardedVisibility },
+        select: { imageUrls: true, status: true, visibility: true },
+      });
+    }
 
     return NextResponse.json(
       {

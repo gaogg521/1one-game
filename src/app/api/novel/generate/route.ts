@@ -66,6 +66,7 @@ import {
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 
 export const maxDuration = 3600;
 
@@ -357,6 +358,11 @@ export async function POST(req: Request) {
       uiLocale,
     });
 
+    const { report: quality } = assessNovelCreatorQuality({
+      content: finalContent,
+      prompt: promptTrim,
+      lengthTier,
+    });
     const novel = await prisma.novel.create({
       data: {
         ownerKey,
@@ -368,7 +374,7 @@ export async function POST(req: Request) {
             ? `${summary ?? ""}\n\n${getChildrenAgeTier(parseChildrenTargetAge(lengthOpts.childrenTargetAge)).closingMark}\n${parentReadingTip}`.trim()
             : summary,
         status: "ready",
-        visibility: defaultWorkVisibility(),
+        visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
       },
     });
     await persistNovelLengthTier(novel.id, lengthTier);
@@ -406,11 +412,6 @@ export async function POST(req: Request) {
     const novelOut = coverPath
       ? await prisma.novel.findUnique({ where: { id: novel.id } })
       : novel;
-    const { report: quality } = assessNovelCreatorQuality({
-      content: finalContent,
-      prompt: promptTrim,
-      lengthTier,
-    });
 
     emitGenerateServeLog({
       phase: "novel_generate",

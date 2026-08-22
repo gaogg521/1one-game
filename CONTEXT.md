@@ -367,3 +367,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `e2e/flagship-first-minute.spec.ts` 的总时限由 100 秒调整为 150 秒：保留生产同等的 61 秒真实等待和 12 秒落库轮询，只补足项目创建与 Phaser 冷启动的时间预算。
 - `ensureOwnerSession` 改为等待 `domcontentloaded` 而非非关键资源的完整 `load`，避免首页字体/展示资源拖垮后续 API 会话验收。
 - 完整 `npm run test:e2e:first-minute` 已通过 5/5（avoider、puzzle、physics、platformer、farming，7.3 分钟）；每条均验证 `start`、`first_action` 和 `first_minute` 已回写项目质量报告。
+
+## 14. 续接：最低公开发布质量保护（2026-08-23）
+
+- 新增 `visibilityWithQualityGuard`：仅当默认可见性为 `public` 且统一质量报告明确为 `blocked` 时，自动落为 `pending_review`；`needs_polish` 仍可发布，显式 `hidden`/`pending_review` 配置保持不变。
+- 游戏创建、小说普通/流式生成和漫画生成已接入。漫画在生成结束后依据完整面板质量更新可见性；不把未校准的消费指标作为自动拒绝条件。
+- 验证通过：TypeScript、`qa:creator-workflow`（含三条门禁断言）、`qa:creator-quality`、`qa:game-vertical-slice`。
