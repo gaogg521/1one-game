@@ -9,6 +9,8 @@ import { processNextGenerationJob } from "../src/lib/creator-core/worker";
 import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
 import { reviseNovelStoryPlan } from "../src/lib/novel-story-plan";
 import { mirrorComicToCreatorCore } from "../src/lib/creator-core/comic-bridge";
+import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
+import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -173,6 +175,26 @@ async function main() {
     } finally {
       await prisma.comic.delete({ where: { id: comic.id } });
       if (mirroredComicProjectId) await prisma.creativeProject.delete({ where: { id: mirroredComicProjectId } });
+    }
+
+    const gameSpec = prepareGameSpecForPersist(undefined, "霓虹街机飞船突破机械舰队");
+    const game = await prisma.project.create({
+      data: { ownerKey: marker, title: gameSpec.title, prompt: "霓虹街机飞船突破机械舰队", specJson: JSON.stringify(gameSpec), status: "ready", visibility: "hidden" },
+    });
+    let mirroredGameProjectId: string | null = null;
+    try {
+      const mirroredGame = await mirrorGameToCreatorCore({ project: game });
+      mirroredGameProjectId = mirroredGame.creativeProjectId;
+      const gameArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
+      assert(gameArtifacts.some((artifact) => artifact.kind === "game_spec"), "game mirror must retain the executable spec");
+      assert(gameArtifacts.some((artifact) => artifact.kind === "evaluation"), "game mirror must retain creator quality evidence");
+      const edited = await prisma.project.update({ where: { id: game.id }, data: { prompt: "霓虹飞船穿越机械舰队的终局" } });
+      const refinedGame = await mirrorGameToCreatorCore({ project: edited, cause: "refine" });
+      const gameSnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey: marker, legacyType: "project", legacyId: game.id });
+      assert(gameSnapshot?.revision?.id === refinedGame.creativeRevisionId, "game snapshot must select its latest editable revision");
+    } finally {
+      await prisma.project.delete({ where: { id: game.id } });
+      if (mirroredGameProjectId) await prisma.creativeProject.delete({ where: { id: mirroredGameProjectId } });
     }
     console.log("[OK] qa-creator-core");
   } finally {

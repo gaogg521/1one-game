@@ -25,6 +25,8 @@ import {
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -45,6 +47,9 @@ export async function GET(req: Request, ctx: RouteContext) {
 
     let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
     let creativeBrief: ReturnType<typeof parseStoredCreativeBrief> = null;
+    const core = isOwner
+      ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
+      : null;
     if (isOwner) {
       const logRaw = await fetchRefinementLogJson(id);
       refinementHistory = parseRefinementLog(logRaw).slice(-12);
@@ -97,6 +102,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       spec,
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
+      ...(core ? { core } : {}),
     });
   } catch (error) {
     console.error("[GET /api/projects/:id]", error);
@@ -235,8 +241,17 @@ export async function PATCH(req: Request, ctx: RouteContext) {
 
   const fresh = await prisma.project.findUnique({
     where: { id },
-    select: { title: true, shareCode: true, coverPath: true, prompt: true, status: true },
+    select: { id: true, ownerKey: true, title: true, shareCode: true, coverPath: true, prompt: true, status: true, specJson: true, visibility: true, creativeBriefJson: true },
   });
+  let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" } | undefined;
+  if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined || coverJpegBase64 !== undefined)) {
+    try {
+      core = await mirrorGameToCreatorCore({ project: fresh, cause: "refine" });
+    } catch (error) {
+      console.error("[game-core-mirror]", { projectId: id, error });
+      core = { status: "degraded" };
+    }
+  }
 
   return NextResponse.json({
     project: {
@@ -247,6 +262,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       coverPath: fresh?.coverPath ?? row.coverPath,
       status: fresh?.status ?? row.status,
     },
+    ...(core ? { core } : {}),
   });
 }
 

@@ -20,6 +20,7 @@ import { assessGameCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
+import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -125,6 +126,13 @@ export async function POST(req: Request) {
       brief,
       uiLocale: "zh-Hans",
     });
+    let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+    try {
+      core = await mirrorGameToCreatorCore({ project, cause: "generate" });
+    } catch (error) {
+      console.error("[game-core-mirror]", { projectId: project.id, error });
+      core = { status: "degraded" };
+    }
     return NextResponse.json({
       project: {
         id: project.id,
@@ -133,6 +141,7 @@ export async function POST(req: Request) {
         workflow: { stage: resolveCreatorWorkStage({ status: project.status, visibility: project.visibility, quality }) },
         quality,
       },
+      core,
     });
   } catch (e) {
     return NextResponse.json({ error: apiErrorFromUnknown(req, e, "saveFailed") }, { status: 400 });

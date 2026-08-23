@@ -434,3 +434,14 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增独立 `operone-generation-worker.timer`：每次通过本机 loopback 只消费一个 `GenerationJob`，`OnUnitInactiveSec=15` 确保长图像任务不会重叠；凭据仅从服务器 `.env` 读取，首次部署自动生成 `JOB_WORKER_SECRET`，不经过公网代理或写入 unit 文件。常规完整部署和 Linux 一键部署都会安装/启用该 timer。
 - 漫画页仍保留 SSE 快速生成，同时提供“后台可恢复渲染”入口。作者重新打开作品时，`GET /api/comic/:id/panels` 会按 Core Project owner 仅返回当前活跃的 `comic_panel` 任务及脱敏进度；页面轮询该状态并在后台渲染期间禁止与 worker 冲突的编辑/重绘。
 - durable worker 的全册重绘现在与同步路径保持封面重生和风格参考跳过规则一致。新 `qa:comic-panel-job-api` 以真实本地 Next HTTP 服务验证 `202 入队 → 作者恢复任务 → worker 完成/100% → 非作者 403 → 活跃任务消失`；测试用已有图片分镜避免触发付费供应商。TypeScript、定向 ESLint、shell 语法、五语 JSON 与 `qa:creator-core` 均通过。
+
+### P3 生产验收（2026-08-23）
+
+- 已完整发布 `0619ba2a` 与首次凭据修复 `c68b3da8`：公开 HTTPS 健康检查返回 `ok/db:up/email:configured`，服务器与 `origin/main` 均为 `c68b3da8`。
+- 服务器 `operone-generation-worker.timer` 为 active。手动执行一次空队列 worker 返回 `{"ok":true,"processed":false}`，systemd 显示 `Result=success`、`ExecMainStatus=0`；此前首次生成 `JOB_WORKER_SECRET` 后 Web 进程未重载造成的 403 已被修复，安装脚本不再吞掉 worker 启动错误。
+
+## P4 第一段：游戏影子版本链（待提交）
+
+- 新增 `mirrorGameToCreatorCore`：每个旧 `Project` 对应一个 Core game project，创建/编辑时写入不可变 game spec、可选 Creative Brief、统一质量评估和 playable route artifact；Core revision 会保留模板、提示词、可见性与运行状态的意图快照。
+- `POST /api/projects` 与会改变标题/提示词/spec/Brief/封面的 `PATCH /api/projects/:id` 已双写并返回 Core revision；镜像异常时仅明确返回 `core.status=degraded`，不阻断旧 Project 的既有保存流程。作者 `GET /api/projects/:id` 仅可读取最新 Core snapshot，非作者不暴露。
+- 新 `qa:game-core-api` 使用本机真实 Next HTTP 验证创建 → owner snapshot → 编辑新 revision → 非 owner 不可读；`qa:creator-core` 也覆盖 game spec/evaluation artifact 与 revision lineage。验证通过 TypeScript、定向 ESLint、Prisma、creator core/workflow QA；生产构建与发布待本段提交后执行。
