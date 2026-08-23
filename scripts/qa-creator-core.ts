@@ -2,6 +2,7 @@ import { prisma } from "../src/lib/prisma";
 import { createCreativeProject, createCreativeRevision } from "../src/lib/creator-core/repository";
 import { enqueueGenerationJob } from "../src/lib/creator-core/jobs";
 import { processNextGenerationJob } from "../src/lib/creator-core/worker";
+import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -36,6 +37,47 @@ async function main() {
     assert(processed?.status === "completed", "artifact job must execute, not merely acknowledge");
     const saved = await prisma.creativeArtifact.findUnique({ where: { id: processed.outputArtifactId } });
     assert(saved?.kind === "story_bible" && saved.creativeRevisionId === second.id, "artifact must preserve revision lineage");
+
+    const novel = await prisma.novel.create({
+      data: {
+        ownerKey: marker,
+        title: "Core 小说镜像",
+        prompt: "一盏灯照亮旧城",
+        content: "=== 第1章 灯火 ===\n\n旧城的灯火在雨里亮起。\n\n=== 第2章 回声 ===\n\n旅人沿着回声找到答案。",
+        status: "ready",
+        visibility: "hidden",
+      },
+    });
+    let mirroredProjectId: string | null = null;
+    try {
+      const mirrored = await mirrorNovelToCreatorCore({
+        novel,
+        meta: {
+          version: 1,
+          bible: {
+            title: novel.title,
+            worldSetting: "一座被长雨包围的旧城",
+            characters: [{ name: "旅人", role: "主角", traits: "执着" }, { name: "灯灵", role: "引路者", traits: "沉静" }],
+            coreConflict: "旅人必须在灯火熄灭前找到出路",
+            endingDirection: "旅人带灯灵离开旧城",
+          },
+          chapterPlan: { chapters: [
+            { num: 1, title: "灯火", summary: "旅人进入旧城", phase: "opening" },
+            { num: 2, title: "回声", summary: "旅人找到答案", phase: "resolution" },
+            { num: 3, title: "远行", summary: "旅人离开旧城", phase: "resolution" },
+          ] },
+          segmentCount: 1,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      mirroredProjectId = mirrored.creativeProjectId;
+      const artifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirrored.creativeRevisionId } });
+      assert(artifacts.some((artifact) => artifact.kind === "story_bible"), "novel mirror must retain story bible");
+      assert(artifacts.filter((artifact) => artifact.kind === "scene").length === 2, "novel mirror must split chapters into scenes");
+    } finally {
+      await prisma.novel.delete({ where: { id: novel.id } });
+      if (mirroredProjectId) await prisma.creativeProject.delete({ where: { id: mirroredProjectId } });
+    }
     console.log("[OK] qa-creator-core");
   } finally {
     await prisma.creativeProject.delete({ where: { id: project.id } });

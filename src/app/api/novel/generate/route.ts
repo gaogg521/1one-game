@@ -67,6 +67,7 @@ import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
+import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 
 export const maxDuration = 3600;
 
@@ -393,6 +394,13 @@ export async function POST(req: Request) {
     if (briefJsonToPersist) {
       await saveNovelCreativeBriefJson(novel.id, briefJsonToPersist);
     }
+    let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+    try {
+      core = await mirrorNovelToCreatorCore({ novel, meta: pipelineMeta, cause: "generate" });
+    } catch (error) {
+      console.error("[novel-core-mirror]", error);
+      core = { status: "degraded" };
+    }
 
     const coverGenre = resolveNovelCoverGenre({
       genreTagCoverGenre: genreTag?.coverGenre,
@@ -435,6 +443,7 @@ export async function POST(req: Request) {
           }),
         },
         quality,
+        core,
         coverPath: coverPath ?? null,
         provider: providerUsed,
         model: modelUsed,

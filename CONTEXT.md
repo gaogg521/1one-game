@@ -385,3 +385,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 前向迁移 `20260823010000_add_creator_core` 新增 `CreativeProject`、`CreativeRevision`、`CreativeArtifact`、`GenerationJob`，不改写旧 Project/Novel/Comic，供双轨迁移使用。
 - `src/lib/creator-core/` 已实现输入边界、不可变 revision 序号/父版本关系、带内容哈希的 artifact、幂等/租约/退避重试任务，以及首个真实 `artifact_write` worker handler。`/api/jobs/worker` 优先执行新任务，旧队列继续兼容。
 - `npm run qa:creator-core` 已在本地真实 SQLite 执行：创建项目和两条 lineage revision、验证幂等任务重放、worker 落库 Story Bible artifact，最后级联清理测试项目。TypeScript、Prisma schema、creator workflow QA 均通过。
+
+### P1 第二段：小说影子版本链
+
+- 前向迁移 `20260823011000_creator_project_legacy_unique` 为 `(legacyType, legacyId)` 增加唯一约束，防止请求重连或重试生成重复 Core Project。
+- `mirrorNovelToCreatorCore` 将一个已完成的旧 Novel 映射为单个 Core Project、一个不可变生成 revision、Story Bible、纲要、逐章 scene artifact 和 manuscript artifact；旧阅读/编辑数据未被改写。
+- 普通与流式小说生成在持久化旧 Novel 后同步镜像，并在 API 输出 `core` 结果；若迁移桥失败则明确返回 `core.status=degraded` 并记录错误，不会把内核同步假报成功。
+- QA 已验证 story bible、纲要和两个章节产物实际落库且按级联清理；TypeScript、creator core/workflow/quality QA 均通过。

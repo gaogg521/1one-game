@@ -25,6 +25,25 @@ export async function createCreativeProject(input: CreativeProjectInput) {
   return prisma.creativeProject.create({ data: parsed });
 }
 
+/** One shadow project per legacy work while product lines migrate without downtime. */
+export async function ensureLegacyCreativeProject(input: Omit<CreativeProjectInput, "visibility" | "legacyType" | "legacyId"> & {
+  visibility?: "private" | "pending_review" | "public" | "hidden";
+  legacyType: string;
+  legacyId: string;
+}) {
+  const parsed = CreativeProjectInputSchema.parse(input);
+  return prisma.creativeProject.upsert({
+    where: {
+      legacyType_legacyId: {
+        legacyType: parsed.legacyType!,
+        legacyId: parsed.legacyId!,
+      },
+    },
+    create: parsed,
+    update: { title: parsed.title, ownerKey: parsed.ownerKey },
+  });
+}
+
 /** Creates an immutable revision; retries only the sequence collision caused by concurrent authors/jobs. */
 export async function createCreativeRevision(
   creativeProjectId: string,

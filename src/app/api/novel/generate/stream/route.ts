@@ -80,6 +80,7 @@ import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-messa
 import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
+import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 
 /** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
 export const maxDuration = 3600;
@@ -627,6 +628,13 @@ export async function POST(req: Request) {
           if (briefJsonToPersist) {
             await saveNovelCreativeBriefJson(novel.id, briefJsonToPersist);
           }
+          let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+          try {
+            core = await mirrorNovelToCreatorCore({ novel, meta: pipelineMeta, cause: "generate" });
+          } catch (error) {
+            console.error("[novel-core-mirror]", error);
+            core = { status: "degraded" };
+          }
 
           emitGenerateServeLog({
             phase: "novel_generate_stream",
@@ -649,6 +657,7 @@ export async function POST(req: Request) {
               }),
             },
             quality,
+            core,
             coverPath: null,
             model,
             provider: providerLabel,

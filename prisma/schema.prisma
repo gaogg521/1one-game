@@ -189,6 +189,7 @@ model CreativeProject {
 
   @@index([ownerKey, updatedAt])
   @@index([kind, visibility, updatedAt])
+  @@unique([legacyType, legacyId])
   @@index([legacyType, legacyId])
 }
 
