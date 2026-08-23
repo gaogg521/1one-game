@@ -25,6 +25,7 @@ import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
+import { getAcceptedLegacyArtifact } from "@/lib/creator-core/repository";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -71,10 +72,21 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
-  const doc = parseComicDocument(row.imageUrls);
+  const acceptedComicDocument = !isOwner
+    ? await getAcceptedLegacyArtifact({ legacyType: "comic", legacyId: id, kind: "comic_document" })
+    : null;
+  // The editable legacy row may move ahead of the published version. Public
+  // reading remains pinned to the author's confirmed storyboard artifact.
+  const acceptedDoc = acceptedComicDocument?.content;
+  const doc = acceptedDoc && typeof acceptedDoc === "object"
+    ? (acceptedDoc as ReturnType<typeof parseComicDocument>)
+    : parseComicDocument(row.imageUrls);
+  const visibleImageUrls = acceptedDoc && typeof acceptedDoc === "object"
+    ? serializeComicDocument(doc)
+    : row.imageUrls;
   const panelStats = countPanelsWithImages(doc);
   const literaryEngagement = await summarizeLiteraryEngagement({ workType: "comic", workId: id, unitCount: Math.max(1, doc.pages.length) });
-  const baseQuality = assessComicCreatorQuality(row.imageUrls).report;
+  const baseQuality = assessComicCreatorQuality(visibleImageUrls).report;
   const quality = withCreatorEngagementQuality(baseQuality, {
     sampleSize: literaryEngagement.sampleSize,
     likes: row.likeCount,
@@ -95,7 +107,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       title: row.title,
       displayTitle: displayComicTitle(row.title, row.novel?.title, row.prompt, uiLocale),
       prompt: row.prompt,
-      imageUrls: row.imageUrls,
+      imageUrls: visibleImageUrls,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       revisionToken: row.updatedAt.toISOString(),
@@ -110,7 +122,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       canDelete,
       panelsWithImage: panelStats.withImage,
       panelsTotal: panelStats.total,
-      coverPath: resolveComicCoverPath(row.imageUrls, row.coverPath),
+      coverPath: resolveComicCoverPath(visibleImageUrls, row.coverPath),
       novelId: row.novelId,
       novel: row.novel
         ? {

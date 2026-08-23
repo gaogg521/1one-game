@@ -25,7 +25,7 @@ import { localizedJsonError } from "@/lib/api/localized-error";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
-import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 import { checkSegmentConsistency } from "@/lib/novel-long-consistency";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
@@ -54,11 +54,17 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
+  const acceptedManuscript = !isOwner
+    ? await getAcceptedLegacyArtifact({ legacyType: "novel", legacyId: id, kind: "manuscript" })
+    : null;
+  // Readers must consume the manuscript the author explicitly confirmed,
+  // while owners can keep editing a newer legacy draft before republishing.
+  const visibleContent = acceptedManuscript?.textContent?.trim() || row.content;
   const pipelineMeta = await loadNovelGenerationMeta(id);
   const literaryEngagement = await summarizeLiteraryEngagement({
     workType: "novel",
     workId: id,
-    unitCount: Math.max(1, parseNovelChapters(row.content, resolveRequestLocaleSync(req)).length),
+    unitCount: Math.max(1, parseNovelChapters(visibleContent, resolveRequestLocaleSync(req)).length),
   });
   const creativeBrief = isOwner ? await loadCreativeBriefForNovel(id) : null;
   const briefKind =
@@ -80,7 +86,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       : null;
   const continuation = assessNovelContinuation({
     lengthTier: row.lengthTier,
-    content: row.content,
+    content: visibleContent,
     meta: pipelineMeta,
     uiLocale,
   });
@@ -118,7 +124,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     }
   }
   const baseQuality = assessNovelCreatorQuality({
-    content: row.content,
+    content: visibleContent,
     prompt: row.prompt,
     lengthTier: row.lengthTier,
     generationMeta: pipelineMeta,
@@ -140,7 +146,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       id: row.id,
       title: row.title,
       prompt: row.prompt,
-      content: row.content,
+      content: visibleContent,
       summary: row.summary,
       lengthTier: row.lengthTier,
       createdAt: row.createdAt,

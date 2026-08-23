@@ -1,6 +1,8 @@
 import { OWNER_COOKIE } from "../src/lib/constants";
 import { summarizeLiteraryEngagement } from "../src/lib/literary-engagement";
 import { prisma } from "../src/lib/prisma";
+import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
+import { mirrorComicToCreatorCore } from "../src/lib/creator-core/comic-bridge";
 
 const baseUrl = process.env.QA_BASE_URL?.trim() || "http://127.0.0.1:8888";
 
@@ -20,6 +22,8 @@ async function main() {
   const owner = `qa-literary-owner-${Date.now()}`;
   let novelId: string | undefined;
   let comicId: string | undefined;
+  let novelCoreId: string | undefined;
+  let comicCoreId: string | undefined;
   try {
     const novel = await prisma.novel.create({
       data: {
@@ -28,6 +32,16 @@ async function main() {
       },
     });
     novelId = novel.id;
+    const acceptedNovel = await mirrorNovelToCreatorCore({ novel });
+    novelCoreId = acceptedNovel.creativeProjectId;
+    await prisma.creativeProject.update({
+      where: { id: acceptedNovel.creativeProjectId },
+      data: { acceptedRevisionId: acceptedNovel.creativeRevisionId },
+    });
+    await prisma.novel.update({
+      where: { id: novel.id },
+      data: { content: "=== 第1章 新稿 ===\n\n这是作者正在修改、尚未确认发布的新正文。" },
+    });
     const comic = await prisma.comic.create({
       data: {
         ownerKey: owner, visibility: "public", status: "ready", title: "翻页信号 QA", prompt: "测试漫画阅读指标",
@@ -35,6 +49,24 @@ async function main() {
       },
     });
     comicId = comic.id;
+    const acceptedComic = await mirrorComicToCreatorCore({ comic });
+    comicCoreId = acceptedComic.creativeProjectId;
+    await prisma.creativeProject.update({
+      where: { id: acceptedComic.creativeProjectId },
+      data: { acceptedRevisionId: acceptedComic.creativeRevisionId },
+    });
+    await prisma.comic.update({
+      where: { id: comic.id },
+      data: { imageUrls: JSON.stringify({ pages: [{ page: 1, panels: [{ caption: "尚未确认的新分镜", prompt: "storm", imageUrl: "/qa-new.png" }] }] }) },
+    });
+    const publicNovel = await (await fetch(`${baseUrl}/api/novel/${novel.id}`)).json() as { novel?: { content?: string } };
+    assert(publicNovel.novel?.content?.includes("匿名阅读进度测试"), "public novel must stay on the author-confirmed manuscript");
+    assert(!publicNovel.novel?.content?.includes("尚未确认发布"), "public novel must not leak an unconfirmed draft");
+    const ownerNovel = await (await fetch(`${baseUrl}/api/novel/${novel.id}`, { headers: { Cookie: `${OWNER_COOKIE}=${owner}` } })).json() as { novel?: { content?: string } };
+    assert(ownerNovel.novel?.content?.includes("尚未确认发布"), "owner must keep access to the editable novel draft");
+    const publicComic = await (await fetch(`${baseUrl}/api/comic/${comic.id}`)).json() as { comic?: { imageUrls?: string } };
+    assert(publicComic.comic?.imageUrls?.includes("开始"), "public comic must stay on the author-confirmed storyboard");
+    assert(!publicComic.comic?.imageUrls?.includes("尚未确认的新分镜"), "public comic must not leak an unconfirmed storyboard");
     const novelSession = "qa-literary-novel-session-0001";
     for (const body of [
       { workType: "novel", workId: novel.id, sessionId: novelSession, event: "start" },
@@ -72,6 +104,8 @@ async function main() {
   } finally {
     if (comicId) await prisma.comic.delete({ where: { id: comicId } }).catch(() => undefined);
     if (novelId) await prisma.novel.delete({ where: { id: novelId } }).catch(() => undefined);
+    if (comicCoreId) await prisma.creativeProject.delete({ where: { id: comicCoreId } }).catch(() => undefined);
+    if (novelCoreId) await prisma.creativeProject.delete({ where: { id: novelCoreId } }).catch(() => undefined);
   }
 }
 

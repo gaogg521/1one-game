@@ -610,8 +610,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 统一发布事务在 Core 项目存在时只接受最新 `ready` revision；没有就绪 Core revision 会回滚并拒绝发布。下架不会选择后续生成的版本，publication decision 始终关联实际已发布的确认版本。
 - 后续生成或 refine 会创建新 revision，但绝不静默移动 `acceptedRevisionId`。`qa:creator-publication` 覆盖发布确认、refine 产生新版本但确认锚点不变、下架历史仍指向已发布版本，以及原有 owner/质量阻断路径。
 
-## P22 第一段：游戏公开版本投影（2026-08-23）
+## P22 第一段：公开确认版本投影（2026-08-23）
 
 - 公开游戏读取不再直接把可编辑 legacy `Project.specJson` 当作已发布内容；当 Core 有作者确认 revision 时，匿名访客会读取该 revision 的 immutable `game_spec` artifact，作者本人仍读取当前可编辑草稿。
-- 这使作者可以在已发布游戏上继续 refine，而不会让访客在没有再次发布确认的情况下看到新玩法。没有 Core 锚点的历史公开游戏保持原有兼容读取，避免迁移期间无故不可玩。
-- 真实 `qa:creator-publication:http` 覆盖 pending 匿名 404 → 发布公开 → 作者保存新版本 → owner 读到新版本、匿名仍读已确认版本 → 下架匿名 404；`qa:creator-publication`、定向 ESLint 与 TypeScript 均通过。
+- 小说与漫画的匿名读取同样投影到 `manuscript` 与 `comic_document` artifact；作者仍可读当前编辑稿。没有 Core 锚点的历史公开作品继续回退旧字段，避免迁移期间无故不可读。
+- 这使作者可以在已发布作品上继续 refine，而不会让访客在没有再次发布确认的情况下看到新玩法、正文或分镜。真实 `qa:creator-publication:http` 覆盖游戏发布/编辑隔离；`qa:literary-engagement-api` 覆盖匿名仍读已确认小说/分镜、作者读编辑稿，以及既有阅读事件路径；定向 ESLint 与 TypeScript 均通过。
