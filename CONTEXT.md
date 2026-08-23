@@ -592,3 +592,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `REFERENCE_ASSET_STORAGE=cloud` 不再是占位：配置 `REFERENCE_ASSET_CLOUD_UPLOAD_URL` 后，摄取服务会以 multipart 上传图片与最小元数据（`file`、随机 ref ID、序号、类型、原名、可选用途），只接受响应 `{ publicUrl: "https://..." }` 后才返回 `persistent` 句柄。认证既支持 `Bearer token`，也支持 `X-Api-Key: token` 形式的自定义 header。
 - 上传服务不可用、超时、重定向、非成功状态或未提供安全 HTTPS URL 时，句柄明确降级为 session-only 并给出不含端点/密钥的可见警告；绝不把未落盘图片表示为持久化资产，也不阻断文本/文档摄取。
 - `qa:reference-image-cloud-storage` 覆盖未配置安全降级、multipart 字节/元数据、认证透传、成功持久化、非 HTTPS 响应和 503 降级。生产启用前仍需业务提供实际对象存储上传端点与凭据。
+
+## P19 第一段：Godot 离线导出归属保护（2026-08-23）
+
+- `POST /api/godot/export` 现要求 owner cookie、已保存的 `projectId`，并以数据库作品 owner 做二次核验；公开阅读、猜测 ID 或提交任意 projectId 都不能触发该作品的缓存/资产补全。接口按 owner/IP 组合限制为 10 分钟 8 次。
+- 离线下载入口只向当前作品主人显示；新建页尚未保存的预览不展示该入口，避免把一个昂贵的项目级构建器暴露成通用匿名 API。
+- `qa:godot-export-ownership` 覆盖本人允许、非 owner 拒绝和不存在项目拒绝；完整 TypeScript、定向 ESLint（无 error）和隔离 production build 均通过。既有动态文件追踪性能警告未作掩盖。

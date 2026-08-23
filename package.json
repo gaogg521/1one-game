@@ -215,6 +215,7 @@
     "godot:export:desktop": "powershell -ExecutionPolicy Bypass -File scripts/godot-export-desktop.ps1",
     "godot:export:project": "tsx scripts/qa-godot-export-project.ts",
     "qa:godot-export": "tsx scripts/qa-godot-export.ts",
+    "qa:godot-export-ownership": "tsx scripts/qa-godot-export-ownership.ts",
     "qa:godot-export:matrix": "tsx scripts/qa-godot-export-matrix.ts",
     "qa:godot-3d-matrix": "tsx scripts/qa-godot-3d-matrix.ts",
     "qa:game-hud-locale-dedicated": "tsx scripts/qa-game-hud-locale-dedicated.ts",

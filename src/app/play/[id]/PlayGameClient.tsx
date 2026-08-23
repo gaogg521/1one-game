@@ -585,6 +585,7 @@ export function PlayGameClient({ id }: { id: string }) {
             <GameRuntimeTabs
               spec={spec}
               projectId={id}
+              allowOfflineExport={meta.isOwner}
               phaser={<GamePlayer spec={spec} promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} onIterate={(instr) => {
                 setPatchPrompt(instr);
                 setTimeout(() => {

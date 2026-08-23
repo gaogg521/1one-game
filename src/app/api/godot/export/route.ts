@@ -15,6 +15,11 @@ import {
 import { generateGameSprites } from "@/lib/game-sprite-gen";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { repoPublicPath } from "@/lib/public-path";
+import { getOwnerKey } from "@/lib/owner";
+import { findOwnedGodotExportProject } from "@/lib/godot-export-ownership";
+import { rateLimit } from "@/lib/rate-limit";
+import { getThrottleKey } from "@/lib/request-key";
+import { localizedJsonError } from "@/lib/api/localized-error";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -55,6 +60,12 @@ async function resolveReferencePayloadsForExport(
 
 export async function POST(req: Request) {
   const requestId = newGenerateRequestId();
+  const ownerKey = await getOwnerKey();
+  if (!ownerKey) return localizedJsonError(req, "unauthorized", 401);
+
+  const throttleKey = await getThrottleKey("godot_export", ownerKey);
+  if (!rateLimit(throttleKey, 8, 10 * 60_000)) return localizedJsonError(req, "rateLimited", 429);
+
   /** Godot 导出可带缩略参考图，放宽于默认 generate 512KB */
   const json = await readLimitedJson(req, requestId, { maxBytes: 12 * 1024 * 1024 });
   if (!json.ok) {
@@ -74,6 +85,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const projectId = parsed.data.projectId;
+  if (!projectId) return localizedJsonError(req, "invalidBody", 400);
+  const project = await findOwnedGodotExportProject(ownerKey, projectId);
+  if (!project) return localizedJsonError(req, "notFound", 404);
+
   const coerced = coerceGameSpec(parsed.data.spec);
   if (!coerced.ok) {
     return NextResponse.json(
@@ -87,14 +103,14 @@ export async function POST(req: Request) {
   const spec = toPlainJson(coerced.spec);
 
   // 若带 projectId 且精灵尚未生成，后台静默触发（不阻塞导出）
-  if (parsed.data.projectId) {
-    const spriteDir = repoPublicPath("game-sprites", parsed.data.projectId);
+  if (projectId) {
+    const spriteDir = repoPublicPath("game-sprites", projectId);
     const hasSprites = fs.existsSync(path.join(spriteDir, "player.png"));
     if (!hasSprites) {
-      console.info(`[godot-export] 项目 ${parsed.data.projectId} 精灵未生成，后台触发…`);
+      console.info(`[godot-export] 项目 ${projectId} 精灵未生成，后台触发…`);
       void Promise.all([
-        generateGameSprites(parsed.data.projectId, coerced.spec),
-        generateGameBackground(parsed.data.projectId, coerced.spec),
+        generateGameSprites(projectId, coerced.spec),
+        generateGameBackground(projectId, coerced.spec),
       ]).then(() => {
         console.info(`[godot-export] 项目 ${parsed.data.projectId} 精灵/背景生成完成`);
       }).catch((e) => {
@@ -124,7 +140,7 @@ export async function POST(req: Request) {
   if (target === "web") {
     const result = await exportGameSpecToGodotWeb({
       spec,
-      projectId: parsed.data.projectId,
+      projectId,
       referencePayloads,
     });
 
@@ -151,7 +167,7 @@ export async function POST(req: Request) {
 
   const result = await exportGodotByTarget(target, {
     spec,
-    projectId: parsed.data.projectId,
+    projectId,
     referencePayloads,
   });
 

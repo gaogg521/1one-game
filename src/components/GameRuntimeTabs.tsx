@@ -30,6 +30,7 @@ type Props = {
   phaser: ReactNode;
   refEpoch?: number;
   allowRuntimeSwitch?: boolean;
+  allowOfflineExport?: boolean;
 };
 
 function tabClass(active: boolean): string {
@@ -46,6 +47,7 @@ export function GameRuntimeTabs({
   phaser,
   refEpoch = 0,
   allowRuntimeSwitch = true,
+  allowOfflineExport = false,
 }: Props) {
   const t = useTranslations("gameRuntime");
   const locale = useLocale() as AppLocale;
@@ -196,6 +198,7 @@ export function GameRuntimeTabs({
                 referencePayloads={referencePayloads}
                 referenceHandles={referenceHandles}
                 onlineReady
+                canExport={allowOfflineExport}
               />
             </>
           ) : null}

@@ -13,6 +13,8 @@ type Props = {
   referenceHandles?: ReferenceImageHandle[];
   /** 仅在线试玩就绪后展示导出区（先玩再导） */
   onlineReady: boolean;
+  /** 导出会占用项目专属构建/资产缓存，只对作品主人显示。 */
+  canExport?: boolean;
 };
 
 /**
@@ -24,10 +26,11 @@ export function GodotOfflineDownloads({
   referencePayloads,
   referenceHandles,
   onlineReady,
+  canExport = false,
 }: Props) {
   const t = useTranslations("godotExport");
 
-  if (!onlineReady) return null;
+  if (!onlineReady || !canExport || !projectId) return null;
 
   return (
     <details className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3">
