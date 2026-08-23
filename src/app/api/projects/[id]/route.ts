@@ -7,6 +7,7 @@ import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
+import { deleteGameAssetFiles } from "@/lib/game-assets-gc";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { SAMPLE_GALLERY_OWNER } from "@/lib/sample-gallery";
 import { rateLimit } from "@/lib/rate-limit";
@@ -305,6 +306,7 @@ export async function DELETE(req: Request, ctx: RouteContext) {
   }
 
   await deleteProjectCoverFile(id);
+  await deleteGameAssetFiles(id);
   await prisma.project.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -4,6 +4,7 @@ import { getOwnerKey } from "@/lib/owner";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
+import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { parseNovelChapters, serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
 import { defaultChapterTitle } from "@/lib/i18n/chapter-labels";
@@ -328,7 +329,9 @@ export async function DELETE(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "notFound", 404);
   }
 
+  const linkedComics = await prisma.comic.findMany({ where: { novelId: id }, select: { id: true, imageUrls: true } });
+  for (const comic of linkedComics) await deleteComicAssetFiles(comic.id, comic.imageUrls);
   await prisma.novel.delete({ where: { id } });
-  void deleteNovelCoverFile(id);
+  await deleteNovelCoverFile(id);
   return NextResponse.json({ ok: true });
 }

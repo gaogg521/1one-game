@@ -23,6 +23,7 @@ import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/c
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
+import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -435,6 +436,7 @@ export async function DELETE(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "notFound", 404);
   }
 
+  await deleteComicAssetFiles(row.id, row.imageUrls);
   await prisma.comic.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

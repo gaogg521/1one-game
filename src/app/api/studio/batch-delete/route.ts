@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getOwnerKey } from "@/lib/owner";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
 import { deleteProjectCoverFile } from "@/lib/project-cover";
+import { deleteGameAssetFiles } from "@/lib/game-assets-gc";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
 import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { localizedApiErrorPayload, localizedJsonError, studioErrorText } from "@/lib/api/localized-error";
@@ -76,6 +77,7 @@ export async function DELETE(req: Request) {
           continue;
         }
         await deleteProjectCoverFile(item.id);
+        await deleteGameAssetFiles(item.id);
         await prisma.project.delete({ where: { id: item.id } });
         deletedCount += 1;
         continue;
