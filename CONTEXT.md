@@ -379,3 +379,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 已在 `docs/creator-platform-rebuild-plan.md` 固化总路线：保留 Next.js 应用壳、账户、发现、商业化和 Phaser 播放器；重构创作内核为 Project / Revision / Artifact / GenerationJob / Evaluation / Publication。
 - 当前数据库的 Project、Novel、Comic 分别以 `specJson`、`content`、`imageUrls` 承载关键状态，长生成多由请求内 SSE 或进程内后台调用承担；`JobQueueItem` worker 仍是确认任务的占位实现。P1 先补可恢复任务和版本化产物，再以小说作为首条迁移样板。
 - 三条产品线目标：游戏为结构化设计与可执行试玩；小说为 Story Bible→纲要→场景→正文；漫画为角色/风格锁定→可编辑分镜→逐格可恢复渲染。禁止继续把一次性生成成功误报为创作者作品完成。
+
+### P1 第一段：统一创作内核落地
+
+- 前向迁移 `20260823010000_add_creator_core` 新增 `CreativeProject`、`CreativeRevision`、`CreativeArtifact`、`GenerationJob`，不改写旧 Project/Novel/Comic，供双轨迁移使用。
+- `src/lib/creator-core/` 已实现输入边界、不可变 revision 序号/父版本关系、带内容哈希的 artifact、幂等/租约/退避重试任务，以及首个真实 `artifact_write` worker handler。`/api/jobs/worker` 优先执行新任务，旧队列继续兼容。
+- `npm run qa:creator-core` 已在本地真实 SQLite 执行：创建项目和两条 lineage revision、验证幂等任务重放、worker 落库 Story Bible artifact，最后级联清理测试项目。TypeScript、Prisma schema、creator workflow QA 均通过。

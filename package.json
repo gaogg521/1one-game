@@ -97,6 +97,7 @@
     "qa:runtime-actor-state": "tsx scripts/qa-runtime-actor-state.ts",
     "qa:creator-workflow": "tsx scripts/qa-creator-workflow.ts",
     "qa:creator-quality": "tsx scripts/qa-creator-quality.ts",
+    "qa:creator-core": "tsx scripts/qa-creator-core.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
     "qa:xiangqi-commercial-runtime": "tsx scripts/qa-xiangqi-commercial-runtime.ts",
     "qa:board-showcase-samples": "tsx scripts/qa-board-showcase-samples.ts",

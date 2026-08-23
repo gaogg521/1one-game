@@ -9,35 +9,35 @@ datasource db {
 
 /// 注册用户（OAuth / 邮箱 / 用户名）；legacyOwnerKey 桥接匿名 Cookie 作品。
 model User {
-  id              String   @id @default(cuid())
-  legacyOwnerKey  String?  @unique
+  id             String   @id @default(cuid())
+  legacyOwnerKey String?  @unique
   /// 登录用户名（小写存储，唯一）
-  username        String?  @unique
-  email           String?  @unique
-  phone           String?  @unique
-  displayName     String?
-  avatarUrl       String?
+  username       String?  @unique
+  email          String?  @unique
+  phone          String?  @unique
+  displayName    String?
+  avatarUrl      String?
   /// scrypt 哈希（用户名/邮箱注册）；OAuth 用户可为空
-  passwordHash    String?
+  passwordHash   String?
   /// user | admin | super_admin
-  role            String   @default("user")
+  role           String   @default("user")
   /// 裂变邀请码（分享链接 ?ref=）
-  referralCode    String   @unique @default(cuid())
-  referredById    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  referralCode   String   @unique @default(cuid())
+  referredById   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   /// 可用生成额度（积分）；订阅月度额度另计
-  quotaBalance  Int      @default(0)
-  referredBy   User?          @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals    User[]         @relation("UserReferrals")
-  oauthAccounts OAuthAccount[]
-  sessions     UserSession[]
-  quotaLedger  QuotaLedger[]
-  referralRewardsGiven ReferralReward[] @relation("ReferrerRewards")
-  referralRewardReceived ReferralReward? @relation("InviteeReward")
-  subscriptions UserSubscription[]
-  paymentEvents PaymentEvent[]
+  quotaBalance           Int                @default(0)
+  referredBy             User?              @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals              User[]             @relation("UserReferrals")
+  oauthAccounts          OAuthAccount[]
+  sessions               UserSession[]
+  quotaLedger            QuotaLedger[]
+  referralRewardsGiven   ReferralReward[]   @relation("ReferrerRewards")
+  referralRewardReceived ReferralReward?    @relation("InviteeReward")
+  subscriptions          UserSubscription[]
+  paymentEvents          PaymentEvent[]
 
   @@index([role])
 }
@@ -77,11 +77,11 @@ model QuotaLedger {
 
 /// 邀请裂变奖励（一次性的邀请关系记录）
 model ReferralReward {
-  id          String   @id @default(cuid())
-  referrerId  String
-  inviteeId   String   @unique
-  credits     Int
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  referrerId String
+  inviteeId  String   @unique
+  credits    Int
+  createdAt  DateTime @default(now())
 
   referrer User @relation("ReferrerRewards", fields: [referrerId], references: [id], onDelete: Cascade)
   invitee  User @relation("InviteeReward", fields: [inviteeId], references: [id], onDelete: Cascade)
@@ -91,33 +91,33 @@ model ReferralReward {
 
 /// 套餐定义（free / creator / pro）
 model SubscriptionPlan {
-  id            String   @id
-  name          String
-  monthlyQuota  Int
-  priceCents    Int
-  currency      String   @default("CNY")
-  active        Boolean  @default(true)
-  featuresJson  String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id
+  name         String
+  monthlyQuota Int
+  priceCents   Int
+  currency     String   @default("CNY")
+  active       Boolean  @default(true)
+  featuresJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   subscriptions UserSubscription[]
 }
 
 /// 用户订阅周期
 model UserSubscription {
-  id             String   @id @default(cuid())
-  userId         String
-  planId         String
+  id            String   @id @default(cuid())
+  userId        String
+  planId        String
   /// active | cancelled | expired | pending
-  status         String   @default("pending")
-  periodStart    DateTime
-  periodEnd      DateTime
-  externalSubId  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  status        String   @default("pending")
+  periodStart   DateTime
+  periodEnd     DateTime
+  externalSubId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan SubscriptionPlan @relation(fields: [planId], references: [id])
 
   @@index([userId])
@@ -150,35 +150,148 @@ model PaymentEvent {
 
 /// 异步任务（长生成迁移队列；单实例可用内存，多实例配 REDIS_URL）
 model JobQueueItem {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   /// novel_generate | comic_generate | cover_gen | ...
   type        String
   payloadJson String
   /// pending | running | done | failed
-  status      String    @default("pending")
-  attempts    Int       @default(0)
+  status      String   @default("pending")
+  attempts    Int      @default(0)
   lastError   String?
-  runAfter    DateTime  @default(now())
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  runAfter    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([status, runAfter])
   @@index([type])
 }
 
+/// 统一创作项目：新内核的作品容器。旧 Project / Novel / Comic 在迁移期保持独立读取。
+model CreativeProject {
+  id         String   @id @default(cuid())
+  ownerKey   String
+  /// game | novel | comic
+  kind       String
+  title      String
+  /// draft | generating | ready | review | published | failed
+  status     String   @default("draft")
+  /// private | pending_review | public | hidden
+  visibility String   @default("private")
+  /// 指向旧作品的迁移来源；不设数据库外键，允许按批次渐进迁移。
+  legacyType String?
+  legacyId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  revisions CreativeRevision[]
+  artifacts CreativeArtifact[]
+  jobs      GenerationJob[]
+
+  @@index([ownerKey, updatedAt])
+  @@index([kind, visibility, updatedAt])
+  @@index([legacyType, legacyId])
+}
+
+/// 不可变创作版本。一条生成或一次作者确认编辑都创建一个新的 revision。
+model CreativeRevision {
+  id                String    @id @default(cuid())
+  creativeProjectId String
+  sequence          Int
+  parentRevisionId  String?
+  /// user_prompt | generate | refine | import | restore
+  cause             String
+  /// preparing | generating | ready | failed | superseded
+  status            String    @default("preparing")
+  intentJson        String?
+  summary           String?
+  createdAt         DateTime  @default(now())
+  finalizedAt       DateTime?
+
+  project   CreativeProject    @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  artifacts CreativeArtifact[]
+  jobs      GenerationJob[]
+
+  @@unique([creativeProjectId, sequence])
+  @@index([creativeProjectId, createdAt])
+  @@index([parentRevisionId])
+}
+
+/// 版本化产物：正文、故事圣经、分镜、角色参考、游戏设计、构建物和媒体索引均可寻址。
+model CreativeArtifact {
+  id                 String   @id @default(cuid())
+  creativeProjectId  String
+  creativeRevisionId String?
+  /// story_bible | outline | scene | manuscript | game_design | scene_graph | panel_plan | panel_image | asset_manifest | evaluation
+  kind               String
+  /// text | json | image | audio | binary | report
+  mediaType          String
+  /// pending | ready | failed | archived
+  status             String   @default("ready")
+  contentJson        String?
+  textContent        String?
+  storageUri         String?
+  contentHash        String?
+  provider           String?
+  sourceArtifactId   String?
+  metadataJson       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project  CreativeProject   @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  revision CreativeRevision? @relation(fields: [creativeRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([creativeProjectId, kind, createdAt])
+  @@index([creativeRevisionId, kind])
+  @@index([contentHash])
+  @@index([sourceArtifactId])
+}
+
+/// 持久化、可租约、可重试的创作任务；替代请求内 SSE 和进程内后台任务作为最终执行语义。
+model GenerationJob {
+  id                 String    @id @default(cuid())
+  creativeProjectId  String
+  creativeRevisionId String?
+  /// artifact_write | novel_plan | novel_scene | comic_panel | game_build | game_asset | evaluation
+  type               String
+  payloadJson        String
+  /// queued | running | retrying | completed | failed | cancelled
+  status             String    @default("queued")
+  idempotencyKey     String?   @unique
+  attempts           Int       @default(0)
+  maxAttempts        Int       @default(3)
+  runAfter           DateTime  @default(now())
+  leaseExpiresAt     DateTime?
+  workerId           String?
+  lastErrorCode      String?
+  lastErrorDetail    String?
+  progressJson       String?
+  outputArtifactId   String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  completedAt        DateTime?
+
+  project  CreativeProject   @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  revision CreativeRevision? @relation(fields: [creativeRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([status, runAfter])
+  @@index([creativeProjectId, createdAt])
+  @@index([creativeRevisionId, createdAt])
+  @@index([leaseExpiresAt])
+}
+
 /// 第三方登录绑定（微信 / QQ / 飞书 / Line / 抖音等）
 model OAuthAccount {
-  id              String    @id @default(cuid())
-  userId          String
+  id             String    @id @default(cuid())
+  userId         String
   /// wechat | qq | feishu | line | douyin | dev
-  provider        String
-  providerUserId  String
-  accessToken     String?
-  refreshToken    String?
-  expiresAt       DateTime?
-  profileJson     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  provider       String
+  providerUserId String
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+  profileJson    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -275,31 +388,31 @@ model AdminAuditLog {
 
 /// 访客或未来登录用户的作品容器；ownerKey 由 HttpOnly Cookie 持有，便于后续接入 OAuth 时迁移合并。
 model Project {
-  id        String   @id @default(cuid())
-  ownerKey  String
+  id                String   @id @default(cuid())
+  ownerKey          String
   /// public | hidden | pending_review
-  visibility String  @default("public")
-  featured   Boolean @default(false)
+  visibility        String   @default("public")
+  featured          Boolean  @default(false)
   /// 可选短链 slug，用于 /s/[shareCode] 跳转试玩页
-  shareCode String?  @unique
-  title     String
-  prompt    String
-  specJson  String
-  status    String   @default("ready")
+  shareCode         String?  @unique
+  title             String
+  prompt            String
+  specJson          String
+  status            String   @default("ready")
   /// 试玩首帧截图 URL 路径，如 /covers/{id}.jpg；由客户端截图后 PATCH 写入
-  coverPath String?
+  coverPath         String?
   /// 累计试玩次数（任何访客打开试玩页面时递增，不需要登录）
-  playCount Int      @default(0)
+  playCount         Int      @default(0)
   /// 累计点赞数（访客通过 localStorage 去重，防止重复点）
-  likeCount Int      @default(0)
+  likeCount         Int      @default(0)
   /// 试玩页多回合 refine 日志 JSON（仅主人可读写入）
   refinementLogJson String?
   /// Creative Brief 结构化扩写 JSON（与 specJson 并列持久化）
   creativeBriefJson String?
   /// LLM 生成的旋律音符序列 JSON（无第三方 BGM API Key 时的降级方案，生成后缓存）
   bgmNotesJson      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([ownerKey])
   @@index([visibility, featured, playCount])
@@ -307,29 +420,29 @@ model Project {
 }
 
 model Novel {
-  id        String   @id @default(cuid())
-  ownerKey  String
-  visibility String  @default("public")
-  featured   Boolean @default(false)
-  shareCode String?  @unique
-  title     String
-  prompt    String
-  content   String
-  summary   String?
+  id                  String   @id @default(cuid())
+  ownerKey            String
+  visibility          String   @default("public")
+  featured            Boolean  @default(false)
+  shareCode           String?  @unique
+  title               String
+  prompt              String
+  content             String
+  summary             String?
   /// short | medium | long
-  lengthTier String? @default("medium")
+  lengthTier          String?  @default("medium")
   /// 长篇流水线元数据 JSON：设定圣经、章规划等（NovelGenerationMeta）
-  generationMetaJson String?
+  generationMetaJson  String?
   /// Creative Brief 结构化扩写 JSON
-  creativeBriefJson String?
+  creativeBriefJson   String?
   /// 角色资产库 JSON（ComicCharacterRoster）
   characterRosterJson String?
-  status    String   @default("ready")
-  coverPath String?
-  playCount Int      @default(0)
-  likeCount Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status              String   @default("ready")
+  coverPath           String?
+  playCount           Int      @default(0)
+  likeCount           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   comics Comic[]
 
@@ -339,22 +452,22 @@ model Novel {
 }
 
 model Comic {
-  id        String   @id @default(cuid())
-  ownerKey  String
-  visibility String  @default("public")
-  featured   Boolean @default(false)
-  novelId   String?
-  shareCode String?  @unique
-  title     String
-  prompt    String
-  imageUrls String
+  id                String   @id @default(cuid())
+  ownerKey          String
+  visibility        String   @default("public")
+  featured          Boolean  @default(false)
+  novelId           String?
+  shareCode         String?  @unique
+  title             String
+  prompt            String
+  imageUrls         String
   /// 漫画改编 Brief JSON（可与关联 Novel 的 Brief 并存）
   creativeBriefJson String?
-  status    String   @default("ready")
-  coverPath String?
-  likeCount Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status            String   @default("ready")
+  coverPath         String?
+  likeCount         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   novel Novel? @relation(fields: [novelId], references: [id], onDelete: SetNull)
 
@@ -383,17 +496,17 @@ model Comment {
 
 /// 生成失败日志：game / novel / comic 三类内容的生成错误记录
 model GenerationError {
-  id          String   @id @default(cuid())
+  id            String   @id @default(cuid())
   /// 内容类型：game | novel | comic
-  contentType String
+  contentType   String
   /// 触发生成的 prompt 前 512 字符（便于统计高频失败主题）
   promptSnippet String
   /// 错误类型标签：timeout | rate_limit | context_length | parse_error | upstream | unknown
-  errorType   String   @default("unknown")
+  errorType     String   @default("unknown")
   /// 原始错误消息（截断至 512 字符）
-  errorMessage String?
-  ownerKey    String?
-  createdAt   DateTime @default(now())
+  errorMessage  String?
+  ownerKey      String?
+  createdAt     DateTime @default(now())
 
   @@index([contentType, createdAt])
   @@index([errorType, createdAt])

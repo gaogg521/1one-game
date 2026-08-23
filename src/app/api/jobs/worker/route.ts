@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { claimNextJob, completeJob, failJob, updateJobProgress } from "@/lib/jobs/queue";
+import { processNextGenerationJob } from "@/lib/creator-core/worker";
 
 function authorized(req: Request): boolean {
   const secret = process.env.JOB_WORKER_SECRET?.trim();
@@ -10,6 +11,12 @@ function authorized(req: Request): boolean {
 /** 拉取并处理一条队列任务（长生成迁移入口；当前为占位处理器） */
 export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 403 });
+
+  const workerId = req.headers.get("x-worker-id")?.slice(0, 96) || "api-worker";
+  const generationJob = await processNextGenerationJob(workerId);
+  if (generationJob) {
+    return NextResponse.json({ ok: generationJob.status === "completed", processed: true, job: generationJob });
+  }
 
   const job = await claimNextJob();
   if (!job) return NextResponse.json({ ok: true, processed: false });

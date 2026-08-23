@@ -1,0 +1,103 @@
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+
+export type NewGenerationJob = {
+  creativeProjectId: string;
+  creativeRevisionId?: string;
+  type: "artifact_write" | "novel_plan" | "novel_scene" | "comic_panel" | "game_build" | "game_asset" | "evaluation";
+  payload: Record<string, unknown>;
+  idempotencyKey?: string;
+  maxAttempts?: number;
+  runAfter?: Date;
+};
+
+export async function enqueueGenerationJob(input: NewGenerationJob) {
+  if (input.idempotencyKey) {
+    const existing = await prisma.generationJob.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) return existing;
+  }
+  try {
+    return await prisma.generationJob.create({
+      data: {
+        creativeProjectId: input.creativeProjectId,
+        creativeRevisionId: input.creativeRevisionId,
+        type: input.type,
+        payloadJson: JSON.stringify(input.payload),
+        idempotencyKey: input.idempotencyKey,
+        maxAttempts: Math.max(1, Math.min(8, input.maxAttempts ?? 3)),
+        runAfter: input.runAfter ?? new Date(),
+      },
+    });
+  } catch (error) {
+    if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.generationJob.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing) return existing;
+    }
+    throw error;
+  }
+}
+
+export async function claimGenerationJob(workerId: string, leaseMs = 90_000) {
+  const now = new Date();
+  const candidate = await prisma.generationJob.findFirst({
+    where: {
+      OR: [
+        { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
+        { status: "running", leaseExpiresAt: { lt: now } },
+      ],
+    },
+    orderBy: { runAfter: "asc" },
+  });
+  if (!candidate) return null;
+  const claimed = await prisma.generationJob.updateMany({
+    where: {
+      id: candidate.id,
+      OR: [
+        { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
+        { status: "running", leaseExpiresAt: { lt: now } },
+      ],
+    },
+    data: {
+      status: "running",
+      workerId,
+      leaseExpiresAt: new Date(now.getTime() + leaseMs),
+      attempts: { increment: 1 },
+      progressJson: JSON.stringify({ percent: 1, stage: "claimed" }),
+    },
+  });
+  if (claimed.count === 0) return null;
+  return prisma.generationJob.findUniqueOrThrow({ where: { id: candidate.id } });
+}
+
+export async function completeGenerationJob(id: string, outputArtifactId?: string) {
+  return prisma.generationJob.update({
+    where: { id },
+    data: {
+      status: "completed",
+      outputArtifactId,
+      progressJson: JSON.stringify({ percent: 100, stage: "completed" }),
+      leaseExpiresAt: null,
+      completedAt: new Date(),
+      lastErrorCode: null,
+      lastErrorDetail: null,
+    },
+  });
+}
+
+export async function failGenerationJob(id: string, error: unknown) {
+  const current = await prisma.generationJob.findUniqueOrThrow({ where: { id } });
+  const detail = error instanceof Error ? error.message : String(error);
+  const retry = current.attempts < current.maxAttempts;
+  const backoffMs = Math.min(5 * 60_000, 2 ** Math.max(0, current.attempts - 1) * 5_000);
+  return prisma.generationJob.update({
+    where: { id },
+    data: {
+      status: retry ? "retrying" : "failed",
+      runAfter: retry ? new Date(Date.now() + backoffMs) : current.runAfter,
+      leaseExpiresAt: null,
+      lastErrorCode: "execution_failed",
+      lastErrorDetail: detail.slice(0, 1200),
+      progressJson: JSON.stringify({ percent: 0, stage: retry ? "retrying" : "failed" }),
+    },
+  });
+}
