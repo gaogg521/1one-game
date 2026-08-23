@@ -34,18 +34,30 @@ async function main() {
     const core = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
     assert(persisted.visibility === "public", "legacy work must become public");
     assert(core.visibility === "public" && core.status === "published", "core publication state must stay in sync");
+    assert(core.acceptedRevisionId, "publish must explicitly accept an immutable revision");
     const publishDecision = await prisma.creativePublication.findFirst({
       where: { creativeProjectId: coreId, action: "publish" },
       orderBy: { createdAt: "desc" },
     });
     assert(publishDecision?.decision === "approved" && publishDecision.visibility === "public", "publish must write an immutable Core decision");
+    assert(publishDecision?.creativeRevisionId === core.acceptedRevisionId, "publication must point to the author-accepted revision");
+
+    const newerRevision = await mirrorGameToCreatorCore({ project: game, cause: "refine" });
+    assert(newerRevision.creativeRevisionId !== core.acceptedRevisionId, "a refinement must create a separate immutable revision");
+    const coreAfterRefine = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
+    assert(
+      coreAfterRefine.acceptedRevisionId === core.acceptedRevisionId,
+      "a later generation must not silently replace the author-accepted revision",
+    );
 
     const unpublished = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "unpublish" });
     assert(unpublished.visibility === "hidden", "owner should be able to unpublish");
     const hiddenCore = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
     assert(hiddenCore.visibility === "hidden" && hiddenCore.status === "ready", "core must reflect unpublish");
+    assert(hiddenCore.acceptedRevisionId === core.acceptedRevisionId, "unpublish must not silently change the accepted revision");
     const publicationHistory = await prisma.creativePublication.findMany({ where: { creativeProjectId: coreId }, orderBy: { createdAt: "asc" } });
     assert(publicationHistory.length === 2 && publicationHistory[1]?.action === "unpublish", "unpublish must append rather than overwrite publication history");
+    assert(publicationHistory[1]?.creativeRevisionId === core.acceptedRevisionId, "unpublish must remain linked to the version that was actually published");
 
     await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey: `${ownerKey}-other`, action: "publish" })
       .then(() => { throw new Error("other owners must not publish this work"); })

@@ -155,6 +155,7 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       kind: true,
       title: true,
       visibility: true,
+      acceptedRevisionId: true,
       updatedAt: true,
       ownerKey: true,
       evaluations: {
@@ -202,6 +203,7 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       kind: project.kind,
       title: project.title,
       visibility: project.visibility,
+      acceptedRevisionId: project.acceptedRevisionId,
       updatedAt: project.updatedAt,
       evaluation: project.evaluations[0]
         ? {

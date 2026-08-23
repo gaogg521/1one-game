@@ -35,7 +35,8 @@ export function visibilityWithQualityGuard(
 
 /**
  * The only unified author-facing publish transition during the legacy/core
- * bridge. Publishing changes visibility, never mutates an immutable revision.
+ * bridge. Publishing changes visibility and records the author's selected
+ * immutable revision; it never overwrites the revision itself.
  */
 export async function setCreatorWorkPublication(input: {
   type: PublishableWorkType;
@@ -91,14 +92,23 @@ async function persistPublication(input: {
     await input.update(tx, visibility);
     const core = await tx.creativeProject.findFirst({
       where: { ownerKey: input.input.ownerKey, legacyType: input.legacyType, legacyId: input.input.id },
-      select: { id: true },
+      select: { id: true, acceptedRevisionId: true },
     });
     if (!core) return;
-    const revision = await tx.creativeRevision.findFirst({
-      where: { creativeProjectId: core.id },
-      orderBy: { sequence: "desc" },
-      select: { id: true },
-    });
+    const revisionId = input.input.action === "unpublish"
+      ? core.acceptedRevisionId
+      : (await tx.creativeRevision.findFirst({
+        where: { creativeProjectId: core.id, status: "ready" },
+        orderBy: { sequence: "desc" },
+        select: { id: true },
+      }))?.id;
+    // Publishing is the author's explicit confirmation of this immutable
+    // revision. A later generate/refine creates a new revision but never
+    // changes the accepted pointer behind the author's back.
+    if (input.input.action === "publish") {
+      if (!revisionId) throw new CreatorPublicationError("not_ready");
+      await tx.creativeProject.update({ where: { id: core.id }, data: { acceptedRevisionId: revisionId } });
+    }
     await tx.creativeProject.update({
       where: { id: core.id },
       data: { visibility, status: visibility === "public" ? "published" : "ready" },
@@ -106,7 +116,7 @@ async function persistPublication(input: {
     await tx.creativePublication.create({
       data: {
         creativeProjectId: core.id,
-        creativeRevisionId: revision?.id,
+        creativeRevisionId: revisionId,
         action: input.input.action,
         visibility,
         decision: "approved",

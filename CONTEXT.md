@@ -603,3 +603,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 单个项目删除现在会同时删除该项目的游戏精灵目录与背景图；单个漫画删除会删除封面和面板图；单个小说删除会先回收其关联漫画资产，再删除小说封面。批量删除同步复用游戏资产回收器。
 - 游戏资源回收器仅接受受限 project ID 字符集并使用固定 public 子路径，拒绝路径穿越；`qa:game-assets-gc` 覆盖本人资源回收、其他项目不受影响与非法 ID 安全拒绝。
+
+## P21 第一段：作者确认版本锚点（2026-08-23）
+
+- 前向迁移 `20260823016000_add_accepted_revision` 为 `CreativeProject` 增加 `acceptedRevisionId`。它是兼容旧作品桥接期的软引用：历史项目保持 null，只有作者显式发布时才会记录已确认的 immutable `ready` revision。
+- 统一发布事务在 Core 项目存在时只接受最新 `ready` revision；没有就绪 Core revision 会回滚并拒绝发布。下架不会选择后续生成的版本，publication decision 始终关联实际已发布的确认版本。
+- 后续生成或 refine 会创建新 revision，但绝不静默移动 `acceptedRevisionId`。`qa:creator-publication` 覆盖发布确认、refine 产生新版本但确认锚点不变、下架历史仍指向已发布版本，以及原有 owner/质量阻断路径。

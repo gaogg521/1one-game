@@ -180,6 +180,8 @@ model CreativeProject {
   /// 指向旧作品的迁移来源；不设数据库外键，允许按批次渐进迁移。
   legacyType String?
   legacyId   String?
+  /// Author-confirmed immutable revision. Later generations must not move it implicitly.
+  acceptedRevisionId String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -192,6 +194,7 @@ model CreativeProject {
   @@index([ownerKey, updatedAt])
   @@index([kind, visibility, updatedAt])
   @@unique([legacyType, legacyId])
+  @@index([acceptedRevisionId])
   @@index([legacyType, legacyId])
 }
 
