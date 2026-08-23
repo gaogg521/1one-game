@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${ROOT}/.env"
 APP_USER="${OPERONE_USER:-www-data}"
+secret_initialized=0
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "install-generation-worker-timer.sh requires root" >&2
@@ -23,6 +24,7 @@ if ! grep -q '^JOB_WORKER_SECRET=[^[:space:]]' "${ENV_FILE}"; then
   printf '\nJOB_WORKER_SECRET=%s\n' "${secret}" >> "${ENV_FILE}"
   chmod 600 "${ENV_FILE}"
   chown "${APP_USER}:${APP_USER}" "${ENV_FILE}" 2>/dev/null || true
+  secret_initialized=1
   echo "[generation-worker] JOB_WORKER_SECRET initialized"
 fi
 
@@ -61,6 +63,12 @@ chmod 750 "${ROOT}/scripts/run-generation-worker-once.sh"
 chown "${APP_USER}:${APP_USER}" "${ROOT}/scripts/run-generation-worker-once.sh" 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now operone-generation-worker.timer
-systemctl start operone-generation-worker.service || true
+if [[ "${secret_initialized}" == "1" ]]; then
+  # The web runtime read its environment before this first secret existed.
+  # Restart it once so the loopback worker and route share the same secret.
+  systemctl restart operone
+  sleep 3
+fi
+systemctl start operone-generation-worker.service
 systemctl is-active --quiet operone-generation-worker.timer
 echo "[generation-worker] timer active"
