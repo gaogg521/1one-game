@@ -465,3 +465,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 图像主入口 `generateImageDetailed`、非流式 `llmJson`/`llmText` 和流式 `llmTextStream` 都统一写入账本；流式调用在结束或异常时写入字符输出量与结果。账本写失败不会中断用户生成。
 - 管理分析 API 新增按 provider/模型/媒介/结果的调用聚合，以及总事件数、已定价事件数、成本覆盖率和估算成本。单价未配置时保持 `null`，不将未知成本伪装为零成本或毛利。
 - `qa:provider-usage` 使用真实 SQLite 验证事件落库、耗时/输出单位保留，并检查 schema 不包含 prompt/content/secret/token/response 字段。开发库已通过 `prisma migrate deploy` 应用迁移；标准 Prisma binary client 已恢复，勿使用 `--no-engine` 后直接跑本地 SQLite QA。
+
+### P5 第二段：成本控制台读数（2026-08-23）
+
+- Console 的“变现与额度”面板现展示 provider 成本覆盖率、账本调用数和估算成本；没有配置单价时明确显示“待配置单价”，避免将未知成本误报为零。
+- 同一面板按 provider / model 展示调用数、媒介、成功状态和平均耗时，聚合来自安全账本 API，不含作品内容或提示词。五语文案和生产构建通过。

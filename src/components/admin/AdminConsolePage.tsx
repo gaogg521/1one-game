@@ -125,6 +125,8 @@ type Analytics = {
     planBreakdown: { planId: string; label: string; count: number }[];
     quotaByReason: { reason: string; events: number; deltaSum: number }[];
     paymentsByDay: DayPoint[];
+    providerUsage: { provider: string; model: string; modality: string; status: string; events: number; durationMs: number; estimatedCostMicros: number | null }[];
+    providerCost: { events: number; pricedEvents: number; coverageRate: number; estimatedCostMicros: number };
   };
   gameplay: {
     starts: number; firstMinuteRate: number; firstActionRate: number; retries: number; averageFailureSec: number; averageQualityScore: number;
@@ -791,6 +793,14 @@ export default function AdminConsolePage({
                         {t("revenueLabel")}{" "}
                         <span className="font-semibold text-[var(--gc-text)]">{formatMoney(analytics.commerce.revenueCents)}</span>
                       </p>
+                      <p className="text-[var(--gc-text-soft)]" data-testid="provider-cost-coverage">
+                        {t("providerCostCoverage", { coverage: analytics.commerce.providerCost.coverageRate, events: analytics.commerce.providerCost.events })}{" "}
+                        <span className="font-semibold text-[var(--gc-text)]">
+                          {analytics.commerce.providerCost.pricedEvents > 0
+                            ? formatMoney(Math.round(analytics.commerce.providerCost.estimatedCostMicros / 10_000))
+                            : t("providerCostPending")}
+                        </span>
+                      </p>
                       {analytics.commerce.planBreakdown.length > 0 ? (
                         <AdminRankBars
                           items={analytics.commerce.planBreakdown.map((p) => ({
@@ -805,6 +815,18 @@ export default function AdminConsolePage({
                       )}
                     </div>
                     <AdminQuotaBars items={analytics.commerce.quotaByReason} />
+                    {analytics.commerce.providerUsage.length > 0 ? (
+                      <div className="mt-4">
+                        <AdminRankBars
+                          items={analytics.commerce.providerUsage.slice(0, 6).map((row) => ({
+                            label: `${row.provider} · ${row.model}`,
+                            value: row.events,
+                            hint: `${row.modality} · ${row.status} · ${Math.round(row.durationMs / Math.max(1, row.events))}ms`,
+                          }))}
+                          valueSuffix={t("providerUsageEvents")}
+                        />
+                      </div>
+                    ) : null}
                   </ChartPanel>
                 </div>
 
