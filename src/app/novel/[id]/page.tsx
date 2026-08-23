@@ -40,6 +40,8 @@ import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
 import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/novel/NovelReadCoverThumb";
 import { NovelCharacterRosterPanel } from "@/components/literary/NovelCharacterRosterPanel";
+import { NovelStoryPlanPanel } from "@/components/novel/NovelStoryPlanPanel";
+import type { NovelBible, NovelChapterPlan } from "@/lib/novel-long-pipeline-types";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
@@ -66,6 +68,7 @@ interface Novel {
   status?: string;
   characterRoster?: ComicCharacterRoster | null;
   quality?: CreatorQualityReport;
+  storyPlan?: { bible: NovelBible; chapterPlan: NovelChapterPlan };
 }
 
 export default function NovelDetailPage() {
@@ -496,6 +499,17 @@ export default function NovelDetailPage() {
                     : msg,
                 )
               }
+            />
+          </div>
+        ) : null}
+
+        {!editing && novel.isOwner && !isChildrenReader ? (
+          <div className="mx-auto max-w-2xl px-4 pb-3 lg:px-6">
+            <NovelStoryPlanPanel
+              key={JSON.stringify(novel.storyPlan)}
+              novelId={novel.id}
+              initialBible={novel.storyPlan?.bible}
+              initialChapterPlan={novel.storyPlan?.chapterPlan}
             />
           </div>
         ) : null}

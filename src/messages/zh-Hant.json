@@ -635,6 +635,11 @@
     "chapterLabel": "第{num}章",
     "continueLongForm": "續寫長篇"
   },
+  "storyPlan": {
+    "eyebrow": "創作控制台", "title": "設定聖經與章節綱要", "desc": "這裡的設定是後續續寫、分鏡和連續性檢查的事實來源。每次保存都會留下可恢復的版本。", "chapterCount": "{count} 章",
+    "world": "世界觀", "conflict": "核心衝突", "ending": "結局方向", "tone": "基調與文風", "taboos": "禁忌（每行一條）", "characters": "角色", "characterName": "角色名", "characterRole": "角色定位", "characterTraits": "性格與特徵", "relationships": "關係與動機", "removeCharacter": "移除角色", "addCharacter": "新增角色", "outline": "章節綱要", "chapterTitle": "章節標題", "chapterSummary": "本章發生什麼、推進了什麼",
+    "phase_opening": "開端", "phase_rising": "發展", "phase_climax": "高潮", "phase_resolution": "收束", "edit": "修訂設定與綱要", "save": "保存新版本", "saving": "正在保存…", "cancel": "取消", "invalid": "請補全至少兩名角色和三章有效綱要後再保存。", "generating": "小說正在生成中，完成後再修訂設定。", "unavailable": "這部作品沒有可修訂的長篇設定。", "saveFailed": "設定保存失敗，請稍後重試。"
+  },
   "novelBrief": {
     "novelSummary": "小說創意構思（可展開 / 可修訂）",
     "expandPack": "類型骨架",

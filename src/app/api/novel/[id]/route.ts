@@ -105,6 +105,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       remainingChapterCount: continuation.remainingChapterCount,
       charsRemaining: continuation.charsRemaining,
       hasPipelineMeta: Boolean(pipelineMeta),
+      ...(isOwner && pipelineMeta ? { storyPlan: { bible: pipelineMeta.bible, chapterPlan: pipelineMeta.chapterPlan } } : {}),
       continueChapterPresets: NOVEL_CONTINUE_CHAPTER_PRESETS,
       continueDefaultMaxChapters: PRODUCT.novel.longSegmented.continueDefaultMaxChapters,
       polishDefault: PRODUCT.novel.longSegmented.polishAfterSegment,

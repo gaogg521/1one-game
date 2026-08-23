@@ -635,6 +635,11 @@
     "chapterLabel": "Chapter {num}",
     "continueLongForm": "Continue long-form novel"
   },
+  "storyPlan": {
+    "eyebrow": "Creator control", "title": "Story Bible and chapter outline", "desc": "These facts guide continuation, storyboarding, and continuity checks. Every save creates a recoverable revision.", "chapterCount": "{count} chapters",
+    "world": "World", "conflict": "Core conflict", "ending": "Ending direction", "tone": "Tone and voice", "taboos": "Do not include (one per line)", "characters": "Characters", "characterName": "Name", "characterRole": "Role", "characterTraits": "Traits", "relationships": "Relationships and motives", "removeCharacter": "Remove character", "addCharacter": "Add character", "outline": "Chapter outline", "chapterTitle": "Chapter title", "chapterSummary": "What happens and what advances",
+    "phase_opening": "Opening", "phase_rising": "Rising action", "phase_climax": "Climax", "phase_resolution": "Resolution", "edit": "Revise story facts and outline", "save": "Save new revision", "saving": "Saving…", "cancel": "Cancel", "invalid": "Add at least two characters and three valid outline chapters before saving.", "generating": "This novel is still generating. Revise its story plan after it finishes.", "unavailable": "This work has no editable long-form story plan.", "saveFailed": "Could not save the story plan. Please try again."
+  },
   "novelBrief": {
     "novelSummary": "Novel creative brief (expand / revise)",
     "expandPack": "Genre scaffold",

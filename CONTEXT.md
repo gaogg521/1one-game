@@ -398,3 +398,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 小说详情 API 对作者返回仅最新的 Core revision 快照；快照包含 project/revision 元数据和同一 revision 的 artifacts，避免 Story Bible、纲要和正文跨保存版本混用，非作者不获得该数据。
 - 小说正文或标题经 `PATCH /api/novel/:id` 保存后，会用 `refine` 原因写入新的不可变 Core revision；迁移失败时旧小说保存仍成功，但 API 明确返回 `core.status=degraded` 并记录服务端错误，禁止把旧快照伪装为新版本。
 - `qa:creator-core` 扩展为“生成镜像 → 编辑旧小说 → 再镜像 → 读取快照”，确认快照必定定位最后 revision 且正文为编辑后的文本。
+
+### P2 第一段：作者可控 Story Bible 与纲要
+
+- 作者在长篇小说详情页可查看和修订 Story Bible（世界观、冲突、结局、基调、禁忌、角色关系）及每章标题、摘要和叙事阶段；非作者与没有长篇元数据的作品不显示该面板。
+- 新增 `PUT /api/novel/:id/story-plan`：必须为作品 owner，使用既有 Zod 规则校验至少两名角色和三条有效章节纲要；生成中的小说拒绝修订，避免与流式长生成相互覆盖。
+- 保存先更新旧长篇元数据，再以 `refine` 写入一条新的完整 Core revision（Bible、纲要、场景、正文）；任何旧 revision 保持不可变。新的 `qa:novel-story-plan-api` 用本机真实 Next HTTP 服务、临时 owner Cookie 与临时作品验证了保存响应和最终 Core snapshot。
+- 本机浏览器控制环境不能连接宿主机 `127.0.0.1:8888`（网络命名空间隔离），故未能进行该面板的浏览器截图/点击验收；TypeScript、定向 ESLint、五语 JSON、creator core/workflow/quality QA 和真实 HTTP API 回归均通过。

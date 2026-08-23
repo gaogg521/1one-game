@@ -7,6 +7,7 @@ import {
 import { enqueueGenerationJob } from "../src/lib/creator-core/jobs";
 import { processNextGenerationJob } from "../src/lib/creator-core/worker";
 import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
+import { reviseNovelStoryPlan } from "../src/lib/novel-story-plan";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -92,6 +93,44 @@ async function main() {
       assert(snapshot?.revision?.id === refined.creativeRevisionId, "snapshot must select the latest saved revision");
       const manuscript = snapshot?.revision?.artifacts.find((artifact) => artifact.kind === "manuscript");
       assert(manuscript?.textContent?.includes("新灯火"), "latest snapshot must expose the edited manuscript");
+
+      await prisma.novel.update({
+        where: { id: novel.id },
+        data: { generationMetaJson: JSON.stringify({
+          version: 1,
+          bible: {
+            title: novel.title,
+            worldSetting: "一座被长雨包围的旧城",
+            characters: [{ name: "旅人", role: "主角", traits: "执着" }, { name: "灯灵", role: "引路者", traits: "沉静" }],
+            coreConflict: "旅人必须在灯火熄灭前找到出路",
+            endingDirection: "旅人带灯灵离开旧城",
+          },
+          chapterPlan: { chapters: [
+            { num: 1, title: "灯火", summary: "旅人冒雨进入被长雨包围的旧城", phase: "opening" },
+            { num: 2, title: "回声", summary: "旅人循着回声找到沉默的灯灵", phase: "rising" },
+            { num: 3, title: "远行", summary: "旅人带着灯灵穿过雨幕离开旧城", phase: "resolution" },
+          ] },
+          segmentCount: 1,
+          createdAt: new Date().toISOString(),
+        }) },
+      });
+      const current = await prisma.novel.findUniqueOrThrow({ where: { id: novel.id } });
+      const revisedPlan = await reviseNovelStoryPlan({
+        novel: current,
+        bible: { ...JSON.parse(current.generationMetaJson!).bible, coreConflict: "旅人必须在暴雨吞没旧城前找回灯火" },
+        chapterPlan: { chapters: [
+          { num: 1, title: "新灯火", summary: "旅人从雨幕进入被暴雨吞没的旧城", phase: "opening" },
+          { num: 2, title: "钟楼", summary: "旅人追随灯灵前往藏着真相的钟楼", phase: "rising" },
+          { num: 3, title: "远行", summary: "旅人带着灯灵穿过风暴离开旧城", phase: "resolution" },
+        ] },
+      });
+      const revisedSnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey: marker, legacyType: "novel", legacyId: novel.id });
+      const revisedBible = revisedSnapshot?.revision?.artifacts.find((artifact) => artifact.kind === "story_bible");
+      assert(revisedSnapshot?.revision?.id === revisedPlan.core.creativeRevisionId, "story plan edit must create a new core revision");
+      assert(
+        (revisedBible?.content as { coreConflict?: string } | null)?.coreConflict?.includes("暴雨"),
+        "story plan edit must preserve the revised bible in the latest revision",
+      );
     } finally {
       await prisma.novel.delete({ where: { id: novel.id } });
       if (mirroredProjectId) await prisma.creativeProject.delete({ where: { id: mirroredProjectId } });

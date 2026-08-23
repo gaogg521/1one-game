@@ -635,6 +635,11 @@
     "chapterLabel": "第{num}章",
     "continueLongForm": "续写长篇"
   },
+  "storyPlan": {
+    "eyebrow": "创作控制台", "title": "设定圣经与章节纲要", "desc": "这里的设定是后续续写、分镜和连续性检查的事实来源。每次保存都会留下可恢复的版本。", "chapterCount": "{count} 章",
+    "world": "世界观", "conflict": "核心冲突", "ending": "结局方向", "tone": "基调与文风", "taboos": "禁忌（每行一条）", "characters": "角色", "characterName": "角色名", "characterRole": "角色定位", "characterTraits": "性格与特征", "relationships": "关系与动机", "removeCharacter": "移除角色", "addCharacter": "添加角色", "outline": "章节纲要", "chapterTitle": "章节标题", "chapterSummary": "本章发生什么、推进了什么",
+    "phase_opening": "开端", "phase_rising": "发展", "phase_climax": "高潮", "phase_resolution": "收束", "edit": "修订设定与纲要", "save": "保存新版本", "saving": "正在保存…", "cancel": "取消", "invalid": "请补全至少两名角色和三章有效纲要后再保存。", "generating": "小说正在生成中，完成后再修订设定。", "unavailable": "这部作品没有可修订的长篇设定。", "saveFailed": "设定保存失败，请稍后重试。"
+  },
   "novelBrief": {
     "novelSummary": "小说创意构思（可展开 / 可修订）",
     "expandPack": "类型骨架",
