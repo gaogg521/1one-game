@@ -248,12 +248,20 @@ export async function getLegacyCreativeProjectSnapshot(input: {
   if (!project || project.ownerKey !== input.ownerKey) return null;
 
   const revision = project.revisions[0];
-  const acceptedRevision = project.acceptedRevisionId
-    ? await prisma.creativeRevision.findUnique({
-      where: { id: project.acceptedRevisionId },
-      select: { id: true, sequence: true, status: true, summary: true, finalizedAt: true },
-    })
-    : null;
+  const [acceptedRevision, recentRevisions] = await Promise.all([
+    project.acceptedRevisionId
+      ? prisma.creativeRevision.findUnique({
+          where: { id: project.acceptedRevisionId },
+          select: { id: true, sequence: true, cause: true, status: true, summary: true, finalizedAt: true },
+        })
+      : null,
+    prisma.creativeRevision.findMany({
+      where: { creativeProjectId: project.id },
+      orderBy: { sequence: "desc" },
+      take: 6,
+      select: { id: true, sequence: true, cause: true, status: true, summary: true, finalizedAt: true },
+    }),
+  ]);
   return {
     project: {
       id: project.id,
@@ -262,6 +270,7 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       visibility: project.visibility,
       acceptedRevisionId: project.acceptedRevisionId,
       acceptedRevision,
+      recentRevisions,
       updatedAt: project.updatedAt,
       evaluation: project.evaluations[0]
         ? {

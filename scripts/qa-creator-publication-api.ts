@@ -47,8 +47,14 @@ async function main() {
       body: JSON.stringify({ prompt: "把公开游戏改成尚未确认的新版本", spec: revisedSpec }),
     });
     assert(revised.ok, `owner refinement must save, got ${revised.status}`);
-    const ownerAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`, { headers })).json() as { spec?: { title?: string } };
+    const ownerAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`, { headers })).json() as {
+      spec?: { title?: string };
+      core?: { revision?: { id?: string }; project?: { acceptedRevision?: { id?: string }; recentRevisions?: Array<{ id?: string }> } };
+    };
     assert(ownerAfterRefine.spec?.title === revisedSpec.title, "owner must see the editable refined version");
+    assert(ownerAfterRefine.core?.project?.recentRevisions?.length === 2, "owner API must expose recent immutable versions");
+    assert(ownerAfterRefine.core?.project?.recentRevisions?.[0]?.id === ownerAfterRefine.core?.revision?.id, "owner API must put the current draft first");
+    assert(ownerAfterRefine.core?.project?.recentRevisions?.[1]?.id === ownerAfterRefine.core?.project?.acceptedRevision?.id, "owner API must retain the confirmed public version");
     await prisma.project.update({ where: { id: game.id }, data: { coverPath: "/covers/qa-unconfirmed-game.jpg" } });
     const publicAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`)).json() as {
       spec?: { title?: string };

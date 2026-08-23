@@ -59,6 +59,10 @@ async function main() {
       coreAfterRefine.acceptedRevisionId === core.acceptedRevisionId,
       "a later generation must not silently replace the author-accepted revision",
     );
+    const historySnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey, legacyType: "project", legacyId: game.id });
+    assert(historySnapshot?.project.recentRevisions?.length === 2, "owner snapshot must expose recent immutable revisions");
+    assert(historySnapshot?.project.recentRevisions?.[0]?.id === newerRevision.creativeRevisionId, "revision history must place the current draft first");
+    assert(historySnapshot?.project.recentRevisions?.[1]?.id === core.acceptedRevisionId, "revision history must retain the confirmed public version");
 
     const unpublished = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "unpublish" });
     assert(unpublished.visibility === "hidden", "owner should be able to unpublish");

@@ -717,7 +717,11 @@
     "draftAhead": "Draf v{current} lebih baharu; pembaca masih melihat v{accepted} yang disahkan.",
     "notConfirmed": "Versi v{sequence} hanya boleh dilihat oleh anda. Terbitkan untuk mengesahkannya kepada pembaca.",
     "publishNote": "Penerbitan mengesahkan draf semasa dan menukar pembaca ke versi ini.",
-    "lastPublication": "Penerbitan terkini: {action} → {visibility}"
+    "lastPublication": "Penerbitan terkini: {action} → {visibility}",
+    "historyTitle": "Versi terkini",
+    "revision": "v{sequence}",
+    "currentMarker": "draf semasa",
+    "confirmedMarker": "versi awam"
   },
   "creatorEngagement": {
     "title": "Maklum balas pembaca",

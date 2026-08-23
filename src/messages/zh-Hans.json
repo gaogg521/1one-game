@@ -717,7 +717,11 @@
     "draftAhead": "当前草稿 v{current} 更新；读者仍在阅读已确认的 v{accepted}。",
     "notConfirmed": "v{sequence} 目前仅自己可见，发布后才会确认给读者。",
     "publishNote": "发布会确认当前草稿，并让读者切换到这个版本。",
-    "lastPublication": "最近发布动作：{action} → {visibility}"
+    "lastPublication": "最近发布动作：{action} → {visibility}",
+    "historyTitle": "最近版本",
+    "revision": "v{sequence}",
+    "currentMarker": "当前草稿",
+    "confirmedMarker": "已确认公开"
   },
   "creatorEngagement": {
     "title": "真实读者反馈",

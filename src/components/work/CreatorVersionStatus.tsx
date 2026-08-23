@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 type Revision = {
   id: string;
   sequence: number;
+  cause?: string;
   status?: string;
   summary?: string | null;
   finalizedAt?: string | null;
@@ -22,6 +23,7 @@ type CreatorCore = {
   project?: {
     acceptedRevisionId?: string | null;
     acceptedRevision?: Revision | null;
+    recentRevisions?: Revision[];
     publications?: Publication[];
   };
 } | null | undefined;
@@ -35,6 +37,7 @@ export function CreatorVersionStatus({ core, className = "" }: { core: CreatorCo
   const accepted = core?.project?.acceptedRevision;
   const currentIsAccepted = Boolean(accepted && accepted.id === current.id);
   const lastPublication = core?.project?.publications?.[0];
+  const recent = core?.project?.recentRevisions ?? [];
 
   return (
     <section className={`rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-xs text-sky-100 ${className}`} data-testid="creator-version-status">
@@ -53,6 +56,21 @@ export function CreatorVersionStatus({ core, className = "" }: { core: CreatorCo
       ) : null}
       {lastPublication ? (
         <p className="mt-1 text-sky-100/65">{t("lastPublication", { action: lastPublication.action, visibility: lastPublication.visibility })}</p>
+      ) : null}
+      {recent.length > 1 ? (
+        <div className="mt-2 border-t border-sky-300/15 pt-2">
+          <p className="font-medium text-sky-100/85">{t("historyTitle")}</p>
+          <ol className="mt-1 space-y-1 text-sky-100/65">
+            {recent.map((revision) => (
+              <li key={revision.id} className="flex flex-wrap gap-x-1">
+                <span>{t("revision", { sequence: revision.sequence })}</span>
+                {revision.id === current.id ? <span className="text-sky-200">· {t("currentMarker")}</span> : null}
+                {revision.id === accepted?.id ? <span className="text-emerald-200">· {t("confirmedMarker")}</span> : null}
+                {revision.summary ? <span className="truncate">· {revision.summary}</span> : null}
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
     </section>
   );

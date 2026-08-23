@@ -627,3 +627,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 作者点击发布的同一数据库事务现在会为该已确认 revision 写入 `publication_display` 不可变 artifact，保存当时的标题、提示词与封面；小说额外保存简介和篇幅档位，漫画额外保存关联小说标题。后续草稿/legacy row 的显示字段变化不会反向改写公开页。
 - 游戏、小说、漫画的匿名详情 API 会优先读取确认 revision 的内容 artifact 与发布展示快照；历史公开作品没有该快照时安全回退 legacy 字段，作者本人继续始终读取当前可编辑稿。
 - 验证：`qa:creator-publication` 覆盖发布事务的展示快照；隔离 production build 通过（仅保留既有动态文件追踪性能警告）；在该构建启动的真实 HTTP `qa:creator-publication:http` 覆盖发布后修改游戏 title/prompt/cover/spec，匿名仍只读确认版本，`qa:literary-engagement-api` 同步覆盖小说/漫画确认版本和阅读事件。
+
+## P25 第一段：作者近期版本时间线（2026-08-23）
+
+- Owner Core snapshot 现在额外返回最近 6 个 immutable revision（版本号、原因、状态、摘要、完成时间）；确认版本仍单独保留，避免历史列表的排序或截断改变公开锚点语义。
+- 三种作品复用的“发布版本”卡现在显示近期版本时间线，明确标出当前草稿与已确认公开版本；该信息只在作者页面出现，不向匿名读者泄露创作历史。
+- `qa:creator-publication` 覆盖最近版本顺序和确认版本保留；`qa:creator-publication:http` 同步覆盖 owner API 序列化。i18n JSON、定向 ESLint、TypeScript 与隔离 production build 待本批提交前复验。

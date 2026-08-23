@@ -717,7 +717,11 @@
     "draftAhead": "Draft v{current} is newer; public readers remain on confirmed v{accepted}.",
     "notConfirmed": "Version v{sequence} is still private to you. Publish to confirm it for readers.",
     "publishNote": "Publishing confirms the current draft and switches public readers to it.",
-    "lastPublication": "Latest publication: {action} → {visibility}"
+    "lastPublication": "Latest publication: {action} → {visibility}",
+    "historyTitle": "Recent versions",
+    "revision": "v{sequence}",
+    "currentMarker": "current draft",
+    "confirmedMarker": "public version"
   },
   "creatorEngagement": {
     "title": "Reader feedback",
