@@ -71,6 +71,12 @@ async function main() {
     assert(payload.storyPlan?.bible?.coreConflict?.includes("是否留下"), "story-plan API must return saved facts");
     const snapshot = await getLegacyCreativeProjectSnapshot({ ownerKey: marker, legacyType: "novel", legacyId: novel.id });
     assert(snapshot?.revision?.id === payload.core.creativeRevisionId, "story-plan API must point to the latest revision");
+    const detailResponse = await fetch(`http://127.0.0.1:8888/api/novel/${novel.id}`, {
+      headers: { Cookie: `${OWNER_COOKIE}=${marker}`, "x-ui-locale": "zh-Hans" },
+    });
+    const detail = (await detailResponse.json()) as { novel?: { continuity?: { issues?: unknown[] } } };
+    assert(detailResponse.ok, `novel detail API failed with ${detailResponse.status}`);
+    assert(Array.isArray(detail.novel?.continuity?.issues), "owner detail must expose the continuity report");
     console.log("[OK] qa-novel-story-plan-api");
   } finally {
     await prisma.novel.delete({ where: { id: novel.id } });

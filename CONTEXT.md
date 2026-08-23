@@ -405,3 +405,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `PUT /api/novel/:id/story-plan`：必须为作品 owner，使用既有 Zod 规则校验至少两名角色和三条有效章节纲要；生成中的小说拒绝修订，避免与流式长生成相互覆盖。
 - 保存先更新旧长篇元数据，再以 `refine` 写入一条新的完整 Core revision（Bible、纲要、场景、正文）；任何旧 revision 保持不可变。新的 `qa:novel-story-plan-api` 用本机真实 Next HTTP 服务、临时 owner Cookie 与临时作品验证了保存响应和最终 Core snapshot。
 - 本机浏览器控制环境不能连接宿主机 `127.0.0.1:8888`（网络命名空间隔离），故未能进行该面板的浏览器截图/点击验收；TypeScript、定向 ESLint、五语 JSON、creator core/workflow/quality QA 和真实 HTTP API 回归均通过。
+
+### P2 第二段：作者可见连续性审查
+
+- 已复用长篇生成阶段的同一 `checkSegmentConsistency` 规则，在作者详情 API 返回 Story Bible/纲要与现有正文的一致性报告；不新增模型调用，也不静默重写正文。
+- 长篇详情新增“设定与正文一致性”面板，清晰区分阻断与提示，并明确要求作者修订正文或纲要。非作者不会获得报告。
+- `qa:novel-story-plan-api` 扩展为真实 owner HTTP 详情断言，确认保存 Story Plan 后详情确实返回连续性报告；TypeScript、定向 ESLint、五语 JSON、core/workflow/quality QA 全部通过。

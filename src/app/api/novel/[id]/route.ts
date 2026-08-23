@@ -26,6 +26,7 @@ import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/c
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
+import { checkSegmentConsistency } from "@/lib/novel-long-consistency";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -60,6 +61,16 @@ export async function GET(req: Request, ctx: RouteContext) {
         ? ("novel" as const)
         : null;
   const uiLocale = resolveRequestLocaleSync(req);
+  const continuity =
+    isOwner && pipelineMeta
+      ? checkSegmentConsistency({
+          bible: pipelineMeta.bible,
+          expectedChapters: pipelineMeta.chapterPlan.chapters,
+          segmentText: row.content,
+          previousContent: "",
+          uiLocale,
+        })
+      : null;
   const continuation = assessNovelContinuation({
     lengthTier: row.lengthTier,
     content: row.content,
@@ -130,6 +141,7 @@ export async function GET(req: Request, ctx: RouteContext) {
               .map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt })),
             characterRoster,
             creatorCore,
+            continuity,
           }
         : {}),
     },

@@ -640,6 +640,9 @@
     "world": "世界觀", "conflict": "核心衝突", "ending": "結局方向", "tone": "基調與文風", "taboos": "禁忌（每行一條）", "characters": "角色", "characterName": "角色名", "characterRole": "角色定位", "characterTraits": "性格與特徵", "relationships": "關係與動機", "removeCharacter": "移除角色", "addCharacter": "新增角色", "outline": "章節綱要", "chapterTitle": "章節標題", "chapterSummary": "本章發生什麼、推進了什麼",
     "phase_opening": "開端", "phase_rising": "發展", "phase_climax": "高潮", "phase_resolution": "收束", "edit": "修訂設定與綱要", "save": "保存新版本", "saving": "正在保存…", "cancel": "取消", "invalid": "請補全至少兩名角色和三章有效綱要後再保存。", "generating": "小說正在生成中，完成後再修訂設定。", "unavailable": "這部作品沒有可修訂的長篇設定。", "saveFailed": "設定保存失敗，請稍後重試。"
   },
+  "novelContinuity": {
+    "eyebrow": "連續性檢查", "title": "設定與正文一致性", "ready": "目前正文與已保存的設定和章節綱要沒有阻斷性衝突。", "needsReview": "請依下列提示修訂正文或章節綱要；檢查不會靜默改寫作品。", "passed": "通過", "issues": "{count} 項待檢查", "error": "阻斷", "warning": "提示"
+  },
   "novelBrief": {
     "novelSummary": "小說創意構思（可展開 / 可修訂）",
     "expandPack": "類型骨架",

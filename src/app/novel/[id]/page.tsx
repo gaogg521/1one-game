@@ -42,6 +42,8 @@ import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/nov
 import { NovelCharacterRosterPanel } from "@/components/literary/NovelCharacterRosterPanel";
 import { NovelStoryPlanPanel } from "@/components/novel/NovelStoryPlanPanel";
 import type { NovelBible, NovelChapterPlan } from "@/lib/novel-long-pipeline-types";
+import { NovelContinuityPanel } from "@/components/novel/NovelContinuityPanel";
+import type { ConsistencyReport } from "@/lib/novel-long-consistency";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
@@ -69,6 +71,7 @@ interface Novel {
   characterRoster?: ComicCharacterRoster | null;
   quality?: CreatorQualityReport;
   storyPlan?: { bible: NovelBible; chapterPlan: NovelChapterPlan };
+  continuity?: ConsistencyReport | null;
 }
 
 export default function NovelDetailPage() {
@@ -500,6 +503,12 @@ export default function NovelDetailPage() {
                 )
               }
             />
+          </div>
+        ) : null}
+
+        {!editing && novel.isOwner && !isChildrenReader ? (
+          <div className="mx-auto max-w-2xl px-4 pb-3 lg:px-6">
+            <NovelContinuityPanel report={novel.continuity} />
           </div>
         ) : null}
 

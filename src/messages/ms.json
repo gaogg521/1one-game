@@ -640,6 +640,9 @@
     "world": "Dunia", "conflict": "Konflik utama", "ending": "Arah pengakhiran", "tone": "Nada dan gaya", "taboos": "Larangan (satu setiap baris)", "characters": "Watak", "characterName": "Nama", "characterRole": "Peranan", "characterTraits": "Ciri-ciri", "relationships": "Hubungan dan motivasi", "removeCharacter": "Buang watak", "addCharacter": "Tambah watak", "outline": "Rangka bab", "chapterTitle": "Tajuk bab", "chapterSummary": "Apa berlaku dan perkembangan cerita",
     "phase_opening": "Pembukaan", "phase_rising": "Perkembangan", "phase_climax": "Kemuncak", "phase_resolution": "Penyelesaian", "edit": "Semak fakta cerita dan rangka", "save": "Simpan semakan baharu", "saving": "Menyimpan…", "cancel": "Batal", "invalid": "Tambah sekurang-kurangnya dua watak dan tiga bab rangka yang sah sebelum menyimpan.", "generating": "Novel ini masih dijana. Semak pelan cerita selepas ia siap.", "unavailable": "Karya ini tiada pelan cerita panjang yang boleh disunting.", "saveFailed": "Pelan cerita tidak dapat disimpan. Sila cuba lagi."
   },
+  "novelContinuity": {
+    "eyebrow": "Semakan kesinambungan", "title": "Fakta cerita dan manuskrip", "ready": "Manuskrip ini tiada konflik yang menyekat dengan fakta cerita dan rangka bab yang disimpan.", "needsReview": "Semak manuskrip atau rangka daripada dapatan ini. Semakan ini tidak akan menulis semula karya anda secara senyap.", "passed": "Lulus", "issues": "{count} dapatan", "error": "Menghalang", "warning": "Semak"
+  },
   "novelBrief": {
     "novelSummary": "Brief kreatif novel (kembang / semak)",
     "expandPack": "Rangka genre",
