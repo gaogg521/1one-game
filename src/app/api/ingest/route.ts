@@ -11,7 +11,7 @@ import { getReferenceImageStorage } from "@/lib/assets/reference-image-storage.f
 import { cacheIngestReferenceBuffer } from "@/lib/reference-ingest-server-cache";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import { describeReferenceImage } from "@/lib/vision-reference";
-import { localizedApiErrorText, localizedJsonError } from "@/lib/api/localized-error";
+import { localizedJsonError } from "@/lib/api/localized-error";
 import { apiKeyedErrorText, isApiKeyedError } from "@/lib/api/api-keyed-error";
 import { ingestWarningMessage } from "@/lib/i18n/progress-message";
 import {
@@ -259,13 +259,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       warn("cloudUploadUrlMissing");
     }
 
-    if (
-      referenceAssets.some((h) => h.tier === "persistent" && !h.persisted) &&
-      assetStorage.mode === "cloud" &&
-      process.env.REFERENCE_ASSET_CLOUD_UPLOAD_URL?.trim()
-    ) {
-      warn("cloudUploadIncomplete");
-    }
+    if (referenceAssets.some((h) => h.notice === "cloud_upload_failed")) warn("cloudUploadFailed");
+    if (referenceAssets.some((h) => h.notice === "cloud_upload_invalid_response")) warn("cloudUploadInvalidResponse");
 
     return NextResponse.json({
       text: text || "",

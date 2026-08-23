@@ -586,3 +586,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - Ops Health 现新增“小说生产演练”检查。它只检查生效的 `novel` provider/模型路由和 queued/running GenerationJob 数量：路由/模型缺失为 fail，队列有积压为 warn，配置就绪也保持 warn，明确要求管理员先主动运行 provider 探测、再以已批准的小额额度进行一次真实续写演练。
 - 预检绝不读取/返回密钥，绝不发送模型请求，也不把配置存在伪装为生产模型成功。它将 `qa:novel-continuation-job-api` 暴露为可操作的本地恢复闭环检查。
 - `qa:generation-rehearsal-readiness` 覆盖缺失路由、队列积压、配置待 probe，并确认 Ops Health 实际暴露该项；五语 JSON 与定向 ESLint 通过。真实模型演练仍需在确认额度/供应商规则后单独执行。
+
+## P18 第一段：跨任务参考图云持久化（2026-08-23）
+
+- `REFERENCE_ASSET_STORAGE=cloud` 不再是占位：配置 `REFERENCE_ASSET_CLOUD_UPLOAD_URL` 后，摄取服务会以 multipart 上传图片与最小元数据（`file`、随机 ref ID、序号、类型、原名、可选用途），只接受响应 `{ publicUrl: "https://..." }` 后才返回 `persistent` 句柄。认证既支持 `Bearer token`，也支持 `X-Api-Key: token` 形式的自定义 header。
+- 上传服务不可用、超时、重定向、非成功状态或未提供安全 HTTPS URL 时，句柄明确降级为 session-only 并给出不含端点/密钥的可见警告；绝不把未落盘图片表示为持久化资产，也不阻断文本/文档摄取。
+- `qa:reference-image-cloud-storage` 覆盖未配置安全降级、multipart 字节/元数据、认证透传、成功持久化、非 HTTPS 响应和 503 降级。生产启用前仍需业务提供实际对象存储上传端点与凭据。
