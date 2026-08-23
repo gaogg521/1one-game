@@ -2,6 +2,7 @@ import type { Project } from "@prisma/client";
 import { assessGameCreatorQuality } from "@/lib/creator-quality";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { parseGameSpec } from "@/lib/game-spec";
+import { buildGameDesignGraphs } from "@/lib/creator-core/game-design-graph";
 import {
   createCreativeArtifact,
   createCreativeRevision,
@@ -19,6 +20,7 @@ export async function mirrorGameToCreatorCore(input: {
   const spec = parseGameSpec(JSON.parse(input.project.specJson));
   const brief = parseStoredCreativeBrief(input.project.creativeBriefJson);
   const quality = assessGameCreatorQuality(spec, brief).report;
+  const { sceneGraph, behaviorGraph } = buildGameDesignGraphs(spec);
   const project = await ensureLegacyCreativeProject({
     ownerKey: input.project.ownerKey,
     kind: "game",
@@ -41,6 +43,14 @@ export async function mirrorGameToCreatorCore(input: {
   await createCreativeArtifact({
     ...revisionInput,
     artifact: { kind: "game_spec", mediaType: "json", content: spec, metadata: { templateId: spec.templateId } },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: { kind: "scene_graph", mediaType: "json", content: sceneGraph, metadata: { templateId: spec.templateId } },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: { kind: "behavior_graph", mediaType: "json", content: behaviorGraph, metadata: { templateId: spec.templateId } },
   });
   if (brief) {
     await createCreativeArtifact({

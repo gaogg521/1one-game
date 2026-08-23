@@ -48,7 +48,7 @@ async function main() {
 
     const publicDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`);
     const publicDetail = (await publicDetailResponse.json()) as { core?: unknown };
-    assert(publicDetailResponse.ok && publicDetail.core === undefined, "non-owner detail must not expose Core snapshot");
+    assert(publicDetailResponse.status === 404 && publicDetail.core === undefined, "unpublished game must be hidden from non-owners");
     console.log("[OK] qa-game-core-api");
   } finally {
     if (projectId) await prisma.project.delete({ where: { id: projectId } }).catch(() => undefined);

@@ -2793,6 +2793,7 @@
     "recentRefineTitle": "Recent refinements (newest last)",
     "coreRevision": "Saved creator revision v{sequence}",
     "coreRevisionReady": "Playable design, quality evaluation, and intent are archived",
+    "designGraphReady": "Structured design: {scenes} scenes · {behaviors} behavior nodes",
     "assetJobReady": "Art assets can be completed in the background without interrupting play.",
     "assetJobStart": "Complete art assets",
     "assetJobQueueing": "Queueing…",

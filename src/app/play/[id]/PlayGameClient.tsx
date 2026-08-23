@@ -28,10 +28,18 @@ import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
-type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null };
+type CoreArtifact = { kind: string; content: unknown };
+type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
 type CoreSnapshot = { revision: CoreRevision | null };
 type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
 type AssetJob = { id: string; status: "queued" | "running" | "retrying"; attempts: number; maxAttempts: number; progress: { percent?: number; stage?: string } | null };
+
+function graphItemCount(revision: CoreRevision | null | undefined, kind: string, key: "scenes" | "nodes"): number | null {
+  const content = revision?.artifacts.find((artifact) => artifact.kind === kind)?.content;
+  if (!content || typeof content !== "object") return null;
+  const value = (content as Record<string, unknown>)[key];
+  return Array.isArray(value) ? value.length : null;
+}
 
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
@@ -672,6 +680,14 @@ export function PlayGameClient({ id }: { id: string }) {
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
+                  {graphItemCount(core.revision, "scene_graph", "scenes") !== null && graphItemCount(core.revision, "behavior_graph", "nodes") !== null ? (
+                    <p className="mt-1 text-sky-100/70" data-testid="game-design-graph">
+                      {t("designGraphReady", {
+                        scenes: graphItemCount(core.revision, "scene_graph", "scenes") ?? 0,
+                        behaviors: graphItemCount(core.revision, "behavior_graph", "nodes") ?? 0,
+                      })}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               {meta.isOwner ? (

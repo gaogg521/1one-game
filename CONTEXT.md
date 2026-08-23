@@ -494,3 +494,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 现在支付能力显式分为 `development` 与 `unavailable`：只有 `PAYMENT_DEV_MODE=1` 才能创建 `provider=dev` 订单和使用模拟完成；其他环境的订单 API 在写库前返回 `paymentUnavailable`，账单页禁用购买并说明支付接入中。
 - 微信/支付宝 notify 在非开发模式一律拒绝，开发模拟也只会完成 `provider=dev` 订单；保留的 V2 MD5 函数不再把开发模式当成签名绕过。后续真实支付必须实现官方 merchant checkout、证书/平台公钥轮换、回调验签、金额/商户号核对与退款/对账后，才可开放任一生产支付入口。
 - 新增 `qa:payment-safety`：验证生产态不创建订单、显式开发态仅创建 dev pending 订单并可模拟完成，测试数据会清理。
+
+## P8 第一段：游戏结构化设计资产（2026-08-23）
+
+- 每次游戏镜像进入 Creator Core 时，除原始 `game_spec`、质量报告和 playable route 外，还会从同一份已校验的 GameSpec 确定性生成不可变 `scene_graph` 与 `behavior_graph` artifact。场景图明确开场/主循环/结算与玩家、威胁、奖励、目标；行为图明确输入、生成调度、碰撞/奖励结算、进度与完成流转。
+- 图中的移速、生成间隔、生命、目标分全部直接来自可运行 GameSpec，不引入第二套运行时或与试玩脱节的伪配置。作者试玩页会在版本卡中显示当前版本的场景数和行为节点数；非作者仍不会得到 Core snapshot。
+- `qa:creator-core` 验证两个图 artifact 与 6 节点/6 边的行为流实际落库；`qa:game-core-api` 的真实 HTTP 用例同时更新为验证默认未发布作品对非 owner 返回 404。creator-quality、game-vertical-slice、定向 ESLint、五语 JSON 和完整 production build 均通过。

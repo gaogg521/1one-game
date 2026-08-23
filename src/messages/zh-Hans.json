@@ -2790,6 +2790,7 @@
     "recentRefineTitle": "最近精炼（最新在后）",
     "coreRevision": "已保存的创作版本 v{sequence}",
     "coreRevisionReady": "可试玩设计、质量评估与创作意图已归档",
+    "designGraphReady": "结构化设计：{scenes} 个场景 · {behaviors} 个行为节点",
     "assetJobReady": "美术资产可在后台补齐，不会中断试玩。",
     "assetJobStart": "补齐美术资产",
     "assetJobQueueing": "正在入队…",

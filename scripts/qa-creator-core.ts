@@ -188,6 +188,11 @@ async function main() {
       const gameArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
       assert(gameArtifacts.some((artifact) => artifact.kind === "game_spec"), "game mirror must retain the executable spec");
       assert(gameArtifacts.some((artifact) => artifact.kind === "evaluation"), "game mirror must retain creator quality evidence");
+      const sceneGraph = gameArtifacts.find((artifact) => artifact.kind === "scene_graph");
+      const behaviorGraph = gameArtifacts.find((artifact) => artifact.kind === "behavior_graph");
+      assert(sceneGraph && behaviorGraph, "game mirror must retain inspectable scene and behavior graphs");
+      const parsedBehavior = JSON.parse(behaviorGraph.contentJson ?? "{}") as { nodes?: unknown[]; edges?: unknown[] };
+      assert(parsedBehavior.nodes?.length === 6 && parsedBehavior.edges?.length === 6, "behavior graph must preserve executable control flow");
       const edited = await prisma.project.update({ where: { id: game.id }, data: { prompt: "霓虹飞船穿越机械舰队的终局" } });
       const refinedGame = await mirrorGameToCreatorCore({ project: edited, cause: "refine" });
       const gameSnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey: marker, legacyType: "project", legacyId: game.id });
