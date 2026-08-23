@@ -1,5 +1,6 @@
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { parseComicImageUrls, type ComicDocument } from "@/lib/comic-format";
+import { parseComicDirectorPack } from "@/lib/comic-director-types";
 import {
   buildCreatorQualityReport,
   type CreatorQualityEngagement,
@@ -124,15 +125,85 @@ export function assessNovelCreatorQuality(input: {
   return { report: { ...buildCreatorQualityReport({ kind: "novel", score, evidence }), units } };
 }
 
+type ComicStoryboardIntegrity = {
+  structured: boolean;
+  ok: boolean;
+  evidence: string[];
+};
+
+/**
+ * Validate only durable storyboard references, never inferred image quality.
+ * A long-director comic can be repaired when an author sees an unknown
+ * character/location, a missing shot binding, or regressed scene order.
+ */
+function assessComicStoryboardIntegrity(doc: ComicDocument): ComicStoryboardIntegrity {
+  const panels = doc.pages.flatMap((page) => page.panels);
+  const director = parseComicDirectorPack(doc.director);
+  const hasPanelBindings = panels.some(
+    (panel) => panel.characterIds !== undefined || panel.locationId !== undefined || panel.shotType !== undefined,
+  );
+  const structured = doc.pipeline === "long_director" || Boolean(doc.director) || hasPanelBindings;
+  if (!structured) return { structured: false, ok: true, evidence: ["storyboard_integrity:light_pipeline"] };
+
+  const issues: string[] = [];
+  if (!director) {
+    issues.push("director_pack_invalid");
+  } else {
+    const characterIds = new Set(director.characters.map((character) => character.id));
+    const locationIds = new Set(director.locations.map((location) => location.id));
+    const unknownCharacters = new Set<string>();
+    const unknownLocations = new Set<string>();
+    let missingBindings = 0;
+    let previousScene = -1;
+    let sceneRegressions = 0;
+    let previousShot: string | undefined;
+    let sameShotRun = 0;
+    let repetitiveShotRuns = 0;
+
+    for (const panel of panels) {
+      if (!panel.characterIds || !panel.locationId || !panel.shotType) missingBindings += 1;
+      for (const characterId of panel.characterIds ?? []) {
+        if (!characterIds.has(characterId)) unknownCharacters.add(characterId);
+      }
+      if (panel.locationId && !locationIds.has(panel.locationId)) unknownLocations.add(panel.locationId);
+      if (panel.scene !== undefined) {
+        if (previousScene > panel.scene) sceneRegressions += 1;
+        previousScene = panel.scene;
+      }
+      if (panel.shotType && panel.shotType === previousShot) {
+        sameShotRun += 1;
+        if (sameShotRun === 4) repetitiveShotRuns += 1;
+      } else {
+        previousShot = panel.shotType;
+        sameShotRun = 1;
+      }
+    }
+    const beatPages = new Set(director.pageBeats.map((beat) => beat.page));
+    const missingBeats = doc.pages.filter((page) => !beatPages.has(page.page)).length;
+    if (missingBindings) issues.push(`storyboard_binding_missing:${missingBindings}/${panels.length}`);
+    if (unknownCharacters.size) issues.push(`storyboard_unknown_characters:${unknownCharacters.size}`);
+    if (unknownLocations.size) issues.push(`storyboard_unknown_locations:${unknownLocations.size}`);
+    if (missingBeats) issues.push(`storyboard_page_beats_missing:${missingBeats}/${doc.pages.length}`);
+    if (sceneRegressions) issues.push(`storyboard_scene_order_regressed:${sceneRegressions}`);
+    if (repetitiveShotRuns) issues.push(`storyboard_shot_variety_needs_review:${repetitiveShotRuns}`);
+  }
+
+  return {
+    structured: true,
+    ok: issues.length === 0,
+    evidence: ["storyboard_integrity:structured", ...issues],
+  };
+}
+
 function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
   const panels = doc.pages.flatMap((page) => page.panels);
   const renderedPanels = panels.filter((panel) => Boolean(panel.imageUrl?.trim())).length;
   const readablePanels = panels.filter(
     (panel) => panel.caption.trim().length > 0 && panel.caption.length <= 180 && panel.prompt.trim().length > 0,
   ).length;
-  const anchored = Boolean(
-    doc.director || doc.characterRoster?.characters?.length || doc.characterSheetUrls?.length,
-  );
+  const director = parseComicDirectorPack(doc.director);
+  const anchored = Boolean(director || doc.characterRoster?.characters?.length || doc.characterSheetUrls?.length);
+  const integrity = assessComicStoryboardIntegrity(doc);
   const hasPageRhythm = doc.pages.length >= 2 || panels.length >= 4;
   let score = 0;
   if (doc.pages.length > 0) score += 20;
@@ -148,11 +219,16 @@ function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
     `rendered_panels:${renderedPanels}/${panels.length}`,
     `readable_panels:${readablePanels}/${panels.length}`,
     `visual_anchors:${anchored ? "present" : "missing"}`,
+    ...integrity.evidence,
   ];
   if (!anchored) evidence.push("character_scene_anchor_needs_review");
   if (renderedPanels < panels.length) evidence.push("panel_rendering_incomplete");
   if (readablePanels < panels.length) evidence.push("panel_text_or_prompt_needs_review");
-  return buildCreatorQualityReport({ kind: "comic", score, evidence });
+  const report = buildCreatorQualityReport({ kind: "comic", score, evidence });
+  if (integrity.structured && !integrity.ok && report.verdict !== "blocked") {
+    return { ...report, verdict: "needs_polish" };
+  }
+  return report;
 }
 
 export function assessComicCreatorQuality(rawDocument: string): CreatorQualityAssessment {

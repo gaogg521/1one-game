@@ -500,3 +500,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 每次游戏镜像进入 Creator Core 时，除原始 `game_spec`、质量报告和 playable route 外，还会从同一份已校验的 GameSpec 确定性生成不可变 `scene_graph` 与 `behavior_graph` artifact。场景图明确开场/主循环/结算与玩家、威胁、奖励、目标；行为图明确输入、生成调度、碰撞/奖励结算、进度与完成流转。
 - 图中的移速、生成间隔、生命、目标分全部直接来自可运行 GameSpec，不引入第二套运行时或与试玩脱节的伪配置。作者试玩页会在版本卡中显示当前版本的场景数和行为节点数；非作者仍不会得到 Core snapshot。
 - `qa:creator-core` 验证两个图 artifact 与 6 节点/6 边的行为流实际落库；`qa:game-core-api` 的真实 HTTP 用例同时更新为验证默认未发布作品对非 owner 返回 404。creator-quality、game-vertical-slice、定向 ESLint、五语 JSON 和完整 production build 均通过。
+
+## P9 第一段：漫画导演分镜完整性门禁（2026-08-23）
+
+- 漫画质量评估不再把任意非空 `director` 对象误判为视觉锚点。长导演分镜会验证导演包 schema、每格角色/地点/镜头绑定、角色和地点 ID、每页节拍覆盖、场景序号前进和连续同镜头过多等确定性约束。
+- 这些问题不会被静默忽略：已渲染但绑定损坏的分镜会明确降为 `needs_polish`，并返回 `storyboard_unknown_characters`、`storyboard_scene_order_regressed` 等可修复证据；轻量流程仍保持兼容，不把没有导演包的旧作品误阻断。
+- `qa:creator-quality` 新增完整导演包与损坏绑定两类用例；真实 `qa:comic-panel-job-api`、creator publication/workflow、comic-novel product rules、定向 ESLint 和完整 production build 均通过。
