@@ -1,6 +1,7 @@
 import { ArtifactWritePayloadSchema, ComicPanelJobPayloadSchema } from "@/lib/creator-core/types";
 import { createCreativeArtifact } from "@/lib/creator-core/repository";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
+import { generateComicCover } from "@/lib/cover-generation";
 import {
   claimGenerationJob,
   completeGenerationJob,
@@ -30,15 +31,32 @@ async function executeComicPanelJob(job: { id: string; payloadJson: string }, wo
     await prisma.comic.update({ where: { id: comic.id }, data: { imageUrls: serializeComicPanels(doc) } });
   }
   const context = await resolveComicStoryContext(comic, payload.uiLocale as import("@/i18n/routing").AppLocale);
+  const fullRegenerate = payload.regenerate && !payload.page;
+  let coverPath = comic.coverPath;
+  if (fullRegenerate && comic.novelId) {
+    const novel = await prisma.novel.findUnique({
+      where: { id: comic.novelId },
+      select: { summary: true, content: true },
+    });
+    const regeneratedCover = await generateComicCover(
+      comic.id,
+      comic.title,
+      novel?.summary ?? "",
+      novel?.content?.slice(0, 800) ?? comic.prompt ?? "",
+      context.genre,
+    );
+    if (regeneratedCover) coverPath = regeneratedCover;
+  }
   const timer = setInterval(() => {
     void heartbeatGenerationJob(job.id, workerId, { percent: 5, stage: "rendering", detail: "waiting for image provider" });
   }, 25_000);
   try {
     const result = await renderComicPanels(doc, {
       onlyMissing: true,
-      coverPath: comic.coverPath,
+      coverPath,
       storyGenre: context.genre,
       storyContext: { title: context.title, summary: context.summary },
+      skipStyleRefs: fullRegenerate && !doc.characterSheetUrls?.length,
       director: doc.director,
       characterSheetUrls: doc.characterSheetUrls,
       comicId: comic.id,

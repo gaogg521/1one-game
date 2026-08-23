@@ -26,6 +26,44 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 type PanelsBody = { regenerate?: boolean; page?: number; panel?: number; durable?: boolean };
 
+/** Owner-visible recovery point for a page reopened while its durable render is running. */
+export async function GET(req: Request, ctx: RouteContext) {
+  const ownerKey = await getOwnerKey();
+  if (!ownerKey) return localizedJsonError(req, "unauthorized", 401);
+  const { id } = await ctx.params;
+  const comic = await prisma.comic.findUnique({ where: { id }, select: { ownerKey: true } });
+  if (!comic || comic.ownerKey !== ownerKey) return localizedJsonError(req, "notFound", 404);
+
+  const candidates = await prisma.generationJob.findMany({
+    where: {
+      type: "comic_panel",
+      status: { in: ["queued", "running", "retrying"] },
+      project: { ownerKey },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  const job = candidates.find((candidate) => {
+    try {
+      return JSON.parse(candidate.payloadJson).comicId === id;
+    } catch {
+      return false;
+    }
+  });
+  if (!job) return NextResponse.json({ job: null });
+  let progress: unknown = null;
+  try { progress = JSON.parse(job.progressJson ?? "null"); } catch { /* safe null for corrupt progress */ }
+  return NextResponse.json({
+    job: {
+      id: job.id,
+      status: job.status,
+      attempts: job.attempts,
+      maxAttempts: job.maxAttempts,
+      progress,
+    },
+  });
+}
+
 export async function POST(req: Request, ctx: RouteContext) {
   const uiLocale = resolveRequestLocaleSync(req);
   const pm = (key: string, params?: Record<string, string | number | undefined | null>) =>
@@ -71,7 +109,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const before = countPanelsWithImages(doc);
-  if (!body.regenerate && before.withImage >= before.total) {
+  if (!body.durable && !body.regenerate && before.withImage >= before.total) {
     return NextResponse.json({
       ok: true,
       comic: { id, imageUrls: row.imageUrls },

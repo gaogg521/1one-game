@@ -428,3 +428,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `GenerationJob` 增加可续租 heartbeat；`comic_panel` worker 校验 payload/作者归属、支持全册/页/单格重绘、每格完成持久化进度和图片，结束后将最终 Comic 再镜像为新的 Core revision。图像服务等待期间 25 秒续租，避免 90 秒默认 lease 被误回收。
 - 非流式 `POST /api/comic/:id/panels` 现支持 `durable:true`，返回 `202` 与幂等任务 ID；已有实时 SSE 渲染体验保持兼容。`GET /api/jobs/:id` 修复为优先读取新任务并按 Core Project owner 鉴权，返回安全的进度、重试与错误摘要。
 - `qa:creator-core` 现验证已完成图片的 `comic_panel` 任务完成“入队→认领→执行→完成→最终 Core revision”闭环，不调用付费模型。TypeScript、定向 ESLint 和 Prisma 校验均通过；缺图的真实供应商调用未用假结果替代。
+
+### P3 第四段：生产消费者与作者任务可见性
+
+- 新增独立 `operone-generation-worker.timer`：每次通过本机 loopback 只消费一个 `GenerationJob`，`OnUnitInactiveSec=15` 确保长图像任务不会重叠；凭据仅从服务器 `.env` 读取，首次部署自动生成 `JOB_WORKER_SECRET`，不经过公网代理或写入 unit 文件。常规完整部署和 Linux 一键部署都会安装/启用该 timer。
+- 漫画页仍保留 SSE 快速生成，同时提供“后台可恢复渲染”入口。作者重新打开作品时，`GET /api/comic/:id/panels` 会按 Core Project owner 仅返回当前活跃的 `comic_panel` 任务及脱敏进度；页面轮询该状态并在后台渲染期间禁止与 worker 冲突的编辑/重绘。
+- durable worker 的全册重绘现在与同步路径保持封面重生和风格参考跳过规则一致。新 `qa:comic-panel-job-api` 以真实本地 Next HTTP 服务验证 `202 入队 → 作者恢复任务 → worker 完成/100% → 非作者 403 → 活跃任务消失`；测试用已有图片分镜避免触发付费供应商。TypeScript、定向 ESLint、shell 语法、五语 JSON 与 `qa:creator-core` 均通过。

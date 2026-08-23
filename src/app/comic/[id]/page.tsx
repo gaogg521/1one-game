@@ -49,6 +49,14 @@ interface Comic {
   quality?: CreatorQualityReport;
 }
 
+type DurablePanelJob = {
+  id: string;
+  status: "queued" | "running" | "retrying";
+  attempts: number;
+  maxAttempts: number;
+  progress: { percent?: number; stage?: string; detail?: string } | null;
+};
+
 export default function ComicDetailPage() {
   const tr = useTranslations("comicRead");
   const tStory = useTranslations("storyboardOutline");
@@ -95,7 +103,9 @@ export default function ComicDetailPage() {
     message: string;
     elapsedMs?: number;
   } | null>(null);
+  const [durableJob, setDurableJob] = useState<DurablePanelJob | null>(null);
   const [reorderBusy, setReorderBusy] = useState(false);
+  const workBusy = rendering || Boolean(durableJob);
 
   const loadComic = useCallback(async () => {
     if (!id) return;
@@ -138,12 +148,39 @@ export default function ComicDetailPage() {
     }
   }, [loadComic, tr]);
 
+  const loadDurableJob = useCallback(async () => {
+    if (!id) return null;
+    const res = await fetch(`/api/comic/${encodeURIComponent(id as string)}/panels`, {
+      headers: mergeLocaleHeaders(locale),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { job?: DurablePanelJob | null };
+    setDurableJob(data.job ?? null);
+    return data.job ?? null;
+  }, [id, locale]);
+
   useEffect(() => {
     if (!id) return;
     queueMicrotask(() => {
       void runLoadComic();
     });
   }, [id, runLoadComic]);
+
+  useEffect(() => {
+    if (!comic?.isOwner) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const refresh = async () => {
+      const active = await loadDurableJob().catch(() => null);
+      if (!cancelled && active) timer = window.setTimeout(() => void refresh(), 3000);
+      if (!cancelled && !active) void runLoadComic();
+    };
+    void refresh();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [comic?.isOwner, comic?.id, loadDurableJob, runLoadComic]);
 
   const panelStats = useMemo(() => {
     let total = 0;
@@ -364,9 +401,39 @@ export default function ComicDetailPage() {
     [comic, runLoadComic, applyComicDoc, panelStats.total, panelStats.withImage, tr, locale],
   );
 
+  const handleDurableRenderPanels = useCallback(
+    async (opts?: { regenerate?: boolean; page?: number; panel?: number }) => {
+      if (!comic || durableJob) return;
+      setError("");
+      setRenderMsg(null);
+      try {
+        const res = await fetch(`/api/comic/${comic.id}/panels`, {
+          method: "POST",
+          headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
+          body: JSON.stringify({ durable: true, ...opts }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          job?: { id: string; status: DurablePanelJob["status"] };
+          error?: string;
+          errorKey?: string;
+          errorParams?: Record<string, string | number>;
+        };
+        if (!res.ok || !data.job) {
+          setError(resolveClientApiError(locale, data, "comicPanelRenderFailed"));
+          return;
+        }
+        setDurableJob({ ...data.job, attempts: 0, maxAttempts: 3, progress: { percent: 0, stage: "queued" } });
+        setRenderMsg(tr("durableQueued"));
+      } catch {
+        setError(tr("renderRequestFailed"));
+      }
+    },
+    [comic, durableJob, locale, tr],
+  );
+
   const confirmRegeneratePanel = useCallback(
     (pageNumber: number, panelNumber: number) => {
-      if (!comic || rendering) return;
+      if (!comic || workBusy) return;
       if (
         !window.confirm(tr("confirmRegenPanel", { page: pageNumber, panel: panelNumber }))
       ) {
@@ -374,12 +441,12 @@ export default function ComicDetailPage() {
       }
       void handleRenderPanels({ regenerate: true, page: pageNumber, panel: panelNumber });
     },
-    [comic, rendering, handleRenderPanels, tr],
+    [comic, workBusy, handleRenderPanels, tr],
   );
 
   const patchStoryboard = useCallback(
     async (payload: Record<string, unknown>) => {
-      if (!id || !comic?.isOwner || reorderBusy || rendering) return null;
+      if (!id || !comic?.isOwner || reorderBusy || workBusy) return null;
       setReorderBusy(true);
       setError("");
       try {
@@ -403,7 +470,7 @@ export default function ComicDetailPage() {
         setReorderBusy(false);
       }
     },
-    [id, comic?.isOwner, reorderBusy, rendering, locale, tStory],
+    [id, comic?.isOwner, reorderBusy, workBusy, locale, tStory],
   );
 
   const handleMovePanel = useCallback(
@@ -701,16 +768,37 @@ export default function ComicDetailPage() {
                   ) : null}
                 </div>
               )}
-              {comic.isOwner && !rendering ? (
+              {durableJob ? (
+                <div className="mt-3 rounded-lg border border-sky-400/30 bg-sky-950/30 px-3 py-2 text-sm text-sky-100" data-testid="comic-durable-job">
+                  <p className="font-medium">{tr("durableStatus", { status: durableJob.status })}</p>
+                  <p className="mt-1 text-xs text-sky-100/75">
+                    {tr("durableProgress", {
+                      percent: durableJob.progress?.percent ?? 0,
+                      detail: durableJob.progress?.detail ?? durableJob.progress?.stage ?? "—",
+                      attempts: durableJob.attempts,
+                      maxAttempts: durableJob.maxAttempts,
+                    })}
+                  </p>
+                </div>
+              ) : comic.isOwner && !rendering ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {panelStats.missing > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleRenderPanels()}
-                      className="rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-sm font-medium text-white"
-                    >
-                      {panelStats.withImage > 0 ? tr("continueRender") : tr("startRender")}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleRenderPanels()}
+                        className="rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-sm font-medium text-white"
+                      >
+                        {panelStats.withImage > 0 ? tr("continueRender") : tr("startRender")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDurableRenderPanels()}
+                        className="rounded-lg border border-sky-400/50 bg-sky-950/40 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-950/70"
+                      >
+                        {tr("durableRender")}
+                      </button>
+                    </>
                   ) : null}
                   {panelStats.withImage > 0 ? (
                     <>
@@ -764,7 +852,7 @@ export default function ComicDetailPage() {
                   <button
                     type="button"
                     onClick={() => confirmRegenerate("page")}
-                    disabled={rendering}
+                    disabled={workBusy}
                     className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 font-medium text-amber-300 hover:bg-amber-400/15 disabled:opacity-50"
                   >
                     {tr("regenPage")}
@@ -783,7 +871,7 @@ export default function ComicDetailPage() {
                 currentPage={currentPage}
                 onSelectPage={setCurrentPage}
                 isOwner={Boolean(comic.isOwner)}
-                rendering={rendering}
+                rendering={workBusy}
                 onRegeneratePanel={confirmRegeneratePanel}
                 onMovePanel={comic.isOwner ? handleMovePanel : undefined}
                 onAddPanel={comic.isOwner ? handleAddPanel : undefined}
@@ -821,7 +909,7 @@ export default function ComicDetailPage() {
                 (layoutId === "picture_book_5" ? (
                   <ComicPictureBookPageGrid
                     page={page}
-                    rendering={rendering}
+                    rendering={workBusy}
                     stylePreset={stylePreset}
                     canRemovePanel={Boolean(comic.isOwner)}
                     onRemovePanel={
@@ -832,7 +920,7 @@ export default function ComicDetailPage() {
                 ) : (
                   <ComicEightGridPageGrid
                     page={page}
-                    rendering={rendering}
+                    rendering={workBusy}
                     stylePreset={stylePreset}
                     canRemovePanel={Boolean(comic.isOwner)}
                     onRemovePanel={

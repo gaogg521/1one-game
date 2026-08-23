@@ -61,12 +61,13 @@ def main() -> int:
         "systemctl restart operone || true",
         "sleep 6",
         local_health_check_command(),
+        f"cd {repo} && bash scripts/deploy/install-generation-worker-timer.sh",
     ]
 
     try:
         for i, cmd in enumerate(steps):
             code = run(client, cmd)
-            if code != 0 and i != len(steps) - 1:
+            if code != 0 and i not in (len(steps) - 2,):
                 return code
     finally:
         client.close()

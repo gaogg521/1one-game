@@ -595,6 +595,7 @@ EOF
   fi
 
   wait_for_health 30 || true
+  bash "$OPERONE_DIR/scripts/deploy/install-generation-worker-timer.sh"
 }
 
 ensure_nginx_installed() {
