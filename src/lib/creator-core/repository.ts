@@ -157,6 +157,16 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       visibility: true,
       updatedAt: true,
       ownerKey: true,
+      evaluations: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { verdict: true, score: true, evidenceJson: true, createdAt: true },
+      },
+      publications: {
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        select: { action: true, visibility: true, decision: true, qualityVerdict: true, qualityScore: true, createdAt: true },
+      },
       revisions: {
         orderBy: { sequence: "desc" },
         take: 1,
@@ -193,6 +203,15 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       title: project.title,
       visibility: project.visibility,
       updatedAt: project.updatedAt,
+      evaluation: project.evaluations[0]
+        ? {
+            verdict: project.evaluations[0].verdict,
+            score: project.evaluations[0].score,
+            evidence: parseJson(project.evaluations[0].evidenceJson),
+            createdAt: project.evaluations[0].createdAt,
+          }
+        : null,
+      publications: project.publications,
     },
     revision: revision
       ? {

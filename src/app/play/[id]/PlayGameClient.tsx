@@ -30,7 +30,13 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 type CoreArtifact = { kind: string; content: unknown };
 type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
-type CoreSnapshot = { revision: CoreRevision | null };
+type CoreSnapshot = {
+  revision: CoreRevision | null;
+  project?: {
+    evaluation?: { verdict: string; score: number; evidence: unknown; createdAt: string } | null;
+    publications?: Array<{ action: string; visibility: string; decision: string; createdAt: string }>;
+  };
+};
 type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
 type AssetJob = { id: string; status: "queued" | "running" | "retrying"; attempts: number; maxAttempts: number; progress: { percent?: number; stage?: string } | null };
 
@@ -680,6 +686,16 @@ export function PlayGameClient({ id }: { id: string }) {
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
+                  {core.project?.evaluation ? (
+                    <p className="mt-1 text-sky-100/70" data-testid="game-core-evaluation">
+                      {t("coreQuality", { verdict: core.project.evaluation.verdict, score: core.project.evaluation.score })}
+                    </p>
+                  ) : null}
+                  {core.project?.publications?.[0] ? (
+                    <p className="mt-1 text-sky-100/70" data-testid="game-core-publication">
+                      {t("corePublication", { action: core.project.publications[0].action, visibility: core.project.publications[0].visibility })}
+                    </p>
+                  ) : null}
                   {graphItemCount(core.revision, "scene_graph", "scenes") !== null && graphItemCount(core.revision, "behavior_graph", "nodes") !== null ? (
                     <p className="mt-1 text-sky-100/70" data-testid="game-design-graph">
                       {t("designGraphReady", {

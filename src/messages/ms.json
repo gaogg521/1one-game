@@ -2780,6 +2780,8 @@
     "createWithSamplePrompt": "Create with this prompt in studio →",
     "coreRevision": "Saved creator revision v{sequence}",
     "coreRevisionReady": "Playable design, quality evaluation, and intent are archived",
+    "coreQuality": "Kualiti semasa: {verdict} · {score}",
+    "corePublication": "Keputusan penerbitan terkini: {action} → {visibility}",
     "designGraphReady": "Reka bentuk berstruktur: {scenes} adegan · {behaviors} nod tingkah laku",
     "assetJobReady": "Art assets can be completed in the background without interrupting play.",
     "assetJobStart": "Complete art assets",

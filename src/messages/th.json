@@ -2780,6 +2780,8 @@
     "createWithSamplePrompt": "Create with this prompt in studio →",
     "coreRevision": "Saved creator revision v{sequence}",
     "coreRevisionReady": "Playable design, quality evaluation, and intent are archived",
+    "coreQuality": "คุณภาพปัจจุบัน: {verdict} · {score}",
+    "corePublication": "การตัดสินใจเผยแพร่ล่าสุด: {action} → {visibility}",
     "designGraphReady": "การออกแบบเชิงโครงสร้าง: {scenes} ฉาก · {behaviors} โหนดพฤติกรรม",
     "assetJobReady": "Art assets can be completed in the background without interrupting play.",
     "assetJobStart": "Complete art assets",

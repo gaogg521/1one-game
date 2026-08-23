@@ -203,6 +203,7 @@ async function main() {
       const refinedGame = await mirrorGameToCreatorCore({ project: edited, cause: "refine" });
       const gameSnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey: marker, legacyType: "project", legacyId: game.id });
       assert(gameSnapshot?.revision?.id === refinedGame.creativeRevisionId, "game snapshot must select its latest editable revision");
+      assert(gameSnapshot?.project.evaluation?.verdict, "owner snapshot must expose the latest Core evaluation");
     } finally {
       await prisma.project.delete({ where: { id: game.id } });
       if (mirroredGameProjectId) await prisma.creativeProject.delete({ where: { id: mirroredGameProjectId } });

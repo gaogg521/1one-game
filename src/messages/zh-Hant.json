@@ -2780,6 +2780,8 @@
     "createWithSamplePrompt": "用此 prompt 去创作台 →",
     "coreRevision": "已儲存的創作版本 v{sequence}",
     "coreRevisionReady": "可試玩設計、品質評估與創作意圖已封存",
+    "coreQuality": "目前品質：{verdict} · {score} 分",
+    "corePublication": "最近發布決定：{action} → {visibility}",
     "designGraphReady": "結構化設計：{scenes} 個場景 · {behaviors} 個行為節點",
     "assetJobReady": "美術資產可在背景補齊，不會中斷試玩。",
     "assetJobStart": "補齊美術資產",

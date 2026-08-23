@@ -530,3 +530,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 前向迁移 `20260823013000_add_creator_evaluation_publication` 新增 `CreativeEvaluation` 与 append-only `CreativePublication`；它们分别绑定 Project/Revision，质量证据与发布决定不再只存在于 JSON artifact 或旧作品可见性字段。
 - 游戏、小说、漫画每次镜像 revision 都写入同一份确定性质量报告；发布/下架仍先更新旧作品，再在同一事务同步 Core 项目并追加带版本、质量分数和证据摘要的 publication decision。
 - `qa:creator-core` 验证三类镜像均有独立 evaluation；`qa:creator-publication` 验证发布/下架产生两条不可变历史。Prisma validate/generate/migrate deploy、定向 ESLint 和完整 production build 均通过。
+
+### P12 第二段：作者可见的审计快照
+
+- Owner Core snapshot 现带最新独立 evaluation 与最近三条 publication decisions；游戏试玩页版本卡展示当前质量结论和最近发布动作。非 owner 仍不会取得 Core snapshot。
+- `qa:creator-core` 验证作者快照可读取 evaluation；定向 ESLint 无错误、五语 JSON 解析通过。`PlayGameClient` 仍有三条既存 lint warning（未使用导入及两个 Hook dependency），本批未扩大修改范围。
