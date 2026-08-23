@@ -458,3 +458,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 作者试玩页不再在加载时静默调用同步资产生成接口；公开访客也无法触发该接口。作品详情仅向 owner 返回当前 `game_asset` 的脱敏状态和进度，试玩页每 3 秒轮询任务状态，并显示“补齐美术资产”这一显式、可恢复动作。
 - `POST /api/projects/:id/background` 保持旧同步兼容路径，但作者传 `durable:true` 时会先建立新的 Core revision 后返回 `202` durable job；任务由 production generation worker 完成，作品与版本归属均在 worker 中复核。
 - `qa:game-asset-job-api` 扩展验证 owner 详情可恢复活动任务、首次任务完成后作者可显式入队第二次恢复任务并由 worker 完成。生产构建通过。Windows 开发链残留的孤立 `.next/dev` PostCSS 进程会破坏 `routes.d.ts`；本次已终止两条无父进程的陈旧 worker 后，在独占环境中完成构建，不应将该缓存问题误判为业务类型回归。
+
+## P5 第一段：Provider 成本账本（2026-08-23）
+
+- 前向迁移 `20260823012000_add_provider_usage_event` 新增 `ProviderUsageEvent`。账本只含 provider、model、媒介、操作类型、成功/失败、耗时、输出单位、可选估算成本和错误代码；明确不存 prompt、正文、密钥或原始响应。
+- 图像主入口 `generateImageDetailed`、非流式 `llmJson`/`llmText` 和流式 `llmTextStream` 都统一写入账本；流式调用在结束或异常时写入字符输出量与结果。账本写失败不会中断用户生成。
+- 管理分析 API 新增按 provider/模型/媒介/结果的调用聚合，以及总事件数、已定价事件数、成本覆盖率和估算成本。单价未配置时保持 `null`，不将未知成本伪装为零成本或毛利。
+- `qa:provider-usage` 使用真实 SQLite 验证事件落库、耗时/输出单位保留，并检查 schema 不包含 prompt/content/secret/token/response 字段。开发库已通过 `prisma migrate deploy` 应用迁移；标准 Prisma binary client 已恢复，勿使用 `--no-engine` 后直接跑本地 SQLite QA。

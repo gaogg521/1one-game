@@ -280,6 +280,30 @@ model GenerationJob {
   @@index([leaseExpiresAt])
 }
 
+/// Provider 级生成使用账本。绝不存 prompt、作品正文、密钥或原始 provider 响应。
+model ProviderUsageEvent {
+  id                  String   @id @default(cuid())
+  /// llm | image
+  modality            String
+  /// openai | openai_compatible | litellm | anthropic | gemini
+  provider            String
+  model               String
+  /// json | text | image | image_batch 等安全操作标签
+  operation           String
+  /// succeeded | failed
+  status              String
+  durationMs          Int
+  outputUnits         Int?
+  /// Provider 单价未知时保持 null，禁止用虚假成本计算毛利。
+  estimatedCostMicros Int?
+  errorCode           String?
+  createdAt           DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([provider, model, createdAt])
+  @@index([modality, status, createdAt])
+}
+
 /// 第三方登录绑定（微信 / QQ / 飞书 / Line / 抖音等）
 model OAuthAccount {
   id             String    @id @default(cuid())

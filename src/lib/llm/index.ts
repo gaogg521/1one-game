@@ -23,6 +23,7 @@ import {
   restoreProviderEnv,
   applyProviderToProcessEnv,
 } from "@/lib/runtime-llm-client";
+import { recordProviderUsage } from "@/lib/provider-usage";
 
 function normalizeProvider(p: string | undefined): LlmProvider {
   const v = (p ?? "").trim().toLowerCase();
@@ -75,10 +76,31 @@ function resolveRequestScene(req: { scene?: RuntimeSceneKey; model: string }): R
   return req.scene ?? inferSceneForModel(req.model);
 }
 
+async function observeLlmResult<T extends LlmJsonResult | LlmTextResult>(
+  model: string,
+  operation: "json" | "text",
+  work: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  const result = await work();
+  recordProviderUsage({
+    modality: "llm",
+    provider: result.provider,
+    model: result.model || model,
+    operation,
+    status: result.ok ? "succeeded" : "failed",
+    durationMs: Date.now() - startedAt,
+    outputUnits: result.ok && "text" in result ? result.text.length : undefined,
+    errorCode: result.ok ? undefined : "llm_request_failed",
+  });
+  return result;
+}
+
 export async function llmJson(
   req: Omit<LlmJsonRequest, "provider"> & { scene?: RuntimeSceneKey },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): Promise<LlmJsonResult> {
+  return observeLlmResult(req.model, "json", async () => {
   const scene = resolveRequestScene(req);
   if (scene) {
     const ctx = resolveSceneContext(scene);
@@ -131,6 +153,7 @@ export async function llmJson(
     req: { ...req, provider },
     gatewayBaseUrl: process.env.OPENAI_BASE_URL,
   });
+  });
 }
 
 /** 长篇流水线 JSON（设定圣经 / 章规划）：使用小说网关超时头。 */
@@ -145,6 +168,7 @@ export async function llmText(
   req: Omit<LlmTextRequest, "provider"> & { scene?: RuntimeSceneKey },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): Promise<LlmTextResult> {
+  return observeLlmResult(req.model, "text", async () => {
   const scene = resolveRequestScene(req);
   if (scene) {
     const ctx = resolveSceneContext(scene);
@@ -181,6 +205,7 @@ export async function llmText(
     return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
   }
   return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
+  });
 }
 
 export function llmNovelText(
@@ -205,13 +230,30 @@ export async function* llmTextStream(
     const tier = opts?.lengthTier ?? "medium";
     const prev = snapshotProviderEnv();
     applyProviderToProcessEnv(ctx.provider);
+    const startedAt = Date.now();
+    let outputUnits = 0;
+    let succeeded = false;
     try {
       const client = opts?.novelLongRun
         ? createNovelOpenAIClientForProvider(ctx.provider, tier)
         : createOpenAIClientForProvider(ctx.provider);
-      yield* llmTextStreamOpenAICompatible({ client, req: { ...req, provider } });
+      for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...req, provider } })) {
+        outputUnits += chunk.length;
+        yield chunk;
+      }
+      succeeded = true;
     } finally {
       restoreProviderEnv(prev);
+      recordProviderUsage({
+        modality: "llm",
+        provider,
+        model: req.model,
+        operation: "text",
+        status: succeeded ? "succeeded" : "failed",
+        durationMs: Date.now() - startedAt,
+        outputUnits,
+        errorCode: succeeded ? undefined : "llm_stream_failed",
+      });
     }
     return;
   }
@@ -223,7 +265,27 @@ export async function* llmTextStream(
   }
   const tier = opts?.lengthTier ?? "medium";
   const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
-  yield* llmTextStreamOpenAICompatible({ client, req: { ...req, provider } });
+  const startedAt = Date.now();
+  let outputUnits = 0;
+  let succeeded = false;
+  try {
+    for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...req, provider } })) {
+      outputUnits += chunk.length;
+      yield chunk;
+    }
+    succeeded = true;
+  } finally {
+    recordProviderUsage({
+      modality: "llm",
+      provider,
+      model: req.model,
+      operation: "text",
+      status: succeeded ? "succeeded" : "failed",
+      durationMs: Date.now() - startedAt,
+      outputUnits,
+      errorCode: succeeded ? undefined : "llm_stream_failed",
+    });
+  }
 }
 
 /** 小说正文流式：按篇幅使用对应网关超时头（长篇默认 30 分钟）。 */
@@ -243,4 +305,3 @@ export function getProviderModelCascade(opts?: GameModelRouteInput): string[] {
 }
 
 export { getNovelStyleTextModelCascade, getNovelPlanModelCascade, getComicStoryboardModelCascade } from "@/lib/model-config";
-

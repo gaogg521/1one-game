@@ -58,6 +58,7 @@ export async function GET(req: Request) {
     paidOrders,
     activeSubs,
     quotaByReason,
+    providerUsage,
     plans,
     visibilityG,
     visibilityN,
@@ -102,6 +103,13 @@ export async function GET(req: Request) {
       where: { createdAt: { gte: since } },
       _count: { id: true },
       _sum: { delta: true },
+    }),
+    prisma.providerUsageEvent.groupBy({
+      by: ["provider", "model", "modality", "status"],
+      where: { createdAt: { gte: since } },
+      _count: { id: true },
+      _sum: { durationMs: true, estimatedCostMicros: true },
+      orderBy: { _count: { id: "desc" } },
     }),
     prisma.subscriptionPlan.findMany({ select: { id: true, name: true } }),
     prisma.project.groupBy({ by: ["visibility"], _count: { id: true } }),
@@ -155,6 +163,9 @@ export async function GET(req: Request) {
     .sort((a, b) => b.count - a.count);
 
   const revenueCents = paidOrders.reduce((sum, o) => sum + o.amountCents, 0);
+  const usageTotal = providerUsage.reduce((sum, row) => sum + row._count.id, 0);
+  const usagePriced = providerUsage.reduce((sum, row) => sum + (row._sum.estimatedCostMicros == null ? 0 : row._count.id), 0);
+  const providerCostMicros = providerUsage.reduce((sum, row) => sum + (row._sum.estimatedCostMicros ?? 0), 0);
 
   const conversionRate =
     shareTotal > 0 ? Math.round((referralSignups / shareTotal) * 1000) / 10 : 0;
@@ -281,6 +292,21 @@ export async function GET(req: Request) {
         paidOrders.filter((o) => o.paidAt).map((o) => o.paidAt!),
         dayKeys,
       ),
+      providerUsage: providerUsage.map((row) => ({
+        provider: row.provider,
+        model: row.model,
+        modality: row.modality,
+        status: row.status,
+        events: row._count.id,
+        durationMs: row._sum.durationMs ?? 0,
+        estimatedCostMicros: row._sum.estimatedCostMicros,
+      })),
+      providerCost: {
+        events: usageTotal,
+        pricedEvents: usagePriced,
+        coverageRate: usageTotal ? Math.round((usagePriced / usageTotal) * 1000) / 10 : 0,
+        estimatedCostMicros: providerCostMicros,
+      },
     },
     gameplay: {
       starts: startedSessions.size,

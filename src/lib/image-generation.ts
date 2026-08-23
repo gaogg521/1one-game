@@ -14,6 +14,7 @@ import { getRuntimeConfigSync } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
 import { resolveSceneRoute } from "@/lib/runtime-providers";
 import { repoPublicPath } from "@/lib/public-path";
+import { recordProviderUsage } from "@/lib/provider-usage";
 import fs from "fs";
 import path from "path";
 
@@ -408,6 +409,19 @@ export async function generateImageDetailed(
   },
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
+  const record = (result: ImageGenDetail) => {
+    recordProviderUsage({
+      modality: "image",
+      provider: result.provider ?? "unknown",
+      model: result.model ?? "unknown",
+      operation: "image",
+      status: result.ok ? "succeeded" : "failed",
+      durationMs: result.durationMs ?? Date.now() - t0,
+      outputUnits: result.ok && result.url ? 1 : 0,
+      errorCode: result.ok ? undefined : "image_generation_failed",
+    });
+    return result;
+  };
   const styleRefs = options?.styleReferenceUrls?.filter(Boolean) ?? [];
 
   if (styleRefs.length > 0) {
@@ -418,14 +432,14 @@ export async function generateImageDetailed(
       timeoutMs: options?.timeoutMs,
     });
     if (geminiRef?.url) {
-      return {
+      return record({
         ok: true,
         url: geminiRef.url,
         localPath: geminiRef.localPath,
         provider: "gemini",
         model: getImageGenGeminiModel(),
         durationMs: Date.now() - t0,
-      };
+      });
     }
   }
 
@@ -439,30 +453,30 @@ export async function generateImageDetailed(
       : `${urbanPrefix}${prompt}`,
     options,
   );
-  if (openai.ok) return { ...openai, durationMs: openai.durationMs ?? Date.now() - t0 };
+  if (openai.ok) return record({ ...openai, durationMs: openai.durationMs ?? Date.now() - t0 });
 
   const gemini = await generateImageWithGemini(prompt, { size: options?.size, timeoutMs: options?.timeoutMs });
   const durationMs = Date.now() - t0;
   if (gemini?.url) {
-    return {
+    return record({
       ok: true,
       url: gemini.url,
       localPath: gemini.localPath,
       provider: "gemini",
       model: getImageGenGeminiModel(),
       durationMs,
-    };
+    });
   }
 
   const geminiHint = process.env.GEMINI_API_KEY?.trim()
     ? "Gemini 文生图也未返回图片"
     : "未配置 GEMINI_API_KEY";
-  return {
+  return record({
     ok: false,
     model: openai.model,
     error: [openai.error, geminiHint].filter(Boolean).join("；"),
     durationMs,
-  };
+  });
 }
 
 export async function generateImage(
