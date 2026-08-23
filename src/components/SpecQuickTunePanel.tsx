@@ -33,6 +33,28 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
     onChange({ ...spec, director: { ...d, intensity: ni } });
   };
 
+  const director = spec.director ?? defaultDirector();
+  const patchDirectorAct = (
+    index: number,
+    patch: Partial<NonNullable<GameSpec["director"]>["acts"][number]>,
+  ) => {
+    const acts = director.acts.map((act, i) => (i === index ? { ...act, ...patch } : act));
+    onChange({ ...spec, director: { ...director, acts } });
+  };
+  const addDirectorAct = () => {
+    if (director.acts.length >= 8) return;
+    const previousAt = director.acts.at(-1)?.at ?? 0;
+    const at = Math.min(0.95, Math.round((previousAt + 0.16) * 100) / 100);
+    onChange({
+      ...spec,
+      director: { ...director, acts: [...director.acts, { at, label: t("newAct"), modifiers: [] }] },
+    });
+  };
+  const removeDirectorAct = (index: number) => {
+    if (director.acts.length <= 1) return;
+    onChange({ ...spec, director: { ...director, acts: director.acts.filter((_, i) => i !== index) } });
+  };
+
   const setThemeColor = (key: keyof GameSpec["theme"], v: string) => {
     const hex = normalizeHex6(v);
     onChange({ ...spec, theme: { ...spec.theme, [key]: hex } });
@@ -166,6 +188,68 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
               className="w-full rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-[var(--gc-text)]"
             />
           </label>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-[var(--gc-text-soft)]">{t("directorTimeline")}</p>
+              <p className="mt-1 text-[10px] text-[var(--gc-text-faint)]">{t("directorTimelineHint")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={addDirectorAct}
+              disabled={director.acts.length >= 8}
+              className="rounded-md border border-[color:var(--gc-border)] px-2 py-1 text-[10px] text-[var(--gc-text-soft)] disabled:opacity-40"
+            >
+              {t("addAct")}
+            </button>
+          </div>
+          <div className="mt-2 space-y-2">
+            {director.acts.map((act, index) => (
+              <div key={`${index}-${act.at}`} className="grid gap-2 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]/40 p-2 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)_auto]">
+                <label className="space-y-1">
+                  <span className="text-[10px] text-[var(--gc-text-faint)]">{t("actLabel")}</span>
+                  <input
+                    type="text"
+                    maxLength={24}
+                    value={act.label}
+                    onChange={(e) => patchDirectorAct(index, { label: e.target.value.slice(0, 24) || t("newAct") })}
+                    className="w-full rounded border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1 text-[var(--gc-text)]"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-[var(--gc-text-faint)]">{t("actAt")}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Math.round(act.at * 100)}
+                    onChange={(e) => patchDirectorAct(index, { at: clamp(Number(e.target.value) || 0, 0, 100) / 100 })}
+                    className="w-full rounded border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1 text-[var(--gc-text)]"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-[var(--gc-text-faint)]">{t("actModifiers")}</span>
+                  <input
+                    type="text"
+                    maxLength={143}
+                    value={act.modifiers.join(", ")}
+                    onChange={(e) => patchDirectorAct(index, { modifiers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 6).map((item) => item.slice(0, 24)) })}
+                    className="w-full rounded border border-[color:var(--gc-border)] bg-[var(--gc-bg)] px-2 py-1 text-[var(--gc-text)]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={director.acts.length <= 1}
+                  onClick={() => removeDirectorAct(index)}
+                  className="self-end rounded border border-[color:var(--gc-border)] px-2 py-1 text-[10px] text-[var(--gc-muted)] disabled:opacity-40"
+                >
+                  {t("removeAct")}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── Template-specific gameplay params ── */}

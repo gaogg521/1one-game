@@ -512,3 +512,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 统一小说质量现在可接收已解析的长篇生成元数据。存在 Story Bible/章节纲要时，会把缺失计划章节、重复/倒退/意外章节及正文远低于计划篇幅作为 `story_plan_issue:*` 证据；有问题的作品绝不再被判为 `ready`。旧作品及无长篇元数据的内容保持原有兼容路径。
 - 小说详情与作者发布动作都传入同一份 pipeline meta，因此阅读页的连续性报告、质量状态和发布门禁不会各自使用不同事实。真实 `qa:novel-story-plan-api`、creator publication/workflow 与质量用例均通过。
 - Windows 上每次临时 Next dev 后可能留下损坏的 `.next/dev/types/routes.d.ts`；由于不能安全删除共享缓存，`tsconfig` 现排除该开发生成目录，正常保留 `.next/types` 的生产路由类型。`next.config.ts` 可用 `NEXT_DIST_DIR` 进行隔离验证（默认仍为 `.next`），完整默认 production build 已重新通过。
+
+## P11 第一段：游戏导演时间线成为作者资产（2026-08-23）
+
+- 作者试玩页的快速调优面板现可直接增删最多 8 个导演段落，并编辑段落名称、时间位置和变奏标签；保存仍走既有 Project PATCH，因此每一次调整都会创建不可变的 Core refine revision。
+- `scene_graph` 将每个导演段落投影为可审查的 play 场景，`behavior_graph` 将其投影为带时间条件的事件节点和边，作者可在版本快照中查看真实保存的节奏意图，而非只能查看通用主循环。
+- 修复质量增强的一个数据所有权错误：当作者暂未配置 runtime events 时，系统只补齐事件，不再用自动导演曲线覆盖作者已保存的 intensity、acts、名称或变奏。
+- `qa:game-core-api` 使用真实本地 HTTP 验证自定义段落进入 Core artifacts，且编辑会推进 immutable lineage；`qa:creator-core`、`qa:creator-quality`、`qa:game-vertical-slice`、定向 ESLint 和完整 production build 均通过。构建仍报告既有动态文件追踪性能警告，但没有类型/编译失败。

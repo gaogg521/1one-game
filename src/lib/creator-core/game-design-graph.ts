@@ -11,10 +11,11 @@ export type GameSceneGraph = {
   version: 1;
   templateId: GameSpec["templateId"];
   scenes: Array<{
-    id: "opening" | "main_loop" | "resolution";
+    id: string;
     purpose: "onboard" | "play" | "complete";
     entities: GameDesignEntity["id"][];
     objective: string;
+    act?: { at: number; label: string; modifiers: string[] };
   }>;
   entities: GameDesignEntity[];
 };
@@ -23,7 +24,7 @@ export type GameBehaviorGraph = {
   version: 1;
   templateId: GameSpec["templateId"];
   nodes: Array<{
-    id: "start" | "player_control" | "spawn_hazard" | "resolve_collision" | "track_progress" | "complete";
+    id: string;
     kind: "event" | "input" | "scheduler" | "rule" | "state" | "terminal";
     label: string;
     config?: Record<string, string | number | boolean>;
@@ -50,6 +51,7 @@ export function buildGameDesignGraphs(spec: GameSpec): {
   const hasCollectible = Boolean(spec.labels.collectible);
   const target = spec.gameplay.winScore ?? 1;
   const goal = goalLabel(spec);
+  const acts = [...(spec.director?.acts ?? [])].sort((a, b) => a.at - b.at);
   const entities: GameDesignEntity[] = [
     {
       id: "player",
@@ -76,6 +78,13 @@ export function buildGameDesignGraphs(spec: GameSpec): {
       entities,
       scenes: [
         { id: "opening", purpose: "onboard", entities: ["player", "goal"], objective: `让玩家理解：${goal}` },
+        ...acts.map((act, index) => ({
+          id: `act-${index + 1}`,
+          purpose: "play" as const,
+          entities: (hasCollectible ? ["player", "hazard", "collectible", "goal"] : ["player", "hazard", "goal"]) as GameDesignEntity["id"][],
+          objective: act.label,
+          act: { at: act.at, label: act.label, modifiers: act.modifiers },
+        })),
         {
           id: "main_loop",
           purpose: "play",
@@ -94,6 +103,12 @@ export function buildGameDesignGraphs(spec: GameSpec): {
         { id: "spawn_hazard", kind: "scheduler", label: `${spec.labels.hazard} 生成`, config: { everyMs: spec.gameplay.spawnIntervalMs, speed: spec.gameplay.hazardSpeed } },
         { id: "resolve_collision", kind: "rule", label: "碰撞、奖励与容错结算", config: { lives: spec.gameplay.lives ?? 1 } },
         { id: "track_progress", kind: "state", label: goal, config: { target } },
+        ...acts.map((act, index) => ({
+          id: `director_act_${index + 1}`,
+          kind: "event" as const,
+          label: act.label,
+          config: { at: act.at, modifiers: act.modifiers.join(",") || "none" },
+        })),
         { id: "complete", kind: "terminal", label: "完成并写入试玩结果" },
       ],
       edges: [
@@ -102,6 +117,11 @@ export function buildGameDesignGraphs(spec: GameSpec): {
         { from: "player_control", to: "resolve_collision", when: "contact_or_collect" },
         { from: "spawn_hazard", to: "resolve_collision", when: "hazard_active" },
         { from: "resolve_collision", to: "track_progress", when: "state_changed" },
+        ...acts.map((_, index) => ({
+          from: "track_progress",
+          to: `director_act_${index + 1}`,
+          when: `timeline_at_${Math.round(acts[index]!.at * 100)}%`,
+        })),
         { from: "track_progress", to: "complete", when: "target_reached" },
       ],
     },

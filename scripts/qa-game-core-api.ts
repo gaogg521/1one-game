@@ -10,7 +10,17 @@ const baseUrl = process.env.QA_BASE_URL?.trim() || "http://127.0.0.1:8888";
 
 async function main() {
   const ownerKey = `qa-game-core-api-${Date.now()}`;
-  const spec = prepareGameSpecForPersist(undefined, "霓虹飞船突破机械舰队并击败终局 Boss");
+  const baseSpec = prepareGameSpecForPersist(undefined, "霓虹飞船突破机械舰队并击败终局 Boss");
+  const spec = {
+    ...baseSpec,
+    director: {
+      intensity: 0.7,
+      acts: [
+        { at: 0.2, label: "侦察接触", modifiers: ["warning"] },
+        { at: 0.7, label: "终局突破", modifiers: ["elite"] },
+      ],
+    },
+  };
   let projectId: string | undefined;
   let coreProjectId: string | undefined;
   try {
@@ -32,10 +42,14 @@ async function main() {
     const ownerDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, {
       headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` },
     });
-    const ownerDetail = (await ownerDetailResponse.json()) as { core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string }> } } };
+    const ownerDetail = (await ownerDetailResponse.json()) as { core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string; content?: unknown }> } } };
     assert(ownerDetailResponse.ok, "owner game detail must load");
     assert(ownerDetail.core?.revision?.id === created.core.creativeRevisionId, "owner detail must expose the latest Core revision");
     assert(ownerDetail.core.revision.artifacts?.some((artifact) => artifact.kind === "game_spec"), "owner snapshot must include game spec");
+    const sceneGraph = ownerDetail.core.revision.artifacts?.find((artifact) => artifact.kind === "scene_graph")?.content as { scenes?: Array<{ act?: { label?: string } }> } | undefined;
+    const behaviorGraph = ownerDetail.core.revision.artifacts?.find((artifact) => artifact.kind === "behavior_graph")?.content as { nodes?: Array<{ label?: string }> } | undefined;
+    assert(sceneGraph?.scenes?.some((scene) => scene.act?.label === "终局突破"), "scene graph must preserve saved director acts");
+    assert(behaviorGraph?.nodes?.some((node) => node.label === "侦察接触"), "behavior graph must preserve saved director acts");
 
     const patchResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, {
       method: "PATCH",

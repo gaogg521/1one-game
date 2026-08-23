@@ -102,13 +102,28 @@ function ensureCommercialBlueprints(spec: GameSpec, prompt = ""): GameSpec {
 
 function ensureCommercialDirector(spec: GameSpec, prompt: string, locale: AppLocale): GameSpec {
   if ((spec.director?.events?.length ?? 0) >= 3) return spec;
+  const authoredDirector = spec.director;
   const rebuilt = buildDirector({
     prompt: `${prompt || spec.title} 成品 复杂 目标 金币 boss 奖励`,
     spec,
     locale,
   });
   if ((rebuilt.events?.length ?? 0) >= 3) {
-    return { ...spec, director: rebuilt };
+    return {
+      ...spec,
+      director: {
+        ...rebuilt,
+        // A creator may deliberately edit the timeline before adding custom
+        // runtime events. Quality enrichment can supply the events, but must
+        // never silently replace their authored pacing and labels.
+        ...(authoredDirector
+          ? {
+              intensity: authoredDirector.intensity,
+              acts: authoredDirector.acts,
+            }
+          : {}),
+      },
+    };
   }
 
   const events = [...(rebuilt.events ?? [])];
@@ -129,6 +144,12 @@ function ensureCommercialDirector(spec: GameSpec, prompt: string, locale: AppLoc
     ...spec,
     director: {
       ...rebuilt,
+      ...(authoredDirector
+        ? {
+            intensity: authoredDirector.intensity,
+            acts: authoredDirector.acts,
+          }
+        : {}),
       events: events.slice(0, 8),
     },
   };
@@ -146,9 +167,20 @@ export function applyHardQualityDefaults(spec: GameSpec, prompt = "", locale: Ap
   next = makeThemeRicher(next);
 
   if (!next.director?.acts?.length || !next.director.events?.length) {
+    const authoredDirector = next.director;
+    const rebuilt = buildDirector({ prompt: prompt || next.title, spec: next, locale });
     next = {
       ...next,
-      director: buildDirector({ prompt: prompt || next.title, spec: next, locale }),
+      director: {
+        ...rebuilt,
+        ...(authoredDirector
+          ? {
+              intensity: authoredDirector.intensity,
+              acts: authoredDirector.acts,
+              ...(authoredDirector.events?.length ? { events: authoredDirector.events } : {}),
+            }
+          : {}),
+      },
     };
   }
 
