@@ -8,6 +8,7 @@ import { enqueueGenerationJob } from "../src/lib/creator-core/jobs";
 import { processNextGenerationJob } from "../src/lib/creator-core/worker";
 import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
 import { reviseNovelStoryPlan } from "../src/lib/novel-story-plan";
+import { mirrorComicToCreatorCore } from "../src/lib/creator-core/comic-bridge";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -134,6 +135,35 @@ async function main() {
     } finally {
       await prisma.novel.delete({ where: { id: novel.id } });
       if (mirroredProjectId) await prisma.creativeProject.delete({ where: { id: mirroredProjectId } });
+    }
+
+    const comic = await prisma.comic.create({
+      data: {
+        ownerKey: marker,
+        title: "Core 漫画镜像",
+        prompt: "旧城与灯灵",
+        status: "ready",
+        visibility: "hidden",
+        imageUrls: JSON.stringify({
+          formatVersion: 3,
+          pageCount: 1,
+          stylePreset: "manga",
+          characterSheetUrls: ["/covers/lamp-spirit.png"],
+          pages: [{ page: 1, panels: [{ scene: 1, caption: "雨中的旧城", prompt: "rainy old city", imageUrl: "/covers/panel.png" }] }],
+        }),
+      },
+    });
+    let mirroredComicProjectId: string | null = null;
+    try {
+      const mirroredComic = await mirrorComicToCreatorCore({ comic });
+      mirroredComicProjectId = mirroredComic.creativeProjectId;
+      const comicArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredComic.creativeRevisionId } });
+      assert(comicArtifacts.some((artifact) => artifact.kind === "comic_document"), "comic mirror must retain its document");
+      assert(comicArtifacts.some((artifact) => artifact.kind === "style_lock"), "comic mirror must retain style and character locks");
+      assert(comicArtifacts.some((artifact) => artifact.kind === "storyboard_page"), "comic mirror must retain storyboard pages");
+    } finally {
+      await prisma.comic.delete({ where: { id: comic.id } });
+      if (mirroredComicProjectId) await prisma.creativeProject.delete({ where: { id: mirroredComicProjectId } });
     }
     console.log("[OK] qa-creator-core");
   } finally {

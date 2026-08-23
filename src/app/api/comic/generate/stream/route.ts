@@ -13,6 +13,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { apiErrorMessage, progressComicMessage } from "@/lib/i18n/progress-message";
+import { prisma } from "@/lib/prisma";
+import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 
 export const maxDuration = 3600;
 
@@ -142,12 +144,21 @@ export async function POST(req: Request) {
           },
           send,
         );
+        let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+        try {
+          const comic = await prisma.comic.findUniqueOrThrow({ where: { id: result.comicId } });
+          core = await mirrorComicToCreatorCore({ comic });
+        } catch (error) {
+          console.error("[comic-core-mirror]", { comicId: result.comicId, error });
+          core = { status: "degraded" };
+        }
 
         send({
           step: "done",
           message: progressComicMessage(uiLocale, "comicDone"),
           requestId,
           comic: { id: result.comicId },
+          core,
           pageCount: result.pageCount,
           panelCount: result.panelCount,
           panelsRendered: result.panelsRendered,

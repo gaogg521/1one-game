@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { assessComicCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
+import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 
 export const maxDuration = 3600;
 
@@ -128,12 +129,21 @@ export async function POST(req: Request) {
         select: { imageUrls: true, status: true, visibility: true },
       });
     }
+    let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+    try {
+      const comic = await prisma.comic.findUniqueOrThrow({ where: { id: result.comicId } });
+      core = await mirrorComicToCreatorCore({ comic });
+    } catch (error) {
+      console.error("[comic-core-mirror]", { comicId: result.comicId, error });
+      core = { status: "degraded" };
+    }
 
     return NextResponse.json(
       {
         ok: true,
         comic: {
           id: result.comicId,
+          core,
           workflow: {
             stage: resolveCreatorWorkStage({
               status: persisted?.status,

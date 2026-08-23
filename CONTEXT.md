@@ -411,3 +411,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 已复用长篇生成阶段的同一 `checkSegmentConsistency` 规则，在作者详情 API 返回 Story Bible/纲要与现有正文的一致性报告；不新增模型调用，也不静默重写正文。
 - 长篇详情新增“设定与正文一致性”面板，清晰区分阻断与提示，并明确要求作者修订正文或纲要。非作者不会获得报告。
 - `qa:novel-story-plan-api` 扩展为真实 owner HTTP 详情断言，确认保存 Story Plan 后详情确实返回连续性报告；TypeScript、定向 ESLint、五语 JSON、core/workflow/quality QA 全部通过。
+
+### P3 第一段：漫画影子版本链
+
+- `mirrorComicToCreatorCore` 将 Comic 映射为唯一 Core Project 和不可变 revision，分别保存完整 `comic_document`、`style_lock`（画风、版式、导演包、角色 roster/reference sheets）与每页 `storyboard_page` artifact。
+- 普通与流式漫画生成在旧 Comic 持久化后都执行镜像，响应明确返回 Core revision；桥接失败返回 `core.status=degraded`，不把漫画创作资产同步误报为成功。
+- `qa:creator-core` 现用真实 SQLite 创建带画风与角色参考图的漫画，验证完整文档、画风/角色锁和逐页分镜全部落库。TypeScript 和定向 ESLint 已通过。
