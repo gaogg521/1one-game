@@ -23,6 +23,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { WorkLikeButton } from "@/components/work/WorkLikeButton";
+import { PublishWorkButton } from "@/components/work/PublishWorkButton";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { LiteraryAdaptationTrustBadge } from "@/components/LiteraryAdaptationTrustBadge";
 import { ComicDetailCoverPreview } from "@/components/comic/ComicDetailCoverPreview";
@@ -44,6 +45,7 @@ interface Comic {
   likeCount?: number;
   isOwner?: boolean;
   status?: string;
+  visibility?: string;
   panelsWithImage?: number;
   panelsTotal?: number;
   quality?: CreatorQualityReport;
@@ -644,6 +646,14 @@ export default function ComicDetailPage() {
                   initialCount={comic.likeCount ?? 0}
                   variant="banner"
                 />
+                {comic.isOwner ? (
+                  <PublishWorkButton
+                    type="comic"
+                    id={comic.id}
+                    visibility={comic.visibility}
+                    onVisibilityChange={(visibility) => setComic((current) => current ? { ...current, visibility } : current)}
+                  />
+                ) : null}
                 {comic.isOwner && chapterScope && linkedNovel ? (
                   <Link
                     href={withLocalePath(

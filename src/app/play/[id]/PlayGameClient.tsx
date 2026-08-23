@@ -22,6 +22,7 @@ import { ResultMomentBanner } from "@/components/ResultMomentBanner";
 import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
+import { PublishWorkButton } from "@/components/work/PublishWorkButton";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -47,6 +48,7 @@ export function PlayGameClient({ id }: { id: string }) {
     shareCode: string | null;
     likeCount: number;
     playCount: number;
+    visibility: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -87,6 +89,7 @@ export function PlayGameClient({ id }: { id: string }) {
             shareCode: string | null;
             likeCount?: number;
             playCount?: number;
+            visibility?: string;
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           core?: CoreSnapshot;
@@ -117,6 +120,7 @@ export function PlayGameClient({ id }: { id: string }) {
             shareCode: data.project.shareCode ?? null,
             likeCount: data.project.likeCount ?? 0,
             playCount: data.project.playCount ?? 0,
+            visibility: data.project.visibility ?? "pending_review",
           });
           setLikeCount(data.project.likeCount ?? 0);
           setPlayCount(data.project.playCount ?? 0);
@@ -460,6 +464,14 @@ export function PlayGameClient({ id }: { id: string }) {
                 <>
                   <WorkEngagementStats kind="game" playCount={playCount} likeCount={likeCount} hideLikes size="md" />
                   <GameRuntimePreferenceControl />
+                  {meta.isOwner ? (
+                    <PublishWorkButton
+                      type="game"
+                      id={id}
+                      visibility={meta.visibility}
+                      onVisibilityChange={(visibility) => setMeta((current) => current ? { ...current, visibility } : current)}
+                    />
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleLike}

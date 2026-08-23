@@ -28,6 +28,7 @@ import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
+import { canReadWorkPublicly } from "@/lib/literary-safety";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,6 +42,9 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
+  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
+    return localizedJsonError(req, "notFound", 404);
+  }
   const likeCount = row.likeCount ?? 0;
 
   try {
@@ -110,6 +114,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         likeCount,
         playCount: row.playCount,
         status: row.status,
+        visibility: row.visibility,
         workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
         quality,
         isOwner: Boolean(isOwner),

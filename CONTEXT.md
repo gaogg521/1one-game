@@ -480,3 +480,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 ### P5 第四段：真实裂变付费漏斗（2026-08-23）
 
 - 管理分析的社交漏斗不再把“全平台所有付费订单”暗示成分享转化：新增“裂变付费”阶段，仅统计付款用户具有 `referredById` 的已付订单；“全平台付款”继续单列，方便对比总体收入但不污染归因漏斗。
+
+## P6 第一段：作者显式发布与私有作品保护（2026-08-23）
+
+- 新作品的代码默认可见性从 `public` 改为 `pending_review`（环境变量仍可明确覆盖）；生成完成不再等同于自动公开。作品详情页为 owner 提供统一的“发布作品 / 下架作品”动作，覆盖游戏、小说和漫画。
+- `POST /api/works/:type/:id/publication` 强制校验 owner、`ready` 状态和当前统一质量报告。质量为 `blocked` 的作品只能先修复，不能公开；发布和下架会在同一个 Prisma 事务中同步旧作品与对应 `CreativeProject` 的 visibility/status，且不会篡改 immutable revision。
+- 游戏和漫画详情 API 补齐了与小说一致的公共读取保护：不是 owner/管理员且不是 `public + ready` 的作品一律返回 404，避免 pending 或 hidden 作品通过直链泄露。详情响应现在带 visibility，供作者界面反映真实状态。
+- 新增 `qa:creator-publication`（默认可见性、owner、质量阻断、Core 同步）与 `qa:creator-publication:http`（匿名 404 → owner 读取 → 发布公开 → 下架后再次 404）。“HTTP” 用例必须以 `DEV_SUPER_ADMIN=0` 启动本地服务；开发环境的 admin bypass 会刻意让匿名请求通过，不能拿来验证访问控制。完整 production build、creator workflow/quality QA 和五语 JSON 解析通过。

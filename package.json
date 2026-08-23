@@ -73,6 +73,8 @@
     "qa:platform-user-journey": "tsx scripts/qa-platform-user-journey.ts",
     "qa:runtime-config-admin": "tsx scripts/qa-runtime-config-admin.ts",
     "qa:referral-funnel": "tsx scripts/qa-referral-funnel.ts",
+    "qa:creator-publication": "tsx scripts/qa-creator-publication.ts",
+    "qa:creator-publication:http": "tsx scripts/qa-creator-publication-api.ts",
     "qa:runtime-config-admin:http": "tsx scripts/qa-runtime-config-admin.ts --require-http",
     "fix:dev-db-migrations": "tsx scripts/fix-dev-db-migrations.ts",
     "promote:super-admin": "tsx scripts/promote-super-admin.ts",

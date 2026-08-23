@@ -22,6 +22,7 @@ import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
+import { canReadWorkPublicly } from "@/lib/literary-safety";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -49,6 +50,9 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
+  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
+    return localizedJsonError(req, "notFound", 404);
+  }
   const doc = parseComicDocument(row.imageUrls);
   const panelStats = countPanelsWithImages(doc);
   const baseQuality = assessComicCreatorQuality(row.imageUrls).report;
@@ -71,6 +75,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       shareCode: row.shareCode,
       likeCount: row.likeCount,
       status: row.status,
+      visibility: row.visibility,
       workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
       quality,
       isOwner: Boolean(isOwner),

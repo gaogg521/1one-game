@@ -107,6 +107,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       playCount: row.playCount,
       likeCount: row.likeCount,
       status: row.status,
+      visibility: row.visibility,
       workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
       quality,
       isOwner: Boolean(isOwner),

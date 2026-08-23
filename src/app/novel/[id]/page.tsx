@@ -36,6 +36,7 @@ import {
 import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { WorkLikeButton } from "@/components/work/WorkLikeButton";
+import { PublishWorkButton } from "@/components/work/PublishWorkButton";
 import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { NovelResumeBanner } from "@/components/novel/NovelResumeBanner";
 import { NovelReadCoverThumb, type NovelReadCoverHandle } from "@/components/novel/NovelReadCoverThumb";
@@ -68,6 +69,7 @@ interface Novel {
   continuationReason?: string;
   remainingChapterCount?: number;
   status?: string;
+  visibility?: string;
   characterRoster?: ComicCharacterRoster | null;
   quality?: CreatorQualityReport;
   storyPlan?: { bible: NovelBible; chapterPlan: NovelChapterPlan };
@@ -231,6 +233,14 @@ export default function NovelDetailPage() {
                     initialCount={novel.likeCount ?? 0}
                     variant="banner"
                   />
+                  {novel.isOwner ? (
+                    <PublishWorkButton
+                      type="novel"
+                      id={novel.id}
+                      visibility={novel.visibility}
+                      onVisibilityChange={(visibility) => setNovel((current) => current ? { ...current, visibility } : current)}
+                    />
+                  ) : null}
                   {novel.isOwner ? (
                     <button
                       type="button"
