@@ -31,6 +31,8 @@ import { ComicStoryboardOutline } from "@/components/literary/ComicStoryboardOut
 import { inferStoryGenre } from "@/lib/cover-genre";
 import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-user";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
+import { reportLiteraryEngagement } from "@/lib/literary-engagement.client";
+import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
 
 interface Comic {
   id: string;
@@ -51,6 +53,7 @@ interface Comic {
   panelsWithImage?: number;
   panelsTotal?: number;
   quality?: CreatorQualityReport;
+  literaryEngagement?: CreatorConsumptionSummary;
 }
 
 type DurablePanelJob = {
@@ -483,7 +486,7 @@ export default function ComicDetailPage() {
         setReorderBusy(false);
       }
     },
-    [id, comic?.isOwner, comic?.revisionToken, reorderBusy, workBusy, locale, tStory],
+    [id, comic, reorderBusy, workBusy, locale, tStory],
   );
 
   const handleMovePanel = useCallback(
@@ -563,6 +566,16 @@ export default function ComicDetailPage() {
       void handleRenderPanels();
     });
   }, [comic?.isOwner, missingImages, rendering, searchParams, handleRenderPanels]);
+
+  useEffect(() => {
+    if (comic?.id) reportLiteraryEngagement({ workType: "comic", workId: comic.id, event: "start" });
+  }, [comic?.id]);
+
+  useEffect(() => {
+    if (!comic?.id || pages.length === 0) return;
+    reportLiteraryEngagement({ workType: "comic", workId: comic.id, event: "unit_view", unitIndex: currentPage + 1 });
+    if (currentPage === pages.length - 1) reportLiteraryEngagement({ workType: "comic", workId: comic.id, event: "complete" });
+  }, [comic?.id, currentPage, pages.length]);
 
   if (loading) {
     return (
@@ -881,6 +894,10 @@ export default function ComicDetailPage() {
                 ) : null}
               </div>
             </section>
+          ) : null}
+
+          {comic.isOwner && comic.literaryEngagement ? (
+            <CreatorConsumptionPanel summary={comic.literaryEngagement} className="mb-4" />
           ) : null}
 
           {total === 0 ? (

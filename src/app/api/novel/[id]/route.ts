@@ -4,7 +4,7 @@ import { getOwnerKey } from "@/lib/owner";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
-import { serializeNovelChapters } from "@/lib/novel-chapters";
+import { parseNovelChapters, serializeNovelChapters } from "@/lib/novel-chapters";
 import { validateNovelTitleInput } from "@/lib/novel-display";
 import { defaultChapterTitle } from "@/lib/i18n/chapter-labels";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
@@ -27,6 +27,7 @@ import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 import { checkSegmentConsistency } from "@/lib/novel-long-consistency";
+import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -53,6 +54,11 @@ export async function GET(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "notFound", 404);
   }
   const pipelineMeta = await loadNovelGenerationMeta(id);
+  const literaryEngagement = await summarizeLiteraryEngagement({
+    workType: "novel",
+    workId: id,
+    unitCount: Math.max(1, parseNovelChapters(row.content, resolveRequestLocaleSync(req)).length),
+  });
   const creativeBrief = isOwner ? await loadCreativeBriefForNovel(id) : null;
   const briefKind =
     creativeBrief && isChildrenNovelTier(row.lengthTier as NovelLengthTier)
@@ -117,9 +123,14 @@ export async function GET(req: Request, ctx: RouteContext) {
     generationMeta: pipelineMeta,
   }).report;
   const quality = withCreatorEngagementQuality(baseQuality, {
-    sampleSize: row.playCount + row.likeCount,
+    sampleSize: literaryEngagement.sampleSize,
     reads: row.playCount,
     likes: row.likeCount,
+    starts: literaryEngagement.starts,
+    completed: literaryEngagement.completed,
+    completionRate: literaryEngagement.completionRate,
+    averageProgressRate: literaryEngagement.averageProgressRate,
+    unitViews: literaryEngagement.unitViews,
   });
   return NextResponse.json({
     novel: {
@@ -140,6 +151,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       visibility: row.visibility,
       workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
       quality,
+      ...(isOwner ? { literaryEngagement } : {}),
       isOwner: Boolean(isOwner),
       canDelete,
       canContinue: Boolean(isOwner) && continuation.canContinue,

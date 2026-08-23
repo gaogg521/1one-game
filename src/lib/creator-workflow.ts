@@ -29,6 +29,10 @@ export type CreatorQualityEngagement = {
   firstMinuteRate?: number;
   retryRate?: number;
   averageFailureSec?: number;
+  completed?: number;
+  completionRate?: number;
+  averageProgressRate?: number;
+  unitViews?: number;
 };
 
 export function resolveCreatorWorkStage(input: {

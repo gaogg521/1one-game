@@ -33,6 +33,10 @@ export function withCreatorEngagementQuality(
     ...(engagement.firstMinuteRate !== undefined ? [`first_minute_rate:${engagement.firstMinuteRate}%`] : []),
     ...(engagement.retryRate !== undefined ? [`retry_rate:${engagement.retryRate}%`] : []),
     ...(engagement.averageFailureSec !== undefined ? [`average_failure_sec:${engagement.averageFailureSec}`] : []),
+    ...(engagement.completed !== undefined ? [`completed_reads:${engagement.completed}`] : []),
+    ...(engagement.completionRate !== undefined ? [`completion_rate:${engagement.completionRate}%`] : []),
+    ...(engagement.averageProgressRate !== undefined ? [`average_progress_rate:${engagement.averageProgressRate}%`] : []),
+    ...(engagement.unitViews !== undefined ? [`unit_views:${engagement.unitViews}`] : []),
   ];
   return { ...report, evidence: [...report.evidence, ...evidence], engagement };
 }

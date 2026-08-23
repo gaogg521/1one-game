@@ -48,6 +48,7 @@ import type { ConsistencyReport } from "@/lib/novel-long-consistency";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
+import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
 
 interface Novel {
   id: string;
@@ -81,6 +82,7 @@ interface Novel {
     maxAttempts: number;
     progress: { percent?: number; stage?: string } | null;
   } | null;
+  literaryEngagement?: CreatorConsumptionSummary;
 }
 
 export default function NovelDetailPage() {
@@ -498,6 +500,10 @@ export default function NovelDetailPage() {
           </section>
         ) : null}
 
+        {!editing && novel.isOwner && novel.literaryEngagement ? (
+          <CreatorConsumptionPanel summary={novel.literaryEngagement} className="mx-auto mb-4 max-w-2xl" />
+        ) : null}
+
         {!editing && novel.isOwner && novel.chapterAdaptation ? (
           <div className="mx-auto max-w-2xl px-4 pb-3 lg:px-6">
             <ComicChapterAdaptationBanner
@@ -604,6 +610,7 @@ export default function NovelDetailPage() {
           />
         ) : (
           <NovelReader
+            workId={novel.id}
             content={novel.content}
             stripTitles={stripTitles}
             theme={readerTheme}

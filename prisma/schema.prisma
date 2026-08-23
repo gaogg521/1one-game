@@ -426,6 +426,22 @@ model GameplayEvent {
   @@index([sessionId])
 }
 
+/// 匿名文学消费信号：随机 session，不保存正文、提示词、账号、IP 或设备指纹。
+model LiteraryEngagementEvent {
+  id        String   @id @default(cuid())
+  workType  String
+  workId    String
+  sessionId String
+  event     String
+  /// chapter/page number; 0 for work-level start/complete events.
+  unitIndex Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([workType, workId, sessionId, event, unitIndex])
+  @@index([workType, workId, createdAt])
+  @@index([createdAt])
+}
+
 /// 平台运行时配置（密钥加密存储；模型等可覆盖 product-config 默认值）
 model PlatformRuntimeConfig {
   id              String   @id @default("default")

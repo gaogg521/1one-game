@@ -711,6 +711,15 @@
     "backgroundQueued": "Queued in the background. You can return to this work later.",
     "backgroundWorking": "Continuing in background ({percent}%)"
   },
+  "creatorEngagement": {
+    "title": "Reader feedback",
+    "noSamples": "No anonymous reading samples yet. Completion and page-turn data will appear here after publication.",
+    "starts": "Reading starts",
+    "completion": "Completion",
+    "progress": "Avg. progress",
+    "completed": "Completed reads",
+    "privacy": "Only random-session aggregates are retained. No account, manuscript, prompt, IP, or device data is collected."
+  },
   "comicPanel": {
     "consistencyTitle": "How does adaptation stay consistent?",
     "consistencyBody": "From the novel body and creative brief, the system locks character design → generates reference art in parallel → storyboard panels include dialogue/narration overlays (no readable text in the art) → panel art anchors to references and the first panel style. Long works generate storyboard text first, then parallel panel art on the comic page.",

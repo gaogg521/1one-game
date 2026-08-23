@@ -23,6 +23,7 @@ import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/c
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
+import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -71,10 +72,16 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
   const doc = parseComicDocument(row.imageUrls);
   const panelStats = countPanelsWithImages(doc);
+  const literaryEngagement = await summarizeLiteraryEngagement({ workType: "comic", workId: id, unitCount: Math.max(1, doc.pages.length) });
   const baseQuality = assessComicCreatorQuality(row.imageUrls).report;
   const quality = withCreatorEngagementQuality(baseQuality, {
-    sampleSize: row.likeCount,
+    sampleSize: literaryEngagement.sampleSize,
     likes: row.likeCount,
+    starts: literaryEngagement.starts,
+    completed: literaryEngagement.completed,
+    completionRate: literaryEngagement.completionRate,
+    averageProgressRate: literaryEngagement.averageProgressRate,
+    unitViews: literaryEngagement.unitViews,
   });
 
   const uiLocale = resolveRequestLocaleSync(req);
@@ -95,6 +102,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       visibility: row.visibility,
       workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
       quality,
+      ...(isOwner ? { literaryEngagement } : {}),
       isOwner: Boolean(isOwner),
       canDelete,
       panelsWithImage: panelStats.withImage,

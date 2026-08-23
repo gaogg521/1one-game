@@ -10,6 +10,7 @@ import { splitNovelParagraphs } from "@/lib/novel-paragraphs";
 import { NovelListenBar } from "@/components/novel/NovelListenBar";
 import { useNovelListen } from "@/hooks/use-novel-listen";
 import { NOVEL_READER_THEMES, type NovelReaderPalette, type NovelReaderThemeId } from "@/lib/novel-reader-theme";
+import { reportLiteraryEngagement } from "@/lib/literary-engagement.client";
 
 interface NovelReaderProps {
   content: string;
@@ -18,9 +19,10 @@ interface NovelReaderProps {
   /** 受控：与页面顶栏、站点导航统一阅读配色 */
   theme?: NovelReaderThemeId;
   onThemeChange?: (id: NovelReaderThemeId) => void;
+  workId?: string;
 }
 
-export function NovelReader({ content, stripTitles = [], theme: themeProp, onThemeChange }: NovelReaderProps) {
+export function NovelReader({ content, stripTitles = [], theme: themeProp, onThemeChange, workId }: NovelReaderProps) {
   const locale = useLocale() as AppLocale;
   const tr = useTranslations("novelReader");
   const chapters = useMemo(() => {
@@ -41,8 +43,23 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
   const t = NOVEL_READER_THEMES[theme];
 
   useEffect(() => {
-    if (chapters[0]?.id) setActiveId(chapters[0].id);
+    const firstId = chapters[0]?.id;
+    if (!firstId) return;
+    const timer = window.setTimeout(() => setActiveId(firstId), 0);
+    return () => window.clearTimeout(timer);
   }, [chapters]);
+
+  useEffect(() => {
+    if (workId) reportLiteraryEngagement({ workType: "novel", workId, event: "start" });
+  }, [workId]);
+
+  useEffect(() => {
+    if (!workId || !activeId) return;
+    const index = chapters.findIndex((chapter) => chapter.id === activeId);
+    if (index < 0) return;
+    reportLiteraryEngagement({ workType: "novel", workId, event: "unit_view", unitIndex: index + 1 });
+    if (index === chapters.length - 1) reportLiteraryEngagement({ workType: "novel", workId, event: "complete" });
+  }, [activeId, chapters, workId]);
 
   const scrollToChapter = useCallback((ch: NovelChapter) => {
     const el = document.getElementById(ch.id);

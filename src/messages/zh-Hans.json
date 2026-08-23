@@ -711,6 +711,15 @@
     "backgroundQueued": "已加入后台队列，可关闭页面后回来查看",
     "backgroundWorking": "后台续写中（{percent}%）"
   },
+  "creatorEngagement": {
+    "title": "真实读者反馈",
+    "noSamples": "尚无匿名阅读样本。公开后，完成阅读与翻页数据会在这里汇总。",
+    "starts": "开始阅读",
+    "completion": "完成率",
+    "progress": "平均进度",
+    "completed": "完成阅读",
+    "privacy": "仅汇总随机会话，不记录账号、正文、提示词、IP 或设备信息。"
+  },
   "comicPanel": {
     "consistencyTitle": "改编如何保证一致？",
     "consistencyBody": "基于小说正文与创作 Brief，系统会锁定人设 → 并行生成角色参考图 → 分镜每格附带对白/旁白叠字（画面不含可读文字）→ 配图锚定参考图与首格画风。中长篇默认先出分镜文字，再在漫画页并行配图。",

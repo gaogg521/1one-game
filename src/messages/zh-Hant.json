@@ -711,6 +711,15 @@
     "backgroundQueued": "已加入背景佇列，可關閉頁面後回來查看",
     "backgroundWorking": "背景續寫中（{percent}%）"
   },
+  "creatorEngagement": {
+    "title": "真實讀者回饋",
+    "noSamples": "尚無匿名閱讀樣本。公開後，完成閱讀與翻頁資料會在這裡彙總。",
+    "starts": "開始閱讀",
+    "completion": "完成率",
+    "progress": "平均進度",
+    "completed": "完成閱讀",
+    "privacy": "僅彙總隨機工作階段，不記錄帳號、正文、提示詞、IP 或裝置資訊。"
+  },
   "comicPanel": {
     "consistencyTitle": "改編如何保證一致？",
     "consistencyBody": "基於小說正文與創作 Brief，系統會鎖定人設 → 並行生成角色參考圖 → 分鏡每格附帶對白/旁白疊字（畫面不含可讀文字）→ 配圖錨定參考圖與首格畫風。中長篇預設先出分鏡文字，再在漫畫頁並行配圖。",

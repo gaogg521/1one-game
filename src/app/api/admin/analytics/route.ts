@@ -6,6 +6,7 @@ import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreator
 import type { CreatorQualityReport, CreatorWorkKind } from "@/lib/creator-workflow";
 import { parseGameSpec } from "@/lib/game-spec";
 import { prisma } from "@/lib/prisma";
+import { summarizeLiteraryEngagementRows } from "@/lib/literary-engagement";
 
 type QualityRow = { kind: CreatorWorkKind; templateId?: string; report: CreatorQualityReport };
 
@@ -71,6 +72,7 @@ export async function GET(req: Request) {
     qualityProjects,
     qualityNovels,
     qualityComics,
+    literaryEvents,
   ] = await Promise.all([
     prisma.shareEvent.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
     prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
@@ -143,6 +145,10 @@ export async function GET(req: Request) {
       take: 200,
       select: { imageUrls: true },
     }),
+    prisma.literaryEngagementEvent.findMany({
+      where: { createdAt: { gte: since } },
+      select: { workType: true, workId: true, sessionId: true, event: true, unitIndex: true },
+    }),
   ]);
 
   const planName = new Map(plans.map((p) => [p.id, p.name]));
@@ -199,6 +205,15 @@ export async function GET(req: Request) {
     if (event.event === "retry") row.retries += 1;
     gameplayByTemplate.set(event.templateId, row);
   }
+  const literaryByWork = summarizeLiteraryEngagementRows(literaryEvents, () => 1);
+  const literaryByType = (["novel", "comic"] as const).map((kind) => {
+    const summaries = [...literaryByWork.entries()]
+      .filter(([key]) => key.startsWith(`${kind}:`))
+      .map(([, summary]) => summary);
+    const starts = summaries.reduce((sum, summary) => sum + summary.starts, 0);
+    const completed = summaries.reduce((sum, summary) => sum + summary.completed, 0);
+    return { kind, starts, completed, completionRate: starts ? Math.round((completed / starts) * 1000) / 10 : 0, unitViews: summaries.reduce((sum, summary) => sum + summary.unitViews, 0) };
+  });
 
   // Admin receives aggregates only: no prompt, story text, image URL, owner
   // or work id leaves this route. Bad legacy specs are excluded rather than
@@ -334,6 +349,9 @@ export async function GET(req: Request) {
           retries: row.retries,
         }))
         .sort((a, b) => b.starts - a.starts),
+    },
+    literary: {
+      byType: literaryByType,
     },
     quality: {
       sampleLimitPerMedium: 200,
