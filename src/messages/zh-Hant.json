@@ -718,6 +718,10 @@
     "completion": "完成率",
     "progress": "平均進度",
     "completed": "完成閱讀",
+    "collecting": "正在累積可靠樣本（{count}/{min}）；不會影響發布資格。",
+    "healthy": "閱讀訊號健康，可繼續觀察。",
+    "lowCompletion": "完成率偏低。請複查結尾承諾與最終章節／頁前的節奏。",
+    "earlyDropoff": "讀者在第 {unit} 章／頁前流失較多。請複查開場、轉場和繼續閱讀的動機。",
     "privacy": "僅彙總隨機工作階段，不記錄帳號、正文、提示詞、IP 或裝置資訊。"
   },
   "comicPanel": {
@@ -2126,6 +2130,12 @@
     "chartQualityByTemplateSubtitle": "靜態評分與匿名試玩訊號並列展示；樣本不足不作為發布門檻",
     "chartQualityByTemplateHint": "就緒 {ready}/{evaluated} · 均分 {score} · 啟動 {starts} · 首分鐘 {rate}",
     "chartGameplayNoData": "遷移生效並產生試玩後，資料會顯示在這裡。",
+    "chartLiteraryReading": "文學閱讀品質",
+    "chartLiteraryReadingSubtitle": "匿名開始、完成和進度只作建議訊號；小樣本絕不阻斷發布。",
+    "chartLiteraryCollecting": "已累積 {starts} 次開始；達到 {min} 次後才形成品質訊號。",
+    "chartLiteraryReadingHint": "完成 {completion}% · 進度 {progress}% · 完成閱讀 {completed} · {state}",
+    "literaryAttention": "建議複查",
+    "literaryHealthy": "健康",
     "chartGrowthTrend": "增长趋势",
     "chartGrowthSubtitle": "近 {days} 日分享、注册与裂变",
     "seriesShareEvents": "分享事件",

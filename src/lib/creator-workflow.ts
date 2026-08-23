@@ -33,6 +33,8 @@ export type CreatorQualityEngagement = {
   completionRate?: number;
   averageProgressRate?: number;
   unitViews?: number;
+  literaryHealth?: "insufficient_sample" | "attention" | "healthy";
+  literaryAlertCodes?: string[];
 };
 
 export function resolveCreatorWorkStage(input: {

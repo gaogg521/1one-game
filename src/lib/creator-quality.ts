@@ -37,6 +37,8 @@ export function withCreatorEngagementQuality(
     ...(engagement.completionRate !== undefined ? [`completion_rate:${engagement.completionRate}%`] : []),
     ...(engagement.averageProgressRate !== undefined ? [`average_progress_rate:${engagement.averageProgressRate}%`] : []),
     ...(engagement.unitViews !== undefined ? [`unit_views:${engagement.unitViews}`] : []),
+    ...(engagement.literaryHealth !== undefined ? [`literary_engagement:${engagement.literaryHealth}`] : []),
+    ...(engagement.literaryAlertCodes ?? []).map((code) => `literary_alert:${code}`),
   ];
   return { ...report, evidence: [...report.evidence, ...evidence], engagement };
 }

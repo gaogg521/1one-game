@@ -58,9 +58,16 @@ async function main() {
     assert(novelSummary.starts === 1 && novelSummary.completed === 1, "duplicate start must be idempotent and completion retained");
     assert(novelSummary.completionRate === 100 && novelSummary.averageProgressRate === 100, "chapter progress must aggregate by anonymous session");
     const ownerDetail = await fetch(`${baseUrl}/api/novel/${novel.id}`, { headers: { Cookie: `${OWNER_COOKIE}=${owner}` } });
-    const detail = (await ownerDetail.json()) as { novel?: { literaryEngagement?: { starts?: number; completionRate?: number }; quality?: { engagement?: { completionRate?: number } } } };
+    const detail = (await ownerDetail.json()) as {
+      novel?: {
+        literaryEngagement?: { starts?: number; completionRate?: number; health?: { status?: string; minSamples?: number } };
+        quality?: { engagement?: { completionRate?: number; literaryHealth?: string } };
+      };
+    };
     assert(ownerDetail.ok && detail.novel?.literaryEngagement?.starts === 1, "owner detail must expose only aggregate reading insight");
     assert(detail.novel?.quality?.engagement?.completionRate === 100, "quality envelope must carry observed completion evidence");
+    assert(detail.novel?.literaryEngagement?.health?.status === "insufficient_sample" && detail.novel.literaryEngagement.health.minSamples === 10, "owner insight must expose the safe sample threshold");
+    assert(detail.novel?.quality?.engagement?.literaryHealth === "insufficient_sample", "quality envelope must carry the advisory health state");
     console.log("[OK] qa-literary-engagement-api");
   } finally {
     if (comicId) await prisma.comic.delete({ where: { id: comicId } }).catch(() => undefined);

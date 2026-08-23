@@ -6,7 +6,7 @@ import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreator
 import type { CreatorQualityReport, CreatorWorkKind } from "@/lib/creator-workflow";
 import { parseGameSpec } from "@/lib/game-spec";
 import { prisma } from "@/lib/prisma";
-import { summarizeLiteraryEngagementRows } from "@/lib/literary-engagement";
+import { assessLiteraryEngagementHealth, summarizeLiteraryEngagementRows } from "@/lib/literary-engagement";
 
 type QualityRow = { kind: CreatorWorkKind; templateId?: string; report: CreatorQualityReport };
 
@@ -212,7 +212,22 @@ export async function GET(req: Request) {
       .map(([, summary]) => summary);
     const starts = summaries.reduce((sum, summary) => sum + summary.starts, 0);
     const completed = summaries.reduce((sum, summary) => sum + summary.completed, 0);
-    return { kind, starts, completed, completionRate: starts ? Math.round((completed / starts) * 1000) / 10 : 0, unitViews: summaries.reduce((sum, summary) => sum + summary.unitViews, 0) };
+    const sampleSize = summaries.reduce((sum, summary) => sum + summary.sampleSize, 0);
+    const averageProgressRate = sampleSize
+      ? Math.round((summaries.reduce((sum, summary) => sum + summary.averageProgressRate * summary.sampleSize, 0) / sampleSize) * 10) / 10
+      : 0;
+    const completionRate = starts ? Math.round((completed / starts) * 1000) / 10 : 0;
+    const unitViews = summaries.reduce((sum, summary) => sum + summary.unitViews, 0);
+    const health = assessLiteraryEngagementHealth({
+      sampleSize,
+      starts,
+      completed,
+      completionRate,
+      averageProgressRate,
+      unitViews,
+      unitViewsByIndex: [],
+    });
+    return { kind, starts, completed, completionRate, averageProgressRate, unitViews, health };
   });
 
   // Admin receives aggregates only: no prompt, story text, image URL, owner

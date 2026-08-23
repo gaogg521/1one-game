@@ -718,6 +718,10 @@
     "completion": "完成率",
     "progress": "平均进度",
     "completed": "完成阅读",
+    "collecting": "正在积累可靠样本（{count}/{min}）；不会影响发布资格。",
+    "healthy": "阅读信号健康，可继续观察。",
+    "lowCompletion": "完成率偏低。请复查结尾承诺与最终章节/页前的节奏。",
+    "earlyDropoff": "读者在第 {unit} 章/页前流失较多。请复查开场、转场和继续阅读的动机。",
     "privacy": "仅汇总随机会话，不记录账号、正文、提示词、IP 或设备信息。"
   },
   "comicPanel": {
@@ -2199,6 +2203,12 @@
     "chartQualityByTemplateSubtitle": "静态评分与匿名试玩信号并列展示；样本不足不作为发布门槛",
     "chartQualityByTemplateHint": "就绪 {ready}/{evaluated} · 均分 {score} · 启动 {starts} · 首分钟 {rate}",
     "chartGameplayNoData": "迁移生效并产生试玩后，数据会显示在这里。",
+    "chartLiteraryReading": "文学阅读质量",
+    "chartLiteraryReadingSubtitle": "匿名开始、完成和进度只作建议信号；小样本绝不阻断发布。",
+    "chartLiteraryCollecting": "已积累 {starts} 次开始；达到 {min} 次后才形成质量信号。",
+    "chartLiteraryReadingHint": "完成 {completion}% · 进度 {progress}% · 完成阅读 {completed} · {state}",
+    "literaryAttention": "建议复查",
+    "literaryHealthy": "健康",
     "chartGrowthTrend": "增长趋势",
     "chartGrowthSubtitle": "近 {days} 日分享、注册与裂变",
     "seriesShareEvents": "分享事件",

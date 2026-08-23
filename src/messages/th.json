@@ -718,6 +718,10 @@
     "completion": "อัตราอ่านจบ",
     "progress": "ความคืบหน้าเฉลี่ย",
     "completed": "อ่านจบ",
+    "collecting": "กำลังเก็บตัวอย่างที่เชื่อถือได้ ({count}/{min}); ไม่มีผลต่อการเผยแพร่",
+    "healthy": "สัญญาณการอ่านอยู่ในเกณฑ์ดี ติดตามต่อได้",
+    "lowCompletion": "อัตราการอ่านจบต่ำ ควรทบทวนจังหวะและคำสัญญาของตอนจบ",
+    "earlyDropoff": "ผู้อ่านออกก่อนบท/หน้า {unit} มาก ควรทบทวนช่วงเปิด เรื่องเชื่อม และเหตุผลให้อ่านต่อ",
     "privacy": "เก็บเฉพาะข้อมูลรวมของเซสชันสุ่ม ไม่เก็บบัญชี ต้นฉบับ พรอมป์ต์ IP หรือข้อมูลอุปกรณ์"
   },
   "comicPanel": {
@@ -2126,6 +2130,12 @@
     "chartQualityByTemplateSubtitle": "แสดงคะแนนคงที่คู่กับสัญญาณการเล่นแบบไม่ระบุตัวตน; ตัวอย่างน้อยไม่ใช้เป็นเกณฑ์เผยแพร่",
     "chartQualityByTemplateHint": "พร้อม {ready}/{evaluated} · เฉลี่ย {score} · เริ่ม {starts} · นาทีแรก {rate}",
     "chartGameplayNoData": "ข้อมูลจะแสดงหลังจากย้ายฐานข้อมูลและมีเหตุการณ์การเล่น",
+    "chartLiteraryReading": "คุณภาพการอ่านงานวรรณกรรม",
+    "chartLiteraryReadingSubtitle": "การเริ่ม อ่านจบ และความคืบหน้าแบบไม่ระบุตัวตนเป็นเพียงสัญญาณแนะนำ ตัวอย่างน้อยจะไม่บล็อกการเผยแพร่",
+    "chartLiteraryCollecting": "เก็บแล้ว {starts} การเริ่ม ต้องมี {min} จึงจะเกิดสัญญาณคุณภาพ",
+    "chartLiteraryReadingHint": "อ่านจบ {completion}% · ความคืบหน้า {progress}% · จบแล้ว {completed} · {state}",
+    "literaryAttention": "ควรทบทวน",
+    "literaryHealthy": "ดี",
     "chartGrowthTrend": "Growth trend",
     "chartGrowthSubtitle": "Shares, signups & referrals in the last {days} days",
     "seriesShareEvents": "Share events",

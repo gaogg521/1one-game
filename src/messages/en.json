@@ -718,6 +718,10 @@
     "completion": "Completion",
     "progress": "Avg. progress",
     "completed": "Completed reads",
+    "collecting": "Collecting a reliable sample ({count}/{min}); this does not affect publication.",
+    "healthy": "Reading signals are healthy enough to keep observing.",
+    "lowCompletion": "Completion is low. Review the ending promise and pacing before the final chapter/page.",
+    "earlyDropoff": "Readers drop before chapter/page {unit}. Review the opening, transition, and reason to continue.",
     "privacy": "Only random-session aggregates are retained. No account, manuscript, prompt, IP, or device data is collected."
   },
   "comicPanel": {
@@ -2200,6 +2204,12 @@
     "chartQualityByTemplateSubtitle": "Static scores sit beside anonymous play signals; small samples never gate publishing",
     "chartQualityByTemplateHint": "Ready {ready}/{evaluated} · Avg {score} · Starts {starts} · First minute {rate}",
     "chartGameplayNoData": "Data appears here after migration and gameplay events arrive.",
+    "chartLiteraryReading": "Literary reading quality",
+    "chartLiteraryReadingSubtitle": "Anonymous starts, completion and progress are advisory signals only; small samples never block publication.",
+    "chartLiteraryCollecting": "Collecting {starts} starts; needs {min} before a quality signal.",
+    "chartLiteraryReadingHint": "Completion {completion}% · Progress {progress}% · Completed {completed} · {state}",
+    "literaryAttention": "review advised",
+    "literaryHealthy": "healthy",
     "chartGrowthTrend": "Growth trend",
     "chartGrowthSubtitle": "Shares, signups & referrals in the last {days} days",
     "seriesShareEvents": "Share events",

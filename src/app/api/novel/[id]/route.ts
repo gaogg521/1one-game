@@ -131,6 +131,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     completionRate: literaryEngagement.completionRate,
     averageProgressRate: literaryEngagement.averageProgressRate,
     unitViews: literaryEngagement.unitViews,
+    literaryHealth: literaryEngagement.health.status,
+    literaryAlertCodes: literaryEngagement.health.alerts.map((alert) => alert.code),
   });
   return NextResponse.json({
     novel: {

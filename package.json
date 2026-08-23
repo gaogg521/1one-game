@@ -111,6 +111,7 @@
     "qa:novel-continuation-executor": "tsx scripts/qa-novel-continuation-executor.ts",
     "qa:novel-continuation-job-api": "tsx scripts/qa-novel-continuation-job-api.ts",
     "qa:literary-engagement-api": "tsx scripts/qa-literary-engagement-api.ts",
+    "qa:literary-engagement-alerts": "tsx scripts/qa-literary-engagement-alerts.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
     "qa:xiangqi-commercial-runtime": "tsx scripts/qa-xiangqi-commercial-runtime.ts",
     "qa:board-showcase-samples": "tsx scripts/qa-board-showcase-samples.ts",

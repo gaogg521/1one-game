@@ -132,6 +132,17 @@ type Analytics = {
     starts: number; firstMinuteRate: number; firstActionRate: number; retries: number; averageFailureSec: number; averageQualityScore: number;
     byTemplate: { templateId: string; starts: number; firstMinuteRate: number; retries: number }[];
   };
+  literary: {
+    byType: {
+      kind: "novel" | "comic";
+      starts: number;
+      completed: number;
+      completionRate: number;
+      averageProgressRate: number;
+      unitViews: number;
+      health: { status: "insufficient_sample" | "attention" | "healthy"; minSamples: number; alerts: { code: string }[] };
+    }[];
+  };
   quality: {
     sampleLimitPerMedium: number;
     byMedium: { kind: "game" | "novel" | "comic"; evaluated: number; ready: number; needsPolish: number; blocked: number; averageScore: number | null }[];
@@ -858,6 +869,24 @@ export default function AdminConsolePage({
                   ) : (
                     <p className="text-sm text-[var(--gc-text-faint)]">{t("chartGameplayNoData")}</p>
                   )}
+                </ChartPanel>
+
+                <ChartPanel title={t("chartLiteraryReading")} subtitle={t("chartLiteraryReadingSubtitle")}>
+                  <AdminRankBars
+                    items={analytics.literary.byType.map((row) => ({
+                      label: row.kind === "novel" ? t("typeNovel") : t("typeComic"),
+                      value: row.starts,
+                      hint: row.health.status === "insufficient_sample"
+                        ? t("chartLiteraryCollecting", { starts: row.starts, min: row.health.minSamples })
+                        : t("chartLiteraryReadingHint", {
+                            completion: row.completionRate,
+                            progress: row.averageProgressRate,
+                            completed: row.completed,
+                            state: row.health.status === "attention" ? t("literaryAttention") : t("literaryHealthy"),
+                          }),
+                    }))}
+                    valueSuffix={t("timesSuffix")}
+                  />
                 </ChartPanel>
 
                 <ChartPanel title={t("chartQualityByMedium")} subtitle={t("chartQualityByMediumSubtitle", { limit: analytics.quality.sampleLimitPerMedium })}>

@@ -718,6 +718,10 @@
     "completion": "Kadar tamat",
     "progress": "Purata kemajuan",
     "completed": "Bacaan tamat",
+    "collecting": "Mengumpul sampel yang boleh dipercayai ({count}/{min}); ini tidak menjejaskan penerbitan.",
+    "healthy": "Isyarat pembacaan sihat dan boleh terus diperhatikan.",
+    "lowCompletion": "Kadar tamat rendah. Semak janji penutup dan rentak sebelum bab/halaman akhir.",
+    "earlyDropoff": "Ramai pembaca keluar sebelum bab/halaman {unit}. Semak pembukaan, peralihan dan sebab untuk terus membaca.",
     "privacy": "Hanya agregat sesi rawak disimpan. Tiada akaun, manuskrip, prompt, IP atau data peranti dikumpulkan."
   },
   "comicPanel": {
@@ -2126,6 +2130,12 @@
     "chartQualityByTemplateSubtitle": "Skor statik dipaparkan bersama isyarat permainan tanpa nama; sampel kecil tidak menyekat penerbitan",
     "chartQualityByTemplateHint": "Sedia {ready}/{evaluated} · Purata {score} · Mula {starts} · Minit pertama {rate}",
     "chartGameplayNoData": "Data akan muncul selepas migrasi dan acara permainan diterima.",
+    "chartLiteraryReading": "Kualiti pembacaan karya sastera",
+    "chartLiteraryReadingSubtitle": "Mula, tamat dan kemajuan tanpa nama hanyalah isyarat nasihat; sampel kecil tidak akan menyekat penerbitan.",
+    "chartLiteraryCollecting": "Terkumpul {starts} mula; perlu {min} untuk isyarat kualiti.",
+    "chartLiteraryReadingHint": "Tamat {completion}% · Kemajuan {progress}% · Bacaan tamat {completed} · {state}",
+    "literaryAttention": "semakan disyorkan",
+    "literaryHealthy": "sihat",
     "chartGrowthTrend": "Growth trend",
     "chartGrowthSubtitle": "Shares, signups & referrals in the last {days} days",
     "seriesShareEvents": "Share events",
