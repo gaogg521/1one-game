@@ -16,13 +16,15 @@ import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { comicPanelResumeHint } from "@/lib/comic-safety";
+import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
+import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 
 /** 漫画分镜配图：每格经网关文生图约 1～6 分钟，4 格顺序生成。 */
 export const maxDuration = 600;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-type PanelsBody = { regenerate?: boolean; page?: number; panel?: number };
+type PanelsBody = { regenerate?: boolean; page?: number; panel?: number; durable?: boolean };
 
 export async function POST(req: Request, ctx: RouteContext) {
   const uiLocale = resolveRequestLocaleSync(req);
@@ -83,6 +85,27 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const quotaBlock = await gateGenerationQuota("comicPanels", { refId: id });
   if (quotaBlock) return quotaBlock;
+
+  if (body.durable) {
+    const core = await mirrorComicToCreatorCore({ comic: row, cause: "refine" });
+    const scopeKey = body.regenerate ? `regen:${body.page ?? "all"}:${body.panel ?? "all"}` : "missing";
+    const job = await enqueueGenerationJob({
+      creativeProjectId: core.creativeProjectId,
+      creativeRevisionId: core.creativeRevisionId,
+      type: "comic_panel",
+      payload: {
+        comicId: id,
+        ownerKey,
+        regenerate: body.regenerate === true,
+        ...(typeof body.page === "number" ? { page: Math.floor(body.page) } : {}),
+        ...(typeof body.panel === "number" ? { panel: Math.floor(body.panel) } : {}),
+        uiLocale,
+      },
+      idempotencyKey: `comic-panel:${id}:${row.updatedAt.getTime()}:${scopeKey}`,
+      maxAttempts: 3,
+    });
+    return NextResponse.json({ ok: true, queued: true, job: { id: job.id, status: job.status }, core }, { status: 202 });
+  }
 
   const availability = getImageGenAvailability();
   const { title: storyTitle, summary: storySummary, genre: storyGenre } =

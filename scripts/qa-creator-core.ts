@@ -161,6 +161,15 @@ async function main() {
       assert(comicArtifacts.some((artifact) => artifact.kind === "comic_document"), "comic mirror must retain its document");
       assert(comicArtifacts.some((artifact) => artifact.kind === "style_lock"), "comic mirror must retain style and character locks");
       assert(comicArtifacts.some((artifact) => artifact.kind === "storyboard_page"), "comic mirror must retain storyboard pages");
+      const panelJob = await enqueueGenerationJob({
+        creativeProjectId: mirroredComic.creativeProjectId,
+        creativeRevisionId: mirroredComic.creativeRevisionId,
+        type: "comic_panel",
+        idempotencyKey: `${marker}:comic-panel`,
+        payload: { comicId: comic.id, ownerKey: marker, regenerate: false, uiLocale: "zh-Hans" },
+      });
+      const processedPanel = await processNextGenerationJob("qa-worker");
+      assert(processedPanel?.id === panelJob.id && processedPanel.status === "completed", "comic panel worker must execute durable work");
     } finally {
       await prisma.comic.delete({ where: { id: comic.id } });
       if (mirroredComicProjectId) await prisma.creativeProject.delete({ where: { id: mirroredComicProjectId } });

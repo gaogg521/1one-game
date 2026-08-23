@@ -84,6 +84,27 @@ export async function completeGenerationJob(id: string, outputArtifactId?: strin
   });
 }
 
+/** Extends a long-running worker lease and exposes coarse, owner-safe progress. */
+export async function heartbeatGenerationJob(
+  id: string,
+  workerId: string,
+  progress: { percent: number; stage: string; detail?: string },
+  leaseMs = 90_000,
+) {
+  const result = await prisma.generationJob.updateMany({
+    where: { id, status: "running", workerId },
+    data: {
+      leaseExpiresAt: new Date(Date.now() + leaseMs),
+      progressJson: JSON.stringify({
+        percent: Math.max(1, Math.min(99, Math.round(progress.percent))),
+        stage: progress.stage.slice(0, 96),
+        ...(progress.detail ? { detail: progress.detail.slice(0, 400) } : {}),
+      }),
+    },
+  });
+  return result.count === 1;
+}
+
 export async function failGenerationJob(id: string, error: unknown) {
   const current = await prisma.generationJob.findUniqueOrThrow({ where: { id } });
   const detail = error instanceof Error ? error.message : String(error);

@@ -422,3 +422,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 漫画详情中同页重排、跨页移动、增删格、增页、合页和单格文本编辑现统一经 `saveStoryboardRevision` 保存旧 Comic 后镜像为新的 `refine` Core revision；响应会返回 revision 或明确 `core.status=degraded`。
 - 这保证角色/风格锁、分镜文案和逐格图片的改动都有可追溯版本，而不是只覆盖 `imageUrls`。TypeScript、creator core QA 和该详情路由定向 ESLint 已通过。
+
+### P3 第三段：逐格渲染可恢复任务化
+
+- `GenerationJob` 增加可续租 heartbeat；`comic_panel` worker 校验 payload/作者归属、支持全册/页/单格重绘、每格完成持久化进度和图片，结束后将最终 Comic 再镜像为新的 Core revision。图像服务等待期间 25 秒续租，避免 90 秒默认 lease 被误回收。
+- 非流式 `POST /api/comic/:id/panels` 现支持 `durable:true`，返回 `202` 与幂等任务 ID；已有实时 SSE 渲染体验保持兼容。`GET /api/jobs/:id` 修复为优先读取新任务并按 Core Project owner 鉴权，返回安全的进度、重试与错误摘要。
+- `qa:creator-core` 现验证已完成图片的 `comic_panel` 任务完成“入队→认领→执行→完成→最终 Core revision”闭环，不调用付费模型。TypeScript、定向 ESLint 和 Prisma 校验均通过；缺图的真实供应商调用未用假结果替代。

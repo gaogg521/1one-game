@@ -41,6 +41,16 @@ export const ArtifactWritePayloadSchema = z.object({
   artifact: CreativeArtifactInputSchema,
 });
 
+export const ComicPanelJobPayloadSchema = z.object({
+  comicId: z.string().min(1).max(96),
+  ownerKey: z.string().min(1).max(160),
+  regenerate: z.boolean().default(false),
+  page: z.number().int().positive().optional(),
+  panel: z.number().int().positive().optional(),
+  uiLocale: z.string().min(2).max(16).default("zh-Hans"),
+});
+
 export type CreativeProjectInput = z.infer<typeof CreativeProjectInputSchema>;
 export type CreativeRevisionInput = z.infer<typeof CreativeRevisionInputSchema>;
 export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
+export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
