@@ -373,3 +373,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `visibilityWithQualityGuard`：仅当默认可见性为 `public` 且统一质量报告明确为 `blocked` 时，自动落为 `pending_review`；`needs_polish` 仍可发布，显式 `hidden`/`pending_review` 配置保持不变。
 - 游戏创建、小说普通/流式生成和漫画生成已接入。漫画在生成结束后依据完整面板质量更新可见性；不把未校准的消费指标作为自动拒绝条件。
 - 验证通过：TypeScript、`qa:creator-workflow`（含三条门禁断言）、`qa:creator-quality`、`qa:game-vertical-slice`。
+
+## 15. CTO 接管：创作者平台重构（2026-08-23，进行中）
+
+- 已在 `docs/creator-platform-rebuild-plan.md` 固化总路线：保留 Next.js 应用壳、账户、发现、商业化和 Phaser 播放器；重构创作内核为 Project / Revision / Artifact / GenerationJob / Evaluation / Publication。
+- 当前数据库的 Project、Novel、Comic 分别以 `specJson`、`content`、`imageUrls` 承载关键状态，长生成多由请求内 SSE 或进程内后台调用承担；`JobQueueItem` worker 仍是确认任务的占位实现。P1 先补可恢复任务和版本化产物，再以小说作为首条迁移样板。
+- 三条产品线目标：游戏为结构化设计与可执行试玩；小说为 Story Bible→纲要→场景→正文；漫画为角色/风格锁定→可编辑分镜→逐格可恢复渲染。禁止继续把一次性生成成功误报为创作者作品完成。
