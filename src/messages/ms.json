@@ -711,6 +711,14 @@
     "backgroundQueued": "Ditambah ke baris latar belakang. Anda boleh kembali kemudian.",
     "backgroundWorking": "Menyambung di latar belakang ({percent}%)"
   },
+  "creatorVersion": {
+    "title": "Versi penerbitan",
+    "currentConfirmed": "Versi v{sequence} ialah versi awam yang disahkan.",
+    "draftAhead": "Draf v{current} lebih baharu; pembaca masih melihat v{accepted} yang disahkan.",
+    "notConfirmed": "Versi v{sequence} hanya boleh dilihat oleh anda. Terbitkan untuk mengesahkannya kepada pembaca.",
+    "publishNote": "Penerbitan mengesahkan draf semasa dan menukar pembaca ke versi ini.",
+    "lastPublication": "Penerbitan terkini: {action} → {visibility}"
+  },
   "creatorEngagement": {
     "title": "Maklum balas pembaca",
     "noSamples": "Belum ada sampel bacaan tanpa nama. Data tamat baca dan selak halaman akan muncul selepas diterbitkan.",

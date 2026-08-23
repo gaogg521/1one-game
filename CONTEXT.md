@@ -615,3 +615,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 公开游戏读取不再直接把可编辑 legacy `Project.specJson` 当作已发布内容；当 Core 有作者确认 revision 时，匿名访客会读取该 revision 的 immutable `game_spec` artifact，作者本人仍读取当前可编辑草稿。
 - 小说与漫画的匿名读取同样投影到 `manuscript` 与 `comic_document` artifact；作者仍可读当前编辑稿。没有 Core 锚点的历史公开作品继续回退旧字段，避免迁移期间无故不可读。
 - 这使作者可以在已发布作品上继续 refine，而不会让访客在没有再次发布确认的情况下看到新玩法、正文或分镜。真实 `qa:creator-publication:http` 覆盖游戏发布/编辑隔离；`qa:literary-engagement-api` 覆盖匿名仍读已确认小说/分镜、作者读编辑稿，以及既有阅读事件路径；定向 ESLint 与 TypeScript 均通过。
+
+## P23 第一段：作者可见的确认版本状态（2026-08-23）
+
+- Owner Core snapshot 现同时返回 current revision 与 `acceptedRevision` 的版本号、摘要和完成时间；漫画详情 API 也补齐了与游戏、小说一致的 owner-only Core snapshot。
+- 游戏试玩、小说阅读和漫画详情新增统一“发布版本”状态卡：明确区分“当前版本已确认公开”“当前草稿领先、读者仍在已确认版本”“尚未确认”，并显示最近发布动作；卡片不对非 owner 暴露。
+- `qa:creator-publication` 验证确认 revision 出现在 owner snapshot；真实 `qa:creator-publication:http` 与 `qa:literary-engagement-api` 验证三媒介 owner API 均返回确认版本，且原有发布、下架、匿名读取和阅读事件仍通过。五语 JSON、定向 ESLint 和 TypeScript 均通过。

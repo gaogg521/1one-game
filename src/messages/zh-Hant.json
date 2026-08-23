@@ -711,6 +711,14 @@
     "backgroundQueued": "已加入背景佇列，可關閉頁面後回來查看",
     "backgroundWorking": "背景續寫中（{percent}%）"
   },
+  "creatorVersion": {
+    "title": "發布版本",
+    "currentConfirmed": "v{sequence} 已是作者確認的公開版本。",
+    "draftAhead": "目前草稿 v{current} 較新；讀者仍閱讀已確認的 v{accepted}。",
+    "notConfirmed": "v{sequence} 目前僅自己可見，發布後才會確認給讀者。",
+    "publishNote": "發布會確認目前草稿，並讓讀者切換到這個版本。",
+    "lastPublication": "最近發布動作：{action} → {visibility}"
+  },
   "creatorEngagement": {
     "title": "真實讀者回饋",
     "noSamples": "尚無匿名閱讀樣本。公開後，完成閱讀與翻頁資料會在這裡彙總。",

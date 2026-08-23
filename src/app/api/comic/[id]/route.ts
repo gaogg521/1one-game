@@ -25,7 +25,7 @@ import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
-import { getAcceptedLegacyArtifact } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -100,6 +100,9 @@ export async function GET(req: Request, ctx: RouteContext) {
   });
 
   const uiLocale = resolveRequestLocaleSync(req);
+  const creatorCore = isOwner
+    ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "comic", legacyId: id })
+    : null;
 
   return NextResponse.json({
     comic: {
@@ -118,6 +121,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
       quality,
       ...(isOwner ? { literaryEngagement } : {}),
+      ...(isOwner ? { creatorCore } : {}),
       isOwner: Boolean(isOwner),
       canDelete,
       panelsWithImage: panelStats.withImage,

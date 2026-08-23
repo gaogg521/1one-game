@@ -711,6 +711,14 @@
     "backgroundQueued": "已加入后台队列，可关闭页面后回来查看",
     "backgroundWorking": "后台续写中（{percent}%）"
   },
+  "creatorVersion": {
+    "title": "发布版本",
+    "currentConfirmed": "v{sequence} 已是作者确认的公开版本。",
+    "draftAhead": "当前草稿 v{current} 更新；读者仍在阅读已确认的 v{accepted}。",
+    "notConfirmed": "v{sequence} 目前仅自己可见，发布后才会确认给读者。",
+    "publishNote": "发布会确认当前草稿，并让读者切换到这个版本。",
+    "lastPublication": "最近发布动作：{action} → {visibility}"
+  },
   "creatorEngagement": {
     "title": "真实读者反馈",
     "noSamples": "尚无匿名阅读样本。公开后，完成阅读与翻页数据会在这里汇总。",

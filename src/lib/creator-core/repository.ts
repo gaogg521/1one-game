@@ -230,6 +230,12 @@ export async function getLegacyCreativeProjectSnapshot(input: {
   if (!project || project.ownerKey !== input.ownerKey) return null;
 
   const revision = project.revisions[0];
+  const acceptedRevision = project.acceptedRevisionId
+    ? await prisma.creativeRevision.findUnique({
+      where: { id: project.acceptedRevisionId },
+      select: { id: true, sequence: true, status: true, summary: true, finalizedAt: true },
+    })
+    : null;
   return {
     project: {
       id: project.id,
@@ -237,6 +243,7 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       title: project.title,
       visibility: project.visibility,
       acceptedRevisionId: project.acceptedRevisionId,
+      acceptedRevision,
       updatedAt: project.updatedAt,
       evaluation: project.evaluations[0]
         ? {

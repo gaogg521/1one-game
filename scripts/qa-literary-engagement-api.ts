@@ -94,12 +94,17 @@ async function main() {
       novel?: {
         literaryEngagement?: { starts?: number; completionRate?: number; health?: { status?: string; minSamples?: number } };
         quality?: { engagement?: { completionRate?: number; literaryHealth?: string } };
+        creatorCore?: { project?: { acceptedRevision?: { id?: string } | null } | null } | null;
       };
     };
     assert(ownerDetail.ok && detail.novel?.literaryEngagement?.starts === 1, "owner detail must expose only aggregate reading insight");
     assert(detail.novel?.quality?.engagement?.completionRate === 100, "quality envelope must carry observed completion evidence");
     assert(detail.novel?.literaryEngagement?.health?.status === "insufficient_sample" && detail.novel.literaryEngagement.health.minSamples === 10, "owner insight must expose the safe sample threshold");
     assert(detail.novel?.quality?.engagement?.literaryHealth === "insufficient_sample", "quality envelope must carry the advisory health state");
+    assert(detail.novel?.creatorCore?.project?.acceptedRevision?.id === acceptedNovel.creativeRevisionId, "owner novel response must expose the confirmed revision for version UI");
+    const ownerComicDetail = await fetch(`${baseUrl}/api/comic/${comic.id}`, { headers: { Cookie: `${OWNER_COOKIE}=${owner}` } });
+    const ownerComicBody = (await ownerComicDetail.json()) as { comic?: { creatorCore?: { project?: { acceptedRevision?: { id?: string } | null } | null } | null } };
+    assert(ownerComicDetail.ok && ownerComicBody.comic?.creatorCore?.project?.acceptedRevision?.id === acceptedComic.creativeRevisionId, "owner comic response must expose the confirmed revision for version UI");
     console.log("[OK] qa-literary-engagement-api");
   } finally {
     if (comicId) await prisma.comic.delete({ where: { id: comicId } }).catch(() => undefined);

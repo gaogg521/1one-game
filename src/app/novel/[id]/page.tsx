@@ -49,6 +49,7 @@ import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
+import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
 
 interface Novel {
   id: string;
@@ -83,6 +84,14 @@ interface Novel {
     progress: { percent?: number; stage?: string } | null;
   } | null;
   literaryEngagement?: CreatorConsumptionSummary;
+  creatorCore?: {
+    revision?: { id: string; sequence: number; status?: string; summary?: string | null; finalizedAt?: string | null } | null;
+    project?: {
+      acceptedRevisionId?: string | null;
+      acceptedRevision?: { id: string; sequence: number; status?: string; summary?: string | null; finalizedAt?: string | null } | null;
+      publications?: Array<{ action: string; visibility: string; decision?: string; createdAt?: string }>;
+    };
+  } | null;
 }
 
 export default function NovelDetailPage() {
@@ -294,6 +303,7 @@ export default function NovelDetailPage() {
                 </>
               }
             />
+            {novel.isOwner ? <CreatorVersionStatus core={novel.creatorCore} className="mt-4" /> : null}
           </div>
         ) : null}
         <header

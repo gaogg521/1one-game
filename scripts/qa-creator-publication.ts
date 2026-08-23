@@ -1,6 +1,7 @@
 import { prisma } from "../src/lib/prisma";
 import { CreatorPublicationError, setCreatorWorkPublication } from "../src/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
+import { getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { defaultWorkVisibility } from "../src/lib/auth/work-visibility";
 import { canReadWorkPublicly } from "../src/lib/literary-safety";
@@ -35,6 +36,8 @@ async function main() {
     assert(persisted.visibility === "public", "legacy work must become public");
     assert(core.visibility === "public" && core.status === "published", "core publication state must stay in sync");
     assert(core.acceptedRevisionId, "publish must explicitly accept an immutable revision");
+    const ownerSnapshot = await getLegacyCreativeProjectSnapshot({ ownerKey, legacyType: "project", legacyId: game.id });
+    assert(ownerSnapshot?.project.acceptedRevision?.id === core.acceptedRevisionId, "owner snapshot must expose the confirmed revision for version UI");
     const publishDecision = await prisma.creativePublication.findFirst({
       where: { creativeProjectId: coreId, action: "publish" },
       orderBy: { createdAt: "desc" },

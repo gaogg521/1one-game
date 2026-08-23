@@ -33,6 +33,7 @@ import { resolveLiteraryAdaptationUserInfo } from "@/lib/literary-adaptation-use
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { reportLiteraryEngagement } from "@/lib/literary-engagement.client";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
+import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
 
 interface Comic {
   id: string;
@@ -54,6 +55,14 @@ interface Comic {
   panelsTotal?: number;
   quality?: CreatorQualityReport;
   literaryEngagement?: CreatorConsumptionSummary;
+  creatorCore?: {
+    revision?: { id: string; sequence: number; status?: string; summary?: string | null; finalizedAt?: string | null } | null;
+    project?: {
+      acceptedRevisionId?: string | null;
+      acceptedRevision?: { id: string; sequence: number; status?: string; summary?: string | null; finalizedAt?: string | null } | null;
+      publications?: Array<{ action: string; visibility: string; decision?: string; createdAt?: string }>;
+    };
+  } | null;
 }
 
 type DurablePanelJob = {
@@ -721,6 +730,7 @@ export default function ComicDetailPage() {
               </p>
             }
           />
+          {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} className="mt-4" /> : null}
           </div>
 
           {(missingImages || rendering || (comic.isOwner && panelStats.withImage > 0)) && (

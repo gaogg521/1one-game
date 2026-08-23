@@ -23,6 +23,7 @@ import { WorkShareBar } from "@/components/share/WorkShareBar";
 import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { PublishWorkButton } from "@/components/work/PublishWorkButton";
+import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -35,6 +36,8 @@ type CoreSnapshot = {
   project?: {
     evaluation?: { verdict: string; score: number; evidence: unknown; createdAt: string } | null;
     publications?: Array<{ action: string; visibility: string; decision: string; createdAt: string }>;
+    acceptedRevisionId?: string | null;
+    acceptedRevision?: { id: string; sequence: number; status: string; summary: string | null; finalizedAt: string | null } | null;
   };
 };
 type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
@@ -685,6 +688,7 @@ export function PlayGameClient({ id }: { id: string }) {
               ) : null}
               {meta.isOwner && core?.revision ? (
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
+                  <CreatorVersionStatus core={core} className="mb-2" />
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
                   {core.project?.evaluation ? (
