@@ -888,6 +888,7 @@
     "continueDone": "Continue writing complete",
     "continueNoDelta": "Continue writing did not add body text",
     "continueFailed": "Continue failed: models returned no valid delta, retry later",
+    "continueConflict": "The manuscript changed elsewhere. Your continuation checkpoint is preserved; reload before continuing.",
     "continueProcessError": "Continue process error",
     "continuePrep": "Preparing long-form continue…",
     "bibleRecoverStart": "Pipeline archive missing — rebuilding character bible…",

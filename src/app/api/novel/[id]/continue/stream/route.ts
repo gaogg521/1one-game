@@ -240,7 +240,7 @@ export async function POST(req: Request, ctx: RouteContext) {
             send({
               step: "conflict",
               code: codes.BAD_REQUEST,
-              message: progressNovelMessage(uiLocale, "continueInterrupted"),
+              message: progressNovelMessage(uiLocale, "continueConflict"),
               requestId,
             });
             return;

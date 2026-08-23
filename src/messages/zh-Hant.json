@@ -888,6 +888,7 @@
     "continueDone": "續寫完成",
     "continueNoDelta": "續寫未增加正文长度",
     "continueFailed": "續寫失败：模型未返回有效增量，请稍后重试",
+    "continueConflict": "正文已在別處更新；續寫斷點已保留，請重新載入後繼續。",
     "continueProcessError": "續寫过程异常",
     "continuePrep": "正在准备长篇續寫…",
     "bibleRecoverStart": "未找到流水线存档，正在恢复設定圣经…",
