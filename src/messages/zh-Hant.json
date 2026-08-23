@@ -2743,7 +2743,13 @@
     "recentRefineTitle": "最近精煉（最新在后）",
     "createWithSamplePrompt": "用此 prompt 去创作台 →",
     "coreRevision": "已儲存的創作版本 v{sequence}",
-    "coreRevisionReady": "可試玩設計、品質評估與創作意圖已封存"
+    "coreRevisionReady": "可試玩設計、品質評估與創作意圖已封存",
+    "assetJobReady": "美術資產可在背景補齊，不會中斷試玩。",
+    "assetJobStart": "補齊美術資產",
+    "assetJobQueueing": "正在入隊…",
+    "assetJobActive": "美術資產生成中：{percent}% · {stage}",
+    "assetJobFailed": "無法建立美術資產任務",
+    "assetJobNetworkError": "美術資產任務網路異常"
     ,"playtestAdviceTitle": "試玩回饋建議",
     "playtestAdvice": {"collect_samples":"先邀請至少 5 位試玩者；目前樣本不足以判斷玩法問題。","first_action":"首次操作率偏低：在開場加入可點擊目標和一行明確操作提示。","first_minute":"首分鐘留存偏低：縮短首次獎勵或變化出現前的等待時間。","early_failure":"失敗發生過早：降低前 20 秒的危險密度，或增加一次容錯機會。","retry_friction":"失敗後重試偏低：讓重試按鈕更明顯，並縮短重新開始等待。","healthy":"目前樣本未顯示明顯試玩阻塞；繼續收集樣本再校準。"}
   },

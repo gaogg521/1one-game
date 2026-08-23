@@ -34,6 +34,10 @@ async function main() {
     projectId = created.project.id;
     coreProjectId = created.core.creativeProjectId;
 
+    const queuedDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, { headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` } });
+    const queuedDetail = (await queuedDetailResponse.json()) as { assetJob?: { id?: string; status?: string } };
+    assert(queuedDetailResponse.ok && queuedDetail.assetJob?.id === created.assetJob.id, "owner detail must expose only its active asset job");
+
     const spriteDir = repoPublicPath("game-sprites", projectId);
     await fs.mkdir(spriteDir, { recursive: true });
     await fs.mkdir(repoPublicPath("game-bg"), { recursive: true });
@@ -64,6 +68,18 @@ async function main() {
     const detail = (await detailResponse.json()) as { core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string }> } } };
     assert(detailResponse.ok && detail.core?.revision?.id === created.core.creativeRevisionId, "owner must retain the creation revision");
     assert(detail.core.revision.artifacts?.some((artifact) => artifact.kind === "asset_manifest"), "Core revision must retain its generated asset manifest");
+
+    const recoveryResponse = await fetch(`${baseUrl}/api/projects/${projectId}/background`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ durable: true }),
+    });
+    const recovery = (await recoveryResponse.json()) as { job?: { id?: string; status?: string } };
+    assert(recoveryResponse.status === 202 && recovery.job?.id && recovery.job.status === "queued", "owner must explicitly queue recoverable art completion");
+
+    const recoveryProcessedResponse = await fetch(`${baseUrl}/api/jobs/worker`, { method: "POST", headers: { "x-worker-id": "qa-game-assets-recovery-worker" } });
+    const recoveryProcessed = (await recoveryProcessedResponse.json()) as { job?: { id?: string; status?: string } };
+    assert(recoveryProcessedResponse.ok && recoveryProcessed.job?.id === recovery.job.id && recoveryProcessed.job.status === "completed", "worker must complete an explicit recovery task");
     console.log("[OK] qa-game-asset-job-api");
   } finally {
     if (projectId) {

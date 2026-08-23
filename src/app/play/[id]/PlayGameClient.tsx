@@ -11,7 +11,6 @@ import { SampleParityTrustBadge } from "@/components/SampleParityTrustBadge";
 import { resolveSampleParityUserInfo } from "@/lib/sample-parity-user";
 import { buildCreatePrefillPath } from "@/lib/sample-create-prefill";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
-import { writeAssetManifestToSession } from "@/lib/assets/asset-manifest-session.client";
 import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
 import { PRODUCT } from "@/lib/product-config";
@@ -31,6 +30,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null };
 type CoreSnapshot = { revision: CoreRevision | null };
 type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
+type AssetJob = { id: string; status: "queued" | "running" | "retrying"; attempts: number; maxAttempts: number; progress: { percent?: number; stage?: string } | null };
 
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
@@ -67,6 +67,8 @@ export function PlayGameClient({ id }: { id: string }) {
   const [playCount, setPlayCount] = useState(0);
   const [core, setCore] = useState<CoreSnapshot | null>(null);
   const [playtestAdvice, setPlaytestAdvice] = useState<PlaytestAdvice[]>([]);
+  const [assetJob, setAssetJob] = useState<AssetJob | null>(null);
+  const [assetJobBusy, setAssetJobBusy] = useState(false);
 
   const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
 
@@ -88,6 +90,7 @@ export function PlayGameClient({ id }: { id: string }) {
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           core?: CoreSnapshot;
+          assetJob?: AssetJob;
           playtestAdvice?: PlaytestAdvice[];
           error?: string;
           errorKey?: string;
@@ -106,17 +109,6 @@ export function PlayGameClient({ id }: { id: string }) {
           if (PRODUCT.godot.enabled && isGodotExportSupported(data.spec)) {
             prefetchGodotExport(data.spec, { projectId: id });
           }
-          // 保险：若精灵/背景尚未生成，后台静默触发一次（服务端有缓存，重复无害）
-          void fetch(`/api/projects/${id}/background`, {
-            method: "POST",
-            keepalive: true,
-            headers: apiHeaders(),
-          })
-            .then((r) => (r.ok ? r.json() : null))
-            .then((payload) => {
-              if (payload?.assetManifest) writeAssetManifestToSession(payload.assetManifest);
-            })
-            .catch(() => {});
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
@@ -141,6 +133,7 @@ export function PlayGameClient({ id }: { id: string }) {
             setRefinementHistory([]);
           }
           setCore(data.core ?? null);
+          setAssetJob(data.assetJob ?? null);
           setPlaytestAdvice(Array.isArray(data.playtestAdvice) ? data.playtestAdvice : []);
         }
       } catch {
@@ -151,6 +144,48 @@ export function PlayGameClient({ id }: { id: string }) {
       cancelled = true;
     };
   }, [id, locale, t]);
+
+  useEffect(() => {
+    if (!assetJob?.id) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const res = await fetch(`/api/jobs/${assetJob.id}`, { headers: apiHeaders() });
+        const data = (await res.json()) as { status?: string; attempts?: number; maxAttempts?: number; progress?: AssetJob["progress"] };
+        if (cancelled) return;
+        if (data.status === "queued" || data.status === "running" || data.status === "retrying") {
+          setAssetJob({ id: assetJob.id, status: data.status, attempts: data.attempts ?? assetJob.attempts, maxAttempts: data.maxAttempts ?? assetJob.maxAttempts, progress: data.progress ?? null });
+        } else {
+          setAssetJob(null);
+        }
+      } catch { /* retain last visible task state until next poll */ }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [assetJob?.id, assetJob?.attempts, assetJob?.maxAttempts, locale]);
+
+  async function queueAssetRecovery() {
+    if (!meta?.isOwner || assetJobBusy || assetJob) return;
+    setAssetJobBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${id}/background`, {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ durable: true }),
+      });
+      const data = (await res.json()) as { job?: { id?: string; status?: AssetJob["status"] }; error?: string; errorKey?: string; errorParams?: Record<string, string | number> };
+      if (!res.ok || !data.job?.id || !data.job.status) {
+        setPatchError(resolveClientApiError(locale, data, "assetJobFailed"));
+        return;
+      }
+      setAssetJob({ id: data.job.id, status: data.job.status, attempts: 0, maxAttempts: 3, progress: { percent: 0, stage: "queued" } });
+    } catch {
+      setPatchError(t("assetJobNetworkError"));
+    } finally {
+      setAssetJobBusy(false);
+    }
+  }
 
   async function copyLink() {
     const url = typeof window !== "undefined" ? window.location.href : "";
@@ -625,6 +660,20 @@ export function PlayGameClient({ id }: { id: string }) {
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
+                </div>
+              ) : null}
+              {meta.isOwner ? (
+                <div className="rounded-xl border border-violet-400/25 bg-violet-950/20 px-3 py-2 text-[11px] text-violet-100" data-testid="game-asset-job">
+                  {assetJob ? (
+                    <p>{t("assetJobActive", { percent: assetJob.progress?.percent ?? 0, stage: assetJob.progress?.stage ?? assetJob.status })}</p>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <p>{t("assetJobReady")}</p>
+                      <button type="button" disabled={assetJobBusy} onClick={() => void queueAssetRecovery()} className="rounded-full border border-violet-300/35 px-2 py-1 font-medium hover:bg-violet-300/10 disabled:opacity-50">
+                        {assetJobBusy ? t("assetJobQueueing") : t("assetJobStart")}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : null}
               {meta.isOwner && playtestAdvice.length > 0 ? (

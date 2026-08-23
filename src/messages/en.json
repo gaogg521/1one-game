@@ -2766,7 +2766,13 @@
     "applyAndSave": "Apply & save",
     "recentRefineTitle": "Recent refinements (newest last)",
     "coreRevision": "Saved creator revision v{sequence}",
-    "coreRevisionReady": "Playable design, quality evaluation, and intent are archived"
+    "coreRevisionReady": "Playable design, quality evaluation, and intent are archived",
+    "assetJobReady": "Art assets can be completed in the background without interrupting play.",
+    "assetJobStart": "Complete art assets",
+    "assetJobQueueing": "Queueing…",
+    "assetJobActive": "Generating art assets: {percent}% · {stage}",
+    "assetJobFailed": "Could not create the art-asset task",
+    "assetJobNetworkError": "Network error while creating the art-asset task"
     ,"playtestAdviceTitle": "Playtest advice",
     "playtestAdvice": {"collect_samples":"Invite at least five playtesters before drawing conclusions.","first_action":"First-action rate is low: add a clear target and one-line control cue at the start.","first_minute":"First-minute retention is low: bring the first reward or variation forward.","early_failure":"Failures happen too early: ease the first 20 seconds or add one forgiveness moment.","retry_friction":"Retries are low after failures: make retry obvious and reduce restart wait.","healthy":"No clear playtest blocker in the current sample; keep collecting data."}
   },

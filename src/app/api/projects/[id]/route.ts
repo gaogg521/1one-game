@@ -51,6 +51,21 @@ export async function GET(req: Request, ctx: RouteContext) {
     const core = isOwner
       ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
       : null;
+    const assetJob = isOwner && core
+      ? await prisma.generationJob.findFirst({
+          where: {
+            creativeProjectId: core.project.id,
+            type: "game_asset",
+            status: { in: ["queued", "running", "retrying"] },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, status: true, attempts: true, maxAttempts: true, progressJson: true },
+        })
+      : null;
+    let assetJobProgress: unknown = null;
+    if (assetJob?.progressJson) {
+      try { assetJobProgress = JSON.parse(assetJob.progressJson); } catch { /* corrupted progress stays hidden */ }
+    }
     if (isOwner) {
       const logRaw = await fetchRefinementLogJson(id);
       refinementHistory = parseRefinementLog(logRaw).slice(-12);
@@ -104,6 +119,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
       ...(core ? { core } : {}),
+      ...(assetJob ? { assetJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(isOwner ? { playtestAdvice: buildGamePlaytestAdvice(quality.engagement ?? { sampleSize: 0 }) } : {}),
     });
   } catch (error) {

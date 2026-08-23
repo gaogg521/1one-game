@@ -452,3 +452,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 游戏创建不再仅在 Web 进程内 fire-and-forget 生成背景、精灵和 Brief 封面。创建 Core revision 成功后，`game_asset` 会以 revision 级不可变 spec/Brief 入 `GenerationJob`，由现有生产 worker 租约、进度、退避与重试机制消费；worker 复核 Core/旧 Project 作者归属，并把 `asset_manifest` 写进同一 revision。
 - 背景生成补齐本地缓存复用，重试不会对已成功的背景再次计费。Core 写入失败时保留原有非阻塞资产管线，API 会明确返回 `core.status=degraded`，而不把保存失败伪装为任务已入队。
 - 新 `qa:game-asset-job-api` 用真实本机 Next HTTP 验证“创建 → durable job queued → worker 完成 → 作者可查 100% 进度 → Core revision 保留 asset_manifest”闭环；测试预置本地资产缓存，不触发付费图像供应商。后续仍需让试玩页显示该活跃任务并提供作者发起的显式重绘入口。
+
+### P4 收尾：游戏资产任务作者可见性（2026-08-23）
+
+- 作者试玩页不再在加载时静默调用同步资产生成接口；公开访客也无法触发该接口。作品详情仅向 owner 返回当前 `game_asset` 的脱敏状态和进度，试玩页每 3 秒轮询任务状态，并显示“补齐美术资产”这一显式、可恢复动作。
+- `POST /api/projects/:id/background` 保持旧同步兼容路径，但作者传 `durable:true` 时会先建立新的 Core revision 后返回 `202` durable job；任务由 production generation worker 完成，作品与版本归属均在 worker 中复核。
+- `qa:game-asset-job-api` 扩展验证 owner 详情可恢复活动任务、首次任务完成后作者可显式入队第二次恢复任务并由 worker 完成。生产构建通过。Windows 开发链残留的孤立 `.next/dev` PostCSS 进程会破坏 `routes.d.ts`；本次已终止两条无父进程的陈旧 worker 后，在独占环境中完成构建，不应将该缓存问题误判为业务类型回归。
