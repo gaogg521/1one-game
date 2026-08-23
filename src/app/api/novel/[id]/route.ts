@@ -25,7 +25,7 @@ import { localizedJsonError } from "@/lib/api/localized-error";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
-import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 import { checkSegmentConsistency } from "@/lib/novel-long-consistency";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
@@ -54,9 +54,12 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
-  const acceptedManuscript = !isOwner
-    ? await getAcceptedLegacyArtifact({ legacyType: "novel", legacyId: id, kind: "manuscript" })
-    : null;
+  const [acceptedManuscript, acceptedDisplay] = !isOwner
+    ? await Promise.all([
+        getAcceptedLegacyArtifact({ legacyType: "novel", legacyId: id, kind: "manuscript" }),
+        getAcceptedLegacyPublicationDisplay({ legacyType: "novel", legacyId: id }),
+      ])
+    : [null, null];
   // Readers must consume the manuscript the author explicitly confirmed,
   // while owners can keep editing a newer legacy draft before republishing.
   const visibleContent = acceptedManuscript?.textContent?.trim() || row.content;
@@ -144,16 +147,16 @@ export async function GET(req: Request, ctx: RouteContext) {
   return NextResponse.json({
     novel: {
       id: row.id,
-      title: row.title,
-      prompt: row.prompt,
+      title: acceptedDisplay?.title?.trim() || row.title,
+      prompt: acceptedDisplay?.prompt?.trim() || row.prompt,
       content: visibleContent,
-      summary: row.summary,
-      lengthTier: row.lengthTier,
+      summary: acceptedDisplay?.summary?.trim() || row.summary,
+      lengthTier: acceptedDisplay?.lengthTier?.trim() || row.lengthTier,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       shareCode: row.shareCode,
       /** 仅使用小说专属封面，禁止用漫画首格顶替（避免玄幻配图污染小说封面） */
-      coverPath: row.coverPath?.trim() || null,
+      coverPath: acceptedDisplay?.coverPath?.trim() || row.coverPath?.trim() || null,
       playCount: row.playCount,
       likeCount: row.likeCount,
       status: row.status,

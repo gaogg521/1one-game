@@ -1,7 +1,7 @@
 import { prisma } from "../src/lib/prisma";
 import { CreatorPublicationError, setCreatorWorkPublication } from "../src/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
-import { getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
+import { getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { defaultWorkVisibility } from "../src/lib/auth/work-visibility";
 import { canReadWorkPublicly } from "../src/lib/literary-safety";
@@ -21,7 +21,10 @@ async function main() {
   const ownerKey = `qa-publication-${Date.now()}`;
   const spec = prepareGameSpecForPersist(undefined, "霓虹飞船穿过机械舰队");
   const game = await prisma.project.create({
-    data: { ownerKey, title: spec.title, prompt: "霓虹飞船穿过机械舰队", specJson: JSON.stringify(spec), status: "ready", visibility: "hidden" },
+    data: {
+      ownerKey, title: spec.title, prompt: "霓虹飞船穿过机械舰队", specJson: JSON.stringify(spec),
+      coverPath: "/covers/qa-confirmed-game.jpg", status: "ready", visibility: "hidden",
+    },
   });
   const comic = await prisma.comic.create({
     data: { ownerKey, title: "空白分镜", prompt: "测试", imageUrls: JSON.stringify({ pages: [{ page: 1, panels: [] }] }), status: "ready", visibility: "hidden" },
@@ -44,6 +47,10 @@ async function main() {
     });
     assert(publishDecision?.decision === "approved" && publishDecision.visibility === "public", "publish must write an immutable Core decision");
     assert(publishDecision?.creativeRevisionId === core.acceptedRevisionId, "publication must point to the author-accepted revision");
+    const acceptedDisplay = await getAcceptedLegacyPublicationDisplay({ legacyType: "project", legacyId: game.id });
+    assert(acceptedDisplay?.title === game.title, "publish must capture the reader-facing title with the accepted revision");
+    assert(acceptedDisplay?.prompt === game.prompt, "publish must capture the reader-facing prompt with the accepted revision");
+    assert(acceptedDisplay?.coverPath === game.coverPath, "publish must capture the reader-facing cover with the accepted revision");
 
     const newerRevision = await mirrorGameToCreatorCore({ project: game, cause: "refine" });
     assert(newerRevision.creativeRevisionId !== core.acceptedRevisionId, "a refinement must create a separate immutable revision");

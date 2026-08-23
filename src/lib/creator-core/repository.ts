@@ -172,6 +172,24 @@ export async function getAcceptedLegacyArtifact(input: {
 }
 
 /**
+ * Publication display fields are captured only when an author publishes a
+ * revision. They deliberately live beside the content artifact because a
+ * legacy row may receive a newer title, prompt, summary or cover afterwards.
+ */
+export async function getAcceptedLegacyPublicationDisplay(input: {
+  legacyType: string;
+  legacyId: string;
+}) {
+  const artifact = await getAcceptedLegacyArtifact({ ...input, kind: "publication_display" });
+  if (!artifact?.content || typeof artifact.content !== "object" || Array.isArray(artifact.content)) return null;
+  const fields: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(artifact.content)) {
+    if (typeof value === "string" || value === null) fields[key] = value;
+  }
+  return fields;
+}
+
+/**
  * The migration read-model for a legacy work. It exposes only the latest
  * immutable revision, so creator screens never accidentally compose assets
  * from different saves.

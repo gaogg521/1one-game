@@ -26,7 +26,7 @@ import {
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
-import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
@@ -51,9 +51,12 @@ export async function GET(req: Request, ctx: RouteContext) {
   try {
     // A public reader must play exactly the revision the author confirmed at
     // publish time. Owners continue to see their current editable draft.
-    const acceptedGameSpec = !isOwner
-      ? await getAcceptedLegacyArtifact({ legacyType: "project", legacyId: id, kind: "game_spec" })
-      : null;
+    const [acceptedGameSpec, acceptedDisplay] = !isOwner
+      ? await Promise.all([
+          getAcceptedLegacyArtifact({ legacyType: "project", legacyId: id, kind: "game_spec" }),
+          getAcceptedLegacyPublicationDisplay({ legacyType: "project", legacyId: id }),
+        ])
+      : [null, null];
     const storedSpec = acceptedGameSpec?.content && typeof acceptedGameSpec.content === "object"
       ? acceptedGameSpec.content
       : JSON.parse(row.specJson);
@@ -115,11 +118,11 @@ export async function GET(req: Request, ctx: RouteContext) {
     return NextResponse.json({
       project: {
         id: row.id,
-        title: row.title,
-        prompt: row.prompt,
+        title: acceptedDisplay?.title?.trim() || row.title,
+        prompt: acceptedDisplay?.prompt?.trim() || row.prompt,
         createdAt: row.createdAt,
         shareCode: row.shareCode,
-        coverPath: row.coverPath,
+        coverPath: acceptedDisplay?.coverPath?.trim() || row.coverPath,
         likeCount,
         playCount: row.playCount,
         status: row.status,

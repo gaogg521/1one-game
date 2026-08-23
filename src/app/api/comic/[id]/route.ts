@@ -25,7 +25,7 @@ import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
-import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -72,9 +72,12 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
-  const acceptedComicDocument = !isOwner
-    ? await getAcceptedLegacyArtifact({ legacyType: "comic", legacyId: id, kind: "comic_document" })
-    : null;
+  const [acceptedComicDocument, acceptedDisplay] = !isOwner
+    ? await Promise.all([
+        getAcceptedLegacyArtifact({ legacyType: "comic", legacyId: id, kind: "comic_document" }),
+        getAcceptedLegacyPublicationDisplay({ legacyType: "comic", legacyId: id }),
+      ])
+    : [null, null];
   // The editable legacy row may move ahead of the published version. Public
   // reading remains pinned to the author's confirmed storyboard artifact.
   const acceptedDoc = acceptedComicDocument?.content;
@@ -107,9 +110,14 @@ export async function GET(req: Request, ctx: RouteContext) {
   return NextResponse.json({
     comic: {
       id: row.id,
-      title: row.title,
-      displayTitle: displayComicTitle(row.title, row.novel?.title, row.prompt, uiLocale),
-      prompt: row.prompt,
+      title: acceptedDisplay?.title?.trim() || row.title,
+      displayTitle: displayComicTitle(
+        acceptedDisplay?.title?.trim() || row.title,
+        acceptedDisplay?.novelTitle?.trim() || row.novel?.title,
+        acceptedDisplay?.prompt?.trim() || row.prompt,
+        uiLocale,
+      ),
+      prompt: acceptedDisplay?.prompt?.trim() || row.prompt,
       imageUrls: visibleImageUrls,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -126,7 +134,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       canDelete,
       panelsWithImage: panelStats.withImage,
       panelsTotal: panelStats.total,
-      coverPath: resolveComicCoverPath(visibleImageUrls, row.coverPath),
+      coverPath: resolveComicCoverPath(visibleImageUrls, acceptedDisplay?.coverPath?.trim() || row.coverPath),
       novelId: row.novelId,
       novel: row.novel
         ? {

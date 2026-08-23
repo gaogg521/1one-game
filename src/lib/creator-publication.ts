@@ -53,7 +53,13 @@ export async function setCreatorWorkPublication(input: {
       parseGameSpec(JSON.parse(row.specJson)),
       parseStoredCreativeBrief(row.creativeBriefJson),
     ).report;
-    return persistPublication({ input, quality, legacyType: "project", update: (tx, visibility) => tx.project.update({ where: { id: row.id }, data: { visibility } }) });
+    return persistPublication({
+      input,
+      quality,
+      legacyType: "project",
+      publicationDisplay: { title: row.title, prompt: row.prompt, coverPath: row.coverPath },
+      update: (tx, visibility) => tx.project.update({ where: { id: row.id }, data: { visibility } }),
+    });
   }
 
   if (input.type === "novel") {
@@ -67,21 +73,45 @@ export async function setCreatorWorkPublication(input: {
       lengthTier: row.lengthTier,
       generationMeta: parseNovelGenerationMeta(row.generationMetaJson),
     }).report;
-    return persistPublication({ input, quality, legacyType: "novel", update: (tx, visibility) => tx.novel.update({ where: { id: row.id }, data: { visibility } }) });
+    return persistPublication({
+      input,
+      quality,
+      legacyType: "novel",
+      publicationDisplay: {
+        title: row.title,
+        prompt: row.prompt,
+        summary: row.summary,
+        lengthTier: row.lengthTier,
+        coverPath: row.coverPath,
+      },
+      update: (tx, visibility) => tx.novel.update({ where: { id: row.id }, data: { visibility } }),
+    });
   }
 
-  const row = await prisma.comic.findUnique({ where: { id: input.id } });
+  const row = await prisma.comic.findUnique({ where: { id: input.id }, include: { novel: { select: { title: true } } } });
   if (!row) throw new CreatorPublicationError("not_found");
   if (row.ownerKey !== input.ownerKey) throw new CreatorPublicationError("not_owner");
   if (row.status !== "ready") throw new CreatorPublicationError("not_ready");
   const quality = assessComicCreatorQuality(row.imageUrls).report;
-  return persistPublication({ input, quality, legacyType: "comic", update: (tx, visibility) => tx.comic.update({ where: { id: row.id }, data: { visibility } }) });
+  return persistPublication({
+    input,
+    quality,
+    legacyType: "comic",
+    publicationDisplay: {
+      title: row.title,
+      prompt: row.prompt,
+      coverPath: row.coverPath,
+      novelTitle: row.novel?.title ?? null,
+    },
+    update: (tx, visibility) => tx.comic.update({ where: { id: row.id }, data: { visibility } }),
+  });
 }
 
 async function persistPublication(input: {
   input: { type: PublishableWorkType; id: string; ownerKey: string; action: "publish" | "unpublish" };
   quality: CreatorQualityReport;
   legacyType: string;
+  publicationDisplay: Record<string, string | null>;
   update: (tx: Prisma.TransactionClient, visibility: WorkVisibility) => Promise<unknown>;
 }): Promise<{ visibility: WorkVisibility; quality: CreatorQualityReport }> {
   if (input.input.action === "publish" && input.quality.verdict === "blocked") {
@@ -108,6 +138,18 @@ async function persistPublication(input: {
     if (input.input.action === "publish") {
       if (!revisionId) throw new CreatorPublicationError("not_ready");
       await tx.creativeProject.update({ where: { id: core.id }, data: { acceptedRevisionId: revisionId } });
+      // Capture reader-facing metadata at the same explicit author decision as
+      // the accepted revision. This prevents an unconfirmed legacy draft from
+      // changing public title, prompt, synopsis, tier or cover presentation.
+      await tx.creativeArtifact.create({
+        data: {
+          creativeProjectId: core.id,
+          creativeRevisionId: revisionId,
+          kind: "publication_display",
+          mediaType: "json",
+          contentJson: JSON.stringify(input.publicationDisplay),
+        },
+      });
     }
     await tx.creativeProject.update({
       where: { id: core.id },

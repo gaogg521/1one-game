@@ -17,7 +17,10 @@ async function main() {
   const funnelSessionId = randomUUID();
   const spec = prepareGameSpecForPersist(undefined, "霓虹飞船突破机械舰队");
   const game = await prisma.project.create({
-    data: { ownerKey, title: spec.title, prompt: "霓虹飞船突破机械舰队", specJson: JSON.stringify(spec), status: "ready", visibility: "pending_review" },
+    data: {
+      ownerKey, title: spec.title, prompt: "霓虹飞船突破机械舰队", specJson: JSON.stringify(spec),
+      coverPath: "/covers/qa-confirmed-game.jpg", status: "ready", visibility: "pending_review",
+    },
   });
   let coreId: string | null = null;
   try {
@@ -46,8 +49,15 @@ async function main() {
     assert(revised.ok, `owner refinement must save, got ${revised.status}`);
     const ownerAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`, { headers })).json() as { spec?: { title?: string } };
     assert(ownerAfterRefine.spec?.title === revisedSpec.title, "owner must see the editable refined version");
-    const publicAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`)).json() as { spec?: { title?: string } };
+    await prisma.project.update({ where: { id: game.id }, data: { coverPath: "/covers/qa-unconfirmed-game.jpg" } });
+    const publicAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`)).json() as {
+      spec?: { title?: string };
+      project?: { title?: string; prompt?: string; coverPath?: string | null };
+    };
     assert(publicAfterRefine.spec?.title === spec.title, "public reader must remain on the author-confirmed revision until republish");
+    assert(publicAfterRefine.project?.title === spec.title, "public title must remain on the author-confirmed publication display");
+    assert(publicAfterRefine.project?.prompt === game.prompt, "public prompt must not leak an unconfirmed refinement");
+    assert(publicAfterRefine.project?.coverPath === game.coverPath, "public cover must remain on the author-confirmed publication display");
     const unpublished = await fetch(`${base}/api/works/game/${game.id}/publication`, {
       method: "POST", headers, body: JSON.stringify({ action: "unpublish" }),
     });
