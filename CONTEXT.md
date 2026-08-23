@@ -535,3 +535,7 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - Owner Core snapshot 现带最新独立 evaluation 与最近三条 publication decisions；游戏试玩页版本卡展示当前质量结论和最近发布动作。非 owner 仍不会取得 Core snapshot。
 - `qa:creator-core` 验证作者快照可读取 evaluation；定向 ESLint 无错误、五语 JSON 解析通过。`PlayGameClient` 仍有三条既存 lint warning（未使用导入及两个 Hook dependency），本批未扩大修改范围。
+
+## P2/P3 续接：小说续写并发保护（2026-08-23）
+
+- 长篇续写每段已有 checkpoint；完成时若作者在其他窗口修改正文，乐观锁冲突不再退回无条件更新。服务端改发 conflict SSE 并保留 checkpoint，避免生成请求覆盖更晚的人工编辑。

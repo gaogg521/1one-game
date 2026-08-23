@@ -226,7 +226,9 @@ export async function POST(req: Request, ctx: RouteContext) {
             uiLocale,
           });
 
-          // P1 修复：乐观锁防并发覆盖；冲突时回退到无条件更新（保留已生成内容不丢失）
+          // Preserve explicit author edits. Segment checkpoints above retain
+          // generated work, so a stale continuation must never overwrite a
+          // newer manuscript just to finish its own request.
           const priorUpdatedAt = new Date(row.updatedAt).getTime();
           let novel;
           try {
@@ -234,13 +236,14 @@ export async function POST(req: Request, ctx: RouteContext) {
               where: { id, updatedAt: new Date(priorUpdatedAt) },
               data: { content: newContent, summary },
             });
-          } catch (updateErr) {
-            // 乐观锁冲突（P2025）或精度不匹配 → 回退无条件更新，保留 LLM 已生成内容
-            send({ step: "optimistic_lock_fallback", message: "检测到并发更新，回退到无条件写入" });
-            novel = await prisma.novel.update({
-              where: { id },
-              data: { content: newContent, summary },
+          } catch {
+            send({
+              step: "conflict",
+              code: codes.BAD_REQUEST,
+              message: progressNovelMessage(uiLocale, "continueInterrupted"),
+              requestId,
             });
+            return;
           }
           if (pipelineMeta) {
             await persistNovelGenerationMeta(id, pipelineMeta);
