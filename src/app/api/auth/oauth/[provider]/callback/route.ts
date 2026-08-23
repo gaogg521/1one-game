@@ -13,6 +13,7 @@ import { grantSignupBonus } from "@/lib/commerce/quota";
 import { REF_COOKIE, SESSION_COOKIE } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 const STATE_COOKIE = "gcreator_oauth_state";
 
@@ -44,6 +45,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     });
 
     let userId: string;
+    let createdUser = false;
     if (account) {
       userId = account.userId;
       await prisma.oAuthAccount.update({
@@ -69,6 +71,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         ? await prisma.user.findUnique({ where: { email: profile.email } })
         : null;
       const existingUser = linked ?? emailUser;
+      createdUser = !existingUser;
       const user = existingUser
         ? await prisma.user.update({
             where: { id: existingUser.id },
@@ -121,6 +124,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (ownerKey) await linkOwnerKeyToUser(userId, ownerKey);
 
     const token = await createUserSession(userId);
+    if (createdUser) await recordCreatorFunnelEvent({ event: "signup" });
     const res = NextResponse.redirect(`${origin}/studio?login=ok`);
     res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(origin.startsWith("https")));
     return res;

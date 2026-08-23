@@ -442,6 +442,21 @@ model LiteraryEngagementEvent {
   @@index([createdAt])
 }
 
+/// 匿名创作者漏斗：随机浏览器会话与聚合阶段，不保存账号、作品内容、提示词、IP 或设备信息。
+model CreatorFunnelEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  /// visit | signup | create | publish
+  event     String
+  /// game | novel | comic; visit/signup use an empty string.
+  workType  String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, event, workType])
+  @@index([event, createdAt])
+  @@index([createdAt])
+}
+
 /// 平台运行时配置（密钥加密存储；模型等可覆盖 product-config 默认值）
 model PlatformRuntimeConfig {
   id              String   @id @default("default")

@@ -22,6 +22,7 @@ import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -118,6 +119,7 @@ export async function POST(req: Request) {
       status: "ready",
       visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
     });
+    await recordCreatorFunnelEvent({ event: "create", workType: "game" });
     if (briefJson && !project.creativeBriefJson) {
       await saveCreativeBriefJson(project.id, briefJson);
     }

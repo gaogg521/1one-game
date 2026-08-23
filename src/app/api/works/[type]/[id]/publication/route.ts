@@ -3,6 +3,7 @@ import { localizedJsonError } from "@/lib/api/localized-error";
 import { setCreatorWorkPublication, CreatorPublicationError, type PublishableWorkType } from "@/lib/creator-publication";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getOwnerKey } from "@/lib/owner";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 type RouteContext = { params: Promise<{ type: string; id: string }> };
 
@@ -17,6 +18,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   try {
     const result = await setCreatorWorkPublication({ type: type as PublishableWorkType, id, ownerKey, action });
+    if (action === "publish") await recordCreatorFunnelEvent({ event: "publish", workType: type });
     return NextResponse.json({
       visibility: result.visibility,
       quality: result.quality,

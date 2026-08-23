@@ -15,6 +15,7 @@ import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { apiErrorMessage, progressComicMessage } from "@/lib/i18n/progress-message";
 import { prisma } from "@/lib/prisma";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 export const maxDuration = 3600;
 
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
           },
           send,
         );
+        await recordCreatorFunnelEvent({ event: "create", workType: "comic" });
         let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
         try {
           const comic = await prisma.comic.findUniqueOrThrow({ where: { id: result.comicId } });

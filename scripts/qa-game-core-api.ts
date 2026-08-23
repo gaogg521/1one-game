@@ -1,4 +1,5 @@
 import { OWNER_COOKIE } from "../src/lib/constants";
+import { randomUUID } from "crypto";
 import { prisma } from "../src/lib/prisma";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 
@@ -10,6 +11,7 @@ const baseUrl = process.env.QA_BASE_URL?.trim() || "http://127.0.0.1:8888";
 
 async function main() {
   const ownerKey = `qa-game-core-api-${Date.now()}`;
+  const funnelSessionId = randomUUID();
   const baseSpec = prepareGameSpecForPersist(undefined, "霓虹飞船突破机械舰队并击败终局 Boss");
   const spec = {
     ...baseSpec,
@@ -24,7 +26,7 @@ async function main() {
   let projectId: string | undefined;
   let coreProjectId: string | undefined;
   try {
-    const headers = { "Content-Type": "application/json", Cookie: `${OWNER_COOKIE}=${ownerKey}` };
+    const headers = { "Content-Type": "application/json", Cookie: `${OWNER_COOKIE}=${ownerKey}; gcreator_funnel=${funnelSessionId}` };
     const createdResponse = await fetch(`${baseUrl}/api/projects`, {
       method: "POST",
       headers,
@@ -38,6 +40,10 @@ async function main() {
     assert(created.core?.creativeProjectId && created.core.creativeRevisionId, "game create API must create a Core revision");
     projectId = created.project.id;
     coreProjectId = created.core.creativeProjectId;
+    const createSignal = await prisma.creatorFunnelEvent.findUnique({
+      where: { sessionId_event_workType: { sessionId: funnelSessionId, event: "create", workType: "game" } },
+    });
+    assert(createSignal, "game creation must write a privacy-safe funnel signal");
 
     const ownerDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, {
       headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` },
@@ -67,6 +73,7 @@ async function main() {
   } finally {
     if (projectId) await prisma.project.delete({ where: { id: projectId } }).catch(() => undefined);
     if (coreProjectId) await prisma.creativeProject.delete({ where: { id: coreProjectId } }).catch(() => undefined);
+    await prisma.creatorFunnelEvent.deleteMany({ where: { sessionId: funnelSessionId } }).catch(() => undefined);
   }
 }
 

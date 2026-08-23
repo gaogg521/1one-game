@@ -118,6 +118,9 @@ type Analytics = {
     channels: { channel: string; count: number }[];
     funnel: { stage: string; value: number }[];
   };
+  creator: {
+    funnel: { stage: string; value: number }[];
+  };
   commerce: {
     paidOrders: number;
     revenueCents: number;
@@ -843,6 +846,13 @@ export default function AdminConsolePage({
 
                 <ChartPanel title={t("chartSocialFunnel")} subtitle={t("chartSocialFunnelSubtitle")}>
                   <AdminFunnelChart stages={analytics.social.funnel} />
+                </ChartPanel>
+
+                <ChartPanel title={t("chartCreatorFunnel")} subtitle={t("chartCreatorFunnelSubtitle")}>
+                  <AdminFunnelChart stages={analytics.creator.funnel.map((row) => ({
+                    ...row,
+                    stage: t(row.stage as "creatorVisits" | "creatorSignups" | "creatorFirstCreates" | "creatorPublishes" | "creatorPaidOrders"),
+                  }))} />
                 </ChartPanel>
 
                 <ChartPanel title={t("chartGameplayQuality")} subtitle={t("chartGameplayQualitySubtitle", { days: analytics.days })}>

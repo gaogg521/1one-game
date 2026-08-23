@@ -7,6 +7,7 @@ import type { CreatorQualityReport, CreatorWorkKind } from "@/lib/creator-workfl
 import { parseGameSpec } from "@/lib/game-spec";
 import { prisma } from "@/lib/prisma";
 import { assessLiteraryEngagementHealth, summarizeLiteraryEngagementRows } from "@/lib/literary-engagement";
+import { summarizeCreatorFunnelRows } from "@/lib/creator-funnel";
 
 type QualityRow = { kind: CreatorWorkKind; templateId?: string; report: CreatorQualityReport };
 
@@ -73,6 +74,7 @@ export async function GET(req: Request) {
     qualityNovels,
     qualityComics,
     literaryEvents,
+    creatorFunnelEvents,
   ] = await Promise.all([
     prisma.shareEvent.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
     prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
@@ -149,6 +151,10 @@ export async function GET(req: Request) {
       where: { createdAt: { gte: since } },
       select: { workType: true, workId: true, sessionId: true, event: true, unitIndex: true },
     }),
+    prisma.creatorFunnelEvent.findMany({
+      where: { createdAt: { gte: since } },
+      select: { sessionId: true, event: true },
+    }),
   ]);
 
   const planName = new Map(plans.map((p) => [p.id, p.name]));
@@ -206,6 +212,7 @@ export async function GET(req: Request) {
     gameplayByTemplate.set(event.templateId, row);
   }
   const literaryByWork = summarizeLiteraryEngagementRows(literaryEvents, () => 1);
+  const creatorFunnel = summarizeCreatorFunnelRows(creatorFunnelEvents);
   const literaryByType = (["novel", "comic"] as const).map((kind) => {
     const summaries = [...literaryByWork.entries()]
       .filter(([key]) => key.startsWith(`${kind}:`))
@@ -315,6 +322,12 @@ export async function GET(req: Request) {
         { stage: "referralSignups", value: referralSignups },
         { stage: "referralPaidOrders", value: referralPaidOrders },
         { stage: "allPaidOrders", value: paidOrders.length },
+      ],
+    },
+    creator: {
+      funnel: [
+        ...creatorFunnel,
+        { stage: "creatorPaidOrders", value: paidOrders.length },
       ],
     },
     commerce: {

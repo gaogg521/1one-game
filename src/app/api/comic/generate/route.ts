@@ -19,6 +19,7 @@ import { assessComicCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 export const maxDuration = 3600;
 
@@ -114,6 +115,7 @@ export async function POST(req: Request) {
       forceLightStoryboard: body.forceLightStoryboard === true,
       uiLocale,
     });
+    await recordCreatorFunnelEvent({ event: "create", workType: "comic" });
     let persisted = await prisma.comic.findUnique({
       where: { id: result.comicId },
       select: { imageUrls: true, status: true, visibility: true },

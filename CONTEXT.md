@@ -573,3 +573,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 达到样本量后，完成率低于 `35%` 会提示复查结尾承诺与收束节奏；平均进度低于 `45%` 且存在章节/页访问时，会定位最早低于 60% 触达的章节/页，提示复查开场、转场和继续阅读动机。信号仍为 advisory，不是自动拒绝。
 - 聚合器只新增“每章节/页的唯一随机会话触达数”，不增加账号、正文、提示词、IP 或设备字段。作者详情的质量 envelope 同步带 `literaryHealth` 和可解释告警代码；管理控制台新增小说/漫画阅读质量面板，明确区分“样本积累中 / 建议复查 / 健康”。
 - 验证：`qa:literary-engagement-alerts` 覆盖样本不足、健康、低完成与早期跳出定位；真实 HTTP `qa:literary-engagement-api` 覆盖事件幂等、作者忽略、详情阈值回显与 quality envelope；`qa:creator-quality`、`qa:novel-story-plan-api`、五语 JSON、定向 ESLint 及隔离 production build 均通过。构建仅保留既有动态文件追踪性能告警。
+
+## P16 第一段：匿名创作者激活漏斗（2026-08-23）
+
+- 前向迁移 `20260823015000_add_creator_funnel_event` 新增 `CreatorFunnelEvent`。它只保留随机、HttpOnly、30 天会话 ID、阶段（visit/signup/create/publish）、可选媒介和时间；没有账号、owner key、作品 ID、正文、提示词、IP 或设备信息。复合唯一键确保同一会话同一阶段/媒介只计算一次。
+- 根布局通过极小客户端组件上报访问；注册、游戏/小说/漫画生成及统一发布 API 在服务端记录后续阶段，任一写入失败只记日志，绝不影响登录、创作或发布。付费阶段继续使用既有已付款订单聚合，绝不把 development 模拟订单伪装为真实支付。
+- 管理分析 API 和 Console 新增“创作者激活漏斗”：访问 → 新注册 → 创建作品 → 发布作品 → 已付款订单。响应与 UI 只处理聚合值，并明确说明匿名范围；五语文案齐备。
+- 验证：`prisma generate`、dev.db `migrate deploy`（30 条）和 `prisma validate` 通过；`qa:creator-funnel` 覆盖访问幂等与会话聚合，真实 `qa:game-core-api`/`qa:creator-publication:http` 覆盖游戏创建和发布实际写入漏斗事件。隔离 Next dev 修复默认 `.next/dev` 路由缓存污染后，完整 production build 通过；仍有既有动态文件追踪性能警告。

@@ -11,6 +11,7 @@ import {
 import { grantSignupBonus } from "@/lib/commerce/quota";
 import { prisma } from "@/lib/prisma";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 export type UsernameRegisterInput = {
   username: string;
@@ -82,6 +83,7 @@ export async function registerWithUsername(input: UsernameRegisterInput): Promis
   if (ownerKey) await linkOwnerKeyToUser(userId, ownerKey);
 
   const sessionToken = await createUserSession(userId);
+  await recordCreatorFunnelEvent({ event: "signup" });
   return { ok: true, userId, sessionToken };
 }
 

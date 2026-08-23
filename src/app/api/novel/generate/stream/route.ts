@@ -81,6 +81,7 @@ import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
+import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 
 /** 长篇流式可跑 20–45+ 分钟；自托管 next start 生效，Serverless 受平台上限约束 */
 export const maxDuration = 3600;
@@ -612,6 +613,7 @@ export async function POST(req: Request) {
               visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
             },
           });
+          await recordCreatorFunnelEvent({ event: "create", workType: "novel" });
           await persistNovelLengthTier(novel.id, lengthTier);
           if (lengthOpts?.childrenTargetAge !== undefined) {
             await persistChildrenNovelMeta(novel.id, {
