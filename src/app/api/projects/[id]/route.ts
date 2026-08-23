@@ -26,7 +26,7 @@ import {
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
 import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
-import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { getAcceptedLegacyArtifact, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
@@ -49,7 +49,15 @@ export async function GET(req: Request, ctx: RouteContext) {
   const likeCount = row.likeCount ?? 0;
 
   try {
-    const spec = normalizeAstrocadePlaySpec(parseGameSpec(JSON.parse(row.specJson)));
+    // A public reader must play exactly the revision the author confirmed at
+    // publish time. Owners continue to see their current editable draft.
+    const acceptedGameSpec = !isOwner
+      ? await getAcceptedLegacyArtifact({ legacyType: "project", legacyId: id, kind: "game_spec" })
+      : null;
+    const storedSpec = acceptedGameSpec?.content && typeof acceptedGameSpec.content === "object"
+      ? acceptedGameSpec.content
+      : JSON.parse(row.specJson);
+    const spec = normalizeAstrocadePlaySpec(parseGameSpec(storedSpec));
 
     let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
     let creativeBrief: ReturnType<typeof parseStoredCreativeBrief> = null;

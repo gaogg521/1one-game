@@ -37,6 +37,17 @@ async function main() {
     });
     assert(publishSignal, "publication must write a privacy-safe funnel signal");
     assert((await fetch(`${base}/api/projects/${game.id}`)).ok, "published game must be publicly readable");
+    const revisedSpec = { ...spec, title: "发布后尚未确认的新版本" };
+    const revised = await fetch(`${base}/api/projects/${game.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ prompt: "把公开游戏改成尚未确认的新版本", spec: revisedSpec }),
+    });
+    assert(revised.ok, `owner refinement must save, got ${revised.status}`);
+    const ownerAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`, { headers })).json() as { spec?: { title?: string } };
+    assert(ownerAfterRefine.spec?.title === revisedSpec.title, "owner must see the editable refined version");
+    const publicAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`)).json() as { spec?: { title?: string } };
+    assert(publicAfterRefine.spec?.title === spec.title, "public reader must remain on the author-confirmed revision until republish");
     const unpublished = await fetch(`${base}/api/works/game/${game.id}/publication`, {
       method: "POST", headers, body: JSON.stringify({ action: "unpublish" }),
     });

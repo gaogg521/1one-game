@@ -139,6 +139,39 @@ export async function finalizeCreativeRevision(creativeRevisionId: string, summa
 }
 
 /**
+ * Resolves an artifact from the immutable revision that an author actually
+ * published. Public readers use this projection while the legacy row can keep
+ * receiving private follow-up edits.
+ */
+export async function getAcceptedLegacyArtifact(input: {
+  legacyType: string;
+  legacyId: string;
+  kind: string;
+}) {
+  const project = await prisma.creativeProject.findUnique({
+    where: { legacyType_legacyId: { legacyType: input.legacyType, legacyId: input.legacyId } },
+    select: { id: true, acceptedRevisionId: true },
+  });
+  if (!project?.acceptedRevisionId) return null;
+  const artifact = await prisma.creativeArtifact.findFirst({
+    where: {
+      creativeProjectId: project.id,
+      creativeRevisionId: project.acceptedRevisionId,
+      kind: input.kind,
+      status: "ready",
+    },
+    orderBy: { createdAt: "asc" },
+    select: { contentJson: true, textContent: true, metadataJson: true },
+  });
+  if (!artifact) return null;
+  return {
+    content: parseJson(artifact.contentJson),
+    textContent: artifact.textContent,
+    metadata: parseJson(artifact.metadataJson),
+  };
+}
+
+/**
  * The migration read-model for a legacy work. It exposes only the latest
  * immutable revision, so creator screens never accidentally compose assets
  * from different saves.
