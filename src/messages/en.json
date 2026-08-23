@@ -2764,7 +2764,9 @@
     "aiPatch": "AI patch",
     "saving": "Saving…",
     "applyAndSave": "Apply & save",
-    "recentRefineTitle": "Recent refinements (newest last)"
+    "recentRefineTitle": "Recent refinements (newest last)",
+    "coreRevision": "Saved creator revision v{sequence}",
+    "coreRevisionReady": "Playable design, quality evaluation, and intent are archived"
   },
   "gameEvents": {
     "acts": {

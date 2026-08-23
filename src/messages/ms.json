@@ -2741,7 +2741,9 @@
     "saving": "Saving…",
     "applyAndSave": "Apply & save",
     "recentRefineTitle": "Recent refinements (newest last)",
-    "createWithSamplePrompt": "Create with this prompt in studio →"
+    "createWithSamplePrompt": "Create with this prompt in studio →",
+    "coreRevision": "Saved creator revision v{sequence}",
+    "coreRevisionReady": "Playable design, quality evaluation, and intent are archived"
   },
   "genrePacks": {
     "space-epic": {

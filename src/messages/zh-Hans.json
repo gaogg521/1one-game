@@ -2761,7 +2761,9 @@
     "aiPatch": "AI 修改",
     "saving": "保存中…",
     "applyAndSave": "应用并保存",
-    "recentRefineTitle": "最近精炼（最新在后）"
+    "recentRefineTitle": "最近精炼（最新在后）",
+    "coreRevision": "已保存的创作版本 v{sequence}",
+    "coreRevisionReady": "可试玩设计、质量评估与创作意图已归档"
   },
   "gameEvents": {
     "acts": {

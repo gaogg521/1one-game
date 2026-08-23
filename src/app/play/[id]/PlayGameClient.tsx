@@ -28,6 +28,9 @@ import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
+type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null };
+type CoreSnapshot = { revision: CoreRevision | null };
+
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
   const tBanner = useTranslations("resultBanner");
@@ -61,6 +64,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [playCount, setPlayCount] = useState(0);
+  const [core, setCore] = useState<CoreSnapshot | null>(null);
 
   const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
 
@@ -81,6 +85,7 @@ export function PlayGameClient({ id }: { id: string }) {
             playCount?: number;
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
+          core?: CoreSnapshot;
           error?: string;
           errorKey?: string;
           errorParams?: Record<string, string | number>;
@@ -132,6 +137,7 @@ export function PlayGameClient({ id }: { id: string }) {
           } else {
             setRefinementHistory([]);
           }
+          setCore(data.core ?? null);
         }
       } catch {
         if (!cancelled) setError(t("networkError"));
@@ -306,6 +312,7 @@ export function PlayGameClient({ id }: { id: string }) {
         errorKey?: string;
         errorParams?: Record<string, string | number>;
         project?: { title?: string; prompt?: string };
+        core?: { creativeRevisionId?: string };
       };
       if (!res.ok) {
         setPatchError(resolveClientApiError(locale, data, "saveFailed"));
@@ -320,6 +327,11 @@ export function PlayGameClient({ id }: { id: string }) {
             }
           : m,
       );
+      if (data.core?.creativeRevisionId) {
+        setCore((current) => current?.revision
+          ? { revision: { ...current.revision, id: data.core!.creativeRevisionId!, sequence: current.revision.sequence + 1, cause: "refine", finalizedAt: new Date().toISOString() } }
+          : current);
+      }
       setSaveMsg(t("savedToVersion"));
       window.setTimeout(() => setSaveMsg(null), 2200);
     } catch {
@@ -603,6 +615,12 @@ export function PlayGameClient({ id }: { id: string }) {
                       </li>
                     ))}
                   </ul>
+                </div>
+              ) : null}
+              {meta.isOwner && core?.revision ? (
+                <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
+                  <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
+                  <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
                 </div>
               ) : null}
             </div>

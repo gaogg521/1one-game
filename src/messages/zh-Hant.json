@@ -2741,7 +2741,9 @@
     "saving": "保存中…",
     "applyAndSave": "应用并保存",
     "recentRefineTitle": "最近精煉（最新在后）",
-    "createWithSamplePrompt": "用此 prompt 去创作台 →"
+    "createWithSamplePrompt": "用此 prompt 去创作台 →",
+    "coreRevision": "已儲存的創作版本 v{sequence}",
+    "coreRevisionReady": "可試玩設計、品質評估與創作意圖已封存"
   },
   "genrePacks": {
     "space-epic": {
