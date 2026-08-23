@@ -62,6 +62,7 @@ async function main() {
     loadRuntimeConfig,
     saveRuntimeConfig,
   } = await import("../src/lib/runtime-config");
+  const { resolveEstimatedProviderCost } = await import("../src/lib/provider-usage");
   const { prisma } = await import("../src/lib/prisma");
 
   try {
@@ -103,6 +104,27 @@ async function main() {
         view.modelSources.gamePrimary,
       ),
     );
+
+    await saveRuntimeConfig({
+      providerPricing: [
+        { provider: "*", model: "*", modality: "llm", operation: "text", estimatedCostMicros: 1200 },
+        { provider: "gemini", model: "gemini-2.5-flash", modality: "llm", operation: "text", estimatedCostMicros: 800 },
+      ],
+    });
+    const pricedView = await getRuntimeConfigPublicView();
+    checks.push(assert("persist provider pricing", pricedView.providerPricing.length === 2));
+    const exactCost = await resolveEstimatedProviderCost({
+      modality: "llm", provider: "gemini", model: "gemini-2.5-flash", operation: "text", status: "succeeded", durationMs: 1,
+    });
+    const wildcardCost = await resolveEstimatedProviderCost({
+      modality: "llm", provider: "openai", model: "gpt-test", operation: "text", status: "succeeded", durationMs: 1,
+    });
+    const unmatchedCost = await resolveEstimatedProviderCost({
+      modality: "image", provider: "gemini", model: "gemini-2.5-flash", operation: "image", status: "succeeded", durationMs: 1,
+    });
+    checks.push(assert("provider pricing exact match", exactCost === 800, String(exactCost)));
+    checks.push(assert("provider pricing wildcard match", wildcardCost === 1200, String(wildcardCost)));
+    checks.push(assert("provider pricing unmatched remains null", unmatchedCost === null, String(unmatchedCost)));
 
     const base = process.env.QA_BASE_URL?.trim() || "http://127.0.0.1:8888";
     const httpSecret = process.env.SUPER_ADMIN_SECRET?.trim();

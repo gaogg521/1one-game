@@ -470,3 +470,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - Console 的“变现与额度”面板现展示 provider 成本覆盖率、账本调用数和估算成本；没有配置单价时明确显示“待配置单价”，避免将未知成本误报为零。
 - 同一面板按 provider / model 展示调用数、媒介、成功状态和平均耗时，聚合来自安全账本 API，不含作品内容或提示词。五语文案和生产构建通过。
+
+### P5 第三段：可审计的单价规则（2026-08-23）
+
+- Runtime Config 现在可保存最多 100 条 Provider 单价规则，按 `provider + model + modality + operation` 精确匹配；服务商或模型可以填 `*` 作为受控兜底。金额是“每次调用的估算成本（微单位）”，不是伪造的 token/invoice 数据。
+- 规则和密钥同样由现有加密 Runtime Config 存储，公开管理视图只返回规则本身；PATCH 审计日志仅记录规则数量。写账本时异步加载当前 Runtime Config，精确规则优先于兜底规则；没有规则仍保存 `null`，因此经营看板继续真实显示“待配置”。
+- 管理控制台新增“成本估算规则”页签，支持新增、编辑、删除和保存规则。`qa:runtime-config-admin` 已覆盖精确匹配、通配兜底和未匹配为 null；`qa:provider-usage` 与完整 production build 通过。已修复 Runtime Config 合并时漏掉 providers/routes 等 DB 持久化字段的问题，确保运行时使用已保存配置。

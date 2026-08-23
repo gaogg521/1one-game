@@ -52,6 +52,19 @@ export type CdnConfigStored = {
   ttlSeconds: number;
 };
 
+/**
+ * An operator-maintained estimate for one provider/model operation. Values are
+ * micros of the platform accounting currency per request; they deliberately do
+ * not pretend to be token-level provider invoices.
+ */
+export type ProviderPricingRule = {
+  provider: string;
+  model: string;
+  modality: "llm" | "image";
+  operation: "json" | "text" | "image" | "image_batch";
+  estimatedCostMicros: number;
+};
+
 export type RuntimeSecretsPayload = {
   openaiApiKey?: string;
   openaiBaseUrl?: string;
@@ -64,6 +77,7 @@ export type RuntimeSecretsPayload = {
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
   cdnConfig?: CdnConfigStored;
+  providerPricing?: ProviderPricingRule[];
 };
 
 export type RuntimeSecretField =
@@ -108,6 +122,7 @@ export type RuntimeConfigPublicView = {
   productDefaults: RuntimeModelsOverride;
   providers: RuntimeProviderPublic[];
   routes: RuntimeModelRoute[];
+  providerPricing: ProviderPricingRule[];
 };
 
 type ResolvedRuntime = {
@@ -169,6 +184,10 @@ function mergePayload(db: RuntimeSecretsPayload): RuntimeSecretsPayload {
     anthropicApiKey: db.anthropicApiKey ?? envTrim("ANTHROPIC_API_KEY"),
     replicateApiKey: db.replicateApiKey ?? envTrim("REPLICATE_API_TOKEN"),
     models,
+    providers: db.providers,
+    routes: db.routes,
+    cdnConfig: db.cdnConfig,
+    providerPricing: db.providerPricing,
   };
 }
 
@@ -344,6 +363,7 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
     productDefaults: defaultModels(),
     providers: providersPublic,
     routes,
+    providerPricing: dbPayload.providerPricing ?? [],
   };
 }
 
@@ -352,6 +372,7 @@ export type RuntimeConfigPatch = {
   models?: Partial<Record<keyof RuntimeModelsOverride, string | string[] | null>>;
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
+  providerPricing?: ProviderPricingRule[];
 };
 
 export function getSceneModelCascade(scene: RuntimeSceneKey): string[] {
@@ -443,6 +464,34 @@ function applyPatchToPayload(
     next.models = modelsFromRoutes;
   }
 
+  if (patch.providerPricing !== undefined) {
+    const seen = new Set<string>();
+    const rules: ProviderPricingRule[] = [];
+    for (const rule of patch.providerPricing.slice(0, 100)) {
+      const provider = rule.provider?.trim().toLowerCase();
+      const model = rule.model?.trim().toLowerCase();
+      if (!provider || !model) continue;
+      if (rule.modality !== "llm" && rule.modality !== "image") continue;
+      if (!(["json", "text", "image", "image_batch"] as const).includes(rule.operation)) continue;
+      const estimatedCostMicros = Number(rule.estimatedCostMicros);
+      if (!Number.isFinite(estimatedCostMicros) || estimatedCostMicros < 0 || estimatedCostMicros > 1_000_000_000_000) continue;
+      const normalized: ProviderPricingRule = {
+        provider,
+        model,
+        modality: rule.modality,
+        operation: rule.operation,
+        estimatedCostMicros: Math.round(estimatedCostMicros),
+      };
+      const key = `${normalized.provider}|${normalized.model}|${normalized.modality}|${normalized.operation}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        rules.push(normalized);
+      }
+    }
+    if (rules.length) next.providerPricing = rules;
+    else delete next.providerPricing;
+  }
+
   return next;
 }
 
@@ -457,7 +506,8 @@ export async function saveRuntimeConfig(
     Object.keys(nextDb).some((k) => k !== "models" && nextDb[k as keyof RuntimeSecretsPayload]) ||
     (nextDb.models && Object.keys(nextDb.models).length > 0) ||
     (nextDb.providers && nextDb.providers.length > 0) ||
-    (nextDb.routes && nextDb.routes.length > 0);
+    (nextDb.routes && nextDb.routes.length > 0) ||
+    (nextDb.providerPricing && nextDb.providerPricing.length > 0);
 
   if (hasContent) {
     await prisma.platformRuntimeConfig.upsert({

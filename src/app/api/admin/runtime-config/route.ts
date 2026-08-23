@@ -36,6 +36,7 @@ export async function PATCH(req: Request) {
       modelFields: body.models ? Object.keys(body.models) : [],
       providerCount: body.providers?.length,
       routeCount: body.routes?.length,
+      providerPricingRuleCount: body.providerPricing?.length,
     },
     actorUserId: gate.user?.id,
     actorOwnerKey: gate.ownerKey,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { loadRuntimeConfig, type ProviderPricingRule } from "@/lib/runtime-config";
 
 export type ProviderUsageInput = {
   modality: "llm" | "image";
@@ -12,11 +13,36 @@ export type ProviderUsageInput = {
   errorCode?: string;
 };
 
+function matchingPriceRule(input: ProviderUsageInput, rules: ProviderPricingRule[]): ProviderPricingRule | null {
+  const provider = input.provider.trim().toLowerCase();
+  const model = input.model.trim().toLowerCase();
+  let best: ProviderPricingRule | null = null;
+  let bestScore = -1;
+  for (const rule of rules) {
+    if (rule.modality !== input.modality || rule.operation !== input.operation) continue;
+    if (rule.provider !== "*" && rule.provider !== provider) continue;
+    if (rule.model !== "*" && rule.model !== model) continue;
+    const score = (rule.provider === "*" ? 0 : 2) + (rule.model === "*" ? 0 : 1);
+    if (score > bestScore) {
+      best = rule;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+export async function resolveEstimatedProviderCost(input: ProviderUsageInput): Promise<number | null> {
+  if (input.estimatedCostMicros != null) return Math.max(0, Math.round(input.estimatedCostMicros));
+  const runtime = await loadRuntimeConfig();
+  return matchingPriceRule(input, runtime.dbPayload.providerPricing ?? [])?.estimatedCostMicros ?? null;
+}
+
 /**
  * Best-effort financial observability. This must never change creator-facing
  * generation semantics, and intentionally accepts only metadata.
  */
 export async function writeProviderUsage(input: ProviderUsageInput): Promise<void> {
+  const estimatedCostMicros = await resolveEstimatedProviderCost(input);
   await prisma.providerUsageEvent.create({
     data: {
       modality: input.modality,
@@ -26,7 +52,7 @@ export async function writeProviderUsage(input: ProviderUsageInput): Promise<voi
       status: input.status,
       durationMs: Math.max(0, Math.min(24 * 60 * 60 * 1000, Math.round(input.durationMs))),
       outputUnits: input.outputUnits == null ? null : Math.max(0, Math.min(10_000_000, Math.round(input.outputUnits))),
-      estimatedCostMicros: input.estimatedCostMicros == null ? null : Math.max(0, Math.round(input.estimatedCostMicros)),
+      estimatedCostMicros,
       errorCode: input.errorCode?.slice(0, 96),
     },
   });

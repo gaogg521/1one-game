@@ -17,6 +17,7 @@ import {
   RuntimeProviderTemplateMeta,
   RuntimeProviderTemplateSelect,
 } from "@/components/admin/RuntimeProviderCatalog";
+import type { ProviderPricingRule } from "@/lib/runtime-config";
 
 export type RuntimeConfigView = {
   updatedAt: string | null;
@@ -57,6 +58,7 @@ export type RuntimeConfigView = {
   };
   providers: RuntimeProviderPublic[];
   routes: RuntimeModelRoute[];
+  providerPricing: ProviderPricingRule[];
 };
 
 type ProviderFormState = {
@@ -121,7 +123,7 @@ type Props = {
   onNotice: (notice: { kind: "ok" | "error"; text: string }) => void;
 };
 
-type PanelSection = "providers" | "routing";
+type PanelSection = "providers" | "routing" | "pricing";
 
 const DOMAIN = {
   game: { color: CHART_COLORS.game, labelKey: "domainGame" as const },
@@ -790,6 +792,53 @@ function FieldRow({
   );
 }
 
+function ProviderPricingEditor({
+  rules,
+  inputCls,
+  onChange,
+}: {
+  rules: ProviderPricingRule[];
+  inputCls: string;
+  onChange: (rules: ProviderPricingRule[]) => void;
+}) {
+  const t = useTranslations("adminPage.runtimeConfig");
+  const update = (index: number, patch: Partial<ProviderPricingRule>) => {
+    onChange(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
+  };
+  return (
+    <section className="overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" data-testid="admin-runtime-pricing-editor">
+      <div className="border-b border-white/8 px-4 py-4 sm:px-5">
+        <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("pricingTitle")}</h3>
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">{t("pricingHint")}</p>
+      </div>
+      <div className="space-y-3 p-4 sm:p-5">
+        {rules.length === 0 ? <p className="text-sm text-[var(--gc-muted)]">{t("pricingEmpty")}</p> : null}
+        {rules.map((rule, index) => (
+          <div key={`${index}-${rule.provider}-${rule.model}`} className="grid gap-3 rounded-lg border border-white/8 p-3 md:grid-cols-[1fr_1fr_130px_130px_150px_auto]">
+            <input className={inputCls} value={rule.provider} onChange={(e) => update(index, { provider: e.target.value })} placeholder={t("pricingProviderPlaceholder")} aria-label={t("pricingProvider")} />
+            <input className={inputCls} value={rule.model} onChange={(e) => update(index, { model: e.target.value })} placeholder={t("pricingModelPlaceholder")} aria-label={t("pricingModel")} />
+            <select className={inputCls} value={rule.modality} onChange={(e) => update(index, { modality: e.target.value as ProviderPricingRule["modality"] })} aria-label={t("pricingModality")}>
+              <option value="llm">LLM</option><option value="image">Image</option>
+            </select>
+            <select className={inputCls} value={rule.operation} onChange={(e) => update(index, { operation: e.target.value as ProviderPricingRule["operation"] })} aria-label={t("pricingOperation")}>
+              <option value="text">text</option><option value="json">json</option><option value="image">image</option><option value="image_batch">image_batch</option>
+            </select>
+            <input className={inputCls} type="number" min="0" step="1" value={rule.estimatedCostMicros} onChange={(e) => update(index, { estimatedCostMicros: Number(e.target.value) })} aria-label={t("pricingMicros")} />
+            <button type="button" className="text-sm text-red-300 hover:text-red-200" onClick={() => onChange(rules.filter((_, i) => i !== index))}>{t("removeProvider")}</button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChange([...rules, { provider: "*", model: "*", modality: "llm", operation: "text", estimatedCostMicros: 0 }])}
+          className="rounded-lg border border-[color:var(--gc-border)] px-4 py-2.5 text-sm text-[var(--gc-text)] hover:bg-white/5"
+        >
+          {t("pricingAdd")}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   const t = useTranslations("adminPage.runtimeConfig");
   const [loading, setLoading] = useState(true);
@@ -801,6 +850,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   const [routesForm, setRoutesForm] = useState<RuntimeModelRoute[]>([]);
   const [savedProviders, setSavedProviders] = useState<ProviderFormState[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RuntimeModelRoute[]>([]);
+  const [pricingForm, setPricingForm] = useState<ProviderPricingRule[]>([]);
+  const [savedPricing, setSavedPricing] = useState<ProviderPricingRule[]>([]);
   const [newProviderTemplate, setNewProviderTemplate] = useState<ProviderTemplateId>("litellm");
 
   const inputCls =
@@ -812,6 +863,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setSavedProviders(JSON.parse(JSON.stringify(pf)) as ProviderFormState[]);
     setRoutesForm(data.routes.map((r) => ({ ...r, fallbacks: [...r.fallbacks] })));
     setSavedRoutes(JSON.parse(JSON.stringify(data.routes)) as RuntimeModelRoute[]);
+    setPricingForm(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
+    setSavedPricing(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
   }, []);
 
   const load = useCallback(async () => {
@@ -846,8 +899,9 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
   const dirty = useMemo(() => {
     return JSON.stringify(providersForm) !== JSON.stringify(savedProviders)
-      || JSON.stringify(routesForm) !== JSON.stringify(savedRoutes);
-  }, [providersForm, routesForm, savedProviders, savedRoutes]);
+      || JSON.stringify(routesForm) !== JSON.stringify(savedRoutes)
+      || JSON.stringify(pricingForm) !== JSON.stringify(savedPricing);
+  }, [pricingForm, providersForm, routesForm, savedPricing, savedProviders, savedRoutes]);
 
   const savedProviderIds = useMemo(() => new Set(savedProviders.map((p) => p.id)), [savedProviders]);
 
@@ -925,6 +979,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   function discardChanges() {
     setProvidersForm(JSON.parse(JSON.stringify(savedProviders)) as ProviderFormState[]);
     setRoutesForm(JSON.parse(JSON.stringify(savedRoutes)) as RuntimeModelRoute[]);
+    setPricingForm(JSON.parse(JSON.stringify(savedPricing)) as ProviderPricingRule[]);
     onNotice({ kind: "ok", text: t("discardDone") });
   }
 
@@ -958,6 +1013,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     const data = await patch({
       providers: providersForm.map(providerToPayload),
       routes: routesForm,
+      providerPricing: pricingForm,
     });
     if (data) onNotice({ kind: "ok", text: t("saveDone") });
   }
@@ -1058,6 +1114,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           [
             { id: "providers" as const, label: t("tabProviders") },
             { id: "routing" as const, label: t("tabRouting") },
+            { id: "pricing" as const, label: t("tabPricing") },
           ] as const
         ).map((tab) => (
           <button
@@ -1161,7 +1218,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             )}
           </section>
         </div>
-      ) : (
+      ) : section === "routing" ? (
         <div className="overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" data-testid="admin-runtime-routing-editor">
           <div className="border-b border-white/8 px-4 py-4 sm:px-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -1229,6 +1286,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             </table>
           </div>
         </div>
+      ) : (
+        <ProviderPricingEditor rules={pricingForm} inputCls={inputCls} onChange={setPricingForm} />
       )}
 
       {/* Sticky action bar */}
