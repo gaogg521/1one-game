@@ -487,3 +487,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `POST /api/works/:type/:id/publication` 强制校验 owner、`ready` 状态和当前统一质量报告。质量为 `blocked` 的作品只能先修复，不能公开；发布和下架会在同一个 Prisma 事务中同步旧作品与对应 `CreativeProject` 的 visibility/status，且不会篡改 immutable revision。
 - 游戏和漫画详情 API 补齐了与小说一致的公共读取保护：不是 owner/管理员且不是 `public + ready` 的作品一律返回 404，避免 pending 或 hidden 作品通过直链泄露。详情响应现在带 visibility，供作者界面反映真实状态。
 - 新增 `qa:creator-publication`（默认可见性、owner、质量阻断、Core 同步）与 `qa:creator-publication:http`（匿名 404 → owner 读取 → 发布公开 → 下架后再次 404）。“HTTP” 用例必须以 `DEV_SUPER_ADMIN=0` 启动本地服务；开发环境的 admin bypass 会刻意让匿名请求通过，不能拿来验证访问控制。完整 production build、creator workflow/quality QA 和五语 JSON 解析通过。
+
+## P7 第一段：支付闭环诚实性与安全门禁（2026-08-23）
+
+- 已确认旧支付链路没有真实微信/支付宝商户 checkout 或官方回调验签，却允许生产页创建 `dev` pending 订单；这会误导创作者且存在用通用 webhook secret 伪造支付完成的风险。
+- 现在支付能力显式分为 `development` 与 `unavailable`：只有 `PAYMENT_DEV_MODE=1` 才能创建 `provider=dev` 订单和使用模拟完成；其他环境的订单 API 在写库前返回 `paymentUnavailable`，账单页禁用购买并说明支付接入中。
+- 微信/支付宝 notify 在非开发模式一律拒绝，开发模拟也只会完成 `provider=dev` 订单；保留的 V2 MD5 函数不再把开发模式当成签名绕过。后续真实支付必须实现官方 merchant checkout、证书/平台公钥轮换、回调验签、金额/商户号核对与退款/对账后，才可开放任一生产支付入口。
+- 新增 `qa:payment-safety`：验证生产态不创建订单、显式开发态仅创建 dev pending 订单并可模拟完成，测试数据会清理。

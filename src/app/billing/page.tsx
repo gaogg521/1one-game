@@ -24,12 +24,17 @@ type QuotaInfo = {
   plan: { id: string; name: string; periodEnd: string | null };
 };
 
+type PaymentCheckout =
+  | { mode: "development"; provider: "dev" }
+  | { mode: "unavailable"; provider: null };
+
 export default function BillingPage() {
   const t = useTranslations();
   const tp = useTranslations("commercePlans");
   const locale = useLocale() as AppLocale;
   const [plans, setPlans] = useState<Plan[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [checkout, setCheckout] = useState<PaymentCheckout>({ mode: "unavailable", provider: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
@@ -40,12 +45,18 @@ export default function BillingPage() {
         r.ok ? r.json() : null,
       ),
     ]).then(([p, q]) => {
-      setPlans((p as { plans?: Plan[] }).plans ?? []);
+      const planResponse = p as { plans?: Plan[]; checkout?: PaymentCheckout };
+      setPlans(planResponse.plans ?? []);
+      setCheckout(planResponse.checkout ?? { mode: "unavailable", provider: null });
       setQuota(q as QuotaInfo | null);
     });
   }, [locale]);
 
   async function buy(planId: string) {
+    if (checkout.mode !== "development") {
+      setMsg(t("billing.paymentUnavailable"));
+      return;
+    }
     setBusy(planId);
     setMsg("");
     try {
@@ -142,11 +153,15 @@ export default function BillingPage() {
               {p.id !== "free" ? (
                 <button
                   type="button"
-                  disabled={busy === p.id}
+                  disabled={busy === p.id || checkout.mode !== "development"}
                   onClick={() => void buy(p.id)}
                   className="gc-theme-cta mt-4 w-full rounded-lg py-2 text-xs font-semibold disabled:opacity-50"
                 >
-                  {busy === p.id ? t("billing.processing") : t("billing.subscribe")}
+                  {busy === p.id
+                    ? t("billing.processing")
+                    : checkout.mode === "development"
+                      ? t("billing.subscribe")
+                      : t("billing.paymentUnavailableShort")}
                 </button>
               ) : null}
             </div>

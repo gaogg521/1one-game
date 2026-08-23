@@ -4,10 +4,29 @@ import { ensureSubscriptionPlansSeeded, getPlanById } from "@/lib/commerce/plans
 import { prisma } from "@/lib/prisma";
 
 export class PaymentOrderError extends Error {
-  constructor(public readonly errorKey: "invalidPlan") {
+  constructor(public readonly errorKey: "invalidPlan" | "paymentUnavailable") {
     super(errorKey);
     this.name = "PaymentOrderError";
   }
+}
+
+export type PaymentCheckoutAvailability =
+  | { mode: "development"; provider: "dev" }
+  | { mode: "unavailable"; provider: null };
+
+/**
+ * A real provider must create a provider-side checkout and validate its official
+ * callback signature. Until that adapter exists, production must not create an
+ * order that a creator cannot pay for.
+ */
+export function getPaymentCheckoutAvailability(): PaymentCheckoutAvailability {
+  return process.env.PAYMENT_DEV_MODE === "1"
+    ? { mode: "development", provider: "dev" }
+    : { mode: "unavailable", provider: null };
+}
+
+export function isDevelopmentPaymentEnabled(): boolean {
+  return getPaymentCheckoutAvailability().mode === "development";
 }
 
 export function newOrderId(): string {
@@ -19,6 +38,10 @@ export async function createPaymentOrder(opts: {
   planId: string;
   provider: "wechat" | "alipay" | "dev";
 }): Promise<{ orderId: string; amountCents: number; planId: string }> {
+  const checkout = getPaymentCheckoutAvailability();
+  if (checkout.mode !== "development" || opts.provider !== checkout.provider) {
+    throw new PaymentOrderError("paymentUnavailable");
+  }
   await ensureSubscriptionPlansSeeded();
   const plan = getPlanById(opts.planId);
   if (!plan || plan.id === "free") {
@@ -39,8 +62,9 @@ export async function createPaymentOrder(opts: {
 }
 
 function verifyDevWebhookSecret(req: Request): boolean {
+  if (!isDevelopmentPaymentEnabled()) return false;
   const secret = process.env.PAYMENT_WEBHOOK_SECRET?.trim();
-  if (!secret) return process.env.PAYMENT_DEV_MODE === "1";
+  if (!secret) return true;
   return req.headers.get("x-payment-webhook-secret") === secret;
 }
 
@@ -95,6 +119,14 @@ export async function fulfillPaidOrder(orderId: string, payload?: unknown): Prom
   return true;
 }
 
+/** Only development orders may be fulfilled by the local simulator or dev callbacks. */
+export async function fulfillDevelopmentOrder(orderId: string, payload?: unknown): Promise<boolean> {
+  if (!isDevelopmentPaymentEnabled()) return false;
+  const order = await prisma.paymentEvent.findUnique({ where: { orderId }, select: { provider: true } });
+  if (order?.provider !== "dev") return false;
+  return fulfillPaidOrder(orderId, payload);
+}
+
 export async function handleWechatPayNotify(req: Request): Promise<{ code: string; message: string }> {
   if (!verifyDevWebhookSecret(req)) {
     return { code: "FAIL", message: "unauthorized" };
@@ -102,7 +134,7 @@ export async function handleWechatPayNotify(req: Request): Promise<{ code: strin
   const body = (await req.json().catch(() => ({}))) as { orderId?: string; out_trade_no?: string };
   const orderId = body.orderId ?? body.out_trade_no;
   if (!orderId) return { code: "FAIL", message: "missing orderId" };
-  const ok = await fulfillPaidOrder(orderId, body);
+  const ok = await fulfillDevelopmentOrder(orderId, body);
   return ok ? { code: "SUCCESS", message: "ok" } : { code: "FAIL", message: "order not found" };
 }
 
@@ -113,13 +145,12 @@ export async function handleAlipayNotify(req: Request): Promise<string> {
     (form?.get("out_trade_no") as string | null) ??
     ((await req.json().catch(() => ({}))) as { out_trade_no?: string }).out_trade_no;
   if (!orderId) return "fail";
-  const ok = await fulfillPaidOrder(orderId, form ? Object.fromEntries(form.entries()) : undefined);
+  const ok = await fulfillDevelopmentOrder(orderId, form ? Object.fromEntries(form.entries()) : undefined);
   return ok ? "success" : "fail";
 }
 
-/** 微信 V2 MD5 签名校验；开发模式可跳过 */
+/** 微信 V2 MD5 签名校验。真实支付接入时还必须使用官方回调验签与证书轮换。 */
 export function verifyWechatSign(payload: Record<string, string>, apiKey: string): boolean {
-  if (process.env.PAYMENT_DEV_MODE === "1") return true;
   const sign = payload.sign?.trim();
   if (!sign || !apiKey) return false;
   const expected = md5Sign(payload, apiKey);

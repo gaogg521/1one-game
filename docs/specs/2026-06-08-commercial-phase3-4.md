@@ -14,12 +14,13 @@
 - 注册绑定 `?ref=` 后：邀请人 +50、被邀请人 +20（见 `product-config.commerce`）
 - 新用户注册礼包 +30 点
 
-### 套餐订阅 + 支付 Webhook
+### 套餐订阅 + 支付（开发模拟）
 - 套餐：`free` / `creator` / `pro`（`SubscriptionPlan`）
 - `POST /api/commerce/orders` 创建订单
 - `POST /api/payment/wechat/notify` / `alipay/notify` Webhook
 - `POST /api/payment/dev/simulate` 开发模拟支付（`PAYMENT_DEV_MODE=1`）
 - 页面：`/billing`
+- 当前仅 `PAYMENT_DEV_MODE=1` 可创建和模拟完成 `dev` 订单。生产没有接入官方商户下单与回调验签时，购买入口必须明确关闭，不能创建无法支付的微信/支付宝订单。
 
 ### 生成额度 gate
 - 已登录用户：游戏 1 / 小说 2 / 长篇 5 / 漫画 3 点

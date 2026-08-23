@@ -15,8 +15,7 @@ export async function POST(req: Request) {
   if (!planId || planId === "free") {
     return localizedJsonError(req, "invalidPlan", 400);
   }
-  const provider =
-    body.provider === "alipay" ? "alipay" : body.provider === "dev" ? "dev" : "wechat";
+  const provider = body.provider === "dev" ? "dev" : body.provider === "alipay" ? "alipay" : "wechat";
 
   try {
     const order = await createPaymentOrder({ userId: user.id, planId, provider });
