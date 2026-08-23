@@ -392,3 +392,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `mirrorNovelToCreatorCore` 将一个已完成的旧 Novel 映射为单个 Core Project、一个不可变生成 revision、Story Bible、纲要、逐章 scene artifact 和 manuscript artifact；旧阅读/编辑数据未被改写。
 - 普通与流式小说生成在持久化旧 Novel 后同步镜像，并在 API 输出 `core` 结果；若迁移桥失败则明确返回 `core.status=degraded` 并记录错误，不会把内核同步假报成功。
 - QA 已验证 story bible、纲要和两个章节产物实际落库且按级联清理；TypeScript、creator core/workflow/quality QA 均通过。
+
+### P1 第三段：小说保存与创作快照一致性
+
+- 小说详情 API 对作者返回仅最新的 Core revision 快照；快照包含 project/revision 元数据和同一 revision 的 artifacts，避免 Story Bible、纲要和正文跨保存版本混用，非作者不获得该数据。
+- 小说正文或标题经 `PATCH /api/novel/:id` 保存后，会用 `refine` 原因写入新的不可变 Core revision；迁移失败时旧小说保存仍成功，但 API 明确返回 `core.status=degraded` 并记录服务端错误，禁止把旧快照伪装为新版本。
+- `qa:creator-core` 扩展为“生成镜像 → 编辑旧小说 → 再镜像 → 读取快照”，确认快照必定定位最后 revision 且正文为编辑后的文本。

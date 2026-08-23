@@ -24,6 +24,8 @@ import { localizedJsonError } from "@/lib/api/localized-error";
 import { canReadWorkPublicly } from "@/lib/literary-safety";
 import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
+import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -65,6 +67,9 @@ export async function GET(req: Request, ctx: RouteContext) {
     uiLocale,
   });
   const characterRoster = isOwner ? await loadNovelCharacterRoster(id) : null;
+  const creatorCore = isOwner
+    ? await getLegacyCreativeProjectSnapshot({ ownerKey, legacyType: "novel", legacyId: id })
+    : null;
   const baseQuality = assessNovelCreatorQuality({
     content: row.content,
     prompt: row.prompt,
@@ -123,6 +128,7 @@ export async function GET(req: Request, ctx: RouteContext) {
               .filter((c) => c.status === "draft_storyboard")
               .map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt })),
             characterRoster,
+            creatorCore,
           }
         : {}),
     },
@@ -211,8 +217,29 @@ export async function PATCH(req: Request, ctx: RouteContext) {
 
   const fresh = await prisma.novel.findUnique({
     where: { id },
-    select: { title: true, content: true, summary: true, shareCode: true, coverPath: true },
+    select: {
+      id: true,
+      ownerKey: true,
+      title: true,
+      prompt: true,
+      content: true,
+      summary: true,
+      lengthTier: true,
+      shareCode: true,
+      coverPath: true,
+    },
   });
+
+  let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" } | undefined;
+  if (fresh && Object.keys(data).length > 0) {
+    try {
+      const meta = await loadNovelGenerationMeta(id);
+      core = await mirrorNovelToCreatorCore({ novel: fresh, meta, cause: "refine" });
+    } catch (error) {
+      console.error("[novel-core-mirror]", { novelId: id, error });
+      core = { status: "degraded" };
+    }
+  }
 
   return NextResponse.json({
     novel: {
@@ -223,6 +250,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       shareCode: fresh?.shareCode ?? shareCode,
       coverPath: fresh?.coverPath ?? row.coverPath,
     },
+    ...(core ? { core } : {}),
   });
 }
 

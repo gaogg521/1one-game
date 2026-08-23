@@ -1,5 +1,9 @@
 import { prisma } from "../src/lib/prisma";
-import { createCreativeProject, createCreativeRevision } from "../src/lib/creator-core/repository";
+import {
+  createCreativeProject,
+  createCreativeRevision,
+  getLegacyCreativeProjectSnapshot,
+} from "../src/lib/creator-core/repository";
 import { enqueueGenerationJob } from "../src/lib/creator-core/jobs";
 import { processNextGenerationJob } from "../src/lib/creator-core/worker";
 import { mirrorNovelToCreatorCore } from "../src/lib/creator-core/novel-bridge";
@@ -74,6 +78,20 @@ async function main() {
       const artifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirrored.creativeRevisionId } });
       assert(artifacts.some((artifact) => artifact.kind === "story_bible"), "novel mirror must retain story bible");
       assert(artifacts.filter((artifact) => artifact.kind === "scene").length === 2, "novel mirror must split chapters into scenes");
+
+      const edited = await prisma.novel.update({
+        where: { id: novel.id },
+        data: { content: "=== 第1章 新灯火 ===\n\n旅人让灯火重新点亮旧城。" },
+      });
+      const refined = await mirrorNovelToCreatorCore({ novel: edited, cause: "refine" });
+      const snapshot = await getLegacyCreativeProjectSnapshot({
+        ownerKey: marker,
+        legacyType: "novel",
+        legacyId: novel.id,
+      });
+      assert(snapshot?.revision?.id === refined.creativeRevisionId, "snapshot must select the latest saved revision");
+      const manuscript = snapshot?.revision?.artifacts.find((artifact) => artifact.kind === "manuscript");
+      assert(manuscript?.textContent?.includes("新灯火"), "latest snapshot must expose the edited manuscript");
     } finally {
       await prisma.novel.delete({ where: { id: novel.id } });
       if (mirroredProjectId) await prisma.creativeProject.delete({ where: { id: mirroredProjectId } });

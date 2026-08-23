@@ -20,6 +20,15 @@ function artifactHash(input: CreativeArtifactInput): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function parseJson(value: string | null): unknown | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export async function createCreativeProject(input: CreativeProjectInput) {
   const parsed = CreativeProjectInputSchema.parse(input);
   return prisma.creativeProject.create({ data: parsed });
@@ -104,4 +113,82 @@ export async function finalizeCreativeRevision(creativeRevisionId: string, summa
     where: { id: creativeRevisionId },
     data: { status: "ready", finalizedAt: new Date(), ...(summary ? { summary } : {}) },
   });
+}
+
+/**
+ * The migration read-model for a legacy work. It exposes only the latest
+ * immutable revision, so creator screens never accidentally compose assets
+ * from different saves.
+ */
+export async function getLegacyCreativeProjectSnapshot(input: {
+  ownerKey: string;
+  legacyType: string;
+  legacyId: string;
+}) {
+  const project = await prisma.creativeProject.findUnique({
+    where: { legacyType_legacyId: { legacyType: input.legacyType, legacyId: input.legacyId } },
+    select: {
+      id: true,
+      kind: true,
+      title: true,
+      visibility: true,
+      updatedAt: true,
+      ownerKey: true,
+      revisions: {
+        orderBy: { sequence: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          sequence: true,
+          cause: true,
+          status: true,
+          summary: true,
+          finalizedAt: true,
+          artifacts: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              mediaType: true,
+              textContent: true,
+              contentJson: true,
+              metadataJson: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!project || project.ownerKey !== input.ownerKey) return null;
+
+  const revision = project.revisions[0];
+  return {
+    project: {
+      id: project.id,
+      kind: project.kind,
+      title: project.title,
+      visibility: project.visibility,
+      updatedAt: project.updatedAt,
+    },
+    revision: revision
+      ? {
+          id: revision.id,
+          sequence: revision.sequence,
+          cause: revision.cause,
+          status: revision.status,
+          summary: revision.summary,
+          finalizedAt: revision.finalizedAt,
+          artifacts: revision.artifacts.map((artifact) => ({
+            id: artifact.id,
+            kind: artifact.kind,
+            mediaType: artifact.mediaType,
+            textContent: artifact.textContent,
+            content: parseJson(artifact.contentJson),
+            metadata: parseJson(artifact.metadataJson),
+            createdAt: artifact.createdAt,
+          })),
+        }
+      : null,
+  };
 }
