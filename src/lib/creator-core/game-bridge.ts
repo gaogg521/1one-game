@@ -8,6 +8,7 @@ import {
   createCreativeRevision,
   ensureLegacyCreativeProject,
   finalizeCreativeRevision,
+  recordCreativeEvaluation,
 } from "@/lib/creator-core/repository";
 
 export type GameCoreMirror = { creativeProjectId: string; creativeRevisionId: string };
@@ -69,6 +70,11 @@ export async function mirrorGameToCreatorCore(input: {
       mediaType: "json",
       content: { templateId: spec.templateId, route: spec.agenticPlayRoute ?? "dedicated", coverPath: input.project.coverPath },
     },
+  });
+  await recordCreativeEvaluation({
+    creativeProjectId: project.id,
+    creativeRevisionId: revision.id,
+    report: quality,
   });
   await finalizeCreativeRevision(revision.id);
   return { creativeProjectId: project.id, creativeRevisionId: revision.id };

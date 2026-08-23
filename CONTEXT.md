@@ -524,3 +524,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 漫画详情读取现提供基于 `updatedAt` 的 revision token；所有结构化分镜编辑必须携带该 token。服务端以原子条件更新保存，旧 token 返回 409，避免双窗口或网络重试覆盖较新的分镜。
 - 成功保存会返回新 token 与新的 Core revision；作者页面据此刷新本地 token。`qa:comic-panel-job-api` 使用真实 HTTP 验证首写、Core revision、旧 token 的 409 以及随后 durable panel job 的完整恢复闭环。
+
+## P12 第一段：Core 质量与发布审计实体（2026-08-23）
+
+- 前向迁移 `20260823013000_add_creator_evaluation_publication` 新增 `CreativeEvaluation` 与 append-only `CreativePublication`；它们分别绑定 Project/Revision，质量证据与发布决定不再只存在于 JSON artifact 或旧作品可见性字段。
+- 游戏、小说、漫画每次镜像 revision 都写入同一份确定性质量报告；发布/下架仍先更新旧作品，再在同一事务同步 Core 项目并追加带版本、质量分数和证据摘要的 publication decision。
+- `qa:creator-core` 验证三类镜像均有独立 evaluation；`qa:creator-publication` 验证发布/下架产生两条不可变历史。Prisma validate/generate/migrate deploy、定向 ESLint 和完整 production build 均通过。

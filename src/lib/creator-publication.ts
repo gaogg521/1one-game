@@ -89,9 +89,31 @@ async function persistPublication(input: {
   const visibility: WorkVisibility = input.input.action === "publish" ? "public" : "hidden";
   await prisma.$transaction(async (tx) => {
     await input.update(tx, visibility);
-    await tx.creativeProject.updateMany({
+    const core = await tx.creativeProject.findFirst({
       where: { ownerKey: input.input.ownerKey, legacyType: input.legacyType, legacyId: input.input.id },
+      select: { id: true },
+    });
+    if (!core) return;
+    const revision = await tx.creativeRevision.findFirst({
+      where: { creativeProjectId: core.id },
+      orderBy: { sequence: "desc" },
+      select: { id: true },
+    });
+    await tx.creativeProject.update({
+      where: { id: core.id },
       data: { visibility, status: visibility === "public" ? "published" : "ready" },
+    });
+    await tx.creativePublication.create({
+      data: {
+        creativeProjectId: core.id,
+        creativeRevisionId: revision?.id,
+        action: input.input.action,
+        visibility,
+        decision: "approved",
+        qualityVerdict: input.quality.verdict,
+        qualityScore: input.quality.score,
+        reasonJson: JSON.stringify({ evidence: input.quality.evidence }),
+      },
     });
   });
   return { visibility, quality: input.quality };

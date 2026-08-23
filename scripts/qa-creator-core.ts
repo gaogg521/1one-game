@@ -80,8 +80,10 @@ async function main() {
       });
       mirroredProjectId = mirrored.creativeProjectId;
       const artifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirrored.creativeRevisionId } });
+      const novelEvaluation = await prisma.creativeEvaluation.findFirst({ where: { creativeRevisionId: mirrored.creativeRevisionId } });
       assert(artifacts.some((artifact) => artifact.kind === "story_bible"), "novel mirror must retain story bible");
       assert(artifacts.filter((artifact) => artifact.kind === "scene").length === 2, "novel mirror must split chapters into scenes");
+      assert(novelEvaluation?.evaluator === "deterministic_quality", "novel mirror must persist its quality evaluation");
 
       const edited = await prisma.novel.update({
         where: { id: novel.id },
@@ -160,9 +162,11 @@ async function main() {
       const mirroredComic = await mirrorComicToCreatorCore({ comic });
       mirroredComicProjectId = mirroredComic.creativeProjectId;
       const comicArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredComic.creativeRevisionId } });
+      const comicEvaluation = await prisma.creativeEvaluation.findFirst({ where: { creativeRevisionId: mirroredComic.creativeRevisionId } });
       assert(comicArtifacts.some((artifact) => artifact.kind === "comic_document"), "comic mirror must retain its document");
       assert(comicArtifacts.some((artifact) => artifact.kind === "style_lock"), "comic mirror must retain style and character locks");
       assert(comicArtifacts.some((artifact) => artifact.kind === "storyboard_page"), "comic mirror must retain storyboard pages");
+      assert(comicEvaluation?.evaluator === "deterministic_quality", "comic mirror must persist its quality evaluation");
       const panelJob = await enqueueGenerationJob({
         creativeProjectId: mirroredComic.creativeProjectId,
         creativeRevisionId: mirroredComic.creativeRevisionId,
@@ -186,8 +190,10 @@ async function main() {
       const mirroredGame = await mirrorGameToCreatorCore({ project: game });
       mirroredGameProjectId = mirroredGame.creativeProjectId;
       const gameArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
+      const gameEvaluation = await prisma.creativeEvaluation.findFirst({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
       assert(gameArtifacts.some((artifact) => artifact.kind === "game_spec"), "game mirror must retain the executable spec");
       assert(gameArtifacts.some((artifact) => artifact.kind === "evaluation"), "game mirror must retain creator quality evidence");
+      assert(gameEvaluation?.evaluator === "deterministic_quality", "game mirror must persist its quality evaluation");
       const sceneGraph = gameArtifacts.find((artifact) => artifact.kind === "scene_graph");
       const behaviorGraph = gameArtifacts.find((artifact) => artifact.kind === "behavior_graph");
       assert(sceneGraph && behaviorGraph, "game mirror must retain inspectable scene and behavior graphs");

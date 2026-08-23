@@ -1,11 +1,13 @@
 import type { Novel } from "@prisma/client";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
+import { assessNovelCreatorQuality } from "@/lib/creator-quality";
 import {
   createCreativeArtifact,
   createCreativeRevision,
   ensureLegacyCreativeProject,
   finalizeCreativeRevision,
+  recordCreativeEvaluation,
 } from "@/lib/creator-core/repository";
 
 export type NovelCoreMirror = { creativeProjectId: string; creativeRevisionId: string };
@@ -38,6 +40,12 @@ export async function mirrorNovelToCreatorCore(input: {
     summary: input.novel.summary ?? undefined,
   });
   const revisionInput = { creativeProjectId: project.id, creativeRevisionId: revision.id };
+  const quality = assessNovelCreatorQuality({
+    content: input.novel.content,
+    prompt: input.novel.prompt,
+    lengthTier: input.novel.lengthTier,
+    generationMeta: input.meta ?? null,
+  }).report;
 
   await createCreativeArtifact({
     ...revisionInput,
@@ -72,6 +80,11 @@ export async function mirrorNovelToCreatorCore(input: {
       },
     });
   }
+  await recordCreativeEvaluation({
+    creativeProjectId: project.id,
+    creativeRevisionId: revision.id,
+    report: quality,
+  });
   await finalizeCreativeRevision(revision.id, input.novel.summary ?? undefined);
   return { creativeProjectId: project.id, creativeRevisionId: revision.id };
 }

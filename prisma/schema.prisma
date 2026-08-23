@@ -186,6 +186,8 @@ model CreativeProject {
   revisions CreativeRevision[]
   artifacts CreativeArtifact[]
   jobs      GenerationJob[]
+  evaluations CreativeEvaluation[]
+  publications CreativePublication[]
 
   @@index([ownerKey, updatedAt])
   @@index([kind, visibility, updatedAt])
@@ -211,6 +213,8 @@ model CreativeRevision {
   project   CreativeProject    @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
   artifacts CreativeArtifact[]
   jobs      GenerationJob[]
+  evaluations CreativeEvaluation[]
+  publications CreativePublication[]
 
   @@unique([creativeProjectId, sequence])
   @@index([creativeProjectId, createdAt])
@@ -278,6 +282,51 @@ model GenerationJob {
   @@index([creativeProjectId, createdAt])
   @@index([creativeRevisionId, createdAt])
   @@index([leaseExpiresAt])
+}
+
+/// Immutable, machine-readable quality decision for a concrete creator revision.
+model CreativeEvaluation {
+  id                 String    @id @default(cuid())
+  creativeProjectId  String
+  creativeRevisionId String?
+  /// deterministic_quality | human_review | playtest
+  evaluator          String
+  /// ready | needs_polish | blocked
+  verdict            String
+  score              Int
+  evidenceJson       String
+  reportJson         String
+  createdAt          DateTime  @default(now())
+
+  project  CreativeProject   @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  revision CreativeRevision? @relation(fields: [creativeRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([creativeProjectId, createdAt])
+  @@index([creativeRevisionId, createdAt])
+  @@index([verdict, createdAt])
+}
+
+/// Append-only public-distribution decision. It never changes revision content.
+model CreativePublication {
+  id                 String    @id @default(cuid())
+  creativeProjectId  String
+  creativeRevisionId String?
+  /// publish | unpublish
+  action             String
+  visibility         String
+  /// approved | blocked
+  decision           String
+  qualityVerdict     String?
+  qualityScore       Int?
+  reasonJson         String?
+  createdAt          DateTime  @default(now())
+
+  project  CreativeProject   @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  revision CreativeRevision? @relation(fields: [creativeRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([creativeProjectId, createdAt])
+  @@index([creativeRevisionId, createdAt])
+  @@index([action, decision, createdAt])
 }
 
 /// Provider 级生成使用账本。绝不存 prompt、作品正文、密钥或原始 provider 响应。

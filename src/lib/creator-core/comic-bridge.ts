@@ -1,10 +1,12 @@
 import type { Comic } from "@prisma/client";
 import { parseComicDocument } from "@/lib/comic-panel-render";
+import { assessComicCreatorQuality } from "@/lib/creator-quality";
 import {
   createCreativeArtifact,
   createCreativeRevision,
   ensureLegacyCreativeProject,
   finalizeCreativeRevision,
+  recordCreativeEvaluation,
 } from "@/lib/creator-core/repository";
 
 export type ComicCoreMirror = { creativeProjectId: string; creativeRevisionId: string };
@@ -28,6 +30,7 @@ export async function mirrorComicToCreatorCore(input: {
     summary: `${doc.pages.length} pages / ${doc.pages.reduce((count, page) => count + page.panels.length, 0)} panels`,
   });
   const revisionInput = { creativeProjectId: project.id, creativeRevisionId: revision.id };
+  const quality = assessComicCreatorQuality(input.comic.imageUrls).report;
   await createCreativeArtifact({ ...revisionInput, artifact: { kind: "comic_document", mediaType: "json", content: doc } });
   await createCreativeArtifact({
     ...revisionInput,
@@ -49,6 +52,11 @@ export async function mirrorComicToCreatorCore(input: {
       artifact: { kind: "storyboard_page", mediaType: "json", content: page, metadata: { page: page.page } },
     });
   }
+  await recordCreativeEvaluation({
+    creativeProjectId: project.id,
+    creativeRevisionId: revision.id,
+    report: quality,
+  });
   await finalizeCreativeRevision(revision.id);
   return { creativeProjectId: project.id, creativeRevisionId: revision.id };
 }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import {
   CreativeArtifactInputSchema,
   CreativeProjectInputSchema,
@@ -104,6 +105,28 @@ export async function createCreativeArtifact(input: {
       provider: artifact.provider,
       sourceArtifactId: artifact.sourceArtifactId,
       metadataJson: stringify(artifact.metadata),
+    },
+  });
+}
+
+/** Stores the exact quality decision used for a revision, independently of report artifacts. */
+export async function recordCreativeEvaluation(input: {
+  creativeProjectId: string;
+  creativeRevisionId?: string;
+  evaluator?: "deterministic_quality" | "human_review" | "playtest";
+  report: CreatorQualityReport;
+}) {
+  return prisma.creativeEvaluation.create({
+    data: {
+      creativeProjectId: input.creativeProjectId,
+      creativeRevisionId: input.creativeRevisionId,
+      evaluator: input.evaluator ?? "deterministic_quality",
+      verdict: input.report.verdict,
+      // Some shared report producers type score as optional; persist a stable
+      // numeric audit field even when a legacy producer omits it.
+      score: Math.round(input.report.score ?? 0),
+      evidenceJson: JSON.stringify(input.report.evidence),
+      reportJson: JSON.stringify(input.report),
     },
   });
 }
