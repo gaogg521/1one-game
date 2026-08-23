@@ -50,7 +50,17 @@ export const ComicPanelJobPayloadSchema = z.object({
   uiLocale: z.string().min(2).max(16).default("zh-Hans"),
 });
 
+/** Immutable game-asset input kept with the revision that requested it. */
+export const GameAssetJobPayloadSchema = z.object({
+  projectId: z.string().min(1).max(96),
+  ownerKey: z.string().min(1).max(160),
+  spec: z.unknown(),
+  brief: z.unknown().nullable().optional(),
+  uiLocale: z.string().min(2).max(16).default("zh-Hans"),
+});
+
 export type CreativeProjectInput = z.infer<typeof CreativeProjectInputSchema>;
 export type CreativeRevisionInput = z.infer<typeof CreativeRevisionInputSchema>;
 export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
 export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
+export type GameAssetJobPayload = z.infer<typeof GameAssetJobPayloadSchema>;

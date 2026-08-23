@@ -21,6 +21,7 @@ import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
+import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -120,18 +121,23 @@ export async function POST(req: Request) {
     if (briefJson && !project.creativeBriefJson) {
       await saveCreativeBriefJson(project.id, briefJson);
     }
-    scheduleProjectAssetPipeline({
-      projectId: project.id,
-      spec,
-      brief,
-      uiLocale: "zh-Hans",
-    });
     let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
+    let assetJob: { id: string; status: string } | undefined;
     try {
       core = await mirrorGameToCreatorCore({ project, cause: "generate" });
+      const job = await enqueueGenerationJob({
+        creativeProjectId: core.creativeProjectId,
+        creativeRevisionId: core.creativeRevisionId,
+        type: "game_asset",
+        idempotencyKey: `game-asset:${project.id}:${core.creativeRevisionId}`,
+        payload: { projectId: project.id, ownerKey, spec, brief, uiLocale: "zh-Hans" },
+      });
+      assetJob = { id: job.id, status: job.status };
     } catch (error) {
       console.error("[game-core-mirror]", { projectId: project.id, error });
       core = { status: "degraded" };
+      // Preserve the legacy non-blocking path only when Core persistence is unavailable.
+      scheduleProjectAssetPipeline({ projectId: project.id, spec, brief, uiLocale: "zh-Hans" });
     }
     return NextResponse.json({
       project: {
@@ -142,6 +148,7 @@ export async function POST(req: Request) {
         quality,
       },
       core,
+      ...(assetJob ? { assetJob } : {}),
     });
   } catch (e) {
     return NextResponse.json({ error: apiErrorFromUnknown(req, e, "saveFailed") }, { status: 400 });

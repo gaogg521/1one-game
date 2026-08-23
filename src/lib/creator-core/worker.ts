@@ -1,4 +1,8 @@
-import { ArtifactWritePayloadSchema, ComicPanelJobPayloadSchema } from "@/lib/creator-core/types";
+import {
+  ArtifactWritePayloadSchema,
+  ComicPanelJobPayloadSchema,
+  GameAssetJobPayloadSchema,
+} from "@/lib/creator-core/types";
 import { createCreativeArtifact } from "@/lib/creator-core/repository";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { generateComicCover } from "@/lib/cover-generation";
@@ -17,6 +21,67 @@ import {
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
 import { resolveComicStoryContext } from "@/lib/comic-story-genre";
+import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
+import { parseGameSpec } from "@/lib/game-spec";
+import { runProjectAssetPipeline } from "@/lib/game-asset-pipeline";
+
+async function executeGameAssetJob(
+  job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
+  workerId: string,
+) {
+  const payload = GameAssetJobPayloadSchema.parse(JSON.parse(job.payloadJson));
+  const [project, coreProject] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: payload.projectId },
+      select: { id: true, ownerKey: true, coverPath: true },
+    }),
+    prisma.creativeProject.findUnique({
+      where: { id: job.creativeProjectId },
+      select: { ownerKey: true, kind: true, legacyType: true, legacyId: true },
+    }),
+  ]);
+  if (
+    !project ||
+    project.ownerKey !== payload.ownerKey ||
+    !coreProject ||
+    coreProject.ownerKey !== payload.ownerKey ||
+    coreProject.kind !== "game" ||
+    coreProject.legacyType !== "project" ||
+    coreProject.legacyId !== project.id
+  ) {
+    throw new Error("game_asset_owner_or_resource_missing");
+  }
+
+  const spec = parseGameSpec(payload.spec);
+  const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
+  if (!briefResult.success) throw new Error("game_asset_brief_invalid");
+
+  await heartbeatGenerationJob(job.id, workerId, { percent: 5, stage: "generating", detail: "preparing game assets" });
+  const result = await runProjectAssetPipeline({
+    projectId: project.id,
+    spec,
+    brief: briefResult.data,
+    uiLocale: payload.uiLocale as import("@/i18n/routing").AppLocale,
+    existingCoverPath: project.coverPath,
+  });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 95, stage: "persisting", detail: "saving asset manifest" });
+  return createCreativeArtifact({
+    creativeProjectId: job.creativeProjectId,
+    creativeRevisionId: job.creativeRevisionId ?? undefined,
+    artifact: {
+      kind: "asset_manifest",
+      mediaType: "json",
+      content: {
+        backgroundUrl: result.backgroundUrl,
+        sprites: result.sprites,
+        manifest: result.assetManifest,
+        coverPath: result.coverPath,
+        coverSource: result.coverSource,
+      },
+      metadata: { projectId: project.id, templateId: spec.templateId },
+    },
+  });
+}
 
 async function executeComicPanelJob(job: { id: string; payloadJson: string }, workerId: string) {
   const payload = ComicPanelJobPayloadSchema.parse(JSON.parse(job.payloadJson));
@@ -105,6 +170,11 @@ export async function processNextGenerationJob(workerId: string) {
       await executeComicPanelJob(job, workerId);
       await completeGenerationJob(job.id);
       return { id: job.id, type: job.type, status: "completed" as const };
+    }
+    if (job.type === "game_asset") {
+      const artifact = await executeGameAssetJob(job, workerId);
+      await completeGenerationJob(job.id, artifact.id);
+      return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
     }
     throw new Error(`unsupported_generation_job:${job.type}`);
   } catch (error) {

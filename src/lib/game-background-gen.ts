@@ -60,6 +60,12 @@ export async function generateGameBackground(
   spec: GameSpec,
   brief?: CreativeBrief | null,
 ): Promise<string | null> {
+  const cachedPath = path.join(/*turbopackIgnore: true*/ BG_DIR, `${projectId}.png`);
+  if (fs.existsSync(cachedPath)) {
+    console.info(`[game-bg] 复用缓存 ${projectId}`);
+    return `/game-bg/${projectId}.png`;
+  }
+
   const availability = getImageGenAvailability();
   if (!availability.ok) {
     console.warn(`[game-bg] 跳过背景生成：${availability.message}`);
@@ -93,7 +99,7 @@ export async function generateGameBackground(
       }
       buffer = Buffer.from(await res.arrayBuffer());
     }
-    const destPath = path.join(/*turbopackIgnore: true*/ BG_DIR, `${projectId}.png`);
+    const destPath = cachedPath;
     fs.writeFileSync(destPath, buffer);
     console.info(`[game-bg] 背景已保存 ${destPath}`);
 

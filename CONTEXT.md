@@ -445,3 +445,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `mirrorGameToCreatorCore`：每个旧 `Project` 对应一个 Core game project，创建/编辑时写入不可变 game spec、可选 Creative Brief、统一质量评估和 playable route artifact；Core revision 会保留模板、提示词、可见性与运行状态的意图快照。
 - `POST /api/projects` 与会改变标题/提示词/spec/Brief/封面的 `PATCH /api/projects/:id` 已双写并返回 Core revision；镜像异常时仅明确返回 `core.status=degraded`，不阻断旧 Project 的既有保存流程。作者 `GET /api/projects/:id` 仅可读取最新 Core snapshot，非作者不暴露。
 - 新 `qa:game-core-api` 使用本机真实 Next HTTP 验证创建 → owner snapshot → 编辑新 revision → 非 owner 不可读；`qa:creator-core` 也覆盖 game spec/evaluation artifact 与 revision lineage。验证通过 TypeScript、定向 ESLint、Prisma、creator core/workflow QA；生产构建与发布待本段提交后执行。
+
+### P4 后续：作者试玩反馈与可恢复资产生产（2026-08-23）
+
+- 作者试玩页已显示只基于匿名汇总样本的改进建议：样本不足、首个操作、首分钟、过早失败、重试摩擦和健康状态均有明确下一步；不回传用户身份、提示词或设备信息。`qa:game-playtest-advice` 通过。
+- 游戏创建不再仅在 Web 进程内 fire-and-forget 生成背景、精灵和 Brief 封面。创建 Core revision 成功后，`game_asset` 会以 revision 级不可变 spec/Brief 入 `GenerationJob`，由现有生产 worker 租约、进度、退避与重试机制消费；worker 复核 Core/旧 Project 作者归属，并把 `asset_manifest` 写进同一 revision。
+- 背景生成补齐本地缓存复用，重试不会对已成功的背景再次计费。Core 写入失败时保留原有非阻塞资产管线，API 会明确返回 `core.status=degraded`，而不把保存失败伪装为任务已入队。
+- 新 `qa:game-asset-job-api` 用真实本机 Next HTTP 验证“创建 → durable job queued → worker 完成 → 作者可查 100% 进度 → Core revision 保留 asset_manifest”闭环；测试预置本地资产缓存，不触发付费图像供应商。后续仍需让试玩页显示该活跃任务并提供作者发起的显式重绘入口。

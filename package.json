@@ -100,6 +100,7 @@
     "qa:creator-core": "tsx scripts/qa-creator-core.ts",
     "qa:comic-panel-job-api": "tsx scripts/qa-comic-panel-job-api.ts",
     "qa:game-core-api": "tsx scripts/qa-game-core-api.ts",
+    "qa:game-asset-job-api": "tsx scripts/qa-game-asset-job-api.ts",
     "qa:game-playtest-advice": "tsx scripts/qa-game-playtest-advice.ts",
     "qa:novel-story-plan-api": "tsx scripts/qa-novel-story-plan-api.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
