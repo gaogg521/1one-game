@@ -27,6 +27,7 @@ scripts/deploy.local.env
 
 # next.js
 /.next/
+/.next-*/
 /out/
 
 # production

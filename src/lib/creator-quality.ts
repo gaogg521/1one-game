@@ -12,6 +12,8 @@ import type { GameSpec } from "@/lib/game-spec";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import type { NovelLengthTier } from "@/lib/novel-length";
+import { checkSegmentConsistency } from "@/lib/novel-long-consistency";
+import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 
 export type CreatorQualityAssessment = {
   report: CreatorQualityReport;
@@ -73,6 +75,7 @@ export function assessNovelCreatorQuality(input: {
   content: string;
   prompt: string;
   lengthTier?: string | null;
+  generationMeta?: NovelGenerationMeta | null;
 }): CreatorQualityAssessment {
   const tier = (input.lengthTier ?? "medium") as NovelLengthTier;
   const content = input.content.trim();
@@ -100,6 +103,37 @@ export function assessNovelCreatorQuality(input: {
   if (firstChapter.length < 300) evidence.push("opening_hook_needs_review");
   if (paragraphUniqueness < 0.85) evidence.push("repetition_needs_review");
 
+  const planIssues: string[] = [];
+  if (input.generationMeta) {
+    const consistency = checkSegmentConsistency({
+      bible: input.generationMeta.bible,
+      expectedChapters: input.generationMeta.chapterPlan.chapters,
+      segmentText: content,
+      previousContent: "",
+    });
+    const materialCodes = new Set([
+      "no_chapter_markers",
+      "duplicate_chapter_num",
+      "chapter_rewind",
+      "missing_planned_chapter",
+      "unexpected_chapter",
+    ]);
+    for (const issue of consistency.issues) {
+      if (materialCodes.has(issue.code)) planIssues.push(issue.code);
+    }
+    const chaptersByNum = new Map(chapters.map((chapter) => [chapter.num, chapter]));
+    for (const planned of input.generationMeta.chapterPlan.chapters) {
+      const actual = chaptersByNum.get(planned.num);
+      if (actual && planned.targetChars && actual.body.trim().length < Math.max(100, Math.floor(planned.targetChars * 0.4))) {
+        planIssues.push(`planned_chapter_under_target:${planned.num}`);
+      }
+    }
+    evidence.push(
+      `story_plan:${planIssues.length === 0 ? "aligned" : "needs_repair"}`,
+      ...[...new Set(planIssues)].map((code) => `story_plan_issue:${code}`),
+    );
+  }
+
   const units: CreatorQualityUnit[] = chapters.map((chapter, index) => {
     const body = chapter.body.trim();
     const chapterUniqueness = uniqueParagraphRatio(body);
@@ -122,7 +156,14 @@ export function assessNovelCreatorQuality(input: {
     return { id: `chapter-${chapter.num}`, label: `chapter:${chapter.num}`, ...chapterReport, score: chapterScore };
   });
 
-  return { report: { ...buildCreatorQualityReport({ kind: "novel", score, evidence }), units } };
+  const report = buildCreatorQualityReport({ kind: "novel", score, evidence });
+  return {
+    report: {
+      ...report,
+      ...(input.generationMeta && planIssues.length > 0 && report.verdict !== "blocked" ? { verdict: "needs_polish" as const } : {}),
+      units,
+    },
+  };
 }
 
 type ComicStoryboardIntegrity = {

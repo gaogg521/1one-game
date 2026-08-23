@@ -85,6 +85,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     content: row.content,
     prompt: row.prompt,
     lengthTier: row.lengthTier,
+    generationMeta: pipelineMeta,
   }).report;
   const quality = withCreatorEngagementQuality(baseQuality, {
     sampleSize: row.playCount + row.likeCount,

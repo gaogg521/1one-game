@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
+  /** Allows isolated CI/local production builds when a dev server left stale route types behind. */
+  distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
   transpilePackages: ["phaser"],
   serverExternalPackages: ["pdf-parse", "mammoth"],
   /** Playwright / 局域网设备用 127.0.0.1 打开 dev HMR */

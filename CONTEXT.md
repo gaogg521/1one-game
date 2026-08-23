@@ -506,3 +506,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 漫画质量评估不再把任意非空 `director` 对象误判为视觉锚点。长导演分镜会验证导演包 schema、每格角色/地点/镜头绑定、角色和地点 ID、每页节拍覆盖、场景序号前进和连续同镜头过多等确定性约束。
 - 这些问题不会被静默忽略：已渲染但绑定损坏的分镜会明确降为 `needs_polish`，并返回 `storyboard_unknown_characters`、`storyboard_scene_order_regressed` 等可修复证据；轻量流程仍保持兼容，不把没有导演包的旧作品误阻断。
 - `qa:creator-quality` 新增完整导演包与损坏绑定两类用例；真实 `qa:comic-panel-job-api`、creator publication/workflow、comic-novel product rules、定向 ESLint 和完整 production build 均通过。
+
+## P10 第一段：小说纲要完整性与可重复生产构建（2026-08-23）
+
+- 统一小说质量现在可接收已解析的长篇生成元数据。存在 Story Bible/章节纲要时，会把缺失计划章节、重复/倒退/意外章节及正文远低于计划篇幅作为 `story_plan_issue:*` 证据；有问题的作品绝不再被判为 `ready`。旧作品及无长篇元数据的内容保持原有兼容路径。
+- 小说详情与作者发布动作都传入同一份 pipeline meta，因此阅读页的连续性报告、质量状态和发布门禁不会各自使用不同事实。真实 `qa:novel-story-plan-api`、creator publication/workflow 与质量用例均通过。
+- Windows 上每次临时 Next dev 后可能留下损坏的 `.next/dev/types/routes.d.ts`；由于不能安全删除共享缓存，`tsconfig` 现排除该开发生成目录，正常保留 `.next/types` 的生产路由类型。`next.config.ts` 可用 `NEXT_DIST_DIR` 进行隔离验证（默认仍为 `.next`），完整默认 production build 已重新通过。

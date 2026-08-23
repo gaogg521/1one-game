@@ -13,6 +13,31 @@ assert(novel.report.score !== undefined && novel.report.score >= 75, "complete c
 assert(novel.report.units?.length === 1, "novel quality should include one repairable chapter unit");
 assert(novel.report.units?.[0]?.verdict === "ready", "complete chapter should be quality-ready");
 
+const plannedNovel = assessNovelCreatorQuality({
+  lengthTier: "long",
+  prompt: "雨城旅人寻找灯灵的故事",
+  content: "=== 第1章 灯火 ===\n\n旅人走进雨城，寻找失落的灯火。".repeat(30),
+  generationMeta: {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    segmentCount: 1,
+    bible: {
+      title: "雨城灯火",
+      worldSetting: "被长雨笼罩的旧城，灯火决定居民能否回家。",
+      characters: [{ name: "旅人", role: "主角", traits: "执着" }, { name: "灯灵", role: "引路者", traits: "沉静" }],
+      coreConflict: "旅人必须在暴雨吞没旧城前找回灯火。",
+      endingDirection: "旅人与灯灵带着灯火离开雨城。",
+    },
+    chapterPlan: { chapters: [
+      { num: 1, title: "灯火", summary: "旅人进入雨城寻找失落灯火", phase: "opening", targetChars: 800 },
+      { num: 2, title: "钟楼", summary: "旅人追随灯灵前往钟楼", phase: "rising", targetChars: 800 },
+      { num: 3, title: "远行", summary: "旅人带着灯灵穿过风暴离开", phase: "resolution", targetChars: 800 },
+    ] },
+  },
+});
+assert(plannedNovel.report.verdict !== "ready", "missing planned chapters must not be quality-ready");
+assert(plannedNovel.report.evidence.some((item) => item === "story_plan_issue:missing_planned_chapter"), "quality must explain missing plan chapters");
+
 const comic = assessComicCreatorQuality(JSON.stringify({
   formatVersion: 3,
   pageCount: 2,

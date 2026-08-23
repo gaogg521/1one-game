@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { parseGameSpec } from "@/lib/game-spec";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
+import { parseNovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 
 export type PublishableWorkType = "game" | "novel" | "comic";
@@ -59,7 +60,12 @@ export async function setCreatorWorkPublication(input: {
     if (!row) throw new CreatorPublicationError("not_found");
     if (row.ownerKey !== input.ownerKey) throw new CreatorPublicationError("not_owner");
     if (row.status !== "ready") throw new CreatorPublicationError("not_ready");
-    const quality = assessNovelCreatorQuality({ content: row.content, prompt: row.prompt, lengthTier: row.lengthTier }).report;
+    const quality = assessNovelCreatorQuality({
+      content: row.content,
+      prompt: row.prompt,
+      lengthTier: row.lengthTier,
+      generationMeta: parseNovelGenerationMeta(row.generationMetaJson),
+    }).report;
     return persistPublication({ input, quality, legacyType: "novel", update: (tx, visibility) => tx.novel.update({ where: { id: row.id }, data: { visibility } }) });
   }
 
