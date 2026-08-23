@@ -936,6 +936,8 @@
     "storyboardRemoveBlocked": "至少保留一格分鏡，無法刪除",
     "storyboardAddPageBlocked": "已達頁數上限，無法新增",
     "storyboardMergeBlocked": "無法合併：至少保留一頁，或當前頁無下一頁",
+    "storyboardRevisionRequired": "請先載入最新分鏡後再編輯",
+    "storyboardConflict": "分鏡已在別處更新，請重新載入後再儲存",
     "registerFailed": "註冊失敗",
     "invalidJson": "無效 JSON",
     "corruptWork": "損壞的作品資料",

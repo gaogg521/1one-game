@@ -26,13 +26,29 @@ import { canReadWorkPublicly } from "@/lib/literary-safety";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function saveStoryboardRevision(id: string, imageUrls: string) {
-  const comic = await prisma.comic.update({ where: { id }, data: { imageUrls } });
+async function saveStoryboardRevision(input: {
+  id: string;
+  ownerKey: string;
+  imageUrls: string;
+  expectedUpdatedAt: Date;
+}) {
+  const updated = await prisma.comic.updateMany({
+    where: {
+      id: input.id,
+      ownerKey: input.ownerKey,
+      updatedAt: input.expectedUpdatedAt,
+    },
+    data: { imageUrls: input.imageUrls },
+  });
+  if (updated.count !== 1) return null;
+
+  const comic = await prisma.comic.findUniqueOrThrow({ where: { id: input.id } });
   try {
-    return await mirrorComicToCreatorCore({ comic, cause: "refine" });
+    const core = await mirrorComicToCreatorCore({ comic, cause: "refine" });
+    return { core, revisionToken: comic.updatedAt.toISOString() };
   } catch (error) {
-    console.error("[comic-core-mirror]", { comicId: id, error });
-    return { status: "degraded" as const };
+    console.error("[comic-core-mirror]", { comicId: input.id, error });
+    return { core: { status: "degraded" as const }, revisionToken: comic.updatedAt.toISOString() };
   }
 }
 
@@ -72,6 +88,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       imageUrls: row.imageUrls,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      revisionToken: row.updatedAt.toISOString(),
       shareCode: row.shareCode,
       likeCount: row.likeCount,
       status: row.status,
@@ -130,7 +147,18 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         }).storyboardReorder
       : null;
 
+  const expectedRevisionToken =
+    typeof body === "object" &&
+    body !== null &&
+    "expectedRevisionToken" in body &&
+    typeof (body as { expectedRevisionToken?: unknown }).expectedRevisionToken === "string"
+      ? (body as { expectedRevisionToken: string }).expectedRevisionToken
+      : null;
+  const expectedUpdatedAt = expectedRevisionToken ? new Date(expectedRevisionToken) : null;
+  const hasValidRevisionToken = Boolean(expectedUpdatedAt && Number.isFinite(expectedUpdatedAt.getTime()));
+
   if (storyboardReorder) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const pageIndex = Number(storyboardReorder.pageIndex);
     const fromIndex = Number(storyboardReorder.fromIndex);
     const toIndex = Number(storyboardReorder.toIndex);
@@ -143,8 +171,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   const storyboardMove =
@@ -164,6 +193,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       : null;
 
   if (storyboardMove) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const fromPageIndex = Number(storyboardMove.fromPageIndex);
     const fromPanelIndex = Number(storyboardMove.fromPanelIndex);
     const toPageIndex = Number(storyboardMove.toPageIndex);
@@ -182,8 +212,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   const storyboardAdd =
@@ -197,6 +228,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       : null;
 
   if (storyboardAdd) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const pageIndex = Number(storyboardAdd.pageIndex);
     const afterPanelIndex =
       storyboardAdd.afterPanelIndex !== undefined
@@ -215,8 +247,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   const storyboardRemove =
@@ -230,6 +263,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       : null;
 
   if (storyboardRemove) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const pageIndex = Number(storyboardRemove.pageIndex);
     const panelIndex = Number(storyboardRemove.panelIndex);
     if (!Number.isFinite(pageIndex) || !Number.isFinite(panelIndex)) {
@@ -241,8 +275,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardRemoveBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   const storyboardUpdate =
@@ -270,6 +305,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       : null;
 
   if (storyboardAddPage) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const afterPageIndex =
       storyboardAddPage.afterPageIndex !== undefined
         ? Number(storyboardAddPage.afterPageIndex)
@@ -283,8 +319,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardAddPageBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   const storyboardMergePage =
@@ -297,6 +334,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       : null;
 
   if (storyboardMergePage) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const pageIndex = Number(storyboardMergePage.pageIndex);
     if (!Number.isFinite(pageIndex)) {
       return localizedJsonError(req, "badJson", 400);
@@ -307,11 +345,13 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardMergeBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   if (storyboardUpdate) {
+    if (!hasValidRevisionToken) return localizedJsonError(req, "storyboardRevisionRequired", 400);
     const pageIndex = Number(storyboardUpdate.pageIndex);
     const panelIndex = Number(storyboardUpdate.panelIndex);
     const rawFields = storyboardUpdate.fields;
@@ -337,8 +377,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    const core = await saveStoryboardRevision(id, imageUrls);
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
+    const saved = await saveStoryboardRevision({ id, ownerKey, imageUrls, expectedUpdatedAt: expectedUpdatedAt! });
+    if (!saved) return localizedJsonError(req, "storyboardConflict", 409);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, ...saved });
   }
 
   let shareCode = row.shareCode;

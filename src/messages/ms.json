@@ -936,6 +936,8 @@
     "storyboardRemoveBlocked": "Sekurang-kurangnya satu panel mesti kekal",
     "storyboardAddPageBlocked": "Had halaman dicapai; tidak boleh tambah lagi",
     "storyboardMergeBlocked": "Tidak boleh gabung: sekurang-kurangnya satu halaman mesti kekal, atau tiada halaman seterusnya",
+    "storyboardRevisionRequired": "Muatkan papan cerita terkini sebelum mengedit",
+    "storyboardConflict": "Papan cerita ini telah berubah di tempat lain. Muat semula sebelum menyimpan",
     "registerFailed": "Pendaftaran gagal",
     "invalidJson": "JSON tidak sah",
     "corruptWork": "Data karya rosak",

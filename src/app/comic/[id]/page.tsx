@@ -37,6 +37,8 @@ interface Comic {
   title: string;
   displayTitle?: string;
   imageUrls: string;
+  /** Server-issued optimistic concurrency token for storyboard edits. */
+  revisionToken?: string;
   coverPath?: string | null;
   novelId?: string | null;
   novel: { id: string; title: string; displayTitle?: string } | null;
@@ -455,14 +457,23 @@ export default function ComicDetailPage() {
         const res = await fetch(`/api/comic/${encodeURIComponent(id as string)}`, {
           method: "PATCH",
           headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, expectedRevisionToken: comic.revisionToken }),
         });
-        const data = (await res.json()) as { pages?: ComicPage[]; errorKey?: string };
+        const data = (await res.json()) as {
+          pages?: ComicPage[];
+          revisionToken?: string;
+          errorKey?: string;
+        };
         if (!res.ok || !data.pages) {
           setError(resolveClientApiError(locale, data, "reorderFailed"));
           return null;
         }
         setPages(data.pages);
+        if (data.revisionToken) {
+          setComic((current) =>
+            current ? { ...current, revisionToken: data.revisionToken } : current,
+          );
+        }
         setCurrentPage((p) => Math.min(p, Math.max(0, data.pages!.length - 1)));
         return data.pages;
       } catch {
@@ -472,7 +483,7 @@ export default function ComicDetailPage() {
         setReorderBusy(false);
       }
     },
-    [id, comic?.isOwner, reorderBusy, workBusy, locale, tStory],
+    [id, comic?.isOwner, comic?.revisionToken, reorderBusy, workBusy, locale, tStory],
   );
 
   const handleMovePanel = useCallback(

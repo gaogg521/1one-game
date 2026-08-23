@@ -936,6 +936,8 @@
     "storyboardRemoveBlocked": "ต้องเหลือแผงอย่างน้อยหนึ่งแผง",
     "storyboardAddPageBlocked": "ถึงขีดจำกัดหน้าแล้ว ไม่สามารถเพิ่มได้",
     "storyboardMergeBlocked": "ไม่สามารถรวมได้: ต้องเหลืออย่างน้อยหนึ่งหน้า หรือไม่มีหน้าถัดไป",
+    "storyboardRevisionRequired": "โปรดโหลดสตอรี่บอร์ดล่าสุดก่อนแก้ไข",
+    "storyboardConflict": "สตอรี่บอร์ดนี้ถูกแก้ไขจากที่อื่น โปรดโหลดใหม่ก่อนบันทึก",
     "registerFailed": "สมัครไม่สำเร็จ",
     "invalidJson": "JSON ไม่ถูกต้อง",
     "corruptWork": "ข้อมูลงานเสียหาย",

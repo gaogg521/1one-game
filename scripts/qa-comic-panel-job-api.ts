@@ -27,6 +27,41 @@ async function main() {
 
   try {
     const ownerHeaders = { "Content-Type": "application/json", Cookie: `${OWNER_COOKIE}=${ownerKey}` };
+    const detailResponse = await fetch(`${baseUrl}/api/comic/${comic.id}`, {
+      headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` },
+    });
+    const detail = (await detailResponse.json()) as { comic?: { revisionToken?: string } };
+    assert(detailResponse.ok && detail.comic?.revisionToken, "owner comic detail must provide a storyboard revision token");
+
+    const editResponse = await fetch(`${baseUrl}/api/comic/${comic.id}`, {
+      method: "PATCH",
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        expectedRevisionToken: detail.comic.revisionToken,
+        storyboardUpdatePanel: { pageIndex: 0, panelIndex: 0, fields: { caption: "雨巷中重新点亮的灯" } },
+      }),
+    });
+    const edited = (await editResponse.json()) as {
+      pages?: Array<{ panels?: Array<{ caption?: string }> }>;
+      revisionToken?: string;
+      core?: { creativeRevisionId?: string; status?: string };
+    };
+    assert(editResponse.ok && edited.revisionToken, "storyboard edit must advance the revision token");
+    assert(edited.revisionToken !== detail.comic.revisionToken, "storyboard edit must produce a fresh revision token");
+    assert(edited.core?.creativeRevisionId, "storyboard edit must create a Core revision");
+    assert(edited.pages?.[0]?.panels?.[0]?.caption === "雨巷中重新点亮的灯", "storyboard edit must persist its panel text");
+
+    const staleResponse = await fetch(`${baseUrl}/api/comic/${comic.id}`, {
+      method: "PATCH",
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        expectedRevisionToken: detail.comic.revisionToken,
+        storyboardUpdatePanel: { pageIndex: 0, panelIndex: 0, fields: { caption: "stale overwrite" } },
+      }),
+    });
+    const stale = (await staleResponse.json()) as { errorKey?: string };
+    assert(staleResponse.status === 409 && stale.errorKey === "storyboardConflict", "stale storyboard writes must be rejected");
+
     const queuedResponse = await fetch(`${baseUrl}/api/comic/${comic.id}/panels`, {
       method: "POST",
       headers: ownerHeaders,

@@ -936,6 +936,8 @@
     "storyboardRemoveBlocked": "At least one panel must remain",
     "storyboardAddPageBlocked": "Page limit reached; cannot add more pages",
     "storyboardMergeBlocked": "Cannot merge: at least one page must remain, or there is no next page",
+    "storyboardRevisionRequired": "Load the latest storyboard before editing",
+    "storyboardConflict": "This storyboard changed elsewhere. Reload before saving again",
     "registerFailed": "Registration failed",
     "invalidJson": "Invalid JSON",
     "corruptWork": "Corrupted work data",

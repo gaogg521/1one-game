@@ -519,3 +519,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `scene_graph` 将每个导演段落投影为可审查的 play 场景，`behavior_graph` 将其投影为带时间条件的事件节点和边，作者可在版本快照中查看真实保存的节奏意图，而非只能查看通用主循环。
 - 修复质量增强的一个数据所有权错误：当作者暂未配置 runtime events 时，系统只补齐事件，不再用自动导演曲线覆盖作者已保存的 intensity、acts、名称或变奏。
 - `qa:game-core-api` 使用真实本地 HTTP 验证自定义段落进入 Core artifacts，且编辑会推进 immutable lineage；`qa:creator-core`、`qa:creator-quality`、`qa:game-vertical-slice`、定向 ESLint 和完整 production build 均通过。构建仍报告既有动态文件追踪性能警告，但没有类型/编译失败。
+
+## P3 收尾：漫画分镜并发保护（2026-08-23）
+
+- 漫画详情读取现提供基于 `updatedAt` 的 revision token；所有结构化分镜编辑必须携带该 token。服务端以原子条件更新保存，旧 token 返回 409，避免双窗口或网络重试覆盖较新的分镜。
+- 成功保存会返回新 token 与新的 Core revision；作者页面据此刷新本地 token。`qa:comic-panel-job-api` 使用真实 HTTP 验证首写、Core revision、旧 token 的 409 以及随后 durable panel job 的完整恢复闭环。
