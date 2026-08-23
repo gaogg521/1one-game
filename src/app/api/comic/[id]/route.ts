@@ -21,8 +21,19 @@ import { localizedJsonError } from "@/lib/api/localized-error";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
+import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+async function saveStoryboardRevision(id: string, imageUrls: string) {
+  const comic = await prisma.comic.update({ where: { id }, data: { imageUrls } });
+  try {
+    return await mirrorComicToCreatorCore({ comic, cause: "refine" });
+  } catch (error) {
+    console.error("[comic-core-mirror]", { comicId: id, error });
+    return { status: "degraded" as const };
+  }
+}
 
 export async function GET(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
@@ -127,8 +138,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   const storyboardMove =
@@ -166,8 +177,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   const storyboardAdd =
@@ -199,8 +210,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   const storyboardRemove =
@@ -225,8 +236,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardRemoveBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   const storyboardUpdate =
@@ -267,8 +278,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardAddPageBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   const storyboardMergePage =
@@ -291,8 +302,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "storyboardMergeBlocked", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   if (storyboardUpdate) {
@@ -321,8 +332,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return localizedJsonError(req, "badJson", 400);
     }
     const imageUrls = serializeComicDocument(next);
-    await prisma.comic.update({ where: { id }, data: { imageUrls } });
-    return NextResponse.json({ ok: true, pages: next.pages, imageUrls });
+    const core = await saveStoryboardRevision(id, imageUrls);
+    return NextResponse.json({ ok: true, pages: next.pages, imageUrls, core });
   }
 
   let shareCode = row.shareCode;

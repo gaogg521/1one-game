@@ -417,3 +417,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `mirrorComicToCreatorCore` 将 Comic 映射为唯一 Core Project 和不可变 revision，分别保存完整 `comic_document`、`style_lock`（画风、版式、导演包、角色 roster/reference sheets）与每页 `storyboard_page` artifact。
 - 普通与流式漫画生成在旧 Comic 持久化后都执行镜像，响应明确返回 Core revision；桥接失败返回 `core.status=degraded`，不把漫画创作资产同步误报为成功。
 - `qa:creator-core` 现用真实 SQLite 创建带画风与角色参考图的漫画，验证完整文档、画风/角色锁和逐页分镜全部落库。TypeScript 和定向 ESLint 已通过。
+
+### P3 第二段：编辑后的分镜版本化
+
+- 漫画详情中同页重排、跨页移动、增删格、增页、合页和单格文本编辑现统一经 `saveStoryboardRevision` 保存旧 Comic 后镜像为新的 `refine` Core revision；响应会返回 revision 或明确 `core.status=degraded`。
+- 这保证角色/风格锁、分镜文案和逐格图片的改动都有可追溯版本，而不是只覆盖 `imageUrls`。TypeScript、creator core QA 和该详情路由定向 ESLint 已通过。
