@@ -2383,6 +2383,7 @@
     "funnelStages": {
       "shareEvents": "分享事件",
       "referralSignups": "裂变注册",
+      "referralPaidOrders": "裂变付费",
       "paidOrders": "付费订单",
       "allPaidOrders": "全平台付款"
     },

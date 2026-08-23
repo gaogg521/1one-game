@@ -2312,6 +2312,7 @@
     "funnelStages": {
       "shareEvents": "Share events",
       "referralSignups": "Referral signups",
+      "referralPaidOrders": "Referral paid orders",
       "paidOrders": "Paid orders",
       "allPaidOrders": "คำสั่งซื้อทั้งหมด"
     },

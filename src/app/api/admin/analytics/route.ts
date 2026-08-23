@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildDayRange, clampDays, countByDay, toDayKey } from "@/lib/admin/analytics";
+import { countReferralPaidOrders } from "@/lib/admin/referral-funnel";
 import { requireAdmin } from "@/lib/auth/admin";
 import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreatorQuality } from "@/lib/creator-quality";
 import type { CreatorQualityReport, CreatorWorkKind } from "@/lib/creator-workflow";
@@ -92,7 +93,15 @@ export async function GET(req: Request) {
     }),
     prisma.paymentEvent.findMany({
       where: { status: "paid", paidAt: { gte: since } },
-      select: { amountCents: true, planId: true, provider: true, paidAt: true },
+      select: {
+        amountCents: true,
+        planId: true,
+        provider: true,
+        paidAt: true,
+        // A paid order only belongs in the social funnel when the payer is a
+        // referred user. All-platform revenue remains visible separately.
+        user: { select: { referredById: true } },
+      },
     }),
     prisma.userSubscription.groupBy({
       by: ["planId", "status"],
@@ -163,6 +172,7 @@ export async function GET(req: Request) {
     .sort((a, b) => b.count - a.count);
 
   const revenueCents = paidOrders.reduce((sum, o) => sum + o.amountCents, 0);
+  const referralPaidOrders = countReferralPaidOrders(paidOrders);
   const usageTotal = providerUsage.reduce((sum, row) => sum + row._count.id, 0);
   const usagePriced = providerUsage.reduce((sum, row) => sum + (row._sum.estimatedCostMicros == null ? 0 : row._count.id), 0);
   const providerCostMicros = providerUsage.reduce((sum, row) => sum + (row._sum.estimatedCostMicros ?? 0), 0);
@@ -273,6 +283,7 @@ export async function GET(req: Request) {
       funnel: [
         { stage: "shareEvents", value: shareTotal },
         { stage: "referralSignups", value: referralSignups },
+        { stage: "referralPaidOrders", value: referralPaidOrders },
         { stage: "allPaidOrders", value: paidOrders.length },
       ],
     },

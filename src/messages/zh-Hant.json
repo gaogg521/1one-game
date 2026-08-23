@@ -2312,6 +2312,7 @@
     "funnelStages": {
       "shareEvents": "分享事件",
       "referralSignups": "裂變註冊",
+      "referralPaidOrders": "裂變付費",
       "paidOrders": "付費訂單",
       "allPaidOrders": "全平台付款"
     },
