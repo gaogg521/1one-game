@@ -27,6 +27,7 @@ import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/cr
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
+import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -103,6 +104,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
       ...(core ? { core } : {}),
+      ...(isOwner ? { playtestAdvice: buildGamePlaytestAdvice(quality.engagement ?? { sampleSize: 0 }) } : {}),
     });
   } catch (error) {
     console.error("[GET /api/projects/:id]", error);

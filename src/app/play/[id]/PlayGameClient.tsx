@@ -30,6 +30,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 
 type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null };
 type CoreSnapshot = { revision: CoreRevision | null };
+type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
 
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
@@ -65,6 +66,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const [likeCount, setLikeCount] = useState(0);
   const [playCount, setPlayCount] = useState(0);
   const [core, setCore] = useState<CoreSnapshot | null>(null);
+  const [playtestAdvice, setPlaytestAdvice] = useState<PlaytestAdvice[]>([]);
 
   const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
 
@@ -86,6 +88,7 @@ export function PlayGameClient({ id }: { id: string }) {
           };
           refinementHistory?: Array<{ at: string; mode: string; instruction: string }>;
           core?: CoreSnapshot;
+          playtestAdvice?: PlaytestAdvice[];
           error?: string;
           errorKey?: string;
           errorParams?: Record<string, string | number>;
@@ -138,6 +141,7 @@ export function PlayGameClient({ id }: { id: string }) {
             setRefinementHistory([]);
           }
           setCore(data.core ?? null);
+          setPlaytestAdvice(Array.isArray(data.playtestAdvice) ? data.playtestAdvice : []);
         }
       } catch {
         if (!cancelled) setError(t("networkError"));
@@ -621,6 +625,14 @@ export function PlayGameClient({ id }: { id: string }) {
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
+                </div>
+              ) : null}
+              {meta.isOwner && playtestAdvice.length > 0 ? (
+                <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] px-3 py-2 text-[11px]" data-testid="game-playtest-advice">
+                  <p className="font-medium text-[var(--gc-text-soft)]">{t("playtestAdviceTitle")}</p>
+                  <ul className="mt-1 space-y-1 text-[var(--gc-muted)]">
+                    {playtestAdvice.map((advice) => <li key={advice.kind}>{t(`playtestAdvice.${advice.kind}`)}</li>)}
+                  </ul>
                 </div>
               ) : null}
             </div>

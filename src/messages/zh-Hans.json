@@ -2764,6 +2764,8 @@
     "recentRefineTitle": "最近精炼（最新在后）",
     "coreRevision": "已保存的创作版本 v{sequence}",
     "coreRevisionReady": "可试玩设计、质量评估与创作意图已归档"
+    ,"playtestAdviceTitle": "试玩反馈建议",
+    "playtestAdvice": {"collect_samples":"先邀请至少 5 位试玩者；当前样本不足以判断玩法问题。","first_action":"首个操作率偏低：在开场加入可点击目标和一行明确操作提示。","first_minute":"首分钟留存偏低：缩短首次奖励或变化出现前的等待时间。","early_failure":"失败发生过早：降低前 20 秒的危险密度，或增加一次容错机会。","retry_friction":"失败后重试偏低：让重试按钮更明显，并缩短重新开始的等待。","healthy":"当前样本未显示明显试玩阻塞；继续收集样本再校准。"}
   },
   "gameEvents": {
     "acts": {
