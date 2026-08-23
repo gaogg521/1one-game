@@ -580,3 +580,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 根布局通过极小客户端组件上报访问；注册、游戏/小说/漫画生成及统一发布 API 在服务端记录后续阶段，任一写入失败只记日志，绝不影响登录、创作或发布。付费阶段继续使用既有已付款订单聚合，绝不把 development 模拟订单伪装为真实支付。
 - 管理分析 API 和 Console 新增“创作者激活漏斗”：访问 → 新注册 → 创建作品 → 发布作品 → 已付款订单。响应与 UI 只处理聚合值，并明确说明匿名范围；五语文案齐备。
 - 验证：`prisma generate`、dev.db `migrate deploy`（30 条）和 `prisma validate` 通过；`qa:creator-funnel` 覆盖访问幂等与会话聚合，真实 `qa:game-core-api`/`qa:creator-publication:http` 覆盖游戏创建和发布实际写入漏斗事件。隔离 Next dev 修复默认 `.next/dev` 路由缓存污染后，完整 production build 通过；仍有既有动态文件追踪性能警告。
+
+## P17 第一段：小说生产演练零额度预检（2026-08-23）
+
+- Ops Health 现新增“小说生产演练”检查。它只检查生效的 `novel` provider/模型路由和 queued/running GenerationJob 数量：路由/模型缺失为 fail，队列有积压为 warn，配置就绪也保持 warn，明确要求管理员先主动运行 provider 探测、再以已批准的小额额度进行一次真实续写演练。
+- 预检绝不读取/返回密钥，绝不发送模型请求，也不把配置存在伪装为生产模型成功。它将 `qa:novel-continuation-job-api` 暴露为可操作的本地恢复闭环检查。
+- `qa:generation-rehearsal-readiness` 覆盖缺失路由、队列积压、配置待 probe，并确认 Ops Health 实际暴露该项；五语 JSON 与定向 ESLint 通过。真实模型演练仍需在确认额度/供应商规则后单独执行。

@@ -3,6 +3,8 @@ import { isEmailDeliveryConfigured } from "@/lib/auth/email-sender";
 import { loadEmailConfig } from "@/lib/email-config";
 import { buildAdminSampleGalleryReport } from "@/lib/admin-sample-gallery";
 import { readQaSnapshot, type QaSmokeSnapshot, type QaSnapshotId } from "@/lib/qa-cache";
+import { loadRuntimeConfig, resolveSceneRoute } from "@/lib/runtime-config";
+import { assessNovelRehearsalReadiness } from "@/lib/generation-rehearsal-readiness";
 
 export type OpsHealthStatus = "ok" | "warn" | "fail";
 
@@ -176,6 +178,24 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     hintKey: genErrors1h > 5 ? "healthHint_genErrors" : undefined,
   });
 
+  const [runtime, queuedGenerationJobs, runningGenerationJobs] = await Promise.all([
+    loadRuntimeConfig(),
+    prisma.generationJob.count({ where: { status: { in: ["queued", "retrying"] } } }),
+    prisma.generationJob.count({ where: { status: "running" } }),
+  ]);
+  const rehearsal = assessNovelRehearsalReadiness({
+    route: resolveSceneRoute(runtime.payload, "novel"),
+    queuedJobs: queuedGenerationJobs,
+    runningJobs: runningGenerationJobs,
+  });
+  checks.push({
+    id: "novel_rehearsal",
+    status: rehearsal.status,
+    labelKey: "healthCheck_novelRehearsal",
+    detail: rehearsal.detail,
+    hintKey: rehearsal.hintKey,
+  });
+
   const qaCommands: OpsHealthQaCommand[] = [
     { id: "admin", command: "npm run qa:admin-console", labelKey: "healthQa_admin" },
     { id: "samples_db", command: "npm run qa:sample-gallery-db-sync", labelKey: "healthQa_samplesDb" },
@@ -186,6 +206,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     },
     { id: "board", command: "npm run qa:board-showcase-samples", labelKey: "healthQa_board" },
     { id: "seed", command: "npm run seed:samples", labelKey: "healthQa_seed" },
+    { id: "novel_rehearsal", command: "npm run qa:novel-continuation-job-api", labelKey: "healthQa_novelRehearsal" },
   ];
 
   const qaSnapshots: OpsHealthQaSnapshot[] = [];
