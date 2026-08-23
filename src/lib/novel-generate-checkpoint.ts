@@ -1,4 +1,4 @@
-import { planLongNovelSegments, type LongNovelSegmentPlan } from "@/lib/novel-long-config";
+import { planLongNovelSegments } from "@/lib/novel-long-config";
 import {
   type NovelBible,
   type NovelChapterPlan,
@@ -74,7 +74,7 @@ export async function saveNovelCheckpointAndContent(
   content: string,
   meta: NovelGenerationMeta,
   checkpoint: NovelGenerateCheckpointMeta,
-): Promise<void> {
+): Promise<{ updatedAt: Date }> {
   const merged = buildCheckpointMeta(
     {
       version: meta.version,
@@ -86,10 +86,11 @@ export async function saveNovelCheckpointAndContent(
     { ...checkpoint, updatedAt: new Date().toISOString() },
   );
   const json = serializeNovelGenerationMeta(merged);
-  await prisma.novel.update({
+  const saved = await prisma.novel.update({
     where: { id: novelId },
     data: { content, updatedAt: new Date(), generationMetaJson: json },
   });
+  return { updatedAt: saved.updatedAt };
 }
 
 export async function loadNovelGenerationResumeState(
@@ -143,7 +144,7 @@ export async function finalizeDraftNovel(
       status: "ready",
     },
   });
-  const { generating: _g, ...cleanMeta } = data.pipelineMeta;
+  const { generating, ...cleanMeta } = data.pipelineMeta;
+  void generating;
   await persistNovelGenerationMeta(novelId, cleanMeta);
 }
-

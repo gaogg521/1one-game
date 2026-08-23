@@ -59,8 +59,18 @@ export const GameAssetJobPayloadSchema = z.object({
   uiLocale: z.string().min(2).max(16).default("zh-Hans"),
 });
 
+/** A continuation request is immutable at enqueue time; the worker revalidates ownership before execution. */
+export const NovelContinueJobPayloadSchema = z.object({
+  novelId: z.string().min(1).max(96),
+  ownerKey: z.string().min(1).max(160),
+  maxChapters: z.number().int().positive().max(24).nullable(),
+  polish: z.boolean(),
+  uiLocale: z.string().min(2).max(16).default("zh-Hans"),
+});
+
 export type CreativeProjectInput = z.infer<typeof CreativeProjectInputSchema>;
 export type CreativeRevisionInput = z.infer<typeof CreativeRevisionInputSchema>;
 export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
 export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
 export type GameAssetJobPayload = z.infer<typeof GameAssetJobPayloadSchema>;
+export type NovelContinueJobPayload = z.infer<typeof NovelContinueJobPayloadSchema>;

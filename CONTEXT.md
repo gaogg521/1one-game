@@ -539,3 +539,17 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 ## P2/P3 续接：小说续写并发保护（2026-08-23）
 
 - 长篇续写每段已有 checkpoint；完成时若作者在其他窗口修改正文，乐观锁冲突不再退回无条件更新。服务端改发 conflict SSE 并保留 checkpoint，避免生成请求覆盖更晚的人工编辑。
+
+## P13 第一段：小说续写可恢复任务化（2026-08-23）
+
+- 新增 `novel_continue` GenerationJob：作者可在原续写面板勾选“后台可恢复”，请求立即返回 `202`；关闭页面后重新打开小说详情会恢复当前任务及安全的进度摘要，并每 3 秒轮询直到完成。原 SSE 实时续写保持不变。
+- 新的 `executeNovelContinuation` 是两条路径共用的完整执行边界：模型级降级、分段 checkpoint、完整性修复、摘要、最终正文保存、Core revision 镜像与生成日志不再各自复制。worker 在执行前复核 Novel/Core project/owner 的三方归属，并在模型等待和 checkpoint 后续租。
+- 修复一个真实乐观锁问题：成功 checkpoint 本身会更新 `Novel.updatedAt`。执行器现在把每次自己成功保存 checkpoint 返回的新时间戳作为下一次最终写入的 expected version；作者在该 checkpoint 之后的编辑仍会返回 conflict，且不会写入 pipeline meta 或伪造 Core revision。
+- 任务完成后 metadata/Core 镜像异常会降级记录而不重跑已成功保存的正文，避免失败重试在新的作者状态上重复消耗生成额度。真正的作者编辑冲突则以不重试的 `novel_continuation_conflict` 失败任务保留给作者处理。
+- 验证：`npm run qa:novel-continuation-executor` 覆盖“checkpoint 后正常提交”和“作者冲突不写 meta/Core”；真实本地 HTTP `qa:novel-continuation-job-api` 覆盖 `202 入队 → owner 详情恢复 queued job`，不调用付费模型。并已通过 `qa:novel-story-plan-api`、`qa:creator-core`、`qa:creator-publication`、`qa:creator-quality`、Prisma validate、定向 ESLint、五语 JSON、`npx tsc --noEmit` 和完整 production build。
+
+### 下一步
+
+1. 将小说 durable worker 的真实模型完成路径放入受控生产演练：用真实小额额度验证 worker 的 claim → checkpoint → complete 后，把结果与 writer UI 的恢复状态一起验收。
+2. 继续补漫画“页级阅读完成率/重绘原因”与小说“章节完成率/跳出位置”的匿名消费指标；在有样本前保持质量分数不作为自动拒绝。
+3. 真实支付继续保持 fail-closed，待商户号、签约产品、证书/平台公钥、回调域名与退款/对账规则齐备后单独接入。

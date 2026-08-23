@@ -705,7 +705,11 @@
     "chapterOption": "{count} chapters",
     "polish": "Polish",
     "continuing": "Continuing…",
-    "continueBtn": "Continue"
+    "continueBtn": "Continue",
+    "backgroundMode": "Recover in background",
+    "continueBackground": "Continue in background",
+    "backgroundQueued": "Queued in the background. You can return to this work later.",
+    "backgroundWorking": "Continuing in background ({percent}%)"
   },
   "comicPanel": {
     "consistencyTitle": "How does adaptation stay consistent?",

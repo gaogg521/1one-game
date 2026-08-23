@@ -108,6 +108,8 @@
     "qa:provider-usage": "tsx scripts/qa-provider-usage.ts",
     "qa:payment-safety": "tsx scripts/qa-payment-safety.ts",
     "qa:novel-story-plan-api": "tsx scripts/qa-novel-story-plan-api.ts",
+    "qa:novel-continuation-executor": "tsx scripts/qa-novel-continuation-executor.ts",
+    "qa:novel-continuation-job-api": "tsx scripts/qa-novel-continuation-job-api.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
     "qa:xiangqi-commercial-runtime": "tsx scripts/qa-xiangqi-commercial-runtime.ts",
     "qa:board-showcase-samples": "tsx scripts/qa-board-showcase-samples.ts",

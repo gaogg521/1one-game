@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export type NewGenerationJob = {
   creativeProjectId: string;
   creativeRevisionId?: string;
-  type: "artifact_write" | "novel_plan" | "novel_scene" | "comic_panel" | "game_build" | "game_asset" | "evaluation";
+  type: "artifact_write" | "novel_plan" | "novel_scene" | "novel_continue" | "comic_panel" | "game_build" | "game_asset" | "evaluation";
   payload: Record<string, unknown>;
   idempotencyKey?: string;
   maxAttempts?: number;
@@ -105,10 +105,14 @@ export async function heartbeatGenerationJob(
   return result.count === 1;
 }
 
-export async function failGenerationJob(id: string, error: unknown) {
+export async function failGenerationJob(
+  id: string,
+  error: unknown,
+  options?: { retry?: boolean; errorCode?: string },
+) {
   const current = await prisma.generationJob.findUniqueOrThrow({ where: { id } });
   const detail = error instanceof Error ? error.message : String(error);
-  const retry = current.attempts < current.maxAttempts;
+  const retry = options?.retry ?? current.attempts < current.maxAttempts;
   const backoffMs = Math.min(5 * 60_000, 2 ** Math.max(0, current.attempts - 1) * 5_000);
   return prisma.generationJob.update({
     where: { id },
@@ -116,7 +120,7 @@ export async function failGenerationJob(id: string, error: unknown) {
       status: retry ? "retrying" : "failed",
       runAfter: retry ? new Date(Date.now() + backoffMs) : current.runAfter,
       leaseExpiresAt: null,
-      lastErrorCode: "execution_failed",
+      lastErrorCode: options?.errorCode ?? "execution_failed",
       lastErrorDetail: detail.slice(0, 1200),
       progressJson: JSON.stringify({ percent: 0, stage: retry ? "retrying" : "failed" }),
     },

@@ -705,7 +705,11 @@
     "chapterOption": "{count} 章",
     "polish": "潤飾",
     "continuing": "續寫中…",
-    "continueBtn": "續寫"
+    "continueBtn": "續寫",
+    "backgroundMode": "背景可復原",
+    "continueBackground": "背景續寫",
+    "backgroundQueued": "已加入背景佇列，可關閉頁面後回來查看",
+    "backgroundWorking": "背景續寫中（{percent}%）"
   },
   "comicPanel": {
     "consistencyTitle": "改編如何保證一致？",

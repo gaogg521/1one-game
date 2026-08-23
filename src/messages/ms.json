@@ -705,7 +705,11 @@
     "chapterOption": "{count} bab",
     "polish": "Poles",
     "continuing": "Menyambung…",
-    "continueBtn": "Sambung"
+    "continueBtn": "Sambung",
+    "backgroundMode": "Pulih di latar belakang",
+    "continueBackground": "Sambung di latar belakang",
+    "backgroundQueued": "Ditambah ke baris latar belakang. Anda boleh kembali kemudian.",
+    "backgroundWorking": "Menyambung di latar belakang ({percent}%)"
   },
   "comicPanel": {
     "consistencyTitle": "Bagaimana adaptasi kekal konsisten?",

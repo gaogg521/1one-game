@@ -74,6 +74,13 @@ interface Novel {
   quality?: CreatorQualityReport;
   storyPlan?: { bible: NovelBible; chapterPlan: NovelChapterPlan };
   continuity?: ConsistencyReport | null;
+  continueJob?: {
+    id: string;
+    status: string;
+    attempts: number;
+    maxAttempts: number;
+    progress: { percent?: number; stage?: string } | null;
+  } | null;
 }
 
 export default function NovelDetailPage() {
@@ -124,6 +131,18 @@ export default function NovelDetailPage() {
       );
     });
   }, [id, locale, t]);
+
+  useEffect(() => {
+    if (!novel?.isOwner || !novel.continueJob || !id) return;
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/novel/${encodeURIComponent(id as string)}`, { headers: mergeLocaleHeaders(locale) })
+        .then((r) => r.json())
+        .then((data: { novel?: Novel }) => {
+          if (data.novel) setNovel(data.novel);
+        });
+    }, 3_000);
+    return () => window.clearTimeout(timer);
+  }, [id, locale, novel?.continueJob, novel?.isOwner]);
 
   const displayMeta = useMemo(() => {
     if (!novel) return null;
@@ -398,6 +417,13 @@ export default function NovelDetailPage() {
                         }
                       }}
                       onError={setError}
+                      activeJob={novel.continueJob}
+                      onQueued={(job) => {
+                        setNovel((current) => current ? {
+                          ...current,
+                          continueJob: { ...job, attempts: 0, maxAttempts: 3, progress: { percent: 1, stage: "queued" } },
+                        } : current);
+                      }}
                       className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
                       style={{
                         borderColor: `${readPalette.tocActive}88`,

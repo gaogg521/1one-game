@@ -1,20 +1,15 @@
 import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { generateRateLimits } from "@/lib/api/generate-limits";
-import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { getActiveProvider, getNovelStyleTextModelCascade } from "@/lib/llm";
 import { apiErrorMessage, progressNovelMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
-import { generateNovelSynopsis } from "@/lib/novel-synopsis";
-import { novelMaxChars, parseNovelLengthTier } from "@/lib/novel-length";
-import { planLongNovelSegments } from "@/lib/novel-long-config";
 import { parseNovelContinueOptions } from "@/lib/novel-continue-options";
-import { assessNovelContinuation, streamLongNovelContinue } from "@/lib/novel-long-continue";
-import { loadNovelGenerationMeta, persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
-import { saveNovelCheckpointAndContent } from "@/lib/novel-generate-checkpoint";
-import { assessNovelCompleteness } from "@/lib/novel-completeness";
-import { repairPlannedNovelCompleteness } from "@/lib/novel-completeness-repair";
+import { assessNovelContinuation } from "@/lib/novel-long-continue";
+import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
+import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
+import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
+import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { getOwnerKey } from "@/lib/owner";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
@@ -59,7 +54,6 @@ export async function POST(req: Request, ctx: RouteContext) {
     });
   }
 
-  const lengthTier = parseNovelLengthTier(row.lengthTier);
   const meta = await loadNovelGenerationMeta(id);
   const assessment = assessNovelContinuation({
     lengthTier: row.lengthTier,
@@ -80,8 +74,36 @@ export async function POST(req: Request, ctx: RouteContext) {
   const maxChaptersToWrite =
     continueOpts.maxChapters === null ? null : continueOpts.maxChapters;
 
-  const cascade = getNovelStyleTextModelCascade();
-  const providerLabel = getActiveProvider();
+  if (continueOpts.durable) {
+    try {
+      const core = await mirrorNovelToCreatorCore({ novel: row, meta, cause: "refine" });
+      const job = await enqueueGenerationJob({
+        creativeProjectId: core.creativeProjectId,
+        creativeRevisionId: core.creativeRevisionId,
+        type: "novel_continue",
+        payload: {
+          novelId: row.id,
+          ownerKey,
+          maxChapters: maxChaptersToWrite,
+          polish: continueOpts.polish,
+          uiLocale,
+        },
+        idempotencyKey: `novel-continue:${row.id}:${row.updatedAt.getTime()}:${maxChaptersToWrite ?? "all"}:${continueOpts.polish}`,
+        maxAttempts: 3,
+      });
+      return new Response(JSON.stringify({ ok: true, queued: true, job: { id: job.id, status: job.status }, core, requestId }), {
+        status: 202,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
+      });
+    } catch (error) {
+      console.error("[novel-continue-job-enqueue]", { novelId: id, error });
+      return new Response(JSON.stringify({ error: progressNovelMessage(uiLocale, "continueProcessError"), code: codes.BAD_REQUEST, requestId }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...ridHeaders(requestId) },
+      });
+    }
+  }
+
   const encoder = new TextEncoder();
 
   // M1 修复：AbortController——客户端断连时 abort，取消进行中的 LLM fetch
@@ -100,7 +122,6 @@ export async function POST(req: Request, ctx: RouteContext) {
         }
       };
 
-      const startedAt = Date.now();
       try {
         const chapterHint =
           maxChaptersToWrite == null
@@ -119,161 +140,28 @@ export async function POST(req: Request, ctx: RouteContext) {
           polish: continueOpts.polish,
         });
 
-        let saved = false;
-        for (const model of cascade) {
-          send({ step: "model_start", model });
-          let pipelineMeta: Awaited<ReturnType<typeof streamLongNovelContinue>>["pipelineMeta"] | null =
-            null;
-          let newContent = row.content;
-          // P2 修复：ping 在 closed 后立即停
-          const ping = setInterval(() => { if (!closed) send({ step: "ping" }); }, 15_000);
-          // P0 修复：续写路径加 onSegmentCheckpoint，每段 atomic 写 DB 防数据丢失
-          const checkpointAt = Date.now();
-          const longPlan = planLongNovelSegments(lengthTier);
-          try {
-            const result = await streamLongNovelContinue({
-              model,
-              promptTrim: row.prompt,
-              titleTrim: row.title,
-              existingContent: row.content,
-              meta,
-              lengthTier,
-              maxChaptersToWrite,
-              polish: continueOpts.polish,
-              uiLocale,
-              emit: send,
-              signal: abortSignal,
-              onSegmentCheckpoint: async ({ index, content: partial, meta: partialMeta }) => {
-                try {
-                  await saveNovelCheckpointAndContent(id, partial, partialMeta, {
-                    completedSegmentIndex: index,
-                    partialContent: partial,
-                    prompt: row.prompt,
-                    title: row.title,
-                    lengthTier,
-                    polish: Boolean(continueOpts.polish),
-                    plan: longPlan,
-                    updatedAt: new Date().toISOString(),
-                  });
-                  send({ step: "checkpoint_saved", at: Date.now() - checkpointAt });
-                } catch (e) {
-                  send({
-                    step: "checkpoint_error",
-                    message: e instanceof Error ? e.message : String(e),
-                  });
-                }
-              },
-            });
-            newContent = result.content;
-            pipelineMeta = result.pipelineMeta;
-          } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            send({ step: "model_error", model, message });
-            continue;
-          } finally {
-            clearInterval(ping);
-          }
-
-          if (newContent.length <= row.content.length) {
-            send({
-              step: "model_short",
-              model,
-              message: progressNovelMessage(uiLocale, "continueNoDelta"),
-              length: newContent.length,
-              priorLength: row.content.length,
-            });
-            continue;
-          }
-
-          // P1 修复：续写后加完整性校验，不完整则尝试 repair
-          try {
-            const completeness = assessNovelCompleteness(
-              newContent,
-              lengthTier,
-              undefined,
-              row.prompt,
-              meta?.chapterPlan,
-              uiLocale,
-            );
-            if (!completeness.ok && meta?.chapterPlan) {
-              send({ step: "completeness_repair", message: "正文不完整，自动补章" });
-              const repaired = await repairPlannedNovelCompleteness({
-                model,
-                promptTrim: row.prompt,
-                titleTrim: row.title,
-                content: newContent,
-                lengthTier,
-                pipelineMeta: meta,
-                uiLocale,
-                emit: send,
-              });
-              newContent = repaired.content;
-            }
-          } catch (e) {
-            send({
-              step: "completeness_error",
-              message: e instanceof Error ? e.message : String(e),
-            });
-          }
-
-          send({ step: "synopsis_start", message: progressNovelMessage(uiLocale, "continueSynopsis") });
-          const summary = await generateNovelSynopsis({
-            model,
-            title: row.title,
-            prompt: row.prompt,
-            content: newContent,
-            lengthTier,
+        const ping = setInterval(() => { if (!closed) send({ step: "ping" }); }, 15_000);
+        let result: Awaited<ReturnType<typeof executeNovelContinuation>>;
+        try {
+          result = await executeNovelContinuation({
+            novel: row,
+            meta,
+            maxChaptersToWrite,
+            polish: continueOpts.polish,
             uiLocale,
-          });
-
-          // Preserve explicit author edits. Segment checkpoints above retain
-          // generated work, so a stale continuation must never overwrite a
-          // newer manuscript just to finish its own request.
-          const priorUpdatedAt = new Date(row.updatedAt).getTime();
-          let novel;
-          try {
-            novel = await prisma.novel.update({
-              where: { id, updatedAt: new Date(priorUpdatedAt) },
-              data: { content: newContent, summary },
-            });
-          } catch {
-            send({
-              step: "conflict",
-              code: codes.BAD_REQUEST,
-              message: progressNovelMessage(uiLocale, "continueConflict"),
-              requestId,
-            });
-            return;
-          }
-          if (pipelineMeta) {
-            await persistNovelGenerationMeta(id, pipelineMeta);
-          }
-
-          emitGenerateServeLog({
+            requestId,
             phase: "novel_continue_stream",
-            requestId,
-            durationMs: Date.now() - startedAt,
-            byteLength: 0,
-            promptChars: row.prompt.length,
-            source: "llm",
-            llmProvider: String(providerLabel),
+            emit: send,
+            signal: abortSignal,
           });
-
-          send({
-            step: "done",
-            novel,
-            model,
-            provider: providerLabel,
-            message: progressNovelMessage(uiLocale, "continueDone"),
-            requestId,
-            addedChars: newContent.length - row.content.length,
-            maxChars: novelMaxChars(lengthTier),
-          });
-          saved = true;
-          break;
+        } finally {
+          clearInterval(ping);
         }
-
-        if (!saved) {
+        if (result.status === "conflict") {
+          send({ step: "conflict", code: codes.BAD_REQUEST, message: progressNovelMessage(uiLocale, "continueConflict"), requestId });
+          return;
+        }
+        if (result.status !== "completed") {
           send({
             step: "error",
             message: progressNovelMessage(uiLocale, "continueFailed"),

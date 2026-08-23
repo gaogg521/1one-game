@@ -2,6 +2,7 @@ import {
   ArtifactWritePayloadSchema,
   ComicPanelJobPayloadSchema,
   GameAssetJobPayloadSchema,
+  NovelContinueJobPayloadSchema,
 } from "@/lib/creator-core/types";
 import { createCreativeArtifact } from "@/lib/creator-core/repository";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
@@ -24,6 +25,9 @@ import { resolveComicStoryContext } from "@/lib/comic-story-genre";
 import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import { parseGameSpec } from "@/lib/game-spec";
 import { runProjectAssetPipeline } from "@/lib/game-asset-pipeline";
+import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
+import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
+import { assessNovelContinuation } from "@/lib/novel-long-continue";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -148,6 +152,64 @@ async function executeComicPanelJob(job: { id: string; payloadJson: string }, wo
   }
 }
 
+async function executeNovelContinueJob(
+  job: { id: string; creativeProjectId: string; payloadJson: string },
+  workerId: string,
+) {
+  const payload = NovelContinueJobPayloadSchema.parse(JSON.parse(job.payloadJson));
+  const [novel, coreProject] = await Promise.all([
+    prisma.novel.findUnique({ where: { id: payload.novelId } }),
+    prisma.creativeProject.findUnique({
+      where: { id: job.creativeProjectId },
+      select: { ownerKey: true, kind: true, legacyType: true, legacyId: true },
+    }),
+  ]);
+  if (
+    !novel ||
+    novel.ownerKey !== payload.ownerKey ||
+    !coreProject ||
+    coreProject.ownerKey !== payload.ownerKey ||
+    coreProject.kind !== "novel" ||
+    coreProject.legacyType !== "novel" ||
+    coreProject.legacyId !== novel.id
+  ) {
+    throw new Error("novel_continue_owner_or_resource_missing");
+  }
+  const uiLocale = payload.uiLocale as import("@/i18n/routing").AppLocale;
+  const meta = await loadNovelGenerationMeta(novel.id);
+  const continuation = assessNovelContinuation({
+    lengthTier: novel.lengthTier,
+    content: novel.content,
+    meta,
+    uiLocale,
+  });
+  if (!continuation.canContinue) throw new Error("novel_continue_not_available");
+
+  const timer = setInterval(() => {
+    void heartbeatGenerationJob(job.id, workerId, { percent: 5, stage: "generating", detail: "continuing manuscript" });
+  }, 25_000);
+  try {
+    return await executeNovelContinuation({
+      novel,
+      meta,
+      maxChaptersToWrite: payload.maxChapters,
+      polish: payload.polish,
+      uiLocale,
+      requestId: `job:${job.id}`,
+      phase: "novel_continue_job",
+      onCheckpointSaved: async ({ index, contentLength }) => {
+        await heartbeatGenerationJob(job.id, workerId, {
+          percent: Math.min(90, 20 + index * 15),
+          stage: "checkpoint_saved",
+          detail: `${contentLength.toLocaleString()} chars`,
+        });
+      },
+    });
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 /**
  * Durable-job execution boundary. New job types are added here only after
  * their payload schema and idempotency behavior have an integration test.
@@ -175,6 +237,19 @@ export async function processNextGenerationJob(workerId: string) {
       const artifact = await executeGameAssetJob(job, workerId);
       await completeGenerationJob(job.id, artifact.id);
       return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
+    }
+    if (job.type === "novel_continue") {
+      const result = await executeNovelContinueJob(job, workerId);
+      if (result.status === "conflict") {
+        const failed = await failGenerationJob(job.id, new Error("novel_continuation_conflict"), {
+          retry: false,
+          errorCode: "novel_continuation_conflict",
+        });
+        return { id: job.id, type: job.type, status: failed.status as "failed" };
+      }
+      if (result.status !== "completed") throw new Error("novel_continue_all_models_failed");
+      await completeGenerationJob(job.id);
+      return { id: job.id, type: job.type, status: "completed" as const };
     }
     throw new Error(`unsupported_generation_job:${job.type}`);
   } catch (error) {

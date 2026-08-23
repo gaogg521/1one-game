@@ -705,7 +705,11 @@
     "chapterOption": "{count} 章",
     "polish": "润色",
     "continuing": "续写中…",
-    "continueBtn": "续写"
+    "continueBtn": "续写",
+    "backgroundMode": "后台可恢复",
+    "continueBackground": "后台续写",
+    "backgroundQueued": "已加入后台队列，可关闭页面后回来查看",
+    "backgroundWorking": "后台续写中（{percent}%）"
   },
   "comicPanel": {
     "consistencyTitle": "改编如何保证一致？",

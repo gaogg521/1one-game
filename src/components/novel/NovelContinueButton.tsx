@@ -18,6 +18,8 @@ type Props = {
   continuationReason: string;
   remainingChapterCount?: number;
   onCompleted: (data: { content: string; summary?: string | null }) => void;
+  onQueued?: (job: { id: string; status: string }) => void;
+  activeJob?: { id: string; status: string; progress?: { percent?: number; stage?: string } | null } | null;
   onError: (message: string) => void;
   className?: string;
   style?: CSSProperties;
@@ -31,6 +33,8 @@ export function NovelContinueButton({
   continuationReason,
   remainingChapterCount = 0,
   onCompleted,
+  onQueued,
+  activeJob,
   onError,
   className,
   style,
@@ -43,13 +47,14 @@ export function NovelContinueButton({
     PRODUCT.novel.longSegmented.continueDefaultMaxChapters,
   );
   const [polish, setPolish] = useState<boolean>(PRODUCT.novel.longSegmented.polishAfterSegment);
+  const [durable, setDurable] = useState(false);
 
   if (!canContinue) return null;
 
   const presets = NOVEL_CONTINUE_CHAPTER_PRESETS;
 
   async function handleContinue() {
-    if (loading) return;
+    if (loading || activeJob) return;
     setLoading(true);
     setProgress(t("connectService"));
     onError("");
@@ -57,6 +62,7 @@ export function NovelContinueButton({
     const body = {
       maxChapters: maxChapters <= 0 ? 0 : maxChapters,
       polish,
+      durable,
     };
 
     try {
@@ -80,6 +86,17 @@ export function NovelContinueButton({
           ),
         );
         setLoading(false);
+        return;
+      }
+
+      if (res.status === 202) {
+        const data = (await res.json().catch(() => ({}))) as { job?: { id?: string; status?: string } };
+        if (!data.job?.id || !data.job.status) {
+          onError(t("continueFailed"));
+        } else {
+          setProgress(t("backgroundQueued"));
+          onQueued?.({ id: data.job.id, status: data.job.status });
+        }
         return;
       }
 
@@ -204,14 +221,30 @@ export function NovelContinueButton({
         />
         {t("polish")}
       </label>
+      <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+        <input
+          type="checkbox"
+          checked={durable}
+          disabled={loading || Boolean(activeJob)}
+          onChange={(e) => setDurable(e.target.checked)}
+          className="rounded"
+        />
+        {t("backgroundMode")}
+      </label>
       <button
         type="button"
         onClick={handleContinue}
-        disabled={loading}
+        disabled={loading || Boolean(activeJob)}
         className={className}
         style={style}
       >
-        {loading ? progress || t("continuing") : t("continueBtn")}
+        {activeJob
+          ? t("backgroundWorking", { percent: activeJob.progress?.percent ?? 1 })
+          : loading
+            ? progress || t("continuing")
+            : durable
+              ? t("continueBackground")
+              : t("continueBtn")}
       </button>
     </div>
   );

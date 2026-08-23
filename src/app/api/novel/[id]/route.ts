@@ -81,6 +81,35 @@ export async function GET(req: Request, ctx: RouteContext) {
   const creatorCore = isOwner
     ? await getLegacyCreativeProjectSnapshot({ ownerKey, legacyType: "novel", legacyId: id })
     : null;
+  const activeContinueJob = isOwner
+    ? await prisma.generationJob.findFirst({
+        where: {
+          type: "novel_continue",
+          status: { in: ["queued", "running", "retrying"] },
+          project: { ownerKey, legacyType: "novel", legacyId: id },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+  let continueJob: { id: string; status: string; attempts: number; maxAttempts: number; progress: unknown } | null = null;
+  if (activeContinueJob) {
+    try {
+      const payload = JSON.parse(activeContinueJob.payloadJson) as { novelId?: unknown };
+      if (payload.novelId === id) {
+        let progress: unknown = null;
+        try { progress = JSON.parse(activeContinueJob.progressJson ?? "null"); } catch { /* keep corrupt progress private */ }
+        continueJob = {
+          id: activeContinueJob.id,
+          status: activeContinueJob.status,
+          attempts: activeContinueJob.attempts,
+          maxAttempts: activeContinueJob.maxAttempts,
+          progress,
+        };
+      }
+    } catch {
+      // A malformed legacy payload must not make the owner detail unreadable.
+    }
+  }
   const baseQuality = assessNovelCreatorQuality({
     content: row.content,
     prompt: row.prompt,
@@ -122,6 +151,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       continueChapterPresets: NOVEL_CONTINUE_CHAPTER_PRESETS,
       continueDefaultMaxChapters: PRODUCT.novel.longSegmented.continueDefaultMaxChapters,
       polishDefault: PRODUCT.novel.longSegmented.polishAfterSegment,
+      ...(isOwner ? { continueJob } : {}),
       comics: row.comics.map((c) => ({
         id: c.id,
         title: c.title,

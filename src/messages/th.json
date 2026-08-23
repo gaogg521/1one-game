@@ -705,7 +705,11 @@
     "chapterOption": "{count} บท",
     "polish": "ขัดเกลา",
     "continuing": "กำลังเขียนต่อ…",
-    "continueBtn": "เขียนต่อ"
+    "continueBtn": "เขียนต่อ",
+    "backgroundMode": "กู้คืนเบื้องหลัง",
+    "continueBackground": "เขียนต่อเบื้องหลัง",
+    "backgroundQueued": "เข้าคิวเบื้องหลังแล้ว กลับมาดูผลงานนี้ภายหลังได้",
+    "backgroundWorking": "กำลังเขียนต่อเบื้องหลัง ({percent}%)"
   },
   "comicPanel": {
     "consistencyTitle": "การดัดแปลงจะสอดคล้องกันอย่างไร?",
