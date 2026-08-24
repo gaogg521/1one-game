@@ -5,6 +5,22 @@ import { apiErrorMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { prisma } from "@/lib/prisma";
 
+export type AdminCapability = "content" | "growth" | "finance_read" | "platform_ops" | "user_admin" | "quota_write";
+
+const ROLE_CAPABILITIES: Record<UserRole, readonly AdminCapability[]> = {
+  user: [],
+  content_operator: ["content"],
+  growth_operator: ["growth"],
+  finance_viewer: ["finance_read"],
+  platform_operator: ["platform_ops"],
+  admin: ["content", "growth", "finance_read", "platform_ops", "user_admin", "quota_write"],
+  super_admin: ["content", "growth", "finance_read", "platform_ops", "user_admin", "quota_write"],
+};
+
+export function hasAdminCapability(user: AuthUser | null | undefined, viaLegacy: boolean, capability: AdminCapability): boolean {
+  return viaLegacy || Boolean(user && ROLE_CAPABILITIES[user.role].includes(capability));
+}
+
 async function safeGetCurrentAuthUser(): Promise<AuthUser | null> {
   try {
     return await getCurrentAuthUser();
@@ -36,7 +52,7 @@ export async function requireAdmin(req: Request): Promise<
     };
   }
 
-  if (user && (user.role === "admin" || user.role === "super_admin")) {
+  if (user && user.role !== "user") {
     return { ok: true, user, ownerKey, viaLegacy: false };
   }
 
@@ -73,7 +89,15 @@ export async function writeAdminAudit(opts: {
 }
 
 export function isAdminRole(role: UserRole): boolean {
-  return role === "admin" || role === "super_admin";
+  return role !== "user";
+}
+
+/** Scope check for operator roles. Super admins and legacy emergency access retain full control. */
+export async function requireAdminCapability(req: Request, capability: AdminCapability) {
+  const gate = await requireAdmin(req);
+  if (!gate.ok) return gate;
+  if (hasAdminCapability(gate.user, gate.viaLegacy, capability)) return gate;
+  return { ok: false as const, status: 403, error: apiErrorMessage(resolveRequestLocaleSync(req), "adminRequired") };
 }
 
 export function isSuperAdminRole(role: UserRole | string | null | undefined): boolean {

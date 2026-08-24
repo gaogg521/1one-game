@@ -1,5 +1,5 @@
 import { clampDays } from "@/lib/admin/analytics";
-import { requireAdmin, writeAdminAudit } from "@/lib/auth/admin";
+import { requireAdminCapability, writeAdminAudit } from "@/lib/auth/admin";
 import { prisma } from "@/lib/prisma";
 
 function csvCell(value: string | number | null | undefined): string {
@@ -14,7 +14,7 @@ function toCsv(rows: string[][]): string {
 
 /** GET ?days=30 — 导出支付订单 CSV（运营对账） */
 export async function GET(req: Request) {
-  const gate = await requireAdmin(req);
+  const gate = await requireAdminCapability(req, "finance_read");
   if (!gate.ok) return new Response(JSON.stringify({ error: gate.error }), { status: gate.status });
 
   const { searchParams } = new URL(req.url);

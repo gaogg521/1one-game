@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, writeAdminAudit } from "@/lib/auth/admin";
+import { requireAdmin, requireSuperAdmin, writeAdminAudit } from "@/lib/auth/admin";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
 
@@ -47,18 +47,14 @@ export async function GET(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const gate = await requireAdmin(req);
+  const gate = await requireSuperAdmin(req);
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   const body = (await req.json()) as { id?: string; role?: string };
   if (!body.id || !body.role) return localizedJsonError(req, "adminMissingIdRole", 400);
-  if (!["user", "admin", "super_admin"].includes(body.role)) {
+  if (!["user", "content_operator", "growth_operator", "finance_viewer", "platform_operator", "admin", "super_admin"].includes(body.role)) {
     return localizedJsonError(req, "adminInvalidRole", 400);
   }
-  if (body.role === "super_admin" && gate.user?.role !== "super_admin") {
-    return localizedJsonError(req, "adminSuperAdminOnly", 403);
-  }
-
   await prisma.user.update({ where: { id: body.id }, data: { role: body.role } });
   await writeAdminAudit({
     req,

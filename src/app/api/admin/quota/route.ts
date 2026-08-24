@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, writeAdminAudit } from "@/lib/auth/admin";
+import { requireAdminCapability, writeAdminAudit } from "@/lib/auth/admin";
 import { grantQuota } from "@/lib/commerce/quota";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { prisma } from "@/lib/prisma";
 
 /** POST { userId, delta, reason? } — 运营发放/扣减额度 */
 export async function POST(req: Request) {
-  const admin = await requireAdmin(req);
+  const admin = await requireAdminCapability(req, "quota_write");
   if (!admin.ok) return NextResponse.json({ error: admin.error }, { status: admin.status });
 
-  let body: { userId?: string; delta?: number; reason?: string };
+  let body: { userId?: string; delta?: number; reason?: string; confirmation?: string };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -18,6 +18,9 @@ export async function POST(req: Request) {
 
   const userId = body.userId?.trim();
   const delta = body.delta;
+  if (body.confirmation !== "APPLY_QUOTA_CHANGE") {
+    return NextResponse.json({ error: "confirmation_required" }, { status: 400 });
+  }
   if (!userId || typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
     return localizedJsonError(req, "adminUserIdDelta", 400);
   }

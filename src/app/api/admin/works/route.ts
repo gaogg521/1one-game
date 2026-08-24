@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, writeAdminAudit } from "@/lib/auth/admin";
+import { requireAdminCapability, writeAdminAudit } from "@/lib/auth/admin";
 import { attachWorkShareCounts } from "@/lib/admin/work-engagement";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
 
 export async function GET(req: Request) {
-  const gate = await requireAdmin(req);
+  const gate = await requireAdminCapability(req, "content");
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   const { searchParams } = new URL(req.url);
@@ -178,7 +178,7 @@ async function moderateOne(
 }
 
 export async function PATCH(req: Request) {
-  const gate = await requireAdmin(req);
+  const gate = await requireAdminCapability(req, "content");
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   const body = (await req.json()) as {

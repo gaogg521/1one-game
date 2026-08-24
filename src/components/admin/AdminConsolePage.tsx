@@ -1861,6 +1861,14 @@ function UserActions({
 
   return (
     <div className="flex flex-wrap gap-3">
+      {canPromoteSuper && user.role === "user" ? (
+        <>
+          <button type="button" className="text-sm text-sky-300" onClick={() => void patchRole("content_operator")}>内容运营</button>
+          <button type="button" className="text-sm text-sky-300" onClick={() => void patchRole("growth_operator")}>增长运营</button>
+          <button type="button" className="text-sm text-sky-300" onClick={() => void patchRole("finance_viewer")}>财务只读</button>
+          <button type="button" className="text-sm text-sky-300" onClick={() => void patchRole("platform_operator")}>平台运维</button>
+        </>
+      ) : null}
       {user.role !== "admin" && user.role !== "super_admin" ? (
         <button type="button" className="text-sm text-[var(--gc-accent)]" onClick={() => void patchRole("admin")}>
           {t("setAdminRole")}
@@ -1899,10 +1907,11 @@ function UserActions({
           if (!raw) return;
           const delta = Number.parseInt(raw, 10);
           if (!Number.isFinite(delta) || delta === 0) return;
+          if (!window.confirm(`确认向该用户${delta > 0 ? "发放" : "扣减"} ${Math.abs(delta)} 额度？此操作会写入账本和管理员审计。`)) return;
           const res = await fetch("/api/admin/quota", {
             method: "POST",
             headers: { ...headers(), "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, delta }),
+            body: JSON.stringify({ userId: user.id, delta, confirmation: "APPLY_QUOTA_CHANGE" }),
           });
           if (res.ok) onNotice({ kind: "ok", text: t("quotaUpdated") });
           else onNotice({ kind: "error", text: t("quotaGrantFailed") });

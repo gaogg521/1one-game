@@ -1,4 +1,11 @@
-export type UserRole = "user" | "admin" | "super_admin";
+export type UserRole =
+  | "user"
+  | "content_operator"
+  | "growth_operator"
+  | "finance_viewer"
+  | "platform_operator"
+  | "admin"
+  | "super_admin";
 
 export type OAuthProviderId = "wechat" | "qq" | "feishu" | "line" | "douyin" | "dev" | "console_oidc";
 

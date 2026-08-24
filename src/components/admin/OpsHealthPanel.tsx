@@ -87,12 +87,13 @@ export function OpsHealthPanel({
           >
             <div className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_STYLE[check.status]}`} />
-              <span className="font-medium">{t(check.labelKey as "healthCheck_db")}</span>
+              <span className="font-medium">{check.label ?? t(check.labelKey as "healthCheck_db")}</span>
               {check.detail ? <span className="ml-auto font-mono text-xs opacity-80">{check.detail}</span> : null}
             </div>
             {check.hintKey ? (
-              <p className="mt-1.5 text-xs opacity-80">{t(check.hintKey as "healthHint_db")}</p>
+              <p className="mt-1.5 text-xs opacity-80">{check.hint ?? t(check.hintKey as "healthHint_db")}</p>
             ) : null}
+            {check.hint ? <p className="mt-1.5 text-xs opacity-80">{check.hint}</p> : null}
             {check.id === "samples_sync" && check.status !== "ok" && onGoSamples ? (
               <button type="button" className="mt-2 text-xs underline opacity-90" onClick={onGoSamples}>
                 {t("healthGoSamples")}

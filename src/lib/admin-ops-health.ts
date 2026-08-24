@@ -3,7 +3,7 @@ import { isEmailDeliveryConfigured } from "@/lib/auth/email-sender";
 import { loadEmailConfig } from "@/lib/email-config";
 import { buildAdminSampleGalleryReport } from "@/lib/admin-sample-gallery";
 import { readQaSnapshot, type QaSmokeSnapshot, type QaSnapshotId } from "@/lib/qa-cache";
-import { loadRuntimeConfig, resolveSceneRoute } from "@/lib/runtime-config";
+import { getEffectiveProviders, getEffectiveRoutes, loadRuntimeConfig, resolveSceneRoute } from "@/lib/runtime-config";
 import { assessNovelRehearsalReadiness } from "@/lib/generation-rehearsal-readiness";
 
 export type OpsHealthStatus = "ok" | "warn" | "fail";
@@ -14,6 +14,9 @@ export type OpsHealthCheck = {
   labelKey: string;
   detail?: string;
   hintKey?: string;
+  /** For newly added operational checks before every locale has a translation. */
+  label?: string;
+  hint?: string;
 };
 
 export type OpsHealthQaSnapshot = {
@@ -194,6 +197,22 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     labelKey: "healthCheck_novelRehearsal",
     detail: rehearsal.detail,
     hintKey: rehearsal.hintKey,
+  });
+
+  const providers = getEffectiveProviders(runtime.payload);
+  const routes = getEffectiveRoutes(runtime.payload);
+  const readyRoutes = routes.filter((route) => {
+    const provider = providers.find((item) => item.id === route.providerId && item.enabled !== false);
+    return Boolean(route.primary?.trim() && provider?.apiKey?.trim() && (provider.protocol !== "openai_compatible" || provider.baseUrl?.trim()));
+  });
+  const localeOverrides = runtime.payload.localeRoutes?.length ?? 0;
+  checks.push({
+    id: "model_routes",
+    status: readyRoutes.length === routes.length && routes.length > 0 ? "ok" : "fail",
+    labelKey: "healthCheck_db",
+    label: "模型路由预检",
+    detail: `${readyRoutes.length}/${routes.length} 全局路由就绪；${localeOverrides} 个语言覆盖`,
+    hint: readyRoutes.length === routes.length ? "配置有效；连通性与真实生成结果需由独立探测/运营记录确认。" : "存在缺少主模型、服务商、密钥或 OpenAI Base URL 的路由。",
   });
 
   const qaCommands: OpsHealthQaCommand[] = [

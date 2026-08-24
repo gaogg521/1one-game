@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/admin";
+import { requireAdminCapability } from "@/lib/auth/admin";
 import { buildAdminOpsHealthReport } from "@/lib/admin-ops-health";
 import { apiErrorFromUnknown } from "@/lib/api/localized-error";
 
 export async function GET(req: Request) {
-  const gate = await requireAdmin(req);
+  const gate = await requireAdminCapability(req, "platform_ops");
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   try {
