@@ -1418,19 +1418,20 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             </div>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("routingEditHint")}</p>
           </div>
-          <section className="border-b border-white/8 bg-sky-500/5 px-4 py-5 sm:px-6" data-testid="admin-runtime-locale-routing">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <details className="group border-b border-white/8 bg-sky-500/5" data-testid="admin-runtime-locale-routing">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
               <div>
-                <h4 className="text-base font-semibold text-[var(--gc-text)]">语言模型策略</h4>
+                <h4 className="text-base font-semibold text-[var(--gc-text)]">语言覆盖（可选）</h4>
                 <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">
-                  简体中文与繁体中文共用“中文”池；英语、马来语、泰语等使用“国际”池。未设置的场景保持使用下方全局分域模型，确保旧生产配置不受影响。
+                  默认使用下方每个场景的主路由；只有需要中西文化或供应商差异时，才展开为中文池和国际池设置覆盖。
                 </p>
               </div>
-              <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">
-                {localeRoutesForm.length} 个语言覆盖已配置
-              </span>
-            </div>
-            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">{localeRoutesForm.length} 个覆盖</span>
+                <span className="text-xs text-[var(--gc-text-faint)] transition group-open:rotate-180">⌄</span>
+              </div>
+            </summary>
+            <div className="grid gap-4 px-4 pb-5 sm:px-6 xl:grid-cols-2">
               {(["zh", "international"] as const).map((localeGroup) => (
                 <div key={localeGroup} className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -1474,7 +1475,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                 </div>
               ))}
             </div>
-          </section>
+          </details>
           <div className="overflow-x-auto px-4 pb-2 sm:px-6">
             <table className="w-full min-w-[720px] text-left">
               <thead>
