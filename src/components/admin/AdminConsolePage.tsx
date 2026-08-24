@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
@@ -174,7 +174,8 @@ export default function AdminConsolePage({
     },
     [t],
   );
-  const [tab, setTab] = useState<Tab>(defaultConsoleTab());
+  const [requestedTab, setRequestedTab] = useState<Tab>(defaultConsoleTab());
+  const tab = !canViewAdminSection && isAdminConsoleTab(requestedTab) ? defaultConsoleTab() : requestedTab;
   const [stats, setStats] = useState<Stats | null>(null);
   const [works, setWorks] = useState<WorkRow[]>([]);
   const [pending, setPending] = useState<WorkRow[]>([]);
@@ -207,17 +208,40 @@ export default function AdminConsolePage({
   const [auditSinceDays, setAuditSinceDays] = useState(30);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
 
+  function resetListingState() {
+    setPage(1);
+    setSelected(new Set());
+  }
+
+  function selectTab(nextTab: Tab) {
+    setRequestedTab(nextTab);
+    resetListingState();
+  }
+
+  function updateQuery(nextQuery: string) {
+    setQuery(nextQuery);
+    resetListingState();
+  }
+
+  function updateWorkTypeFilter(nextWorkTypeFilter: "all" | string) {
+    setWorkTypeFilter(nextWorkTypeFilter);
+    resetListingState();
+  }
+
+  function updateVisibilityFilter(nextVisibilityFilter: "all" | string) {
+    setVisibilityFilter(nextVisibilityFilter);
+    resetListingState();
+  }
+
   const navSections = useMemo(() => {
     const sections = buildConsoleNavSections(canViewAdminSection);
     if (!stats?.canManageRuntimeConfig) {
-      return sections.map((section) =>
-        section.id === "administrator"
-          ? {
-              ...section,
-              items: section.items.filter((item) => item.id !== "runtime" && item.id !== "email"),
-            }
-          : section,
-      );
+      return sections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => item.id !== "runtime" && item.id !== "email"),
+        }))
+        .filter((section) => section.items.length > 0);
     }
     return sections;
   }, [canViewAdminSection, stats?.canManageRuntimeConfig]);
@@ -234,12 +258,6 @@ export default function AdminConsolePage({
       ),
     [navSections, t, tu],
   );
-
-  useEffect(() => {
-    if (!canViewAdminSection && isAdminConsoleTab(tab)) {
-      setTab(defaultConsoleTab());
-    }
-  }, [canViewAdminSection, tab]);
 
   const headers = useCallback((): HeadersInit => {
     const h = mergeLocaleHeaders(locale) as Record<string, string>;
@@ -358,7 +376,8 @@ export default function AdminConsolePage({
   }, [tab, canViewAdminSection, loadAnalytics, loadAudit, loadOverview, loadPending, loadShares, loadUsers, t]);
 
   useEffect(() => {
-    void load();
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
 
   // Populate header mini-stats when on a non-admin tab (account/wallet/profile).
@@ -373,11 +392,6 @@ export default function AdminConsolePage({
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canViewAdminSection]);
-
-  useEffect(() => {
-    setPage(1);
-    setSelected(new Set());
-  }, [tab, query, workTypeFilter, visibilityFilter]);
 
   const visibleWorks = useMemo(() => {
     const source = tab === "pending" ? pending : works;
@@ -469,7 +483,7 @@ export default function AdminConsolePage({
     <AdminConsoleShell
       navSections={navSections}
       activeNavId={tab}
-      onNavChange={(id) => setTab(id as Tab)}
+      onNavChange={(id) => selectTab(id as Tab)}
       actorRole={stats?.actorRole}
       consolePath={consolePath}
       showSsoLogout={showSsoLogout}
@@ -543,7 +557,7 @@ export default function AdminConsolePage({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setTab(item.id)}
+                  onClick={() => selectTab(item.id)}
                   data-testid={`admin-tab-${item.id}`}
                   className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
                     tab === item.id
@@ -594,11 +608,11 @@ export default function AdminConsolePage({
               <AdminToolbar
                 tab={tab}
                 query={query}
-                onQueryChange={setQuery}
+                onQueryChange={updateQuery}
                 workTypeFilter={workTypeFilter}
-                onWorkTypeFilterChange={setWorkTypeFilter}
+                onWorkTypeFilterChange={updateWorkTypeFilter}
                 visibilityFilter={visibilityFilter}
-                onVisibilityFilterChange={setVisibilityFilter}
+                onVisibilityFilterChange={updateVisibilityFilter}
                 total={tab === "users" ? visibleUsers.length : visibleWorks.length}
               />
             ) : null}
@@ -710,14 +724,14 @@ export default function AdminConsolePage({
                   pendingCount={stats.moderation.pendingReview}
                   sampleSynced={stats.sampleGallery?.synced}
                   sampleCatalog={stats.sampleGallery?.catalog}
-                  onGoPending={() => setTab("pending")}
-                  onGoSamples={() => setTab("samples")}
+                  onGoPending={() => selectTab("pending")}
+                  onGoSamples={() => selectTab("samples")}
                 />
 
                 <OpsHealthPanel
                   headers={headers}
-                  onGoSamples={() => setTab("samples")}
-                  onGoPending={() => setTab("pending")}
+                  onGoSamples={() => selectTab("samples")}
+                  onGoPending={() => selectTab("pending")}
                 />
 
                 <div className="grid gap-5 xl:grid-cols-2">

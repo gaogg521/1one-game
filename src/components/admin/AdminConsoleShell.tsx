@@ -44,7 +44,7 @@ export function AdminConsoleShell({
         </div>
         <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-3" aria-label={t("navAria")}>
           {navSections.map((section) => (
-            <div key={section.id}>
+            <div key={section.id} data-testid={`admin-nav-section-${section.id}`}>
               <p
                 className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider ${
                   section.superAdminOnly

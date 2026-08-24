@@ -24,6 +24,9 @@ test.describe("Admin 网关/模型页", () => {
 
     const panel = page.getByTestId("admin-runtime-config");
     await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("admin-nav-section-admin-content")).toBeVisible();
+    await expect(page.getByTestId("admin-nav-section-admin-growth")).toBeVisible();
+    await expect(page.getByTestId("admin-nav-section-admin-system")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-hero")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-live-summary")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-section-providers")).toBeVisible();
