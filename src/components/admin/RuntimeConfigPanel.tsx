@@ -475,10 +475,6 @@ function ProviderEditor({
   const modelCount = parseModelsText(provider.modelsText).length;
   const keyConfigured = Boolean(provider.apiKeyDraft || provider.apiKeyMasked);
 
-  useEffect(() => {
-    if (editState === "draft" || editState === "modified") setOpen(true);
-  }, [editState]);
-
   async function testConnection() {
     const apiKey = provider.apiKeyDraft.trim();
     if (!apiKey) {
@@ -665,7 +661,62 @@ function ProviderEditor({
   );
 }
 
+function RouteModelPicker({
+  sceneKey,
+  field,
+  label,
+  value,
+  onChange,
+  modelSuggestions,
+}: {
+  sceneKey: RuntimeSceneKey;
+  field: "primary" | "fallback";
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  modelSuggestions: string[];
+}) {
+  const t = useTranslations("adminPage.runtimeConfig");
+  const inputCls =
+    "w-full rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-[10px] text-[var(--gc-text-faint)]">{label}</span>
+      {modelSuggestions.length > 0 ? (
+        <select
+          aria-label={t("routeCatalogSelectAria", { label })}
+          className={inputCls}
+          data-testid={`admin-runtime-route-${sceneKey}-${field}-catalog`}
+          value=""
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="" disabled>
+            {t("routeCatalogPlaceholder")}
+          </option>
+          {modelSuggestions.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="text-[10px] leading-relaxed text-amber-200/80">{t("routeCatalogEmpty")}</p>
+      )}
+      <input
+        aria-label={t("routeModelInputAria", { label })}
+        className={inputCls}
+        data-testid={`admin-runtime-route-${sceneKey}-${field}-model`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <p className="text-[10px] leading-relaxed text-[var(--gc-text-faint)]">{t("routeModelPickerHint")}</p>
+    </div>
+  );
+}
+
 function RouteRow({
+  sceneKey,
   domain,
   domainColor,
   scene,
@@ -683,6 +734,7 @@ function RouteRow({
   livePrimary,
   liveFallback,
 }: {
+  sceneKey: RuntimeSceneKey;
   domain: string;
   domainColor: string;
   scene: string;
@@ -701,10 +753,8 @@ function RouteRow({
   liveFallback?: string;
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
-  const inputCls =
-    "w-full rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
-  const selectCls = `${inputCls} appearance-none`;
-  const listId = `route-models-${scene.replace(/\s+/g, "-")}`;
+  const selectCls =
+    "w-full appearance-none rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
   return (
     <tr className="border-b border-white/6 last:border-0">
       <td className="py-4 pr-4 align-top">
@@ -735,35 +785,36 @@ function RouteRow({
         </select>
       </td>
       <td className="py-4 pr-4 align-top">
-        <div className="space-y-1">
-          <span className="text-[10px] text-[var(--gc-text-faint)]">{t("routePrimary")}</span>
-          <input className={inputCls} value={primary} onChange={(e) => onPrimary(e.target.value)} list={listId} />
-          {pending && livePrimary && livePrimary !== primary ? (
-            <p className="text-[10px] text-emerald-300/80">{t("routeLiveValue", { value: livePrimary })}</p>
-          ) : null}
-        </div>
+        <RouteModelPicker
+          sceneKey={sceneKey}
+          field="primary"
+          label={t("routePrimary")}
+          value={primary}
+          onChange={onPrimary}
+          modelSuggestions={modelSuggestions}
+        />
+        {pending && livePrimary && livePrimary !== primary ? (
+          <p className="mt-1 text-[10px] text-emerald-300/80">{t("routeLiveValue", { value: livePrimary })}</p>
+        ) : null}
       </td>
       <td className="py-4 align-top">
         {onFallback ? (
-          <div className="space-y-1">
-            <span className="text-[10px] text-[var(--gc-text-faint)]">
-              {fallbackOptional ? t("routeFallbackOptional") : t("routeFallback")}
-            </span>
-            <input className={inputCls} value={fallback ?? ""} onChange={(e) => onFallback(e.target.value)} list={listId} />
+          <>
+            <RouteModelPicker
+              sceneKey={sceneKey}
+              field="fallback"
+              label={fallbackOptional ? t("routeFallbackOptional") : t("routeFallback")}
+              value={fallback ?? ""}
+              onChange={onFallback}
+              modelSuggestions={modelSuggestions}
+            />
             {pending && liveFallback !== undefined && liveFallback !== (fallback ?? "") ? (
-              <p className="text-[10px] text-emerald-300/80">{t("routeLiveValue", { value: liveFallback || "—" })}</p>
+              <p className="mt-1 text-[10px] text-emerald-300/80">{t("routeLiveValue", { value: liveFallback || "—" })}</p>
             ) : null}
-          </div>
+          </>
         ) : (
           <span className="text-xs text-[var(--gc-text-faint)]">—</span>
         )}
-        {modelSuggestions.length > 0 ? (
-          <datalist id={listId}>
-            {modelSuggestions.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        ) : null}
       </td>
     </tr>
   );
@@ -884,7 +935,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   }, [headers, hydrateForm, onNotice, t]);
 
   useEffect(() => {
-    void load();
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
 
   const providerOptions = useMemo(
@@ -1256,6 +1308,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                   return (
                     <RouteRow
                       key={meta.scene}
+                      sceneKey={meta.scene}
                       domain={t(domain.labelKey)}
                       domainColor={domain.color}
                       scene={t(meta.labelKey)}

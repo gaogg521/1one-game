@@ -671,3 +671,15 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `mergeRoutesWithDefaults` 的回归检查明确验证：即使代码默认模型变化，已保存的生产路由仍保留其 provider、主模型和备选模型。`qa:runtime-config-admin`（隔离数据库）、Seedream 契约、定向 lint、五语 JSON 和隔离 production build 都通过；构建仅保留既有动态文件追踪性能告警。
 - Joy MaaS 专用 Seedream endpoint 现受 `SEEDREAM_IMAGE_API_MODE=joy` 显式开关保护；开发 `.env.local` 已设置，生产 Ark 等 OpenAI 兼容服务商默认不设置，因而同名 Seedream 模型不会被错误重写到 Joy 路径。实际本地调用在该开关下成功返回 `doubao-seedream-5-0-pro` 图片 URL；专用契约测试同时验证未设开关时不会改写生产请求。
 - 已将 `50f52269` 发布到生产：服务端无待执行迁移、构建通过、`operone` 服务与 generation worker timer active；使用 TLS/SNI 的 `/api/health` 公网验证返回 `ok` 和 `db=up`。发布仅同步代码、既有样例资源和文学封面，未写入生产 `PlatformRuntimeConfig` 或覆盖任何业务模型路由。
+
+## P32 第一段：模型路由后台可操作性（2026-08-24）
+
+- 「业务模型路由」不再依赖浏览器对 `datalist` 的不一致三角图标。每个主模型和备用模型字段均有明确的「从已添加模型选择」原生下拉框；选择某一目录项会写入下方实际 Model ID，管理员仍可手填目录外 model ID。
+- 当选定服务商尚未维护模型目录时，路由页明确显示原因和手填路径；路由表与“当前线上生效”摘要的列名改为「API 服务商」，不再把服务商名称错误标为「请求协议」。选择、保存和线上生效仍是三步分离：选择目录不写库，只有「保存并立即生效」会更新业务路由。
+- `e2e/admin-runtime-config.smoke.spec.ts` 现在验证主/备用目录控件出现，并实际选择一项后确认 Model ID 写入；导航等待调整为 `domcontentloaded`，避免不相关资源延迟阻塞页面用例。
+- 验证：隔离生产构建 `.next-p33` 通过（仍有既有动态文件追踪性能告警）；`npx tsc --noEmit`、定向 ESLint、五语 JSON、隔离库 `qa:runtime-config-admin` 和真实 Playwright 后台模型选择闭环均通过。E2E 首次编译 `/console` 约 54 秒，编译完成后的 API 与界面交互正常；该隔离验证没有访问生产或发出模型请求。
+
+### 下一步
+
+1. 提交、推送并发布本次后台可操作性改造；发布不会写入生产 `PlatformRuntimeConfig`，线上已保存模型路由保持不变。
+2. 后续后台演进优先补“路由可用性预检”（provider 密钥、目录、连通性、最近探测）和按业务场景的成本/成功率面板，继续保持“配置存在”与“真实生成成功”分开呈现。

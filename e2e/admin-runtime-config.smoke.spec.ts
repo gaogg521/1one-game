@@ -16,7 +16,7 @@ test.describe("Admin 网关/模型页", () => {
       sessionStorage.setItem("gc_super_admin_key", secret);
     }, E2E_SECRET);
 
-    await page.goto("/console");
+    await page.goto("/console", { waitUntil: "domcontentloaded" });
 
     const runtimeTab = page.locator("aside").getByTestId("admin-tab-runtime");
     await expect(runtimeTab).toBeVisible({ timeout: 45_000 });
@@ -42,6 +42,21 @@ test.describe("Admin 网关/模型页", () => {
 
     await page.getByTestId("admin-runtime-section-routing").click();
     await expect(panel).toBeVisible();
+
+    const primaryCatalog = page.getByTestId("admin-runtime-route-game_text-primary-catalog");
+    const primaryModel = page.getByTestId("admin-runtime-route-game_text-primary-model");
+    const fallbackCatalog = page.getByTestId("admin-runtime-route-game_text-fallback-catalog");
+    const fallbackModel = page.getByTestId("admin-runtime-route-game_text-fallback-model");
+    await expect(primaryCatalog).toBeVisible();
+    await expect(primaryModel).toBeVisible();
+    await expect(fallbackCatalog).toBeVisible();
+    await expect(fallbackModel).toBeVisible();
+
+    const firstCatalogModel = await primaryCatalog.locator("option").nth(1).getAttribute("value");
+    expect(firstCatalogModel).toBeTruthy();
+    await primaryCatalog.selectOption(firstCatalogModel!);
+    await expect(primaryModel).toHaveValue(firstCatalogModel!);
+
     await page.screenshot({
       path: path.join(OUT, "runtime-config-models.png"),
       fullPage: true,
