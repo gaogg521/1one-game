@@ -3,6 +3,7 @@ import { requireSuperAdmin } from "@/lib/auth/admin";
 import { getSavedRuntimeProvider } from "@/lib/runtime-config";
 import type { RuntimeLlmProvider } from "@/lib/runtime-providers";
 import { testRuntimeProvider } from "@/lib/runtime-provider-test";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   const gate = await requireSuperAdmin(req);
@@ -21,7 +22,17 @@ export async function POST(req: Request) {
     if (!provider) {
       return NextResponse.json({ error: "provider not found" }, { status: 404 });
     }
+    const startedAt = Date.now();
     const result = await testRuntimeProvider(provider);
+    await prisma.runtimeProviderProbe.create({
+      data: {
+        providerId: provider.id,
+        ok: result.ok,
+        statusCode: result.status,
+        outcome: result.message.slice(0, 96),
+        latencyMs: Date.now() - startedAt,
+      },
+    }).catch(() => undefined);
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }
 

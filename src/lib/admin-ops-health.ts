@@ -215,6 +215,29 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     hint: readyRoutes.length === routes.length ? "配置有效；连通性与真实生成结果需由独立探测/运营记录确认。" : "存在缺少主模型、服务商、密钥或 OpenAI Base URL 的路由。",
   });
 
+  const probeRows = await prisma.runtimeProviderProbe.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: { providerId: true, ok: true, latencyMs: true, createdAt: true },
+  }).catch(() => []);
+  const latestProbeByProvider = new Map<string, (typeof probeRows)[number]>();
+  for (const probe of probeRows) if (!latestProbeByProvider.has(probe.providerId)) latestProbeByProvider.set(probe.providerId, probe);
+  const enabledProviders = providers.filter((provider) => provider.enabled !== false && provider.apiKey?.trim());
+  const failedProbes = enabledProviders.filter((provider) => latestProbeByProvider.get(provider.id)?.ok === false);
+  const missingProbes = enabledProviders.filter((provider) => !latestProbeByProvider.has(provider.id));
+  checks.push({
+    id: "provider_probes",
+    status: failedProbes.length ? "fail" : missingProbes.length ? "warn" : "ok",
+    labelKey: "healthCheck_db",
+    label: "网关真实探测",
+    detail: `${enabledProviders.length - missingProbes.length - failedProbes.length}/${enabledProviders.length} 最近成功`,
+    hint: failedProbes.length
+      ? "至少一个已配置网关最近探测失败；请在网关模型页重新测试并检查网络、白名单或密钥。"
+      : missingProbes.length
+        ? "尚未对所有已配置网关执行真实探测；配置存在不等于可调用。"
+        : "最近探测均成功；仍需通过真实生成成功率持续观察。",
+  });
+
   const qaCommands: OpsHealthQaCommand[] = [
     { id: "admin", command: "npm run qa:admin-console", labelKey: "healthQa_admin" },
     { id: "samples_db", command: "npm run qa:sample-gallery-db-sync", labelKey: "healthQa_samplesDb" },

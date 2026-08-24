@@ -356,6 +356,20 @@ model ProviderUsageEvent {
   @@index([modality, status, createdAt])
 }
 
+/// Last-mile provider reachability observations. Stores only safe metadata, never keys or response bodies.
+model RuntimeProviderProbe {
+  id         String   @id @default(cuid())
+  providerId String
+  ok         Boolean
+  statusCode Int?
+  outcome    String
+  latencyMs  Int
+  createdAt  DateTime @default(now())
+
+  @@index([providerId, createdAt])
+  @@index([createdAt])
+}
+
 /// 第三方登录绑定（微信 / QQ / 飞书 / Line / 抖音等）
 model OAuthAccount {
   id             String    @id @default(cuid())
