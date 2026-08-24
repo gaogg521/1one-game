@@ -639,3 +639,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 统一发布 API 现在可由作者显式携带 `revisionId` 重新发布同一作品的历史版本；服务端以 Core project、owner、`ready` 状态三重校验目标 revision，拒绝猜测 ID、其他作品版本和未就绪版本。
 - 为防止当前草稿的标题/封面污染历史内容，只允许重新发布带 `publication_display` 不可变快照的版本。首次普通发布会写入该快照；从未发布过的旧草稿会安全地返回冲突，而不是拼接当前 legacy 元数据。
 - 作者版本时间线只会为可安全重新发布的历史版本显示“发布此版本”操作；成功后刷新页面，公开投影和 append-only publication decision 都指向所选版本。`qa:creator-publication` 覆盖安全拒绝和重新发布审计；隔离 production build、真实 `qa:creator-publication:http` 与 `qa:literary-engagement-api` 均通过。构建仅保留既有动态文件追踪性能告警。
+
+## P27 第一段：生产外部能力无成本审计（2026-08-24）
+
+- 生产环境只读、脱敏检查确认模型网关密钥与地址已配置；尚未发出真实模型请求，因此没有把“存在配置”伪称为真实生成成功。继续进行小说 durable worker 的真实演练前，需要业务确认可使用的小额额度上限。
+- `REFERENCE_ASSET_STORAGE`、云上传 HTTPS endpoint/认证，以及微信支付 webhook secret/API key 均未配置。现有实现保持安全语义：参考图为 session-only，支付 checkout fail-closed，绝不创建假支付成功或伪持久化素材。
+- `qa:generation-rehearsal-readiness`、`qa:reference-image-cloud-storage`、`qa:payment-safety` 均通过；下一步外部前置物分别为：模型额度确认、对象存储上传端点与凭据、商户号/签约产品/证书或平台公钥/回调域名/退款对账规则。
