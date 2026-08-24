@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     where.createdAt = { gte: new Date(Date.now() - sinceDays * 86_400_000) };
   }
 
-  const [errors, total] = await Promise.all([
+  const [errors, total, jobGroups, jobs] = await Promise.all([
     prisma.generationError.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -35,7 +35,24 @@ export async function GET(req: Request) {
       },
     }),
     prisma.generationError.count({ where }),
+    prisma.generationJob.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.generationJob.findMany({
+      where: { status: { in: ["queued", "running", "retrying", "failed"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+      select: {
+        id: true, type: true, status: true, attempts: true, maxAttempts: true, lastErrorCode: true,
+        updatedAt: true,
+        project: { select: { kind: true, title: true } },
+      },
+    }),
   ]);
 
-  return NextResponse.json({ errors, total, limit });
+  return NextResponse.json({
+    errors,
+    total,
+    limit,
+    jobSummary: Object.fromEntries(jobGroups.map((item) => [item.status, item._count._all])),
+    jobs,
+  });
 }

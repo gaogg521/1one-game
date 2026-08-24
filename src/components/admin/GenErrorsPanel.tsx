@@ -19,6 +19,11 @@ type Filter = {
   sinceDays: string;
 };
 
+type GenerationJob = {
+  id: string; type: string; status: string; attempts: number; maxAttempts: number; lastErrorCode: string | null;
+  updatedAt: string; project: { kind: string; title: string };
+};
+
 export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
   const t = useTranslations("adminPage");
   const [rows, setRows] = useState<GenErrorRow[]>([]);
@@ -26,6 +31,8 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>({ contentType: "", errorType: "", sinceDays: "7" });
   const [loaded, setLoaded] = useState(false);
+  const [jobs, setJobs] = useState<GenerationJob[]>([]);
+  const [jobSummary, setJobSummary] = useState<Record<string, number>>({});
 
   const fetchErrors = useCallback(async (f: Filter) => {
     setLoading(true);
@@ -38,11 +45,13 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
       const data = await res.json();
       setRows(data.errors ?? []);
       setTotal(data.total ?? null);
+      setJobs(data.jobs ?? []);
+      setJobSummary(data.jobSummary ?? {});
       setLoaded(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [headers]);
 
   const handleLoad = () => fetchErrors(filter);
 
@@ -111,6 +120,29 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
       {loaded && rows.length === 0 && (
         <p className="text-sm text-gray-400">{t("genErrorEmpty")}</p>
       )}
+
+      {loaded ? (
+        <section className="rounded border bg-white p-4" data-testid="admin-generation-ops-jobs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-medium text-slate-900">生成运营队列</h3>
+              <p className="mt-1 text-xs text-slate-500">统一查看游戏、小说、漫画的待执行、运行中、重试和失败任务；不暴露原始提示词或密钥。</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {["queued", "running", "retrying", "failed"].map((status) => (
+                <span key={status} className="rounded bg-slate-100 px-2 py-1 text-slate-700">{status}: {jobSummary[status] ?? 0}</span>
+              ))}
+            </div>
+          </div>
+          {jobs.length ? (
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态</th><th>重试</th><th>最近错误</th><th>更新时间</th></tr></thead>
+                <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="py-2 pr-3">{job.lastErrorCode ?? "—"}</td><td className="py-2">{new Date(job.updatedAt).toLocaleString()}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ) : <p className="mt-3 text-sm text-slate-500">当前没有待处理生成任务。</p>}
+        </section>
+      ) : null}
 
       {rows.length > 0 && (
         <div className="overflow-auto rounded border">
