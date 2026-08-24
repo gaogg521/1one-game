@@ -26,10 +26,10 @@ export const PRODUCT = {
     gamePrimary: "gpt-5.2",
     gameFallbacks: ["gemini-3.1-pro-preview"] as string[],
     /** 小说正文、漫画分镜 JSON */
-    novelTextPrimary: "deepseek-v4-pro",
-    novelTextFallback: "doubao-seed-2-pro",
+    novelTextPrimary: "minimax-2-7",
+    novelTextFallback: "deepseek-v4-pro",
     /** 封面、漫画分镜配图 */
-    imageOpenAI: "gpt-image-2",
+    imageOpenAI: "doubao-seedream-5-0-pro",
     imageGemini: "gemini-3.1-flash-image-preview",
     /** 非 OpenAI 兼容 Provider 时的备用（需对应 API Key） */
     anthropicPrimary: "claude-3-7-sonnet-latest",

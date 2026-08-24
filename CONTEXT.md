@@ -656,3 +656,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 已在生产机用当前环境中配置的 OpenAI 兼容网关、小说主模型 `deepseek-v4-pro` 发出一次 280 tokens 上限的中文小说开篇请求；请求在 TCP 连接阶段超时，未取得 completion、未写入 Novel/CreatorCore/账本，也没有继续重试或发起任何额外模型调用。
 - 这与 COS allocation 的失败同为生产机访问公司内网域名连接超时；模型配置项仍存在，但绝不能据此宣称“一句话写小说”已真实验收。恢复网关网络可达性后，应先复跑同一最小探针，成功后再通过 `/api/novel/generate` 做一次 short tier durable worker 全链路验收；支付仍因商户资料/回调配置未提供而保持 fail-closed。
+
+## P30 第一段：本地 Joy MaaS 小说与 Seedream 真实验收（2026-08-24）
+
+- 本地使用未纳入版本控制的运行配置，以网关根地址调用 `minimax-2-7` 的 OpenAI 兼容 completion，获得正常完成和用量；该网关的模型清单页不是 API 前缀。
+- `doubao-seedream-5-0-pro` 需要走专用 Seedream 图片路由，不能复用 OpenAI 的通用 images endpoint。适配器固定验证过的 `2K`、PNG、无水印、非流式请求契约；真实调用返回可访问的图片 URL，小说封面生成也已在本地走通并做过视觉检查。
+- 实际作者路径 `/api/novel/generate/stream` 已跑完一句话短篇：创意简报、设定、计划、三段正文、摘要和保存都通过 SSE 给出阶段进度，最终生成约 1,190 字。首次验收显示简报扩写曾错误使用通用模型池；现已改为使用小说正文的 `minimax-2-7 → deepseek-v4-pro` 级联，避免同一作品在模型间漂移。
+- 端到端短篇耗时约 5.6 分钟，虽然 UI 会呈现阶段进度、可恢复 checkpoint 已存在，但仍是下一轮的性能优化对象。非流式旧接口在客户端 5 分钟断开时不应被计为持久化成功。专项 Seedream 适配器、定向 ESLint、`tsc --noEmit` 与隔离 production build 均通过；构建仍只有既有动态文件追踪性能警告。

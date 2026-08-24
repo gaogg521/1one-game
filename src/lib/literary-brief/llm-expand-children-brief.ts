@@ -10,7 +10,7 @@ import {
   type ChildrenBriefUserRevision,
   type ChildrenCreativeBrief,
 } from "@/lib/literary-brief/children-brief-types";
-import { llmJson, getProviderModelCascade } from "@/lib/llm";
+import { getNovelStyleTextModelCascade, llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 
 export async function llmExpandChildrenBriefFromSeed(
@@ -19,7 +19,8 @@ export async function llmExpandChildrenBriefFromSeed(
 ): Promise<ChildrenCreativeBrief> {
   if (!PRODUCT.novel.creativeBriefLlm) return base;
 
-  const models = getProviderModelCascade();
+  // 儿童故事同样属于小说创作，不应退回游戏默认模型池。
+  const models = getNovelStyleTextModelCascade();
   if (!models.length) return base;
 
   const age = parseChildrenTargetAge(base.targetAge);

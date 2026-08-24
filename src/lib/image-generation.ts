@@ -35,7 +35,7 @@ export type ImageGenDetail = {
   ok: boolean;
   url?: string;
   localPath?: string;
-  provider?: "openai" | "gemini";
+  provider?: "openai" | "gemini" | "seedream";
   model?: string;
   error?: string;
   /** 本次 generateImageDetailed 总耗时（含 OpenAI 重试与 Gemini 降级） */
@@ -46,6 +46,34 @@ function resolveOpenAIImageClient(): ReturnType<typeof createOpenAIClient> {
   const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
   if (ctx) return createOpenAIClientForProvider(ctx.provider);
   return createOpenAIClient();
+}
+
+type SeedreamImageConfig = { endpoint: string; key: string; model: string };
+
+function isSeedreamModel(model: string): boolean {
+  return model.trim().toLowerCase().startsWith("doubao-seedream-");
+}
+
+/** Joy MaaS Seedream accepts a quality tier, not the OpenAI pixel-dimension enum. */
+function seedreamSize(): "2K" {
+  return "2K";
+}
+
+/** 豆包 Seedream 在 Joy MaaS 使用专用路由，不兼容 OpenAI `/v1/images/generations`。 */
+function resolveSeedreamImageConfig(): SeedreamImageConfig | null {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
+  const base = ctx?.provider.baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim();
+  const key = ctx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
+  if (!base || !key) return null;
+  try {
+    return {
+      endpoint: new URL("/api/seedream/v1/images/generations", base).toString(),
+      key,
+      model: getImageGenOpenAIModel(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function resolveGeminiImageConfig(): { base: string; key: string; model: string } | null {
@@ -118,6 +146,38 @@ function imageItemToResult(
   return null;
 }
 
+async function generateImageWithSeedreamDetail(
+  prompt: string,
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number },
+): Promise<ImageGenDetail> {
+  const t0 = Date.now();
+  const cfg = resolveSeedreamImageConfig();
+  if (!cfg) return { ok: false, model: getImageGenOpenAIModel(), error: "未配置 Seedream 网关", durationMs: 0 };
+  try {
+    const response = await fetch(cfg.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.key}` },
+      body: JSON.stringify({
+        model: cfg.model,
+        prompt,
+        size: seedreamSize(),
+        n: options?.n ?? 1,
+        output_format: "png",
+        watermark: false,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(resolveImageGenTimeoutMs(options?.timeoutMs)),
+    });
+    if (!response.ok) return { ok: false, model: cfg.model, error: `Seedream HTTP ${response.status}`, durationMs: Date.now() - t0 };
+    const payload = (await response.json()) as { data?: Array<{ url?: string | null; b64_json?: string | null }> };
+    const hit = imageItemToResult(payload.data?.[0], `seedream-${Date.now()}`);
+    if (!hit) return { ok: false, model: cfg.model, error: "Seedream 响应无 url 或 b64_json", durationMs: Date.now() - t0 };
+    return { ok: true, url: hit.url, localPath: hit.localPath, provider: "seedream", model: cfg.model, durationMs: Date.now() - t0 };
+  } catch {
+    return { ok: false, model: cfg.model, error: "Seedream 图片请求失败", durationMs: Date.now() - t0 };
+  }
+}
+
 /**
  * LiteLLM / gpt-image-2 等网关常不支持 `response_format`、`quality`；按多种参数组合尝试。
  */
@@ -135,6 +195,7 @@ export async function generateImageWithOpenAIDetail(
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
   const model = getImageGenOpenAIModel();
+  if (isSeedreamModel(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
     client = resolveOpenAIImageClient();
@@ -225,6 +286,12 @@ export async function generateImagesBatchOpenAIDetail(
   }
 
   const model = getImageGenOpenAIModel();
+  if (isSeedreamModel(model)) {
+    const results = await Promise.all(
+      prompts.map((prompt) => generateImageWithSeedreamDetail(prompt, { ...options, n: 1 })),
+    );
+    return { results, mode: "parallel", durationMs: Date.now() - t0 };
+  }
   let client: ReturnType<typeof createOpenAIClient>;
   try {
     client = resolveOpenAIImageClient();

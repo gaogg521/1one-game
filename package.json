@@ -116,6 +116,7 @@
     "qa:generation-rehearsal-readiness": "tsx scripts/qa-generation-rehearsal-readiness.ts",
     "qa:reference-image-cloud-storage": "tsx scripts/qa-reference-image-cloud-storage.ts",
     "qa:reference-image-cos-storage": "tsx scripts/qa-reference-image-cos-storage.ts",
+    "qa:seedream-image-adapter": "tsx scripts/qa-seedream-image-adapter.ts",
     "qa:match3-commercial-runtime": "tsx scripts/qa-match3-commercial-runtime.ts",
     "qa:xiangqi-commercial-runtime": "tsx scripts/qa-xiangqi-commercial-runtime.ts",
     "qa:board-showcase-samples": "tsx scripts/qa-board-showcase-samples.ts",
