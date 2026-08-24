@@ -736,3 +736,16 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 根因：生产服务器曾以未完成的 `.next` 构建重启失败；旧 Node 进程继续运行时与后来写入磁盘的新静态目录版本错配。语言路由在共享客户端依赖图中静态导入 `next/headers`，使 Next 16 生产构建失败，且旧发布流程对 service restart/health 的失败未严格中止。
 - 修复：将漫画角色 roster 的 LLM 调用拆入 server-only 入口，语言请求头改为运行时导入以避免污染客户端依赖图；`663895cc` 与 `9e6ab18` 已在 `origin/main`。生产机已同步 `9e6ab18`，本地隔离 production build 成功，生产完整 `BUILD_ID`、TLS/SNI health、首页 HTML 当前引用的 17 个分块和真实浏览器首页均已验证通过。
 - 发布脚本 `scripts/deploy-prod-cee8b1d.py` 现会对重启、service active 与 health 的任何失败直接退出，并在 build 后将 `.next` 归属给 `www-data`；提交该脚本后，后续发布不再把不完整构建误报为成功。
+
+## P40 修复：小说章节预算与正文 SSE 直通（2026-08-24）
+
+- 中篇/短篇的章节规划原本已有目标字数，但单章写作一直使用统一的大 token 上限；某章超量后，`requireAllPlannedChapters` 又会继续写完余章，最终的“只保留完整章”截断则可能为了保章而保留超长全文。
+- 现将每批写作限制为：本章目标字数的有限弹性，且先为后续规划章节（尤其终章）预留目标预算；该限制同时进入提示词、模型 token 上限、用户可见 SSE 增量和落库前的按句末压缩。压缩保留所有章节，不再通过删除后续章节达成上限。
+- 小说 SSE 路由新增 `X-Accel-Buffering: no`，客户端明确请求 `Accept: text/event-stream` 与 `no-cache`，以避免 Nginx 缓冲导致“整段才出现”。前端此前已逐 delta 解析并追加预览，本轮保留该链路。
+- 新增 `qa:novel-scope-plan`，验证 5 章严重超量正文会压入预算、所有章节和终章仍保留；`npm run qa:novel-scope-plan`、`npm run qa:novel-comic-smoke`、`npx tsc --noEmit` 通过。定向 ESLint 无 error，保留两个历史 unused-variable warning。已用本地浏览器确认 `/zh-Hans/novel/create` 创作路径与篇幅选择可正常加载；未调用真实模型，因此生产网关的端到端 chunk 到达时间仍待下一次受控生成验收。
+- 修改文件：`src/lib/novel-chapters.ts`、`src/lib/novel-locale-prompts.ts`、`src/lib/novel-long-generate.ts`、`src/lib/novel-planned-generate.ts`、`src/app/api/novel/generate/stream/route.ts`、`src/app/novel/create/page.tsx`、`scripts/qa-novel-scope-plan.ts`、`package.json`。
+
+### 下一步
+
+1. 在不影响用户作品的受控测试账号下做一次中篇真实模型生成，确认首个正文 token、连续 SSE 帧、最终字数、章节齐全和终章收束；记录网关/Nginx 实际 chunk 时间。
+2. 通过后仅精确暂存本批小说文件并提交；不要把当前工作区的运行时配置、数据库、日志或其它团队改动混入提交。

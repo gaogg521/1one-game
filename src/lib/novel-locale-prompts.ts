@@ -314,38 +314,39 @@ export function buildLongNovelSegmentBatchTask(opts: {
   phase: string;
   nums: string;
   targetChars: number;
+  maxChars: number;
   hasPrior: boolean;
   isContinuation: boolean;
 }): string {
-  const { locale, segmentIndex, totalSegments, phase, nums, targetChars, hasPrior, isContinuation } =
+  const { locale, segmentIndex, totalSegments, phase, nums, targetChars, maxChars, hasPrior, isContinuation } =
     opts;
   const cont = hasPrior || isContinuation;
 
   switch (locale) {
     case "en":
       return segmentIndex === 0 && !cont
-        ? `Batch 1/${totalSegments} (${phase}): write **only** chapter(s) ${nums}; open the story. Target ~${targetChars} characters.`
-        : `Batch ${segmentIndex + 1}/${totalSegments} (${phase}): write **only** chapter(s) ${nums}; ${cont ? "continue smoothly; " : ""}no repeated beats. Target ~${targetChars} characters.`;
+        ? `Batch 1/${totalSegments} (${phase}): write **only** chapter(s) ${nums}; open the story. Target ~${targetChars} characters; hard maximum ${maxChars} characters.`
+        : `Batch ${segmentIndex + 1}/${totalSegments} (${phase}): write **only** chapter(s) ${nums}; ${cont ? "continue smoothly; " : ""}no repeated beats. Target ~${targetChars} characters; hard maximum ${maxChars} characters.`;
     case "ja":
       return segmentIndex === 0 && !cont
-        ? `第 1/${totalSegments} 批（${phase}）：**${nums} 章のみ**書く。導入と登場。約 ${targetChars} 字。`
-        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**${nums} 章のみ**。${cont ? "前文に続け、" : ""}重複禁止。約 ${targetChars} 字。`;
+        ? `第 1/${totalSegments} 批（${phase}）：**${nums} 章のみ**書く。導入と登場。約 ${targetChars} 字、上限 ${maxChars} 字。`
+        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**${nums} 章のみ**。${cont ? "前文に続け、" : ""}重複禁止。約 ${targetChars} 字、上限 ${maxChars} 字。`;
     case "ms":
       return segmentIndex === 0 && !cont
-        ? `Batch 1/${totalSegments} (${phase}): tulis **hanya** bab ${nums}; buka cerita. Sasaran ~${targetChars} aksara.`
-        : `Batch ${segmentIndex + 1}/${totalSegments} (${phase}): tulis **hanya** bab ${nums}; ${cont ? "sambung lancar; " : ""}jangan ulang. ~${targetChars} aksara.`;
+        ? `Batch 1/${totalSegments} (${phase}): tulis **hanya** bab ${nums}; buka cerita. Sasaran ~${targetChars}, maksimum keras ${maxChars} aksara.`
+        : `Batch ${segmentIndex + 1}/${totalSegments} (${phase}): tulis **hanya** bab ${nums}; ${cont ? "sambung lancar; " : ""}jangan ulang. Sasaran ~${targetChars}, maksimum keras ${maxChars} aksara.`;
     case "th":
       return segmentIndex === 0 && !cont
-        ? `ชุด 1/${totalSegments} (${phase}): เขียน**เฉพาะ**บท ${nums}; เปิดเรื่อง ~${targetChars} อักขระ`
-        : `ชุด ${segmentIndex + 1}/${totalSegments} (${phase}): เขียน**เฉพาะ**บท ${nums}; ${cont ? "ต่อเนื่อง " : ""}~${targetChars} อักขระ`;
+        ? `ชุด 1/${totalSegments} (${phase}): เขียน**เฉพาะ**บท ${nums}; เปิดเรื่อง ~${targetChars} อักขระ ห้ามเกิน ${maxChars} อักขระ`
+        : `ชุด ${segmentIndex + 1}/${totalSegments} (${phase}): เขียน**เฉพาะ**บท ${nums}; ${cont ? "ต่อเนื่อง " : ""}เป้า ~${targetChars} อักขระ ห้ามเกิน ${maxChars} อักขระ`;
     case "zh-Hant":
       return segmentIndex === 0 && !cont
-        ? `第 1/${totalSegments} 批（${phase}）：**只寫**第 ${nums} 章，完成開篇。本批約 ${targetChars} 字。`
-        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**只寫**第 ${nums} 章，${cont ? "緊接前文，" : ""}勿重複。約 ${targetChars} 字。`;
+        ? `第 1/${totalSegments} 批（${phase}）：**只寫**第 ${nums} 章，完成開篇。本批約 ${targetChars} 字，嚴格不得超過 ${maxChars} 字。`
+        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**只寫**第 ${nums} 章，${cont ? "緊接前文，" : ""}勿重複。約 ${targetChars} 字，嚴格不得超過 ${maxChars} 字。`;
     default:
       return segmentIndex === 0 && !cont
-        ? `第 1/${totalSegments} 批（${phase}）：**只写**第 ${nums} 章，完成开篇。本批约 ${targetChars} 字。`
-        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**只写**第 ${nums} 章，${cont ? "紧接前文，" : ""}勿重复。约 ${targetChars} 字。`;
+        ? `第 1/${totalSegments} 批（${phase}）：**只写**第 ${nums} 章，完成开篇。本批约 ${targetChars} 字，严格不得超过 ${maxChars} 字。`
+        : `第 ${segmentIndex + 1}/${totalSegments} 批（${phase}）：**只写**第 ${nums} 章，${cont ? "紧接前文，" : ""}勿重复。约 ${targetChars} 字，严格不得超过 ${maxChars} 字。`;
   }
 }
 

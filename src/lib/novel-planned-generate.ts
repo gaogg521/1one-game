@@ -1,6 +1,6 @@
 import type { AppLocale } from "@/i18n/routing";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
-import { fitNovelContentToMaxChars } from "@/lib/novel-chapters";
+import { fitNovelSegmentToMaxChars } from "@/lib/novel-chapters";
 import {
   assessNovelCompleteness,
   type NovelCompletenessReport,
@@ -115,7 +115,7 @@ export async function streamPlannedNovelBody(params: {
     isContinuation: false,
     emit,
     uiLocale,
-    stopWhenLength: scope.maxChars,
+    stopWhenLength: scope.targetTotalChars,
     polish: false,
     requireAllPlannedChapters: true,
   });
@@ -156,7 +156,7 @@ export async function streamPlannedNovelBody(params: {
 
   let finalContent = repaired.content.trim();
   if (getRemainingChapterPlan(chapterPlan, finalContent).length === 0) {
-    const fitted = fitNovelContentToMaxChars(finalContent, scope.maxChars);
+    const fitted = fitNovelSegmentToMaxChars(finalContent, scope.maxChars);
     if (getRemainingChapterPlan(chapterPlan, fitted).length === 0) {
       finalContent = fitted;
     }

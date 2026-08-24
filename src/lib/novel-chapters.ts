@@ -222,6 +222,59 @@ export function fitNovelContentToMaxChars(content: string, maxChars: number): st
   return out.length > maxChars ? out.slice(0, maxChars).trimEnd() : out;
 }
 
+/**
+ * 将一个已分章的写作批次压入预算，但绝不靠删除整章来满足上限。
+ * 这用于生成中的单章/多章批次：保留每个已规划章节，并优先在句末收束，
+ * 让后续章节仍有空间完成主线与结局。
+ */
+export function fitNovelSegmentToMaxChars(content: string, maxChars: number): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+
+  const cutAtBoundary = (text: string, limit: number) => {
+    const capped = text.slice(0, Math.max(1, limit)).trimEnd();
+    const boundary = Math.max(
+      capped.lastIndexOf("。"),
+      capped.lastIndexOf("！"),
+      capped.lastIndexOf("？"),
+      capped.lastIndexOf("!"),
+      capped.lastIndexOf("?"),
+      capped.lastIndexOf("\n\n"),
+    );
+    return boundary >= Math.floor(capped.length * 0.6)
+      ? capped.slice(0, boundary + (capped.slice(boundary, boundary + 2) === "\n\n" ? 0 : 1)).trimEnd()
+      : capped;
+  };
+
+  const chapters = parseNovelChapters(trimmed);
+  if (chapters.length === 0) return cutAtBoundary(trimmed, maxChars);
+
+  const latinMarkers = usesLatinChapterMarkers(trimmed);
+  const scaffold = serializeNovelChapters(
+    chapters.map((ch) => ({ ...ch, body: "·" })),
+    { latinMarkers },
+  );
+  const bodyBudget = maxChars - (scaffold.length - chapters.length);
+  if (bodyBudget < chapters.length) return cutAtBoundary(trimmed, maxChars);
+
+  const totalBodyChars = chapters.reduce((sum, ch) => sum + ch.body.length, 0);
+  let remainingBudget = bodyBudget;
+  let remainingSourceChars = totalBodyChars;
+  const fitted = chapters.map((ch, index) => {
+    const isLast = index === chapters.length - 1;
+    const share = isLast
+      ? remainingBudget
+      : Math.max(1, Math.floor((remainingBudget * ch.body.length) / Math.max(1, remainingSourceChars)));
+    const body = cutAtBoundary(ch.body, share) || ch.body.slice(0, 1);
+    remainingBudget -= body.length;
+    remainingSourceChars -= ch.body.length;
+    return { num: ch.num, title: ch.title, body };
+  });
+
+  const out = serializeNovelChapters(fitted, { latinMarkers });
+  return out.length <= maxChars ? out : cutAtBoundary(out, maxChars);
+}
+
 /** @deprecated 使用 fitNovelContentToMaxChars */
 export function truncateNovelToMaxChars(content: string, maxChars: number, _locale?: string): string {
   return fitNovelContentToMaxChars(content, maxChars);

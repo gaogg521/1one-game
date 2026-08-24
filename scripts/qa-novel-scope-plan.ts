@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fitNovelContentToMaxChars } from "@/lib/novel-chapters";
+import { fitNovelContentToMaxChars, fitNovelSegmentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
 import { allocateChapterTargetChars, planNovelScope } from "@/lib/novel-scope-plan";
 
 function main() {
@@ -26,6 +26,14 @@ function main() {
   const fitted = fitNovelContentToMaxChars(over, 600);
   assert.ok(!fitted.includes("已达本篇幅"), "不应插入触顶收束句");
   assert.ok(fitted.length <= 600);
+
+  const plannedOver = [1, 2, 3, 4, 5]
+    .map((num) => `=== 第${num}章 ${num === 5 ? "终章" : `第${num}章`} ===\n\n${"正文。".repeat(800)}`)
+    .join("\n\n");
+  const segmentFitted = fitNovelSegmentToMaxChars(plannedOver, 6_000);
+  assert.ok(segmentFitted.length <= 6_000, `segment fitted ${segmentFitted.length}`);
+  assert.equal(parseNovelChapters(segmentFitted).length, 5, "预算压缩不得删除已规划章节");
+  assert.match(segmentFitted, /终章/, "终章必须保留给收束");
 }
 
 main();

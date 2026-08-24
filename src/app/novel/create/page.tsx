@@ -396,7 +396,11 @@ export default function NovelCreatePage() {
     try {
       const res = await fetch("/api/novel/generate/stream", {
         method: "POST",
-        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
+        headers: mergeLocaleHeaders(locale, {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          "Cache-Control": "no-cache",
+        }),
         body: JSON.stringify(body),
       });
 

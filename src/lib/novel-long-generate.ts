@@ -5,7 +5,7 @@ import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-loca
 import { llmNovelTextStream } from "@/lib/llm";
 import { assessNovelCompleteness, type NovelCompletenessReport } from "@/lib/novel-completeness";
 import { repairPlannedNovelCompleteness } from "@/lib/novel-completeness-repair";
-import { fitNovelContentToMaxChars, mergeNovelChapterContents, normalizeSegmentToChapterPlan, parseNovelChapters } from "@/lib/novel-chapters";
+import { fitNovelSegmentToMaxChars, mergeNovelChapterContents, normalizeSegmentToChapterPlan, parseNovelChapters } from "@/lib/novel-chapters";
 import { getNovelSystemPrompt } from "@/lib/novel-generate-config";
 import { fillMissingPlannedNovelChapters } from "@/lib/novel-missing-chapters-fill";
 import {
@@ -63,6 +63,7 @@ export function buildLongNovelSegmentUserMessage(opts: {
   totalSegments: number;
   previousContent: string;
   targetCharsThisSegment: number;
+  maxCharsThisSegment?: number;
   isContinuation?: boolean;
   locale?: BriefInputLocale;
 }): string {
@@ -75,6 +76,7 @@ export function buildLongNovelSegmentUserMessage(opts: {
     totalSegments,
     previousContent,
     targetCharsThisSegment,
+    maxCharsThisSegment,
     isContinuation,
     locale: localeRaw,
   } = opts;
@@ -99,6 +101,7 @@ export function buildLongNovelSegmentUserMessage(opts: {
     phase: chapterSlice.phase,
     nums,
     targetChars: targetCharsThisSegment,
+    maxChars: maxCharsThisSegment ?? targetCharsThisSegment,
     hasPrior,
     isContinuation: Boolean(isContinuation),
   });
@@ -280,7 +283,7 @@ export async function streamLongNovelBody(params: {
 
   let finalContent = repaired.content.trim();
   if (getRemainingChapterPlan(chapterPlan, finalContent).length === 0) {
-    const fitted = fitNovelContentToMaxChars(finalContent, hardMax);
+    const fitted = fitNovelSegmentToMaxChars(finalContent, hardMax);
     if (getRemainingChapterPlan(chapterPlan, fitted).length === 0) {
       finalContent = fitted;
     }
@@ -349,6 +352,22 @@ export async function writeNovelSegmentSlices(params: {
       (s, c) => s + (c.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter),
       0,
     );
+    const followingTargetChars = slices
+      .slice(i + 1)
+      .flatMap((later) => later.chapters)
+      .reduce((sum, chapter) => sum + (chapter.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter), 0);
+    // 章节目标不是展示文案：给当前批次一个有限弹性，同时为后续章节（特别是终章）保留预算。
+    const maxCharsThisSegment = Math.max(
+      1,
+      Math.min(
+        Math.ceil(targetCharsThisSegment * 1.25),
+        hardMax - content.length - followingTargetChars,
+      ),
+    );
+    const maxTokensThisSegment = Math.max(
+      256,
+      Math.min(segmentMaxTokens, Math.ceil(maxCharsThisSegment * 1.5)),
+    );
 
     emit({
       step: "segment_start",
@@ -374,6 +393,7 @@ export async function writeNovelSegmentSlices(params: {
       totalSegments,
       previousContent: content,
       targetCharsThisSegment,
+      maxCharsThisSegment,
       isContinuation,
       locale: outputLocale,
     });
@@ -394,6 +414,8 @@ export async function writeNovelSegmentSlices(params: {
 
     let segmentText = "";
     const contentBeforeSegment = content;
+    let streamedChars = 0;
+    let streamCapped = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
       segmentText = "";
       for await (const delta of llmNovelTextStream(
@@ -402,14 +424,19 @@ export async function writeNovelSegmentSlices(params: {
           system,
           user: userMsg,
           temperature: attempt === 1 ? 0.82 : 0.75,
-          maxTokens: segmentMaxTokens,
+          maxTokens: maxTokensThisSegment,
           timeoutMs: segmentTimeout,
           signal: params.signal,
         },
         lengthTier,
       )) {
         segmentText += delta;
-        emit({ step: "delta", text: delta, segment: i + 1, attempt });
+        const visible = delta.slice(0, Math.max(0, maxCharsThisSegment - streamedChars));
+        if (visible) {
+          streamedChars += visible.length;
+          emit({ step: "delta", text: visible, segment: i + 1, attempt });
+        }
+        if (visible.length < delta.length) streamCapped = true;
       }
 
       segmentText = segmentText.trim();
@@ -420,6 +447,7 @@ export async function writeNovelSegmentSlices(params: {
       }
 
       segmentText = normalizeSegmentToChapterPlan(segmentText, slice.chapters, outputLocale);
+      segmentText = fitNovelSegmentToMaxChars(segmentText, maxCharsThisSegment);
       const trial = mergeNovelChapterContents(content, segmentText, outputLocale);
       const writtenNums = new Set(parseNovelChapters(trial).map((c) => c.num));
       if (slice.chapters.every((ch) => writtenNums.has(ch.num))) {
@@ -433,6 +461,15 @@ export async function writeNovelSegmentSlices(params: {
 
     if (!segmentText.trim()) {
       throw new Error(progressNovelMessage(uiLocale, "segmentEmpty", { index: i + 1 }));
+    }
+
+    if (streamCapped) {
+      emit({
+        step: "segment_length_capped",
+        index: i + 1,
+        limit: maxCharsThisSegment,
+        message: progressNovelMessage(uiLocale, "maxLengthReached"),
+      });
     }
 
     emit({ step: "consistency_start", message: progressNovelMessage(uiLocale, "consistencyStart", { index: i + 1 }) });
