@@ -1,7 +1,6 @@
 import type { AppLocale } from "@/i18n/routing";
 import { detectLocaleFromAcceptLanguage, isAppLocale } from "@/i18n/routing";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
-import { headers } from "next/headers";
 
 const LOCALE_HEADER = "x-app-locale";
 
@@ -18,6 +17,11 @@ export function runtimeLocaleGroup(locale: AppLocale | string | undefined | null
  */
 export async function runtimeLocaleGroupForCurrentRequest(): Promise<RuntimeLocaleGroup | undefined> {
   try {
+    // This helper is reached through shared generation utilities that also have
+    // client-side consumers. Keep the App Router-only API out of that static
+    // client graph, while still loading it normally for server requests.
+    const nextHeadersModule = "next/headers";
+    const { headers } = await import(nextHeadersModule);
     const requestHeaders = await headers();
     const explicit = requestHeaders.get(LOCALE_HEADER);
     return runtimeLocaleGroup(isAppLocale(explicit) ? explicit : detectLocaleFromAcceptLanguage(requestHeaders.get("accept-language")));
