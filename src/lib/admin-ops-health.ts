@@ -5,6 +5,7 @@ import { buildAdminSampleGalleryReport } from "@/lib/admin-sample-gallery";
 import { readQaSnapshot, type QaSmokeSnapshot, type QaSnapshotId } from "@/lib/qa-cache";
 import { getEffectiveProviders, getEffectiveRoutes, loadRuntimeConfig, resolveSceneRoute } from "@/lib/runtime-config";
 import { assessNovelRehearsalReadiness } from "@/lib/generation-rehearsal-readiness";
+import type { ConsoleTab } from "@/lib/console-nav";
 
 export type OpsHealthStatus = "ok" | "warn" | "fail";
 
@@ -17,6 +18,8 @@ export type OpsHealthCheck = {
   /** For newly added operational checks before every locale has a translation. */
   label?: string;
   hint?: string;
+  /** A failing health check must take the operator to the page where it can be resolved. */
+  actionTab?: ConsoleTab;
 };
 
 export type OpsHealthQaSnapshot = {
@@ -111,6 +114,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
       labelKey: "healthCheck_email",
       detail: isEmailDeliveryConfigured() ? "configured" : "missing",
       hintKey: isEmailDeliveryConfigured() ? undefined : "healthHint_email",
+      actionTab: isEmailDeliveryConfigured() ? undefined : "email",
     });
   } catch {
     checks.push({
@@ -119,6 +123,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
       labelKey: "healthCheck_email",
       detail: "load_failed",
       hintKey: "healthHint_email",
+      actionTab: "email",
     });
   }
 
@@ -140,6 +145,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
         : sampleReport.items.some((i) => !i.hasCover)
           ? "healthHint_samplesCover"
           : undefined,
+    actionTab: sampleStatus === "ok" ? undefined : "samples",
   });
 
   const noCoverCount = sampleReport.items.filter((i) => !i.hasCover).length;
@@ -150,6 +156,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
       labelKey: "healthCheck_samplesCover",
       detail: String(noCoverCount),
       hintKey: "healthHint_samplesCoverCmd",
+      actionTab: "samples",
     });
   } else {
     checks.push({ id: "samples_cover", status: "ok", labelKey: "healthCheck_samplesCover" });
@@ -170,6 +177,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     labelKey: "healthCheck_moderation",
     detail: String(pendingTotal),
     hintKey: pendingTotal > 0 ? "healthHint_moderation" : undefined,
+    actionTab: pendingTotal > 0 ? "pending" : undefined,
   });
 
   const totalGen1h = genErrors1h + genSuccess1h;
@@ -180,6 +188,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     labelKey: "healthCheck_genErrors",
     detail: `${genErrors1h} errors / ${totalGen1h} attempts (${errorRate1h}% failure rate, 1h)`,
     hintKey: genErrors1h > 5 ? "healthHint_genErrors" : undefined,
+    actionTab: genErrors1h > 5 ? "gen-errors" : undefined,
   });
 
   const [runtime, queuedGenerationJobs, runningGenerationJobs] = await Promise.all([
@@ -209,6 +218,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
           : ratio >= 0.8
             ? "预算接近阈值，请检查失败重试和高成本模型。"
             : "预算处于安全范围。",
+      actionTab: ratio >= 0.8 ? "billing" : undefined,
     });
   }
   const rehearsal = assessNovelRehearsalReadiness({
@@ -222,6 +232,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     labelKey: "healthCheck_novelRehearsal",
     detail: rehearsal.detail,
     hintKey: rehearsal.hintKey,
+    actionTab: rehearsal.status === "ok" ? undefined : "runtime",
   });
 
   const providers = getEffectiveProviders(runtime.payload);
@@ -238,6 +249,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     label: "模型路由预检",
     detail: `${readyRoutes.length}/${routes.length} 全局路由就绪；${localeOverrides} 个语言覆盖`,
     hint: readyRoutes.length === routes.length ? "配置有效；连通性与真实生成结果需由独立探测/运营记录确认。" : "存在缺少主模型、服务商、密钥或 OpenAI Base URL 的路由。",
+    actionTab: readyRoutes.length === routes.length ? undefined : "runtime",
   });
 
   const probeRows = await prisma.runtimeProviderProbe.findMany({
@@ -261,6 +273,7 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
       : missingProbes.length
         ? "尚未对所有已配置网关执行真实探测；配置存在不等于可调用。"
         : "最近探测均成功；仍需通过真实生成成功率持续观察。",
+    actionTab: failedProbes.length || missingProbes.length ? "runtime" : undefined,
   });
 
   const qaCommands: OpsHealthQaCommand[] = [

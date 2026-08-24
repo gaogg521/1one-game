@@ -743,8 +743,7 @@ export default function AdminConsolePage({
 
                 <OpsHealthPanel
                   headers={headers}
-                  onGoSamples={() => selectTab("samples")}
-                  onGoPending={() => selectTab("pending")}
+                  onNavigate={selectTab}
                 />
 
                 <div className="grid gap-5 xl:grid-cols-2">

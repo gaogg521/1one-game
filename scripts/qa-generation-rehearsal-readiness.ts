@@ -24,6 +24,7 @@ async function main() {
   const report = await buildAdminOpsHealthReport();
   const opsCheck = report.checks.find((check) => check.id === "novel_rehearsal");
   assert(opsCheck && ["warn", "fail"].includes(opsCheck.status), "ops health must expose a no-cost novel rehearsal preflight");
+  assert(opsCheck?.actionTab === "runtime", "a rehearsal preflight that is not ready must link to its runtime remediation page");
   console.log("[OK] qa-generation-rehearsal-readiness");
 }
 

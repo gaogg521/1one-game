@@ -2121,6 +2121,7 @@
     "pageTitle": "Admin console",
     "pageDesc": "Moderation · Featured · Share attribution · User governance",
     "backStudio": "Back to studio",
+    "healthResolveAction": "View and resolve",
     "navSectionAdminOperations": "Operations workspace",
     "navSectionAdminContent": "Content and quality",
     "navSectionAdminGrowth": "Growth and users",

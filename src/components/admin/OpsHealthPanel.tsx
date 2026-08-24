@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { AdminOpsHealthReport, OpsHealthStatus } from "@/lib/admin-ops-health";
+import type { ConsoleTab } from "@/lib/console-nav";
 
 const STATUS_STYLE: Record<OpsHealthStatus, string> = {
   ok: "border-emerald-500/30 bg-emerald-500/5 text-emerald-300",
@@ -18,12 +19,10 @@ const DOT_STYLE: Record<OpsHealthStatus, string> = {
 
 export function OpsHealthPanel({
   headers,
-  onGoSamples,
-  onGoPending,
+  onNavigate,
 }: {
   headers: () => HeadersInit;
-  onGoSamples?: () => void;
-  onGoPending?: () => void;
+  onNavigate?: (tab: ConsoleTab) => void;
 }) {
   const t = useTranslations("adminPage");
   const [report, setReport] = useState<AdminOpsHealthReport | null>(null);
@@ -40,7 +39,8 @@ export function OpsHealthPanel({
   }, [headers]);
 
   useEffect(() => {
-    void load();
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
 
   if (loading && !report) {
@@ -94,14 +94,9 @@ export function OpsHealthPanel({
               <p className="mt-1.5 text-xs opacity-80">{check.hint ?? t(check.hintKey as "healthHint_db")}</p>
             ) : null}
             {check.hint ? <p className="mt-1.5 text-xs opacity-80">{check.hint}</p> : null}
-            {check.id === "samples_sync" && check.status !== "ok" && onGoSamples ? (
-              <button type="button" className="mt-2 text-xs underline opacity-90" onClick={onGoSamples}>
-                {t("healthGoSamples")}
-              </button>
-            ) : null}
-            {check.id === "moderation" && check.status === "warn" && onGoPending ? (
-              <button type="button" className="mt-2 text-xs underline opacity-90" onClick={onGoPending}>
-                {t("healthGoPending")}
+            {check.status !== "ok" && check.actionTab && onNavigate ? (
+              <button type="button" className="mt-2 text-xs underline opacity-90" onClick={() => onNavigate(check.actionTab!)}>
+                {t("healthResolveAction")}
               </button>
             ) : null}
           </li>
