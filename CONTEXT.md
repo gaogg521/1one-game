@@ -651,3 +651,8 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 参考图存储新增 `REFERENCE_ASSET_STORAGE=cos` 适配器：服务端使用腾讯 COS 的 S3 兼容 API 上传到 `1onework-1251001122/operone/references`，仅在上传成功时返回 `persistent` 和 HTTPS URL；任一配置缺失、上传失败或对象不可公开读取时都保持 session-only，不会伪称素材已跨任务保存。
 - `scripts/configure-cos-reference-storage.py` 实现 Token + SignKey 的 HMAC-SHA256/HMAC-SHA1/MD5 两段式凭据领取。Token/SignKey 只经 SSH stdin 做一次领取，不写服务器、命令行或日志；生产 `.env` 只保存返回的短期 SecretId/SecretKey。脚本先上传、匿名读取、删除一个随机 probe，确认公开访问后才原子更新 `.env` 并重启服务；剩余有效期低于 15 分钟会 stderr 警告。
 - 只读 COS endpoint 探测显示该桶在 `ap-shanghai`。本机和生产机都在 credential allocation 的网络连接阶段超时，故本轮没有获得或写入短期凭据、没有修改生产运行配置、没有生成残留对象，也不能把 COS 持久化或真实素材摄取宣称为完成。离线 `qa:reference-image-cloud-storage`、新增 `qa:reference-image-cos-storage`、定向 ESLint、TypeScript 和五语 JSON 均通过；allocation 服务恢复连通后执行 `python scripts/configure-cos-reference-storage.py --cos-file cos.txt`，再做生产 API 摄取验证。
+
+## P29 第一段：受控小说模型真实演练（2026-08-24）
+
+- 已在生产机用当前环境中配置的 OpenAI 兼容网关、小说主模型 `deepseek-v4-pro` 发出一次 280 tokens 上限的中文小说开篇请求；请求在 TCP 连接阶段超时，未取得 completion、未写入 Novel/CreatorCore/账本，也没有继续重试或发起任何额外模型调用。
+- 这与 COS allocation 的失败同为生产机访问公司内网域名连接超时；模型配置项仍存在，但绝不能据此宣称“一句话写小说”已真实验收。恢复网关网络可达性后，应先复跑同一最小探针，成功后再通过 `/api/novel/generate` 做一次 short tier durable worker 全链路验收；支付仍因商户资料/回调配置未提供而保持 fail-closed。
