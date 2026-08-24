@@ -47,8 +47,8 @@ import {
 } from "@/lib/comic-storyboard-segments";
 import type { ComicStylePresetId } from "@/lib/comic-style-presets";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
+import { fetchComicCharacterRoster } from "@/lib/comic-character-roster-server";
 import {
-  fetchComicCharacterRoster,
   rosterFromDirectorPack,
   rosterFromNovelMeta,
 } from "@/lib/comic-character-roster";

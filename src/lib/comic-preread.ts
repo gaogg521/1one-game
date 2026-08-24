@@ -1,7 +1,7 @@
 import { llmJson } from "@/lib/llm";
+import { fetchComicCharacterRoster } from "@/lib/comic-character-roster-server";
 import {
   buildPrereadExcerpt,
-  fetchComicCharacterRoster,
   rosterFromNovelMeta,
   type ComicCharacterRoster,
 } from "@/lib/comic-character-roster";
