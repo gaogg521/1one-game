@@ -50,13 +50,29 @@ function resolveOpenAIImageClient(): ReturnType<typeof createOpenAIClient> {
 
 type SeedreamImageConfig = { endpoint: string; key: string; model: string };
 
-function isSeedreamModel(model: string): boolean {
+export function isSeedreamImageModel(model: string): boolean {
   return model.trim().toLowerCase().startsWith("doubao-seedream-");
 }
 
 /** Joy MaaS Seedream accepts a quality tier, not the OpenAI pixel-dimension enum. */
 function seedreamSize(): "2K" {
   return "2K";
+}
+
+export function seedreamGenerationEndpoint(base: string): string {
+  return new URL("/api/seedream/v1/images/generations", base).toString();
+}
+
+export function buildSeedreamGenerationRequest(model: string, prompt: string, n: number) {
+  return {
+    model,
+    prompt,
+    size: seedreamSize(),
+    n,
+    output_format: "png" as const,
+    watermark: false,
+    stream: false,
+  };
 }
 
 /** 豆包 Seedream 在 Joy MaaS 使用专用路由，不兼容 OpenAI `/v1/images/generations`。 */
@@ -67,7 +83,7 @@ function resolveSeedreamImageConfig(): SeedreamImageConfig | null {
   if (!base || !key) return null;
   try {
     return {
-      endpoint: new URL("/api/seedream/v1/images/generations", base).toString(),
+      endpoint: seedreamGenerationEndpoint(base),
       key,
       model: getImageGenOpenAIModel(),
     };
@@ -157,15 +173,7 @@ async function generateImageWithSeedreamDetail(
     const response = await fetch(cfg.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.key}` },
-      body: JSON.stringify({
-        model: cfg.model,
-        prompt,
-        size: seedreamSize(),
-        n: options?.n ?? 1,
-        output_format: "png",
-        watermark: false,
-        stream: false,
-      }),
+      body: JSON.stringify(buildSeedreamGenerationRequest(cfg.model, prompt, options?.n ?? 1)),
       signal: AbortSignal.timeout(resolveImageGenTimeoutMs(options?.timeoutMs)),
     });
     if (!response.ok) return { ok: false, model: cfg.model, error: `Seedream HTTP ${response.status}`, durationMs: Date.now() - t0 };
@@ -195,7 +203,7 @@ export async function generateImageWithOpenAIDetail(
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
   const model = getImageGenOpenAIModel();
-  if (isSeedreamModel(model)) return generateImageWithSeedreamDetail(prompt, options);
+  if (isSeedreamImageModel(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
     client = resolveOpenAIImageClient();
@@ -286,7 +294,7 @@ export async function generateImagesBatchOpenAIDetail(
   }
 
   const model = getImageGenOpenAIModel();
-  if (isSeedreamModel(model)) {
+  if (isSeedreamImageModel(model)) {
     const results = await Promise.all(
       prompts.map((prompt) => generateImageWithSeedreamDetail(prompt, { ...options, n: 1 })),
     );

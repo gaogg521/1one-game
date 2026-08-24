@@ -62,6 +62,7 @@ async function main() {
     loadRuntimeConfig,
     saveRuntimeConfig,
   } = await import("../src/lib/runtime-config");
+  const { mergeRoutesWithDefaults } = await import("../src/lib/runtime-providers");
   const { resolveEstimatedProviderCost } = await import("../src/lib/provider-usage");
   const { prisma } = await import("../src/lib/prisma");
 
@@ -75,6 +76,38 @@ async function main() {
     checks.push(assert("defaults.gamePrimary", defaults.gamePrimary === PRODUCT.models.gamePrimary));
     checks.push(assert("defaults.novelTextPrimary", defaults.novelTextPrimary === PRODUCT.models.novelTextPrimary));
     checks.push(assert("defaults.imageOpenAI", defaults.imageOpenAI === PRODUCT.models.imageOpenAI));
+
+    const persistedRoutes = mergeRoutesWithDefaults(
+      [
+        {
+          scene: "novel" as const,
+          providerId: "production-provider",
+          primary: "production-text-primary",
+          fallbacks: ["production-text-fallback"],
+        },
+      ],
+      {
+        models: { novelTextPrimary: "code-default-text", novelTextFallback: "code-default-fallback" },
+        providers: [
+          {
+            id: "production-provider",
+            name: "Production provider",
+            protocol: "openai_compatible",
+            baseUrl: "https://provider.example.test/v1",
+            apiKey: "test-key",
+            models: ["production-text-primary"],
+            enabled: true,
+          },
+        ],
+      },
+    );
+    const persistedNovel = persistedRoutes.find((route) => route.scene === "novel");
+    checks.push(
+      assert(
+        "stored production route survives code-default changes",
+        persistedNovel?.primary === "production-text-primary" && persistedNovel.fallbacks[0] === "production-text-fallback",
+      ),
+    );
 
     invalidateRuntimeConfigCache();
     await saveRuntimeConfig({

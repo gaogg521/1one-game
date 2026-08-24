@@ -663,3 +663,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `doubao-seedream-5-0-pro` 需要走专用 Seedream 图片路由，不能复用 OpenAI 的通用 images endpoint。适配器固定验证过的 `2K`、PNG、无水印、非流式请求契约；真实调用返回可访问的图片 URL，小说封面生成也已在本地走通并做过视觉检查。
 - 实际作者路径 `/api/novel/generate/stream` 已跑完一句话短篇：创意简报、设定、计划、三段正文、摘要和保存都通过 SSE 给出阶段进度，最终生成约 1,190 字。首次验收显示简报扩写曾错误使用通用模型池；现已改为使用小说正文的 `minimax-2-7 → deepseek-v4-pro` 级联，避免同一作品在模型间漂移。
 - 端到端短篇耗时约 5.6 分钟，虽然 UI 会呈现阶段进度、可恢复 checkpoint 已存在，但仍是下一轮的性能优化对象。非流式旧接口在客户端 5 分钟断开时不应被计为持久化成功。专项 Seedream 适配器、定向 ESLint、`tsc --noEmit` 与隔离 production build 均通过；构建仍只有既有动态文件追踪性能警告。
+
+## P31 第一段：开发与生产模型配置隔离（2026-08-24）
+
+- 模型目录只是服务商可选 model ID 清单，不能改变业务调用；真正生效的是「业务模型路由」。后台原“写入产品默认模型”按钮实际会把当前部署版本的 `product-config` 基线覆盖到所有路由，因此已改名为“用部署默认值覆盖路由”，避免把它误解为从模型目录自动选取新模型。
+- `product-config` 恢复为可移植产品基线，不再承载某台开发机的 MiniMax 或 Seedream 选择。开发机的 `dev.db` 已单独配置：小说正文、长篇规划与漫画分镜使用 `minimax-2-7 → deepseek-v4-pro`，漫画图片使用 `doubao-seedream-5-0-pro`；这份本地数据库不在 Git 中，生产数据库未读取、未写入、不会被同步覆盖。
+- `mergeRoutesWithDefaults` 的回归检查明确验证：即使代码默认模型变化，已保存的生产路由仍保留其 provider、主模型和备选模型。`qa:runtime-config-admin`（隔离数据库）、Seedream 契约、定向 lint、五语 JSON 和隔离 production build 都通过；构建仅保留既有动态文件追踪性能告警。

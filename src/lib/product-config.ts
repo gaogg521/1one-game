@@ -25,11 +25,14 @@ export const PRODUCT = {
     /** @deprecated 兼容旧路由；新配置请用 gameText* / gameVision* */
     gamePrimary: "gpt-5.2",
     gameFallbacks: ["gemini-3.1-pro-preview"] as string[],
-    /** 小说正文、漫画分镜 JSON */
-    novelTextPrimary: "minimax-2-7",
-    novelTextFallback: "deepseek-v4-pro",
-    /** 封面、漫画分镜配图 */
-    imageOpenAI: "doubao-seedream-5-0-pro",
+    /**
+     * 可移植的产品基线。生产和开发环境的实际模型必须由各自的运行时业务路由配置，
+     * 不把某台开发机的模型选择写入发版源码。
+     */
+    novelTextPrimary: "deepseek-v4-pro",
+    novelTextFallback: "doubao-seed-2-pro",
+    /** 封面、漫画分镜配图（实际服务商和模型由 comic_image_openai 路由决定） */
+    imageOpenAI: "gpt-image-2",
     imageGemini: "gemini-3.1-flash-image-preview",
     /** 非 OpenAI 兼容 Provider 时的备用（需对应 API Key） */
     anthropicPrimary: "claude-3-7-sonnet-latest",
