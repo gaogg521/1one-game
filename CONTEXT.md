@@ -670,3 +670,4 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `product-config` 恢复为可移植产品基线，不再承载某台开发机的 MiniMax 或 Seedream 选择。开发机的 `dev.db` 已单独配置：小说正文、长篇规划与漫画分镜使用 `minimax-2-7 → deepseek-v4-pro`，漫画图片使用 `doubao-seedream-5-0-pro`；这份本地数据库不在 Git 中，生产数据库未读取、未写入、不会被同步覆盖。
 - `mergeRoutesWithDefaults` 的回归检查明确验证：即使代码默认模型变化，已保存的生产路由仍保留其 provider、主模型和备选模型。`qa:runtime-config-admin`（隔离数据库）、Seedream 契约、定向 lint、五语 JSON 和隔离 production build 都通过；构建仅保留既有动态文件追踪性能告警。
 - Joy MaaS 专用 Seedream endpoint 现受 `SEEDREAM_IMAGE_API_MODE=joy` 显式开关保护；开发 `.env.local` 已设置，生产 Ark 等 OpenAI 兼容服务商默认不设置，因而同名 Seedream 模型不会被错误重写到 Joy 路径。实际本地调用在该开关下成功返回 `doubao-seedream-5-0-pro` 图片 URL；专用契约测试同时验证未设开关时不会改写生产请求。
+- 已将 `50f52269` 发布到生产：服务端无待执行迁移、构建通过、`operone` 服务与 generation worker timer active；使用 TLS/SNI 的 `/api/health` 公网验证返回 `ok` 和 `db=up`。发布仅同步代码、既有样例资源和文学封面，未写入生产 `PlatformRuntimeConfig` 或覆盖任何业务模型路由。
