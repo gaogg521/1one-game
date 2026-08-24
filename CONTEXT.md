@@ -722,3 +722,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - Console 的「业务模型路由」页增加双列语言策略：中文池与国际池可针对游戏、小说、漫画和图片场景独立选择已配置网关与模型；每格明确显示“继承全局 / 语言覆盖”，可恢复继承。中文图片推荐 `doubao-seedream-5-0-pro`，国际图片推荐 `gpt-image-2`，但推荐不会自动写入或覆盖生产配置。
 - 实际请求层已读取 `x-app-locale` / `Accept-Language`：有语言覆盖时 JSON 生成使用该场景的覆盖模型和服务商；漫画配图与通用图片入口同样将 locale 传至 OpenAI、Seedream、Gemini 路由。没有 HTTP 请求上下文的后台任务仍安全地继承全局路由。
 - 新增 `qa:runtime-locale-routing`，验证简繁归并、国际路由以及覆盖缺失时的全局回退；TypeScript、运行时配置隔离冒烟和生产构建待本批提交前复验。
+
+## P38 第一段：任务级模型账本与预算预警（2026-08-24）
+
+- `ProviderUsageEvent` 新增可空 `generationJobId`。durable generation worker 在领取任务后用异步上下文自动关联该 ID；所有既有的模型调用仍可独立记账，历史事件也不需要回填。账本不保存 prompt、正文、密钥或上游响应。
+- 「生成运营队列」优先展示该任务实际记录到的 provider、model、调用次数、成功次数、耗时和账本成本；未产生账本记录时才显示当前路由估算，并明确区分“没有成本规则”与零成本，避免把配置或估算伪称为实际消耗。
+- 「网关与分域模型 → 成本估算规则」可设置每日模型预算阈值（微单位）。Ops Health 汇总当日已记录的成本，在 80% 报警、100% 失败；没有价格规则的调用不会被虚构计费。预算只是运营告警，不会在请求中偷偷截断创作者生成。
+- 验证：Prisma 迁移、TypeScript、定向 ESLint、`qa:provider-usage`（含任务上下文持久化）、`qa:runtime-config-admin`（含预算持久化）、`qa:creator-core`、`qa:runtime-locale-routing` 均通过；提交后仍需生产构建、迁移和公网健康检查。

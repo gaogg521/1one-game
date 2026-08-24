@@ -139,6 +139,7 @@ async function main() {
     );
 
     await saveRuntimeConfig({
+      dailyBudgetMicros: 987_654,
       providerPricing: [
         { provider: "*", model: "*", modality: "llm", operation: "text", estimatedCostMicros: 1200 },
         { provider: "gemini", model: "gemini-2.5-flash", modality: "llm", operation: "text", estimatedCostMicros: 800 },
@@ -146,6 +147,7 @@ async function main() {
     });
     const pricedView = await getRuntimeConfigPublicView();
     checks.push(assert("persist provider pricing", pricedView.providerPricing.length === 2));
+    checks.push(assert("persist daily model budget", pricedView.dailyBudgetMicros === 987_654, String(pricedView.dailyBudgetMicros)));
     const exactCost = await resolveEstimatedProviderCost({
       modality: "llm", provider: "gemini", model: "gemini-2.5-flash", operation: "text", status: "succeeded", durationMs: 1,
     });

@@ -349,11 +349,14 @@ model ProviderUsageEvent {
   /// Provider 单价未知时保持 null，禁止用虚假成本计算毛利。
   estimatedCostMicros Int?
   errorCode           String?
+  /// Optional durable job correlation. Null for foreground/non-job requests.
+  generationJobId     String?
   createdAt           DateTime @default(now())
 
   @@index([createdAt])
   @@index([provider, model, createdAt])
   @@index([modality, status, createdAt])
+  @@index([generationJobId, createdAt])
 }
 
 /// Last-mile provider reachability observations. Stores only safe metadata, never keys or response bodies.

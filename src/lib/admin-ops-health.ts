@@ -77,6 +77,7 @@ function pushSnapshotCheck(
     detail: `${raw.passed}/${raw.total}`,
     hintKey: raw.ok ? (snap.ageHours > 48 ? hintStale : undefined) : hintFailed,
   });
+
   return snap;
 }
 
@@ -186,6 +187,30 @@ export async function buildAdminOpsHealthReport(): Promise<AdminOpsHealthReport>
     prisma.generationJob.count({ where: { status: { in: ["queued", "retrying"] } } }),
     prisma.generationJob.count({ where: { status: "running" } }),
   ]);
+  const budget = runtime.dbPayload.dailyBudgetMicros;
+  if (budget) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayUsage = await prisma.providerUsageEvent.aggregate({
+      where: { createdAt: { gte: today } },
+      _sum: { estimatedCostMicros: true },
+    });
+    const spent = todayUsage._sum.estimatedCostMicros ?? 0;
+    const ratio = spent / budget;
+    checks.push({
+      id: "daily_model_budget",
+      status: ratio >= 1 ? "fail" : ratio >= 0.8 ? "warn" : "ok",
+      labelKey: "healthCheck_db",
+      label: "当日模型预算",
+      detail: `${spent}/${budget} μ (${Math.round(ratio * 100)}%)`,
+      hint:
+        ratio >= 1
+          ? "已超过当日预算，请暂停非必要重试并检查高成本路由。"
+          : ratio >= 0.8
+            ? "预算接近阈值，请检查失败重试和高成本模型。"
+            : "预算处于安全范围。",
+    });
+  }
   const rehearsal = assessNovelRehearsalReadiness({
     route: resolveSceneRoute(runtime.payload, "novel"),
     queuedJobs: queuedGenerationJobs,

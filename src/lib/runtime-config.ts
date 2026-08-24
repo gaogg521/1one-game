@@ -80,6 +80,7 @@ export type RuntimeSecretsPayload = {
   localeRoutes?: RuntimeLocaleModelRoute[];
   cdnConfig?: CdnConfigStored;
   providerPricing?: ProviderPricingRule[];
+  dailyBudgetMicros?: number;
 };
 
 export type RuntimeSecretField =
@@ -126,6 +127,7 @@ export type RuntimeConfigPublicView = {
   routes: RuntimeModelRoute[];
   localeRoutes: RuntimeLocaleModelRoute[];
   providerPricing: ProviderPricingRule[];
+  dailyBudgetMicros: number | null;
 };
 
 type ResolvedRuntime = {
@@ -192,6 +194,7 @@ function mergePayload(db: RuntimeSecretsPayload): RuntimeSecretsPayload {
     localeRoutes: db.localeRoutes,
     cdnConfig: db.cdnConfig,
     providerPricing: db.providerPricing,
+    dailyBudgetMicros: db.dailyBudgetMicros,
   };
 }
 
@@ -380,6 +383,7 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
     routes,
     localeRoutes: dbPayload.localeRoutes ?? [],
     providerPricing: dbPayload.providerPricing ?? [],
+    dailyBudgetMicros: typeof dbPayload.dailyBudgetMicros === "number" ? dbPayload.dailyBudgetMicros : null,
   };
 }
 
@@ -390,6 +394,7 @@ export type RuntimeConfigPatch = {
   routes?: RuntimeModelRoute[];
   localeRoutes?: RuntimeLocaleModelRoute[];
   providerPricing?: ProviderPricingRule[];
+  dailyBudgetMicros?: number | null;
 };
 
 export function getSceneModelCascade(scene: RuntimeSceneKey, localeGroup?: RuntimeLocaleGroup): string[] {
@@ -533,6 +538,12 @@ function applyPatchToPayload(
     }
     if (rules.length) next.providerPricing = rules;
     else delete next.providerPricing;
+  }
+
+  if (patch.dailyBudgetMicros !== undefined) {
+    const value = Number(patch.dailyBudgetMicros);
+    if (Number.isFinite(value) && value > 0 && value <= 1_000_000_000_000) next.dailyBudgetMicros = Math.round(value);
+    else delete next.dailyBudgetMicros;
   }
 
   return next;

@@ -75,6 +75,20 @@ export async function GET(req: Request) {
   const routes = getEffectiveRoutes(runtime.payload);
   const providers = getEffectiveProviders(runtime.payload);
   const pricing = runtime.payload.providerPricing ?? [];
+  const usageRows = jobs.length
+    ? await prisma.providerUsageEvent.findMany({
+        where: { generationJobId: { in: jobs.map((job) => job.id) } },
+        select: { generationJobId: true, provider: true, model: true, status: true, durationMs: true, estimatedCostMicros: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const usageByJob = new Map<string, typeof usageRows>();
+  for (const usage of usageRows) {
+    if (!usage.generationJobId) continue;
+    const current = usageByJob.get(usage.generationJobId) ?? [];
+    current.push(usage);
+    usageByJob.set(usage.generationJobId, current);
+  }
 
   return NextResponse.json({
     errors,
@@ -88,13 +102,30 @@ export async function GET(req: Request) {
       const model = route ? routeModelCascade(route)[0] : undefined;
       const modality = scene === "comic_image_openai" ? "image" as const : "llm" as const;
       const operation = modality === "image" ? "image" as const : "text" as const;
-      const estimate = provider && model ? configuredEstimateMicros(pricing, provider.name, model, modality, operation) : null;
+      const estimate = provider && model ? configuredEstimateMicros(pricing, provider.protocol, model, modality, operation) : null;
+      const usage = usageByJob.get(job.id) ?? [];
+      const actualCostMicros = usage.reduce((sum, item) => sum + (item.estimatedCostMicros ?? 0), 0);
+      const hasRecordedCost = usage.some((item) => item.estimatedCostMicros != null);
+      const usageDurationMs = usage.reduce((sum, item) => sum + item.durationMs, 0);
+      const successfulUsage = usage.filter((item) => item.status === "succeeded").length;
+      const lastUsage = usage.at(-1);
       return ({
       ...job,
       progress: (() => { try { return job.progressJson ? JSON.parse(job.progressJson) : null; } catch { return null; } })(),
       progressJson: undefined,
       route: provider && model ? { scene, provider: provider.name, model } : null,
-      cost: estimate ? { estimatedMicros: estimate.estimatedCostMicros, status: "configured_estimate" as const } : { estimatedMicros: null, status: "not_configured" as const },
+      usage: usage.length ? {
+        calls: usage.length,
+        succeeded: successfulUsage,
+        durationMs: usageDurationMs,
+        costMicros: hasRecordedCost ? actualCostMicros : null,
+        provider: lastUsage?.provider ?? "unknown",
+        model: lastUsage?.model ?? "unknown",
+      } : null,
+      cost: usage.length
+        ? { estimatedMicros: hasRecordedCost ? actualCostMicros : null, status: "usage_ledger" as const }
+        : estimate ? { estimatedMicros: estimate.estimatedCostMicros, status: "configured_estimate" as const }
+        : { estimatedMicros: null, status: "not_configured" as const },
     });
     }),
   });

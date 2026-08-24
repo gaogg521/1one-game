@@ -61,6 +61,7 @@ export type RuntimeConfigView = {
   routes: RuntimeModelRoute[];
   localeRoutes: RuntimeLocaleModelRoute[];
   providerPricing: ProviderPricingRule[];
+  dailyBudgetMicros: number | null;
 };
 
 type ProviderFormState = {
@@ -929,12 +930,16 @@ function FieldRow({
 
 function ProviderPricingEditor({
   rules,
+  dailyBudgetMicros,
   inputCls,
   onChange,
+  onDailyBudgetMicrosChange,
 }: {
   rules: ProviderPricingRule[];
+  dailyBudgetMicros: string;
   inputCls: string;
   onChange: (rules: ProviderPricingRule[]) => void;
+  onDailyBudgetMicrosChange: (value: string) => void;
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
   const update = (index: number, patch: Partial<ProviderPricingRule>) => {
@@ -947,6 +952,11 @@ function ProviderPricingEditor({
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">{t("pricingHint")}</p>
       </div>
       <div className="space-y-3 p-4 sm:p-5">
+        <div className="rounded-lg border border-white/8 p-3">
+          <label className="block text-sm font-medium text-[var(--gc-text)]" htmlFor="runtime-daily-budget">当日模型预算阈值（微单位）</label>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--gc-muted)]">按实际用量账本的 estimatedCostMicros 汇总。留空即不启用；没有匹配成本规则的调用不会被虚构计费。</p>
+          <input id="runtime-daily-budget" className={`mt-3 max-w-sm ${inputCls}`} type="number" min="1" step="1" value={dailyBudgetMicros} onChange={(event) => onDailyBudgetMicrosChange(event.target.value)} placeholder="例如 1000000" />
+        </div>
         {rules.length === 0 ? <p className="text-sm text-[var(--gc-muted)]">{t("pricingEmpty")}</p> : null}
         {rules.map((rule, index) => (
           <div key={`${index}-${rule.provider}-${rule.model}`} className="grid gap-3 rounded-lg border border-white/8 p-3 md:grid-cols-[1fr_1fr_130px_130px_150px_auto]">
@@ -989,6 +999,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   const [savedLocaleRoutes, setSavedLocaleRoutes] = useState<RuntimeLocaleModelRoute[]>([]);
   const [pricingForm, setPricingForm] = useState<ProviderPricingRule[]>([]);
   const [savedPricing, setSavedPricing] = useState<ProviderPricingRule[]>([]);
+  const [dailyBudgetMicrosForm, setDailyBudgetMicrosForm] = useState("");
+  const [savedDailyBudgetMicros, setSavedDailyBudgetMicros] = useState("");
   const [newProviderTemplate, setNewProviderTemplate] = useState<ProviderTemplateId>("litellm");
 
   const inputCls =
@@ -1004,6 +1016,9 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setSavedLocaleRoutes(JSON.parse(JSON.stringify(data.localeRoutes)) as RuntimeLocaleModelRoute[]);
     setPricingForm(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
     setSavedPricing(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
+    const budget = data.dailyBudgetMicros == null ? "" : String(data.dailyBudgetMicros);
+    setDailyBudgetMicrosForm(budget);
+    setSavedDailyBudgetMicros(budget);
   }, []);
 
   const load = useCallback(async () => {
@@ -1041,8 +1056,9 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     return JSON.stringify(providersForm) !== JSON.stringify(savedProviders)
       || JSON.stringify(routesForm) !== JSON.stringify(savedRoutes)
       || JSON.stringify(localeRoutesForm) !== JSON.stringify(savedLocaleRoutes)
-      || JSON.stringify(pricingForm) !== JSON.stringify(savedPricing);
-  }, [localeRoutesForm, pricingForm, providersForm, routesForm, savedLocaleRoutes, savedPricing, savedProviders, savedRoutes]);
+      || JSON.stringify(pricingForm) !== JSON.stringify(savedPricing)
+      || dailyBudgetMicrosForm !== savedDailyBudgetMicros;
+  }, [dailyBudgetMicrosForm, localeRoutesForm, pricingForm, providersForm, routesForm, savedDailyBudgetMicros, savedLocaleRoutes, savedPricing, savedProviders, savedRoutes]);
 
   const savedProviderIds = useMemo(() => new Set(savedProviders.map((p) => p.id)), [savedProviders]);
 
@@ -1152,6 +1168,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setRoutesForm(JSON.parse(JSON.stringify(savedRoutes)) as RuntimeModelRoute[]);
     setLocaleRoutesForm(JSON.parse(JSON.stringify(savedLocaleRoutes)) as RuntimeLocaleModelRoute[]);
     setPricingForm(JSON.parse(JSON.stringify(savedPricing)) as ProviderPricingRule[]);
+    setDailyBudgetMicrosForm(savedDailyBudgetMicros);
     onNotice({ kind: "ok", text: t("discardDone") });
   }
 
@@ -1187,6 +1204,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
       routes: routesForm,
       localeRoutes: localeRoutesForm,
       providerPricing: pricingForm,
+      dailyBudgetMicros: dailyBudgetMicrosForm.trim() ? Number(dailyBudgetMicrosForm) : null,
     });
     if (data) onNotice({ kind: "ok", text: t("saveDone") });
   }
@@ -1518,7 +1536,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           </div>
         </div>
       ) : (
-        <ProviderPricingEditor rules={pricingForm} inputCls={inputCls} onChange={setPricingForm} />
+        <ProviderPricingEditor rules={pricingForm} dailyBudgetMicros={dailyBudgetMicrosForm} inputCls={inputCls} onChange={setPricingForm} onDailyBudgetMicrosChange={setDailyBudgetMicrosForm} />
       )}
 
       {/* Sticky action bar */}

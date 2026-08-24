@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { loadRuntimeConfig, type ProviderPricingRule } from "@/lib/runtime-config";
+import { currentGenerationJobId } from "@/lib/generation-job-context";
 
 export type ProviderUsageInput = {
   modality: "llm" | "image";
@@ -11,6 +12,7 @@ export type ProviderUsageInput = {
   outputUnits?: number;
   estimatedCostMicros?: number | null;
   errorCode?: string;
+  generationJobId?: string;
 };
 
 function matchingPriceRule(input: ProviderUsageInput, rules: ProviderPricingRule[]): ProviderPricingRule | null {
@@ -54,6 +56,7 @@ export async function writeProviderUsage(input: ProviderUsageInput): Promise<voi
       outputUnits: input.outputUnits == null ? null : Math.max(0, Math.min(10_000_000, Math.round(input.outputUnits))),
       estimatedCostMicros,
       errorCode: input.errorCode?.slice(0, 96),
+      generationJobId: input.generationJobId ?? currentGenerationJobId(),
     },
   });
 }
