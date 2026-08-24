@@ -50,6 +50,20 @@ test.describe("Admin 网关/模型页", () => {
     await page.getByTestId(`admin-runtime-provider-${providerId}-test`).click();
     await expect.poll(() => savedProviderTestPayload).toEqual({ providerId });
 
+    let modelDiscoveryPayload: unknown;
+    await page.route("**/api/admin/runtime-config/discover-models", async (route) => {
+      modelDiscoveryPayload = route.request().postDataJSON();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, message: "models_ok", models: ["e2e-model-a", "e2e-model-b"] }),
+      });
+    });
+    await page.getByTestId(`admin-runtime-provider-${providerId}-discover-models`).click();
+    await expect.poll(() => modelDiscoveryPayload).toEqual({ providerId });
+    await expect(provider.getByText("e2e-model-a", { exact: true })).toBeVisible();
+    await provider.getByText("e2e-model-a", { exact: true }).click();
+    await expect(provider.locator("textarea")).toHaveValue(/e2e-model-a/);
+
     await page.screenshot({
       path: path.join(OUT, "runtime-config-gateway.png"),
       fullPage: true,

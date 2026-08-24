@@ -466,6 +466,9 @@ function ProviderEditor({
   const [open, setOpen] = useState(() => editState === "draft" || editState === "modified");
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [discoveringModels, setDiscoveringModels] = useState(false);
+  const [modelDiscoveryMsg, setModelDiscoveryMsg] = useState<string | null>(null);
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
   const protocolLabel =
     provider.protocol === "gemini"
       ? t("protocolGemini")
@@ -474,6 +477,7 @@ function ProviderEditor({
         : t("protocolOpenAI");
   const modelCount = parseModelsText(provider.modelsText).length;
   const keyConfigured = Boolean(provider.apiKeyDraft || provider.apiKeyMasked);
+  const configuredModels = new Set(parseModelsText(provider.modelsText));
 
   async function testConnection() {
     const apiKey = provider.apiKeyDraft.trim();
@@ -506,6 +510,46 @@ function ProviderEditor({
     } finally {
       setTesting(false);
     }
+  }
+
+  async function discoverModels() {
+    const apiKey = provider.apiKeyDraft.trim();
+    const useSavedProvider = editState === "live" && Boolean(provider.apiKeyMasked);
+    if (!useSavedProvider && !apiKey) {
+      setModelDiscoveryMsg(t("discoverModelsEnterKey"));
+      return;
+    }
+    setDiscoveringModels(true);
+    setModelDiscoveryMsg(null);
+    try {
+      const res = await fetch("/api/admin/runtime-config/discover-models", {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify(
+          useSavedProvider
+            ? { providerId: provider.id }
+            : { provider: providerToPayload({ ...provider, apiKeyDraft: apiKey }) },
+        ),
+      });
+      const data = (await res.json()) as { ok?: boolean; models?: string[]; message?: string };
+      if (data.ok && Array.isArray(data.models)) {
+        setDiscoveredModels(data.models);
+        setModelDiscoveryMsg(t("discoverModelsOk", { count: data.models.length }));
+      } else {
+        const key = data.message ? (`discoverModelsErr_${data.message}` as Parameters<typeof t>[0]) : null;
+        setModelDiscoveryMsg(key && t.has(key) ? t(key) : t("discoverModelsFail"));
+      }
+    } catch {
+      setModelDiscoveryMsg(t("discoverModelsFail"));
+    } finally {
+      setDiscoveringModels(false);
+    }
+  }
+
+  function setDiscoveredModelSelected(model: string, selected: boolean) {
+    const models = parseModelsText(provider.modelsText);
+    const next = selected ? [...models, model] : models.filter((item) => item !== model);
+    onUpdate({ modelsText: Array.from(new Set(next)).join(", ") });
   }
 
   return (
@@ -622,7 +666,7 @@ function ProviderEditor({
               {t("sectionModelCatalog")}
             </p>
             <p className="mt-1 text-xs text-[var(--gc-muted)]">{t("sectionModelCatalogHint")}</p>
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
               <FieldRow label={t("fieldModelList")} hint={t("fieldModelListHint")}>
                 <textarea
                   className={`${inputCls} min-h-[72px] font-mono text-[13px]`}
@@ -631,6 +675,38 @@ function ProviderEditor({
                   placeholder="gpt-4o, deepseek-chat"
                 />
               </FieldRow>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={discoveringModels || provider.protocol !== "openai_compatible"}
+                  onClick={() => void discoverModels()}
+                  data-testid={`admin-runtime-provider-${provider.id}-discover-models`}
+                  className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs font-medium text-[var(--gc-text)] hover:border-[color:var(--gc-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {discoveringModels ? t("discoverModelsBusy") : t("discoverModels")}
+                </button>
+                <span className="text-xs text-[var(--gc-muted)]">
+                  {provider.protocol === "openai_compatible" ? t("discoverModelsHint") : t("discoverModelsProtocolHint")}
+                </span>
+              </div>
+              {modelDiscoveryMsg ? <p className="text-xs text-[var(--gc-muted)]">{modelDiscoveryMsg}</p> : null}
+              {discoveredModels.length > 0 ? (
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-[color:var(--gc-border)] bg-black/10 p-2">
+                  <p className="px-1 pb-2 text-xs text-[var(--gc-muted)]">{t("discoverModelsSelectHint")}</p>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    {discoveredModels.map((model) => (
+                      <label key={model} className="flex min-w-0 items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-white/5">
+                        <input
+                          type="checkbox"
+                          checked={configuredModels.has(model)}
+                          onChange={(event) => setDiscoveredModelSelected(model, event.target.checked)}
+                        />
+                        <span className="truncate font-mono text-[var(--gc-text)]" title={model}>{model}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">

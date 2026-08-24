@@ -709,3 +709,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 缺陷根因：Runtime Config 的公开读取正确地只返回 API Key 脱敏值，但前端“测试连接”错误地只使用输入框草稿；已保存、未重新输入的服务商因此被当成没有密钥。
 - 现已区分两种安全路径：未修改的已保存服务商仅提交 `providerId`，服务端在 super-admin 鉴权后从加密运行时配置读取同 ID 的完整 provider 再探测；新建或修改中的服务商仍必须携带刚输入的草稿 Key，避免把已保存密钥用于未保存的新 Base URL。API Key 从不回传到浏览器、请求体或审计日志。
 - 新增 `qa:runtime-provider-saved-test`，固定使用隔离 SQLite 库，验证服务端解析、未知 ID 拒绝和公开视图脱敏；不再用会写入 `dev.db` 的运行时配置 QA 验证该问题。定向 ESLint、TypeScript 和该专项 QA 均通过。
+
+## P36 第一段：服务商模型目录自动发现（2026-08-24）
+
+- OpenAI 兼容服务商现在可在已填写/保存 Base URL 与 API Key 后点击「拉取模型列表」。对未修改的已保存配置，浏览器只提交 `providerId`，服务端使用加密保存的 Key 调用 `${Base URL}/models`；新建或改动中的服务商仍只能用管理员刚填写的草稿 Key，避免已保存密钥流向未保存的新地址。
+- 返回结果仅保留去重、排序后的 model ID，不保存上游响应正文；管理员在可滚动的多选列表勾选模型，勾选结果同步到「模型目录」草稿，仍须点击「保存并立即生效」才落库。Gemini/Anthropic 的原生目录协议尚未接入，界面明确说明当前范围，不伪装为已支持。
+- 新增 `qa:runtime-provider-model-discovery`：模拟 `/models` 响应，验证 endpoint 归一化、鉴权转发、去重排序和不支持协议的显式错误；五语文案、定向 ESLint 与 TypeScript 待本批构建前复验。
