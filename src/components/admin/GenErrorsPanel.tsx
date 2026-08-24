@@ -22,7 +22,9 @@ type Filter = {
 type GenerationJob = {
   id: string; type: string; status: string; attempts: number; maxAttempts: number; lastErrorCode: string | null;
   lastErrorDetail: string | null; progress: { percent?: number; stage?: string; detail?: string } | null;
-  createdAt: string; updatedAt: string; runAfter: string; creativeRevisionId: string | null; costStatus: "not_recorded";
+  createdAt: string; updatedAt: string; runAfter: string; creativeRevisionId: string | null;
+  route: { scene: string | null; provider: string; model: string } | null;
+  cost: { estimatedMicros: number | null; status: "configured_estimate" | "not_configured" };
   project: { kind: string; title: string };
 };
 
@@ -157,8 +159,8 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
           </div>
           {jobs.length ? (
             <div className="mt-3 overflow-auto">
-              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态 / 进度</th><th>重试</th><th>最近错误</th><th>成本</th><th>更新时间</th><th>处置</th></tr></thead>
-                <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}{job.progress?.stage ? ` · ${job.progress.stage}` : ""}{typeof job.progress?.percent === "number" ? ` (${job.progress.percent}%)` : ""}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="max-w-[12rem] truncate py-2 pr-3" title={job.lastErrorDetail ?? ""}>{job.lastErrorCode ?? "—"}</td><td className="py-2 pr-3 text-slate-400">未归因</td><td className="py-2 pr-3">{new Date(job.updatedAt).toLocaleString()}</td><td className="py-2 whitespace-nowrap"><button type="button" onClick={() => setSelectedJob(job)} className="mr-2 text-indigo-700 hover:underline">详情</button>{job.status === "failed" ? <button type="button" disabled={retryingJobId === job.id} onClick={() => void retryFailedJob(job)} className="text-amber-700 hover:underline disabled:opacity-50">{retryingJobId === job.id ? "重试中…" : "确认后重试"}</button> : null}</td></tr>)}</tbody>
+              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态 / 进度</th><th>当前路由</th><th>重试</th><th>最近错误</th><th>成本估算</th><th>更新时间</th><th>处置</th></tr></thead>
+                <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}{job.progress?.stage ? ` · ${job.progress.stage}` : ""}{typeof job.progress?.percent === "number" ? ` (${job.progress.percent}%)` : ""}</td><td className="max-w-[13rem] truncate py-2 pr-3 font-mono" title={job.route ? `${job.route.provider} · ${job.route.model}` : ""}>{job.route ? `${job.route.provider} · ${job.route.model}` : "—"}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="max-w-[12rem] truncate py-2 pr-3" title={job.lastErrorDetail ?? ""}>{job.lastErrorCode ?? "—"}</td><td className="py-2 pr-3 text-slate-400">{job.cost.estimatedMicros == null ? "未配置" : `约 ${job.cost.estimatedMicros} μ`}</td><td className="py-2 pr-3">{new Date(job.updatedAt).toLocaleString()}</td><td className="py-2 whitespace-nowrap"><button type="button" onClick={() => setSelectedJob(job)} className="mr-2 text-indigo-700 hover:underline">详情</button>{job.status === "failed" ? <button type="button" disabled={retryingJobId === job.id} onClick={() => void retryFailedJob(job)} className="text-amber-700 hover:underline disabled:opacity-50">{retryingJobId === job.id ? "重试中…" : "确认后重试"}</button> : null}</td></tr>)}</tbody>
               </table>
             </div>
           ) : <p className="mt-3 text-sm text-slate-500">当前没有待处理生成任务。</p>}
