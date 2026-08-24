@@ -5,7 +5,9 @@ import { PRODUCT } from "@/lib/product-config";
 
 function normalizeBaseURL(url: string): string {
   const u = url.trim().replace(/\/+$/, "");
-  if (/^https?:\/\//i.test(u) && !/\/v1$/i.test(u)) {
+  // Ark's OpenAI-compatible endpoint is already rooted at /api/v3. Appending
+  // /v1 turns it into the non-existent /api/v3/v1 path (404).
+  if (/^https?:\/\//i.test(u) && !/(?:\/v1|\/api\/v3)$/i.test(u)) {
     return `${u}/v1`;
   }
   return u;

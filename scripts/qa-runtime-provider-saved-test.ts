@@ -17,6 +17,7 @@ async function main() {
 
   const { getRuntimeConfigPublicView, getSavedRuntimeProvider, invalidateRuntimeConfigCache, saveRuntimeConfig } =
     await import("@/lib/runtime-config");
+  const { normalizeOpenAIBaseURL } = await import("@/lib/openai-client");
   const { prisma } = await import("@/lib/prisma");
 
   const providerId = "qa-saved-provider";
@@ -50,6 +51,8 @@ async function main() {
       name: "public view masks saved API key",
       ok: publicProvider?.apiKey !== apiKey && Boolean(publicProvider?.apiKey) && publicProvider?.apiKeySource === "db",
     },
+    { name: "Ark /api/v3 stays unmodified", ok: normalizeOpenAIBaseURL("https://ark.cn-beijing.volces.com/api/v3") === "https://ark.cn-beijing.volces.com/api/v3" },
+    { name: "ordinary OpenAI base still receives /v1", ok: normalizeOpenAIBaseURL("https://provider.example.test") === "https://provider.example.test/v1" },
   ];
   for (const check of checks) console.log(`${check.ok ? "✓" : "✗"} ${check.name}`);
   await prisma.$disconnect();
