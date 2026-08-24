@@ -8,6 +8,7 @@ import {
   countPanelsWithImages,
   parseComicDocument,
   renderComicPanels,
+  resolveComicRenderStatus,
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
@@ -193,7 +194,7 @@ export async function POST(req: Request, ctx: RouteContext) {
                   where: { id },
                   data: {
                     imageUrls: ev.imageUrls,
-                    status: ev.withImage > 0 ? "ready" : row.status,
+                    status: resolveComicRenderStatus({ withImage: ev.withImage, total: ev.total }),
                   },
                 })
                 .catch(() => {});
@@ -208,7 +209,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           where: { id },
           data: {
             imageUrls,
-            status: after.withImage > 0 ? "ready" : row.status,
+            status: resolveComicRenderStatus(after),
           },
         });
 

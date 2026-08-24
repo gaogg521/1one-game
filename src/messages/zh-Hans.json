@@ -43,7 +43,7 @@
     "createNow": "立即开始创作"
   },
   "footer": {
-    "description": "{appName} — AI 与规格驱动的浏览器小游戏管线；适合创意验证、教学演示与快速迭代。",
+    "description": "{appName} — AI 创作平台，支持游戏、小说与漫画的生成、打磨和发布。",
     "create": "创作",
     "studio": "工作室",
     "techStack": "Next.js · Phaser · Prisma"

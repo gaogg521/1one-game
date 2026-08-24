@@ -43,7 +43,7 @@
     "createNow": "Mula Mencipta Sekarang"
   },
   "footer": {
-    "description": "{appName} - aliran kerja permainan pelayar berasaskan AI dan spesifikasi; sesuai untuk pengesahan idea, demo pengajaran, dan iterasi pantas.",
+    "description": "{appName} - platform penciptaan AI untuk menjana, memperhalusi dan menerbitkan permainan, novel dan komik.",
     "create": "Cipta",
     "studio": "Ruang Kerja",
     "techStack": "Next.js · Phaser · Prisma"

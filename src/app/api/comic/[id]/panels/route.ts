@@ -8,6 +8,7 @@ import {
   countPanelsWithImages,
   parseComicDocument,
   renderComicPanels,
+  resolveComicRenderStatus,
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
 import { getImageGenAvailability } from "@/lib/image-generation";
@@ -187,7 +188,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       where: { id },
       data: {
         imageUrls,
-        status: after.withImage > 0 ? "ready" : row.status,
+        status: resolveComicRenderStatus(after),
       },
     });
 

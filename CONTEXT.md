@@ -768,3 +768,33 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 1. 继续 P0：将生成运营队列做成按游戏/小说/漫画的可筛选处置中心，并把失败重试、实际模型账本和耗时放在同一任务视图。
 2. 为运营工作台补“异常优先”卡片与按媒介的质量/消费阈值，保持每个异常都能直达处置页。
+
+## P42：最小运营角色可用性（2026-08-24）
+
+- 将角色能力映射抽为不含服务端依赖的 `admin-capabilities` 模块，供 API 鉴权与客户端导航共同使用，避免前端复制一套不一致的权限表。
+- `content_operator`、`growth_operator`、`finance_viewer`、`platform_operator` 现可通过现有 2FA 机制进入控制台，但只看到相应的内容、增长、计费或生成运营入口；`admin` 可见常规管理页，密钥、网关、邮件和缓存仍只对 `super_admin` 显示。
+- 直达 URL 会按同一规则校验，越权 tab 自动回到账户页；后端 API 继续以 capability/super-admin 为最终授权，不依赖前端隐藏。
+- 验证：`npx tsc --noEmit`、定向 ESLint 和 `qa:admin-console`（37 项，含内容/财务/平台角色范围）通过。
+
+### 下一步
+
+1. 提交、发布 P42；随后为每个最小角色做真实会话级 UI 验收（非 DEV_SUPER_ADMIN 旁路）。
+2. 继续 P1：运营工作台按游戏/小说/漫画输出质量、消费与生成阈值的异常优先卡片。
+
+## P43：异常优先运营工作台（2026-08-24）
+
+- `/console?tab=overview` 新增「今日优先处理」：待审积压、24 小时生成错误、模型成本账本覆盖率、游戏首分钟留存和小说/漫画消费健康会在满足明确阈值时生成可点击处置卡；没有异常时明确显示健康状态。所有卡片都复用既有受授权页面，不输出作品正文、提示词或密钥。
+- P41 的图像真实主备级联、P42 的角色范围以及本项工作台均已精确提交、推送并发布。最新生产提交为 `0377368c`；完整 Next 构建、`operone`、`operone-generation-worker.timer`、样例/封面资源同步和 TLS/SNI `/api/health` 都已核验通过。
+- 已知构建警告仍为既有 Turbopack 动态文件追踪问题（OpenGame workDir 与 cache-management 导入链），不影响构建结果但应作为独立性能治理任务处理。
+
+### 下一步
+
+1. 为非 super-admin 的四个运营角色建立真实账号会话级浏览器验收，确认不依赖 DEV_SUPER_ADMIN 旁路。
+2. 继续将高风险操作（作品批量审核、配额与任务重试）统一为预览 → 确认 → 审计 → 可回退的处置协议。
+
+## P44：三媒介发布质量门禁（2026-08-24）
+
+- 漫画的所有生成入口（首生成、普通/流式补图与 durable worker）统一按总分镜数落状态：只有每一格已落图才为 `ready`；任何部分成功都保留为 `pending_images`，因而无法进入发布转换。
+- 发布质量从“分数提示”升级为硬校验：漫画必须全图完成；导演分镜中的未知人物、场景、顺序倒退或缺绑定会阻止发布；关联小说时每格还必须绑定存在的正文段落并按段落顺序前进；使用角色的导演漫画须有对应 Character Sheet 视觉锚点。
+- 游戏发布必须引用当前不可变版本的 durable `asset_manifest`，且清单内有背景、主角和敌对角色的已生成资源及运行时槽位；浏览器会话中的临时 manifest 或纯几何回退不能再冒充完成品。五语页脚同时改为平台级游戏/小说/漫画定位，避免漫画页仍称自己是小游戏管线。
+- 验证：`qa:creator-quality`、`qa:creator-publication`、`qa:comic-storyboard-resilience`、`qa:comic-director-pipeline`、`qa:comic-novel-product-rules` 与 `npx tsc --noEmit` 通过。待执行完整 production build、精确提交、发布和 TLS/SNI 公网验收。

@@ -1,6 +1,7 @@
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { parseComicImageUrls, type ComicDocument } from "@/lib/comic-format";
 import { parseComicDirectorPack } from "@/lib/comic-director-types";
+import { splitNovelIntoSegments } from "@/lib/comic-storyboard-segments";
 import {
   buildCreatorQualityReport,
   type CreatorQualityEngagement,
@@ -8,6 +9,7 @@ import {
   type CreatorQualityUnit,
 } from "@/lib/creator-workflow";
 import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
+import type { GameAssetReadiness } from "@/lib/game-asset-readiness";
 import type { GameSpec } from "@/lib/game-spec";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
 import { parseNovelChapters } from "@/lib/novel-chapters";
@@ -51,20 +53,23 @@ export function withCreatorEngagementQuality(
 export function assessGameCreatorQuality(
   spec: GameSpec,
   brief?: CreativeBrief | null,
+  assetReadiness?: GameAssetReadiness | null,
 ): CreatorQualityAssessment {
   const scorecard = evaluateGameVerticalSlice(spec, brief ?? undefined);
+  const report = buildCreatorQualityReport({
+    kind: "game",
+    score: scorecard.score,
+    evidence: [
+      `template:${scorecard.templateId}`,
+      `first_minute_beats:${scorecard.contract.firstMinute.length}`,
+      `art_direction:${scorecard.artDirection.visual.assetStyle}`,
+      ...scorecard.reasons,
+      ...(assetReadiness?.evidence ?? []),
+    ],
+  });
   return {
     scorecard,
-    report: buildCreatorQualityReport({
-      kind: "game",
-      score: scorecard.score,
-      evidence: [
-        `template:${scorecard.templateId}`,
-        `first_minute_beats:${scorecard.contract.firstMinute.length}`,
-        `art_direction:${scorecard.artDirection.visual.assetStyle}`,
-        ...scorecard.reasons,
-      ],
-    }),
+    report: assetReadiness && !assetReadiness.ok ? { ...report, verdict: "blocked" } : report,
   };
 }
 
@@ -242,7 +247,55 @@ function assessComicStoryboardIntegrity(doc: ComicDocument): ComicStoryboardInte
   };
 }
 
-function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
+function assessComicPublicationReadiness(doc: ComicDocument, sourceContent?: string | null): string[] {
+  const panels = doc.pages.flatMap((page) => page.panels);
+  const issues: string[] = [];
+  const rendered = panels.filter((panel) => Boolean(panel.imageUrl?.trim())).length;
+  if (panels.length === 0) issues.push("publication_panels_missing");
+  else if (rendered !== panels.length) issues.push(`publication_images_incomplete:${rendered}/${panels.length}`);
+
+  const director = parseComicDirectorPack(doc.director);
+  if (director) {
+    const rosterById = new Map((doc.characterRoster?.characters ?? []).map((character) => [character.id, character]));
+    const referencedIds = new Set(panels.flatMap((panel) => panel.characterIds ?? []));
+    if (referencedIds.size > 0) {
+      if (rosterById.size === 0) {
+        issues.push("publication_character_roster_missing");
+      } else {
+        const missingSheets = [...referencedIds].filter((id) => !rosterById.get(id)?.referenceImageUrl?.trim());
+        if (missingSheets.length) issues.push(`publication_character_sheets_missing:${missingSheets.length}`);
+      }
+    }
+  }
+
+  if (sourceContent?.trim()) {
+    const segments = splitNovelIntoSegments(sourceContent);
+    let previousIndex = -1;
+    let missingBindings = 0;
+    let invalidBindings = 0;
+    let regressions = 0;
+    for (const panel of panels) {
+      const index = panel.sourceSegmentIndex;
+      if (!Number.isInteger(index)) {
+        missingBindings += 1;
+        continue;
+      }
+      if (index! < 0 || index! >= segments.length) {
+        invalidBindings += 1;
+        continue;
+      }
+      if (previousIndex > index!) regressions += 1;
+      previousIndex = index!;
+    }
+    if (segments.length === 0) issues.push("publication_source_segments_missing");
+    if (missingBindings) issues.push(`publication_source_binding_missing:${missingBindings}/${panels.length}`);
+    if (invalidBindings) issues.push(`publication_source_binding_invalid:${invalidBindings}/${panels.length}`);
+    if (regressions) issues.push(`publication_source_order_regressed:${regressions}`);
+  }
+  return issues;
+}
+
+function assessComicDocument(doc: ComicDocument, sourceContent?: string | null): CreatorQualityReport {
   const panels = doc.pages.flatMap((page) => page.panels);
   const renderedPanels = panels.filter((panel) => Boolean(panel.imageUrl?.trim())).length;
   const readablePanels = panels.filter(
@@ -251,6 +304,7 @@ function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
   const director = parseComicDirectorPack(doc.director);
   const anchored = Boolean(director || doc.characterRoster?.characters?.length || doc.characterSheetUrls?.length);
   const integrity = assessComicStoryboardIntegrity(doc);
+  const publicationIssues = assessComicPublicationReadiness(doc, sourceContent);
   const hasPageRhythm = doc.pages.length >= 2 || panels.length >= 4;
   let score = 0;
   if (doc.pages.length > 0) score += 20;
@@ -267,20 +321,21 @@ function assessComicDocument(doc: ComicDocument): CreatorQualityReport {
     `readable_panels:${readablePanels}/${panels.length}`,
     `visual_anchors:${anchored ? "present" : "missing"}`,
     ...integrity.evidence,
+    ...publicationIssues,
   ];
   if (!anchored) evidence.push("character_scene_anchor_needs_review");
   if (renderedPanels < panels.length) evidence.push("panel_rendering_incomplete");
   if (readablePanels < panels.length) evidence.push("panel_text_or_prompt_needs_review");
   const report = buildCreatorQualityReport({ kind: "comic", score, evidence });
-  if (integrity.structured && !integrity.ok && report.verdict !== "blocked") {
-    return { ...report, verdict: "needs_polish" };
+  if ((integrity.structured && !integrity.ok) || publicationIssues.length > 0) {
+    return { ...report, verdict: "blocked" };
   }
   return report;
 }
 
-export function assessComicCreatorQuality(rawDocument: string): CreatorQualityAssessment {
+export function assessComicCreatorQuality(rawDocument: string, opts?: { sourceContent?: string | null }): CreatorQualityAssessment {
   const doc = parseComicImageUrls(rawDocument);
-  const report = assessComicDocument(doc);
+  const report = assessComicDocument(doc, opts?.sourceContent);
   const units: CreatorQualityUnit[] = doc.pages.map((page) => {
     const panels = page.panels;
     const rendered = panels.filter((panel) => Boolean(panel.imageUrl?.trim())).length;

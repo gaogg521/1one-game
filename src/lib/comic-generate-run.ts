@@ -55,7 +55,7 @@ import {
   resolveStoryboardChunkPagesForTier,
 } from "@/lib/comic-locale-prompts";
 import { formatComicStorageTitle } from "@/lib/comic-display";
-import { renderComicPanels, serializeComicPanels } from "@/lib/comic-panel-render";
+import { countPanelsWithImages, renderComicPanels, resolveComicRenderStatus, serializeComicPanels } from "@/lib/comic-panel-render";
 import { generateCharacterSheets } from "@/lib/comic-character-sheet-gen";
 import {
   extractNovelTitleFromContent,
@@ -764,7 +764,7 @@ export async function runComicGeneration(
               where: { id: draftComicId },
               data: {
                 imageUrls: ev.imageUrls,
-                status: ev.withImage > 0 ? "ready" : "draft_storyboard",
+                status: resolveComicRenderStatus({ withImage: ev.withImage, total: panelCount }),
               },
             }).catch(() => {});
           }
@@ -790,7 +790,7 @@ export async function runComicGeneration(
 
   send({ step: "save_start", message: progressComicMessage(uiLocale, "saveStart") });
   const imageUrls = serializeComicPanels(comicDoc);
-  const finalStatus = rendered > 0 ? "ready" : "pending_images";
+  const finalStatus = resolveComicRenderStatus(countPanelsWithImages(comicDoc));
 
   let comicId: string;
   if (draftComicId) {

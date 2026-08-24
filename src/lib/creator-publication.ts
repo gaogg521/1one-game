@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreatorQuality } from "@/lib/creator-quality";
 import { parseGameSpec } from "@/lib/game-spec";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
+import { assessGameAssetReadiness } from "@/lib/game-asset-readiness";
 import { parseNovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 
@@ -50,9 +51,24 @@ export async function setCreatorWorkPublication(input: {
     if (!row) throw new CreatorPublicationError("not_found");
     if (row.ownerKey !== input.ownerKey) throw new CreatorPublicationError("not_owner");
     if (row.status !== "ready") throw new CreatorPublicationError("not_ready");
+    const core = await prisma.creativeProject.findUnique({
+      where: { legacyType_legacyId: { legacyType: "project", legacyId: row.id } },
+      select: { id: true, revisions: { where: { status: "ready" }, orderBy: { sequence: "desc" }, take: 1, select: { id: true } } },
+    });
+    const candidateRevisionId = input.revisionId ?? core?.revisions[0]?.id;
+    const asset = core && candidateRevisionId
+      ? await prisma.creativeArtifact.findFirst({
+          where: { creativeProjectId: core.id, creativeRevisionId: candidateRevisionId, kind: "asset_manifest", status: "ready" },
+          orderBy: { createdAt: "desc" },
+          select: { contentJson: true },
+        })
+      : null;
+    let assetContent: unknown = null;
+    try { assetContent = asset?.contentJson ? JSON.parse(asset.contentJson) : null; } catch { /* corrupted artifact fails closed */ }
     const quality = assessGameCreatorQuality(
       parseGameSpec(JSON.parse(row.specJson)),
       parseStoredCreativeBrief(row.creativeBriefJson),
+      assessGameAssetReadiness(assetContent),
     ).report;
     return persistPublication({
       input,
@@ -89,11 +105,11 @@ export async function setCreatorWorkPublication(input: {
     });
   }
 
-  const row = await prisma.comic.findUnique({ where: { id: input.id }, include: { novel: { select: { title: true } } } });
+  const row = await prisma.comic.findUnique({ where: { id: input.id }, include: { novel: { select: { title: true, content: true } } } });
   if (!row) throw new CreatorPublicationError("not_found");
   if (row.ownerKey !== input.ownerKey) throw new CreatorPublicationError("not_owner");
   if (row.status !== "ready") throw new CreatorPublicationError("not_ready");
-  const quality = assessComicCreatorQuality(row.imageUrls).report;
+  const quality = assessComicCreatorQuality(row.imageUrls, { sourceContent: row.novel?.content }).report;
   return persistPublication({
     input,
     quality,

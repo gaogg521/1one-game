@@ -43,7 +43,7 @@
     "createNow": "立即開始創作"
   },
   "footer": {
-    "description": "{appName} — AI 與規格驅動的瀏覽器小遊戲管線；適合創意驗證、教學展示與快速迭代。",
+    "description": "{appName} — AI 創作平台，支援遊戲、小說與漫畫的生成、打磨和發布。",
     "create": "創作",
     "studio": "工作室",
     "techStack": "Next.js · Phaser · Prisma"

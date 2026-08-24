@@ -596,6 +596,15 @@ export function countPanelsWithImages(doc: ComicDocument): { withImage: number; 
   return { withImage, total };
 }
 
+/**
+ * A comic is only reader-ready when every planned panel has a durable image.
+ * Keeping partially rendered work in `pending_images` lets the creator resume
+ * safely without accidentally publishing an unfinished story.
+ */
+export function resolveComicRenderStatus(stats: { withImage: number; total: number }): "ready" | "pending_images" {
+  return stats.total > 0 && stats.withImage === stats.total ? "ready" : "pending_images";
+}
+
 export function parseComicDocument(imageUrlsRaw: string): ComicDocument {
   return parseComicImageUrls(imageUrlsRaw);
 }

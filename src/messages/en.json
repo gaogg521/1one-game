@@ -43,7 +43,7 @@
     "createNow": "Start Creating Now"
   },
   "footer": {
-    "description": "{appName} - an AI and spec-driven browser game pipeline for idea validation, teaching demos, and fast iteration.",
+    "description": "{appName} - an AI creation platform for generating, refining, and publishing games, novels, and comics.",
     "create": "Create",
     "studio": "Workspace",
     "techStack": "Next.js · Phaser · Prisma"

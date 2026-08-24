@@ -1,4 +1,6 @@
-import { assessComicCreatorQuality, assessNovelCreatorQuality, withCreatorEngagementQuality } from "../src/lib/creator-quality";
+import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreatorQuality, withCreatorEngagementQuality } from "../src/lib/creator-quality";
+import { assessGameAssetReadiness } from "../src/lib/game-asset-readiness";
+import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -56,6 +58,14 @@ const comic = assessComicCreatorQuality(JSON.stringify({
     ],
   },
   pipeline: "long_director",
+  characterRoster: {
+    version: 1,
+    locked: true,
+    characters: [
+      { id: "hero", name: "Hero", appearanceZh: "蓝色风衣侦探", outfitZh: "蓝色风衣", referenceImageUrl: "/sheets/hero.png" },
+      { id: "friend", name: "Friend", appearanceZh: "红围巾同伴", outfitZh: "红围巾", referenceImageUrl: "/sheets/friend.png" },
+    ],
+  },
   pages: [
     { page: 1, panels: [
       { scene: 1, caption: "主角发现线索", prompt: "hero finds clue", imageUrl: "/one.png", characterIds: ["hero"], locationId: "old-town", shotType: "wide" },
@@ -93,13 +103,54 @@ const inconsistentComic = assessComicCreatorQuality(JSON.stringify({
     { scene: 4, caption: "继续", prompt: "continue", imageUrl: "/four.png", characterIds: ["friend"], locationId: "old-town", shotType: "close" },
   ] }],
 }));
-assert(inconsistentComic.report.verdict === "needs_polish", "invalid director bindings must not be quality-ready");
+assert(inconsistentComic.report.verdict === "blocked", "invalid director bindings must not be publishable");
 assert(inconsistentComic.report.evidence.some((item) => item.startsWith("storyboard_unknown_characters:")), "quality must explain unknown character bindings");
 assert(inconsistentComic.report.evidence.some((item) => item.startsWith("storyboard_scene_order_regressed:")), "quality must explain scene order regressions");
 
 const incompleteComic = assessComicCreatorQuality(JSON.stringify({ formatVersion: 2, pageCount: 1, pages: [{ page: 1, panels: [] }] }));
 assert(incompleteComic.report.verdict === "blocked", "empty storyboard should require quality review");
 assert(incompleteComic.report.units?.[0]?.verdict === "blocked", "empty page should require page repair");
+
+const partialComic = assessComicCreatorQuality(JSON.stringify({
+  formatVersion: 2,
+  pageCount: 1,
+  pages: [{ page: 1, panels: [
+    { caption: "第一格", prompt: "first panel", imageUrl: "/one.png" },
+    { caption: "第二格", prompt: "second panel" },
+    { caption: "第三格", prompt: "third panel" },
+    { caption: "第四格", prompt: "fourth panel" },
+  ] }],
+}));
+assert(partialComic.report.verdict === "blocked", "partially rendered comic must not be publishable");
+assert(partialComic.report.evidence.includes("publication_images_incomplete:1/4"), "partial comic must explain its missing images");
+
+const sourceBoundComic = assessComicCreatorQuality(JSON.stringify({
+  formatVersion: 2,
+  pageCount: 1,
+  pages: [{ page: 1, panels: [
+    { caption: "起", prompt: "opening", imageUrl: "/one.png", sourceSegmentIndex: 1 },
+    { caption: "承", prompt: "middle", imageUrl: "/two.png", sourceSegmentIndex: 0 },
+    { caption: "转", prompt: "turn", imageUrl: "/three.png" },
+    { caption: "合", prompt: "ending", imageUrl: "/four.png", sourceSegmentIndex: 99 },
+  ] }],
+}), { sourceContent: "第一段正文必须足够详细，包含人物在雨夜街头发现线索、决定追查真相以及走向旧钟楼的过程。\n\n第二段正文同样足够详细，包含同伴赶来支援、危机突然升级并一起找到解决办法的完整情节。" });
+assert(sourceBoundComic.report.verdict === "blocked", "comic with broken novel bindings must not be publishable");
+assert(sourceBoundComic.report.evidence.some((item) => item.startsWith("publication_source_order_regressed:")), "source binding must preserve plot order");
+assert(sourceBoundComic.report.evidence.some((item) => item.startsWith("publication_source_binding_missing:")), "every panel needs a source binding");
+
+const gameSpec = prepareGameSpecForPersist(undefined, "霓虹飞船穿过机械舰队");
+const missingAssets = assessGameCreatorQuality(gameSpec, null, assessGameAssetReadiness(null));
+assert(missingAssets.report.verdict === "blocked", "game without durable visual assets must not publish");
+const readyAssets = assessGameCreatorQuality(gameSpec, null, assessGameAssetReadiness({
+  backgroundUrl: "/game-bg/qa.png",
+  sprites: [{ kind: "player", url: "/game-sprites/qa/player.png" }, { kind: "hazard", url: "/game-sprites/qa/hazard.png" }],
+  manifest: { slots: [
+    { slot: "background", url: "/game-bg/qa.png" },
+    { slot: "player", url: "/game-sprites/qa/player.png" },
+    { slot: "enemy", url: "/game-sprites/qa/hazard.png" },
+  ] },
+}));
+assert(readyAssets.report.verdict !== "blocked", "game with durable core assets should retain design quality verdict");
 
 const withEngagement = withCreatorEngagementQuality(comic.report, {
   sampleSize: 10,

@@ -1,7 +1,7 @@
 import { prisma } from "../src/lib/prisma";
 import { CreatorPublicationError, setCreatorWorkPublication } from "../src/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
-import { getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
+import { createCreativeArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { defaultWorkVisibility } from "../src/lib/auth/work-visibility";
 import { canReadWorkPublicly } from "../src/lib/literary-safety";
@@ -30,8 +30,32 @@ async function main() {
     data: { ownerKey, title: "空白分镜", prompt: "测试", imageUrls: JSON.stringify({ pages: [{ page: 1, panels: [] }] }), status: "ready", visibility: "hidden" },
   });
   let coreId: string | null = null;
+  async function addReadyAssets(creativeProjectId: string, creativeRevisionId: string) {
+    await createCreativeArtifact({
+      creativeProjectId,
+      creativeRevisionId,
+      artifact: {
+        kind: "asset_manifest",
+        mediaType: "json",
+        content: {
+          backgroundUrl: `/game-bg/${game.id}.png`,
+          sprites: [
+            { kind: "player", url: `/game-sprites/${game.id}/player.png` },
+            { kind: "hazard", url: `/game-sprites/${game.id}/hazard.png` },
+          ],
+          manifest: { slots: [
+            { slot: "background", url: `/game-bg/${game.id}.png` },
+            { slot: "player", url: `/game-sprites/${game.id}/player.png` },
+            { slot: "enemy", url: `/game-sprites/${game.id}/hazard.png` },
+          ] },
+        },
+      },
+    });
+  }
   try {
-    coreId = (await mirrorGameToCreatorCore({ project: game })).creativeProjectId;
+    const mirrored = await mirrorGameToCreatorCore({ project: game });
+    coreId = mirrored.creativeProjectId;
+    await addReadyAssets(mirrored.creativeProjectId, mirrored.creativeRevisionId);
     const published = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish" });
     assert(published.visibility === "public" && published.quality.verdict !== "blocked", "ready game should publish");
     const persisted = await prisma.project.findUniqueOrThrow({ where: { id: game.id } });
@@ -53,6 +77,7 @@ async function main() {
     assert(acceptedDisplay?.coverPath === game.coverPath, "publish must capture the reader-facing cover with the accepted revision");
 
     const newerRevision = await mirrorGameToCreatorCore({ project: game, cause: "refine" });
+    await addReadyAssets(newerRevision.creativeProjectId, newerRevision.creativeRevisionId);
     assert(newerRevision.creativeRevisionId !== core.acceptedRevisionId, "a refinement must create a separate immutable revision");
     const coreAfterRefine = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
     assert(

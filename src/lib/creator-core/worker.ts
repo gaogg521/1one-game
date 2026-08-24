@@ -20,6 +20,7 @@ import {
   countPanelsWithImages,
   parseComicDocument,
   renderComicPanels,
+  resolveComicRenderStatus,
   serializeComicPanels,
 } from "@/lib/comic-panel-render";
 import { resolveComicStoryContext } from "@/lib/comic-story-genre";
@@ -136,7 +137,7 @@ async function executeComicPanelJob(job: { id: string; payloadJson: string }, wo
         const percent = event.total > 0 ? 5 + (event.withImage / event.total) * 90 : 95;
         void prisma.comic.update({
           where: { id: comic.id },
-          data: { imageUrls: event.imageUrls, status: event.withImage > 0 ? "ready" : comic.status },
+          data: { imageUrls: event.imageUrls, status: resolveComicRenderStatus({ withImage: event.withImage, total: event.total }) },
         });
         void heartbeatGenerationJob(job.id, workerId, { percent, stage: "rendering", detail: `${event.withImage}/${event.total}` });
       },
@@ -145,7 +146,7 @@ async function executeComicPanelJob(job: { id: string; payloadJson: string }, wo
     const stats = countPanelsWithImages(result.doc);
     const updated = await prisma.comic.update({
       where: { id: comic.id },
-      data: { imageUrls, status: stats.withImage > 0 ? "ready" : comic.status },
+      data: { imageUrls, status: resolveComicRenderStatus(stats) },
     });
     await mirrorComicToCreatorCore({ comic: updated, cause: "refine" });
   } finally {
