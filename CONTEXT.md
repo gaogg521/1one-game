@@ -645,3 +645,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 生产环境只读、脱敏检查确认模型网关密钥与地址已配置；尚未发出真实模型请求，因此没有把“存在配置”伪称为真实生成成功。继续进行小说 durable worker 的真实演练前，需要业务确认可使用的小额额度上限。
 - `REFERENCE_ASSET_STORAGE`、云上传 HTTPS endpoint/认证，以及微信支付 webhook secret/API key 均未配置。现有实现保持安全语义：参考图为 session-only，支付 checkout fail-closed，绝不创建假支付成功或伪持久化素材。
 - `qa:generation-rehearsal-readiness`、`qa:reference-image-cloud-storage`、`qa:payment-safety` 均通过；下一步外部前置物分别为：模型额度确认、对象存储上传端点与凭据、商户号/签约产品/证书或平台公钥/回调域名/退款对账规则。
+
+## P28 第一段：腾讯 COS 参考素材直连（2026-08-24）
+
+- 参考图存储新增 `REFERENCE_ASSET_STORAGE=cos` 适配器：服务端使用腾讯 COS 的 S3 兼容 API 上传到 `1onework-1251001122/operone/references`，仅在上传成功时返回 `persistent` 和 HTTPS URL；任一配置缺失、上传失败或对象不可公开读取时都保持 session-only，不会伪称素材已跨任务保存。
+- `scripts/configure-cos-reference-storage.py` 实现 Token + SignKey 的 HMAC-SHA256/HMAC-SHA1/MD5 两段式凭据领取。Token/SignKey 只经 SSH stdin 做一次领取，不写服务器、命令行或日志；生产 `.env` 只保存返回的短期 SecretId/SecretKey。脚本先上传、匿名读取、删除一个随机 probe，确认公开访问后才原子更新 `.env` 并重启服务；剩余有效期低于 15 分钟会 stderr 警告。
+- 只读 COS endpoint 探测显示该桶在 `ap-shanghai`。本机和生产机都在 credential allocation 的网络连接阶段超时，故本轮没有获得或写入短期凭据、没有修改生产运行配置、没有生成残留对象，也不能把 COS 持久化或真实素材摄取宣称为完成。离线 `qa:reference-image-cloud-storage`、新增 `qa:reference-image-cos-storage`、定向 ESLint、TypeScript 和五语 JSON 均通过；allocation 服务恢复连通后执行 `python scripts/configure-cos-reference-storage.py --cos-file cos.txt`，再做生产 API 摄取验证。

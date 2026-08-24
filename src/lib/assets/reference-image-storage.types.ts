@@ -2,7 +2,7 @@
  * 参考图 / 素材存储：默认仅会话（不在服务端落盘），并预留持久化（云对象存储等）扩展点。
  */
 
-export type ReferenceImageStorageMode = "session" | "cloud";
+export type ReferenceImageStorageMode = "session" | "cloud" | "cos";
 
 /** 单次摄取后返回给前端的句柄，用于与「图N」、后续生成或引擎贴图管线对齐 */
 export type ReferenceImageHandle = {

@@ -3280,6 +3280,7 @@
     "unsupportedFormat": "{name}: unsupported format (use pdf / docx / txt / md / image / zip)",
     "parseFailed": "{name}: parse failed ({reason})",
     "cloudUploadUrlMissing": "REFERENCE_ASSET_STORAGE=cloud but REFERENCE_ASSET_CLOUD_UPLOAD_URL is not set — references stay session-only.",
+    "cosUploadConfigMissing": "REFERENCE_ASSET_STORAGE=cos but its COS configuration is incomplete — references stay session-only.",
     "cloudUploadIncomplete": "REFERENCE_ASSET_CLOUD_UPLOAD_URL is set but server upload is not implemented — still session-only.",
     "cloudUploadFailed": "Cloud reference upload is unavailable, so this image remains session-only. Retry later before using it across jobs.",
     "cloudUploadInvalidResponse": "Cloud reference upload returned no safe HTTPS asset URL, so this image remains session-only.",

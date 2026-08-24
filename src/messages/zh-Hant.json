@@ -3280,6 +3280,7 @@
     "unsupportedFormat": "{name}：不支持的格式（請用 pdf / docx / txt / md / 圖片 / zip）",
     "parseFailed": "{name}：解析失敗（{reason}）",
     "cloudUploadUrlMissing": "REFERENCE_ASSET_STORAGE=cloud 但未配置 REFERENCE_ASSET_CLOUD_UPLOAD_URL，參考图未上传云端（等同僅会话）。",
+    "cosUploadConfigMissing": "REFERENCE_ASSET_STORAGE=cos 但 COS 直連設定不完整，參考圖未上傳雲端（等同僅會話）。",
     "cloudUploadIncomplete": "REFERENCE_ASSET_CLOUD_UPLOAD_URL 已配置但伺服器端上传逻辑尚未完成，对象未寫入；仍为僅会话语义。",
     "cloudUploadFailed": "雲端參考圖上傳暫時不可用，本圖仍僅在目前工作階段有效；如需跨任務使用請稍後重試。",
     "cloudUploadInvalidResponse": "雲端參考圖上傳未回傳安全的 HTTPS 資源位址，本圖仍僅在目前工作階段有效。",

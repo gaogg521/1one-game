@@ -259,7 +259,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       warn("cloudUploadUrlMissing");
     }
 
-    if (referenceAssets.some((h) => h.notice === "cloud_upload_failed")) warn("cloudUploadFailed");
+    if (referenceAssets.some((h) => h.notice === "cos_upload_unconfigured")) warn("cosUploadConfigMissing");
+
+    if (referenceAssets.some((h) => h.notice === "cloud_upload_failed" || h.notice === "cos_upload_failed")) {
+      warn("cloudUploadFailed");
+    }
     if (referenceAssets.some((h) => h.notice === "cloud_upload_invalid_response")) warn("cloudUploadInvalidResponse");
 
     return NextResponse.json({

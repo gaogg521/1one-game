@@ -7,7 +7,7 @@ import { godotExportTemplateIds, GAME_TEMPLATE_IDS } from "@/lib/game-templates/
 
 export type ImageGenSizeOption = "1024x1024" | "1024x1536" | "1536x1024";
 export type OrchestrationQualityTier = "fast" | "standard" | "rich" | "astrocade";
-export type ReferenceAssetStorageMode = "session" | "cloud";
+export type ReferenceAssetStorageMode = "session" | "cloud" | "cos";
 
 export const PRODUCT = {
   /** OpenAI 兼容网关默认头（小说流式会按篇幅覆盖 x-openclaw-timeout-ms） */
