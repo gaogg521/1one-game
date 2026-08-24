@@ -50,11 +50,16 @@ export const CONSOLE_USER_SECTIONS: ConsoleNavSection[] = [
  */
 export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
   {
+    id: "admin-operations",
+    labelKey: "navSectionAdminOperations",
+    superAdminOnly: true,
+    items: [{ id: "overview", labelKey: "tabOverview" }],
+  },
+  {
     id: "admin-content",
     labelKey: "navSectionAdminContent",
     superAdminOnly: true,
     items: [
-      { id: "overview", labelKey: "tabOverview" },
       { id: "pending", labelKey: "tabPending" },
       { id: "works", labelKey: "tabWorks" },
       { id: "samples", labelKey: "tabSamples" },
@@ -67,6 +72,13 @@ export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
     items: [
       { id: "shares", labelKey: "tabShares" },
       { id: "users", labelKey: "tabUsers" },
+    ],
+  },
+  {
+    id: "admin-business",
+    labelKey: "navSectionAdminBusiness",
+    superAdminOnly: true,
+    items: [
       { id: "billing", labelKey: "tabBilling" },
     ],
   },

@@ -52,7 +52,7 @@ export function AdminConsoleShell({
                     : "text-[var(--gc-text-faint)]"
                 }`}
               >
-                {tu(section.labelKey as "navSectionGeneral")}
+                {section.superAdminOnly ? ta(section.labelKey as "navSectionAdminOperations") : tu(section.labelKey as "navSectionGeneral")}
               </p>
               <div className="flex flex-col gap-0.5">
                 {section.items.map((item) => {
