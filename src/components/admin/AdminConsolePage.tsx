@@ -737,6 +737,8 @@ export default function AdminConsolePage({
                   ]}
                 />
 
+                <AdminOpsActionQueue stats={stats} analytics={analytics} onNavigate={selectTab} />
+
                 <AdminOpsQuickLinks
                   pendingCount={stats.moderation.pendingReview}
                   sampleSynced={stats.sampleGallery?.synced}
@@ -2001,6 +2003,62 @@ function AdminOpsQuickLinks({
         </Link>
       </div>
     </div>
+  );
+}
+
+function AdminOpsActionQueue({
+  stats,
+  analytics,
+  onNavigate,
+}: {
+  stats: Stats;
+  analytics: Analytics;
+  onNavigate: (tab: Tab) => void;
+}) {
+  const t = useTranslations("adminPage");
+  const actions: { id: string; title: string; detail: string; target: Tab; tone: "warn" | "fail" }[] = [];
+  if (stats.moderation.pendingReview > 0) {
+    actions.push({ id: "moderation", title: t("opsActionModerationTitle"), detail: t("opsActionModeration", { count: stats.moderation.pendingReview }), target: "pending", tone: "warn" });
+  }
+  if ((stats.generation?.errors24h ?? 0) > 5) {
+    actions.push({ id: "generation", title: t("opsActionGenerationTitle"), detail: t("opsActionGeneration", { count: stats.generation?.errors24h ?? 0 }), target: "gen-errors", tone: "fail" });
+  }
+  if (analytics.commerce.providerCost.events > 0 && analytics.commerce.providerCost.coverageRate < 100) {
+    actions.push({ id: "cost", title: t("opsActionCostTitle"), detail: t("opsActionCost", { coverage: analytics.commerce.providerCost.coverageRate }), target: "billing", tone: "warn" });
+  }
+  if (analytics.gameplay.starts >= 10 && analytics.gameplay.firstMinuteRate < 45) {
+    actions.push({ id: "gameplay", title: t("opsActionGameplayTitle"), detail: t("opsActionGameplay", { rate: analytics.gameplay.firstMinuteRate }), target: "works", tone: "warn" });
+  }
+  const literaryAttention = analytics.literary.byType.find((row) => row.health.status === "attention");
+  if (literaryAttention) {
+    actions.push({ id: `literary-${literaryAttention.kind}`, title: t("opsActionLiteraryTitle"), detail: t("opsActionLiterary", { kind: literaryAttention.kind === "novel" ? t("typeNovel") : t("typeComic") }), target: "works", tone: "warn" });
+  }
+
+  return (
+    <section className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5" data-testid="admin-ops-action-queue">
+      <div>
+        <p className="text-sm font-medium text-[var(--gc-text)]">{t("opsActionTitle")}</p>
+        <p className="mt-1 text-xs text-[var(--gc-muted)]">{t("opsActionSubtitle")}</p>
+      </div>
+      {actions.length ? (
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              onClick={() => onNavigate(action.target)}
+              className={`rounded-xl border p-3 text-left transition hover:brightness-110 ${action.tone === "fail" ? "border-rose-500/40 bg-rose-500/10" : "border-amber-500/30 bg-amber-500/5"}`}
+            >
+              <span className="block text-sm font-medium text-[var(--gc-text)]">{action.title}</span>
+              <span className="mt-1 block text-xs text-[var(--gc-muted)]">{action.detail}</span>
+              <span className="mt-2 inline-block text-xs font-medium text-[var(--gc-accent)]">{t("healthResolveAction")}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-emerald-300">{t("opsActionNone")}</p>
+      )}
+    </section>
   );
 }
 
