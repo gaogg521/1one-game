@@ -9,6 +9,7 @@ export type LlmProtocol = "openai_compatible" | "gemini" | "anthropic";
 
 export type RuntimeSceneKey =
   | "game_text"
+  | "game_bgm"
   | "game_vision"
   | "game"
   | "novel"
@@ -191,6 +192,12 @@ export function buildDefaultRoutes(
   return [
     {
       scene: "game_text",
+      providerId: openaiId,
+      primary: m.gameTextPrimary ?? m.gamePrimary,
+      fallbacks: [...(m.gameTextFallbacks ?? m.gameFallbacks ?? [])],
+    },
+    {
+      scene: "game_bgm",
       providerId: openaiId,
       primary: m.gameTextPrimary ?? m.gamePrimary,
       fallbacks: [...(m.gameTextFallbacks ?? m.gameFallbacks ?? [])],
@@ -402,5 +409,6 @@ export const RUNTIME_SCENE_KEYS: RuntimeSceneKey[] = [
   "novel",
   "game_vision",
   "game_text",
+  "game_bgm",
   "game",
 ];

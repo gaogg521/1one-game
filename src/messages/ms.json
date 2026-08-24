@@ -2715,6 +2715,8 @@
       "sourceNone": "Not set",
       "sceneGameText": "Game spec · text only",
       "sceneGameTextDesc": "No reference images: GameSpec draft/enhance, patches, multi-agent, creative brief",
+      "sceneGameBgm": "Game BGM (LLM fallback)",
+      "sceneGameBgmDesc": "Playable note-sequence generation when no music service is configured",
       "sceneGameVision": "Game spec · with references",
       "sceneGameVisionDesc": "When reference images are uploaded or prompt includes asset snippets: spec + vision understanding"
     },

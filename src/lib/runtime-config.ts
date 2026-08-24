@@ -490,7 +490,7 @@ function applyPatchToPayload(
 
   if (patch.localeRoutes !== undefined) {
     const validScenes = new Set<RuntimeSceneKey>([
-      "game_text", "game_vision", "game", "novel", "novel_plan", "comic_storyboard", "comic_image_openai", "comic_image_gemini",
+      "game_text", "game_bgm", "game_vision", "game", "novel", "novel_plan", "comic_storyboard", "comic_image_openai", "comic_image_gemini",
     ]);
     const providers = getEffectiveProviders(mergePayload(next));
     const seen = new Set<string>();

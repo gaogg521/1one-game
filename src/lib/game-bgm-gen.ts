@@ -18,6 +18,7 @@ export async function generateBgmNotesFromSpec(spec: GameSpec): Promise<BgmNoteS
 
   const result = await llmJson({
     model,
+    scene: "game_bgm",
     system: "You are a game music composer that outputs JSON note sequences. Respond ONLY with valid JSON matching the schema.",
     user,
     mode: "json_object",

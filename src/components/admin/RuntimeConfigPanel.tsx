@@ -1220,7 +1220,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           ?? providersForm.find((p) => p.protocol === meta.defaultProtocol && p.enabled)?.id
           ?? providersForm[0]?.id
           ?? "";
-        if (meta.scene === "game_text") {
+        if (meta.scene === "game_text" || meta.scene === "game_bgm") {
           return {
             scene: meta.scene,
             providerId,
@@ -1293,13 +1293,6 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
       <EnvLegacySecretsPanel view={view} />
 
-      <BgmServicePanel
-        view={view}
-        headers={headers}
-        onNotice={onNotice}
-        onView={(v) => { setView(v); hydrateForm(v); }}
-      />
-
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -1326,6 +1319,12 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
       {section === "providers" ? (
         <div className="space-y-6">
+          <BgmServicePanel
+            view={view}
+            headers={headers}
+            onNotice={onNotice}
+            onView={(v) => { setView(v); hydrateForm(v); }}
+          />
           {draftProviders.length > 0 ? (
             <section className="space-y-3" data-testid="admin-runtime-draft-providers">
               <div>
@@ -1494,12 +1493,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                   const pending = routeIsPending(savedRoute, route);
                   const domain =
                     meta.domain === "game" ? DOMAIN.game : meta.domain === "novel" ? DOMAIN.novel : DOMAIN.comic;
-                  const showFallback =
-                    meta.scene === "game_text"
-                    || meta.scene === "game_vision"
-                    || meta.scene === "novel"
-                    || meta.scene === "novel_plan"
-                    || meta.scene === "comic_storyboard";
+                  const showFallback = true;
                   const provider = providersForm.find((p) => p.id === route?.providerId);
                   const suggestions = provider ? parseModelsText(provider.modelsText) : [];
                   return (

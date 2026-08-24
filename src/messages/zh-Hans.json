@@ -2702,6 +2702,8 @@
       "sceneGameDesc": "GameSpec、规格修补、多 Agent、Creative Brief",
       "sceneGameText": "游戏规格 · 纯文本",
       "sceneGameTextDesc": "无参考图时：GameSpec 初稿/强化、规格修补、多 Agent、Creative Brief",
+      "sceneGameBgm": "游戏 BGM（LLM 降级）",
+      "sceneGameBgmDesc": "无第三方音乐服务时生成可播放的音符序列",
       "sceneGameVision": "游戏规格 · 含参考图",
       "sceneGameVisionDesc": "上传参考图或 prompt 含【参考素材】时：规格生成 + 参考图视觉理解",
       "sceneNovelBody": "小说正文",

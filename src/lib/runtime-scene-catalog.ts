@@ -20,6 +20,13 @@ export const RUNTIME_SCENE_CATALOG: RuntimeSceneMeta[] = [
     defaultProtocol: "openai_compatible",
   },
   {
+    scene: "game_bgm",
+    domain: "game",
+    labelKey: "sceneGameBgm",
+    descKey: "sceneGameBgmDesc",
+    defaultProtocol: "openai_compatible",
+  },
+  {
     scene: "game_vision",
     domain: "game",
     labelKey: "sceneGameVision",
