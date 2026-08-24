@@ -16,11 +16,10 @@ test.describe("Admin 网关/模型页", () => {
       sessionStorage.setItem("gc_super_admin_key", secret);
     }, E2E_SECRET);
 
-    await page.goto("/console", { waitUntil: "domcontentloaded" });
+    await page.goto("/console?tab=runtime", { waitUntil: "domcontentloaded" });
 
     const runtimeTab = page.locator("aside").getByTestId("admin-tab-runtime");
     await expect(runtimeTab).toBeVisible({ timeout: 45_000 });
-    await runtimeTab.click();
 
     const panel = page.getByTestId("admin-runtime-config");
     await expect(panel).toBeVisible({ timeout: 30_000 });

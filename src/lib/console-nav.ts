@@ -88,6 +88,11 @@ export const ADMIN_CONSOLE_TABS = new Set<ConsoleTab>(
   CONSOLE_ADMIN_SECTIONS.flatMap((section) => section.items.map((item) => item.id)),
 );
 
+const ALL_CONSOLE_TABS = new Set<ConsoleTab>([
+  ...CONSOLE_USER_SECTIONS.flatMap((section) => section.items.map((item) => item.id)),
+  ...ADMIN_CONSOLE_TABS,
+]);
+
 export function buildConsoleNavSections(canViewAdminSection: boolean): ConsoleNavSection[] {
   if (!canViewAdminSection) return CONSOLE_USER_SECTIONS;
   return [...CONSOLE_USER_SECTIONS, ...CONSOLE_ADMIN_SECTIONS];
@@ -95,6 +100,11 @@ export function buildConsoleNavSections(canViewAdminSection: boolean): ConsoleNa
 
 export function isAdminConsoleTab(tab: ConsoleTab): boolean {
   return ADMIN_CONSOLE_TABS.has(tab);
+}
+
+/** URL 参数来自不可信输入；只有已注册的后台页签可以成为当前页。 */
+export function isConsoleTab(value: string | null): value is ConsoleTab {
+  return value !== null && ALL_CONSOLE_TABS.has(value as ConsoleTab);
 }
 
 export function defaultConsoleTab(): ConsoleTab {

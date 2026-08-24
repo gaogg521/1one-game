@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppLocale } from "@/i18n/routing";
 import { withLocalePath } from "@/i18n/navigation";
@@ -32,6 +33,7 @@ import {
   buildConsoleNavSections,
   defaultConsoleTab,
   isAdminConsoleTab,
+  isConsoleTab,
   type ConsoleTab,
 } from "@/lib/console-nav";
 
@@ -167,6 +169,9 @@ export default function AdminConsolePage({
   const t = useTranslations("adminPage");
   const tu = useTranslations("userConsole");
   const locale = useLocale() as AppLocale;
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const shareChannelLabel = useCallback(
     (channel: string) => {
       const key = `shareChannels.${channel}` as Parameters<typeof t>[0];
@@ -174,8 +179,9 @@ export default function AdminConsolePage({
     },
     [t],
   );
-  const [requestedTab, setRequestedTab] = useState<Tab>(defaultConsoleTab());
-  const tab = !canViewAdminSection && isAdminConsoleTab(requestedTab) ? defaultConsoleTab() : requestedTab;
+  const requestedTab = searchParams.get("tab");
+  const resolvedTab = isConsoleTab(requestedTab) ? requestedTab : defaultConsoleTab();
+  const tab = !canViewAdminSection && isAdminConsoleTab(resolvedTab) ? defaultConsoleTab() : resolvedTab;
   const [stats, setStats] = useState<Stats | null>(null);
   const [works, setWorks] = useState<WorkRow[]>([]);
   const [pending, setPending] = useState<WorkRow[]>([]);
@@ -214,7 +220,14 @@ export default function AdminConsolePage({
   }
 
   function selectTab(nextTab: Tab) {
-    setRequestedTab(nextTab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab === defaultConsoleTab()) {
+      params.delete("tab");
+    } else {
+      params.set("tab", nextTab);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     resetListingState();
   }
 
