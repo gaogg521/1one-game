@@ -39,10 +39,10 @@ export async function GET(req: Request) {
     prisma.generationJob.findMany({
       where: { status: { in: ["queued", "running", "retrying", "failed"] } },
       orderBy: { updatedAt: "desc" },
-      take: 30,
+      take: 80,
       select: {
         id: true, type: true, status: true, attempts: true, maxAttempts: true, lastErrorCode: true,
-        updatedAt: true,
+        lastErrorDetail: true, progressJson: true, createdAt: true, updatedAt: true, runAfter: true, creativeRevisionId: true,
         project: { select: { kind: true, title: true } },
       },
     }),
@@ -53,6 +53,13 @@ export async function GET(req: Request) {
     total,
     limit,
     jobSummary: Object.fromEntries(jobGroups.map((item) => [item.status, item._count._all])),
-    jobs,
+    jobs: jobs.map((job) => ({
+      ...job,
+      progress: (() => { try { return job.progressJson ? JSON.parse(job.progressJson) : null; } catch { return null; } })(),
+      progressJson: undefined,
+      // A GenerationJob currently has no FK to ProviderUsage. Do not imply an
+      // estimated cost until usage is correlated at job execution time.
+      costStatus: "not_recorded" as const,
+    })),
   });
 }

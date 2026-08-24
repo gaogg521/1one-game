@@ -21,7 +21,9 @@ type Filter = {
 
 type GenerationJob = {
   id: string; type: string; status: string; attempts: number; maxAttempts: number; lastErrorCode: string | null;
-  updatedAt: string; project: { kind: string; title: string };
+  lastErrorDetail: string | null; progress: { percent?: number; stage?: string; detail?: string } | null;
+  createdAt: string; updatedAt: string; runAfter: string; creativeRevisionId: string | null; costStatus: "not_recorded";
+  project: { kind: string; title: string };
 };
 
 export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
@@ -33,6 +35,8 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
   const [loaded, setLoaded] = useState(false);
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [jobSummary, setJobSummary] = useState<Record<string, number>>({});
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<GenerationJob | null>(null);
 
   const fetchErrors = useCallback(async (f: Filter) => {
     setLoading(true);
@@ -54,6 +58,23 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
   }, [headers]);
 
   const handleLoad = () => fetchErrors(filter);
+
+  async function retryFailedJob(job: GenerationJob) {
+    if (job.status !== "failed") return;
+    if (!window.confirm(`将重新入队「${job.project.title}」的 ${job.type}。此操作可能再次消耗模型额度，是否继续？`)) return;
+    setRetryingJobId(job.id);
+    try {
+      const res = await fetch(`/api/admin/generation-jobs/${job.id}/retry`, {
+        method: "POST",
+        headers: { ...(headers ? headers() : {}), "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "REQUEUE_FAILED_GENERATION" }),
+      });
+      if (!res.ok) return;
+      await fetchErrors(filter);
+    } finally {
+      setRetryingJobId(null);
+    }
+  }
 
   const errorTypeColor: Record<string, string> = {
     timeout: "bg-yellow-100 text-yellow-800",
@@ -136,11 +157,18 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
           </div>
           {jobs.length ? (
             <div className="mt-3 overflow-auto">
-              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态</th><th>重试</th><th>最近错误</th><th>更新时间</th></tr></thead>
-                <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="py-2 pr-3">{job.lastErrorCode ?? "—"}</td><td className="py-2">{new Date(job.updatedAt).toLocaleString()}</td></tr>)}</tbody>
+              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态 / 进度</th><th>重试</th><th>最近错误</th><th>成本</th><th>更新时间</th><th>处置</th></tr></thead>
+                <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}{job.progress?.stage ? ` · ${job.progress.stage}` : ""}{typeof job.progress?.percent === "number" ? ` (${job.progress.percent}%)` : ""}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="max-w-[12rem] truncate py-2 pr-3" title={job.lastErrorDetail ?? ""}>{job.lastErrorCode ?? "—"}</td><td className="py-2 pr-3 text-slate-400">未归因</td><td className="py-2 pr-3">{new Date(job.updatedAt).toLocaleString()}</td><td className="py-2 whitespace-nowrap"><button type="button" onClick={() => setSelectedJob(job)} className="mr-2 text-indigo-700 hover:underline">详情</button>{job.status === "failed" ? <button type="button" disabled={retryingJobId === job.id} onClick={() => void retryFailedJob(job)} className="text-amber-700 hover:underline disabled:opacity-50">{retryingJobId === job.id ? "重试中…" : "确认后重试"}</button> : null}</td></tr>)}</tbody>
               </table>
             </div>
           ) : <p className="mt-3 text-sm text-slate-500">当前没有待处理生成任务。</p>}
+        </section>
+      ) : null}
+
+      {selectedJob ? (
+        <section className="rounded border border-slate-300 bg-slate-50 p-4 text-xs" data-testid="admin-generation-job-detail">
+          <div className="flex items-center justify-between gap-3"><h3 className="font-medium text-slate-900">任务详情</h3><button type="button" onClick={() => setSelectedJob(null)} className="text-slate-600 hover:underline">关闭</button></div>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2"><div><dt className="text-slate-500">任务 ID</dt><dd className="font-mono">{selectedJob.id}</dd></div><div><dt className="text-slate-500">Revision</dt><dd className="font-mono">{selectedJob.creativeRevisionId ?? "—"}</dd></div><div><dt className="text-slate-500">排队时间</dt><dd>{new Date(selectedJob.runAfter).toLocaleString()}</dd></div><div><dt className="text-slate-500">耗时观测</dt><dd>{Math.max(0, new Date(selectedJob.updatedAt).getTime() - new Date(selectedJob.createdAt).getTime())} ms（创建至最近状态）</dd></div><div className="sm:col-span-2"><dt className="text-slate-500">安全错误摘要</dt><dd className="mt-1 whitespace-pre-wrap">{selectedJob.lastErrorDetail ?? "—"}</dd></div></dl>
         </section>
       ) : null}
 

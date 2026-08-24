@@ -126,3 +126,27 @@ export async function failGenerationJob(
     },
   });
 }
+
+/**
+ * Operator-initiated recovery is intentionally narrower than worker retries:
+ * only a terminal failed job can be requeued, its immutable payload/revision is
+ * retained, and the worker will claim it normally. This avoids double-running
+ * an in-flight task or silently mutating creator input.
+ */
+export async function requeueFailedGenerationJob(id: string) {
+  const updated = await prisma.generationJob.updateMany({
+    where: { id, status: "failed" },
+    data: {
+      status: "queued",
+      attempts: 0,
+      runAfter: new Date(),
+      leaseExpiresAt: null,
+      workerId: null,
+      lastErrorCode: null,
+      lastErrorDetail: null,
+      progressJson: JSON.stringify({ percent: 0, stage: "operator_requeued" }),
+      completedAt: null,
+    },
+  });
+  return updated.count === 1;
+}
