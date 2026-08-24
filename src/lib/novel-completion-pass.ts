@@ -1,8 +1,9 @@
-import { fitNovelContentToMaxChars, mergeNovelChapterContents, parseNovelChapters } from "@/lib/novel-chapters";
+import { fitNovelSegmentToMaxChars, mergeNovelChapterContents } from "@/lib/novel-chapters";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
-import { llmNovelText } from "@/lib/llm";
+import { llmNovelTextStream } from "@/lib/llm";
 import { novelCompletionPassCharBudget } from "@/lib/novel-locale-prompts";
 import { type NovelLengthOptions, novelMaxChars, type NovelLengthTier } from "@/lib/novel-length";
+import { accumulateNovelTextStream } from "@/lib/novel-stream-accumulate";
 
 export async function extendNovelToEnding(params: {
   model: string;
@@ -11,12 +12,17 @@ export async function extendNovelToEnding(params: {
   content: string;
   lengthTier: NovelLengthTier;
   lengthOpts?: NovelLengthOptions;
+  /** 传入时，结尾补写也逐增量推送到 SSE。 */
+  onDelta?: (text: string) => void;
 }): Promise<string> {
   const hardMax = novelMaxChars(params.lengthTier, params.lengthOpts);
-  const remaining = Math.max(300, hardMax - params.content.length);
-  if (remaining < 300) return params.content;
+  const available = hardMax - params.content.length;
+  if (available < 300) return params.content;
   const locale = resolveNovelOutputLocale(params.prompt);
-  const passBudget = novelCompletionPassCharBudget(params.lengthTier, remaining);
+  const passBudget = Math.min(
+    available,
+    novelCompletionPassCharBudget(params.lengthTier, available),
+  );
   const completionPrompt =
     locale === "en"
       ? {
@@ -32,7 +38,7 @@ Continue only from this point and finish the story. Requirements:
 1. Preserve the established plot and voice; do not restart the story.
 2. If the short story currently has too few chapters, you may add the missing final chapter(s) using the same chapter marker format.
 3. End the main conflict cleanly. Do not leave "next chapter" hooks.
-4. Keep the continuation within ${Math.min(remaining, 1800)} characters.
+4. Keep the continuation within ${passBudget} characters.
 5. If chapter markers already exist, continue them consistently.`,
         }
       : locale === "ja"
@@ -120,26 +126,31 @@ ${params.content.slice(-4000)}
 5. 若已有章节格式，则延续章节格式；若已进入最后一章，就直接把该章写完`,
                 };
 
-  const result = await llmNovelText(
-    {
-      model: params.model,
-      system: completionPrompt.system,
-      user: completionPrompt.user,
-      temperature: 0.7,
-      maxTokens: Math.min(8192, Math.ceil(passBudget * 1.4)),
-      timeoutMs: 180_000,
-    },
-    params.lengthTier,
-  );
-
-  if (!result.ok || !result.text.trim()) return params.content;
+  let result;
+  try {
+    result = await accumulateNovelTextStream({
+      maxChars: passBudget,
+      stream: llmNovelTextStream(
+        {
+          model: params.model,
+          system: completionPrompt.system,
+          user: completionPrompt.user,
+          temperature: 0.7,
+          maxTokens: Math.min(8192, Math.ceil(passBudget * 1.4)),
+          timeoutMs: 180_000,
+        },
+        params.lengthTier,
+      ),
+      onDelta: params.onDelta ?? (() => {}),
+    });
+  } catch {
+    return params.content;
+  }
+  if (!result.content.trim()) return params.content;
   const merged = mergeNovelChapterContents(
     params.content.trim(),
-    result.text.trim(),
+    result.content.trim(),
     locale,
   );
-  const chaptersBefore = parseNovelChapters(merged).length;
-  const fitted = fitNovelContentToMaxChars(merged, hardMax);
-  const chaptersAfter = parseNovelChapters(fitted).length;
-  return chaptersAfter >= chaptersBefore ? fitted : merged;
+  return fitNovelSegmentToMaxChars(merged, hardMax);
 }

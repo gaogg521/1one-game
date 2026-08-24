@@ -27,7 +27,7 @@ import {
   usesSegmentedLongGeneration,
 } from "@/lib/novel-long-generate";
 import { generatePlannedNovelBody } from "@/lib/novel-planned-generate";
-import { fitNovelContentToMaxChars } from "@/lib/novel-chapters";
+import { fitNovelSegmentToMaxChars } from "@/lib/novel-chapters";
 import { persistNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { getChildrenAgeTier, parseChildrenTargetAge } from "@/lib/children-age-length";
 import { finalizeChildrenNovelContent } from "@/lib/children-novel-postprocess";
@@ -310,7 +310,7 @@ export async function POST(req: Request) {
     }
 
     const maxCharsLimit = novelMaxChars(lengthTier, lengthOpts);
-    let finalContent = fitNovelContentToMaxChars(content, maxCharsLimit);
+    let finalContent = fitNovelSegmentToMaxChars(content, maxCharsLimit);
     let finalTitle = extractNovelTitleFromContent(finalContent, title?.trim(), prompt.trim(), uiLocale);
     let parentReadingTip: string | undefined;
     let childrenSynopsisBody: string | undefined;

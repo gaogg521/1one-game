@@ -745,7 +745,26 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `qa:novel-scope-plan`，验证 5 章严重超量正文会压入预算、所有章节和终章仍保留；`npm run qa:novel-scope-plan`、`npm run qa:novel-comic-smoke`、`npx tsc --noEmit` 通过。定向 ESLint 无 error，保留两个历史 unused-variable warning。已用本地浏览器确认 `/zh-Hans/novel/create` 创作路径与篇幅选择可正常加载；未调用真实模型，因此生产网关的端到端 chunk 到达时间仍待下一次受控生成验收。
 - 修改文件：`src/lib/novel-chapters.ts`、`src/lib/novel-locale-prompts.ts`、`src/lib/novel-long-generate.ts`、`src/lib/novel-planned-generate.ts`、`src/app/api/novel/generate/stream/route.ts`、`src/app/novel/create/page.tsx`、`scripts/qa-novel-scope-plan.ts`、`package.json`。
 
+## P41 修复：全档位小说流式与预算合同对齐（2026-08-24）
+
+- P40 的分段预算机制本已覆盖短篇、中篇、长篇首稿；本轮将儿童短篇、长篇续写、缺章补写、结尾补写和旧的通用流式兜底全部接入同一规则：直接消费上游 `llmNovelTextStream`，每个到达的增量立即经 SSE 转发，展示增量和最终落库文本共用同一硬字数上限。
+- 移除了儿童档“整篇生成完成后再按 120 字伪造 delta”的实现。儿童正文过短时的补结尾也同样实时推送；缺章补写改为按章串行，避免多个并行模型输出在用户页面交错，且每章预留后续章节的预算。
+- 长篇续写在已有正文接近上限时先限制可续写章节并按剩余预算重新分配，避免事后截掉终章。所有旧的“仅保留完整章”收口改为保留已规划章节的按句末压缩。
+- `qa:novel-scope-plan` 新增对通用流式累计器的回归：验证上游 chunks 立即转发、触顶后停止展示、最终文本仍严格不超预算。
+
 ### 下一步
 
 1. 在不影响用户作品的受控测试账号下做一次中篇真实模型生成，确认首个正文 token、连续 SSE 帧、最终字数、章节齐全和终章收束；记录网关/Nginx 实际 chunk 时间。
 2. 通过后仅精确暂存本批小说文件并提交；不要把当前工作区的运行时配置、数据库、日志或其它团队改动混入提交。
+
+## P41：后台运营工作流与处置闭环（2026-08-24）
+
+- 后台导航从按功能堆叠调整为运营工作台、内容与质量、增长与用户、商业与成本、平台与 AI 运行时；管理员分组统一使用后台翻译域，避免复用个人中心文本。
+- Ops Health 的非正常检查现在附带处置目标：邮件配置、样品同步、待审队列、生成错误、模型预算、小说预检、模型路由和服务商探测均可直接进入相应后台页面，而不是只显示告警。
+- 文生图 `comic_image_openai` 的主备模型在 OpenAI 兼容和 Joy Seedream 专用路径均透传实际 fallback model；生产已保存的路由仍优先于部署默认值，不会被发布覆盖。
+- 验证：`npx tsc --noEmit`、定向 ESLint、`qa:seedream-image-adapter`、`qa:generation-rehearsal-readiness`、`qa:admin-console`（32 项）通过。首次后台 QA 发现本地 8888 未监听，启动开发服务后复验通过；这不是生产故障。
+
+### 下一步
+
+1. 继续 P0：将生成运营队列做成按游戏/小说/漫画的可筛选处置中心，并把失败重试、实际模型账本和耗时放在同一任务视图。
+2. 为运营工作台补“异常优先”卡片与按媒介的质量/消费阈值，保持每个异常都能直达处置页。

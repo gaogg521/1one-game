@@ -1,7 +1,7 @@
 import type { AppLocale } from "@/i18n/routing";
 import { progressNovelMessage } from "@/lib/i18n/progress-message";
 import {
-  fitNovelContentToMaxChars,
+  fitNovelSegmentToMaxChars,
   mergeNovelChapterContents,
   normalizeSegmentToChapterPlan,
   parseNovelChapters,
@@ -21,8 +21,9 @@ import {
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { getNovelSystemPrompt } from "@/lib/novel-generate-config";
 import { formatNovelChapterMarkerHead } from "@/lib/novel-locale-prompts";
-import { llmNovelText } from "@/lib/llm";
+import { llmNovelTextStream } from "@/lib/llm";
 import { novelMaxChars, type NovelLengthOptions, type NovelLengthTier } from "@/lib/novel-length";
+import { accumulateNovelTextStream } from "@/lib/novel-stream-accumulate";
 
 const MAX_FILL_ROUNDS = 3;
 
@@ -33,7 +34,7 @@ function finalizeFilledContent(
 ): string {
   const remaining = getRemainingChapterPlan(chapterPlan, merged);
   if (remaining.length > 0) return merged.trim();
-  return fitNovelContentToMaxChars(merged, hardMax);
+  return fitNovelSegmentToMaxChars(merged, hardMax);
 }
 
 function extractFilledChapterBody(
@@ -71,11 +72,11 @@ async function writeOneMissingChapter(params: {
   chapter: ChapterPlanItem;
   pipelineMeta: NovelGenerationMeta;
   lengthTier: NovelLengthTier;
-  hardMax: number;
+  maxCharsThisChapter: number;
   uiLocale: AppLocale;
   emit: NovelStreamEmitter;
 }): Promise<{ content: string; written: boolean }> {
-  const { chapter, pipelineMeta, lengthTier, hardMax, uiLocale, emit } = params;
+  const { chapter, pipelineMeta, lengthTier, maxCharsThisChapter, uiLocale, emit } = params;
   const outputLocale = resolveNovelOutputLocale(params.promptTrim);
   let content = params.content;
   const written = parseNovelChapters(content);
@@ -107,6 +108,7 @@ async function writeOneMissingChapter(params: {
     totalSegments: 1,
     previousContent,
     targetCharsThisSegment: targetChars,
+    maxCharsThisSegment: maxCharsThisChapter,
     isContinuation: !isEarly,
     locale: outputLocale,
   });
@@ -115,20 +117,32 @@ async function writeOneMissingChapter(params: {
     : getNovelContinuationSystemPrompt(outputLocale);
 
   for (let attempt = 1; attempt <= 5; attempt++) {
-    const result = await llmNovelText(
-      {
-        model: params.model,
-        system,
-        user: userMsg,
-        temperature: attempt === 1 ? 0.82 : 0.75,
-        maxTokens: Math.min(LONG_NOVEL_PRODUCT.segmentMaxTokens, Math.ceil(targetChars * 1.6)),
-        timeoutMs: LONG_NOVEL_PRODUCT.segmentTimeoutMs,
-      },
-      lengthTier,
-    );
+    let result;
+    try {
+      result = await accumulateNovelTextStream({
+        maxChars: maxCharsThisChapter,
+        stream: llmNovelTextStream(
+          {
+            model: params.model,
+            system,
+            user: userMsg,
+            temperature: attempt === 1 ? 0.82 : 0.75,
+            maxTokens: Math.min(
+              LONG_NOVEL_PRODUCT.segmentMaxTokens,
+              Math.ceil(maxCharsThisChapter * 1.5),
+            ),
+            timeoutMs: LONG_NOVEL_PRODUCT.segmentTimeoutMs,
+          },
+          lengthTier,
+        ),
+        onDelta: (text) => emit({ step: "delta", text, chapter: chapter.num, source: "missing_chapter" }),
+      });
+    } catch {
+      continue;
+    }
 
-    if (!result.ok || !result.text.trim()) continue;
-    const block = normalizeSegmentToChapterPlan(result.text, [chapter], outputLocale);
+    if (!result.content.trim()) continue;
+    const block = normalizeSegmentToChapterPlan(result.content, [chapter], outputLocale);
     if (!block) continue;
     const merged = mergeNovelChapterContents(content, block, outputLocale);
     const written = parseNovelChapters(merged).find((c) => c.num === chapter.num);
@@ -185,36 +199,40 @@ export async function fillMissingPlannedNovelChapters(params: {
       round: round + 1,
     });
 
-    // 独立章节并行写入
-    const results = await Promise.all(
-      remaining.map((chapter) =>
-        writeOneMissingChapter({
-          model,
-          promptTrim,
-          titleTrim,
-          content: merged,
-          chapter,
-          pipelineMeta,
-          lengthTier,
-          hardMax,
-          uiLocale,
-          emit,
-        }),
-      ),
-    );
-
-    const anyWritten = results.some((r) => r.written);
-    // 若本轮全部失败则提前终止，避免无效继续
-    if (!anyWritten) break;
-
-    // 所有 worker 都以同一 merged 为底，返回「底+该章」。
-    // 将各成功结果链式 merge：mergeNovelChapterContents 按章号去重合并，可安全链式调用。
-    const outputLocale = resolveNovelOutputLocale(promptTrim);
-    for (const r of results) {
-      if (r.written) {
-        merged = mergeNovelChapterContents(merged, r.content, outputLocale);
+    // 逐章串行补写：章节顺序与 SSE 正文顺序一致，且每章都为后续缺章保留预算。
+    let anyWritten = false;
+    for (let index = 0; index < remaining.length; index++) {
+      const chapter = remaining[index]!;
+      const followingTargetChars = remaining
+        .slice(index + 1)
+        .reduce((sum, item) => sum + (item.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter), 0);
+      const targetChars = chapter.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter;
+      const maxCharsThisChapter = Math.max(
+        1,
+        Math.min(
+          Math.ceil(targetChars * 1.25),
+          hardMax - merged.length - followingTargetChars,
+        ),
+      );
+      const result = await writeOneMissingChapter({
+        model,
+        promptTrim,
+        titleTrim,
+        content: merged,
+        chapter,
+        pipelineMeta,
+        lengthTier,
+        maxCharsThisChapter,
+        uiLocale,
+        emit,
+      });
+      if (result.written) {
+        merged = result.content;
+        anyWritten = true;
       }
     }
+    // 若本轮全部失败则提前终止，避免无效继续
+    if (!anyWritten) break;
   }
 
   return finalizeFilledContent(merged, hardMax, pipelineMeta.chapterPlan);

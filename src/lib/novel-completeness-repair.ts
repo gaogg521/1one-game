@@ -14,12 +14,13 @@ import {
   novelLlmTimeoutMs,
   novelMinAcceptChars,
 } from "@/lib/novel-generate-config";
-import { llmNovelText } from "@/lib/llm";
+import { llmNovelTextStream } from "@/lib/llm";
 import { getRemainingChapterPlan } from "@/lib/novel-long-chapter-plan";
 import type { NovelStreamEmitter } from "@/lib/novel-long-generate";
 import { fillMissingPlannedNovelChapters } from "@/lib/novel-missing-chapters-fill";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
-import { isChildrenNovelTier, parseChildrenTargetAge, type NovelLengthOptions, type NovelLengthTier } from "@/lib/novel-length";
+import { accumulateNovelTextStream } from "@/lib/novel-stream-accumulate";
+import { isChildrenNovelTier, novelMaxChars, parseChildrenTargetAge, type NovelLengthOptions, type NovelLengthTier } from "@/lib/novel-length";
 
 export type NovelCompletenessRepairResult = {
   content: string;
@@ -135,6 +136,7 @@ export async function repairPlannedNovelCompleteness(params: {
       content,
       lengthTier,
       lengthOpts,
+      onDelta: (text) => emit({ step: "delta", text, source: "completion_pass" }),
     });
     await runFill("after_completion");
     completeness = assessNovelCompleteness(
@@ -150,7 +152,7 @@ export async function repairPlannedNovelCompleteness(params: {
   return { content, completeness };
 }
 
-/** 儿童档：与线上一致，用儿童 system prompt 非流式生成；过短则续写一次。 */
+/** 儿童档：正文和补结尾均通过真实上游 SSE 增量输出。 */
 export async function generateChildrenNovelRaw(params: {
   model: string;
   promptTrim: string;
@@ -164,6 +166,7 @@ export async function generateChildrenNovelRaw(params: {
   const userMsg = buildNovelUserMessage(promptTrim, titleTrim, lengthTier, promptTrim, lengthOpts);
   const system = getNovelSystemPrompt(lengthTier, lengthOpts, promptTrim);
   const minAccept = novelMinAcceptChars(lengthTier, lengthOpts);
+  const hardMax = novelMaxChars(lengthTier, lengthOpts);
   const age = parseChildrenTargetAge(lengthOpts?.childrenTargetAge ?? 7);
 
   const llmReq = {
@@ -178,15 +181,17 @@ export async function generateChildrenNovelRaw(params: {
   let content = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt === 0) {
-      const result = await llmNovelText(llmReq, lengthTier);
-      if (!result.ok || !result.text.trim()) {
+      const result = await accumulateNovelTextStream({
+        maxChars: hardMax,
+        stream: llmNovelTextStream(llmReq, lengthTier),
+        onDelta: (text) => emit({ step: "delta", text, source: "children" }),
+      });
+      if (!result.content.trim()) {
         throw new Error(
-          result.ok
-            ? progressNovelMessage(uiLocale, "generateFailed")
-            : result.error || progressNovelMessage(uiLocale, "generateFailed"),
+          progressNovelMessage(uiLocale, "generateFailed"),
         );
       }
-      content = result.text.trim();
+      content = result.content;
     } else {
       emit({ step: "children_expand", message: "儿童正文偏短，正在续写补全…" });
       const expanded = await extendNovelToEnding({
@@ -196,14 +201,10 @@ export async function generateChildrenNovelRaw(params: {
         content,
         lengthTier,
         lengthOpts,
+        onDelta: (text) => emit({ step: "delta", text, source: "children_expand" }),
       });
       if (expanded.length <= content.length) break;
       content = expanded;
-    }
-
-    const chunk = 120;
-    for (let i = 0; i < content.length; i += chunk) {
-      emit({ step: "delta", text: content.slice(i, i + chunk) });
     }
 
     const bodyLen = parseChildrenStoryOutput(content, age, uiLocale).body.trim().length;

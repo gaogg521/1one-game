@@ -3,7 +3,7 @@ import { novelContinuationMessage, novelContinuePhaseMessage } from "@/lib/i18n/
 import { progressNovelMessage } from "@/lib/i18n/progress-message";
 import { resolveNovelOutputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { formatChapterRecapLine } from "@/lib/novel-locale-prompts";
-import { fitNovelContentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
+import { fitNovelSegmentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
 import { novelMaxChars, parseNovelLengthTier, type NovelLengthTier } from "@/lib/novel-length";
 import { fetchNovelBible, formatNovelBibleForPrompt } from "@/lib/novel-long-bible";
@@ -16,6 +16,7 @@ import {
 import type { ChapterPlanItem } from "@/lib/novel-long-pipeline-types";
 import { clampContinueChapterCount } from "@/lib/novel-continue-options";
 import { LONG_NOVEL_PRODUCT, planLongNovelSegments } from "@/lib/novel-long-config";
+import { allocateChapterTargetChars } from "@/lib/novel-scope-plan";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import { NOVEL_PIPELINE_VERSION } from "@/lib/novel-long-pipeline-types";
 import {
@@ -233,6 +234,28 @@ export async function streamLongNovelContinue(params: {
     });
   }
 
+  // 已有正文接近总上限时，先缩小本次续写计划，而非写完后删除末章。
+  // 每章至少预留约 300 字（含章标题和收束空间），再把可用字数按剧情权重分配。
+  const availableChars = hardMax - content.length;
+  const maxChaptersByBudget = Math.max(1, Math.floor(availableChars / 300));
+  if (remaining.length > maxChaptersByBudget) {
+    remaining = remaining.slice(0, maxChaptersByBudget);
+    emit({
+      step: "continue_limit",
+      message: progressNovelMessage(uiLocale, "continueLimited", { count: remaining.length }),
+      maxChapters: remaining.length,
+      reason: "char_budget",
+    });
+  }
+  const requestedChars = remaining.reduce(
+    (sum, chapter) => sum + (chapter.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter),
+    0,
+  );
+  remaining = allocateChapterTargetChars(
+    remaining,
+    Math.min(requestedChars, Math.max(300, Math.floor(availableChars * 0.9))),
+  );
+
   const slices = splitChapterPlanIntoSegments(
     { chapters: remaining },
     basePlan,
@@ -277,7 +300,7 @@ export async function streamLongNovelContinue(params: {
     signal: params.signal,
   });
 
-  const finalContent = fitNovelContentToMaxChars(writeResult.content, hardMax);
+  const finalContent = fitNovelSegmentToMaxChars(writeResult.content, hardMax);
   const pipelineMeta = {
     ...meta,
     segmentCount: (meta.segmentCount ?? 0) + slices.length,

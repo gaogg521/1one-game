@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { fitNovelContentToMaxChars, fitNovelSegmentToMaxChars, parseNovelChapters } from "@/lib/novel-chapters";
 import { allocateChapterTargetChars, planNovelScope } from "@/lib/novel-scope-plan";
+import { accumulateNovelTextStream } from "@/lib/novel-stream-accumulate";
 
-function main() {
+async function main() {
   const short = planNovelScope("short");
   assert.equal(short.chapterCount, 3);
   assert.ok(short.targetTotalChars >= short.minChars);
@@ -34,7 +35,26 @@ function main() {
   assert.ok(segmentFitted.length <= 6_000, `segment fitted ${segmentFitted.length}`);
   assert.equal(parseNovelChapters(segmentFitted).length, 5, "预算压缩不得删除已规划章节");
   assert.match(segmentFitted, /终章/, "终章必须保留给收束");
+
+  async function* streamChunks() {
+    yield "甲乙";
+    yield "丙丁";
+    yield "戊己";
+  }
+  const emitted: string[] = [];
+  const streamed = await accumulateNovelTextStream({
+    stream: streamChunks(),
+    maxChars: 5,
+    onDelta: (text) => emitted.push(text),
+  });
+  assert.deepEqual(emitted, ["甲乙", "丙丁", "戊"], "应随上游 chunk 逐段转发，并在上限处停止展示");
+  assert.equal(streamed.content.length, 5, "流式兜底落库也必须遵守硬上限");
+  assert.equal(streamed.overBudget, true);
 }
 
-main();
-console.log("qa-novel-scope-plan: ok");
+main()
+  .then(() => console.log("qa-novel-scope-plan: ok"))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
