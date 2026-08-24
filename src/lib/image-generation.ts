@@ -10,7 +10,7 @@ import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
-import { getRuntimeConfigSync } from "@/lib/runtime-config";
+import { getRuntimeConfigSync, getSceneModelCascade } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
 import { resolveSceneRoute } from "@/lib/runtime-providers";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
@@ -88,11 +88,11 @@ export function buildSeedreamGenerationRequest(model: string, prompt: string, n:
 }
 
 /** 豆包 Seedream 在 Joy MaaS 使用专用路由，不兼容 OpenAI `/v1/images/generations`。 */
-function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup): SeedreamImageConfig | null {
+function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup, modelOverride?: string): SeedreamImageConfig | null {
   const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
   const base = ctx?.provider.baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim();
   const key = ctx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
-  const model = getImageGenOpenAIModel(localeGroup);
+  const model = modelOverride ?? getImageGenOpenAIModel(localeGroup);
   if (!base || !key || !shouldUseJoySeedreamAdapter(model)) return null;
   try {
     return {
@@ -177,13 +177,13 @@ function imageItemToResult(
 
 async function generateImageWithSeedreamDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number } & LocaleImageOptions,
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number; modelOverride?: string } & LocaleImageOptions,
 ): Promise<ImageGenDetail> {
   const localeGroup = options?.localeGroup ?? await runtimeLocaleGroupForCurrentRequest();
   options = { ...options, localeGroup };
   const t0 = Date.now();
-  const cfg = resolveSeedreamImageConfig(options?.localeGroup);
-  if (!cfg) return { ok: false, model: getImageGenOpenAIModel(options?.localeGroup), error: "未配置 Seedream 网关", durationMs: 0 };
+  const cfg = resolveSeedreamImageConfig(options?.localeGroup, options?.modelOverride);
+  if (!cfg) return { ok: false, model: options?.modelOverride ?? getImageGenOpenAIModel(options?.localeGroup), error: "未配置 Seedream 网关", durationMs: 0 };
   try {
     const response = await fetch(cfg.endpoint, {
       method: "POST",
@@ -214,10 +214,10 @@ export async function generateImageWithOpenAI(
 
 export async function generateImageWithOpenAIDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number } & LocaleImageOptions,
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number; modelOverride?: string } & LocaleImageOptions,
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
-  const model = getImageGenOpenAIModel(options?.localeGroup);
+  const model = options?.modelOverride ?? getImageGenOpenAIModel(options?.localeGroup);
   if (shouldUseJoySeedreamAdapter(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
@@ -269,6 +269,14 @@ export async function generateImageWithOpenAIDetail(
       if (process.env.GENERATE_STRUCTURED_LOG === "1") {
         console.warn("[image-gen] openai attempt failed", { model, error: lastErr });
       }
+    }
+  }
+  if (!options?.modelOverride) {
+    const fallbacks = getSceneModelCascade("comic_image_openai", options?.localeGroup).slice(1);
+    for (const fallback of fallbacks) {
+      const retried = await generateImageWithOpenAIDetail(prompt, { ...options, modelOverride: fallback });
+      if (retried.ok) return retried;
+      lastErr = `${lastErr}; fallback ${fallback}: ${retried.error ?? "failed"}`;
     }
   }
   return { ok: false, model, error: lastErr, durationMs: Date.now() - t0 };
