@@ -10,9 +10,13 @@ function getStorage(): JobContextStorage | null {
   if (typeof window !== "undefined") return (storage = null);
   // This file is reachable from LLM helpers that participate in a client
   // dependency graph. Resolve the Node-only implementation only at runtime.
-  const asyncHooks = (0, eval)("require")("node:async_hooks") as {
-    AsyncLocalStorage: new () => JobContextStorage;
-  };
+  const nodeProcess = (globalThis as typeof globalThis & {
+    process?: { getBuiltinModule?: (name: string) => unknown };
+  }).process;
+  const asyncHooks = nodeProcess?.getBuiltinModule?.("node:async_hooks") as {
+    AsyncLocalStorage?: new () => JobContextStorage;
+  } | undefined;
+  if (!asyncHooks?.AsyncLocalStorage) throw new Error("node_async_local_storage_unavailable");
   storage = new asyncHooks.AsyncLocalStorage();
   return storage;
 }
