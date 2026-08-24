@@ -15,6 +15,8 @@ import {
   routeModelCascade,
   syncLegacySecretsFromProviders,
   type RuntimeLlmProvider,
+  type RuntimeLocaleModelRoute,
+  type RuntimeLocaleGroup,
   type RuntimeModelRoute,
   type RuntimeProviderPublic,
   type RuntimeSceneKey,
@@ -74,6 +76,8 @@ export type RuntimeSecretsPayload = {
   models?: RuntimeModelsOverride;
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
+  /** Sparse per-language model overrides. Missing entries inherit `routes`. */
+  localeRoutes?: RuntimeLocaleModelRoute[];
   cdnConfig?: CdnConfigStored;
   providerPricing?: ProviderPricingRule[];
 };
@@ -120,6 +124,7 @@ export type RuntimeConfigPublicView = {
   productDefaults: RuntimeModelsOverride;
   providers: RuntimeProviderPublic[];
   routes: RuntimeModelRoute[];
+  localeRoutes: RuntimeLocaleModelRoute[];
   providerPricing: ProviderPricingRule[];
 };
 
@@ -184,6 +189,7 @@ function mergePayload(db: RuntimeSecretsPayload): RuntimeSecretsPayload {
     models,
     providers: db.providers,
     routes: db.routes,
+    localeRoutes: db.localeRoutes,
     cdnConfig: db.cdnConfig,
     providerPricing: db.providerPricing,
   };
@@ -372,6 +378,7 @@ export async function getRuntimeConfigPublicView(): Promise<RuntimeConfigPublicV
     productDefaults: defaultModels(),
     providers: providersPublic,
     routes,
+    localeRoutes: dbPayload.localeRoutes ?? [],
     providerPricing: dbPayload.providerPricing ?? [],
   };
 }
@@ -381,17 +388,20 @@ export type RuntimeConfigPatch = {
   models?: Partial<Record<keyof RuntimeModelsOverride, string | string[] | null>>;
   providers?: RuntimeLlmProvider[];
   routes?: RuntimeModelRoute[];
+  localeRoutes?: RuntimeLocaleModelRoute[];
   providerPricing?: ProviderPricingRule[];
 };
 
-export function getSceneModelCascade(scene: RuntimeSceneKey): string[] {
+export function getSceneModelCascade(scene: RuntimeSceneKey, localeGroup?: RuntimeLocaleGroup): string[] {
   const payload = getRuntimeConfigSync().payload;
-  const route = mergeRoutesWithDefaults(payload.routes, payload).find((r) => r.scene === scene);
+  const route = (localeGroup
+    ? payload.localeRoutes?.find((item) => item.scene === scene && item.localeGroup === localeGroup)
+    : undefined) ?? mergeRoutesWithDefaults(payload.routes, payload).find((r) => r.scene === scene);
   if (!route) return [];
   return routeModelCascade(route);
 }
 
-export { getEffectiveProviders, getEffectiveRoutes, resolveSceneRoute, type RuntimeSceneKey } from "@/lib/runtime-providers";
+export { getEffectiveProviders, getEffectiveRoutes, resolveSceneRoute, type RuntimeLocaleGroup, type RuntimeSceneKey } from "@/lib/runtime-providers";
 
 function applyPatchToPayload(
   current: RuntimeSecretsPayload,
@@ -473,6 +483,30 @@ function applyPatchToPayload(
     next.models = modelsFromRoutes;
   }
 
+  if (patch.localeRoutes !== undefined) {
+    const validScenes = new Set<RuntimeSceneKey>([
+      "game_text", "game_vision", "game", "novel", "novel_plan", "comic_storyboard", "comic_image_openai", "comic_image_gemini",
+    ]);
+    const providers = getEffectiveProviders(mergePayload(next));
+    const seen = new Set<string>();
+    next.localeRoutes = patch.localeRoutes.flatMap((route) => {
+      if (!validScenes.has(route.scene) || (route.localeGroup !== "zh" && route.localeGroup !== "international")) return [];
+      const providerId = route.providerId?.trim();
+      const primary = route.primary?.trim();
+      const key = `${route.localeGroup}:${route.scene}`;
+      if (!providerId || !primary || !providers.some((provider) => provider.id === providerId) || seen.has(key)) return [];
+      seen.add(key);
+      return [{
+        scene: route.scene,
+        localeGroup: route.localeGroup,
+        providerId,
+        primary,
+        fallbacks: (route.fallbacks ?? []).map((model) => model.trim()).filter(Boolean).slice(0, 5),
+      }];
+    });
+    if (!next.localeRoutes.length) delete next.localeRoutes;
+  }
+
   if (patch.providerPricing !== undefined) {
     const seen = new Set<string>();
     const rules: ProviderPricingRule[] = [];
@@ -516,6 +550,7 @@ export async function saveRuntimeConfig(
     (nextDb.models && Object.keys(nextDb.models).length > 0) ||
     (nextDb.providers && nextDb.providers.length > 0) ||
     (nextDb.routes && nextDb.routes.length > 0) ||
+    (nextDb.localeRoutes && nextDb.localeRoutes.length > 0) ||
     (nextDb.providerPricing && nextDb.providerPricing.length > 0);
 
   if (hasContent) {

@@ -13,8 +13,10 @@ import { createOpenAIClient } from "@/lib/openai-client";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
 import { resolveSceneRoute } from "@/lib/runtime-providers";
+import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import { repoPublicPath } from "@/lib/public-path";
 import { recordProviderUsage } from "@/lib/provider-usage";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import fs from "fs";
 import path from "path";
 
@@ -42,8 +44,10 @@ export type ImageGenDetail = {
   durationMs?: number;
 };
 
-function resolveOpenAIImageClient(): ReturnType<typeof createOpenAIClient> {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
+type LocaleImageOptions = { localeGroup?: RuntimeLocaleGroup };
+
+function resolveOpenAIImageClient(localeGroup?: RuntimeLocaleGroup): ReturnType<typeof createOpenAIClient> {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
   if (ctx) return createOpenAIClientForProvider(ctx.provider);
   return createOpenAIClient();
 }
@@ -84,25 +88,26 @@ export function buildSeedreamGenerationRequest(model: string, prompt: string, n:
 }
 
 /** 豆包 Seedream 在 Joy MaaS 使用专用路由，不兼容 OpenAI `/v1/images/generations`。 */
-function resolveSeedreamImageConfig(): SeedreamImageConfig | null {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
+function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup): SeedreamImageConfig | null {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
   const base = ctx?.provider.baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim();
   const key = ctx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
-  if (!base || !key || !shouldUseJoySeedreamAdapter(getImageGenOpenAIModel())) return null;
+  const model = getImageGenOpenAIModel(localeGroup);
+  if (!base || !key || !shouldUseJoySeedreamAdapter(model)) return null;
   try {
     return {
       endpoint: seedreamGenerationEndpoint(base),
       key,
-      model: getImageGenOpenAIModel(),
+      model,
     };
   } catch {
     return null;
   }
 }
 
-function resolveGeminiImageConfig(): { base: string; key: string; model: string } | null {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_gemini");
-  const model = getImageGenGeminiModel();
+function resolveGeminiImageConfig(localeGroup?: RuntimeLocaleGroup): { base: string; key: string; model: string } | null {
+  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_gemini", localeGroup);
+  const model = getImageGenGeminiModel(localeGroup);
   if (ctx) {
     return {
       base: (ctx.provider.baseUrl?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, ""),
@@ -172,11 +177,13 @@ function imageItemToResult(
 
 async function generateImageWithSeedreamDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number } & LocaleImageOptions,
 ): Promise<ImageGenDetail> {
+  const localeGroup = options?.localeGroup ?? await runtimeLocaleGroupForCurrentRequest();
+  options = { ...options, localeGroup };
   const t0 = Date.now();
-  const cfg = resolveSeedreamImageConfig();
-  if (!cfg) return { ok: false, model: getImageGenOpenAIModel(), error: "未配置 Seedream 网关", durationMs: 0 };
+  const cfg = resolveSeedreamImageConfig(options?.localeGroup);
+  if (!cfg) return { ok: false, model: getImageGenOpenAIModel(options?.localeGroup), error: "未配置 Seedream 网关", durationMs: 0 };
   try {
     const response = await fetch(cfg.endpoint, {
       method: "POST",
@@ -199,7 +206,7 @@ async function generateImageWithSeedreamDetail(
  */
 export async function generateImageWithOpenAI(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number }
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number } & LocaleImageOptions
 ): Promise<ImageGenResult | null> {
   const detail = await generateImageWithOpenAIDetail(prompt, options);
   return detail.ok && detail.url ? { url: detail.url, localPath: detail.localPath } : null;
@@ -207,14 +214,14 @@ export async function generateImageWithOpenAI(
 
 export async function generateImageWithOpenAIDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number } & LocaleImageOptions,
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
-  const model = getImageGenOpenAIModel();
+  const model = getImageGenOpenAIModel(options?.localeGroup);
   if (shouldUseJoySeedreamAdapter(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
-    client = resolveOpenAIImageClient();
+    client = resolveOpenAIImageClient(options?.localeGroup);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, model, error: msg, durationMs: Date.now() - t0 };
@@ -290,7 +297,7 @@ function buildBatchCombinedPrompt(prompts: string[]): string {
  */
 export async function generateImagesBatchOpenAIDetail(
   prompts: string[],
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number } & LocaleImageOptions,
 ): Promise<ImageGenBatchResult> {
   const t0 = Date.now();
   if (prompts.length === 0) {
@@ -301,7 +308,7 @@ export async function generateImagesBatchOpenAIDetail(
     return { results: [one], mode: "batch", durationMs: Date.now() - t0 };
   }
 
-  const model = getImageGenOpenAIModel();
+  const model = getImageGenOpenAIModel(options?.localeGroup);
   if (shouldUseJoySeedreamAdapter(model)) {
     const results = await Promise.all(
       prompts.map((prompt) => generateImageWithSeedreamDetail(prompt, { ...options, n: 1 })),
@@ -310,7 +317,7 @@ export async function generateImagesBatchOpenAIDetail(
   }
   let client: ReturnType<typeof createOpenAIClient>;
   try {
-    client = resolveOpenAIImageClient();
+    client = resolveOpenAIImageClient(options?.localeGroup);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const fail = prompts.map(() => ({ ok: false as const, model, error: msg }));
@@ -388,21 +395,21 @@ export async function generateImagesBatchOpenAIDetail(
 /** 批量文生图：优先 OpenAI `n` 批量，失败格可降级 Gemini。 */
 export async function generateImagesBatchDetailed(
   prompts: string[],
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number },
+  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; timeoutMs?: number } & LocaleImageOptions,
 ): Promise<ImageGenBatchResult> {
   const batch = await generateImagesBatchOpenAIDetail(prompts, options);
   const results = [...batch.results];
   let changed = false;
   for (let i = 0; i < results.length; i++) {
     if (results[i]?.ok) continue;
-    const gemini = await generateImageWithGemini(prompts[i]!, { size: options?.size });
+    const gemini = await generateImageWithGemini(prompts[i]!, { size: options?.size, localeGroup: options?.localeGroup });
     if (gemini?.url) {
       results[i] = {
         ok: true,
         url: gemini.url,
         localPath: gemini.localPath,
         provider: "gemini",
-        model: getImageGenGeminiModel(),
+        model: getImageGenGeminiModel(options?.localeGroup),
       };
       changed = true;
     }
@@ -417,9 +424,9 @@ export async function generateImagesBatchDetailed(
  */
 export async function generateImageWithGemini(
   prompt: string,
-  options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre; timeoutMs?: number },
+  options?: { size?: string; styleReferenceUrls?: string[]; styleGenre?: CoverGenre; timeoutMs?: number } & LocaleImageOptions,
 ): Promise<ImageGenResult | null> {
-  const cfg = resolveGeminiImageConfig();
+  const cfg = resolveGeminiImageConfig(options?.localeGroup);
   if (!cfg) return null;
 
   try {
@@ -489,6 +496,7 @@ export async function generateImageDetailed(
     styleReferenceUrls?: string[];
     /** 与参考图一并约束题材（如都市禁止玄幻画风） */
     styleGenre?: CoverGenre;
+    localeGroup?: RuntimeLocaleGroup;
   },
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
@@ -513,6 +521,7 @@ export async function generateImageDetailed(
       styleReferenceUrls: styleRefs,
       styleGenre: options?.styleGenre,
       timeoutMs: options?.timeoutMs,
+      localeGroup: options?.localeGroup,
     });
     if (geminiRef?.url) {
       return record({
@@ -520,7 +529,7 @@ export async function generateImageDetailed(
         url: geminiRef.url,
         localPath: geminiRef.localPath,
         provider: "gemini",
-        model: getImageGenGeminiModel(),
+        model: getImageGenGeminiModel(options?.localeGroup),
         durationMs: Date.now() - t0,
       });
     }
@@ -538,7 +547,7 @@ export async function generateImageDetailed(
   );
   if (openai.ok) return record({ ...openai, durationMs: openai.durationMs ?? Date.now() - t0 });
 
-  const gemini = await generateImageWithGemini(prompt, { size: options?.size, timeoutMs: options?.timeoutMs });
+  const gemini = await generateImageWithGemini(prompt, { size: options?.size, timeoutMs: options?.timeoutMs, localeGroup: options?.localeGroup });
   const durationMs = Date.now() - t0;
   if (gemini?.url) {
     return record({
@@ -546,7 +555,7 @@ export async function generateImageDetailed(
       url: gemini.url,
       localPath: gemini.localPath,
       provider: "gemini",
-      model: getImageGenGeminiModel(),
+      model: getImageGenGeminiModel(options?.localeGroup),
       durationMs,
     });
   }
@@ -569,6 +578,7 @@ export async function generateImage(
     quality?: "standard" | "high";
     timeoutMs?: number;
     coverGenre?: CoverGenre;
+    localeGroup?: RuntimeLocaleGroup;
   },
 ): Promise<ImageGenResult | null> {
   const detail = await generateImageDetailed(prompt, {

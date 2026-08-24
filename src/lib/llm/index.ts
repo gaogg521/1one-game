@@ -12,8 +12,9 @@ import { getModelCascadeForProvider, getNovelStyleTextModelCascade, getProviderK
 import type { GameModelRouteInput } from "@/lib/game-model-route";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { LlmJsonRequest, LlmJsonResult, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
-import { resolveSceneRoute, protocolToLlmProvider, RUNTIME_SCENE_KEYS, type RuntimeSceneKey } from "@/lib/runtime-providers";
+import { getLocaleRouteOverride, resolveSceneRoute, protocolToLlmProvider, RUNTIME_SCENE_KEYS, type RuntimeLocaleGroup, type RuntimeSceneKey } from "@/lib/runtime-providers";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import {
   createNovelOpenAIClientForProvider,
   createOpenAIClientForProvider,
@@ -57,8 +58,8 @@ export function getActiveProvider(): LlmProvider {
   return normalizeProvider(process.env.LLM_PROVIDER);
 }
 
-function resolveSceneContext(scene: RuntimeSceneKey) {
-  return resolveSceneRoute(getRuntimeConfigSync().payload, scene);
+function resolveSceneContext(scene: RuntimeSceneKey, localeGroup?: RuntimeLocaleGroup) {
+  return resolveSceneRoute(getRuntimeConfigSync().payload, scene, localeGroup);
 }
 
 function inferSceneForModel(model: string): RuntimeSceneKey | undefined {
@@ -97,19 +98,22 @@ async function observeLlmResult<T extends LlmJsonResult | LlmTextResult>(
 }
 
 export async function llmJson(
-  req: Omit<LlmJsonRequest, "provider"> & { scene?: RuntimeSceneKey },
+  req: Omit<LlmJsonRequest, "provider"> & { scene?: RuntimeSceneKey; localeGroup?: RuntimeLocaleGroup },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): Promise<LlmJsonResult> {
   return observeLlmResult(req.model, "json", async () => {
-  const scene = resolveRequestScene(req);
+  const { localeGroup: suppliedLocaleGroup, ...request } = req;
+  const scene = resolveRequestScene(request);
   if (scene) {
-    const ctx = resolveSceneContext(scene);
+    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+    const payload = getRuntimeConfigSync().payload;
+    const ctx = resolveSceneRoute(payload, scene, localeGroup);
     if (!ctx) {
       return {
         ok: false,
         provider: "openai_compatible",
-        model: req.model,
-        modeTried: req.mode,
+        model: request.model,
+        modeTried: request.mode,
         error: `未配置场景 ${scene} 的服务商`,
       };
     }
@@ -118,22 +122,24 @@ export async function llmJson(
       return {
         ok: false,
         provider: protocolToLlmProvider(ctx.provider.protocol),
-        model: req.model,
-        modeTried: req.mode,
+        model: request.model,
+        modeTried: request.mode,
         error: cred.reason ?? "missing credentials",
       };
     }
     const provider = protocolToLlmProvider(ctx.provider.protocol);
+    const model = getLocaleRouteOverride(payload, scene, localeGroup)?.primary || request.model;
+    const routedRequest = { ...request, model };
     return withProviderEnv(ctx.provider, async () => {
-      if (provider === "anthropic") return await llmJsonAnthropic({ ...req, provider });
-      if (provider === "gemini") return await llmJsonGemini({ ...req, provider });
+      if (provider === "anthropic") return await llmJsonAnthropic({ ...routedRequest, provider });
+      if (provider === "gemini") return await llmJsonGemini({ ...routedRequest, provider });
       const tier = opts?.lengthTier ?? "medium";
       const client = opts?.novelLongRun
         ? createNovelOpenAIClientForProvider(ctx.provider, tier)
         : createOpenAIClientForProvider(ctx.provider);
       return await llmJsonOpenAICompatible({
         client,
-        req: { ...req, provider },
+        req: { ...routedRequest, provider },
         gatewayBaseUrl: ctx.provider.baseUrl,
       });
     });
@@ -142,15 +148,15 @@ export async function llmJson(
   const provider = getActiveProvider();
   const keyStatus = getProviderKeyStatus(provider);
   if (!keyStatus.ok) {
-    return { ok: false, provider, model: req.model, modeTried: req.mode, error: keyStatus.reason ?? "missing key" };
+    return { ok: false, provider, model: request.model, modeTried: request.mode, error: keyStatus.reason ?? "missing key" };
   }
-  if (provider === "anthropic") return await llmJsonAnthropic({ ...req, provider });
-  if (provider === "gemini") return await llmJsonGemini({ ...req, provider });
+  if (provider === "anthropic") return await llmJsonAnthropic({ ...request, provider });
+  if (provider === "gemini") return await llmJsonGemini({ ...request, provider });
   const tier = opts?.lengthTier ?? "medium";
   const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
   return await llmJsonOpenAICompatible({
     client,
-    req: { ...req, provider },
+    req: { ...request, provider },
     gatewayBaseUrl: process.env.OPENAI_BASE_URL,
   });
   });
@@ -165,46 +171,51 @@ export async function llmNovelJson(
 }
 
 export async function llmText(
-  req: Omit<LlmTextRequest, "provider"> & { scene?: RuntimeSceneKey },
+  req: Omit<LlmTextRequest, "provider"> & { scene?: RuntimeSceneKey; localeGroup?: RuntimeLocaleGroup },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): Promise<LlmTextResult> {
   return observeLlmResult(req.model, "text", async () => {
-  const scene = resolveRequestScene(req);
+  const { localeGroup: suppliedLocaleGroup, ...request } = req;
+  const scene = resolveRequestScene(request);
   if (scene) {
-    const ctx = resolveSceneContext(scene);
+    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+    const payload = getRuntimeConfigSync().payload;
+    const ctx = resolveSceneRoute(payload, scene, localeGroup);
     if (!ctx) {
-      return { ok: false, provider: "openai_compatible", model: req.model, error: `未配置场景 ${scene} 的服务商` };
+      return { ok: false, provider: "openai_compatible", model: request.model, error: `未配置场景 ${scene} 的服务商` };
     }
     const cred = providerCredentialOk(ctx.provider);
     if (!cred.ok) {
       return {
         ok: false,
         provider: protocolToLlmProvider(ctx.provider.protocol),
-        model: req.model,
+        model: request.model,
         error: cred.reason ?? "missing credentials",
       };
     }
     const provider = protocolToLlmProvider(ctx.provider.protocol);
+    const model = getLocaleRouteOverride(payload, scene, localeGroup)?.primary || request.model;
+    const routedRequest = { ...request, model };
     return withProviderEnv(ctx.provider, async () => {
       const tier = opts?.lengthTier ?? "medium";
       const client = opts?.novelLongRun
         ? createNovelOpenAIClientForProvider(ctx.provider, tier)
         : createOpenAIClientForProvider(ctx.provider);
-      return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
+      return await llmTextOpenAICompatible({ client, req: { ...routedRequest, provider } });
     });
   }
 
   const provider = getActiveProvider();
   const keyStatus = getProviderKeyStatus(provider);
   if (!keyStatus.ok) {
-    return { ok: false, provider, model: req.model, error: keyStatus.reason ?? "missing key" };
+    return { ok: false, provider, model: request.model, error: keyStatus.reason ?? "missing key" };
   }
   const tier = opts?.lengthTier ?? "medium";
   const client = opts?.novelLongRun ? getNovelOpenAIClient(tier) : getOpenAIClient();
   if (provider === "anthropic" || provider === "gemini") {
-    return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
+    return await llmTextOpenAICompatible({ client, req: { ...request, provider } });
   }
-  return await llmTextOpenAICompatible({ client, req: { ...req, provider } });
+  return await llmTextOpenAICompatible({ client, req: { ...request, provider } });
   });
 }
 
@@ -217,16 +228,21 @@ export function llmNovelText(
 
 /** OpenAI 兼容网关流式文本（chunk 为增量字符串）；需网关支持 `stream: true`。 */
 export async function* llmTextStream(
-  req: Omit<LlmTextRequest, "provider"> & { scene?: RuntimeSceneKey },
+  req: Omit<LlmTextRequest, "provider"> & { scene?: RuntimeSceneKey; localeGroup?: RuntimeLocaleGroup },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): AsyncGenerator<string> {
-  const scene = resolveRequestScene(req);
+  const { localeGroup: suppliedLocaleGroup, ...request } = req;
+  const scene = resolveRequestScene(request);
   if (scene) {
-    const ctx = resolveSceneContext(scene);
+    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+    const payload = getRuntimeConfigSync().payload;
+    const ctx = resolveSceneRoute(payload, scene, localeGroup);
     if (!ctx) throw new Error(`未配置场景 ${scene} 的服务商`);
     const cred = providerCredentialOk(ctx.provider);
     if (!cred.ok) throw new Error(cred.reason ?? "missing credentials");
     const provider = protocolToLlmProvider(ctx.provider.protocol);
+    const model = getLocaleRouteOverride(payload, scene, localeGroup)?.primary || request.model;
+    const routedRequest = { ...request, model };
     const tier = opts?.lengthTier ?? "medium";
     const prev = snapshotProviderEnv();
     applyProviderToProcessEnv(ctx.provider);
@@ -237,7 +253,7 @@ export async function* llmTextStream(
       const client = opts?.novelLongRun
         ? createNovelOpenAIClientForProvider(ctx.provider, tier)
         : createOpenAIClientForProvider(ctx.provider);
-      for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...req, provider } })) {
+      for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...routedRequest, provider } })) {
         outputUnits += chunk.length;
         yield chunk;
       }
@@ -247,7 +263,7 @@ export async function* llmTextStream(
       recordProviderUsage({
         modality: "llm",
         provider,
-        model: req.model,
+        model,
         operation: "text",
         status: succeeded ? "succeeded" : "failed",
         durationMs: Date.now() - startedAt,
@@ -269,7 +285,7 @@ export async function* llmTextStream(
   let outputUnits = 0;
   let succeeded = false;
   try {
-    for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...req, provider } })) {
+    for await (const chunk of llmTextStreamOpenAICompatible({ client, req: { ...request, provider } })) {
       outputUnits += chunk.length;
       yield chunk;
     }
@@ -278,7 +294,7 @@ export async function* llmTextStream(
     recordProviderUsage({
       modality: "llm",
       provider,
-      model: req.model,
+      model: request.model,
       operation: "text",
       status: succeeded ? "succeeded" : "failed",
       durationMs: Date.now() - startedAt,

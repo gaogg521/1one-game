@@ -28,6 +28,7 @@ import {
 } from "@/lib/comic-character-sheet-gen";
 import { getComicPanelGenConcurrency } from "@/lib/model-config";
 import { PRODUCT } from "@/lib/product-config";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import type { AppLocale } from "@/i18n/routing";
 import { comicPanelProgressMessage } from "@/lib/i18n/progress-message";
 
@@ -110,6 +111,7 @@ export async function renderComicPanels(
   },
 ): Promise<RenderComicPanelsResult> {
   const locale = opts?.uiLocale ?? "zh-Hans";
+  const localeGroup = runtimeLocaleGroup(locale);
   const pm = (key: string, params?: Record<string, string | number | undefined | null>) =>
     comicPanelProgressMessage(locale, key, params);
   const storyGenre = opts?.storyGenre ?? "general";
@@ -341,6 +343,7 @@ export async function renderComicPanels(
           size: "1024x1024",
           quality: "standard",
           timeoutMs,
+          localeGroup,
         });
       } finally {
         clearInterval(heartbeat);
@@ -361,6 +364,7 @@ export async function renderComicPanels(
             size: "1024x1024",
             quality: "standard",
             timeoutMs,
+            localeGroup,
           });
           if (retry.ok && retry.url) detail = retry;
         }
@@ -450,6 +454,7 @@ export async function renderComicPanels(
             styleReferenceUrls: useRefs,
             styleGenre: storyGenre,
             timeoutMs,
+            localeGroup,
           };
           detail = await generateImageDetailed(prompt, genOpts);
           if ((!detail.ok || !detail.url) && process.env.COMIC_PANEL_RETRY !== "0") {

@@ -6,6 +6,7 @@ import { CHART_COLORS } from "@/components/admin/AdminCharts";
 import type {
   LlmProtocol,
   RuntimeLlmProvider,
+  RuntimeLocaleModelRoute,
   RuntimeModelRoute,
   RuntimeProviderPublic,
   RuntimeSceneKey,
@@ -58,6 +59,7 @@ export type RuntimeConfigView = {
   };
   providers: RuntimeProviderPublic[];
   routes: RuntimeModelRoute[];
+  localeRoutes: RuntimeLocaleModelRoute[];
   providerPricing: ProviderPricingRule[];
 };
 
@@ -981,8 +983,10 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
   const [providersForm, setProvidersForm] = useState<ProviderFormState[]>([]);
   const [routesForm, setRoutesForm] = useState<RuntimeModelRoute[]>([]);
+  const [localeRoutesForm, setLocaleRoutesForm] = useState<RuntimeLocaleModelRoute[]>([]);
   const [savedProviders, setSavedProviders] = useState<ProviderFormState[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RuntimeModelRoute[]>([]);
+  const [savedLocaleRoutes, setSavedLocaleRoutes] = useState<RuntimeLocaleModelRoute[]>([]);
   const [pricingForm, setPricingForm] = useState<ProviderPricingRule[]>([]);
   const [savedPricing, setSavedPricing] = useState<ProviderPricingRule[]>([]);
   const [newProviderTemplate, setNewProviderTemplate] = useState<ProviderTemplateId>("litellm");
@@ -996,6 +1000,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setSavedProviders(JSON.parse(JSON.stringify(pf)) as ProviderFormState[]);
     setRoutesForm(data.routes.map((r) => ({ ...r, fallbacks: [...r.fallbacks] })));
     setSavedRoutes(JSON.parse(JSON.stringify(data.routes)) as RuntimeModelRoute[]);
+    setLocaleRoutesForm(data.localeRoutes.map((r) => ({ ...r, fallbacks: [...r.fallbacks] })));
+    setSavedLocaleRoutes(JSON.parse(JSON.stringify(data.localeRoutes)) as RuntimeLocaleModelRoute[]);
     setPricingForm(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
     setSavedPricing(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
   }, []);
@@ -1034,8 +1040,9 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   const dirty = useMemo(() => {
     return JSON.stringify(providersForm) !== JSON.stringify(savedProviders)
       || JSON.stringify(routesForm) !== JSON.stringify(savedRoutes)
+      || JSON.stringify(localeRoutesForm) !== JSON.stringify(savedLocaleRoutes)
       || JSON.stringify(pricingForm) !== JSON.stringify(savedPricing);
-  }, [pricingForm, providersForm, routesForm, savedPricing, savedProviders, savedRoutes]);
+  }, [localeRoutesForm, pricingForm, providersForm, routesForm, savedLocaleRoutes, savedPricing, savedProviders, savedRoutes]);
 
   const savedProviderIds = useMemo(() => new Set(savedProviders.map((p) => p.id)), [savedProviders]);
 
@@ -1106,6 +1113,36 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setRoutesForm((prev) => prev.map((r) => (r.scene === scene ? { ...r, ...patch } : r)));
   }
 
+  function localeRouteByScene(scene: RuntimeSceneKey, localeGroup: "zh" | "international") {
+    return localeRoutesForm.find((route) => route.scene === scene && route.localeGroup === localeGroup);
+  }
+
+  function updateLocaleRoute(
+    scene: RuntimeSceneKey,
+    localeGroup: "zh" | "international",
+    patch: Partial<RuntimeModelRoute>,
+  ) {
+    setLocaleRoutesForm((current) => {
+      const existing = current.find((route) => route.scene === scene && route.localeGroup === localeGroup);
+      const fallback = routesForm.find((route) => route.scene === scene);
+      const next: RuntimeLocaleModelRoute = {
+        scene,
+        localeGroup,
+        providerId: existing?.providerId ?? fallback?.providerId ?? providerOptions[0]?.id ?? "",
+        primary: existing?.primary ?? fallback?.primary ?? "",
+        fallbacks: existing?.fallbacks ?? fallback?.fallbacks ?? [],
+        ...patch,
+      };
+      return existing
+        ? current.map((route) => route === existing ? next : route)
+        : [...current, next];
+    });
+  }
+
+  function clearLocaleRoute(scene: RuntimeSceneKey, localeGroup: "zh" | "international") {
+    setLocaleRoutesForm((current) => current.filter((route) => route.scene !== scene || route.localeGroup !== localeGroup));
+  }
+
   function routeByScene(scene: RuntimeSceneKey): RuntimeModelRoute | undefined {
     return routesForm.find((r) => r.scene === scene);
   }
@@ -1113,6 +1150,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
   function discardChanges() {
     setProvidersForm(JSON.parse(JSON.stringify(savedProviders)) as ProviderFormState[]);
     setRoutesForm(JSON.parse(JSON.stringify(savedRoutes)) as RuntimeModelRoute[]);
+    setLocaleRoutesForm(JSON.parse(JSON.stringify(savedLocaleRoutes)) as RuntimeLocaleModelRoute[]);
     setPricingForm(JSON.parse(JSON.stringify(savedPricing)) as ProviderPricingRule[]);
     onNotice({ kind: "ok", text: t("discardDone") });
   }
@@ -1147,6 +1185,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     const data = await patch({
       providers: providersForm.map(providerToPayload),
       routes: routesForm,
+      localeRoutes: localeRoutesForm,
       providerPricing: pricingForm,
     });
     if (data) onNotice({ kind: "ok", text: t("saveDone") });
@@ -1361,6 +1400,63 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             </div>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("routingEditHint")}</p>
           </div>
+          <section className="border-b border-white/8 bg-sky-500/5 px-4 py-5 sm:px-6" data-testid="admin-runtime-locale-routing">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="text-base font-semibold text-[var(--gc-text)]">语言模型策略</h4>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">
+                  简体中文与繁体中文共用“中文”池；英语、马来语、泰语等使用“国际”池。未设置的场景保持使用下方全局分域模型，确保旧生产配置不受影响。
+                </p>
+              </div>
+              <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">
+                {localeRoutesForm.length} 个语言覆盖已配置
+              </span>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {(["zh", "international"] as const).map((localeGroup) => (
+                <div key={localeGroup} className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h5 className="font-medium text-[var(--gc-text)]">{localeGroup === "zh" ? "中文池（简体 / 繁体）" : "国际池（非中文）"}</h5>
+                      <p className="mt-1 text-xs text-[var(--gc-text-faint)]">
+                        {localeGroup === "zh" ? "建议中文图像使用 doubao-seedream-5-0-pro" : "建议国际图像使用 gpt-image-2"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {RUNTIME_SCENE_CATALOG.map((meta) => {
+                      const override = localeRouteByScene(meta.scene, localeGroup);
+                      const inherited = routesForm.find((route) => route.scene === meta.scene);
+                      const route = override ?? inherited;
+                      const provider = providersForm.find((item) => item.id === route?.providerId);
+                      const suggestions = provider ? parseModelsText(provider.modelsText) : [];
+                      return (
+                        <div key={meta.scene} className="grid gap-2 rounded-lg border border-white/6 p-2.5 md:grid-cols-[minmax(118px,0.8fr)_minmax(120px,1fr)_minmax(150px,1.2fr)_auto] md:items-center">
+                          <div>
+                            <p className="text-xs font-medium text-[var(--gc-text)]">{t(meta.labelKey)}</p>
+                            <p className="text-[10px] text-[var(--gc-text-faint)]">{override ? "语言覆盖" : "继承全局"}</p>
+                          </div>
+                          <select className={inputCls} value={route?.providerId ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { providerId: e.target.value })}>
+                            {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                          </select>
+                          <div className="space-y-1">
+                            {suggestions.length > 0 ? (
+                              <select className={inputCls} value={route?.primary ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { primary: e.target.value })}>
+                                <option value="">选择模型</option>
+                                {suggestions.map((model) => <option key={model} value={model}>{model}</option>)}
+                              </select>
+                            ) : null}
+                            <input className={inputCls} value={route?.primary ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { primary: e.target.value })} placeholder="模型 ID" />
+                          </div>
+                          {override ? <button type="button" onClick={() => clearLocaleRoute(meta.scene, localeGroup)} className="text-xs text-[var(--gc-muted)] hover:text-red-200">恢复继承</button> : <span className="text-xs text-[var(--gc-text-faint)]">全局</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
           <div className="overflow-x-auto px-4 pb-2 sm:px-6">
             <table className="w-full min-w-[720px] text-left">
               <thead>

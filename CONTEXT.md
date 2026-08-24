@@ -715,3 +715,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - OpenAI 兼容服务商现在可在已填写/保存 Base URL 与 API Key 后点击「拉取模型列表」。对未修改的已保存配置，浏览器只提交 `providerId`，服务端使用加密保存的 Key 调用 `${Base URL}/models`；新建或改动中的服务商仍只能用管理员刚填写的草稿 Key，避免已保存密钥流向未保存的新地址。
 - 返回结果仅保留去重、排序后的 model ID，不保存上游响应正文；管理员在可滚动的多选列表勾选模型，勾选结果同步到「模型目录」草稿，仍须点击「保存并立即生效」才落库。Gemini/Anthropic 的原生目录协议尚未接入，界面明确说明当前范围，不伪装为已支持。
 - 新增 `qa:runtime-provider-model-discovery`：模拟 `/models` 响应，验证 endpoint 归一化、鉴权转发、去重排序和不支持协议的显式错误；五语文案、定向 ESLint 与 TypeScript 待本批构建前复验。
+
+## P37 第一段：语言感知的模型路由（2026-08-24）
+
+- Runtime Config 新增稀疏的 `localeRoutes`：`zh-Hans`、`zh-Hant` 统一进入中文池，其他产品语言进入国际池；未配置语言覆盖时严格回退到既有全局分域 `routes`，升级和代码发布不会替换生产正在使用的模型。
+- Console 的「业务模型路由」页增加双列语言策略：中文池与国际池可针对游戏、小说、漫画和图片场景独立选择已配置网关与模型；每格明确显示“继承全局 / 语言覆盖”，可恢复继承。中文图片推荐 `doubao-seedream-5-0-pro`，国际图片推荐 `gpt-image-2`，但推荐不会自动写入或覆盖生产配置。
+- 实际请求层已读取 `x-app-locale` / `Accept-Language`：有语言覆盖时 JSON 生成使用该场景的覆盖模型和服务商；漫画配图与通用图片入口同样将 locale 传至 OpenAI、Seedream、Gemini 路由。没有 HTTP 请求上下文的后台任务仍安全地继承全局路由。
+- 新增 `qa:runtime-locale-routing`，验证简繁归并、国际路由以及覆盖缺失时的全局回退；TypeScript、运行时配置隔离冒烟和生产构建待本批提交前复验。

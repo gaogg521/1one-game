@@ -3,6 +3,7 @@
  */
 import { PRODUCT } from "@/lib/product-config";
 import { getEffectiveModels, getSceneModelCascade } from "@/lib/runtime-config";
+import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 
 export type ImageGenSizeOption = import("@/lib/product-config").ImageGenSizeOption;
 
@@ -73,15 +74,15 @@ export function getComicStoryboardModelCascade(): string[] {
   return getNovelStyleTextModelCascade();
 }
 
-export function getImageGenOpenAIModel(): string {
-  const cascade = getSceneModelCascade("comic_image_openai");
+export function getImageGenOpenAIModel(localeGroup?: RuntimeLocaleGroup): string {
+  const cascade = getSceneModelCascade("comic_image_openai", localeGroup);
   if (cascade[0]) return cascade[0];
   const { imageOpenAI } = getEffectiveModels();
   return imageOpenAI ?? PRODUCT.models.imageOpenAI;
 }
 
-export function getImageGenGeminiModel(): string {
-  const cascade = getSceneModelCascade("comic_image_gemini");
+export function getImageGenGeminiModel(localeGroup?: RuntimeLocaleGroup): string {
+  const cascade = getSceneModelCascade("comic_image_gemini", localeGroup);
   if (cascade[0]) return cascade[0];
   const { imageGemini } = getEffectiveModels();
   return imageGemini ?? PRODUCT.models.imageGemini;

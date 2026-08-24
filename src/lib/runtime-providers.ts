@@ -36,6 +36,17 @@ export type RuntimeModelRoute = {
   fallbacks: string[];
 };
 
+/**
+ * Language policy is deliberately coarse grained: Simplified + Traditional
+ * Chinese share the Chinese cultural/model pool; every other UI language uses
+ * the international pool.  It is a routing policy, not a UI translation.
+ */
+export type RuntimeLocaleGroup = "zh" | "international";
+
+export type RuntimeLocaleModelRoute = RuntimeModelRoute & {
+  localeGroup: RuntimeLocaleGroup;
+};
+
 export type RuntimeProviderPublic = {
   id: string;
   name: string;
@@ -253,6 +264,17 @@ export function getEffectiveRoutes(payload: RuntimeSecretsPayload): RuntimeModel
   return mergeRoutesWithDefaults(payload.routes, payload);
 }
 
+/** Locale overrides are sparse by design: an absent override safely falls back
+ * to the existing global scene route, so upgrading never changes live traffic. */
+export function getLocaleRouteOverride(
+  payload: RuntimeSecretsPayload,
+  scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
+): RuntimeLocaleModelRoute | undefined {
+  if (!localeGroup) return undefined;
+  return payload.localeRoutes?.find((route) => route.scene === scene && route.localeGroup === localeGroup);
+}
+
 export function routeModelCascade(route: RuntimeModelRoute): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -269,10 +291,11 @@ export function routeModelCascade(route: RuntimeModelRoute): string[] {
 export function resolveSceneRoute(
   payload: RuntimeSecretsPayload,
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): ResolvedSceneRoute | null {
   const providers = getEffectiveProviders(payload);
   const routes = getEffectiveRoutes(payload);
-  const route = routes.find((r) => r.scene === scene);
+  const route = getLocaleRouteOverride(payload, scene, localeGroup) ?? routes.find((r) => r.scene === scene);
   if (!route) return null;
   const provider = providers.find((p) => p.id === route.providerId && p.enabled !== false);
   if (!provider?.apiKey?.trim()) return null;
