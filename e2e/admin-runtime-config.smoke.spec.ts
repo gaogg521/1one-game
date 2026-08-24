@@ -37,6 +37,19 @@ test.describe("Admin 网关/模型页", () => {
     await expect(page.getByTestId("admin-runtime-seed-defaults")).toBeVisible();
     await expect(page.getByTestId("admin-console-preferences")).toBeVisible();
 
+    const provider = page.locator('[data-testid^="admin-runtime-provider-"][data-edit-state="live"]').first();
+    const providerTestId = await provider.getAttribute("data-testid");
+    expect(providerTestId).toBeTruthy();
+    const providerId = providerTestId!.replace("admin-runtime-provider-", "");
+    let savedProviderTestPayload: unknown;
+    await page.route("**/api/admin/runtime-config/test-provider", async (route) => {
+      savedProviderTestPayload = route.request().postDataJSON();
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, message: "models_ok" }) });
+    });
+    await provider.locator("button").first().click();
+    await page.getByTestId(`admin-runtime-provider-${providerId}-test`).click();
+    await expect.poll(() => savedProviderTestPayload).toEqual({ providerId });
+
     await page.screenshot({
       path: path.join(OUT, "runtime-config-gateway.png"),
       fullPage: true,

@@ -72,6 +72,7 @@
     "qa:literary-user-journey": "tsx scripts/qa-literary-user-journey.ts",
     "qa:platform-user-journey": "tsx scripts/qa-platform-user-journey.ts",
     "qa:runtime-config-admin": "tsx scripts/qa-runtime-config-admin.ts",
+    "qa:runtime-provider-saved-test": "tsx scripts/qa-runtime-provider-saved-test.ts",
     "qa:referral-funnel": "tsx scripts/qa-referral-funnel.ts",
     "qa:creator-publication": "tsx scripts/qa-creator-publication.ts",
     "qa:creator-publication:http": "tsx scripts/qa-creator-publication-api.ts",

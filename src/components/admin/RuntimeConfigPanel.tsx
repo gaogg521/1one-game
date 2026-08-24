@@ -477,7 +477,8 @@ function ProviderEditor({
 
   async function testConnection() {
     const apiKey = provider.apiKeyDraft.trim();
-    if (!apiKey) {
+    const useSavedProvider = editState === "live" && Boolean(provider.apiKeyMasked);
+    if (!useSavedProvider && !apiKey) {
       setTestMsg(t("testEnterKey"));
       return;
     }
@@ -487,7 +488,11 @@ function ProviderEditor({
       const res = await fetch("/api/admin/runtime-config/test-provider", {
         method: "POST",
         headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: providerToPayload({ ...provider, apiKeyDraft: apiKey }) }),
+        body: JSON.stringify(
+          useSavedProvider
+            ? { providerId: provider.id }
+            : { provider: providerToPayload({ ...provider, apiKeyDraft: apiKey }) },
+        ),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string };
       if (data.ok) {
@@ -642,6 +647,7 @@ function ProviderEditor({
                 type="button"
                 disabled={testing}
                 onClick={() => void testConnection()}
+                data-testid={`admin-runtime-provider-${provider.id}-test`}
                 className="text-sm text-[var(--gc-accent)] hover:underline disabled:opacity-50"
               >
                 {testing ? t("testProviderBusy") : t("testProvider")}

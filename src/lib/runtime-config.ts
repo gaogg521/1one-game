@@ -6,10 +6,8 @@ import { PRODUCT } from "@/lib/product-config";
 import { prisma } from "@/lib/prisma";
 import { decryptRuntimeSecrets, encryptRuntimeSecrets } from "@/lib/runtime-config-crypto";
 import {
-  buildDefaultRoutes,
   buildLegacyProviders,
   getEffectiveProviders,
-  getEffectiveRoutes,
   mergeRoutesWithDefaults,
   normalizeProviderPatch,
   providerApiKeySource,
@@ -253,6 +251,17 @@ export async function loadRuntimeConfig(): Promise<ResolvedRuntime> {
   cacheAt = Date.now();
   applyRuntimeToProcessEnv(cache);
   return cache;
+}
+
+/**
+ * 仅供服务端受权操作使用：按 ID 取得已加密保存的完整服务商配置。
+ * 不要把这个返回值暴露到 RuntimeConfigPublicView 或任何客户端响应中。
+ */
+export async function getSavedRuntimeProvider(providerId: string): Promise<RuntimeLlmProvider | null> {
+  const id = providerId.trim();
+  if (!id) return null;
+  const runtime = await loadRuntimeConfig();
+  return getEffectiveProviders(runtime.payload).find((provider) => provider.id === id) ?? null;
 }
 
 export function invalidateRuntimeConfigCache(): void {
