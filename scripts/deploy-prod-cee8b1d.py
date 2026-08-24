@@ -57,9 +57,11 @@ def main() -> int:
             "PY"
         ),
         f"cd {repo} && HOME={repo} NODE_OPTIONS='--max-old-space-size=2560' npm run build",
+        f"chown -R www-data:www-data {repo}/.next",
         f"cd {repo} && {env} && npm run seed:samples",
-        "systemctl restart operone || true",
+        "systemctl restart operone",
         "sleep 6",
+        "systemctl is-active --quiet operone",
         local_health_check_command(),
         f"cd {repo} && bash scripts/deploy/install-generation-worker-timer.sh",
     ]
@@ -67,7 +69,7 @@ def main() -> int:
     try:
         for i, cmd in enumerate(steps):
             code = run(client, cmd)
-            if code != 0 and i not in (len(steps) - 2,):
+            if code != 0:
                 return code
     finally:
         client.close()

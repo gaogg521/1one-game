@@ -729,3 +729,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 「生成运营队列」优先展示该任务实际记录到的 provider、model、调用次数、成功次数、耗时和账本成本；未产生账本记录时才显示当前路由估算，并明确区分“没有成本规则”与零成本，避免把配置或估算伪称为实际消耗。
 - 「网关与分域模型 → 成本估算规则」可设置每日模型预算阈值（微单位）。Ops Health 汇总当日已记录的成本，在 80% 报警、100% 失败；没有价格规则的调用不会被虚构计费。预算只是运营告警，不会在请求中偷偷截断创作者生成。
 - 验证：Prisma 迁移、TypeScript、定向 ESLint、`qa:provider-usage`（含任务上下文持久化）、`qa:runtime-config-admin`（含预算持久化）、`qa:creator-core`、`qa:runtime-locale-routing` 均通过；提交后仍需生产构建、迁移和公网健康检查。
+
+## P39 修复：首页落入旧游戏客户端与生产构建错配（2026-08-24）
+
+- 现象：`/zh-Hans` 的服务端 HTML 仍是 Operone 首页，但页面引用的旧 Next 分块返回 404，浏览器报 `ChunkLoadError`，可表现为地址仍是首页而客户端遗留在斗兽棋样品页。
+- 根因：生产服务器曾以未完成的 `.next` 构建重启失败；旧 Node 进程继续运行时与后来写入磁盘的新静态目录版本错配。语言路由在共享客户端依赖图中静态导入 `next/headers`，使 Next 16 生产构建失败，且旧发布流程对 service restart/health 的失败未严格中止。
+- 修复：将漫画角色 roster 的 LLM 调用拆入 server-only 入口，语言请求头改为运行时导入以避免污染客户端依赖图；`663895cc` 与 `9e6ab18` 已在 `origin/main`。生产机已同步 `9e6ab18`，本地隔离 production build 成功，生产完整 `BUILD_ID`、TLS/SNI health、首页 HTML 当前引用的 17 个分块和真实浏览器首页均已验证通过。
+- 发布脚本 `scripts/deploy-prod-cee8b1d.py` 现会对重启、service active 与 health 的任何失败直接退出，并在 build 后将 `.next` 归属给 `www-data`；提交该脚本后，后续发布不再把不完整构建误报为成功。
