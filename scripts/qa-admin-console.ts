@@ -26,6 +26,7 @@ import {
   validateConsoleSsoState,
 } from "../src/lib/auth/console-sso";
 import { chartScaleMax } from "../src/lib/admin-chart-scale";
+import { buildConsoleNavSections, canAccessConsoleTab } from "../src/lib/console-nav";
 import { THEME_SWATCH_COLORS, THEME_META_COLOR, type ThemeId } from "../src/lib/themes";
 
 config();
@@ -73,6 +74,26 @@ function runOfflineChecks(): Check[] {
 
   checks.push(
     assert("isAdminConsolePath", isAdminConsolePath(path) && isAdminConsolePath(`${path}/audit`)),
+  );
+
+  const contentTabs = buildConsoleNavSections(true, "content_operator").flatMap((section) => section.items.map((item) => item.id));
+  checks.push(
+    assert(
+      "content operator console scope",
+      contentTabs.includes("pending") && contentTabs.includes("works") && !contentTabs.includes("runtime"),
+    ),
+  );
+  checks.push(
+    assert(
+      "finance console direct URL scope",
+      canAccessConsoleTab("billing", true, "finance_viewer") && !canAccessConsoleTab("users", true, "finance_viewer"),
+    ),
+  );
+  checks.push(
+    assert(
+      "platform console direct URL scope",
+      canAccessConsoleTab("gen-errors", true, "platform_operator") && !canAccessConsoleTab("runtime", true, "platform_operator"),
+    ),
   );
 
   const prevHost = process.env.ADMIN_CONSOLE_HOST;

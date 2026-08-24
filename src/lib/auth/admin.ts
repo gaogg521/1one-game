@@ -4,22 +4,9 @@ import type { AuthUser, UserRole } from "@/lib/auth/types";
 import { apiErrorMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { prisma } from "@/lib/prisma";
+import { hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
 
-export type AdminCapability = "content" | "growth" | "finance_read" | "platform_ops" | "user_admin" | "quota_write";
-
-const ROLE_CAPABILITIES: Record<UserRole, readonly AdminCapability[]> = {
-  user: [],
-  content_operator: ["content"],
-  growth_operator: ["growth"],
-  finance_viewer: ["finance_read"],
-  platform_operator: ["platform_ops"],
-  admin: ["content", "growth", "finance_read", "platform_ops", "user_admin", "quota_write"],
-  super_admin: ["content", "growth", "finance_read", "platform_ops", "user_admin", "quota_write"],
-};
-
-export function hasAdminCapability(user: AuthUser | null | undefined, viaLegacy: boolean, capability: AdminCapability): boolean {
-  return viaLegacy || Boolean(user && ROLE_CAPABILITIES[user.role].includes(capability));
-}
+export { hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
 
 async function safeGetCurrentAuthUser(): Promise<AuthUser | null> {
   try {

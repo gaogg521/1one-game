@@ -18,6 +18,11 @@ export type ConsoleTab =
 export type ConsoleNavItem = {
   id: ConsoleTab;
   labelKey: string;
+  capability?: AdminCapability;
+  /** API routes that intentionally require an administrator rather than a scoped operator. */
+  roles?: readonly UserRole[];
+  /** Secrets and provider credentials are never available outside super-admin. */
+  requiresSuperAdmin?: boolean;
 };
 
 export type ConsoleNavSection = {
@@ -45,24 +50,23 @@ export const CONSOLE_USER_SECTIONS: ConsoleNavSection[] = [
 ];
 
 /**
- * 仅 super_admin 可见。按运营工作流分组，避免把内容治理、增长、运行时配置混成一个长列表。
- * 组别本身不改变权限；细粒度权限仍在页面/API 层执行。
+ * 按运营工作流分组；每一项按能力最小化展示，API 层仍执行最终鉴权。
  */
 export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
   {
     id: "admin-operations",
     labelKey: "navSectionAdminOperations",
     superAdminOnly: true,
-    items: [{ id: "overview", labelKey: "tabOverview" }],
+    items: [{ id: "overview", labelKey: "tabOverview", roles: ["admin", "super_admin"] }],
   },
   {
     id: "admin-content",
     labelKey: "navSectionAdminContent",
     superAdminOnly: true,
     items: [
-      { id: "pending", labelKey: "tabPending" },
-      { id: "works", labelKey: "tabWorks" },
-      { id: "samples", labelKey: "tabSamples" },
+      { id: "pending", labelKey: "tabPending", capability: "content" },
+      { id: "works", labelKey: "tabWorks", capability: "content" },
+      { id: "samples", labelKey: "tabSamples", capability: "content" },
     ],
   },
   {
@@ -70,8 +74,8 @@ export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
     labelKey: "navSectionAdminGrowth",
     superAdminOnly: true,
     items: [
-      { id: "shares", labelKey: "tabShares" },
-      { id: "users", labelKey: "tabUsers" },
+      { id: "shares", labelKey: "tabShares", capability: "growth" },
+      { id: "users", labelKey: "tabUsers", capability: "user_admin" },
     ],
   },
   {
@@ -79,7 +83,7 @@ export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
     labelKey: "navSectionAdminBusiness",
     superAdminOnly: true,
     items: [
-      { id: "billing", labelKey: "tabBilling" },
+      { id: "billing", labelKey: "tabBilling", capability: "finance_read" },
     ],
   },
   {
@@ -87,11 +91,11 @@ export const CONSOLE_ADMIN_SECTIONS: ConsoleNavSection[] = [
     labelKey: "navSectionAdminSystem",
     superAdminOnly: true,
     items: [
-      { id: "gen-errors", labelKey: "tabGenErrors" },
-      { id: "runtime", labelKey: "tabRuntime" },
-      { id: "email", labelKey: "tabEmail" },
-      { id: "cache-management", labelKey: "tabCacheManagement" },
-      { id: "audit", labelKey: "tabAudit" },
+      { id: "gen-errors", labelKey: "tabGenErrors", capability: "platform_ops" },
+      { id: "runtime", labelKey: "tabRuntime", requiresSuperAdmin: true },
+      { id: "email", labelKey: "tabEmail", requiresSuperAdmin: true },
+      { id: "cache-management", labelKey: "tabCacheManagement", requiresSuperAdmin: true },
+      { id: "audit", labelKey: "tabAudit", roles: ["admin", "super_admin"] },
     ],
   },
 ];
@@ -105,13 +109,33 @@ const ALL_CONSOLE_TABS = new Set<ConsoleTab>([
   ...ADMIN_CONSOLE_TABS,
 ]);
 
-export function buildConsoleNavSections(canViewAdminSection: boolean): ConsoleNavSection[] {
+function canAccessAdminItem(item: ConsoleNavItem, role?: UserRole | null): boolean {
+  // Local development and legacy emergency-console access have no session role; API gates remain authoritative.
+  if (!role) return true;
+  if (item.requiresSuperAdmin) return role === "super_admin";
+  if (item.roles) return item.roles.includes(role);
+  return item.capability ? roleHasAdminCapability(role, item.capability) : false;
+}
+
+export function buildConsoleNavSections(canViewAdminSection: boolean, role?: UserRole | null): ConsoleNavSection[] {
   if (!canViewAdminSection) return CONSOLE_USER_SECTIONS;
-  return [...CONSOLE_USER_SECTIONS, ...CONSOLE_ADMIN_SECTIONS];
+  return [
+    ...CONSOLE_USER_SECTIONS,
+    ...CONSOLE_ADMIN_SECTIONS
+      .map((section) => ({ ...section, items: section.items.filter((item) => canAccessAdminItem(item, role)) }))
+      .filter((section) => section.items.length > 0),
+  ];
 }
 
 export function isAdminConsoleTab(tab: ConsoleTab): boolean {
   return ADMIN_CONSOLE_TABS.has(tab);
+}
+
+export function canAccessConsoleTab(tab: ConsoleTab, canViewAdminSection: boolean, role?: UserRole | null): boolean {
+  if (!isAdminConsoleTab(tab)) return true;
+  if (!canViewAdminSection) return false;
+  const item = CONSOLE_ADMIN_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.id === tab);
+  return Boolean(item && canAccessAdminItem(item, role));
 }
 
 /** URL 参数来自不可信输入；只有已注册的后台页签可以成为当前页。 */
@@ -122,3 +146,5 @@ export function isConsoleTab(value: string | null): value is ConsoleTab {
 export function defaultConsoleTab(): ConsoleTab {
   return "account";
 }
+import { roleHasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
+import type { UserRole } from "@/lib/auth/types";

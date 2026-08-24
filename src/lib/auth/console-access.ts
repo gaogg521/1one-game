@@ -1,4 +1,4 @@
-import { isAdminRole, isSuperAdminRole } from "@/lib/auth/admin";
+import { isAdminRole } from "@/lib/auth/admin";
 import { hasValidConsole2faSession, isConsole2faRequired } from "@/lib/auth/console-2fa";
 import {
   CONSOLE_SSO_COOKIE,
@@ -14,7 +14,7 @@ import { cookies } from "next/headers";
 export type ConsoleAccess = {
   /** 任意已登录用户（会话 cookie）可进入账户中心 */
   canViewConsole: boolean;
-  /** 侧边栏「管理员」模块：仅 super_admin */
+  /** 侧边栏「管理员」模块：所有受授权运营角色，按能力展示最小入口集合。 */
   canViewAdminSection: boolean;
   requireLogin: boolean;
   require2fa: boolean;
@@ -35,15 +35,15 @@ async function hasSso2faBypass(userId: string): Promise<boolean> {
 /**
  * 账户中心 / 运营控制台访问策略（参考 ONE AI 分层）：
  * - 已登录用户：可见「常规 / 个人」模块（概览、钱包、资料）
- * - super_admin：额外可见底部「管理员」模块（平台运维、网关、用户治理等）
- * - admin 角色：可进账户中心；管理员模块仅 super_admin（admin 升权见 CLI）
+ * - 运营角色：额外可见其能力范围内的运营模块；服务端 API 继续执行同一能力校验
+ * - super_admin：可见含密钥、网关与用户治理在内的全部管理模块
  * - 生产 + PIN：admin / super_admin 进入前需二次验证
  */
 export async function getConsoleAccess(): Promise<ConsoleAccess> {
   const consolePath = getAdminConsolePath();
   const user = await getSessionAuthUser();
   const ssoEnabled = isConsoleSsoEnabled();
-  const canViewAdminSection = isSuperAdminRole(user?.role);
+  const canViewAdminSection = Boolean(user && isAdminRole(user.role));
   const canSsoLogout = Boolean(user?.providers.includes("console_oidc"));
 
   const base = {

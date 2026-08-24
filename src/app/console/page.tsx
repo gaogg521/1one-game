@@ -8,6 +8,7 @@ export default async function ConsolePage() {
       consolePath={access.consolePath}
       showSsoLogout={access.canSsoLogout}
       canViewAdminSection={access.canViewAdminSection}
+      adminRole={access.user?.role ?? null}
     />
   );
 }

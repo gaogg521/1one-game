@@ -29,8 +29,10 @@ import { ReferralRewardsPanel } from "@/components/admin/ReferralRewardsPanel";
 import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
+import type { UserRole } from "@/lib/auth/types";
 import {
   buildConsoleNavSections,
+  canAccessConsoleTab,
   defaultConsoleTab,
   isAdminConsoleTab,
   isConsoleTab,
@@ -161,10 +163,12 @@ export default function AdminConsolePage({
   consolePath = "/console",
   showSsoLogout = false,
   canViewAdminSection = false,
+  adminRole = null,
 }: {
   consolePath?: string;
   showSsoLogout?: boolean;
   canViewAdminSection?: boolean;
+  adminRole?: UserRole | null;
 }) {
   const t = useTranslations("adminPage");
   const tu = useTranslations("userConsole");
@@ -181,7 +185,7 @@ export default function AdminConsolePage({
   );
   const requestedTab = searchParams.get("tab");
   const resolvedTab = isConsoleTab(requestedTab) ? requestedTab : defaultConsoleTab();
-  const tab = !canViewAdminSection && isAdminConsoleTab(resolvedTab) ? defaultConsoleTab() : resolvedTab;
+  const tab = canAccessConsoleTab(resolvedTab, canViewAdminSection, adminRole) ? resolvedTab : defaultConsoleTab();
   const [stats, setStats] = useState<Stats | null>(null);
   const [works, setWorks] = useState<WorkRow[]>([]);
   const [pending, setPending] = useState<WorkRow[]>([]);
@@ -247,7 +251,7 @@ export default function AdminConsolePage({
   }
 
   const navSections = useMemo(() => {
-    const sections = buildConsoleNavSections(canViewAdminSection);
+    const sections = buildConsoleNavSections(canViewAdminSection, adminRole);
     if (!stats?.canManageRuntimeConfig) {
       return sections
         .map((section) => ({
@@ -257,7 +261,7 @@ export default function AdminConsolePage({
         .filter((section) => section.items.length > 0);
     }
     return sections;
-  }, [canViewAdminSection, stats?.canManageRuntimeConfig]);
+  }, [adminRole, canViewAdminSection, stats?.canManageRuntimeConfig]);
 
   const flatNavItems = useMemo(
     () =>
