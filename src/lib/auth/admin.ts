@@ -52,7 +52,7 @@ export async function requireAdmin(req: Request): Promise<
     };
   }
 
-  if (user && user.role !== "user") {
+  if (user && (user.role === "admin" || user.role === "super_admin")) {
     return { ok: true, user, ownerKey, viaLegacy: false };
   }
 
@@ -94,9 +94,15 @@ export function isAdminRole(role: UserRole): boolean {
 
 /** Scope check for operator roles. Super admins and legacy emergency access retain full control. */
 export async function requireAdminCapability(req: Request, capability: AdminCapability) {
-  const gate = await requireAdmin(req);
-  if (!gate.ok) return gate;
-  if (hasAdminCapability(gate.user, gate.viaLegacy, capability)) return gate;
+  const ownerKey = await getOwnerKeyFromCookies();
+  if (isSuperAdmin(req, ownerKey)) {
+    const user = await safeGetCurrentAuthUser();
+    return { ok: true as const, user, ownerKey, viaLegacy: true };
+  }
+  const user = await safeGetCurrentAuthUser();
+  if (user && hasAdminCapability(user, false, capability)) {
+    return { ok: true as const, user, ownerKey, viaLegacy: false };
+  }
   return { ok: false as const, status: 403, error: apiErrorMessage(resolveRequestLocaleSync(req), "adminRequired") };
 }
 
