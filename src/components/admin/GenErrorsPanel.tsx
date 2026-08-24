@@ -19,6 +19,11 @@ type Filter = {
   sinceDays: string;
 };
 
+type JobFilter = {
+  contentType: string;
+  status: string;
+};
+
 type GenerationJob = {
   id: string; type: string; status: string; attempts: number; maxAttempts: number; lastErrorCode: string | null;
   lastErrorDetail: string | null; progress: { percent?: number; stage?: string; detail?: string } | null;
@@ -35,18 +40,21 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>({ contentType: "", errorType: "", sinceDays: "7" });
+  const [jobFilter, setJobFilter] = useState<JobFilter>({ contentType: "", status: "" });
   const [loaded, setLoaded] = useState(false);
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [jobSummary, setJobSummary] = useState<Record<string, number>>({});
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<GenerationJob | null>(null);
 
-  const fetchErrors = useCallback(async (f: Filter) => {
+  const fetchErrors = useCallback(async (f: Filter, jf: JobFilter) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: "50", sinceDays: f.sinceDays || "7" });
       if (f.contentType) params.set("contentType", f.contentType);
       if (f.errorType) params.set("errorType", f.errorType);
+      if (jf.contentType) params.set("jobContentType", jf.contentType);
+      if (jf.status) params.set("jobStatus", jf.status);
       const res = await fetch(`/api/admin/gen-errors?${params}`, headers ? { headers: headers() } : undefined);
       if (!res.ok) return;
       const data = await res.json();
@@ -60,7 +68,7 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
     }
   }, [headers]);
 
-  const handleLoad = () => fetchErrors(filter);
+  const handleLoad = () => fetchErrors(filter, jobFilter);
 
   async function retryFailedJob(job: GenerationJob) {
     if (job.status !== "failed") return;
@@ -73,7 +81,7 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
         body: JSON.stringify({ confirmation: "REQUEUE_FAILED_GENERATION" }),
       });
       if (!res.ok) return;
-      await fetchErrors(filter);
+      await fetchErrors(filter, jobFilter);
     } finally {
       setRetryingJobId(null);
     }
@@ -146,11 +154,11 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
       )}
 
       {loaded ? (
-        <section className="rounded border bg-white p-4" data-testid="admin-generation-ops-jobs">
+        <section className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5" data-testid="admin-generation-ops-jobs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-medium text-slate-900">生成运营队列</h3>
-              <p className="mt-1 text-xs text-slate-500">统一查看游戏、小说、漫画的待执行、运行中、重试和失败任务；不暴露原始提示词或密钥。</p>
+              <h3 className="font-medium text-[var(--gc-text)]">{t("genOpsTitle")}</h3>
+              <p className="mt-1 text-xs text-[var(--gc-muted)]">{t("genOpsSubtitle")}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
               {["queued", "running", "retrying", "failed"].map((status) => (
@@ -158,13 +166,26 @@ export function GenErrorsPanel({ headers }: { headers?: () => HeadersInit }) {
               ))}
             </div>
           </div>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-[var(--gc-muted)]">{t("genOpsMedium")}
+              <select className="mt-1 block rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-sm text-[var(--gc-text)]" value={jobFilter.contentType} onChange={(e) => setJobFilter((value) => ({ ...value, contentType: e.target.value }))}>
+                <option value="">{t("genErrorAll")}</option><option value="game">game</option><option value="novel">novel</option><option value="comic">comic</option>
+              </select>
+            </label>
+            <label className="text-xs text-[var(--gc-muted)]">{t("genOpsStatus")}
+              <select className="mt-1 block rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-2 py-1.5 text-sm text-[var(--gc-text)]" value={jobFilter.status} onChange={(e) => setJobFilter((value) => ({ ...value, status: e.target.value }))}>
+                <option value="">{t("genErrorAll")}</option>{["queued", "running", "retrying", "failed"].map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={handleLoad} disabled={loading} className="rounded-lg border border-[color:var(--gc-border)] px-3 py-1.5 text-sm text-[var(--gc-text-soft)] hover:text-[var(--gc-text)] disabled:opacity-50">{t("genOpsRefresh")}</button>
+          </div>
           {jobs.length ? (
             <div className="mt-3 overflow-auto">
-              <table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th>作品</th><th>任务</th><th>状态 / 进度</th><th>实际模型</th><th>重试</th><th>最近错误</th><th>账本成本 / 耗时</th><th>更新时间</th><th>处置</th></tr></thead>
+              <table className="w-full text-xs"><thead className="text-left text-[var(--gc-muted)]"><tr><th>作品</th><th>任务</th><th>状态 / 进度</th><th>实际模型</th><th>重试</th><th>最近错误</th><th>账本成本 / 耗时</th><th>更新时间</th><th>处置</th></tr></thead>
                 <tbody className="divide-y">{jobs.map((job) => <tr key={job.id}><td className="py-2 pr-3">{job.project.kind} · {job.project.title}</td><td className="py-2 pr-3">{job.type}</td><td className="py-2 pr-3">{job.status}{job.progress?.stage ? ` · ${job.progress.stage}` : ""}{typeof job.progress?.percent === "number" ? ` (${job.progress.percent}%)` : ""}</td><td className="max-w-[13rem] truncate py-2 pr-3 font-mono" title={job.usage ? `${job.usage.provider} · ${job.usage.model}` : job.route ? `${job.route.provider} · ${job.route.model}` : ""}>{job.usage ? `${job.usage.provider} · ${job.usage.model}` : job.route ? `${job.route.provider} · ${job.route.model}` : "—"}</td><td className="py-2 pr-3">{job.attempts}/{job.maxAttempts}</td><td className="max-w-[12rem] truncate py-2 pr-3" title={job.lastErrorDetail ?? ""}>{job.lastErrorCode ?? "—"}</td><td className="py-2 pr-3 text-slate-400">{job.usage ? `${job.usage.costMicros ?? "—"} μ · ${job.usage.durationMs} ms` : job.cost.estimatedMicros == null ? "未配置" : `路由估算 ${job.cost.estimatedMicros} μ`}</td><td className="py-2 pr-3">{new Date(job.updatedAt).toLocaleString()}</td><td className="py-2 whitespace-nowrap"><button type="button" onClick={() => setSelectedJob(job)} className="mr-2 text-indigo-700 hover:underline">详情</button>{job.status === "failed" ? <button type="button" disabled={retryingJobId === job.id} onClick={() => void retryFailedJob(job)} className="text-amber-700 hover:underline disabled:opacity-50">{retryingJobId === job.id ? "重试中…" : "确认后重试"}</button> : null}</td></tr>)}</tbody>
               </table>
             </div>
-          ) : <p className="mt-3 text-sm text-slate-500">当前没有待处理生成任务。</p>}
+          ) : <p className="mt-3 text-sm text-[var(--gc-muted)]">当前筛选条件下没有待处理生成任务。</p>}
         </section>
       ) : null}
 

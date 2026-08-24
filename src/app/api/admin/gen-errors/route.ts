@@ -34,6 +34,10 @@ export async function GET(req: Request) {
   const contentType = url.searchParams.get("contentType")?.trim();
   const errorType = url.searchParams.get("errorType")?.trim();
   const sinceDays = Number.parseInt(url.searchParams.get("sinceDays") ?? "7", 10);
+  const jobContentType = url.searchParams.get("jobContentType")?.trim();
+  const requestedJobStatus = url.searchParams.get("jobStatus")?.trim();
+  const activeJobStatuses = ["queued", "running", "retrying", "failed"];
+  const jobStatus = requestedJobStatus && activeJobStatuses.includes(requestedJobStatus) ? requestedJobStatus : undefined;
 
   const where: Record<string, unknown> = {};
   if (contentType) where.contentType = contentType;
@@ -41,6 +45,10 @@ export async function GET(req: Request) {
   if (Number.isFinite(sinceDays) && sinceDays > 0) {
     where.createdAt = { gte: new Date(Date.now() - sinceDays * 86_400_000) };
   }
+  const jobsWhere = {
+    status: jobStatus ?? { in: activeJobStatuses },
+    ...(jobContentType ? { project: { kind: jobContentType } } : {}),
+  };
 
   const [errors, total, jobGroups, jobs, runtime] = await Promise.all([
     prisma.generationError.findMany({
@@ -60,7 +68,7 @@ export async function GET(req: Request) {
     prisma.generationError.count({ where }),
     prisma.generationJob.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.generationJob.findMany({
-      where: { status: { in: ["queued", "running", "retrying", "failed"] } },
+      where: jobsWhere,
       orderBy: { updatedAt: "desc" },
       take: 80,
       select: {

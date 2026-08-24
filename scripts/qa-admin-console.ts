@@ -291,6 +291,24 @@ async function main() {
           ),
         );
       }
+      const generationOps = await fetch(`${base}/api/admin/gen-errors?jobContentType=novel&jobStatus=failed`);
+      checks.push(
+        assert(
+          "generation ops queue filter",
+          generationOps.ok,
+          `status=${generationOps.status}`,
+        ),
+      );
+      if (generationOps.ok) {
+        const body = (await generationOps.json()) as { jobs?: Array<{ project?: { kind?: string }; status?: string }> };
+        checks.push(
+          assert(
+            "generation ops filtered shape",
+            Array.isArray(body.jobs) && body.jobs.every((job) => job.project?.kind === "novel" && job.status === "failed"),
+            `jobs=${body.jobs?.length ?? 0}`,
+          ),
+        );
+      }
       const ordersExport = await fetch(`${base}/api/admin/orders/export?days=7`);
       const csvType = ordersExport.headers.get("content-type") ?? "";
       checks.push(
