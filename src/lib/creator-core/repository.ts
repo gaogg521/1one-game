@@ -259,7 +259,10 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       where: { creativeProjectId: project.id },
       orderBy: { sequence: "desc" },
       take: 6,
-      select: { id: true, sequence: true, cause: true, status: true, summary: true, finalizedAt: true },
+      select: {
+        id: true, sequence: true, cause: true, status: true, summary: true, finalizedAt: true,
+        artifacts: { where: { kind: "publication_display", status: "ready" }, take: 1, select: { id: true } },
+      },
     }),
   ]);
   return {
@@ -270,7 +273,10 @@ export async function getLegacyCreativeProjectSnapshot(input: {
       visibility: project.visibility,
       acceptedRevisionId: project.acceptedRevisionId,
       acceptedRevision,
-      recentRevisions,
+      recentRevisions: recentRevisions.map(({ artifacts, ...recentRevision }) => ({
+        ...recentRevision,
+        canRepublish: artifacts.length > 0,
+      })),
       updatedAt: project.updatedAt,
       evaluation: project.evaluations[0]
         ? {

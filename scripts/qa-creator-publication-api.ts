@@ -55,6 +55,12 @@ async function main() {
     assert(ownerAfterRefine.core?.project?.recentRevisions?.length === 2, "owner API must expose recent immutable versions");
     assert(ownerAfterRefine.core?.project?.recentRevisions?.[0]?.id === ownerAfterRefine.core?.revision?.id, "owner API must put the current draft first");
     assert(ownerAfterRefine.core?.project?.recentRevisions?.[1]?.id === ownerAfterRefine.core?.project?.acceptedRevision?.id, "owner API must retain the confirmed public version");
+    const confirmedRevisionId = ownerAfterRefine.core?.project?.acceptedRevision?.id;
+    assert(confirmedRevisionId, "owner API must identify the historical public version for republishing");
+    const republished = await fetch(`${base}/api/works/game/${game.id}/publication`, {
+      method: "POST", headers, body: JSON.stringify({ action: "publish", revisionId: confirmedRevisionId }),
+    });
+    assert(republished.ok, "owner must be able to republish an immutable historical public version");
     await prisma.project.update({ where: { id: game.id }, data: { coverPath: "/covers/qa-unconfirmed-game.jpg" } });
     const publicAfterRefine = await (await fetch(`${base}/api/projects/${game.id}`)).json() as {
       spec?: { title?: string };

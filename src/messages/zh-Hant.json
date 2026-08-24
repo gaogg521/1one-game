@@ -721,7 +721,10 @@
     "historyTitle": "最近版本",
     "revision": "v{sequence}",
     "currentMarker": "目前草稿",
-    "confirmedMarker": "已確認公開"
+    "confirmedMarker": "已確認公開",
+    "republishVersion": "發布此版本",
+    "republishing": "正在發布…",
+    "republishFailed": "這個歷史版本缺少可安全發布的完整快照。"
   },
   "creatorEngagement": {
     "title": "真實讀者回饋",

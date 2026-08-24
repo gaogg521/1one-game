@@ -688,7 +688,7 @@ export function PlayGameClient({ id }: { id: string }) {
               ) : null}
               {meta.isOwner && core?.revision ? (
                 <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100" data-testid="game-core-revision">
-                  <CreatorVersionStatus core={core} className="mb-2" />
+                  <CreatorVersionStatus core={core} work={{ type: "game", id }} className="mb-2" />
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
                   {core.project?.evaluation ? (

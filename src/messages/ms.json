@@ -721,7 +721,10 @@
     "historyTitle": "Versi terkini",
     "revision": "v{sequence}",
     "currentMarker": "draf semasa",
-    "confirmedMarker": "versi awam"
+    "confirmedMarker": "versi awam",
+    "republishVersion": "Terbitkan versi ini",
+    "republishing": "Menerbitkan…",
+    "republishFailed": "Versi sejarah ini tidak dapat diterbitkan semula dengan selamat."
   },
   "creatorEngagement": {
     "title": "Maklum balas pembaca",

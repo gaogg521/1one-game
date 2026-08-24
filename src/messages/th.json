@@ -721,7 +721,10 @@
     "historyTitle": "เวอร์ชันล่าสุด",
     "revision": "v{sequence}",
     "currentMarker": "ร่างปัจจุบัน",
-    "confirmedMarker": "เวอร์ชันสาธารณะ"
+    "confirmedMarker": "เวอร์ชันสาธารณะ",
+    "republishVersion": "เผยแพร่เวอร์ชันนี้",
+    "republishing": "กำลังเผยแพร่…",
+    "republishFailed": "ไม่สามารถเผยแพร่เวอร์ชันประวัตินี้ได้อย่างปลอดภัย"
   },
   "creatorEngagement": {
     "title": "เสียงตอบรับจากผู้อ่าน",

@@ -10,7 +10,7 @@ import type { CreatorQualityReport } from "@/lib/creator-workflow";
 export type PublishableWorkType = "game" | "novel" | "comic";
 
 export class CreatorPublicationError extends Error {
-  constructor(public readonly code: "not_found" | "not_owner" | "not_ready" | "quality_blocked") {
+  constructor(public readonly code: "not_found" | "not_owner" | "not_ready" | "quality_blocked" | "revision_not_ready") {
     super(code);
     this.name = "CreatorPublicationError";
   }
@@ -43,6 +43,7 @@ export async function setCreatorWorkPublication(input: {
   id: string;
   ownerKey: string;
   action: "publish" | "unpublish";
+  revisionId?: string;
 }): Promise<{ visibility: WorkVisibility; quality: CreatorQualityReport }> {
   if (input.type === "game") {
     const row = await prisma.project.findUnique({ where: { id: input.id } });
@@ -108,7 +109,7 @@ export async function setCreatorWorkPublication(input: {
 }
 
 async function persistPublication(input: {
-  input: { type: PublishableWorkType; id: string; ownerKey: string; action: "publish" | "unpublish" };
+  input: { type: PublishableWorkType; id: string; ownerKey: string; action: "publish" | "unpublish"; revisionId?: string };
   quality: CreatorQualityReport;
   legacyType: string;
   publicationDisplay: Record<string, string | null>;
@@ -125,13 +126,33 @@ async function persistPublication(input: {
       select: { id: true, acceptedRevisionId: true },
     });
     if (!core) return;
-    const revisionId = input.input.action === "unpublish"
+    let revisionId = input.input.action === "unpublish"
       ? core.acceptedRevisionId
       : (await tx.creativeRevision.findFirst({
         where: { creativeProjectId: core.id, status: "ready" },
         orderBy: { sequence: "desc" },
         select: { id: true },
       }))?.id;
+    let displayJson = JSON.stringify(input.publicationDisplay);
+    let writeDisplaySnapshot = input.input.action === "publish";
+    if (input.input.action === "publish" && input.input.revisionId) {
+      const requested = await tx.creativeRevision.findFirst({
+        where: { id: input.input.revisionId, creativeProjectId: core.id, status: "ready" },
+        select: { id: true },
+      });
+      if (!requested) throw new CreatorPublicationError("revision_not_ready");
+      const display = await tx.creativeArtifact.findFirst({
+        where: { creativeProjectId: core.id, creativeRevisionId: requested.id, kind: "publication_display", status: "ready" },
+        orderBy: { createdAt: "asc" },
+        select: { contentJson: true },
+      });
+      // A historical version must carry its own immutable reader-facing
+      // metadata. Never rebuild it from the current editable legacy row.
+      if (!display?.contentJson) throw new CreatorPublicationError("revision_not_ready");
+      revisionId = requested.id;
+      displayJson = display.contentJson;
+      writeDisplaySnapshot = false;
+    }
     // Publishing is the author's explicit confirmation of this immutable
     // revision. A later generate/refine creates a new revision but never
     // changes the accepted pointer behind the author's back.
@@ -141,15 +162,17 @@ async function persistPublication(input: {
       // Capture reader-facing metadata at the same explicit author decision as
       // the accepted revision. This prevents an unconfirmed legacy draft from
       // changing public title, prompt, synopsis, tier or cover presentation.
-      await tx.creativeArtifact.create({
-        data: {
-          creativeProjectId: core.id,
-          creativeRevisionId: revisionId,
-          kind: "publication_display",
-          mediaType: "json",
-          contentJson: JSON.stringify(input.publicationDisplay),
-        },
-      });
+      if (writeDisplaySnapshot) {
+        await tx.creativeArtifact.create({
+          data: {
+            creativeProjectId: core.id,
+            creativeRevisionId: revisionId,
+            kind: "publication_display",
+            mediaType: "json",
+            contentJson: displayJson,
+          },
+        });
+      }
     }
     await tx.creativeProject.update({
       where: { id: core.id },

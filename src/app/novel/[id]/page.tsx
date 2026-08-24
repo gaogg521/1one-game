@@ -303,7 +303,7 @@ export default function NovelDetailPage() {
                 </>
               }
             />
-            {novel.isOwner ? <CreatorVersionStatus core={novel.creatorCore} className="mt-4" /> : null}
+            {novel.isOwner ? <CreatorVersionStatus core={novel.creatorCore} work={{ type: "novel", id: novel.id }} className="mt-4" /> : null}
           </div>
         ) : null}
         <header

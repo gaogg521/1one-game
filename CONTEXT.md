@@ -633,3 +633,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - Owner Core snapshot 现在额外返回最近 6 个 immutable revision（版本号、原因、状态、摘要、完成时间）；确认版本仍单独保留，避免历史列表的排序或截断改变公开锚点语义。
 - 三种作品复用的“发布版本”卡现在显示近期版本时间线，明确标出当前草稿与已确认公开版本；该信息只在作者页面出现，不向匿名读者泄露创作历史。
 - `qa:creator-publication` 覆盖最近版本顺序和确认版本保留；`qa:creator-publication:http` 同步覆盖 owner API 序列化。i18n JSON、定向 ESLint、TypeScript 与隔离 production build 待本批提交前复验。
+
+## P26 第一段：安全重新发布历史版本（2026-08-24）
+
+- 统一发布 API 现在可由作者显式携带 `revisionId` 重新发布同一作品的历史版本；服务端以 Core project、owner、`ready` 状态三重校验目标 revision，拒绝猜测 ID、其他作品版本和未就绪版本。
+- 为防止当前草稿的标题/封面污染历史内容，只允许重新发布带 `publication_display` 不可变快照的版本。首次普通发布会写入该快照；从未发布过的旧草稿会安全地返回冲突，而不是拼接当前 legacy 元数据。
+- 作者版本时间线只会为可安全重新发布的历史版本显示“发布此版本”操作；成功后刷新页面，公开投影和 append-only publication decision 都指向所选版本。`qa:creator-publication` 覆盖安全拒绝和重新发布审计；隔离 production build、真实 `qa:creator-publication:http` 与 `qa:literary-engagement-api` 均通过。构建仅保留既有动态文件追踪性能告警。

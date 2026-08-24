@@ -730,7 +730,7 @@ export default function ComicDetailPage() {
               </p>
             }
           />
-          {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} className="mt-4" /> : null}
+          {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} work={{ type: "comic", id: comic.id }} className="mt-4" /> : null}
           </div>
 
           {(missingImages || rendering || (comic.isOwner && panelStats.withImage > 0)) && (

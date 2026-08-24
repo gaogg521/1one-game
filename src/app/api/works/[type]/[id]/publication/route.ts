@@ -12,12 +12,13 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!ownerKey) return localizedJsonError(req, "unauthorized", 401);
   const { type, id } = await ctx.params;
   if (type !== "game" && type !== "novel" && type !== "comic") return localizedJsonError(req, "notFound", 404);
-  const body = (await req.json().catch(() => ({}))) as { action?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; revisionId?: unknown };
   const action = body.action === "unpublish" ? "unpublish" : body.action === "publish" ? "publish" : null;
   if (!action) return localizedJsonError(req, "invalidRequest", 400);
 
   try {
-    const result = await setCreatorWorkPublication({ type: type as PublishableWorkType, id, ownerKey, action });
+    const revisionId = typeof body.revisionId === "string" ? body.revisionId.trim() : undefined;
+    const result = await setCreatorWorkPublication({ type: type as PublishableWorkType, id, ownerKey, action, ...(revisionId ? { revisionId } : {}) });
     if (action === "publish") await recordCreatorFunnelEvent({ event: "publish", workType: type });
     return NextResponse.json({
       visibility: result.visibility,

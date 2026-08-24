@@ -721,7 +721,10 @@
     "historyTitle": "Recent versions",
     "revision": "v{sequence}",
     "currentMarker": "current draft",
-    "confirmedMarker": "public version"
+    "confirmedMarker": "public version",
+    "republishVersion": "Publish this version",
+    "republishing": "Publishing…",
+    "republishFailed": "This historical version could not be republished safely."
   },
   "creatorEngagement": {
     "title": "Reader feedback",
