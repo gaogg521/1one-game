@@ -2,6 +2,7 @@ import {
   buildSeedreamGenerationRequest,
   isSeedreamImageModel,
   seedreamGenerationEndpoint,
+  shouldUseJoySeedreamAdapter,
 } from "../src/lib/image-generation";
 
 const SEEDREAM_MODEL = "doubao-seedream-5-0-pro";
@@ -13,6 +14,8 @@ function assert(value: unknown, message: string): asserts value {
 async function main() {
   assert(isSeedreamImageModel(SEEDREAM_MODEL), "Seedream model IDs must select the dedicated provider");
   assert(!isSeedreamImageModel("gpt-image-2"), "generic OpenAI image models must not select Seedream");
+  assert(shouldUseJoySeedreamAdapter(SEEDREAM_MODEL, "joy"), "Joy mode must select the dedicated Seedream endpoint");
+  assert(!shouldUseJoySeedreamAdapter(SEEDREAM_MODEL, undefined), "production-compatible mode must not rewrite Seedream endpoints");
   assert(
     seedreamGenerationEndpoint("https://joy.example.test/support-models") === "https://joy.example.test/api/seedream/v1/images/generations",
     "Seedream must use its dedicated endpoint rather than append to the support-models page",

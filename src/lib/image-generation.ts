@@ -54,6 +54,14 @@ export function isSeedreamImageModel(model: string): boolean {
   return model.trim().toLowerCase().startsWith("doubao-seedream-");
 }
 
+/**
+ * Joy MaaS 的 Seedream API 不兼容 OpenAI images endpoint。仅在显式配置时启用，
+ * 防止生产 Ark 等 OpenAI 兼容服务商的同名模型被错误改写到 Joy 路径。
+ */
+export function shouldUseJoySeedreamAdapter(model: string, mode = process.env.SEEDREAM_IMAGE_API_MODE): boolean {
+  return isSeedreamImageModel(model) && mode?.trim().toLowerCase() === "joy";
+}
+
 /** Joy MaaS Seedream accepts a quality tier, not the OpenAI pixel-dimension enum. */
 function seedreamSize(): "2K" {
   return "2K";
@@ -80,7 +88,7 @@ function resolveSeedreamImageConfig(): SeedreamImageConfig | null {
   const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
   const base = ctx?.provider.baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim();
   const key = ctx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
-  if (!base || !key) return null;
+  if (!base || !key || !shouldUseJoySeedreamAdapter(getImageGenOpenAIModel())) return null;
   try {
     return {
       endpoint: seedreamGenerationEndpoint(base),
@@ -203,7 +211,7 @@ export async function generateImageWithOpenAIDetail(
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
   const model = getImageGenOpenAIModel();
-  if (isSeedreamImageModel(model)) return generateImageWithSeedreamDetail(prompt, options);
+  if (shouldUseJoySeedreamAdapter(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
     client = resolveOpenAIImageClient();
@@ -294,7 +302,7 @@ export async function generateImagesBatchOpenAIDetail(
   }
 
   const model = getImageGenOpenAIModel();
-  if (isSeedreamImageModel(model)) {
+  if (shouldUseJoySeedreamAdapter(model)) {
     const results = await Promise.all(
       prompts.map((prompt) => generateImageWithSeedreamDetail(prompt, { ...options, n: 1 })),
     );
