@@ -101,6 +101,7 @@
     "qa:non-sample-game-quality": "tsx scripts/qa-non-sample-game-quality.ts",
     "qa:commercial-game-design-contracts": "tsx scripts/qa-commercial-game-design-contracts.ts",
     "qa:game-vertical-slice": "tsx scripts/qa-game-vertical-slice.ts",
+    "qa:game-generation-kernel": "tsx scripts/qa-game-generation-kernel.ts",
     "qa:gameplay-telemetry": "tsx scripts/qa-gameplay-telemetry.ts",
     "qa:runtime-actor-state": "tsx scripts/qa-runtime-actor-state.ts",
     "qa:creator-workflow": "tsx scripts/qa-creator-workflow.ts",

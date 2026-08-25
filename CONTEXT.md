@@ -805,3 +805,11 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `开心消消乐/三消` 进入专属 puzzle 共创方向，明确相邻交换、三连消除、关卡目标与步数，不再落入通用的“威胁/弹幕”问题分支。
 - H5 试玩画布在手机端保持可用高度并禁用浏览器手势抢占；8×8 三消棋盘同时按宽和高缩放，避免窄屏下越出画布。普通点击、命中、连击不再触发相机全屏闪屏，只有 Boss/胜利/失败保留稀有全屏反馈。
 - 验证：`qa:create-intent-safety`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety`、`qa:puzzle-mode`、`qa:match3-commercial-runtime`、`qa:puzzle-semantic-juice`、`qa:juice-semantic-presets` 与 `npx tsc --noEmit` 通过；本地浏览器已验证默认折叠、直接生成可用，以及三消细化不显示“主要威胁来自哪里”。待精确提交、发布与公网验收。
+
+## P46：游戏生成线内核化与创作页重构（2026-08-25）
+
+- 游戏公共生成路径不再让创意扩写、模板推断、二次强化、评审和 agentic 分支竞争决定基础玩法。新增 `game-generation-plan`，将输入编译为内部运行时内核、核心循环、操作方式和四项基础可玩性检查；模型/素材只能作为后续丰富能力，不能篡改已有玩法。
+- 显式机制优先于宽泛关键词：三消、横版跳跃、塔防、经营种植和射击等会先落入对应运行时；例如“横版跳跃收集宝石”不再因“收集”被误路由为泛收集玩法。
+- `/api/generate` 与 SSE 默认走内核编译；SSE 仅展示“规则 → 验证 → 可玩版本”三个真实阶段，并返回用户可读的玩法摘要，不再展示模板、联网检索、二次强化或隐式创意提炼。
+- `/create` 被重写为单入口：一句话输入、生成状态、即时 Phaser 试玩和保存打开。取消用户侧模板/风格预制、变体、隐藏模型选项、参考素材工作台和精灵轮询；保存后立即进入 H5 试玩，后台美术不得阻塞可玩版本。
+- 验证：`qa:game-generation-kernel`（三消、躲避、经营、跳跃、塔防五类意图）、`qa:generate-stream-sse`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety`、定向 ESLint、`npx tsc --noEmit` 与 production build 通过；390px 真实浏览器中三消 SSE 完成并加载 Canvas，旧控件文字检索为 0。production build 仍有既有动态文件追踪性能警告，未阻塞产物。待精确提交、发布和公网复验。

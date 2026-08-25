@@ -9,6 +9,11 @@ import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-mode
 import type { RuntimeSceneKey } from "@/lib/runtime-providers";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import {
+  buildGameGenerationPlan,
+  compileGameGenerationPlan,
+  validateGameGenerationPlan,
+} from "@/lib/game-generation-plan";
 import { buildLlmTemplateCatalogLines, llmTemplateIdEnum } from "@/lib/game-templates/llm-catalog";
 import { isGameTemplateId } from "@/lib/game-templates/registry";
 import { buildTowerDefenseBlueprint } from "@/lib/td-blueprint";
@@ -56,7 +61,7 @@ import {
   type ExpandCreativeBriefResult,
 } from "@/lib/creative-brief";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
-import { attachAgenticModuleIfEnabled, isAgenticModuleEnabled, lintDedicatedRouteDebugSkill } from "@/lib/agentic/generate-game-module";
+import { attachAgenticModuleIfEnabled, lintDedicatedRouteDebugSkill } from "@/lib/agentic/generate-game-module";
 import { classifyPromptComplexity } from "@/lib/opengame-skills";
 import { detectTemplateFromPrompt } from "@/lib/template-selector";
 
@@ -456,7 +461,7 @@ function getActiveGameSpecJsonSchema() {
   };
 }
 
-export type GenerationSource = "llm" | "llm_overlay" | "llm_repair" | "mock";
+export type GenerationSource = "kernel" | "llm" | "llm_overlay" | "llm_repair" | "mock";
 
 export type GenerationDebug = {
   model?: string;
@@ -484,6 +489,8 @@ export type GenerationDebug = {
   criticVerdict?: import("@/lib/game-quality-critic").GameCriticVerdict;
   /** 确定性首分钟体验评分卡；仅作质量可观察性，不改变运行时规格。 */
   verticalSlice?: GameVerticalSliceScorecard;
+  /** 可审阅的内核编译计划；不向创作页暴露内部模板术语。 */
+  kernelPlan?: { label: string; coreLoop: string; controls: string; checks: readonly string[] };
 };
 
 /** 单次生成请求内 finalize/director 文案 locale（避免层层传参）。 */
@@ -834,6 +841,8 @@ function specsEqual(a: GameSpec, b: GameSpec): boolean {
 }
 
 export type GenerateOptions = {
+  /** 默认走可验证的内核编译；legacy 仅供历史回归和受控实验。 */
+  pipeline?: "kernel" | "legacy";
   /** 附在用户消息末尾，用于多套方案差异化（不影响离线 mock 的标题推断基准）。 */
   flavorSuffix?: string;
   /** 是否启用联网检索增强（需要 TAVILY_API_KEY）。默认 true。 */
@@ -1420,6 +1429,52 @@ export async function generateGameSpecWithMeta(
 ): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
   return withGenerationLocale(options?.uiLocale ?? "zh-Hans", async () => {
   const orch = options?.orchestration;
+
+  // The public path deliberately compiles a playable kernel before any AI work.
+  // This removes the former race where prompt expansion, template guessing and
+  // agentic routing could each make a conflicting decision about basic controls.
+  if ((options?.pipeline ?? "kernel") === "kernel") {
+    const plan = buildGameGenerationPlan(prompt, options?.templateHint ?? "auto");
+    const spec = finalizeSpec(plan.prompt, compileGameGenerationPlan(plan));
+    const issues = validateGameGenerationPlan(plan, spec);
+    const verticalSlice = evaluateGameVerticalSlice(spec);
+    orch?.note("game_kernel_compile", {
+      kernel: plan.kernel,
+      runtime: plan.runtime,
+      checks: plan.checks,
+      issues,
+    });
+    orch?.note("game_vertical_slice", {
+      templateId: verticalSlice.templateId,
+      score: verticalSlice.score,
+      verdict: verticalSlice.verdict,
+      dimensions: verticalSlice.dimensions,
+      reasons: verticalSlice.reasons,
+    });
+    if (issues.length) {
+      throw new Error(`game kernel validation failed: ${issues.join(",")}`);
+    }
+    const debug: GenerationDebug = {
+      fallback: false,
+      searchEnhance: false,
+      enhancedRequested: false,
+      enhancedApplied: false,
+      templateHint: plan.kernel,
+      verticalSlice,
+      kernelPlan: {
+        label: plan.label,
+        coreLoop: plan.coreLoop,
+        controls: plan.controls,
+        checks: plan.checks,
+      },
+    };
+    return {
+      spec,
+      source: "kernel",
+      web: null,
+      debug: orch ? { ...debug, orchestrationTrace: orch.snapshot() } : debug,
+    };
+  }
 
   let briefPre = options?.creativeBriefPreExpanded;
   if (!briefPre && PRODUCT.game.creativeBriefExpand) {

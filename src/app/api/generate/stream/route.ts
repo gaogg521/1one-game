@@ -5,14 +5,10 @@ import { generateRateLimits } from "@/lib/api/generate-limits";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
-import { expandCreativeBrief } from "@/lib/creative-brief";
-import { buildStudioBriefBullets } from "@/lib/creative-brief/format-prompt";
-import { buildGenerateRecapLines, buildServerPrepLines, streamMessage } from "@/lib/create-studio-narrative";
-import { buildOpenGameRecapFromTrace, buildGameModelRecapFromTrace } from "@/lib/opengame-skills/generation-trace";
+import { streamMessage } from "@/lib/create-studio-narrative";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { generateGameSpecWithMeta } from "@/lib/generate-spec";
 import { createRunTraceRecorder } from "@/lib/orchestration/run-trace";
-import { PRODUCT } from "@/lib/product-config";
 import { getOwnerKey } from "@/lib/owner";
 import { parseGeneratePayload } from "@/lib/parse-generate-request";
 import { rateLimit } from "@/lib/rate-limit";
@@ -79,57 +75,20 @@ export async function POST(req: Request) {
         send({ step: "start", message: streamMessage(uiLocale, "start") });
         const orch = createRunTraceRecorder();
 
-        let creativeBriefPreExpanded: Awaited<ReturnType<typeof expandCreativeBrief>> | undefined;
-        if (PRODUCT.game.creativeBriefExpand) {
-          creativeBriefPreExpanded = await orch.span("creative_brief_expand", () =>
-            expandCreativeBrief({
-              prompt: parsed.prompt,
-              templateHint: parsed.templateHint,
-              orchestration: orch,
-            }),
-          );
-          send({
-            step: "brief",
-            summary: creativeBriefPreExpanded.oneLineSummary,
-            lines: buildStudioBriefBullets(creativeBriefPreExpanded.brief, "game", uiLocale),
-            brief: creativeBriefPreExpanded.brief,
-          });
-        }
-
-        send({
-          step: "prep",
-          lines: buildServerPrepLines(parsed.prompt, {
-            searchEnhance: parsed.searchEnhance,
-            templateHint: parsed.templateHint,
-            enhancePass: parsed.enhancePass,
-          }, uiLocale),
-        });
-        // 进度：LLM 开始生成规格
-        send({ step: "spec_draft", message: streamMessage(uiLocale, "spec_draft") });
+        // The kernel is built before assets/copy.  Streaming remains useful, but
+        // no hidden "creative extraction" gets to rewrite the requested game.
+        send({ step: "kernel", message: uiLocale.startsWith("zh") ? "正在确定核心规则与操作方式" : "Building the core rules and controls" });
         const result = await generateGameSpecWithMeta(parsed.prompt, {
-          searchEnhance: parsed.searchEnhance,
           templateHint: parsed.templateHint,
-          enhancePass: parsed.enhancePass,
           uiLocale,
           orchestration: orch,
-          creativeBriefPreExpanded,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
-        const spec = result.spec;
-        // 进度：规格生成完成，进入资产丰富化
-        send({ step: "enriching", message: streamMessage(uiLocale, "enriching") });
-        const recapLines = [
-          ...buildGenerateRecapLines(
-            uiLocale,
-            spec,
-            result.web ?? undefined,
-            parsed.searchEnhance,
-          ),
-          ...buildOpenGameRecapFromTrace(uiLocale, result.debug.orchestrationTrace, {
-            agenticPlayRoute: spec.agenticPlayRoute,
-          }),
-          ...buildGameModelRecapFromTrace(uiLocale, result.debug.orchestrationTrace),
-        ];
+        send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查目标、操作、结算与移动端运行" : "Checking goal, controls, end state and mobile runtime" });
+        const plan = result.debug.kernelPlan;
+        const recapLines = plan
+          ? [plan.label, plan.coreLoop, plan.controls, uiLocale.startsWith("zh") ? "已通过可玩性基础检查" : "Core playability checks passed"]
+          : [];
         send({ step: "recap", lines: recapLines });
         emitGenerateServeLog({
           phase: "generate_stream_done",
