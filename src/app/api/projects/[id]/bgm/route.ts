@@ -1,36 +1,20 @@
 /**
  * GET /api/projects/[id]/bgm
- * 返回该游戏的旋律音符序列（LLM 生成，DB 缓存）。
- * 若配置了第三方 BGM API Key，则返回 { skip: true } 让客户端使用正式 BGM。
+ * Priority: persisted audio-model artifact → audio model → LLM note sequence.
+ * Every response is playable; no configured secret can turn this into a skip.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseGameSpec } from "@/lib/game-spec";
-import { getRuntimeConfigSync } from "@/lib/runtime-config";
-import { generateBgmNotesFromSpec } from "@/lib/game-bgm-gen";
+import { ensureProjectBgm } from "@/lib/game-bgm-pipeline";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, ctx: RouteContext) {
   const { id } = await ctx.params;
 
-  // 若有第三方 BGM API Key，不需要 LLM 降级
-  const cfg = getRuntimeConfigSync();
-  if (cfg.payload.replicateApiKey) {
-    return NextResponse.json({ skip: true });
-  }
-
-  const row = await prisma.project.findUnique({ where: { id }, select: { specJson: true, bgmNotesJson: true } });
+  const row = await prisma.project.findUnique({ where: { id }, select: { specJson: true } });
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
-
-  // 已缓存则直接返回
-  if (row.bgmNotesJson) {
-    try {
-      return NextResponse.json({ notes: JSON.parse(row.bgmNotesJson) });
-    } catch {
-      // cache corrupt, regenerate below
-    }
-  }
 
   // specJson is persisted JSON text; parse it before validating the object.
   let spec;
@@ -40,10 +24,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     return NextResponse.json({ error: "invalid spec" }, { status: 500 });
   }
 
-  const notes = await generateBgmNotesFromSpec(spec);
-  if (!notes) return NextResponse.json({ error: "generation failed" }, { status: 500 });
-
-  await prisma.project.update({ where: { id }, data: { bgmNotesJson: JSON.stringify(notes) } });
-
-  return NextResponse.json({ notes });
+  const result = await ensureProjectBgm(id, spec);
+  if (result.source === "audio_model") return NextResponse.json({ audio: result.audio, source: result.source });
+  if (result.source === "llm_notes") return NextResponse.json({ notes: result.notes, source: result.source });
+  return NextResponse.json({ error: "generation failed" }, { status: 500 });
 }

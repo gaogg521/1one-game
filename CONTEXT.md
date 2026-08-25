@@ -821,3 +821,11 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `GameSoundscape` 接入 BGM 分段时间线和程序化环境音层；`webBleeps` 改接共享 SFX mix bus，并实行并发语音上限。所有 Phaser 结算统一切入胜利/失败段，避免只靠各场景自行记得播结算音乐。
 - SSE 创作页直接回显首局关卡节奏与音频预算，不暴露模板/风格预制。质量评分将环境音、4 段音乐推进和移动端安全混音纳入 presentation 门槛。
 - 验证：`npx tsc --noEmit`、定向 ESLint、`qa:game-generation-kernel`、新增 `qa:game-production-contract`（四种主题）、`qa:generate-stream-sse`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety` 通过；真实浏览器生成“三消”后显示四段节奏与“arcade 环境音 · BGM 分段推进 · 最多 4 个音效并发”，390×844 Canvas 为 342×261，首次点击后音频提示消失。控制台仅有已知导航 hydration mismatch，未见本项错误。待精确提交、发布和公网 SSE 验证。
+
+## P48：真实 BGM 产物、持久化与降级链路（2026-08-25）
+
+- 移除了旧的伪 `Replicate MusicGen` 分支：此前只要存在 `replicateApiKey` 就对播放器返回 `skip`，实际上从未调用音乐模型。现在 `game_bgm` 路由只会把显式音频输出模型（包含 `openai/gpt-audio-mini`）送往 OpenAI-compatible Chat Completions 音频请求。
+- 每个新游戏的 durable `game_asset` 任务在美术资产前先生成 BGM；可播放、非口播且容器签名有效的音频会保存到 Blob Store，元数据写入 `Project.bgmAudioJson` 和不可变 Core `bgm` artifact。没有音频产物时，同一次任务立即回退到 `game_text` 的 LLM 音符序列，并写入 `bgm_notes` artifact；两者都失败时仍由既有本地 Web Audio/模板音乐确保 H5 有声音。
+- 播放器接口与首屏声音启动统一读取同一 BGM pipeline：已持久化音频优先，其次音频模型，最后缓存/新生成 notes；历史 notes 不再抢在新的音频模型尝试之前返回。浏览器等待上限从 12 秒提高到 50 秒；音频模型 30 秒、LLM notes 单次 8 秒上限，既覆盖优先链路又不拖慢游戏本体的程序化声音。
+- Console 不再收集或宣称 Replicate Key 能生成 MusicGen；它显示 `game_bgm` 绑定的 provider/model、是否为音频模型以及真实优先级。Provider 账本与价格规则加入 `audio/audio` 维度，但只记录 provider、model、状态、时长和成本估算，不保存 prompt、密钥或上游音频响应。
+- 新迁移 `20260825090000_project_bgm_audio` 已在本地 dev SQLite 应用；新增 `qa:game-bgm-audio` 验证 gpt-audio-mini 选路、Chat Completions 音频请求、WAV 校验、口播/伪 base64 拒绝。`qa:game-production-contract`、`qa:creator-core`、TypeScript 和定向 ESLint 通过。开发服务上的真实 durable 游戏任务已进入 `generating_audio` 并在 60 秒后完成资产任务；本地当前 BGM route 是 text-only `glm-5-2/deepseek-v4-pro`，所以正确跳过音频请求且没有把它们误当音频模型。生产部署后需用生产 `game_bgm` 路由做一次实际音频产物验收。

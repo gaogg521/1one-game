@@ -3,10 +3,10 @@ import { loadRuntimeConfig, type ProviderPricingRule } from "@/lib/runtime-confi
 import { currentGenerationJobId } from "@/lib/generation-job-context";
 
 export type ProviderUsageInput = {
-  modality: "llm" | "image";
+  modality: "llm" | "image" | "audio";
   provider: string;
   model: string;
-  operation: "json" | "text" | "image" | "image_batch";
+  operation: "json" | "text" | "image" | "image_batch" | "audio";
   status: "succeeded" | "failed";
   durationMs: number;
   outputUnits?: number;

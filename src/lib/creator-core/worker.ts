@@ -27,6 +27,7 @@ import { resolveComicStoryContext } from "@/lib/comic-story-genre";
 import { CREATIVE_BRIEF_SCHEMA } from "@/lib/creative-brief/types";
 import { parseGameSpec } from "@/lib/game-spec";
 import { runProjectAssetPipeline } from "@/lib/game-asset-pipeline";
+import { ensureProjectBgm } from "@/lib/game-bgm-pipeline";
 import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
@@ -62,7 +63,13 @@ async function executeGameAssetJob(
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_asset_brief_invalid");
 
-  await heartbeatGenerationJob(job.id, workerId, { percent: 5, stage: "generating", detail: "preparing game assets" });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 4, stage: "generating_audio", detail: "generating project BGM" });
+  const bgm = await ensureProjectBgm(project.id, spec);
+  await heartbeatGenerationJob(job.id, workerId, {
+    percent: 8,
+    stage: "generating",
+    detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "BGM unavailable; continuing assets",
+  });
   const result = await runProjectAssetPipeline({
     projectId: project.id,
     spec,
@@ -71,7 +78,7 @@ async function executeGameAssetJob(
     existingCoverPath: project.coverPath,
   });
   await heartbeatGenerationJob(job.id, workerId, { percent: 95, stage: "persisting", detail: "saving asset manifest" });
-  return createCreativeArtifact({
+  const assetManifest = await createCreativeArtifact({
     creativeProjectId: job.creativeProjectId,
     creativeRevisionId: job.creativeRevisionId ?? undefined,
     artifact: {
@@ -83,10 +90,40 @@ async function executeGameAssetJob(
         manifest: result.assetManifest,
         coverPath: result.coverPath,
         coverSource: result.coverSource,
+        bgm: bgm.source === "audio_model"
+          ? { source: bgm.source, url: bgm.audio.url, mimeType: bgm.audio.mimeType, model: bgm.audio.model }
+          : bgm.source === "llm_notes"
+            ? { source: bgm.source, bpm: bgm.notes.bpm, noteCount: bgm.notes.notes.length }
+            : { source: bgm.source },
       },
       metadata: { projectId: project.id, templateId: spec.templateId },
     },
   });
+  if (bgm.source === "audio_model") {
+    await createCreativeArtifact({
+      creativeProjectId: job.creativeProjectId,
+      creativeRevisionId: job.creativeRevisionId ?? undefined,
+      artifact: {
+        kind: "bgm",
+        mediaType: "audio",
+        storageUri: bgm.audio.url,
+        provider: bgm.audio.providerId,
+        metadata: { projectId: project.id, model: bgm.audio.model, mimeType: bgm.audio.mimeType, source: bgm.source },
+      },
+    });
+  } else if (bgm.source === "llm_notes") {
+    await createCreativeArtifact({
+      creativeProjectId: job.creativeProjectId,
+      creativeRevisionId: job.creativeRevisionId ?? undefined,
+      artifact: {
+        kind: "bgm_notes",
+        mediaType: "json",
+        content: bgm.notes,
+        metadata: { projectId: project.id, source: bgm.source },
+      },
+    });
+  }
+  return assetManifest;
 }
 
 async function executeComicPanelJob(job: { id: string; payloadJson: string }, workerId: string) {

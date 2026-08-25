@@ -65,9 +65,13 @@ async function main() {
     assert(statusResponse.ok && status.status === "completed" && status.progress?.percent === 100, "owner must see durable asset completion");
 
     const detailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, { headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` } });
-    const detail = (await detailResponse.json()) as { core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string }> } } };
+    const detail = (await detailResponse.json()) as {
+      core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string; content?: { bgm?: { source?: string } } }> } };
+    };
     assert(detailResponse.ok && detail.core?.revision?.id === created.core.creativeRevisionId, "owner must retain the creation revision");
-    assert(detail.core.revision.artifacts?.some((artifact) => artifact.kind === "asset_manifest"), "Core revision must retain its generated asset manifest");
+    const manifest = detail.core.revision.artifacts?.find((artifact) => artifact.kind === "asset_manifest");
+    assert(manifest, "Core revision must retain its generated asset manifest");
+    assert(["audio_model", "llm_notes", "unavailable"].includes(manifest.content?.bgm?.source ?? ""), "durable game task must record its BGM outcome");
 
     const recoveryResponse = await fetch(`${baseUrl}/api/projects/${projectId}/background`, {
       method: "POST",

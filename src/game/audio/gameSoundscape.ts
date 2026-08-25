@@ -1017,8 +1017,7 @@ export class GameSoundscape {
       if (this.chordTimer !== null) { clearInterval(this.chordTimer); this.chordTimer = null; }
     });
 
-    void this.tryTemplateBgmLoop(ctx, master);
-    void this.tryLlmNoteBgm(ctx, master);
+    void this.startProjectBgm(ctx, master);
 
     const now = ctx.currentTime;
     const root = this.rootHz;
@@ -1208,15 +1207,44 @@ export class GameSoundscape {
     this.lfoGain = null;
   }
 
-  /** LLM 降级 BGM：无第三方 API Key 时从服务端拉取音符序列并用 Web Audio 播放 */
-  private async tryLlmNoteBgm(ctx: AudioContext, master: GainNode): Promise<void> {
+  /**
+   * Fetches the server-side BGM decision once: generated audio artifact first,
+   * then notes.  Static template music is a last local fallback only.
+   */
+  private async startProjectBgm(ctx: AudioContext, master: GainNode): Promise<void> {
+    const played = await this.tryProjectBgm(ctx, master);
+    if (!played) await this.tryTemplateBgmLoop(ctx, master);
+  }
+
+  private async tryProjectBgm(ctx: AudioContext, master: GainNode): Promise<boolean> {
     const pid = this.opts.projectId;
-    if (!pid || typeof window === "undefined") return;
+    if (!pid || typeof window === "undefined") return false;
     try {
-      const res = await fetch(`/api/projects/${pid}/bgm`, { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) return;
-      const body = (await res.json()) as { skip?: boolean; notes?: { bpm: number; notes: Array<{ freq: number; dur: number; vol?: number }> } };
-      if (body.skip || !body.notes) return;
+      // Audio models may take longer than a text completion; keep the request
+      // alive long enough for the server to attempt audio then LLM fallback.
+      const res = await fetch(`/api/projects/${pid}/bgm`, { signal: AbortSignal.timeout(50_000) });
+      if (!res.ok) return false;
+      const body = (await res.json()) as {
+        audio?: { url?: string; mimeType?: string };
+        notes?: { bpm: number; notes: Array<{ freq: number; dur: number; vol?: number }> };
+      };
+      if (body.audio?.url) {
+        const audio = new Audio(body.audio.url);
+        audio.loop = true;
+        audio.crossOrigin = "anonymous";
+        const track = ctx.createMediaElementSource(audio);
+        const gain = ctx.createGain();
+        gain.gain.value = 0.34;
+        track.connect(gain);
+        gain.connect(master);
+        await audio.play();
+        this.templateAudio = audio;
+        this.cleanups.push(() => {
+          try { audio.pause(); audio.src = ""; track.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+        });
+        return true;
+      }
+      if (!body.notes) return false;
 
       const { bpm, notes } = body.notes;
       const beatSec = 60 / bpm;
@@ -1258,8 +1286,9 @@ export class GameSoundscape {
       };
 
       scheduleLoop(ctx.currentTime + 0.1);
+      return true;
     } catch {
-      /* ignore, procedural BGM continues */
+      return false;
     }
   }
 

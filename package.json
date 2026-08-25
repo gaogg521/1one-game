@@ -103,6 +103,7 @@
     "qa:game-vertical-slice": "tsx scripts/qa-game-vertical-slice.ts",
     "qa:game-generation-kernel": "tsx scripts/qa-game-generation-kernel.ts",
     "qa:game-production-contract": "tsx scripts/qa-game-production-contract.ts",
+    "qa:game-bgm-audio": "tsx scripts/qa-game-bgm-audio.ts",
     "qa:gameplay-telemetry": "tsx scripts/qa-gameplay-telemetry.ts",
     "qa:runtime-actor-state": "tsx scripts/qa-runtime-actor-state.ts",
     "qa:creator-workflow": "tsx scripts/qa-creator-workflow.ts",

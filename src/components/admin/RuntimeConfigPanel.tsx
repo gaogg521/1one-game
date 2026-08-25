@@ -19,6 +19,7 @@ import {
   RuntimeProviderTemplateSelect,
 } from "@/components/admin/RuntimeProviderCatalog";
 import type { ProviderPricingRule } from "@/lib/runtime-config";
+import { isAudioOutputModelId } from "@/lib/bgm-model-capability";
 
 export type RuntimeConfigView = {
   updatedAt: string | null;
@@ -335,58 +336,11 @@ function EnvLegacySecretsPanel({ view }: { view: RuntimeConfigView }) {
   );
 }
 
-function BgmServicePanel({
-  view,
-  headers,
-  onNotice,
-  onView,
-}: {
-  view: RuntimeConfigView;
-  headers: () => HeadersInit;
-  onNotice: (n: { kind: "ok" | "error"; text: string }) => void;
-  onView: (v: RuntimeConfigView) => void;
-}) {
-  const [keyInput, setKeyInput] = useState("");
-  const [saving, setSaving] = useState(false);
-  const source = view.sources.replicateApiKey ?? "none";
-  const masked = view.secrets.replicateApiKey;
-
-  async function saveKey() {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/runtime-config", {
-        method: "PATCH",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ secrets: { replicateApiKey: keyInput.trim() || null } }),
-      });
-      if (!res.ok) { onNotice({ kind: "error", text: "保存失败" }); return; }
-      const data = (await res.json()) as RuntimeConfigView;
-      onView(data);
-      setKeyInput("");
-      onNotice({ kind: "ok", text: "Replicate API Key 已保存" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function clearKey() {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/runtime-config", {
-        method: "PATCH",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ secrets: { replicateApiKey: null } }),
-      });
-      if (!res.ok) { onNotice({ kind: "error", text: "清除失败" }); return; }
-      const data = (await res.json()) as RuntimeConfigView;
-      onView(data);
-      onNotice({ kind: "ok", text: "Replicate API Key 已清除" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const bgmMode = source !== "none" ? "replicate" : "llm-fallback";
+function BgmServicePanel({ view }: { view: RuntimeConfigView }) {
+  const route = view.routes.find((item) => item.scene === "game_bgm");
+  const provider = route ? view.providers.find((item) => item.id === route.providerId) : undefined;
+  const audioModels = route ? [route.primary, ...route.fallbacks].filter(isAudioOutputModelId) : [];
+  const audioReady = Boolean(provider?.enabled && provider.apiKey && audioModels.length > 0);
 
   return (
     <section
@@ -395,53 +349,23 @@ function BgmServicePanel({
     >
       <h3 className="text-base font-semibold text-[var(--gc-text)]">BGM 生成服务</h3>
       <p className="mt-1 text-xs leading-relaxed text-[var(--gc-muted)]">
-        配置第三方音乐生成 API。有 Replicate Key 时自动使用 MusicGen 生成每款游戏专属 BGM；无 Key 时降级为 LLM 音符序列生成。
+        游戏创建任务会先调用 <code>game_bgm</code> 路由中的音频输出模型，校验并保存可播放音频；模型未产出 BGM、返回口播或不可用时，同一任务立即降级为 LLM 音符序列与 Web Audio。
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-[var(--gc-text-soft)]">当前模式</span>
+        <span className="text-[var(--gc-text-soft)]">当前链路</span>
         <span
           className={`rounded-full px-2 py-0.5 font-medium ${
-            bgmMode === "replicate"
+            audioReady
               ? "bg-green-500/15 text-green-400"
               : "bg-amber-500/15 text-amber-400"
           }`}
         >
-          {bgmMode === "replicate" ? "Replicate MusicGen" : "LLM 降级模式"}
+          {audioReady ? "音频模型优先 + LLM 兜底" : "LLM 音符序列兜底"}
         </span>
-        <SourceBadge source={source} />
-        {masked && (
-          <span className="font-mono text-[11px] text-[var(--gc-muted)]">{masked}</span>
-        )}
+        <span className="text-[var(--gc-muted)]">{provider ? `${provider.name} · ${audioModels.join(", ") || "未选择音频模型"}` : "未配置 game_bgm 路由"}</span>
       </div>
-
-      <div className="mt-3 flex gap-2">
-        <input
-          type="password"
-          placeholder="r8_xxxx… (留空清除)"
-          value={keyInput}
-          onChange={(e) => setKeyInput(e.target.value)}
-          className="h-8 flex-1 rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] px-3 text-xs text-[var(--gc-text)] placeholder:text-[var(--gc-text-faint)] focus:outline-none focus:ring-1 focus:ring-[var(--gc-accent)]"
-        />
-        <button
-          type="button"
-          disabled={saving}
-          onClick={saveKey}
-          className="h-8 rounded-lg bg-[var(--gc-accent)] px-3 text-xs font-medium text-white disabled:opacity-50"
-        >
-          保存
-        </button>
-        {source === "db" && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={clearKey}
-            className="h-8 rounded-lg border border-[color:var(--gc-border)] px-3 text-xs font-medium text-[var(--gc-text-soft)] disabled:opacity-50"
-          >
-            清除
-          </button>
-        )}
-      </div>
+      <p className="mt-3 text-xs text-[var(--gc-muted)]">在下方“路由”区域将 <code>game_bgm</code> 指向音频模型（例如 <code>openai/gpt-audio-mini</code>）；不再使用无真实调用的 Replicate Key 开关。</p>
     </section>
   );
 }
@@ -963,10 +887,10 @@ function ProviderPricingEditor({
             <input className={inputCls} value={rule.provider} onChange={(e) => update(index, { provider: e.target.value })} placeholder={t("pricingProviderPlaceholder")} aria-label={t("pricingProvider")} />
             <input className={inputCls} value={rule.model} onChange={(e) => update(index, { model: e.target.value })} placeholder={t("pricingModelPlaceholder")} aria-label={t("pricingModel")} />
             <select className={inputCls} value={rule.modality} onChange={(e) => update(index, { modality: e.target.value as ProviderPricingRule["modality"] })} aria-label={t("pricingModality")}>
-              <option value="llm">LLM</option><option value="image">Image</option>
+              <option value="llm">LLM</option><option value="image">Image</option><option value="audio">Audio</option>
             </select>
             <select className={inputCls} value={rule.operation} onChange={(e) => update(index, { operation: e.target.value as ProviderPricingRule["operation"] })} aria-label={t("pricingOperation")}>
-              <option value="text">text</option><option value="json">json</option><option value="image">image</option><option value="image_batch">image_batch</option>
+              <option value="text">text</option><option value="json">json</option><option value="image">image</option><option value="image_batch">image_batch</option><option value="audio">audio</option>
             </select>
             <input className={inputCls} type="number" min="0" step="1" value={rule.estimatedCostMicros} onChange={(e) => update(index, { estimatedCostMicros: Number(e.target.value) })} aria-label={t("pricingMicros")} />
             <button type="button" className="text-sm text-red-300 hover:text-red-200" onClick={() => onChange(rules.filter((_, i) => i !== index))}>{t("removeProvider")}</button>
@@ -1321,9 +1245,6 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
         <div className="space-y-6">
           <BgmServicePanel
             view={view}
-            headers={headers}
-            onNotice={onNotice}
-            onView={(v) => { setView(v); hydrateForm(v); }}
           />
           {draftProviders.length > 0 ? (
             <section className="space-y-3" data-testid="admin-runtime-draft-providers">

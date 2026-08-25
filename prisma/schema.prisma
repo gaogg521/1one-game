@@ -335,12 +335,12 @@ model CreativePublication {
 /// Provider 级生成使用账本。绝不存 prompt、作品正文、密钥或原始 provider 响应。
 model ProviderUsageEvent {
   id                  String   @id @default(cuid())
-  /// llm | image
+  /// llm | image | audio
   modality            String
   /// openai | openai_compatible | litellm | anthropic | gemini
   provider            String
   model               String
-  /// json | text | image | image_batch 等安全操作标签
+  /// json | text | image | image_batch | audio 等安全操作标签
   operation           String
   /// succeeded | failed
   status              String
@@ -536,6 +536,8 @@ model Project {
   creativeBriefJson String?
   /// LLM 生成的旋律音符序列 JSON（无第三方 BGM API Key 时的降级方案，生成后缓存）
   bgmNotesJson      String?
+  /// 音频模型实际产出的 BGM 资产元数据（URL / MIME / provider / model；不保存密钥）
+  bgmAudioJson      String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

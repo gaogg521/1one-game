@@ -3,7 +3,7 @@
  * 格式：{ bpm, notes: [{freq, dur, vol}] }，客户端 Web Audio 播放。
  */
 import { llmJson } from "@/lib/llm";
-import { getEffectiveModels } from "@/lib/runtime-config";
+import { getSceneModelCascade } from "@/lib/runtime-config";
 import type { GameSpec } from "@/lib/game-spec";
 
 export type BgmNote = { freq: number; dur: number; vol?: number };
@@ -13,17 +13,22 @@ export type BgmNoteSequence = { bpm: number; notes: BgmNote[] };
 export async function generateBgmNotesFromSpec(spec: GameSpec): Promise<BgmNoteSequence | null> {
   const genre = getBgmGenre(spec);
   const user = buildBgmPrompt(spec, genre);
-  const models = getEffectiveModels();
-  const model = (models.gameTextPrimary ?? models.gamePrimary) as string;
+  // `game_bgm` may be intentionally configured with an audio-output model.
+  // The fallback needs a text-capable model to produce JSON notes, so it uses
+  // the ordinary game-text route rather than sending a JSON request to audio.
+  const model = getSceneModelCascade("game_text")[0];
+  if (!model) return null;
 
   const result = await llmJson({
     model,
-    scene: "game_bgm",
+    scene: "game_text",
     system: "You are a game music composer that outputs JSON note sequences. Respond ONLY with valid JSON matching the schema.",
     user,
     mode: "json_object",
     temperature: 0.9,
-    timeoutMs: 30000,
+    // A JSON mode retry can double this window. Keep BGM fallback bounded so
+    // game assets continue even when the text gateway is temporarily slow.
+    timeoutMs: 8_000,
   });
 
   if (!result.ok || !result.raw) return null;

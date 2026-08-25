@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminCapability } from "@/lib/auth/admin";
 import { prisma } from "@/lib/prisma";
-import { getEffectiveRoutes, loadRuntimeConfig } from "@/lib/runtime-config";
+import { getEffectiveRoutes, loadRuntimeConfig, type ProviderPricingRule } from "@/lib/runtime-config";
 import { getEffectiveProviders, routeModelCascade, type RuntimeSceneKey } from "@/lib/runtime-providers";
 
 function sceneForJob(type: string): RuntimeSceneKey | null {
@@ -12,11 +12,11 @@ function sceneForJob(type: string): RuntimeSceneKey | null {
 }
 
 function configuredEstimateMicros(
-  pricing: { provider: string; model: string; modality: "llm" | "image"; operation: "json" | "text" | "image" | "image_batch"; estimatedCostMicros: number }[],
+  pricing: ProviderPricingRule[],
   provider: string,
   model: string,
-  modality: "llm" | "image",
-  operation: "json" | "text" | "image" | "image_batch",
+  modality: ProviderPricingRule["modality"],
+  operation: ProviderPricingRule["operation"],
 ) {
   const normalizedProvider = provider.toLowerCase();
   const normalizedModel = model.toLowerCase();

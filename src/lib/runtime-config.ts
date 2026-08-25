@@ -60,8 +60,8 @@ export type CdnConfigStored = {
 export type ProviderPricingRule = {
   provider: string;
   model: string;
-  modality: "llm" | "image";
-  operation: "json" | "text" | "image" | "image_batch";
+  modality: "llm" | "image" | "audio";
+  operation: "json" | "text" | "image" | "image_batch" | "audio";
   estimatedCostMicros: number;
 };
 
@@ -519,8 +519,8 @@ function applyPatchToPayload(
       const provider = rule.provider?.trim().toLowerCase();
       const model = rule.model?.trim().toLowerCase();
       if (!provider || !model) continue;
-      if (rule.modality !== "llm" && rule.modality !== "image") continue;
-      if (!(["json", "text", "image", "image_batch"] as const).includes(rule.operation)) continue;
+      if (rule.modality !== "llm" && rule.modality !== "image" && rule.modality !== "audio") continue;
+      if (!(["json", "text", "image", "image_batch", "audio"] as const).includes(rule.operation)) continue;
       const estimatedCostMicros = Number(rule.estimatedCostMicros);
       if (!Number.isFinite(estimatedCostMicros) || estimatedCostMicros < 0 || estimatedCostMicros > 1_000_000_000_000) continue;
       const normalized: ProviderPricingRule = {
