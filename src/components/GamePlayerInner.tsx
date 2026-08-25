@@ -356,7 +356,7 @@ export default function GamePlayerInner({
           tabIndex={0}
           role="application"
           aria-label={t("gameAria")}
-          className={`w-full bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] ${arcadeMode ? "h-full" : "aspect-[920/560] max-h-[min(70vh,620px)]"}`}
+          className={`w-full touch-none select-none bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] ${arcadeMode ? "h-full" : "h-[min(68svh,560px)] min-h-[420px] sm:h-auto sm:min-h-0 sm:aspect-[920/560] sm:max-h-[min(70vh,620px)]"}`}
         />
         {!playReady && !result ? (
           <div

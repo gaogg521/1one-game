@@ -798,3 +798,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 发布质量从“分数提示”升级为硬校验：漫画必须全图完成；导演分镜中的未知人物、场景、顺序倒退或缺绑定会阻止发布；关联小说时每格还必须绑定存在的正文段落并按段落顺序前进；使用角色的导演漫画须有对应 Character Sheet 视觉锚点。
 - 游戏发布必须引用当前不可变版本的 durable `asset_manifest`，且清单内有背景、主角和敌对角色的已生成资源及运行时槽位；浏览器会话中的临时 manifest 或纯几何回退不能再冒充完成品。五语页脚同时改为平台级游戏/小说/漫画定位，避免漫画页仍称自己是小游戏管线。
 - 验证：`qa:creator-quality`、`qa:creator-publication`、`qa:comic-storyboard-resilience`、`qa:comic-director-pipeline`、`qa:comic-novel-product-rules` 与 `npx tsc --noEmit` 通过。待执行完整 production build、精确提交、发布和 TLS/SNI 公网验收。
+
+## P45：游戏创作收敛与移动三消可玩性（2026-08-25）
+
+- 创作台默认改为“输入一句话 → 直接生成可玩版本”：热门灵感移到输入与主操作之后，仅保留四个入口；全部模板、主题诊断与“提炼创作方向”均折叠为可选项，系统不再将未经用户主动选择的方向附加进 prompt。
+- `开心消消乐/三消` 进入专属 puzzle 共创方向，明确相邻交换、三连消除、关卡目标与步数，不再落入通用的“威胁/弹幕”问题分支。
+- H5 试玩画布在手机端保持可用高度并禁用浏览器手势抢占；8×8 三消棋盘同时按宽和高缩放，避免窄屏下越出画布。普通点击、命中、连击不再触发相机全屏闪屏，只有 Boss/胜利/失败保留稀有全屏反馈。
+- 验证：`qa:create-intent-safety`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety`、`qa:puzzle-mode`、`qa:match3-commercial-runtime`、`qa:puzzle-semantic-juice`、`qa:juice-semantic-presets` 与 `npx tsc --noEmit` 通过；本地浏览器已验证默认折叠、直接生成可用，以及三消细化不显示“主要威胁来自哪里”。待精确提交、发布与公网验收。

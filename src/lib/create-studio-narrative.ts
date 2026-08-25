@@ -139,6 +139,15 @@ function inferFantasy(prompt: string, locale: AppLocale): string {
 }
 
 function gameplayCoreFor(templateId: CoCreationIntent["templateId"], locale: AppLocale): string {
+  if (templateId === "puzzle") {
+    return {
+      "zh-Hans": "交换或点击完成益智目标，规则、目标和下一步反馈要一眼可懂。",
+      "zh-Hant": "交換或點擊完成益智目標，規則、目標和下一步回饋要一眼可懂。",
+      en: "Use clear puzzle actions and goals, with the next useful move visible at a glance.",
+      ms: "Gunakan tindakan dan sasaran teka-teki yang jelas supaya langkah seterusnya mudah difahami.",
+      th: "ใช้การกระทำและเป้าหมายพัซเซิลที่ชัดเจน เพื่อให้เห็นก้าวถัดไปได้ทันที",
+    }[locale];
+  }
   return tr(locale, `gameplayCore.${templateId === "auto" ? "avoider" : templateId}`);
 }
 
@@ -212,6 +221,49 @@ function resolveDirectionTemplateId(intent: CoCreationIntent): GameTemplateId {
   return intent.templateId === "auto" ? "avoider" : intent.templateId;
 }
 
+function puzzleMatch3Direction(locale: AppLocale, intent: CoCreationIntent): CoCreationDirection {
+  const copy = {
+    "zh-Hans": {
+      title: "三消闯关，保留原意",
+      summary: "交换相邻棋子凑成三连，完成关卡目标；不引入弹幕、追击或无关战斗。",
+      bullets: ["首关先教会交换与三连消除", "分数/收集目标和步数限制形成轻量闯关"],
+      addon: "【玩法细化】三消闯关\n- 使用 puzzle 模板：交换相邻棋子，三连及以上消除\n- 首屏明确展示关卡目标、剩余步数和可交换提示\n- 不要添加弹幕、追击敌人或射击循环；视觉围绕「{fantasy}」统一",
+    },
+    "zh-Hant": {
+      title: "三消闖關，保留原意",
+      summary: "交換相鄰棋子湊成三連，完成關卡目標；不引入彈幕、追擊或無關戰鬥。",
+      bullets: ["首關先教會交換與三連消除", "分數/收集目標和步數限制形成輕量闖關"],
+      addon: "【玩法細化】三消闖關\n- 使用 puzzle 模板：交換相鄰棋子，三連及以上消除\n- 首屏明確展示關卡目標、剩餘步數和可交換提示\n- 不要加入彈幕、追擊敵人或射擊循環；視覺圍繞「{fantasy}」統一",
+    },
+    en: {
+      title: "Match-3 levels, keep the original idea",
+      summary: "Swap adjacent pieces to make matches and clear level goals; no bullet hell, chasing, or unrelated combat.",
+      bullets: ["Teach swapping and three-in-a-row in the first level", "Use goals and move limits for a light level loop"],
+      addon: "[Gameplay refinement] Match-3 levels\n- Use the puzzle template: swap adjacent pieces and clear matches of 3+\n- Show the level goal, moves remaining, and swap hint immediately\n- Do not add bullet hell, chasing enemies, or a shooting loop; unify visuals around {fantasy}",
+    },
+    ms: {
+      title: "Tahap padan-3, kekalkan idea asal",
+      summary: "Tukar kepingan bersebelahan untuk padanan tiga dan capai sasaran tahap; tiada peluru, kejar-mengejar atau pertempuran tidak berkaitan.",
+      bullets: ["Tahap pertama mengajar pertukaran dan padanan tiga", "Sasaran serta had langkah membentuk gelung tahap ringan"],
+      addon: "[Perincian permainan] Tahap padan-3\n- Guna templat puzzle: tukar kepingan bersebelahan dan padankan 3+\n- Paparkan sasaran, baki langkah, dan petunjuk pertukaran sejak awal\n- Jangan tambah peluru, musuh mengejar atau gelung menembak; satukan visual sekitar {fantasy}",
+    },
+    th: {
+      title: "ด่านจับคู่ 3 ชิ้น ตามเจตนาเดิม",
+      summary: "สลับชิ้นที่อยู่ติดกันให้เรียงสามชิ้นและทำเป้าหมายด่านให้สำเร็จ โดยไม่มีเกมกระสุนหรือการต่อสู้ที่ไม่เกี่ยวข้อง",
+      bullets: ["ด่านแรกสอนการสลับและการเรียงสามชิ้น", "เป้าหมายและจำนวนครั้งที่สลับสร้างลูปด่านแบบเบา"],
+      addon: "[ปรับรายละเอียดเกม] ด่านจับคู่ 3 ชิ้น\n- ใช้เทมเพลต puzzle: สลับชิ้นที่ติดกันและเคลียร์ชุด 3 ชิ้นขึ้นไป\n- แสดงเป้าหมายด่าน จำนวนครั้งที่เหลือ และคำใบ้ตั้งแต่แรก\n- ห้ามเพิ่มเกมกระสุน ศัตรูไล่ล่า หรือวงจรยิง; รวมภาพลักษณ์ให้เข้ากับ {fantasy}",
+    },
+  }[locale];
+  return {
+    id: "puzzle-match3",
+    title: copy.title,
+    summary: copy.summary,
+    templateId: "puzzle",
+    bullets: copy.bullets,
+    promptAddon: copy.addon.replace("{fantasy}", intent.fantasy),
+  };
+}
+
 function buildTemplateDialogueDirections(
   templateId: GameTemplateId,
   intent: CoCreationIntent,
@@ -241,6 +293,9 @@ function buildTemplateDialogueDirections(
       dialogueDirection(locale, "plat-combat", "platformer", "dialogue.platformer.combat", fantasy),
       dialogueDirection(locale, "plat-chapters", "platformer", "dialogue.platformer.chapters", fantasy),
     ];
+  }
+  if (templateId === "puzzle") {
+    return [puzzleMatch3Direction(locale, intent)];
   }
   return null;
 }

@@ -18,6 +18,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildPuzzleBlueprint, type PuzzleMode } from "@/lib/puzzle-blueprint";
+import { resolvePuzzleGridLayout } from "@/game/engine/puzzle-layout";
 import { runtimeSeedFromSpec, seededRandom, seededShuffle } from "@/lib/runtime-seed";
 import { schedulePhaserPlayReady, setPhaserQaClickHints } from "@/game/engine/phaser-play-ready";
 import { showControlsHint, puzzleControlLines } from "@/game/engine/controls-hint";
@@ -336,7 +337,7 @@ export class PuzzleScene extends Phaser.Scene {
         this.build2048(bp.cols, bp.rows, w, h);
         break;
       default:
-        this.buildMatch3(bp.cols, bp.rows, w);
+        this.buildMatch3(bp.cols, bp.rows, w, h);
     }
     schedulePhaserPlayReady(this, 400, {
       puzzleScore: 0,
@@ -742,16 +743,16 @@ export class PuzzleScene extends Phaser.Scene {
     }
   }
 
-  private buildMatch3(cols: number, rows: number, w: number) {
+  private buildMatch3(cols: number, rows: number, w: number, h: number) {
     const bloomScale = this.spec.samplePlayProfile?.puzzle?.match3BloomScale ?? 1;
     const swapMode = this.anipopMode || this.spec.puzzle?.matchMechanic === "swap";
-    const h = this.scale.height;
     const paletteSize = this.anipopMode ? 5 : COLORS.length;
     this.anipopMatchCols = cols;
     this.anipopMatchRows = rows;
-    this.cell = this.anipopMode ? Math.min(42, (w - 48) / cols) : Math.min(48, (w - 40) / cols);
-    this.ox = (w - this.cell * cols) / 2;
-    this.oy = this.anipopMode ? 88 : Math.max(120, (h - this.cell * rows) / 2 + 16);
+    const layout = resolvePuzzleGridLayout({ width: w, height: h, cols, rows, anipop: this.anipopMode });
+    this.cell = layout.cell;
+    this.ox = layout.ox;
+    this.oy = layout.oy;
     if (this.anipopMode) {
       drawAnipopBoardFrame(this.gridGfx, this.ox, this.oy, this.cell * cols, this.cell * rows);
     } else {

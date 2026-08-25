@@ -276,7 +276,7 @@ export function CreateQuickStart({ prompt, onPromptChange }: CreateQuickStartPro
   };
 
   return (
-    <section className="flex flex-col gap-6" aria-label={t("sectionAria")}>
+    <section className="flex flex-col gap-4" aria-label={t("sectionAria")}>
       {/* ─────────── 1. 8 真玩法大卡片 ─────────── */}
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-[var(--gc-text)]">
@@ -287,7 +287,7 @@ export function CreateQuickStart({ prompt, onPromptChange }: CreateQuickStartPro
           </span>
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {HOT_CARDS.map((card) => {
+          {HOT_CARDS.slice(0, 4).map((card) => {
             // 防御：模板不存在则跳过（避免热更新定义变化后渲染异常）
             if (!allIds.includes(card.templateId)) return null;
             const title = t(card.titleKey);
@@ -314,7 +314,13 @@ export function CreateQuickStart({ prompt, onPromptChange }: CreateQuickStartPro
         </div>
       </div>
 
-      {/* ─────────── 2. 60 模板分类快选 chip ─────────── */}
+      {/* 完整模板库与主题诊断对探索有帮助，但不应挤占「写一句话就生成」的首屏。 */}
+      <details className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/45 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-[var(--gc-text-soft)] marker:text-[var(--gc-accent)]">
+          {t("allTitle", { count: allIds.length })}
+        </summary>
+        <div className="mt-4 flex flex-col gap-5">
+      {/* ─────────── 2. 模板分类快选 chip ─────────── */}
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-[var(--gc-text)]">
           <span className="mr-1.5">🎮</span>
@@ -443,6 +449,8 @@ export function CreateQuickStart({ prompt, onPromptChange }: CreateQuickStartPro
           </div>
         </div>
       ) : null}
+        </div>
+      </details>
     </section>
   );
 }

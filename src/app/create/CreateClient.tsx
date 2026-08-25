@@ -269,6 +269,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const [coCreationIntent, setCoCreationIntent] = useState<CoCreationIntent | null>(null);
   const [coDirections, setCoDirections] = useState<CoCreationDirection[]>([]);
   const [selectedDirectionId, setSelectedDirectionId] = useState<string | null>(null);
+  /** 玩法细化是显式可选项；不能把系统猜测默默拼进用户的一句话需求。 */
+  const [coCreationEnabled, setCoCreationEnabled] = useState(false);
   const [coCreationStep, setCoCreationStep] = useState<1 | 2 | 3 | 4>(1);
   /** 与本轮流式生成绑定，卡片区展示一行「正在按此理解」摘要，避免仅显示远端阶段名而造成误解 */
   const [streamIntentBrief, setStreamIntentBrief] = useState<string | null>(null);
@@ -314,7 +316,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const currentDirection =
     selectedDirectionId && coDirections.length ? coDirections.find((x) => x.id === selectedDirectionId) ?? null : null;
 
-  const effectivePromptForGeneration = currentDirection
+  const effectivePromptForGeneration = coCreationEnabled && currentDirection
     ? `${prompt.trim()}\n\n${currentDirection.promptAddon}`.trim().slice(0, 4000)
     : prompt.trim();
 
@@ -324,6 +326,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setCoCreationIntent(intent);
     setCoDirections(directions);
     setSelectedDirectionId(directions[0]?.id ?? null);
+    setCoCreationEnabled(true);
     setCoCreationStep(2);
     setCreationMode("flow");
     appendStudioLog({
@@ -592,7 +595,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       title: t("log.promptExcerpt"),
       bullets: [summarizePromptForStudio(prompt, locale)],
     });
-    if (currentDirection) {
+    if (coCreationEnabled && currentDirection) {
       appendStudioLog({
         kind: "intent",
         title: t("log.directionForGeneration"),
@@ -864,6 +867,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     }
   }, [
     appendStudioLog,
+    coCreationEnabled,
     currentDirection,
     effectivePromptForGeneration,
     enhancePass,
@@ -1239,7 +1243,6 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         </header>
 
         <div className="flex flex-col gap-10">
-          <CreateQuickStart prompt={prompt} onPromptChange={setPrompt} locale={locale} />
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-5 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]/80 px-1 py-2">
             <div className="flex flex-col gap-2">
@@ -1533,7 +1536,21 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
 
           </div>
 
-          <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">
+          <details className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium text-[var(--gc-text-soft)] marker:text-[var(--gc-accent)]">
+                {t("planIntent")}
+              </summary>
+              <div className="mt-4">
+              {!coCreationIntent ? (
+                <button
+                  type="button"
+                  onClick={buildCoCreationPlan}
+                  disabled={prompt.trim().length < 2}
+                  className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)] px-4 py-2 text-xs font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_92%,white)] disabled:opacity-40"
+                >
+                  {t("planIntent")}
+                </button>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 {([
                   [1, t("stepInput")],
@@ -1600,7 +1617,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
                   <p className="mt-1">{t("coCreation.gameplayAxis")}{coCreationIntent.gameplayCore}</p>
                 </div>
               ) : null}
-            </div>
+              </div>
+          </details>
 
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wider text-[var(--gc-muted)]">{t("tryExamples")}</p>
@@ -1623,21 +1641,11 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  if (!coCreationIntent) {
-                    buildCoCreationPlan();
-                    return;
-                  }
-                  if (!currentDirection) {
-                    setError(t("chooseDirectionFirst"));
-                    return;
-                  }
-                  void generateStream();
-                }}
+                onClick={() => void generateStream()}
                 disabled={busy !== "idle" || prompt.trim().length < 2}
                 className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "gen" ? t("streaming") : !coCreationIntent ? t("planIntent") : t("generatePlayable")}
+                {busy === "gen" ? t("streaming") : t("generatePlayable")}
               </button>
               <button
                 type="button"
@@ -1689,6 +1697,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
               </p>
             ) : null}
           </div>
+
+          <CreateQuickStart prompt={prompt} onPromptChange={setPrompt} locale={locale} />
 
           <section
             className="flex flex-col gap-4 border-t border-[color:var(--gc-border)] pt-8"
@@ -1904,4 +1914,3 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     </AppPageShell>
   );
 }
-

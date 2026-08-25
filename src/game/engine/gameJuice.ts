@@ -34,6 +34,14 @@ export type JuicePreset = {
   floaterPrefix?: string;
 };
 
+/**
+ * 相机闪屏是结算级反馈，不能绑在每一次命中/连击上。
+ * 高频叠加会让移动端整块画布长时间染色，掩盖实际可点击区域。
+ */
+export function shouldUseScreenFlash(kind: JuiceSemanticKind): boolean {
+  return kind === "boss" || kind === "win" || kind === "fail";
+}
+
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
@@ -224,7 +232,9 @@ export function juiceSemantic(
   const preset = resolveJuicePreset(kind, { combo: params.combo, large: params.large });
   juiceBurst(scene, params.x, params.y, params.colorHex, preset.burstCount, params.rng);
   juiceShake(scene, { durationMs: preset.shakeDurationMs, intensity: preset.shakeIntensity });
-  juiceFlash(scene, preset.flashRgb, { durationMs: preset.flashDurationMs });
+  if (shouldUseScreenFlash(kind)) {
+    juiceFlash(scene, preset.flashRgb, { durationMs: preset.flashDurationMs });
+  }
   if (params.text) {
     const prefix = preset.floaterPrefix ?? "";
     juiceFloater(scene, params.x, params.y - 14, `${prefix}${params.text}`, params.textColorCss ?? "#ffffff");
