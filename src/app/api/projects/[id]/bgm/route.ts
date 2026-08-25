@@ -26,6 +26,5 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const result = await ensureProjectBgm(id, spec);
   if (result.source === "audio_model") return NextResponse.json({ audio: result.audio, source: result.source });
-  if (result.source === "llm_notes") return NextResponse.json({ notes: result.notes, source: result.source });
-  return NextResponse.json({ error: "generation failed" }, { status: 500 });
+  return NextResponse.json({ notes: result.notes, source: result.source });
 }

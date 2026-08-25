@@ -1,5 +1,6 @@
 import { isAudioOutputModelId } from "../src/lib/bgm-model-capability";
 import { requestBgmAudio } from "../src/lib/game-bgm-audio";
+import { buildProceduralBgmNotes } from "../src/lib/game-bgm-gen";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import type { RuntimeLlmProvider } from "../src/lib/runtime-providers";
 
@@ -30,6 +31,8 @@ async function main() {
   assert(!isAudioOutputModelId("openai/gpt-4.1-mini"), "ordinary text model must not receive audio output requests");
 
   const spec = prepareGameSpecForPersist(undefined, "霓虹飞船穿越机械舰队并击败终局 Boss");
+  const procedural = buildProceduralBgmNotes(spec);
+  assert(procedural.notes.length === 24 && procedural.bpm >= 70, "final procedural fallback must produce a playable loop");
   let capturedBody: Record<string, unknown> | null = null;
   const generated = await requestBgmAudio(provider, "openai/gpt-audio-mini", spec, async (input, init) => {
     assert(String(input) === "https://audio.example/v1/chat/completions", "audio request must use the OpenAI-compatible chat endpoint");

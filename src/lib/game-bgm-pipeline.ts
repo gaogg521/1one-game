@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { generateBgmNotesFromSpec, type BgmNoteSequence } from "@/lib/game-bgm-gen";
+import { buildProceduralBgmNotes, generateBgmNotesFromSpec, type BgmNoteSequence } from "@/lib/game-bgm-gen";
 import { generateProjectBgmAudio, parseProjectBgmAudio, type ProjectBgmAudio } from "@/lib/game-bgm-audio";
 import type { GameSpec } from "@/lib/game-spec";
 
 export type ProjectBgmResult =
   | { source: "audio_model"; audio: ProjectBgmAudio }
   | { source: "llm_notes"; notes: BgmNoteSequence }
-  | { source: "unavailable" };
+  | { source: "procedural_notes"; notes: BgmNoteSequence };
 
 function parseBgmNotes(raw: string | null | undefined): BgmNoteSequence | null {
   if (!raw) return null;
@@ -34,7 +34,7 @@ async function ensureProjectBgmOnce(projectId: string, spec: GameSpec): Promise<
     where: { id: projectId },
     select: { bgmAudioJson: true, bgmNotesJson: true },
   });
-  if (!row) return { source: "unavailable" };
+  if (!row) return { source: "procedural_notes", notes: buildProceduralBgmNotes(spec) };
 
   const persistedAudio = parseProjectBgmAudio(row.bgmAudioJson);
   if (persistedAudio) return { source: "audio_model", audio: persistedAudio };
@@ -49,9 +49,14 @@ async function ensureProjectBgmOnce(projectId: string, spec: GameSpec): Promise<
   if (cachedNotes) return { source: "llm_notes", notes: cachedNotes };
 
   const notes = await generateBgmNotesFromSpec(spec);
-  if (!notes) return { source: "unavailable" };
-  await prisma.project.update({ where: { id: projectId }, data: { bgmNotesJson: JSON.stringify(notes) } });
-  return { source: "llm_notes", notes };
+  if (notes) {
+    await prisma.project.update({ where: { id: projectId }, data: { bgmNotesJson: JSON.stringify(notes) } });
+    return { source: "llm_notes", notes };
+  }
+
+  const proceduralNotes = buildProceduralBgmNotes(spec);
+  await prisma.project.update({ where: { id: projectId }, data: { bgmNotesJson: JSON.stringify(proceduralNotes) } });
+  return { source: "procedural_notes", notes: proceduralNotes };
 }
 
 /** Coalesce a foreground play request with its creation worker in this process. */

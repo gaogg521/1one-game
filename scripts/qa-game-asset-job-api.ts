@@ -71,7 +71,7 @@ async function main() {
     assert(detailResponse.ok && detail.core?.revision?.id === created.core.creativeRevisionId, "owner must retain the creation revision");
     const manifest = detail.core.revision.artifacts?.find((artifact) => artifact.kind === "asset_manifest");
     assert(manifest, "Core revision must retain its generated asset manifest");
-    assert(["audio_model", "llm_notes", "unavailable"].includes(manifest.content?.bgm?.source ?? ""), "durable game task must record its BGM outcome");
+    assert(["audio_model", "llm_notes", "procedural_notes"].includes(manifest.content?.bgm?.source ?? ""), "durable game task must record its BGM outcome");
 
     const recoveryResponse = await fetch(`${baseUrl}/api/projects/${projectId}/background`, {
       method: "POST",

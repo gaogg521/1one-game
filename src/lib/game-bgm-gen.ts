@@ -9,6 +9,27 @@ import type { GameSpec } from "@/lib/game-spec";
 export type BgmNote = { freq: number; dur: number; vol?: number };
 export type BgmNoteSequence = { bpm: number; notes: BgmNote[] };
 
+/**
+ * A bounded final fallback when both external audio and the text gateway are
+ * unavailable. It is deterministic, loopable, and deliberately stored as
+ * notes instead of pretending to be an AI-produced audio file.
+ */
+export function buildProceduralBgmNotes(spec: GameSpec): BgmNoteSequence {
+  const profile = getBgmGenre(spec);
+  const bpm = profile.includes("intense") || profile.includes("fast") ? 120 : profile.includes("calm") ? 82 : 100;
+  const root = spec.templateId === "puzzle" || spec.templateId === "farming" ? 261.63 : 220;
+  const scale = profile.includes("orchestral") ? [1, 1.125, 1.25, 1.5, 1.667, 2] : [1, 1.125, 1.25, 1.5, 1.667, 2.25];
+  const motif = [0, 2, 4, 2, 1, 3, 5, 3, 0, 2, 4, 5, 4, 2, 1, 0, 3, 4, 2, 1, 0, 1, 3, 0];
+  return {
+    bpm,
+    notes: motif.map((degree, index) => ({
+      freq: Number((root * scale[degree]!).toFixed(2)),
+      dur: index % 8 === 7 ? 0.75 : 0.5,
+      vol: index % 4 === 0 ? 0.66 : 0.52,
+    })),
+  };
+}
+
 /** 从 GameSpec 生成音符序列（16-24 音符，主旋律循环） */
 export async function generateBgmNotesFromSpec(spec: GameSpec): Promise<BgmNoteSequence | null> {
   const genre = getBgmGenre(spec);

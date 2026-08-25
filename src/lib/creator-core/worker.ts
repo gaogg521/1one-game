@@ -68,7 +68,7 @@ async function executeGameAssetJob(
   await heartbeatGenerationJob(job.id, workerId, {
     percent: 8,
     stage: "generating",
-    detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "BGM unavailable; continuing assets",
+    detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "procedural BGM fallback ready",
   });
   const result = await runProjectAssetPipeline({
     projectId: project.id,
@@ -92,9 +92,7 @@ async function executeGameAssetJob(
         coverSource: result.coverSource,
         bgm: bgm.source === "audio_model"
           ? { source: bgm.source, url: bgm.audio.url, mimeType: bgm.audio.mimeType, model: bgm.audio.model }
-          : bgm.source === "llm_notes"
-            ? { source: bgm.source, bpm: bgm.notes.bpm, noteCount: bgm.notes.notes.length }
-            : { source: bgm.source },
+          : { source: bgm.source, bpm: bgm.notes.bpm, noteCount: bgm.notes.notes.length },
       },
       metadata: { projectId: project.id, templateId: spec.templateId },
     },
@@ -111,7 +109,7 @@ async function executeGameAssetJob(
         metadata: { projectId: project.id, model: bgm.audio.model, mimeType: bgm.audio.mimeType, source: bgm.source },
       },
     });
-  } else if (bgm.source === "llm_notes") {
+  } else {
     await createCreativeArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId ?? undefined,
