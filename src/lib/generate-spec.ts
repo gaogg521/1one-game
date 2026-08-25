@@ -1,5 +1,6 @@
 ﻿import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
+import type { GameProductionContract } from "@/lib/game-production-contract";
 import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration/context-pack";
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
@@ -490,7 +491,7 @@ export type GenerationDebug = {
   /** 确定性首分钟体验评分卡；仅作质量可观察性，不改变运行时规格。 */
   verticalSlice?: GameVerticalSliceScorecard;
   /** 可审阅的内核编译计划；不向创作页暴露内部模板术语。 */
-  kernelPlan?: { label: string; coreLoop: string; controls: string; checks: readonly string[] };
+  kernelPlan?: { label: string; coreLoop: string; controls: string; production: GameProductionContract; checks: readonly string[] };
 };
 
 /** 单次生成请求内 finalize/director 文案 locale（避免层层传参）。 */
@@ -1465,6 +1466,7 @@ export async function generateGameSpecWithMeta(
         label: plan.label,
         coreLoop: plan.coreLoop,
         controls: plan.controls,
+        production: plan.production,
         checks: plan.checks,
       },
     };

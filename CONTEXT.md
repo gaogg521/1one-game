@@ -813,3 +813,11 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `/api/generate` 与 SSE 默认走内核编译；SSE 仅展示“规则 → 验证 → 可玩版本”三个真实阶段，并返回用户可读的玩法摘要，不再展示模板、联网检索、二次强化或隐式创意提炼。
 - `/create` 被重写为单入口：一句话输入、生成状态、即时 Phaser 试玩和保存打开。取消用户侧模板/风格预制、变体、隐藏模型选项、参考素材工作台和精灵轮询；保存后立即进入 H5 试玩，后台美术不得阻塞可玩版本。
 - 验证：`qa:game-generation-kernel`（三消、躲避、经营、跳跃、塔防五类意图）、`qa:generate-stream-sse`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety`、定向 ESLint、`npx tsc --noEmit` 与 production build 通过；390px 真实浏览器中三消 SSE 完成并加载 Canvas，旧控件文字检索为 0。production build 仍有既有动态文件追踪性能警告，未阻塞产物。待精确提交、发布和公网复验。
+
+## P47：游戏默认生产合同（关卡、声音、混音与移动端）（2026-08-25）
+
+- 所有新游戏的确定性内核现在必须产出并持久化 `production` 合同：首局 0–60 秒固定为 onboarding / core-loop / variation / climax 四段；每段绑定 BGM section（intro/build/drop/climax）和可审阅的玩家目标。关卡节奏不再是生成提示词里的口号。
+- 合同同时包含主题环境音（meadow/ocean/city/space/cave/arcade）、输入/拾取/冲击/能力/Boss/胜利/失败音效覆盖、音乐/环境/音效混音预算、最多 4 个并发 SFX，以及“首次手势后启动、后台静音”的移动端策略。旧项目在运行时会补齐这份默认合同，新项目会随 GameSpec 保存。
+- `GameSoundscape` 接入 BGM 分段时间线和程序化环境音层；`webBleeps` 改接共享 SFX mix bus，并实行并发语音上限。所有 Phaser 结算统一切入胜利/失败段，避免只靠各场景自行记得播结算音乐。
+- SSE 创作页直接回显首局关卡节奏与音频预算，不暴露模板/风格预制。质量评分将环境音、4 段音乐推进和移动端安全混音纳入 presentation 门槛。
+- 验证：`npx tsc --noEmit`、定向 ESLint、`qa:game-generation-kernel`、新增 `qa:game-production-contract`（四种主题）、`qa:generate-stream-sse`、`qa:mobile-puzzle-layout`、`qa:juice-screen-safety` 通过；真实浏览器生成“三消”后显示四段节奏与“arcade 环境音 · BGM 分段推进 · 最多 4 个音效并发”，390×844 Canvas 为 342×261，首次点击后音频提示消失。控制台仅有已知导航 hydration mismatch，未见本项错误。待精确提交、发布和公网 SSE 验证。

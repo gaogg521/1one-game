@@ -1,6 +1,7 @@
 import { getSharedAudioContext, resumeSharedAudioContext } from "@/game/audio/audio-context";
 import type { MusicProfile } from "@/lib/cohesive-presentation";
 import type { GameSpec } from "@/lib/game-spec";
+import type { GameAudioProduction } from "@/lib/game-production-contract";
 import { resolveTemplateBgmUrl, templateBpmBias } from "@/lib/game-bgm-presets";
 
 type SoundscapeCleanup = () => void;
@@ -12,6 +13,8 @@ export type GameSoundscapeOptions = {
   templateId?: GameSpec["templateId"];
   /** 项目 ID，用于拉取 LLM 降级 BGM 音符序列 */
   projectId?: string;
+  /** 生成器默认产出的音乐、环境音、混音和移动端播放合同。 */
+  productionAudio?: GameAudioProduction;
 };
 
 export type MusicSection = "intro" | "build" | "drop" | "climax" | "victory" | "defeat";
@@ -600,7 +603,7 @@ class LeadMelody {
  * - 分层架构：铺底（drone）+ 鼓点（drums）+ 旋律（melody）
  * - 按章节/阶段动态叠加层次
  * - 击杀/事件时触发音乐 stinger
- * - 尊重 prefers-reduced-motion（不播放铺底）
+ * - 在用户首次手势后启动，避免移动端自动播放限制
  */
 export class GameSoundscape {
   private cleanups: SoundscapeCleanup[] = [];
@@ -612,6 +615,9 @@ export class GameSoundscape {
   private filterNode: BiquadFilterNode | null = null;
   private lfoGain: GainNode | null = null;
   private lfoOsc: OscillatorNode | null = null;
+  private ambienceGain: GainNode | null = null;
+  private productionTimer: number | null = null;
+  private productionStartedAt = 0;
 
   // Drum and melody layers
   private drumSequencer: DrumSequencer | null = null;
@@ -643,6 +649,76 @@ export class GameSoundscape {
     return this.opts.blocky === true;
   }
 
+  private get productionAudio(): GameAudioProduction | undefined {
+    return this.opts.productionAudio;
+  }
+
+  private musicMixGain(): number {
+    return this.productionAudio?.mix.musicGain ?? 1;
+  }
+
+  private setAmbienceLevel(level: number): void {
+    const ctx = getSharedAudioContext();
+    if (!ctx || !this.ambienceGain) return;
+    const mix = this.productionAudio?.mix.ambienceGain ?? 0;
+    const target = Math.max(0, Math.min(0.035, 0.025 * mix * level));
+    this.ambienceGain.gain.linearRampToValueAtTime(target, ctx.currentTime + 0.45);
+  }
+
+  private startProductionAmbience(ctx: AudioContext, master: GainNode): void {
+    const audio = this.productionAudio;
+    if (!audio) return;
+
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.2;
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    const filter = ctx.createBiquadFilter();
+    const settings: Record<GameAudioProduction["ambience"], { type: BiquadFilterType; frequency: number; q: number }> = {
+      meadow: { type: "bandpass", frequency: 1150, q: 0.45 },
+      ocean: { type: "lowpass", frequency: 760, q: 0.7 },
+      city: { type: "bandpass", frequency: 1650, q: 0.8 },
+      space: { type: "lowpass", frequency: 440, q: 1.1 },
+      cave: { type: "lowpass", frequency: 320, q: 1.35 },
+      arcade: { type: "bandpass", frequency: 980, q: 0.7 },
+    };
+    const selected = settings[audio.ambience];
+    filter.type = selected.type;
+    filter.frequency.value = selected.frequency;
+    filter.Q.value = selected.q;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    noise.start(ctx.currentTime);
+    this.ambienceGain = gain;
+    this.setAmbienceLevel(audio.sections[0]?.ambienceGain ?? 0.8);
+    this.cleanups.push(() => {
+      try { noise.stop(); noise.disconnect(); filter.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+      this.ambienceGain = null;
+    });
+  }
+
+  private startProductionTimeline(): void {
+    const audio = this.productionAudio;
+    if (!audio || typeof window === "undefined") return;
+    this.productionStartedAt = Date.now();
+    this.setSection("intro");
+    this.productionTimer = window.setInterval(() => {
+      if (this.currentSection === "victory" || this.currentSection === "defeat") return;
+      const elapsed = (Date.now() - this.productionStartedAt) / 1000;
+      const next = [...audio.sections].reverse().find((section) => elapsed >= section.startSecond);
+      if (next && next.section !== this.currentSection) this.setSection(next.section);
+    }, 1000);
+    this.cleanups.push(() => {
+      if (this.productionTimer !== null) clearInterval(this.productionTimer);
+      this.productionTimer = null;
+    });
+  }
+
   /**
    * 平滑过渡到新的紧张度（0=平静, 1=极度紧张）。
    * 影响 master 音量、滤波截止频率、LFO 速度。
@@ -665,7 +741,7 @@ export class GameSoundscape {
 
     // Master gain
     const base = profileBaseGain(this.profile, this.blocky);
-    const targetGain = base * (0.72 + t * 0.28);
+    const targetGain = base * (0.72 + t * 0.28) * this.musicMixGain();
     this.masterGain.gain.linearRampToValueAtTime(targetGain, now + rampTime);
 
     // Filter frequency: higher tension → more high-freq content
@@ -700,6 +776,8 @@ export class GameSoundscape {
 
     const ctx = getSharedAudioContext();
     if (!ctx) return;
+    const productionSection = this.productionAudio?.sections.find((item) => item.section === section);
+    if (productionSection) this.setAmbienceLevel(productionSection.ambienceGain);
 
     // 更新琶音模式（0/1/2=和弦音, 3+=经过音）
     if (this.melodicArp) {
@@ -730,19 +808,19 @@ export class GameSoundscape {
     switch (section) {
       case "intro":
         this.drumSequencer?.setIntensity(0);
-        this.setTension(0.25);
+        this.setTension(productionSection?.tension ?? 0.25);
         break;
       case "build":
         this.drumSequencer?.setIntensity(0.45);
-        this.setTension(0.5);
+        this.setTension(productionSection?.tension ?? 0.5);
         break;
       case "drop":
         this.drumSequencer?.setIntensity(0.75);
-        this.setTension(0.72);
+        this.setTension(productionSection?.tension ?? 0.72);
         break;
       case "climax":
         this.drumSequencer?.setIntensity(1);
-        this.setTension(0.92);
+        this.setTension(productionSection?.tension ?? 0.92);
         break;
       case "victory":
         this.drumSequencer?.setIntensity(0.35);
@@ -861,7 +939,6 @@ export class GameSoundscape {
   /** 在用户首次触控后调用，以满足自动播放策略。 */
   async startInteractive(): Promise<void> {
     if (typeof window === "undefined") return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const ctx = getSharedAudioContext();
     if (!ctx) return;
@@ -875,9 +952,22 @@ export class GameSoundscape {
     const master = ctx.createGain();
     const lvl = Math.min(1, Math.max(0, this.intensity));
     const base = profileBaseGain(this.profile, this.blocky);
-    master.gain.setValueAtTime(base * (0.72 + lvl * 0.22), ctx.currentTime);
+    master.gain.setValueAtTime(base * (0.72 + lvl * 0.22) * this.musicMixGain(), ctx.currentTime);
     master.connect(ctx.destination);
     this.masterGain = master;
+    this.startProductionAmbience(ctx, master);
+
+    // Mobile browsers throttle background tabs.  Keep the contract explicit and
+    // mute this game's graph while hidden instead of leaking a looped ambience.
+    if (this.productionAudio?.mobile.pausesWhenHidden && typeof document !== "undefined") {
+      const onVisibilityChange = () => {
+        if (!this.masterGain) return;
+        const baseGain = base * (0.72 + this.currentTension * 0.28) * this.musicMixGain();
+        this.masterGain.gain.linearRampToValueAtTime(document.hidden ? 0 : baseGain, ctx.currentTime + 0.12);
+      };
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      this.cleanups.push(() => document.removeEventListener("visibilitychange", onVisibilityChange));
+    }
 
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
@@ -1073,6 +1163,7 @@ export class GameSoundscape {
     this.cleanups.push(() => {
       try { filter.disconnect(); master.disconnect(); } catch { /* ignore */ }
     });
+    this.startProductionTimeline();
   }
 
   dispose(): void {

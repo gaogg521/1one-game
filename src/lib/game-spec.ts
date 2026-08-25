@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
+import { GameProductionContractSchema } from "@/lib/game-production-contract";
 import { SamplePlayProfileSchema } from "@/lib/sample-play-profiles/types";
 
 const RelPointSchema = z.object({
@@ -666,6 +667,8 @@ export const GameSpecSchema = z.object({
       sfxPack: z.string().min(1).max(40).optional(),
     })
     .optional(),
+  /** 新建游戏的默认生产合同：首分钟关卡节奏、音乐/环境音、音效与移动端混音策略。 */
+  production: GameProductionContractSchema.optional(),
   /** 深度 Godot 视觉层（可选；省略时 enrich 按 assetStyle 自动推断 shaderPack/animationSet） */
   visual: VisualSchema.optional(),
   labels: z.object({

@@ -13,6 +13,11 @@
 import { getSharedAudioContext } from "@/game/audio/audio-context";
 
 let bleepTemperament = 1;
+let sfxGain = 1;
+let maxConcurrentSfx = 4;
+let activeSfx = 0;
+let sfxMaster: GainNode | null = null;
+let sfxMasterContext: AudioContext | null = null;
 let sfxPack:
   | "arcade"
   | "neon"
@@ -35,6 +40,32 @@ export function setBleepTemperament(mult: number): void {
 /** 与 cohesive-presentation 的 musicProfile / assetStyle 协同 */
 export function setSfxPack(pack: typeof sfxPack): void {
   sfxPack = pack;
+}
+
+/** Shared mix bus and mobile-safe voice limit for every scene's procedural SFX. */
+export function configureSfxMix(input: { gain: number; maxConcurrent: number }): void {
+  sfxGain = Math.max(0, Math.min(1, input.gain));
+  maxConcurrentSfx = Math.max(1, Math.min(6, Math.floor(input.maxConcurrent)));
+  if (sfxMaster) sfxMaster.gain.value = sfxGain;
+}
+
+function sfxDestination(ctx: AudioContext): AudioNode {
+  if (!sfxMaster || sfxMasterContext !== ctx) {
+    sfxMaster?.disconnect();
+    sfxMaster = ctx.createGain();
+    sfxMaster.gain.value = sfxGain;
+    sfxMaster.connect(ctx.destination);
+    sfxMasterContext = ctx;
+  }
+  return sfxMaster;
+}
+
+function reserveSfxVoice(kind: BleepKind): boolean {
+  if (activeSfx >= maxConcurrentSfx) return false;
+  activeSfx += 1;
+  const lifetimeMs = kind === "boss" || kind === "death" ? 760 : kind === "win" ? 620 : 420;
+  window.setTimeout(() => { activeSfx = Math.max(0, activeSfx - 1); }, lifetimeMs);
+  return true;
 }
 
 export type BleepKind =
@@ -149,8 +180,8 @@ function withTail(
   sourceConnect(delay);
   delay.connect(filter);
   filter.connect(wetMix);
-  dryMix.connect(ctx.destination);
-  wetMix.connect(ctx.destination);
+  dryMix.connect(sfxDestination(ctx));
+  wetMix.connect(sfxDestination(ctx));
 }
 
 // ─── 主 API ───────────────────────────────────────────────────────
@@ -159,6 +190,7 @@ export function playBleep(kind: BleepKind): void {
   const ctx = getSharedAudioContext();
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
+  if (!reserveSfxVoice(kind)) return;
 
   const t = bleepTemperament;
   const now = ctx.currentTime;
@@ -192,7 +224,7 @@ export function playBleep(kind: BleepKind): void {
       ng.gain.exponentialRampToValueAtTime(0.0006, now + 0.04);
       noiseSrc.connect(hp);
       hp.connect(ng);
-      ng.connect(ctx.destination);
+      ng.connect(sfxDestination(ctx));
       noiseSrc.start(now);
       noiseSrc.stop(now + 0.05);
       return;
@@ -225,7 +257,7 @@ export function playBleep(kind: BleepKind): void {
       bg.gain.setValueAtTime(0.1, now);
       bg.gain.exponentialRampToValueAtTime(0.0006, now + 0.22);
       boom.connect(bg);
-      bg.connect(ctx.destination);
+      bg.connect(sfxDestination(ctx));
       boom.start(now);
       boom.stop(now + 0.24);
       return;
@@ -253,7 +285,7 @@ export function playBleep(kind: BleepKind): void {
       hg.gain.setValueAtTime(0.024 * env, now);
       hg.gain.exponentialRampToValueAtTime(0.0006, now + 0.1 * env);
       h.connect(hg);
-      hg.connect(ctx.destination);
+      hg.connect(sfxDestination(ctx));
       h.start(now);
       h.stop(now + 0.12);
       return;
@@ -293,7 +325,7 @@ export function playBleep(kind: BleepKind): void {
       cf.frequency.value = 3000;
       click.connect(cf);
       cf.connect(cg);
-      cg.connect(ctx.destination);
+      cg.connect(sfxDestination(ctx));
       click.start(now);
       click.stop(now + 0.035);
       return;
@@ -343,7 +375,7 @@ export function playBleep(kind: BleepKind): void {
       bp.Q.value = 1.5;
       noise.connect(bp);
       bp.connect(ng);
-      ng.connect(ctx.destination);
+      ng.connect(sfxDestination(ctx));
       noise.start(now);
       noise.stop(now + 0.5);
       return;
@@ -390,7 +422,7 @@ export function playBleep(kind: BleepKind): void {
       hg.gain.setValueAtTime(0.018, now);
       hg.gain.exponentialRampToValueAtTime(0.0006, now + 0.36);
       h.connect(hg);
-      hg.connect(ctx.destination);
+      hg.connect(sfxDestination(ctx));
       h.start(now);
       h.stop(now + 0.4);
       return;

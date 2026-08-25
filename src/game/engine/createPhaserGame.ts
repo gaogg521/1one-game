@@ -47,7 +47,8 @@ import { readAssetManifestFromSession } from "@/lib/assets/asset-manifest-sessio
 import { GameSoundscape } from "@/game/audio/gameSoundscape";
 import { thematicRootFrequencyHz, resolveAssetStyle } from "@/lib/cohesive-presentation";
 import { bindAudioBootGestures, buildSceneCohesion } from "@/lib/scene-experience";
-import { setSfxPack } from "@/game/audio/webBleeps";
+import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
+import { configureSfxMix, setSfxPack } from "@/game/audio/webBleeps";
 
 import type { RunnerLeaderboardSnapshot } from "@/lib/runner-leaderboard";
 import type { RunnerRunRecap } from "@/lib/runner-leaderboard";
@@ -131,11 +132,19 @@ export function createPhaserGame(
     themeBackground: specPlay.theme.backgroundColor,
   });
   const blockyAdventure = isMinecraftLikeSpec(specPlay);
+  // Old projects are upgraded in-memory; every newly generated project already
+  // persists this contract.  Runtime therefore never silently skips levels or sound.
+  const production =
+    specPlay.production ??
+    buildDefaultGameProductionContract({
+      prompt: opts?.promptHint?.trim() || `${specPlay.title} ${specPlay.labels.subtitle ?? ""}`,
+      templateId: specPlay.templateId,
+    });
   const soundscape = new GameSoundscape(
     presentation.musicProfile,
     thematicRootFrequencyHz(specPlay.theme),
     specPlay.director?.intensity ?? 0.55,
-    { blocky: blockyAdventure, templateId: specPlay.templateId, projectId: opts?.projectId },
+    { blocky: blockyAdventure, templateId: specPlay.templateId, projectId: opts?.projectId, productionAudio: production.audio },
   );
 
   // SFX 调色（按 templateId 优先，再按 assetStyle / musicProfile 决定 osc 波形偏好和反射尾比例）
@@ -178,12 +187,17 @@ export function createPhaserGame(
                       ? "pulse"
                       : "arcade",
   );
+  configureSfxMix({
+    gain: production.audio.mix.sfxGain,
+    maxConcurrent: Math.min(production.audio.mix.maxConcurrentSfx, production.audio.mobile.maxConcurrentSfx),
+  });
 
   // 预览模式：游戏结束时自动重启，不触发结算 overlay
   // 使用 ref 对象绕过 forward-declaration 限制
   const gameRef = { current: null as Phaser.Game | null };
   const effectiveOnEnd = opts?.previewMode
-    ? (_r: PhaserEndPayload) => {
+    ? (result: PhaserEndPayload) => {
+        soundscape.setSection(result.won ? "victory" : "defeat");
         // 延迟 800ms 让死亡动画播完，然后重启所有活动场景
         window.setTimeout(() => {
           try {
@@ -197,7 +211,10 @@ export function createPhaserGame(
           }
         }, 800);
       }
-    : onEnd;
+    : (result: PhaserEndPayload) => {
+        soundscape.setSection(result.won ? "victory" : "defeat");
+        onEnd(result);
+      };
 
   const scene = createPhaserSceneForSpec(specPlay, effectiveOnEnd, ref, soundscape, {
     PlayScene,

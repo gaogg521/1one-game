@@ -49,6 +49,9 @@ export type GameArtDirectionPack = {
     musicProfile: string;
     bgmTag?: string;
     sfxPack?: string;
+    ambience?: string;
+    musicSections?: number;
+    mobileSafeMix?: boolean;
   };
   anchors: {
     world: string;
@@ -229,6 +232,16 @@ export function buildGameArtDirectionPack(spec: GameSpec, brief?: CreativeBrief)
       musicProfile: resolveMusicProfile(spec),
       ...(spec.presentation?.bgmTag ? { bgmTag: spec.presentation.bgmTag } : {}),
       ...(spec.presentation?.sfxPack ? { sfxPack: spec.presentation.sfxPack } : {}),
+      ...(spec.production?.audio.ambience ? { ambience: spec.production.audio.ambience } : {}),
+      ...(spec.production?.audio.sections ? { musicSections: spec.production.audio.sections.length } : {}),
+      ...(spec.production
+        ? {
+            mobileSafeMix:
+              spec.production.audio.mobile.startsAfterFirstGesture &&
+              spec.production.audio.mobile.maxConcurrentSfx <= 4 &&
+              spec.production.audio.mix.maxConcurrentSfx <= 4,
+          }
+        : {}),
     },
     anchors: {
       world: visualDirection?.worldLine || spec.labels.subtitle || spec.title,
@@ -290,8 +303,14 @@ export function evaluateGameVerticalSlice(spec: GameSpec, brief?: CreativeBrief)
       (spec.presentation?.hudFontStyle ? 15 : 0) +
       (spec.presentation?.qualityTier && spec.presentation.qualityTier !== "minimal" ? 20 : 0) +
       (artDirection.audio.bgmTag ? 10 : 0) +
-      (artDirection.audio.sfxPack ? 10 : 0),
+      (artDirection.audio.sfxPack ? 10 : 0) +
+      (artDirection.audio.ambience ? 10 : 0) +
+      (artDirection.audio.musicSections === 4 ? 10 : 0) +
+      (artDirection.audio.mobileSafeMix ? 10 : 0),
   );
+  if (!artDirection.audio.ambience) reasons.push("missing_environment_audio");
+  if (artDirection.audio.musicSections !== 4) reasons.push("missing_music_progression");
+  if (!artDirection.audio.mobileSafeMix) reasons.push("missing_mobile_audio_mix_policy");
   if (presentation < 70) reasons.push("presentation_pack_incomplete");
 
   const feel = clampScore(

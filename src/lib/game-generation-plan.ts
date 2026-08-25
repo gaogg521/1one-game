@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { buildDefaultGameProductionContract, type GameProductionContract } from "@/lib/game-production-contract";
 import { inferTemplateFromPrompt } from "@/lib/game-templates/infer";
 import { resolveTemplateRuntime, type GameTemplateId } from "@/lib/game-templates/registry";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
@@ -17,7 +18,8 @@ export type GameGenerationPlan = {
   label: string;
   coreLoop: string;
   controls: string;
-  checks: readonly ["goal", "input", "end-state", "mobile-runtime"];
+  production: GameProductionContract;
+  checks: readonly ["goal", "input", "level-flow", "audio", "mix", "end-state", "mobile-runtime"];
 };
 
 const KERNEL_COPY: Partial<Record<GameTemplateId, Pick<GameGenerationPlan, "label" | "coreLoop" | "controls">>> = {
@@ -67,13 +69,17 @@ export function buildGameGenerationPlan(
     kernel,
     runtime: resolveTemplateRuntime(kernel).phaser,
     ...copy,
-    checks: ["goal", "input", "end-state", "mobile-runtime"],
+    production: buildDefaultGameProductionContract({ prompt: clean, templateId: kernel }),
+    checks: ["goal", "input", "level-flow", "audio", "mix", "end-state", "mobile-runtime"],
   };
 }
 
 /** Compile mechanics deterministically; LLMs may enrich copy/assets later but never choose the base interaction. */
 export function compileGameGenerationPlan(plan: GameGenerationPlan): GameSpec {
-  return mockSpecFromPrompt(plan.prompt, { templateId: plan.kernel });
+  return {
+    ...mockSpecFromPrompt(plan.prompt, { templateId: plan.kernel }),
+    production: plan.production,
+  };
 }
 
 export function validateGameGenerationPlan(plan: GameGenerationPlan, spec: GameSpec): string[] {
@@ -82,6 +88,11 @@ export function validateGameGenerationPlan(plan: GameGenerationPlan, spec: GameS
   if (!spec.title.trim() || !spec.labels.subtitle?.trim()) issues.push("missing_identity");
   if (!Number.isFinite(spec.gameplay.winScore) || (spec.gameplay.winScore ?? 0) <= 0) issues.push("missing_goal");
   if (!Number.isFinite(spec.gameplay.lives) || (spec.gameplay.lives ?? 0) <= 0) issues.push("missing_recovery");
+  if (spec.production?.levelFlow.length !== 4) issues.push("missing_level_flow");
+  if (spec.production?.audio.sections.length !== 4) issues.push("missing_music_arc");
+  if (!spec.production?.audio.ambience) issues.push("missing_ambience");
+  if ((spec.production?.audio.mix.maxConcurrentSfx ?? 99) > 4) issues.push("mobile_sfx_budget_exceeded");
+  if (spec.production?.audio.mobile.startsAfterFirstGesture !== true) issues.push("missing_mobile_audio_gesture_policy");
   if (plan.runtime === "puzzle" && !spec.puzzle) issues.push("missing_puzzle_rules");
   if (plan.runtime === "platformer" && !spec.platformer) issues.push("missing_platform_rules");
   if (plan.runtime === "towerDefense" && !spec.towerDefense) issues.push("missing_defense_rules");

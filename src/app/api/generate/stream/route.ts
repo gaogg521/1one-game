@@ -84,10 +84,21 @@ export async function POST(req: Request) {
           orchestration: orch,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
-        send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查目标、操作、结算与移动端运行" : "Checking goal, controls, end state and mobile runtime" });
+        send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查关卡节奏、声音、混音与移动端运行" : "Checking level pacing, audio, mix and mobile runtime" });
         const plan = result.debug.kernelPlan;
         const recapLines = plan
-          ? [plan.label, plan.coreLoop, plan.controls, uiLocale.startsWith("zh") ? "已通过可玩性基础检查" : "Core playability checks passed"]
+          ? [
+              plan.label,
+              plan.coreLoop,
+              plan.controls,
+              uiLocale.startsWith("zh")
+                ? `首局节奏：${plan.production.levelFlow.map((beat) => beat.phase).join(" → ")}`
+                : `First-play pacing: ${plan.production.levelFlow.map((beat) => beat.phase).join(" → ")}`,
+              uiLocale.startsWith("zh")
+                ? `声音：${plan.production.audio.ambience} 环境音 · BGM 分段推进 · 最多 ${plan.production.audio.mobile.maxConcurrentSfx} 个音效并发`
+                : `Audio: ${plan.production.audio.ambience} ambience · staged BGM · ${plan.production.audio.mobile.maxConcurrentSfx} SFX voices max`,
+              uiLocale.startsWith("zh") ? "已通过可玩性与声音基础检查" : "Playability and audio checks passed",
+            ]
           : [];
         send({ step: "recap", lines: recapLines });
         emitGenerateServeLog({
