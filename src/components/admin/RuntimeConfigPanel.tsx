@@ -7,10 +7,12 @@ import type {
   LlmProtocol,
   RuntimeLlmProvider,
   RuntimeLocaleModelRoute,
+  RuntimeModelCandidate,
   RuntimeModelRoute,
   RuntimeProviderPublic,
   RuntimeSceneKey,
 } from "@/lib/runtime-providers";
+import { routeModelCandidates } from "@/lib/runtime-providers";
 import { createProviderFromTemplate, type ProviderTemplateId } from "@/lib/runtime-provider-templates";
 import { RUNTIME_SCENE_CATALOG } from "@/lib/runtime-scene-catalog";
 import {
@@ -204,7 +206,18 @@ function routeIsPending(saved: RuntimeModelRoute | undefined, current: RuntimeMo
     saved.providerId !== current.providerId
     || saved.primary !== current.primary
     || JSON.stringify(saved.fallbacks) !== JSON.stringify(current.fallbacks)
+    || JSON.stringify(saved.fallbackCandidates ?? []) !== JSON.stringify(current.fallbackCandidates ?? [])
   );
+}
+
+/** Convert legacy same-provider fallbacks once at the form boundary.  Every
+ * newly saved route is explicit, so an empty fallback list stays empty. */
+function routeForForm<T extends RuntimeModelRoute>(route: T): T {
+  return {
+    ...route,
+    fallbacks: [],
+    fallbackCandidates: routeModelCandidates(route).slice(1),
+  };
 }
 
 function EditStateBadge({ state }: { state: ProviderEditState | "routePending" }) {
@@ -338,9 +351,15 @@ function EnvLegacySecretsPanel({ view }: { view: RuntimeConfigView }) {
 
 function BgmServicePanel({ view }: { view: RuntimeConfigView }) {
   const route = view.routes.find((item) => item.scene === "game_bgm");
-  const provider = route ? view.providers.find((item) => item.id === route.providerId) : undefined;
-  const audioModels = route ? [route.primary, ...route.fallbacks].filter(isAudioOutputModelId) : [];
-  const audioReady = Boolean(provider?.enabled && provider.apiKey && audioModels.length > 0);
+  const audioCandidates = route
+    ? routeModelCandidates(route)
+        .filter((candidate) => isAudioOutputModelId(candidate.model))
+        .map((candidate) => ({
+          ...candidate,
+          provider: view.providers.find((item) => item.id === candidate.providerId),
+        }))
+    : [];
+  const audioReady = audioCandidates.some((candidate) => candidate.provider?.enabled && candidate.provider.apiKey);
 
   return (
     <section
@@ -363,7 +382,7 @@ function BgmServicePanel({ view }: { view: RuntimeConfigView }) {
         >
           {audioReady ? "音频模型优先 + LLM 兜底" : "LLM 音符序列兜底"}
         </span>
-        <span className="text-[var(--gc-muted)]">{provider ? `${provider.name} · ${audioModels.join(", ") || "未选择音频模型"}` : "未配置 game_bgm 路由"}</span>
+        <span className="text-[var(--gc-muted)]">{audioCandidates.length ? audioCandidates.map((candidate) => `${candidate.provider?.name ?? candidate.providerId} · ${candidate.model}`).join(" → ") : "未选择可用音频候选项"}</span>
       </div>
       <p className="mt-3 text-xs text-[var(--gc-muted)]">在下方“路由”区域将 <code>game_bgm</code> 指向音频模型（例如 <code>openai/gpt-audio-mini</code>）；不再使用无真实调用的 Replicate Key 开关。</p>
     </section>
@@ -679,7 +698,7 @@ function RouteModelPicker({
   modelSuggestions,
 }: {
   sceneKey: RuntimeSceneKey;
-  field: "primary" | "fallback";
+  field: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -734,14 +753,14 @@ function RouteRow({
   providerOptions,
   onProviderId,
   primary,
-  fallback,
+  fallbackCandidates,
   onPrimary,
-  onFallback,
+  onFallbackCandidates,
+  providerModels,
   modelSuggestions = [],
-  fallbackOptional,
   pending = false,
   livePrimary,
-  liveFallback,
+  liveFallbackCandidates,
 }: {
   sceneKey: RuntimeSceneKey;
   domain: string;
@@ -752,14 +771,14 @@ function RouteRow({
   providerOptions: { id: string; name: string }[];
   onProviderId: (id: string) => void;
   primary: string;
-  fallback?: string;
+  fallbackCandidates: RuntimeModelCandidate[];
   onPrimary: (v: string) => void;
-  onFallback?: (v: string) => void;
   modelSuggestions?: string[];
-  fallbackOptional?: boolean;
+  onFallbackCandidates: (value: RuntimeModelCandidate[]) => void;
+  providerModels: Record<string, string[]>;
   pending?: boolean;
   livePrimary?: string;
-  liveFallback?: string;
+  liveFallbackCandidates?: RuntimeModelCandidate[];
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
   const selectCls =
@@ -807,23 +826,39 @@ function RouteRow({
         ) : null}
       </td>
       <td className="py-4 align-top">
-        {onFallback ? (
-          <>
-            <RouteModelPicker
-              sceneKey={sceneKey}
-              field="fallback"
-              label={fallbackOptional ? t("routeFallbackOptional") : t("routeFallback")}
-              value={fallback ?? ""}
-              onChange={onFallback}
-              modelSuggestions={modelSuggestions}
-            />
-            {pending && liveFallback !== undefined && liveFallback !== (fallback ?? "") ? (
-              <p className="mt-1 text-[10px] text-emerald-300/80">{t("routeLiveValue", { value: liveFallback || "—" })}</p>
-            ) : null}
-          </>
-        ) : (
-          <span className="text-xs text-[var(--gc-text-faint)]">—</span>
-        )}
+        <div className="space-y-2">
+          {fallbackCandidates.map((candidate, index) => (
+            <div key={`${candidate.providerId}-${index}`} className="grid gap-2 rounded-lg border border-white/8 p-2">
+              <select
+                aria-label={`备用候选 ${index + 1} 服务商`}
+                className={selectCls}
+                value={candidate.providerId}
+                onChange={(event) => onFallbackCandidates(fallbackCandidates.map((item, i) => i === index ? { ...item, providerId: event.target.value } : item))}
+              >
+                {providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+              </select>
+              <RouteModelPicker
+                sceneKey={sceneKey}
+                field={`fallback-${index}`}
+                label={`备用候选 ${index + 1} 模型`}
+                value={candidate.model}
+                onChange={(model) => onFallbackCandidates(fallbackCandidates.map((item, i) => i === index ? { ...item, model } : item))}
+                modelSuggestions={providerModels[candidate.providerId] ?? []}
+              />
+              <button type="button" className="text-left text-xs text-red-300 hover:text-red-200" onClick={() => onFallbackCandidates(fallbackCandidates.filter((_, i) => i !== index))}>移除此候选项</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="rounded-lg border border-[color:var(--gc-border)] px-3 py-2 text-xs text-[var(--gc-text)] hover:bg-white/5"
+            onClick={() => onFallbackCandidates([...fallbackCandidates, { providerId: providerId || providerOptions[0]?.id || "", model: "" }])}
+          >
+            添加备用候选项
+          </button>
+          {pending && JSON.stringify(liveFallbackCandidates ?? []) !== JSON.stringify(fallbackCandidates) ? (
+            <p className="text-[10px] text-emerald-300/80">线上备用：{(liveFallbackCandidates ?? []).map((candidate) => `${candidate.providerId} · ${candidate.model}`).join(" → ") || "无"}</p>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -934,10 +969,12 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     const pf = data.providers.map(providerFromView);
     setProvidersForm(pf);
     setSavedProviders(JSON.parse(JSON.stringify(pf)) as ProviderFormState[]);
-    setRoutesForm(data.routes.map((r) => ({ ...r, fallbacks: [...r.fallbacks] })));
-    setSavedRoutes(JSON.parse(JSON.stringify(data.routes)) as RuntimeModelRoute[]);
-    setLocaleRoutesForm(data.localeRoutes.map((r) => ({ ...r, fallbacks: [...r.fallbacks] })));
-    setSavedLocaleRoutes(JSON.parse(JSON.stringify(data.localeRoutes)) as RuntimeLocaleModelRoute[]);
+    const routes = data.routes.map(routeForForm);
+    const localeRoutes = data.localeRoutes.map(routeForForm);
+    setRoutesForm(routes);
+    setSavedRoutes(JSON.parse(JSON.stringify(routes)) as RuntimeModelRoute[]);
+    setLocaleRoutesForm(localeRoutes);
+    setSavedLocaleRoutes(JSON.parse(JSON.stringify(localeRoutes)) as RuntimeLocaleModelRoute[]);
     setPricingForm(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
     setSavedPricing(JSON.parse(JSON.stringify(data.providerPricing ?? [])) as ProviderPricingRule[]);
     const budget = data.dailyBudgetMicros == null ? "" : String(data.dailyBudgetMicros);
@@ -968,6 +1005,11 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
   const providerOptions = useMemo(
     () => providersForm.filter((p) => p.enabled).map((p) => ({ id: p.id, name: p.name.trim() || p.id })),
+    [providersForm],
+  );
+
+  const providerModels = useMemo(
+    () => Object.fromEntries(providersForm.map((provider) => [provider.id, parseModelsText(provider.modelsText)])),
     [providersForm],
   );
 
@@ -1004,9 +1046,12 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     setProvidersForm((prev) => prev.filter((p) => p.id !== id));
     setRoutesForm((prev) =>
       prev.map((r) => {
-        if (r.providerId !== id) return r;
         const fallback = providersForm.find((p) => p.id !== id && p.enabled)?.id ?? "";
-        return { ...r, providerId: fallback };
+        return {
+          ...r,
+          providerId: r.providerId === id ? fallback : r.providerId,
+          fallbackCandidates: (r.fallbackCandidates ?? []).filter((candidate) => candidate.providerId !== id),
+        };
       }),
     );
   }
@@ -1071,6 +1116,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
         providerId: existing?.providerId ?? fallback?.providerId ?? providerOptions[0]?.id ?? "",
         primary: existing?.primary ?? fallback?.primary ?? "",
         fallbacks: existing?.fallbacks ?? fallback?.fallbacks ?? [],
+        fallbackCandidates: existing?.fallbackCandidates ?? fallback?.fallbackCandidates ?? [],
         ...patch,
       };
       return existing
@@ -1149,7 +1195,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             scene: meta.scene,
             providerId,
             primary: d.gameTextPrimary ?? d.gamePrimary,
-            fallbacks: [...(d.gameTextFallbacks ?? d.gameFallbacks)],
+            fallbacks: [],
+            fallbackCandidates: (d.gameTextFallbacks ?? d.gameFallbacks).map((model) => ({ providerId, model })),
           };
         }
         if (meta.scene === "game_vision") {
@@ -1157,7 +1204,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             scene: meta.scene,
             providerId,
             primary: d.gameVisionPrimary ?? d.gamePrimary,
-            fallbacks: [...(d.gameVisionFallbacks ?? d.gameFallbacks)],
+            fallbacks: [],
+            fallbackCandidates: (d.gameVisionFallbacks ?? d.gameFallbacks).map((model) => ({ providerId, model })),
           };
         }
         if (meta.scene === "novel" || meta.scene === "novel_plan" || meta.scene === "comic_storyboard") {
@@ -1165,13 +1213,14 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
             scene: meta.scene,
             providerId,
             primary: d.novelTextPrimary,
-            fallbacks: [d.novelTextFallback],
+            fallbacks: [],
+            fallbackCandidates: d.novelTextFallback ? [{ providerId, model: d.novelTextFallback }] : [],
           };
         }
         if (meta.scene === "comic_image_openai") {
-          return { scene: meta.scene, providerId, primary: d.imageOpenAI, fallbacks: [] };
+          return { scene: meta.scene, providerId, primary: d.imageOpenAI, fallbacks: [], fallbackCandidates: [] };
         }
-        return { scene: meta.scene, providerId, primary: d.imageGemini, fallbacks: [] };
+        return { scene: meta.scene, providerId, primary: d.imageGemini, fallbacks: [], fallbackCandidates: [] };
       }),
     });
     if (data) onNotice({ kind: "ok", text: t("seedDone") });
@@ -1414,7 +1463,6 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                   const pending = routeIsPending(savedRoute, route);
                   const domain =
                     meta.domain === "game" ? DOMAIN.game : meta.domain === "novel" ? DOMAIN.novel : DOMAIN.comic;
-                  const showFallback = true;
                   const provider = providersForm.find((p) => p.id === route?.providerId);
                   const suggestions = provider ? parseModelsText(provider.modelsText) : [];
                   return (
@@ -1429,21 +1477,14 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                       providerOptions={providerOptions}
                       onProviderId={(id) => updateRoute(meta.scene, { providerId: id })}
                       primary={route?.primary ?? ""}
-                      fallback={(route?.fallbacks ?? []).join(", ")}
                       onPrimary={(v) => updateRoute(meta.scene, { primary: v })}
-                      onFallback={
-                        showFallback
-                          ? (v) =>
-                              updateRoute(meta.scene, {
-                                fallbacks: v.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean),
-                              })
-                          : undefined
-                      }
+                      fallbackCandidates={route?.fallbackCandidates ?? []}
+                      onFallbackCandidates={(fallbackCandidates) => updateRoute(meta.scene, { fallbacks: [], fallbackCandidates })}
                       modelSuggestions={suggestions}
-                      fallbackOptional={!showFallback}
+                      providerModels={providerModels}
                       pending={pending}
                       livePrimary={savedRoute?.primary}
-                      liveFallback={(savedRoute?.fallbacks ?? []).join(", ")}
+                      liveFallbackCandidates={savedRoute?.fallbackCandidates ?? []}
                     />
                   );
                 })}

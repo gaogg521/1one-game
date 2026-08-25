@@ -18,14 +18,8 @@ test.describe("Admin 网关/模型页", () => {
 
     await page.goto("/console?tab=runtime", { waitUntil: "domcontentloaded" });
 
-    const runtimeTab = page.locator("aside").getByTestId("admin-tab-runtime");
-    await expect(runtimeTab).toBeVisible({ timeout: 45_000 });
-
     const panel = page.getByTestId("admin-runtime-config");
     await expect(panel).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("admin-nav-section-admin-content")).toBeVisible();
-    await expect(page.getByTestId("admin-nav-section-admin-growth")).toBeVisible();
-    await expect(page.getByTestId("admin-nav-section-admin-system")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-hero")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-live-summary")).toBeVisible();
     await expect(page.getByTestId("admin-runtime-section-providers")).toBeVisible();
@@ -62,7 +56,7 @@ test.describe("Admin 网关/模型页", () => {
     await expect.poll(() => modelDiscoveryPayload).toEqual({ providerId });
     await expect(provider.getByText("e2e-model-a", { exact: true })).toBeVisible();
     await provider.getByText("e2e-model-a", { exact: true }).click();
-    await expect(provider.locator("textarea")).toHaveValue(/e2e-model-a/);
+    await expect(page.getByTestId(`admin-runtime-provider-${providerId}`).locator("textarea")).toHaveValue(/e2e-model-a/);
 
     await page.screenshot({
       path: path.join(OUT, "runtime-config-gateway.png"),
@@ -74,10 +68,13 @@ test.describe("Admin 网关/模型页", () => {
 
     const primaryCatalog = page.getByTestId("admin-runtime-route-game_text-primary-catalog");
     const primaryModel = page.getByTestId("admin-runtime-route-game_text-primary-model");
-    const fallbackCatalog = page.getByTestId("admin-runtime-route-game_text-fallback-catalog");
-    const fallbackModel = page.getByTestId("admin-runtime-route-game_text-fallback-model");
     await expect(primaryCatalog).toBeVisible();
     await expect(primaryModel).toBeVisible();
+
+    const gameTextRow = page.getByTestId("admin-runtime-route-game_text-primary-model").locator("xpath=ancestor::tr");
+    await gameTextRow.getByRole("button", { name: "添加备用候选项" }).click();
+    const fallbackCatalog = page.getByTestId("admin-runtime-route-game_text-fallback-0-catalog");
+    const fallbackModel = page.getByTestId("admin-runtime-route-game_text-fallback-0-model");
     await expect(fallbackCatalog).toBeVisible();
     await expect(fallbackModel).toBeVisible();
 

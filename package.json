@@ -77,6 +77,7 @@
     "qa:runtime-provider-saved-test": "tsx scripts/qa-runtime-provider-saved-test.ts",
     "qa:runtime-provider-model-discovery": "tsx scripts/qa-runtime-provider-model-discovery.ts",
     "qa:runtime-locale-routing": "tsx scripts/qa-runtime-locale-routing.ts",
+    "qa:runtime-cross-provider-routing": "tsx scripts/qa-runtime-cross-provider-routing.ts",
     "qa:referral-funnel": "tsx scripts/qa-referral-funnel.ts",
     "qa:creator-publication": "tsx scripts/qa-creator-publication.ts",
     "qa:creator-publication:http": "tsx scripts/qa-creator-publication-api.ts",

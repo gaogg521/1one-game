@@ -34,7 +34,15 @@ export type RuntimeModelRoute = {
   scene: RuntimeSceneKey;
   providerId: string;
   primary: string;
+  /** Legacy same-provider fallback models. Retained for stored configurations. */
   fallbacks: string[];
+  /** Explicit candidates may use any enabled provider; ordered after primary. */
+  fallbackCandidates?: RuntimeModelCandidate[];
+};
+
+export type RuntimeModelCandidate = {
+  providerId: string;
+  model: string;
 };
 
 /**
@@ -64,6 +72,12 @@ export type ResolvedSceneRoute = {
   scene: RuntimeSceneKey;
   provider: RuntimeLlmProvider;
   models: string[];
+};
+
+export type ResolvedSceneCandidate = {
+  scene: RuntimeSceneKey;
+  provider: RuntimeLlmProvider;
+  model: string;
 };
 
 const OPENAI_PROVIDER_ID = "default-openai-compatible";
@@ -262,7 +276,10 @@ export function mergeRoutesWithDefaults(
       ...d,
       providerId: hit.providerId || d.providerId,
       primary: hit.primary?.trim() ? hit.primary : d.primary,
-      fallbacks: hit.fallbacks?.length ? hit.fallbacks : d.fallbacks,
+      // An explicit empty array means “no same-provider fallback”. Do not
+      // silently inject unrelated product defaults into an operator route.
+      fallbacks: Array.isArray(hit.fallbacks) ? hit.fallbacks : d.fallbacks,
+      ...(Array.isArray(hit.fallbackCandidates) ? { fallbackCandidates: hit.fallbackCandidates } : {}),
     };
   });
 }
@@ -295,22 +312,60 @@ export function routeModelCascade(route: RuntimeModelRoute): string[] {
   return out;
 }
 
+/** Ordered candidates preserve the provider beside every model ID. */
+export function routeModelCandidates(route: RuntimeModelRoute): RuntimeModelCandidate[] {
+  const seen = new Set<string>();
+  const add = (out: RuntimeModelCandidate[], providerId: string | undefined, model: string | undefined) => {
+    const normalizedProvider = providerId?.trim();
+    const normalizedModel = model?.trim();
+    if (!normalizedProvider || !normalizedModel) return;
+    const key = `${normalizedProvider}\u0000${normalizedModel}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ providerId: normalizedProvider, model: normalizedModel });
+  };
+  const out: RuntimeModelCandidate[] = [];
+  add(out, route.providerId, route.primary);
+  if (Array.isArray(route.fallbackCandidates)) {
+    for (const candidate of route.fallbackCandidates) add(out, candidate.providerId, candidate.model);
+  } else {
+    for (const model of route.fallbacks) add(out, route.providerId, model);
+  }
+  return out;
+}
+
+export function resolveSceneRouteCandidates(
+  payload: RuntimeSecretsPayload,
+  scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
+): ResolvedSceneCandidate[] {
+  const providers = getEffectiveProviders(payload);
+  const routes = getEffectiveRoutes(payload);
+  const route = getLocaleRouteOverride(payload, scene, localeGroup) ?? routes.find((r) => r.scene === scene);
+  if (!route) return [];
+  return routeModelCandidates(route).flatMap((candidate) => {
+    const provider = providers.find((item) => item.id === candidate.providerId && item.enabled !== false);
+    if (!provider?.apiKey?.trim()) return [];
+    if (provider.protocol === "openai_compatible" && !provider.baseUrl?.trim()) return [];
+    return [{ scene, provider, model: candidate.model }];
+  });
+}
+
 export function resolveSceneRoute(
   payload: RuntimeSecretsPayload,
   scene: RuntimeSceneKey,
   localeGroup?: RuntimeLocaleGroup,
 ): ResolvedSceneRoute | null {
-  const providers = getEffectiveProviders(payload);
-  const routes = getEffectiveRoutes(payload);
-  const route = getLocaleRouteOverride(payload, scene, localeGroup) ?? routes.find((r) => r.scene === scene);
-  if (!route) return null;
-  const provider = providers.find((p) => p.id === route.providerId && p.enabled !== false);
-  if (!provider?.apiKey?.trim()) return null;
-  if (provider.protocol === "openai_compatible" && !provider.baseUrl?.trim()) return null;
+  const candidates = resolveSceneRouteCandidates(payload, scene, localeGroup);
+  const first = candidates[0];
+  if (!first) return null;
   return {
     scene,
-    provider,
-    models: routeModelCascade(route),
+    provider: first.provider,
+    // Legacy callers may still perform a same-provider model cascade.  Do not
+    // leak models from another provider into their credentials; cross-provider
+    // retries must use resolveSceneRouteCandidates explicitly.
+    models: candidates.filter((candidate) => candidate.provider.id === first.provider.id).map((candidate) => candidate.model),
   };
 }
 

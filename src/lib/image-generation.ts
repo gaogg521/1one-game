@@ -10,10 +10,10 @@ import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
-import { getRuntimeConfigSync, getSceneModelCascade } from "@/lib/runtime-config";
+import { getRuntimeConfigSync } from "@/lib/runtime-config";
 import { createOpenAIClientForProvider } from "@/lib/runtime-llm-client";
-import { resolveSceneRoute } from "@/lib/runtime-providers";
-import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
+import { resolveSceneRoute, resolveSceneRouteCandidates } from "@/lib/runtime-providers";
+import type { ResolvedSceneCandidate, RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import { repoPublicPath } from "@/lib/public-path";
 import { recordProviderUsage } from "@/lib/provider-usage";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
@@ -46,13 +46,21 @@ export type ImageGenDetail = {
 
 type LocaleImageOptions = { localeGroup?: RuntimeLocaleGroup };
 
-function resolveOpenAIImageClient(localeGroup?: RuntimeLocaleGroup): ReturnType<typeof createOpenAIClient> {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
+function resolveOpenAIImageClient(localeGroup?: RuntimeLocaleGroup, candidate?: ResolvedSceneCandidate): ReturnType<typeof createOpenAIClient> {
+  const ctx = candidate ?? resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
   if (ctx) return createOpenAIClientForProvider(ctx.provider);
   return createOpenAIClient();
 }
 
 type SeedreamImageConfig = { endpoint: string; key: string; model: string };
+type OpenAIImageOptions = {
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  quality?: "standard" | "high";
+  n?: number;
+  timeoutMs?: number;
+  modelOverride?: string;
+  routeCandidate?: ResolvedSceneCandidate;
+} & LocaleImageOptions;
 
 export function isSeedreamImageModel(model: string): boolean {
   return model.trim().toLowerCase().startsWith("doubao-seedream-");
@@ -88,8 +96,8 @@ export function buildSeedreamGenerationRequest(model: string, prompt: string, n:
 }
 
 /** 豆包 Seedream 在 Joy MaaS 使用专用路由，不兼容 OpenAI `/v1/images/generations`。 */
-function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup, modelOverride?: string): SeedreamImageConfig | null {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
+function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup, modelOverride?: string, candidate?: ResolvedSceneCandidate): SeedreamImageConfig | null {
+  const ctx = candidate ?? resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
   const base = ctx?.provider.baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim();
   const key = ctx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
   const model = modelOverride ?? getImageGenOpenAIModel(localeGroup);
@@ -177,12 +185,12 @@ function imageItemToResult(
 
 async function generateImageWithSeedreamDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; n?: number; timeoutMs?: number; modelOverride?: string } & LocaleImageOptions,
+  options?: OpenAIImageOptions,
 ): Promise<ImageGenDetail> {
   const localeGroup = options?.localeGroup ?? await runtimeLocaleGroupForCurrentRequest();
   options = { ...options, localeGroup };
   const t0 = Date.now();
-  const cfg = resolveSeedreamImageConfig(options?.localeGroup, options?.modelOverride);
+  const cfg = resolveSeedreamImageConfig(options?.localeGroup, options?.modelOverride, options?.routeCandidate);
   if (!cfg) return { ok: false, model: options?.modelOverride ?? getImageGenOpenAIModel(options?.localeGroup), error: "未配置 Seedream 网关", durationMs: 0 };
   try {
     const response = await fetch(cfg.endpoint, {
@@ -206,7 +214,7 @@ async function generateImageWithSeedreamDetail(
  */
 export async function generateImageWithOpenAI(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number } & LocaleImageOptions
+  options?: Omit<OpenAIImageOptions, "modelOverride" | "routeCandidate">
 ): Promise<ImageGenResult | null> {
   const detail = await generateImageWithOpenAIDetail(prompt, options);
   return detail.ok && detail.url ? { url: detail.url, localPath: detail.localPath } : null;
@@ -214,14 +222,26 @@ export async function generateImageWithOpenAI(
 
 export async function generateImageWithOpenAIDetail(
   prompt: string,
-  options?: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "standard" | "high"; n?: number; timeoutMs?: number; modelOverride?: string } & LocaleImageOptions,
+  options?: OpenAIImageOptions,
 ): Promise<ImageGenDetail> {
   const t0 = Date.now();
-  const model = options?.modelOverride ?? getImageGenOpenAIModel(options?.localeGroup);
+  const model = options?.modelOverride ?? options?.routeCandidate?.model ?? getImageGenOpenAIModel(options?.localeGroup);
+  if (!options?.routeCandidate && !options?.modelOverride) {
+    const candidates = resolveSceneRouteCandidates(getRuntimeConfigSync().payload, "comic_image_openai", options?.localeGroup);
+    if (candidates.length > 0) {
+      let last: ImageGenDetail | undefined;
+      for (const candidate of candidates) {
+        const retried = await generateImageWithOpenAIDetail(prompt, { ...options, routeCandidate: candidate, modelOverride: candidate.model });
+        if (retried.ok) return retried;
+        last = retried;
+      }
+      return last ?? { ok: false, model, error: "未配置可用图片候选项", durationMs: Date.now() - t0 };
+    }
+  }
   if (shouldUseJoySeedreamAdapter(model)) return generateImageWithSeedreamDetail(prompt, options);
   let client: ReturnType<typeof createOpenAIClient>;
   try {
-    client = resolveOpenAIImageClient(options?.localeGroup);
+    client = resolveOpenAIImageClient(options?.localeGroup, options?.routeCandidate);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, model, error: msg, durationMs: Date.now() - t0 };
@@ -269,14 +289,6 @@ export async function generateImageWithOpenAIDetail(
       if (process.env.GENERATE_STRUCTURED_LOG === "1") {
         console.warn("[image-gen] openai attempt failed", { model, error: lastErr });
       }
-    }
-  }
-  if (!options?.modelOverride) {
-    const fallbacks = getSceneModelCascade("comic_image_openai", options?.localeGroup).slice(1);
-    for (const fallback of fallbacks) {
-      const retried = await generateImageWithOpenAIDetail(prompt, { ...options, modelOverride: fallback });
-      if (retried.ok) return retried;
-      lastErr = `${lastErr}; fallback ${fallback}: ${retried.error ?? "failed"}`;
     }
   }
   return { ok: false, model, error: lastErr, durationMs: Date.now() - t0 };

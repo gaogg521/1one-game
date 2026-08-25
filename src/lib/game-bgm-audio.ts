@@ -1,6 +1,6 @@
 import { getBlobStore } from "@/lib/storage/blob-store";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
-import { resolveSceneRoute, type RuntimeLlmProvider } from "@/lib/runtime-providers";
+import { resolveSceneRouteCandidates, type RuntimeLlmProvider } from "@/lib/runtime-providers";
 import type { GameSpec } from "@/lib/game-spec";
 import { isAudioOutputModelId } from "@/lib/bgm-model-capability";
 import { recordProviderUsage } from "@/lib/provider-usage";
@@ -146,10 +146,9 @@ export async function requestBgmAudio(
  * incompatible request to a chat model.
  */
 export async function generateProjectBgmAudio(projectId: string, spec: GameSpec): Promise<ProjectBgmAudio | null> {
-  const route = resolveSceneRoute(getRuntimeConfigSync().payload, "game_bgm");
-  if (!route) return null;
-  for (const model of route.models.filter(isAudioOutputModelId)) {
-    const generated = await requestBgmAudio(route.provider, model, spec);
+  const candidates = resolveSceneRouteCandidates(getRuntimeConfigSync().payload, "game_bgm");
+  for (const candidate of candidates.filter((item) => isAudioOutputModelId(item.model))) {
+    const generated = await requestBgmAudio(candidate.provider, candidate.model, spec);
     if (!generated) continue;
     const key = `game-bgm/projects/${projectId}.${extensionFor(generated.mimeType)}`;
     const store = await getBlobStore();
@@ -157,8 +156,8 @@ export async function generateProjectBgmAudio(projectId: string, spec: GameSpec)
     return {
       version: 1,
       source: "audio_model",
-      providerId: route.provider.id,
-      model,
+      providerId: candidate.provider.id,
+      model: candidate.model,
       url,
       mimeType: generated.mimeType,
       createdAt: new Date().toISOString(),

@@ -829,3 +829,11 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 播放器接口与首屏声音启动统一读取同一 BGM pipeline：已持久化音频优先，其次音频模型，最后缓存/新生成 notes；历史 notes 不再抢在新的音频模型尝试之前返回。浏览器等待上限从 12 秒提高到 50 秒；音频模型 30 秒、LLM notes 单次 8 秒上限，既覆盖优先链路又不拖慢游戏本体的程序化声音。
 - Console 不再收集或宣称 Replicate Key 能生成 MusicGen；它显示 `game_bgm` 绑定的 provider/model、是否为音频模型以及真实优先级。Provider 账本与价格规则加入 `audio/audio` 维度，但只记录 provider、model、状态、时长和成本估算，不保存 prompt、密钥或上游音频响应。
 - 新迁移 `20260825090000_project_bgm_audio` 已在本地 dev SQLite 应用；新增 `qa:game-bgm-audio` 验证 gpt-audio-mini 选路、Chat Completions 音频请求、WAV 校验、口播/伪 base64 拒绝和最终可播放序列。`qa:game-production-contract`、`qa:creator-core`、TypeScript、定向 ESLint 和完整 `qa:game-asset-job-api` 通过；本地 text-only BGM route 触发的完整任务从原先 60 秒降到 16.3 秒，且恢复任务直接复用已保存的 BGM 决策。生产 `game_bgm` 已绑定 `openai/gpt-audio-mini`；真实调用若无有效音频会进入 LLM、再进入确定性 notes，不会出现空白音轨。
+
+## P49：跨服务商候选路由与空备用保护（2026-08-25）
+
+- 根因：`RuntimeModelRoute` 原来只保存一个 `providerId` 和字符串备用模型，且 `mergeRoutesWithDefaults` 把显式空数组当成“缺失”，自动补入游戏文本默认备用模型。因此 BGM 画面会错误显示并尝试不属于已选 OpenRouter 的 `deepseek-v4-flash-ga-260731`。
+- 路由现改为有序的 `fallbackCandidates: [{ providerId, model }]`。旧 `fallbacks` 仍可读取并按主服务商迁移；显式空备用数组保持为空。解析阶段返回 provider 与 model 绑定的候选项，不会混用另一渠道的凭据。
+- `llmJson`、`llmText`、`llmTextStream`、游戏 BGM 和 OpenAI-compatible 图片生成均按候选项逐一调用。流式输出只在首个 chunk 之前切换候选；已输出后失败会如实失败，避免拼接两家模型文本。BGM 面板展示真实的 `服务商 · 模型` 链路。
+- Console 路由编辑从单一逗号备用框改为“添加备用候选项”：每项可独立选服务商与模型，删除服务商时也清理指向它的候选项。后台 E2E 同步更新为当前控制台布局，并实际覆盖新增候选项。
+- 验证：`npx tsc --noEmit`、定向 ESLint、`qa:runtime-cross-provider-routing`、`qa:runtime-config-admin`、`qa:game-bgm-audio` 通过；`npx playwright test e2e/admin-runtime-config.smoke.spec.ts --workers=1` 通过。待精确提交、部署，再将生产 `game_bgm` 的错误 DeepSeek 字符串备用清为空候选。
