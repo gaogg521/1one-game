@@ -12,7 +12,7 @@ export function HomeLiteraryPipelineSection() {
   const t = useTranslations("home");
 
   return (
-    <div className="mt-14 grid gap-8 lg:mt-16 lg:grid-cols-2 lg:gap-10">
+    <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-2 lg:gap-8">
       <div className="flex flex-col gap-4">
         <LiteraryProductionChain activeStep="outline" promotional />
         <Link

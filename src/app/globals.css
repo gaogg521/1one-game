@@ -258,7 +258,7 @@ body {
 @keyframes gc-home-reveal {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -266,17 +266,40 @@ body {
   }
 }
 
-@keyframes gc-home-hero-pan {
-  from {
-    transform: scale(1.06);
+@keyframes gc-home-hero-drift {
+  0% {
+    transform: scale(1.08) translate3d(0, 0, 0);
   }
-  to {
-    transform: scale(1);
+  50% {
+    transform: scale(1.14) translate3d(-1.2%, -0.8%, 0);
+  }
+  100% {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes gc-home-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes gc-home-cta-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 28px -8px color-mix(in srgb, var(--gc-cta-b) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 36px -4px color-mix(in srgb, var(--gc-cta-b) 75%, transparent);
   }
 }
 
 .gc-home-reveal {
-  animation: gc-home-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: gc-home-reveal 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .gc-home-reveal-delay-1 {
@@ -289,16 +312,35 @@ body {
   animation-delay: 0.24s;
 }
 .gc-home-reveal-delay-4 {
-  animation-delay: 0.32s;
+  animation-delay: 0.34s;
 }
 
-.gc-home-hero-pan {
-  animation: gc-home-hero-pan 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+.gc-home-hero-drift {
+  animation: gc-home-hero-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+.gc-home-float {
+  animation: gc-home-float 4.8s ease-in-out infinite;
+}
+.gc-home-float-delay {
+  animation-delay: 1.2s;
+}
+
+.gc-home-cta-pulse {
+  animation: gc-home-cta-pulse 2.8s ease-in-out infinite;
+}
+
+.gc-home-lane {
+  animation: gc-home-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gc-home-reveal,
-  .gc-home-hero-pan {
+  .gc-home-hero-drift,
+  .gc-home-float,
+  .gc-home-cta-pulse,
+  .gc-home-lane {
     animation: none;
   }
 }

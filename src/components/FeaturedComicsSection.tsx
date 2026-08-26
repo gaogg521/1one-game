@@ -74,7 +74,7 @@ export function FeaturedComicsSection() {
   }
 
   return (
-    <section className="border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
+    <section className="border-t border-[color:var(--gc-border)] px-5 py-10 sm:px-10 sm:py-12 lg:px-14 xl:px-20 2xl:px-28">
       <div className="flex items-end justify-between">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("manga")}</p>
