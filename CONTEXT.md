@@ -852,8 +852,9 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 游戏数值预检升级为透明的 `deterministic_scenario_sweep`：按新手、普通、预期、熟练、高手五档操作效率扫描速度、刷怪、生命与目标压力。它只是可审阅的数值守卫，明确不等同真实玩家留存；真实浏览器试玩与上线遥测仍是唯一观察证据。每个 Core revision 新增 `game_balance_simulation` artifact；无法通过预期玩家场景时会随交付预检阻止发布。
 - 新作品一律进入 `pending_review`（或更严格的 hidden），环境变量不能再将生成作品自动设为 public；本地 `DEV_SUPER_ADMIN=1` 也不再把匿名请求升级为管理员，避免开发期绕过掩盖“未发布作品必须 404”的回归。
 - 验证：`qa:game-delivery-readiness`、`qa:creator-core`、`qa:creator-quality`、`qa:creator-publication`、`qa:game-core-api`、`qa:game-playtest-evidence`、`npx tsc --noEmit` 与定向 ESLint 均通过。Playwright 真实 H5 `avoider` 首分钟回归通过（实际 1.9 分钟，含 60 秒运行与回写轮询），确认 telemetry、Core playtest artifact 与质量读取能够闭环。
+- 后续矩阵实测发现 platformer 的资产 worker 与 SQLite 首分钟 evidence 写入发生短暂锁竞争；遥测保留但单次异步 Core 写入被吞掉。现将该不阻塞玩家的写入改为 0/250/750/1500/3000ms 五次短重试，并用真实 platformer 回归验证修复。五个核心玩法 avoider、puzzle、physics、platformer、farming 全部通过首分钟 Canvas 操作、遥测回写和 Core artifact 断言。
 
 ### 下一步
 
-1. 将同一真实首分钟浏览器回归扩展到 puzzle、physics、platformer 与 farming，作为周期性发布套件；单用例已验证整条证据写入链路。
+1. 将五个核心玩法的真实首分钟浏览器回归纳入周期性发布套件，保持串行，避免 SQLite QA 库写锁掩盖问题。
 2. 基于至少 5 位真实试玩者的匿名聚合数据校准场景扫测阈值，不能把当前数值模拟当作留存结论。

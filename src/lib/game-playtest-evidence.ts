@@ -94,3 +94,22 @@ export async function persistFirstMinutePlaytestEvidence(event: FirstMinuteEvent
     return "recorded";
   });
 }
+
+/**
+ * SQLite asset workers can briefly hold the write lock just as a first-minute
+ * event arrives. Retry the non-critical Core evidence write within the same
+ * short observation window; callers still must not await this during play.
+ */
+export async function persistFirstMinutePlaytestEvidenceWithRetry(event: FirstMinuteEvent): Promise<GamePlaytestEvidenceResult> {
+  const delaysMs = [0, 250, 750, 1_500, 3_000];
+  let lastError: unknown;
+  for (const delayMs of delaysMs) {
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      return await persistFirstMinutePlaytestEvidence(event);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}

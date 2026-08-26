@@ -1,6 +1,6 @@
 import { prisma } from "../src/lib/prisma";
 import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
-import { persistFirstMinutePlaytestEvidence } from "../src/lib/game-playtest-evidence";
+import { persistFirstMinutePlaytestEvidence, persistFirstMinutePlaytestEvidenceWithRetry } from "../src/lib/game-playtest-evidence";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 
 function assert(value: unknown, message: string): asserts value {
@@ -34,7 +34,7 @@ async function main() {
     };
     const result = await persistFirstMinutePlaytestEvidence(event);
     assert(result === "recorded", "first real-minute event must create revision evidence");
-    const duplicate = await persistFirstMinutePlaytestEvidence(event);
+    const duplicate = await persistFirstMinutePlaytestEvidenceWithRetry(event);
     assert(duplicate === "already_recorded", "same revision must not write duplicate playtest evidence");
 
     const artifact = await prisma.creativeArtifact.findFirst({

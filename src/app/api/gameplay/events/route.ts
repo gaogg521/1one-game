@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { GameplayEventPayloadSchema } from "@/lib/gameplay-telemetry";
-import { persistFirstMinutePlaytestEvidence } from "@/lib/game-playtest-evidence";
+import { persistFirstMinutePlaytestEvidenceWithRetry } from "@/lib/game-playtest-evidence";
 
 export const runtime = "nodejs";
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   // Runtime proof must never slow or break the game. A failed Core write is
   // retriable through a later first-minute event, while telemetry remains kept.
   if (parsed.data.event === "first_minute" && parsed.data.projectId) {
-    void persistFirstMinutePlaytestEvidence(parsed.data).catch(() => undefined);
+    void persistFirstMinutePlaytestEvidenceWithRetry(parsed.data).catch(() => undefined);
   }
   return NextResponse.json({ ok: true }, { status: 202 });
 }
