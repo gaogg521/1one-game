@@ -175,7 +175,10 @@
     "hotNovels": "社区热门小说",
     "hotComics": "社区热门漫画",
     "playsShort": "{count} 玩",
-    "readsShort": "{count} 读"
+    "readsShort": "{count} 读",
+    "ctaPlay": "立即试玩",
+    "ctaRead": "开始阅读",
+    "ctaComic": "打开漫画"
   },
   "literaryChain": {
     "eyebrow": "完整创作流程",

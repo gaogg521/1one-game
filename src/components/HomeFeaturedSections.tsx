@@ -7,7 +7,7 @@ import { FeaturedSamplesSection } from "@/components/FeaturedSamplesSection";
 
 const FeaturedGamesSection = dynamic(
   () => import("@/components/FeaturedGamesSection").then((m) => m.FeaturedGamesSection),
-  { loading: () => <FeaturedShelfSkeleton count={6} aspect="920/560" /> },
+  { loading: () => <FeaturedShelfSkeleton count={6} aspect="16/10" /> },
 );
 const FeaturedNovelsSection = dynamic(
   () => import("@/components/FeaturedNovelsSection").then((m) => m.FeaturedNovelsSection),
@@ -15,7 +15,7 @@ const FeaturedNovelsSection = dynamic(
 );
 const FeaturedComicsSection = dynamic(
   () => import("@/components/FeaturedComicsSection").then((m) => m.FeaturedComicsSection),
-  { loading: () => <FeaturedShelfSkeleton count={6} aspect="4/3" /> },
+  { loading: () => <FeaturedShelfSkeleton count={6} aspect="3/4" /> },
 );
 
 export function HomeFeaturedSections() {

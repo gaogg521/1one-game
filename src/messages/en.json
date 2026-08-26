@@ -175,7 +175,10 @@
     "hotNovels": "Popular community novels",
     "hotComics": "Popular community comics",
     "playsShort": "{count} plays",
-    "readsShort": "{count} reads"
+    "readsShort": "{count} reads",
+    "ctaPlay": "Play now",
+    "ctaRead": "Start reading",
+    "ctaComic": "Open comic"
   },
   "literaryChain": {
     "eyebrow": "Full creative pipeline",

@@ -175,7 +175,10 @@
     "hotNovels": "社群熱門小說",
     "hotComics": "社群熱門漫畫",
     "playsShort": "{count} 玩",
-    "readsShort": "{count} 讀"
+    "readsShort": "{count} 讀",
+    "ctaPlay": "立即試玩",
+    "ctaRead": "開始閱讀",
+    "ctaComic": "打開漫畫"
   },
   "literaryChain": {
     "eyebrow": "完整創作流程",

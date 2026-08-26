@@ -175,7 +175,10 @@
     "hotNovels": "นิยายยอดนิยมจากชุมชน",
     "hotComics": "คอมิกยอดนิยมจากชุมชน",
     "playsShort": "{count} เล่น",
-    "readsShort": "{count} อ่าน"
+    "readsShort": "{count} อ่าน",
+    "ctaPlay": "เล่นเลย",
+    "ctaRead": "เริ่มอ่าน",
+    "ctaComic": "เปิดการ์ตูน"
   },
   "literaryChain": {
     "eyebrow": "Full creative pipeline",
