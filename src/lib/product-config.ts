@@ -115,6 +115,7 @@ export const PRODUCT = {
   },
 
   godot: {
+    /** Phaser-only product surface; Godot export path is retired from CI/product. */
     enabled: false,
     /** 全模板走 ai-mother-universal；列表由 game-templates/registry 驱动 */
     supportedTemplates: godotExportTemplateIds(),

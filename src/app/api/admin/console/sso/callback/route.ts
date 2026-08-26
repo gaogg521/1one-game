@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     const role = resolveConsoleSsoRole(profile);
     if (!role) return fail("role_denied");
 
-    let account = await prisma.oAuthAccount.findUnique({
+    const account = await prisma.oAuthAccount.findUnique({
       where: { provider_providerUserId: { provider: SSO_PROVIDER, providerUserId: profile.providerUserId } },
       include: { user: true },
     });

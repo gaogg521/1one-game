@@ -20,7 +20,7 @@ export type DirectorMigrationContext = {
  * 从 v1 到 v2 的迁移（未来的扩展）
  * 预留新增字段的默认值
  */
-function migrateDirectorV1toV2(v1Data: any): any {
+function migrateDirectorV1toV2(v1Data: Record<string, unknown>): Record<string, unknown> {
   return {
     ...v1Data,
     // 未来可能的新字段（现在空缺）
@@ -33,7 +33,7 @@ function migrateDirectorV1toV2(v1Data: any): any {
  * 迁移函数映射表
  * 每个版本对应一个迁移函数，用于升级到下一个版本
  */
-const MIGRATIONS: Record<number, (data: any) => any> = {
+const MIGRATIONS: Record<number, (data: Record<string, unknown>) => Record<string, unknown>> = {
   1: (data) => data, // v1 → v1（无需迁移）
   2: migrateDirectorV1toV2, // v1 → v2
 };
@@ -93,7 +93,7 @@ export function migrateComicDirector(
   }
 
   // 执行链式迁移（v1 → v2 → v3... → targetVersion）
-  let migrated: any = rawData;
+  let migrated: Record<string, unknown> = { ...(rawData as Record<string, unknown>) };
   for (let v = currentVersion + 1; v <= targetVersion; v++) {
     const migrator = MIGRATIONS[v];
     if (!migrator) {

@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 45
     env:
       DATABASE_URL: file:./ci.sqlite
-      GODOT_BIN: ${{ github.workspace }}/tools/godot/Godot_v4.4.1-stable_linux.x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -35,19 +34,6 @@ jobs:
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Cache Godot engine & export templates
-        uses: actions/cache@v4
-        with:
-          path: |
-            tools/godot
-            ~/.local/share/godot/export_templates/4.4.1.stable
-          key: godot-4.4.1-linux-${{ hashFiles('scripts/godot-install*.sh') }}
-          restore-keys: |
-            godot-4.4.1-linux-
-
-      - name: Install Godot (for E2E wasm / iframe)
-        run: bash scripts/godot-install-ci.sh
 
       - name: Full competitor gates + matrix
         env:
@@ -81,8 +67,5 @@ jobs:
             qa-output/competitor-parity/summary.json
             qa-output/competitor-parity/prompt/**
             qa-output/competitor-parity/clone/**
-            qa-output/godot-matrix/REPORT.md
-            qa-output/godot-matrix/summary.json
             qa-output/regression-archive/LATEST.json
             qa-output/regression-archive/**/INDEX.md
-            qa-output/game-effect/REPORT.md

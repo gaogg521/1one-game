@@ -36,7 +36,7 @@ async function main() {
   }
 
   let doneSpec: GameSpec | null = null;
-  let steps: string[] = [];
+  const steps: string[] = [];
 
   await consumeSSE(res, (ev) => {
     const step = ev.step as string | undefined;

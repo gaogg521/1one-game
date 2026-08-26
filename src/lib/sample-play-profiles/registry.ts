@@ -379,4 +379,30 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
         { variantId: "crashy-roads", coaster: { speedBoost: 1.08 } },
       ),
   },
+  "dou-dizhu": {
+    variantId: "dou-dizhu",
+    apply: (spec, sample) =>
+      withProfile(
+        {
+          ...spec,
+          templateId: "dou-dizhu",
+          title: sample.title,
+          theme: {
+            ...spec.theme,
+            backgroundColor: "#581c87",
+            playerColor: "#fbbf24",
+            hazardColor: "#ef4444",
+            collectibleColor: "#a3e635",
+            particleTint: "#c084fc",
+          },
+          gameplay: {
+            ...spec.gameplay,
+            winScore: 1,
+            lives: 1,
+          },
+          labels: { ...spec.labels, subtitle: sample.subtitle },
+        },
+        { variantId: "dou-dizhu", seed: 0.42, mood: "lively" },
+      ),
+  },
 };

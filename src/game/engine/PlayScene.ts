@@ -1988,8 +1988,8 @@ export class PlayScene extends Phaser.Scene {
       const kb = readMoveAxis(keys, { allowVertical: true });
       const ptr = pointerSteer2D(this, this.player.x, this.player.y);
       const axis = mergeMoveAxis(kb, ptr);
-      let vx = axis.x * speed;
-      let vy = axis.y * speed;
+      const vx = axis.x * speed;
+      const vy = axis.y * speed;
       this.player.setVelocity(vx, vy);
       this.actorState.set(Math.abs(vx) + Math.abs(vy) > 8 ? "move" : "idle", this.time.now);
       this.publishActorState();

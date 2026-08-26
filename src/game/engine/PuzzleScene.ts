@@ -1491,7 +1491,7 @@ export class PuzzleScene extends Phaser.Scene {
         : this.clearMatchCellsSimple(matches);
       if (pendingSpawn) {
         const [sr, sc] = pendingSpawn.key.split(",").map(Number);
-        if (this.grid[sr]?.[sc]! >= 0) {
+        if (this.grid[sr]?.[sc] != null && this.grid[sr]![sc]! >= 0) {
           this.match3Specials.set(pendingSpawn.key, pendingSpawn.type);
           this.specialTilesCreated += 1;
         }

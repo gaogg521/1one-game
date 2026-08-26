@@ -73,7 +73,7 @@ function main() {
     [{ page: 1, panels: [{ caption: "……", prompt: "scene" }, { caption: "……", prompt: "scene2" }] }],
     segments,
   );
-  let enriched = enrichPagesFromNovelSegments(pages, segments);
+  const enriched = enrichPagesFromNovelSegments(pages, segments);
   const firstCaption = enriched[0]!.panels[0]!.caption ?? "";
   const secondCaption = enriched[0]!.panels[1]!.caption ?? "";
   const ok5 =

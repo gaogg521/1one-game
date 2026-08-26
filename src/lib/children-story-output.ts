@@ -132,7 +132,7 @@ export function parseChildrenStoryOutput(
 
   if (bodyHit) {
     const bodyEnd = closingHit && closingHit.index > bodyHit.index ? closingHit.index : text.length;
-    let body = sliceSection(text, bodyHit.mark, bodyEnd);
+    const body = sliceSection(text, bodyHit.mark, bodyEnd);
     let parentReadingTip = "";
     if (closingHit && closingHit.index > bodyHit.index) {
       parentReadingTip = sliceSection(text, closingHit.mark, text.length);

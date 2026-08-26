@@ -47,13 +47,13 @@ function sampleAdjacentPagePairs(pages: ComicPage[], sampleRate: number = 0.2): 
  * 基础相邻页对一致性检查（仅检查角色连续性）
  */
 function checkPagePairConsistency(p1: ComicPage, p2: ComicPage): boolean {
-  const panel1 = p1.panels[p1.panels.length - 1] as any;
-  const panel2 = p2.panels[0] as any;
+  const panel1 = p1.panels[p1.panels.length - 1];
+  const panel2 = p2.panels[0];
 
   if (!panel1 || !panel2) return true;
 
-  const chars1 = new Set((panel1.characterIds ?? []) as string[]);
-  const chars2 = new Set((panel2.characterIds ?? []) as string[]);
+  const chars1 = new Set(panel1.characterIds ?? []);
+  const chars2 = new Set(panel2.characterIds ?? []);
 
   // 如果两页都没有角色信息，认为一致
   if (chars1.size === 0 || chars2.size === 0) return true;

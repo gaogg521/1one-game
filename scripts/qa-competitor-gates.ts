@@ -1,29 +1,25 @@
 /**
  * 竞品 parity 门禁快照（供 astrocade-competitor-matrix 读入）
  * npm run qa:competitor-gates
+ *
+ * Godot 双轨已退役：不再跑 Godot E2E / 导出矩阵；e2eGodotOk 固定为 skipped→true。
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { PRODUCT } from "../src/lib/product-config";
 import { resolveCloneBatchGateOk, type CloneBatchSummary } from "../src/lib/qa/competitor-gates-summary";
-import { parseGodotPlaywrightJson, writeGodotMatrixSummary } from "./qa-godot-matrix-summary";
 
 const OUT = path.join(process.cwd(), "qa-output", "competitor-gates.json");
-const GODOT_JSON = path.join(process.cwd(), "qa-output", "godot-matrix", "playwright-results.json");
 const CLONE_BATCH_SUMMARY = path.join(process.cwd(), "qa-output", "competitor-clone-batch", "summary.json");
 const LOCAL_BASE = "http://127.0.0.1:8888";
 const LOCAL_ENV = { PLAYWRIGHT_BASE_URL: LOCAL_BASE };
-const GODOT_E2E = [
-  "e2e/godot-runtime.smoke.spec.ts",
-  "e2e/godot-templates-matrix.spec.ts",
-] as const;
 
 type GateSnap = {
   at: string;
   e2eAstrocadeOk: boolean;
   e2eCloneOk: boolean;
+  /** @deprecated Godot retired — always true (skipped). */
   e2eGodotOk: boolean;
   e2eSamplesEnOk: boolean;
   specCanonicalOk: boolean;
@@ -36,8 +32,18 @@ type GateSnap = {
     e2eSpecs: string[];
     e2eGodotOk: boolean;
     playSummaryPath: string;
+    retired?: boolean;
   };
   e2eAllOk: boolean;
+};
+
+const RETIRED_GODOT_MATRIX: GateSnap["godotMatrix"] = {
+  templates: [],
+  templateCount: 0,
+  e2eSpecs: [],
+  e2eGodotOk: true,
+  playSummaryPath: "qa-output/godot-matrix/summary.json",
+  retired: true,
 };
 
 function run(cmd: string, extraEnv?: Record<string, string>, timeoutMs?: number): boolean {
@@ -87,25 +93,18 @@ function writeSnap(partial: Partial<GateSnap> & Pick<GateSnap, "at">): void {
     at: partial.at,
     e2eAstrocadeOk: partial.e2eAstrocadeOk ?? prev.e2eAstrocadeOk ?? false,
     e2eCloneOk: partial.e2eCloneOk ?? prev.e2eCloneOk ?? false,
-    e2eGodotOk: partial.e2eGodotOk ?? prev.e2eGodotOk ?? false,
+    e2eGodotOk: partial.e2eGodotOk ?? true,
     e2eSamplesEnOk: partial.e2eSamplesEnOk ?? prev.e2eSamplesEnOk ?? false,
     specCanonicalOk: partial.specCanonicalOk ?? prev.specCanonicalOk ?? false,
     parityValidationOk: partial.parityValidationOk ?? prev.parityValidationOk ?? false,
     cloneBatchOk: partial.cloneBatchOk ?? prev.cloneBatchOk ?? false,
     gameplayInteractionOk: partial.gameplayInteractionOk ?? prev.gameplayInteractionOk ?? false,
-    godotMatrix: partial.godotMatrix ?? prev.godotMatrix ?? {
-      templates: [...PRODUCT.godot.supportedTemplates],
-      templateCount: PRODUCT.godot.supportedTemplates.length,
-      e2eSpecs: [...GODOT_E2E],
-      e2eGodotOk: false,
-      playSummaryPath: "qa-output/godot-matrix/summary.json",
-    },
+    godotMatrix: partial.godotMatrix ?? prev.godotMatrix ?? RETIRED_GODOT_MATRIX,
     e2eAllOk: false,
   };
   snap.e2eAllOk =
     snap.e2eAstrocadeOk &&
     snap.e2eCloneOk &&
-    snap.e2eGodotOk &&
     snap.e2eSamplesEnOk &&
     snap.specCanonicalOk &&
     snap.parityValidationOk &&
@@ -113,43 +112,6 @@ function writeSnap(partial: Partial<GateSnap> & Pick<GateSnap, "at">): void {
     snap.gameplayInteractionOk;
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(snap, null, 2));
-}
-
-function runGodotMatrixE2e(): boolean {
-  fs.mkdirSync(path.dirname(GODOT_JSON), { recursive: true });
-  const ok = run(
-    "npx playwright test e2e/godot-runtime.smoke.spec.ts e2e/godot-templates-matrix.spec.ts --workers=1 --config=playwright.godot-matrix.config.ts",
-    undefined,
-    900_000,
-  );
-  let rows = fs.existsSync(GODOT_JSON)
-    ? parseGodotPlaywrightJson(JSON.parse(fs.readFileSync(GODOT_JSON, "utf8")) as Parameters<
-        typeof parseGodotPlaywrightJson
-      >[0])
-    : [];
-  if (rows.length === 0) {
-    rows = [
-      {
-        testId: "runtime-smoke",
-        title: "试玩页可切换到 Godot 引擎标签",
-        templateId: "runtime-smoke",
-        ok,
-        durationMs: 0,
-      },
-      ...PRODUCT.godot.supportedTemplates.map((templateId) => ({
-        testId: templateId,
-        title: `Godot 标签 · ${templateId}`,
-        templateId,
-        ok,
-        durationMs: 0,
-      })),
-    ];
-  }
-  const summary = writeGodotMatrixSummary({ rows, suiteOk: ok && rows.every((r) => r.ok) });
-  console.log(
-    `[monitor] godot play summary · ${summary.passCount}/${summary.total} → qa-output/godot-matrix/REPORT.md`,
-  );
-  return ok;
 }
 
 function healthOk(): boolean {
@@ -181,8 +143,12 @@ async function main() {
     process.exit(1);
   }
 
+  const e2eGodotOk = true;
+  const godotMatrix = RETIRED_GODOT_MATRIX;
+  console.log("[gates] Godot matrix skipped (PRODUCT.godot.enabled=false / retired from CI)");
+
   const e2eAstrocadeOk = run("npm run test:e2e:astrocade");
-  writeSnap({ at: startedAt, e2eAstrocadeOk });
+  writeSnap({ at: startedAt, e2eAstrocadeOk, e2eGodotOk, godotMatrix });
   await cooldown("e2e astrocade");
 
   const e2eCloneOk = run(
@@ -190,19 +156,8 @@ async function main() {
     undefined,
     120_000,
   );
-  writeSnap({ at: startedAt, e2eAstrocadeOk, e2eCloneOk });
-  await cooldown("e2e clone smoke");
-
-  const e2eGodotOk = runGodotMatrixE2e();
-  const godotMatrix = {
-    templates: [...PRODUCT.godot.supportedTemplates],
-    templateCount: PRODUCT.godot.supportedTemplates.length,
-    e2eSpecs: [...GODOT_E2E],
-    e2eGodotOk,
-    playSummaryPath: "qa-output/godot-matrix/summary.json",
-  };
   writeSnap({ at: startedAt, e2eAstrocadeOk, e2eCloneOk, e2eGodotOk, godotMatrix });
-  await cooldown("godot matrix", 5000);
+  await cooldown("e2e clone smoke");
 
   const e2eSamplesEnOk = run(
     "npx playwright test e2e/samples-en-matrix.smoke.spec.ts --workers=1 --reporter=line",
@@ -279,7 +234,6 @@ async function main() {
     e2eAllOk:
       e2eAstrocadeOk &&
       e2eCloneOk &&
-      e2eGodotOk &&
       e2eSamplesEnOk &&
       specCanonicalOk &&
       parityValidationOk &&
@@ -289,9 +243,7 @@ async function main() {
 
   writeFinalSnap(snap);
   console.log(`[monitor] gates → ${path.relative(process.cwd(), OUT)}`);
-  console.log(
-    `[monitor] godot matrix · ${snap.godotMatrix.templateCount} templates · e2eGodotOk=${e2eGodotOk}`,
-  );
+  console.log(`[monitor] godot matrix · retired (skipped)`);
 
   if (snap.e2eAllOk) {
     console.log("\n→ 门禁全绿，写入回归归档");

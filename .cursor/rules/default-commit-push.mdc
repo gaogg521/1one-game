@@ -1,0 +1,18 @@
+---
+description: After finishing a task, default to git commit and push
+alwaysApply: true
+---
+
+# 完成即提交推送
+
+完成一段可交付工作后，**默认**执行：
+
+1. 只暂存与本次任务相关的文件（排除密钥、本地 DB、临时日志、无关 WIP）
+2. `git commit`（遵循仓库既有 commit message 风格）
+3. `git push` 到当前跟踪分支（通常 `origin HEAD`）
+
+例外（不要擅自推送）：
+
+- 用户明确说不要提交 / 不要推送
+- 工作区混有大量无关改动且无法安全拆分时，先只提交本次相关文件；其余留给用户
+- 涉及生产密钥、强制推送、改写已推送历史时，先停下来确认

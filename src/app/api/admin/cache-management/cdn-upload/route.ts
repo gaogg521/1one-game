@@ -2,6 +2,7 @@ import { requireSuperAdmin } from "@/lib/auth/admin";
 import { NextResponse } from "next/server";
 import { uploadCharacterSheetToCdn, getCdnConfig, verifyCdnUrl } from "@/lib/comic-character-sheet-cdn";
 import fs from "fs";
+import path from "path";
 
 export type CdnUploadRequest = {
   characterIds: string[];
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     const cdnConfig = getCdnConfig();
     const storeDir = (() => {
       const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
-      return require("path").join(homeDir, ".cache", "open-game", "comic-char-sheets");
+      return path.join(homeDir, ".cache", "open-game", "comic-char-sheets");
     })();
 
     const results: CdnUploadResponse["results"] = [];
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     let failed = 0;
 
     for (const characterId of characterIds) {
-      const localPath = require("path").join(storeDir, `${comicKey}-${characterId}.jpg`);
+      const localPath = path.join(storeDir, `${comicKey}-${characterId}.jpg`);
 
       if (!fs.existsSync(localPath)) {
         results.push({

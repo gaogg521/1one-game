@@ -83,7 +83,7 @@ export function sanitizeChildrenBriefForTier(
   const heavyInBeat = (b: string) =>
     HEAVY_PATTERN.test(b) && !(fidelity && textAlignsWithUserPrompt(b, brief.userPrompt));
 
-  let storyBeats = coerced.storyBeats
+  const storyBeats = coerced.storyBeats
     .filter((b) => b.trim() && !heavyInBeat(b))
     .slice(0, maxBeats)
     .map((b) => truncate(b, 28));

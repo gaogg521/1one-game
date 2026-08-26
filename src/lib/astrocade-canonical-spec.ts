@@ -24,37 +24,52 @@ export function buildCanonicalAstrocadeSpec(
   opts: CanonicalSpecOptions = {},
 ): GameSpec {
   const trimmed = prompt.trim();
+  const projectId = opts.projectId;
+  const explicitSampleId =
+    opts.sampleId ??
+    (projectId && isSampleGalleryProject(projectId) ? projectId.slice("sample-".length) : undefined);
   const persistedVariantId = opts.persistedSpec?.samplePlayProfile?.variantId;
+  const promptMatchedSampleId = inferSampleIdFromPrompt(trimmed);
   const inferredId =
-    opts.sampleId ?? inferSampleIdFromPrompt(trimmed) ?? persistedVariantId;
+    explicitSampleId ?? promptMatchedSampleId ?? persistedVariantId;
   const sample = inferredId ? SAMPLES.find((s) => s.id === inferredId) : undefined;
 
   const hasAgenticArtifact =
     Boolean(opts.persistedSpec?.agenticModule?.source) ||
     opts.persistedSpec?.agenticPlayRoute === "agentic";
 
-  /** 已知样品 prompt / variant：mock 起跑；Agentic 生成物保留 persisted，避免入库时剥离模块 */
-  const base: GameSpec =
-    hasAgenticArtifact && opts.persistedSpec
-      ? opts.persistedSpec
-      : sample
-        ? mockSpecFromPrompt(trimmed, {
-            sampleId: sample.id,
-            title: sample.title,
-            subtitle: sample.subtitle,
-          })
-        : (opts.persistedSpec ?? mockSpecFromPrompt(trimmed));
+  /**
+   * Exact gallery-prompt match must follow the sample route (Astrocade parity),
+   * even when a freshly mocked persistedSpec guessed a different templateId.
+   * Keep persistedSpec only when the prompt is not an exact sample match.
+   */
+  const preferPersisted = Boolean(opts.persistedSpec) && !explicitSampleId && !promptMatchedSampleId;
 
-  const projectId = opts.projectId;
+  /** 已知样品 prompt / variant：mock 起跑；Agentic 生成物保留 persisted，避免入库时剥离模块 */
+  const base: GameSpec = preferPersisted
+    ? opts.persistedSpec!
+    : sample
+      ? mockSpecFromPrompt(trimmed, {
+          sampleId: sample.id,
+          title: sample.title,
+          subtitle: sample.subtitle,
+        })
+      : (opts.persistedSpec ?? mockSpecFromPrompt(trimmed));
+
   const sampleId =
-    opts.sampleId ??
-    (projectId && isSampleGalleryProject(projectId) ? projectId.slice("sample-".length) : undefined) ??
+    explicitSampleId ??
     inferredId;
 
   let result = enrichGameSpecForRuntime(base, trimmed, locale, {
     sampleId,
     projectId,
   });
+  if (preferPersisted) {
+    // Runtime enrichment may fill missing systems/blueprints, but it must not
+    // replace choices the user already saved merely because the prompt looks
+    // similar to a gallery sample.
+    result = { ...result, ...opts.persistedSpec };
+  }
   if (hasAgenticArtifact && opts.persistedSpec) {
     result = {
       ...result,

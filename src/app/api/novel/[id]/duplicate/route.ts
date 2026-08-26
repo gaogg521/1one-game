@@ -33,7 +33,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return localizedJsonError(req, "sourceNotFound", 404);
   }
 
-  let lengthTier: NovelLengthTier = parseNovelLengthTier(source.lengthTier);
+  const lengthTier: NovelLengthTier = parseNovelLengthTier(source.lengthTier);
 
   const title = duplicateTitle(source.title, resolveRequestLocaleSync(req), 80);
   let clone: { id: string; title: string; shareCode: string | null } | undefined;

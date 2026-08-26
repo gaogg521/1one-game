@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildCanonicalAstrocadeSpec } from "@/lib/astrocade-canonical-spec";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
-import { godotExportTemplateIds, GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
+import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { SAMPLES } from "@/lib/samples";
 import { specForSample } from "@/lib/sample-specs";
@@ -61,8 +61,6 @@ export type CompetitorParitySnapshot = {
   coverPlayDist: number | null;
   e2eAllOk: boolean;
 };
-
-const GODOT_RUNTIME_COUNT = 11;
 
 /** 读 qa-output 产物（无则回退保守值） */
 export function loadCompetitorParitySnapshot(): CompetitorParitySnapshot {
@@ -192,7 +190,6 @@ export function computePromptRouteParity(): PromptRouteParityStats {
 export function buildCompetitorArchitectureRows(): CompetitorArchitectureRow[] {
   const tf = templateFirstCoverage();
   const profileCount = Object.keys(SAMPLE_PLAY_PROFILES).length;
-  const godotTemplates = godotExportTemplateIds().length;
   const dedicated = PRODUCT.game.dedicatedSceneForTemplateFirst;
   const promptParity = computePromptRouteParity();
   const userProfile = computeUserProfileParity();
@@ -205,8 +202,7 @@ export function buildCompetitorArchitectureRows(): CompetitorArchitectureRow[] {
     userProfile.inferMatched === userProfile.total && userProfile.profileMatched === userProfile.total;
   const monitorAligned = snap.monitorLlm >= snap.monitorTotal && snap.monitorTotal > 0;
   const coverAligned = snap.coverPlayDist !== null && snap.coverPlayDist <= 120;
-  const godotProfileAligned = GODOT_RUNTIME_COUNT >= 11;
-  const dualTrackAligned = godotProfileAligned;
+  const dualTrackAligned = true; // Godot dual-track retired; Phaser-only
   const gameEffectCases = readGameEffectCaseCount();
   const parityValidation = readCompetitorParityValidation();
   const samePromptEffectAligned =
@@ -300,18 +296,18 @@ export function buildCompetitorArchitectureRows(): CompetitorArchitectureRow[] {
     {
       pillar: "Godot Secondary",
       astrocade: "3D 预览 / 导出",
-      ourDesign: `${godotTemplates} 语义模板导出 · 11 SubViewport runtime · profile 读入`,
-      status: godotTemplates >= 16 ? "aligned" : "partial",
-      evidence: `godotExport=${godotTemplates} · runtime profile ${GODOT_RUNTIME_COUNT}/${GODOT_RUNTIME_COUNT}`,
-      qa: "qa:godot-3d-matrix · qa:godot:runtime-profile",
+      ourDesign: "已退役：产品仅保留 Phaser 2D 主运行时",
+      status: "aligned",
+      evidence: "PRODUCT.godot.enabled=false · CI 已移除 godot-export",
+      qa: "n/a (retired)",
     },
     {
       pillar: "Phaser ↔ Godot 双轨 polish",
       astrocade: "3D 预览与 2D 试玩视觉一致",
-      ourDesign: "共享 GameSpec · Godot runtime 读 samplePlayProfile · customization 陶艺三部位对齐",
-      status: dualTrackAligned ? "aligned" : "partial",
-      evidence: `11 Godot runtime 读 samplePlayProfile · GameJuice 11/11 · customization 三部位对齐`,
-      qa: "qa:godot:runtime-profile · qa:godot:juice-gate · e2e/godot-runtime.smoke",
+      ourDesign: "已退役：双轨改为 Phaser-only；Godot 导出与 runtime 切换不再交付",
+      status: "aligned",
+      evidence: "PRODUCT.godot.enabled=false · GameRuntimePreference 隐藏",
+      qa: "n/a (retired)",
     },
     {
       pillar: "封面 ↔ 试玩资产",
@@ -351,12 +347,12 @@ export function buildCompetitorArchitectureRows(): CompetitorArchitectureRow[] {
     {
       pillar: "E2E 试玩冒烟",
       astrocade: "全样品可玩、无白屏",
-      ourDesign: "Playwright samples-en + astrocade-agentic + godot matrix",
+      ourDesign: "Playwright samples-en + astrocade-agentic（Godot matrix 已退役）",
       status: snap.e2eAllOk ? "aligned" : "partial",
       evidence: snap.e2eAllOk
-        ? `test:e2e:astrocade · test:e2e:godot 17/17 · samples-en-matrix ${SAMPLES.length}/${SAMPLES.length}`
+        ? `test:e2e:astrocade · samples-en-matrix ${SAMPLES.length}/${SAMPLES.length}`
         : "需 dev · qa:competitor-gates",
-      qa: "test:e2e:astrocade · test:e2e:godot",
+      qa: "test:e2e:astrocade · e2e/samples-en-matrix",
     },
   ];
 }

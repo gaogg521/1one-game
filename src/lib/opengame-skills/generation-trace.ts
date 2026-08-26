@@ -26,30 +26,30 @@ function stepDetail(trace: OrchestrationRunTrace | undefined, name: string): Rec
 export function summarizeOpenGameGeneration(trace?: OrchestrationRunTrace): OpenGameGenerationSummary | null {
   if (!trace) return null;
   const complexity = stepDetail(trace, "opengame_complexity");
-  const module = stepDetail(trace, "agentic_module");
+  const moduleStep = stepDetail(trace, "agentic_module");
   const attach = stepDetail(trace, "agentic_attach_result");
   const gen = stepDetail(trace, "agentic_gen_result");
   const bench = stepDetail(trace, "agentic_browser_bench");
   const cli = stepDetail(trace, "opengame_cli_spike");
   const cliBridge = stepDetail(trace, "opengame_cli_bridge");
-  if (!complexity && !module && !attach && !gen && !cli && !cliBridge) return null;
+  if (!complexity && !moduleStep && !attach && !gen && !cli && !cliBridge) return null;
 
   return {
     tier: typeof complexity?.tier === "string" ? complexity.tier : undefined,
     playRoute:
-      typeof module?.playRoute === "string"
-        ? module.playRoute
+      typeof moduleStep?.playRoute === "string"
+        ? moduleStep.playRoute
         : typeof complexity?.playRoute === "string"
           ? complexity.playRoute
           : undefined,
-    attached: typeof module?.attached === "boolean" ? module.attached : undefined,
+    attached: typeof moduleStep?.attached === "boolean" ? moduleStep.attached : undefined,
     moduleSource:
       typeof attach?.source === "string"
         ? attach.source
         : typeof gen?.source === "string"
           ? gen.source
-          : typeof module?.moduleSource === "string"
-            ? module.moduleSource
+          : typeof moduleStep?.moduleSource === "string"
+            ? moduleStep.moduleSource
             : undefined,
     browserBenchOk: typeof bench?.ok === "boolean" ? bench.ok : undefined,
     browserBenchSkipped: typeof bench?.skipped === "boolean" ? bench.skipped : undefined,

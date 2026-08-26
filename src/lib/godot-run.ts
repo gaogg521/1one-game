@@ -21,7 +21,7 @@ export function godotBinPath(): string {
   return path.join(root, "tools", "godot", "Godot_v4.4.1-stable_linux.x86_64");
 }
 
-export function useGodotDocker(): boolean {
+export function preferGodotDocker(): boolean {
   const v = process.env.GODOT_USE_DOCKER?.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
 }
@@ -48,7 +48,7 @@ async function nativeGodotRunnable(bin: string): Promise<boolean> {
 
 /** Godot 导出/headless 是否可用（原生或 Docker 回退） */
 export async function godotRuntimeAvailable(): Promise<boolean> {
-  if (useGodotDocker()) return dockerAvailable();
+  if (preferGodotDocker()) return dockerAvailable();
   const bin = godotBinPath();
   if (await nativeGodotRunnable(bin)) return true;
   return dockerAvailable();
@@ -57,7 +57,7 @@ export async function godotRuntimeAvailable(): Promise<boolean> {
 export async function runGodot(args: string[], cwd: string, timeoutMs: number): Promise<void> {
   const root = repoRoot();
   const bin = godotBinPath();
-  const preferDocker = useGodotDocker() || !(await nativeGodotRunnable(bin));
+  const preferDocker = preferGodotDocker() || !(await nativeGodotRunnable(bin));
 
   if (preferDocker && (await dockerAvailable())) {
     const rel = path.relative(root, cwd).replace(/\\/g, "/") || ".";
