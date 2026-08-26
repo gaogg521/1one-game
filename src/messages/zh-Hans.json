@@ -178,7 +178,10 @@
     "readsShort": "{count} 读",
     "ctaPlay": "立即试玩",
     "ctaRead": "开始阅读",
-    "ctaComic": "打开漫画"
+    "ctaComic": "打开漫画",
+    "sampleHeroHook": "精选可玩样品",
+    "sampleRemix": "用同样灵感开写",
+    "samplePlaysLabel": "{plays} 次打开 · 点开即体验"
   },
   "literaryChain": {
     "eyebrow": "完整创作流程",

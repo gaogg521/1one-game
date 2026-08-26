@@ -178,7 +178,10 @@
     "readsShort": "{count} reads",
     "ctaPlay": "Play now",
     "ctaRead": "Start reading",
-    "ctaComic": "Open comic"
+    "ctaComic": "Open comic",
+    "sampleHeroHook": "Featured playable sample",
+    "sampleRemix": "Start from this idea",
+    "samplePlaysLabel": "{plays} opens · play instantly"
   },
   "literaryChain": {
     "eyebrow": "Full creative pipeline",

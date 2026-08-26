@@ -178,7 +178,10 @@
     "readsShort": "{count} baca",
     "ctaPlay": "Main sekarang",
     "ctaRead": "Mula baca",
-    "ctaComic": "Buka komik"
+    "ctaComic": "Buka komik",
+    "sampleHeroHook": "Sampel boleh dimainkan",
+    "sampleRemix": "Cipta dari idea ini",
+    "samplePlaysLabel": "{plays} buka · terus main"
   },
   "literaryChain": {
     "eyebrow": "Full creative pipeline",

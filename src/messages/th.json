@@ -178,7 +178,10 @@
     "readsShort": "{count} อ่าน",
     "ctaPlay": "เล่นเลย",
     "ctaRead": "เริ่มอ่าน",
-    "ctaComic": "เปิดการ์ตูน"
+    "ctaComic": "เปิดการ์ตูน",
+    "sampleHeroHook": "ตัวอย่างเล่นได้ทันที",
+    "sampleRemix": "เริ่มจากไอเดียนี้",
+    "samplePlaysLabel": "เปิด {plays} ครั้ง · เล่นได้ทันที"
   },
   "literaryChain": {
     "eyebrow": "Full creative pipeline",
