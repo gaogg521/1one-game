@@ -1,5 +1,9 @@
 import { GAMEPLAY_DEPTH_BY_SAMPLE } from "@/lib/qa/gameplay-depth";
-import { EXPECTED_SCENE_BY_SAMPLE } from "@/lib/qa/competitor-clone-playability-checks";
+import {
+  defaultInteractionForScene,
+  expectedSceneForSample,
+  isAnimatedScene,
+} from "@/lib/qa/sample-qa-defaults";
 import { SAMPLES } from "@/lib/samples";
 
 export type SampleInteractionKind =
@@ -24,34 +28,63 @@ export type SampleGameplayCase = {
   clickRel2?: { x: number; y: number };
 };
 
-/** 与 ANIMATED_CLONE_SAMPLES 对齐 */
-export const ANIMATED_GAMEPLAY_SAMPLES = new Set([
-  "crashy-roads",
-  "temple-relic-runner",
-  "elastic-thief-2",
-  "gun-merge-3d-zombie-apocalypse",
-  "blade-defender-merge",
-  "smash-the-dummy",
-  "pottery-master-3d",
-]);
+/**
+ * 仅保留「默认 Scene 交互不够」的样品覆盖（坐标/键位）。
+ * 新样品默认按 Scene 族自动生成，不必往这里加。
+ */
+const SAMPLE_GAMEPLAY_OVERRIDES: Partial<
+  Record<string, Omit<SampleGameplayCase, "sampleId" | "expectedScene">>
+> = {
+  "number-merge-2048": { interaction: "arrow-right", clickBurst: 2 },
+  "classic-xiangqi-board": {
+    interaction: "click-center",
+    clickRel: { x: 0.48, y: 0.66 },
+    clickRel2: { x: 0.48, y: 0.56 },
+    clickBurst: 2,
+  },
+  "classic-international-chess": {
+    interaction: "click-center",
+    clickRel: { x: 0.48, y: 0.72 },
+    clickRel2: { x: 0.48, y: 0.56 },
+    clickBurst: 2,
+  },
+  "zen-go-board": { interaction: "click-center", clickRel: { x: 0.24, y: 0.24 }, clickBurst: 2 },
+  "jungle-animal-chess": {
+    interaction: "click-center",
+    clickRel: { x: 0.08, y: 0.9 },
+    clickRel2: { x: 0.08, y: 0.78 },
+    clickBurst: 2,
+  },
+  "grow-a-garden": { interaction: "click-center", clickRel: { x: 0.38, y: 0.24 }, clickBurst: 2 },
+  "color-bloom": { interaction: "click-center", clickRel: { x: 0.38, y: 0.52 }, clickBurst: 2 },
+};
 
-export const SAMPLE_GAMEPLAY_CASES: SampleGameplayCase[] = [
-  { sampleId: "number-merge-2048", expectedScene: "PuzzleScene", interaction: "arrow-right", clickBurst: 2 },
-  { sampleId: "classic-xiangqi-board", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.48, y: 0.66 }, clickRel2: { x: 0.48, y: 0.56 }, clickBurst: 2 },
-  { sampleId: "classic-international-chess", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.48, y: 0.72 }, clickRel2: { x: 0.48, y: 0.56 }, clickBurst: 2 },
-  { sampleId: "zen-go-board", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.24, y: 0.24 }, clickBurst: 2 },
-  { sampleId: "jungle-animal-chess", expectedScene: "ChessScene", interaction: "click-center", clickRel: { x: 0.08, y: 0.9 }, clickRel2: { x: 0.08, y: 0.78 }, clickBurst: 2 },
-  { sampleId: "temple-relic-runner", expectedScene: "CoasterScene", interaction: "arrow-left", animated: true, clickBurst: 8 },
-  { sampleId: "smash-the-dummy", expectedScene: "PhysicsScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },
-  { sampleId: "crashy-roads", expectedScene: "CoasterScene", interaction: "arrow-left", animated: true, clickBurst: 8 },
-  { sampleId: "grow-a-garden", expectedScene: "FarmingScene", interaction: "click-center", clickRel: { x: 0.38, y: 0.24 }, clickBurst: 2 },
-  { sampleId: "color-bloom", expectedScene: "PuzzleScene", interaction: "click-center", clickRel: { x: 0.38, y: 0.52 }, clickBurst: 2 },
-  { sampleId: "gun-merge-3d-zombie-apocalypse", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
-  { sampleId: "elastic-thief-2", expectedScene: "PlatformerScene", interaction: "arrow-right", animated: true, clickBurst: 8 },
-  { sampleId: "blade-defender-merge", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
-  { sampleId: "pottery-master-3d", expectedScene: "CustomizationScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },
-  { sampleId: "dou-dizhu", expectedScene: "DouDizhuScene", interaction: "click-center", clickRel: { x: 0.5, y: 0.72 }, clickBurst: 2 },
-];
+function buildCaseForSample(sampleId: string): SampleGameplayCase {
+  const sample = SAMPLES.find((s) => s.id === sampleId)!;
+  const expectedScene = expectedSceneForSample(sample);
+  const defaults = defaultInteractionForScene(expectedScene);
+  const override = SAMPLE_GAMEPLAY_OVERRIDES[sampleId];
+  return {
+    sampleId,
+    expectedScene,
+    interaction: defaults.interaction,
+    animated: defaults.animated ?? (isAnimatedScene(expectedScene) || undefined),
+    clickRel: defaults.clickRel,
+    clickBurst: defaults.clickBurst,
+    clickRel2: defaults.clickRel2,
+    ...override,
+  };
+}
+
+/** 覆盖全部 SAMPLES；随样品馆增减自动伸缩 */
+export const SAMPLE_GAMEPLAY_CASES: SampleGameplayCase[] = SAMPLES.map((s) =>
+  buildCaseForSample(s.id),
+);
+
+/** 派生：animated=true 的样品集合（兼容旧引用） */
+export const ANIMATED_GAMEPLAY_SAMPLES = new Set(
+  SAMPLE_GAMEPLAY_CASES.filter((c) => c.animated).map((c) => c.sampleId),
+);
 
 export function defaultClickRel(kind: SampleInteractionKind): { x: number; y: number } {
   switch (kind) {
@@ -69,21 +102,32 @@ export function validateSampleGameplayCasesOffline(): string[] {
   const sampleIds = new Set(SAMPLES.map((s) => s.id));
   const caseIds = new Set(SAMPLE_GAMEPLAY_CASES.map((c) => c.sampleId));
 
+  if (SAMPLE_GAMEPLAY_CASES.length !== SAMPLES.length) {
+    failures.push(
+      `case count ${SAMPLE_GAMEPLAY_CASES.length} !== SAMPLES ${SAMPLES.length} (should auto-cover)`,
+    );
+  }
   for (const id of sampleIds) {
     if (!caseIds.has(id)) failures.push(`missing gameplay case: ${id}`);
   }
   for (const c of SAMPLE_GAMEPLAY_CASES) {
     if (!sampleIds.has(c.sampleId)) failures.push(`orphan gameplay case: ${c.sampleId}`);
-    const expected = EXPECTED_SCENE_BY_SAMPLE[c.sampleId];
-    if (expected && c.expectedScene !== expected) {
-      failures.push(`${c.sampleId}: expectedScene ${c.expectedScene} !== ${expected}`);
+    const sample = SAMPLES.find((s) => s.id === c.sampleId);
+    if (sample) {
+      const derived = expectedSceneForSample(sample);
+      if (c.expectedScene !== derived) {
+        failures.push(`${c.sampleId}: expectedScene ${c.expectedScene} !== derived ${derived}`);
+      }
     }
-    if (ANIMATED_GAMEPLAY_SAMPLES.has(c.sampleId) && !c.animated) {
-      failures.push(`${c.sampleId}: should be animated`);
+    if (isAnimatedScene(c.expectedScene) && !c.animated) {
+      failures.push(`${c.sampleId}: animated scene should set animated=true`);
     }
     if (GAMEPLAY_DEPTH_BY_SAMPLE[c.sampleId] && !c.clickBurst && c.interaction.startsWith("click")) {
       failures.push(`${c.sampleId}: depth case needs clickBurst >= 1`);
     }
+  }
+  for (const id of Object.keys(SAMPLE_GAMEPLAY_OVERRIDES)) {
+    if (!sampleIds.has(id)) failures.push(`orphan gameplay override: ${id}`);
   }
   return failures;
 }

@@ -5,7 +5,7 @@ import { buildCustomizationBlueprint } from "@/lib/customization-blueprint";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
 import { buildPlatformerBlueprint } from "@/lib/platformer-blueprint";
 import { buildPuzzleBlueprint } from "@/lib/puzzle-blueprint";
-import type { Sample } from "@/lib/samples";
+import { SAMPLES, type Sample } from "@/lib/samples";
 import type { SamplePlayProfile } from "@/lib/sample-play-profiles/types";
 
 export type SampleProfileDef = {
@@ -17,8 +17,24 @@ function withProfile(spec: GameSpec, profile: SamplePlayProfile): GameSpec {
   return { ...spec, samplePlayProfile: profile };
 }
 
-/** Astrocade 样品 — 独立定制逻辑（写入 specJson，duplicate 可继承） */
-export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
+/** 无 curated 玩法时的最小 profile：保证 variantId 对齐，避免门禁因新样品缺表挂掉 */
+function defaultSampleProfile(sampleId: string): SampleProfileDef {
+  return {
+    variantId: sampleId,
+    apply: (spec, sample) =>
+      withProfile(
+        {
+          ...spec,
+          title: sample.title,
+          labels: { ...spec.labels, subtitle: sample.subtitle },
+        },
+        { variantId: sampleId },
+      ),
+  };
+}
+
+/** 手工 curated 的样品定制；新样品可不写，走 defaultSampleProfile */
+const SAMPLE_PLAY_PROFILE_CURATED: Record<string, SampleProfileDef> = {
   "number-merge-2048": {
     variantId: "number-merge-2048",
     apply: (spec, sample, prompt) =>
@@ -406,3 +422,8 @@ export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = {
       ),
   },
 };
+
+/** 覆盖全部 SAMPLES：curated 优先，其余自动补默认 profile */
+export const SAMPLE_PLAY_PROFILES: Record<string, SampleProfileDef> = Object.fromEntries(
+  SAMPLES.map((s) => [s.id, SAMPLE_PLAY_PROFILE_CURATED[s.id] ?? defaultSampleProfile(s.id)]),
+);

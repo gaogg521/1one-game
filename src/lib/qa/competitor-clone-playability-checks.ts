@@ -5,26 +5,12 @@ import { inferCustomizationMode } from "@/lib/customization-blueprint";
 import { inferPlatformerMode } from "@/lib/platformer-blueprint";
 import { inferPuzzleMode } from "@/lib/puzzle-blueprint";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
+import { buildExpectedSceneBySample } from "@/lib/qa/sample-qa-defaults";
 import type { Sample } from "@/lib/samples";
 
-/** 各样品期望 Phaser Scene（duplicate 后不得落 Agentic） */
-export const EXPECTED_SCENE_BY_SAMPLE: Record<string, string> = {
-  "number-merge-2048": "PuzzleScene",
-  "classic-xiangqi-board": "ChessScene",
-  "classic-international-chess": "ChessScene",
-  "zen-go-board": "ChessScene",
-  "jungle-animal-chess": "ChessScene",
-  "temple-relic-runner": "CoasterScene",
-  "smash-the-dummy": "PhysicsScene",
-  "grow-a-garden": "FarmingScene",
-  "color-bloom": "PuzzleScene",
-  "gun-merge-3d-zombie-apocalypse": "TowerDefenseScene",
-  "elastic-thief-2": "PlatformerScene",
-  "blade-defender-merge": "TowerDefenseScene",
-  "pottery-master-3d": "CustomizationScene",
-  "crashy-roads": "CoasterScene",
-  "dou-dizhu": "DouDizhuScene",
-};
+/** 各样品期望 Phaser Scene — 由 SAMPLES + mockSpec 自动推导，不再手维护 */
+export const EXPECTED_SCENE_BY_SAMPLE: Record<string, string> = buildExpectedSceneBySample();
+
 
 export function buildCompetitorClonePlayabilityChecks(
   sample: Sample,
