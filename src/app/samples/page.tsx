@@ -149,35 +149,64 @@ function SampleCard({
         </p>
       </details>
 
-      <div className="mt-auto flex flex-wrap gap-2 px-0.5">
+      <div className="mt-auto flex flex-col gap-2 px-0.5 md:flex-row md:flex-wrap">
         <Link
           href={playHref}
-          className={`gc-theme-cta rounded-full px-4 py-2 text-xs font-semibold shadow-md hover:brightness-110 sm:px-5 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+          className={`gc-theme-cta inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold shadow-md hover:brightness-110 md:w-auto md:min-h-0 md:px-5 md:py-2 md:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
         >
           {ts("play")}
         </Link>
-        <Link
-          href={buildStartPrefillPath(s.prompt, locale)}
-          className={`rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
-          data-testid="sample-start-with-prompt"
-        >
-          {ts("startViaIntake")}
-        </Link>
-        <Link
-          href={buildCreatePrefillPath(s.prompt, locale)}
-          className={`rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-4 py-2 text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] transition hover:brightness-110 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
-          data-testid="sample-create-with-prompt"
-        >
-          {ts("createWithPrompt")}
-        </Link>
-        <button
-          type="button"
-          disabled={busy || !ready}
-          onClick={() => void onClone(s.id)}
-          className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] disabled:opacity-50 sm:text-sm"
-        >
-          {busy ? ts("cloning") : ts("clone")}
-        </button>
+        <div className="hidden flex-wrap gap-2 md:flex">
+          <Link
+            href={buildStartPrefillPath(s.prompt, locale)}
+            className={`rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+            data-testid="sample-start-with-prompt"
+          >
+            {ts("startViaIntake")}
+          </Link>
+          <Link
+            href={buildCreatePrefillPath(s.prompt, locale)}
+            className={`rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-4 py-2 text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] transition hover:brightness-110 sm:text-sm ${ready ? "" : "pointer-events-none opacity-50"}`}
+            data-testid="sample-create-with-prompt"
+          >
+            {ts("createWithPrompt")}
+          </Link>
+          <button
+            type="button"
+            disabled={busy || !ready}
+            onClick={() => void onClone(s.id)}
+            className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-xs font-medium text-[var(--gc-text-soft)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] disabled:opacity-50 sm:text-sm"
+          >
+            {busy ? ts("cloning") : ts("clone")}
+          </button>
+        </div>
+        <details className="md:hidden">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center text-sm font-medium text-[var(--gc-muted)] marker:content-none [&::-webkit-details-marker]:hidden hover:text-[var(--gc-text)]">
+            {ts("moreActions")}
+          </summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <Link
+              href={buildStartPrefillPath(s.prompt, locale)}
+              className={`inline-flex min-h-[44px] items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm font-medium text-[var(--gc-text-soft)] ${ready ? "" : "pointer-events-none opacity-50"}`}
+            >
+              {ts("startViaIntake")}
+            </Link>
+            <Link
+              href={buildCreatePrefillPath(s.prompt, locale)}
+              className={`inline-flex min-h-[44px] items-center justify-center rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] ${ready ? "" : "pointer-events-none opacity-50"}`}
+            >
+              {ts("createWithPrompt")}
+            </Link>
+            <button
+              type="button"
+              disabled={busy || !ready}
+              onClick={() => void onClone(s.id)}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-2 text-sm font-medium text-[var(--gc-text-soft)] disabled:opacity-50"
+            >
+              {busy ? ts("cloning") : ts("clone")}
+            </button>
+          </div>
+        </details>
       </div>
 
       <p className="flex items-center gap-2 px-0.5 text-[11px] text-[var(--gc-text-faint)]">
@@ -333,15 +362,16 @@ export default function SamplesPage() {
                     <h2 className="text-lg font-semibold tracking-tight text-[var(--gc-text)] sm:text-xl">{meta.title}</h2>
                     <p className="mt-0.5 text-sm text-[var(--gc-muted)]">{meta.description}</p>
                   </div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)]">{ts("swipeHint")}</p>
+                  <p className="hidden text-[11px] font-medium uppercase tracking-wider text-[var(--gc-text-faint)] md:block">{ts("swipeHint")}</p>
                 </div>
 
                 <div className="relative">
                   <div
-                    className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 pt-1 [scrollbar-width:thin] sm:gap-5 sm:px-6 lg:gap-6 lg:px-10 xl:px-12"
+                    data-testid="sample-shelf"
+                    className="flex flex-col gap-6 px-4 pb-2 pt-1 md:flex-row md:snap-x md:snap-mandatory md:gap-4 md:overflow-x-auto md:overscroll-x-contain md:px-6 lg:gap-6 lg:px-10 xl:px-12 [scrollbar-width:thin]"
                   >
                     {list.map((s) => (
-                      <div key={s.id} className={`snap-start ${meta.cardClass}`}>
+                      <div key={s.id} className={`md:snap-start ${meta.cardClass}`} data-testid="sample-card">
                         <SampleCard
                           s={s}
                           featured={featured}
@@ -355,7 +385,7 @@ export default function SamplesPage() {
                     ))}
                   </div>
                   <div
-                    className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-[var(--gc-bg)] to-transparent sm:w-24"
+                    className="pointer-events-none absolute inset-y-0 right-0 hidden w-16 bg-gradient-to-l from-[var(--gc-bg)] to-transparent md:block sm:w-24"
                     aria-hidden
                   />
                 </div>

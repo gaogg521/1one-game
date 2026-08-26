@@ -571,7 +571,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private build2048(cols: number, rows: number, w: number, h: number) {
-    this.cell = Math.min(92, (w - 70) / cols, (h - 210) / rows);
+    this.cell = Math.max(36, Math.min((w - 24) / cols, (h - 140) / rows));
     this.ox = (w - this.cell * cols) / 2;
     this.oy = Math.max(150, (h - this.cell * rows) / 2 + 24);
     this.merge2048Grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
@@ -580,8 +580,17 @@ export class PuzzleScene extends Phaser.Scene {
     this.merge2048Grid[1]![0] = 4;
     this.spawn2048Tile();
     this.redraw2048(cols, rows);
+    const touchDevice = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+    const mergeHint =
+      this.uiLocale === "zh-Hans" || this.uiLocale === "zh-Hant"
+        ? touchDevice
+          ? "滑动合成数字"
+          : "方向键 / WASD 滑动合成数字"
+        : touchDevice
+          ? "Swipe to merge tiles"
+          : "Arrow keys / WASD to merge";
     this.add
-      .text(w / 2, h - 48, this.uiLocale === "zh-Hans" ? "方向键 / WASD 滑动合成数字" : "Arrow keys / WASD to merge", {
+      .text(w / 2, h - 48, mergeHint, {
         fontSize: "14px",
         color: "#fff7ed",
       })
@@ -1681,8 +1690,8 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private buildSpotDifference(w: number, h: number) {
-    const pw = Math.min(280, (w - 60) / 2);
-    const ph = 220;
+    const pw = Math.min(w < 520 ? (w - 24) / 2 : 280, (w - 24) / 2);
+    const ph = Math.min(w < 520 ? h - 160 : 220, Math.max(180, h * 0.42));
     const y = 100;
     const lx = w / 2 - pw - 12;
     const rx = w / 2 + 12;
@@ -1756,7 +1765,7 @@ export class PuzzleScene extends Phaser.Scene {
     const pairs = (cols * rows) / 2;
     const ids = Array.from({ length: pairs }, (_, i) => i);
     const deck = seededShuffle([...ids, ...ids], runtimeSeedFromSpec(this.spec));
-    this.cell = Math.min(64, (w - 40) / cols);
+    this.cell = Math.max(36, Math.min((w - 24) / cols, (this.scale.height - 140) / rows));
     this.ox = (w - this.cell * cols) / 2;
     paintPuzzleBoardFrame(this, this.spec, this.ox - 4, this.oy - 4, this.cell * cols + 8, this.cell * rows + 8);
     const timed = this.memoryTimerSec > 0;

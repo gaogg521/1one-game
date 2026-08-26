@@ -193,7 +193,9 @@ export default function NovelDetailPage() {
   if (loading) {
     return (
       <AppPageShell className="bg-[var(--gc-bg)] text-[var(--gc-text)]">
-        <SiteHeader />
+        <div className="hidden sm:block">
+          <SiteHeader />
+        </div>
         <AppMain>
         <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
           <p className="text-[var(--gc-muted)]">{tc("loading")}</p>
@@ -206,7 +208,9 @@ export default function NovelDetailPage() {
   if (error && !novel) {
     return (
       <AppPageShell className="bg-[var(--gc-bg)] text-[var(--gc-text)]">
-        <SiteHeader />
+        <div className="hidden sm:block">
+          <SiteHeader />
+        </div>
         <AppMain>
         <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
           <p className="text-red-400">{error || t("notFoundShort")}</p>
@@ -233,17 +237,20 @@ export default function NovelDetailPage() {
 
   return (
     <AppPageShell className={`${editing ? "bg-[var(--gc-bg)]" : ""}`} style={shellStyle}>
-      <SiteHeader />
+      <div className="hidden sm:block">
+        <SiteHeader />
+      </div>
       <AppMain>
       <div
         className="flex min-h-[100dvh] min-w-0 flex-col"
         style={!editing ? { backgroundColor: readPalette.bg } : undefined}
       >
         {!editing ? (
-          <div className="mx-auto w-full max-w-6xl px-4 pt-4 lg:px-6">
+          <div className="mx-auto w-full max-w-6xl px-3 pt-2 sm:px-4 sm:pt-4 lg:px-6">
             {novel.isOwner && novel.status === "draft_generating" ? (
               <NovelResumeBanner novelId={novel.id} title={novel.title} className="mb-4" />
             ) : null}
+            <div className="hidden sm:block">
             <ResultMomentBanner
               mode="novel"
               title={displayTitle}
@@ -304,6 +311,7 @@ export default function NovelDetailPage() {
               }
             />
             {novel.isOwner ? <CreatorVersionStatus core={novel.creatorCore} work={{ type: "novel", id: novel.id }} className="mt-4" /> : null}
+            </div>
           </div>
         ) : null}
         <header
@@ -314,7 +322,8 @@ export default function NovelDetailPage() {
             : undefined
           }
         >
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3 lg:px-6">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3 lg:px-6">
+            <div className="hidden sm:block">
             <NovelReadCoverThumb
               ref={coverRef}
               novelId={novel.id}
@@ -329,6 +338,7 @@ export default function NovelDetailPage() {
               onCoverFailed={() => setError(t("coverFailed"))}
               onRegenerateSettled={() => setCoverRegenerating(false)}
             />
+            </div>
 
             <div className="min-w-0 flex-1">
               <h1
@@ -346,11 +356,13 @@ export default function NovelDetailPage() {
                 {!editing && isChildrenReader ? ` · ${t("childrenShort")}` : null}
               </p>
               {!editing && blurb && (
-                <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
+                <div className="hidden sm:block">
+                  <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
+                </div>
               )}
             </div>
 
-            <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">
+            <div className="flex w-full shrink-0 flex-nowrap gap-2 overflow-x-auto pb-0.5 sm:w-auto sm:flex-wrap sm:overflow-visible">
               {novel.isOwner && !editing && (
                 <button
                   type="button"
@@ -475,7 +487,7 @@ export default function NovelDetailPage() {
         </header>
 
         {!editing && novel.isOwner && novel.quality?.units?.length ? (
-          <section className="mx-auto max-w-2xl px-4 pb-4 lg:px-6" data-testid="novel-chapter-quality">
+          <section className="mx-auto hidden max-w-2xl px-4 pb-4 sm:block lg:px-6" data-testid="novel-chapter-quality">
             <div className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4">
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)]">{ts("qualityReview")}</p>
               <div className="mt-3 space-y-2">
@@ -511,7 +523,7 @@ export default function NovelDetailPage() {
         ) : null}
 
         {!editing && novel.isOwner && novel.literaryEngagement ? (
-          <CreatorConsumptionPanel summary={novel.literaryEngagement} className="mx-auto mb-4 max-w-2xl" />
+          <CreatorConsumptionPanel summary={novel.literaryEngagement} className="mx-auto mb-4 hidden max-w-2xl sm:block" />
         ) : null}
 
         {!editing && novel.isOwner && novel.chapterAdaptation ? (

@@ -133,7 +133,7 @@ export function ChildrenNovelReader({
 
         <article className="min-w-0 flex-1 pt-4 pb-16 lg:pt-0">
           <div
-            className="mx-auto max-w-[42rem] rounded-none px-5 py-8 sm:px-10 sm:py-10 lg:rounded-2xl lg:shadow-sm"
+            className="mx-auto max-w-[42rem] rounded-none px-4 py-6 sm:px-10 sm:py-10 lg:rounded-2xl lg:shadow-sm"
             style={{ backgroundColor: palette.panel, color: palette.text }}
           >
             {parsed.interpretation ? (

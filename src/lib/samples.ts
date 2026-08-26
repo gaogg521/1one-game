@@ -313,12 +313,12 @@ const SHELF_META: Record<
   featured: {
     title: "Players' Choice",
     description: "Community favorites — tap to play instantly",
-    cardClass: "w-[min(88vw,280px)] shrink-0 snap-start sm:w-[260px]",
+    cardClass: "w-full max-w-md mx-auto md:mx-0 md:w-[260px] md:max-w-none md:shrink-0 md:snap-start",
   },
   trending: {
     title: "Trending",
     description: "Rising hits across merge, strategy, puzzle and arcade",
-    cardClass: "w-[min(78vw,200px)] shrink-0 snap-start sm:w-[200px]",
+    cardClass: "w-full max-w-md mx-auto md:mx-0 md:w-[200px] md:max-w-none md:shrink-0 md:snap-start",
   },
 };
 

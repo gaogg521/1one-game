@@ -197,10 +197,10 @@ export function NovelReader({ content, stripTitles = [], theme: themeProp, onThe
 
         {/* 正文区 */}
         <article
-          className={`min-w-0 flex-1 pt-4 lg:pt-0 ${listen.state !== "idle" ? "pb-36" : "pb-16"}`}
+          className={`min-w-0 flex-1 pt-4 lg:pt-0 ${listen.state !== "idle" ? "pb-[calc(9rem+env(safe-area-inset-bottom))]" : "pb-20"}`}
         >
           <div
-            className="mx-auto max-w-[42rem] rounded-none px-5 py-8 sm:px-10 sm:py-10 lg:rounded-2xl lg:shadow-sm"
+            className="mx-auto max-w-[42rem] rounded-none px-4 py-8 sm:px-8 sm:py-10 lg:rounded-2xl lg:px-10 lg:shadow-sm"
             style={{ backgroundColor: t.panel, color: t.text }}
           >
             {chapters.length === 0 ? (

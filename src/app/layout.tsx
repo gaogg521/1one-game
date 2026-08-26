@@ -4,6 +4,7 @@ import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { SiteFooterGate } from "@/components/SiteFooterGate";
 import { CreatorFunnelTracker } from "@/components/analytics/CreatorFunnelTracker";
 import { MobileBrowseDock } from "@/components/mobile/MobileBrowseDock";
+import { MobileDockInset } from "@/components/mobile/MobileDockInset";
 import { AppCapabilitiesRoot } from "@/providers/AppCapabilitiesRoot";
 import { localeToHtmlLang, type AppLocale } from "@/i18n/routing";
 import { htmlFontVariableClasses } from "@/lib/fonts";
@@ -66,9 +67,7 @@ export default async function RootLayout({
           <AppCapabilitiesRoot>
             <CreatorFunnelTracker />
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col pb-[calc(3.25rem+env(safe-area-inset-bottom))] md:pb-0">
-                {children}
-              </div>
+              <MobileDockInset>{children}</MobileDockInset>
               <MobileBrowseDock />
               <SiteFooterGate />
             </div>

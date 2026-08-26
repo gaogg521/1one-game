@@ -13,10 +13,12 @@ export function resolvePuzzleGridLayout(params: {
   anipop: boolean;
 }): PuzzleGridLayout {
   const { width, height, cols, rows, anipop } = params;
-  const horizontalPadding = anipop ? 48 : 40;
+  const narrow = width < 640;
+  const horizontalPadding = anipop ? (narrow ? 16 : 48) : narrow ? 16 : 40;
   const topReserved = anipop ? 88 : 76;
   const bottomReserved = anipop ? 104 : 62;
-  const maxCell = anipop ? 42 : 48;
+  /** 宽屏保持既有 48/42 视觉密度；窄屏铺满可用宽高，不再人为压小。 */
+  const maxCell = narrow ? Number.POSITIVE_INFINITY : anipop ? 42 : 48;
   const cell = Math.max(
     30,
     Math.min(maxCell, (width - horizontalPadding) / cols, (height - topReserved - bottomReserved) / rows),

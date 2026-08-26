@@ -49,7 +49,12 @@ export function NovelListenBar({ listen, palette }: { listen: ListenApi; palette
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-4 pt-2 sm:px-6"
+      data-testid="novel-listen-bar"
+      className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-3 pt-2 sm:px-6"
+      style={{
+        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+        paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+      }}
       aria-live="polite"
     >
       <div

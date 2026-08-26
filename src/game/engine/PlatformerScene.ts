@@ -47,7 +47,7 @@ import {
 import { phaserUintToCssHex, resolveAssetStyle, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { buildPlatformerAssetSet } from "@/game/engine/platformer-assets";
 import { buildPlayAssetSet } from "@/game/engine/play-assets";
-import { showControlsHint, platformerControlLines } from "@/game/engine/controls-hint";
+import { showControlsHint, platformerControlLines, platformerMobileControlLines } from "@/game/engine/controls-hint";
 import { spawnDamageNumber } from "@/game/engine/damage-number";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
@@ -562,7 +562,9 @@ export class PlatformerScene extends Phaser.Scene {
 
     this.setupMobileControls();
 
-    showControlsHint(this, platformerControlLines(this.uiLocale));
+    showControlsHint(this, platformerControlLines(this.uiLocale), {
+      mobileLines: platformerMobileControlLines(this.uiLocale),
+    });
   }
 
   private setupMobileControls() {

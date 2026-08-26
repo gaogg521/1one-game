@@ -7,7 +7,7 @@ import Phaser from "phaser";
 export function showControlsHint(
   scene: Phaser.Scene,
   lines: string[],
-  opts?: { durationMs?: number; depth?: number },
+  opts?: { durationMs?: number; depth?: number; mobileLines?: string[] },
 ): void {
   const durationMs = opts?.durationMs ?? 3000;
   const depth = opts?.depth ?? 300;
@@ -16,9 +16,7 @@ export function showControlsHint(
   const isMobile =
     typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
 
-  const displayLines = isMobile
-    ? ["← 左半屏移动  → 右半屏移动", "↑ 按右下跳跃键"]
-    : lines;
+  const displayLines = isMobile && opts?.mobileLines?.length ? opts.mobileLines : lines;
 
   const padX = 20;
   const padY = 12;
@@ -67,6 +65,15 @@ export function platformerControlLines(locale?: string): string[] {
   if (locale === "ms") return ["← → / A D Gerak", "↑ / W / Space Lompat", "Kumpul permata"];
   if (locale === "th") return ["← → / A D เคลื่อนที่", "↑ / W / Space กระโดด", "เก็บอัญมณี"];
   return ["← → / A D  Move", "↑ / W / Space  Jump", "Collect gems to win"];
+}
+
+export function platformerMobileControlLines(locale?: string): string[] {
+  if (locale === "zh-Hans" || locale === "zh-Hant" || !locale) {
+    return ["← 左半屏移动  → 右半屏移动", "↑ 按右下跳跃键"];
+  }
+  if (locale === "ms") return ["← Separuh kiri gerak  → kanan gerak", "↑ Butang lompat kanan bawah"];
+  if (locale === "th") return ["← ครึ่งซ้ายเคลื่อน  → ครึ่งขวา", "↑ ปุ่มกระโดดมุมล่างขวา"];
+  return ["← Left half to move  → Right half", "↑ Jump button, lower right"];
 }
 
 /** Shooter 专用控制提示文本 */

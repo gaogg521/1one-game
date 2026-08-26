@@ -1,6 +1,6 @@
 # 项目工作进度快照
 
-最后更新：2026-08-22（消费数据质量证据续接）
+最后更新：2026-08-26（手机端体验适配）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
@@ -858,3 +858,12 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 1. 将五个核心玩法的真实首分钟浏览器回归纳入周期性发布套件，保持串行，避免 SQLite QA 库写锁掩盖问题。
 2. 基于至少 5 位真实试玩者的匿名聚合数据校准场景扫测阈值，不能把当前数值模拟当作留存结论。
+
+## P52：手机端体验适配（2026-08-26）
+
+- 试玩：Phaser 按 parent 实际宽高创建并 ResizeObserver 同步；去掉 640×560 下限导致的 letterbox。样品馆试玩页收紧顶栏、手机去圆角黑边、宿主约 `100dvh-7.5rem`。斗兽棋 cell 按屏宽铺满；2048 窄屏棋盘约 92% 宽；WASD 永久提示改为触屏「滑动合成」。
+- 听书：`/novel/[id]`、`/comic/[id]` 隐藏 MobileBrowseDock；听书栏 `z-50` + safe-area；layout 底栏 padding 按路径取消（`MobileDockInset`）。
+- 样品馆手机改为全宽竖列，主按钮只留试玩；首页 Featured 上移到文学 Pipeline 之前，第一张样品全宽大卡；Hero 步骤卡收到 details；Feed 入口去掉 emoji。
+- 第二轮（全产品线）：所有试玩页（含非样品）手机先画布后 banner；用户游戏手机隐藏顶栏；Godot 引擎切换条仅桌面显示。斗兽棋/2048/俄罗斯方块/农场/麻将消消乐等 Scene 窄屏铺满。小说/漫画详情手机隐藏顶栏与封面 Banner，阅读区上提；八格漫画手机单列全宽。
+- 验证：`npx tsc --noEmit` 与 `qa:mobile-puzzle-layout` 通过。已提交并发布到生产（`deploy-prod-with-assets.py`）。
+- **发布约定（2026-08-26）**：完成本仓库改动后默认 `git commit`（只含本次相关文件）并 `python scripts/deploy-prod-with-assets.py`（先 push `origin/main`）。

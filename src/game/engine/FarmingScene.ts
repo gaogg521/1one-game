@@ -138,7 +138,7 @@ export class FarmingScene extends Phaser.Scene {
 
     const w = this.scale.width;
     const h = this.scale.height;
-    this.cell = Math.min(72, (w - 80) / this.bp.cols);
+    this.cell = Math.max(28, Math.min((w - 24) / this.bp.cols, (h - 160) / this.bp.rows));
     this.ox = (w - this.cell * this.bp.cols) / 2;
     this.oy = this.richGarden ? 108 : 100;
 
@@ -227,12 +227,7 @@ export class FarmingScene extends Phaser.Scene {
       plantedTiles: 0,
       startingCoins: this.bp.startingCoins,
     });
-    if (this.tiles[0]) {
-      setPhaserQaClickHints([
-        { x: this.tiles[0]!.rect.x / w, y: this.tiles[0]!.rect.y / h },
-        { x: this.tiles[0]!.rect.x / w, y: this.tiles[0]!.rect.y / h },
-      ]);
-    }
+    setPhaserQaClickHints(this.tiles.map((tile) => ({ x: tile.rect.x / w, y: tile.rect.y / h })));
     showControlsHint(this, farmingControlLines(this.uiLocale));
   }
 
@@ -251,7 +246,7 @@ export class FarmingScene extends Phaser.Scene {
   private buildCropSelector(w: number, h: number) {
     const barY = h - 88;
     const gap = 8;
-    const bw = Math.min(96, (w - 40) / this.bp.crops.length - gap);
+    const bw = Math.min(w < 520 ? 120 : 96, (w - 24) / this.bp.crops.length - gap);
     let x = (w - (bw + gap) * this.bp.crops.length) / 2 + bw / 2;
     this.bp.crops.forEach((crop, i) => {
       const bg = this.add.rectangle(0, 0, bw, 52, 0x1e293b, 0.88).setStrokeStyle(2, 0x475569);

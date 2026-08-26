@@ -1308,6 +1308,7 @@
     "expand": "（展开）",
     "creating": "创建中…",
     "play": "试玩",
+    "moreActions": "更多",
     "clone": "克隆",
     "createWithPrompt": "用此 prompt 创作",
     "startViaIntake": "智能推荐再创作",

@@ -1309,6 +1309,7 @@
     "expand": "(expand)",
     "creating": "Creating…",
     "play": "เล่น",
+    "moreActions": "เพิ่มเติม",
     "clone": "โคลน",
     "createWithPrompt": "สร้างด้วย prompt นี้",
     "startViaIntake": "แนะนำรูปแบบก่อน",

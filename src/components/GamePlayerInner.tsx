@@ -335,7 +335,7 @@ export default function GamePlayerInner({
       <div
         ref={shellRef}
         style={shellStyle}
-        className={`group relative overflow-hidden ${arcadeMode ? "h-full rounded-none border-0 shadow-none" : "rounded-2xl border border-[color:var(--gc-border)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"} bg-[var(--gc-bg-elevated)]`}
+        className={`group relative overflow-hidden ${arcadeMode ? "h-full rounded-none border-0 shadow-none" : "rounded-none border-0 shadow-none sm:rounded-2xl sm:border sm:border-[color:var(--gc-border)] sm:shadow-[0_24px_80px_-24px_rgba(0,0,0,0.9)]"} bg-[var(--gc-bg-elevated)]`}
       >
         {showCohesiveSnapshot ? (
           <div className="pointer-events-none absolute left-3 top-3 z-[6] flex max-w-[calc(100%-10rem)] flex-wrap items-center gap-2 rounded-full border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_88%,#000)] px-3 py-1.5 text-[10px] text-[var(--gc-muted)] backdrop-blur-md">
@@ -356,7 +356,7 @@ export default function GamePlayerInner({
           tabIndex={0}
           role="application"
           aria-label={t("gameAria")}
-          className={`w-full touch-none select-none bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] ${arcadeMode ? "h-full" : "h-[min(68svh,560px)] min-h-[420px] sm:h-auto sm:min-h-0 sm:aspect-[920/560] sm:max-h-[min(70vh,620px)]"}`}
+          className={`w-full touch-none select-none bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,#000)] outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--gc-accent)_55%,transparent)] ${arcadeMode ? "h-full" : "h-[calc(100dvh-7.5rem)] min-h-[min(70dvh,520px)] sm:h-auto sm:min-h-0 sm:aspect-[920/560] sm:max-h-[min(70vh,620px)]"}`}
         />
         {!playReady && !result ? (
           <div

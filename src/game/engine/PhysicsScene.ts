@@ -153,7 +153,7 @@ export class PhysicsScene extends Phaser.Scene {
       });
     }
 
-    setPhaserQaState({ qaTouches: 0 });
+    setPhaserQaState({ qaTouches: 0, hits: 0, physicsScore: 0, targetX: Math.round(dummyX), targetY: Math.round(dummyY) });
     this.actorState.set("idle", this.time.now);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.hitDummy(p));
     setPhaserQaClickHints([{ x: dummyX / w, y: dummyY / h }]);
@@ -183,7 +183,10 @@ export class PhysicsScene extends Phaser.Scene {
     const dx = this.dummy.x - p.x;
     const dy = this.dummy.y - p.y;
     const dist = Math.hypot(dx, dy);
-    if (dist > 120) return;
+    // Finger taps are less precise on a scaled portrait canvas. Keep desktop
+    // precision while giving mobile a forgiving, still target-bound radius.
+    const hitRadius = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0 ? 320 : 120;
+    if (dist > hitRadius) return;
 
     const force = Phaser.Math.Clamp(280 - dist, 120, 420) * this.hitImpulse;
     this.actorState.set("hit", this.time.now, 180);
@@ -233,7 +236,15 @@ export class PhysicsScene extends Phaser.Scene {
     this.banner.tick();
     this.actorState.set(this.combo > 0 ? "action" : "idle", this.time.now);
     const actor = this.actorState.snapshot();
-    setPhaserQaState({ qaTouches: this.hits, hits: this.hits, actorState: actor.state, actorStateTransitions: actor.transitions });
+    setPhaserQaState({
+      qaTouches: this.hits,
+      hits: this.hits,
+      physicsScore: this.score,
+      targetX: Math.round(this.dummy.x),
+      targetY: Math.round(this.dummy.y),
+      actorState: actor.state,
+      actorStateTransitions: actor.transitions,
+    });
     if (this.finished) return;
     if (this.time.now > this.comboUntil && this.combo > 0) {
       this.combo = 0;

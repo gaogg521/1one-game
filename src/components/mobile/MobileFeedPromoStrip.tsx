@@ -6,9 +6,9 @@ import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 
 const FEEDS = [
-  { href: "/arcade", icon: "🎮", labelKey: "games" as const, descKey: "swipePromoGame" as const },
-  { href: "/novel/feed", icon: "📖", labelKey: "novels" as const, descKey: "swipePromoNovel" as const },
-  { href: "/comic/feed", icon: "🎨", labelKey: "comics" as const, descKey: "swipePromoComic" as const },
+  { href: "/arcade", labelKey: "games" as const, descKey: "swipePromoGame" as const },
+  { href: "/novel/feed", labelKey: "novels" as const, descKey: "swipePromoNovel" as const },
+  { href: "/comic/feed", labelKey: "comics" as const, descKey: "swipePromoComic" as const },
 ] as const;
 
 /** 首页手机端：三种竖滑 Feed 快捷入口 */
@@ -26,10 +26,10 @@ export function MobileFeedPromoStrip() {
           <Link
             key={feed.href}
             href={withLocalePath(feed.href, locale)}
-            className="flex flex-col items-center gap-1 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-2 py-3 text-center transition active:scale-[0.98]"
+            className="flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-[color:color-mix(in_srgb,var(--gc-accent)_8%,var(--gc-surface-glass))] px-2 py-3 text-center transition active:scale-[0.98]"
           >
-            <span className="text-xl">{feed.icon}</span>
-            <span className="text-[11px] font-semibold text-[var(--gc-text)]">{t(feed.labelKey)}</span>
+            <span className="text-sm font-semibold text-[var(--gc-text)]">{t(feed.labelKey)}</span>
+            <span className="sr-only">{t(feed.descKey)}</span>
           </Link>
         ))}
       </div>

@@ -142,12 +142,13 @@ export class Merge2048Scene extends Phaser.Scene {
     this.size = this.bp.gridSize;
     this.targetTile = this.bp.targetTile;
 
-    // 单元格大小自适应：网格能放进中央区域为准
-    const maxBoardW = Math.min(viewW * 0.7, 460);
-    const maxBoardH = viewH - 180;
+    // 单元格大小自适应：窄屏铺满宽度，桌面保留居中留白
+    const narrow = viewW < 520;
+    const maxBoardW = Math.min(viewW * (narrow ? 0.92 : 0.7), narrow ? viewW - 16 : 460);
+    const maxBoardH = viewH - (narrow ? 140 : 180);
     const cellByW = Math.floor((maxBoardW - (this.size + 1) * this.gap) / this.size);
     const cellByH = Math.floor((maxBoardH - (this.size + 1) * this.gap) / this.size);
-    this.cellPx = Math.max(40, Math.min(cellByW, cellByH, 96));
+    this.cellPx = Math.max(40, Math.min(cellByW, cellByH, narrow ? 160 : 96));
 
     const boardW = this.size * this.cellPx + (this.size + 1) * this.gap;
     const boardH = boardW;

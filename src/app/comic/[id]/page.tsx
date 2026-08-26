@@ -589,9 +589,11 @@ export default function ComicDetailPage() {
   if (loading) {
     return (
       <AppPageShell className="text-[var(--gc-text)]">
-        <SiteHeader />
+        <div className="hidden sm:block">
+          <SiteHeader />
+        </div>
         <AppMain>
-        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+        <main className="px-2 py-3 sm:px-6 sm:py-10 lg:px-10">
           <p className="text-[var(--gc-muted)]">{tr("loading")}</p>
         </main>
         </AppMain>
@@ -602,9 +604,11 @@ export default function ComicDetailPage() {
   if (error && !comic) {
     return (
       <AppPageShell className="text-[var(--gc-text)]">
-        <SiteHeader />
+        <div className="hidden sm:block">
+          <SiteHeader />
+        </div>
         <AppMain>
-        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+        <main className="px-2 py-3 sm:px-6 sm:py-10 lg:px-10">
           <p className="text-red-400">{error}</p>
         </main>
         </AppMain>
@@ -638,11 +642,14 @@ export default function ComicDetailPage() {
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">
-      <SiteHeader />
+      <div className="hidden sm:block">
+        <SiteHeader />
+      </div>
       <AppMain>
-      <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+      <main className="px-2 py-3 sm:px-6 sm:py-10 lg:px-10">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-6 flex justify-center">
+          <h1 className="mb-3 px-1 text-lg font-bold tracking-tight sm:hidden">{heading}</h1>
+          <div className="mb-6 hidden justify-center sm:flex">
             <ComicDetailCoverPreview
               comicId={comic.id}
               title={heading}
@@ -657,7 +664,7 @@ export default function ComicDetailPage() {
               <LiteraryAdaptationTrustBadge info={adaptationInfo} />
             </div>
           ) : null}
-          <div className="mb-6">
+          <div className="mb-6 hidden sm:block">
           <ResultMomentBanner
             mode="comic"
             title={heading}
@@ -730,7 +737,7 @@ export default function ComicDetailPage() {
               </p>
             }
           />
-          {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} work={{ type: "comic", id: comic.id }} className="mt-4" /> : null}
+          {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} work={{ type: "comic", id: comic.id }} className="mt-4 hidden sm:block" /> : null}
           </div>
 
           {(missingImages || rendering || (comic.isOwner && panelStats.withImage > 0)) && (
@@ -883,7 +890,7 @@ export default function ComicDetailPage() {
           {error && rendering ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
 
           {comic.isOwner && currentPageQuality ? (
-            <section className="mb-4 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4" data-testid="comic-page-quality">
+            <section className="mb-4 hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 sm:block" data-testid="comic-page-quality">
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--gc-muted)]">{ts("qualityReview")}</p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div>
@@ -907,13 +914,14 @@ export default function ComicDetailPage() {
           ) : null}
 
           {comic.isOwner && comic.literaryEngagement ? (
-            <CreatorConsumptionPanel summary={comic.literaryEngagement} className="mb-4" />
+            <CreatorConsumptionPanel summary={comic.literaryEngagement} className="mb-4 hidden sm:block" />
           ) : null}
 
           {total === 0 ? (
             <p className="text-[var(--gc-muted)]">{tr("noPanels")}</p>
           ) : (
             <>
+              <div className="flex flex-col">
               <ComicStoryboardOutline
                 pages={pages}
                 currentPage={currentPage}
@@ -928,9 +936,10 @@ export default function ComicDetailPage() {
                 onMergePage={comic.isOwner ? handleMergePage : undefined}
                 onUpdatePanel={comic.isOwner ? handleUpdatePanel : undefined}
                 reorderBusy={reorderBusy}
-                className="mb-6"
+                className="order-2 mb-4 sm:order-1 sm:mb-6"
               />
 
+              <div className="order-1 sm:order-2">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -996,9 +1005,11 @@ export default function ComicDetailPage() {
                   ))}
                 </div>
               )}
+              </div>
+              </div>
             </>
           )}
-          <div className="mt-4 px-4">
+          <div className="mt-6 px-1 sm:px-4">
             <WorkCommentSection workType="comic" workId={comic.id} />
           </div>
         </div>

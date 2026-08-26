@@ -255,11 +255,21 @@ export function createPhaserGame(
   const dpr =
     typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
+  const measureParent = (node: HTMLElement) => {
+    const w = Math.round(node.clientWidth);
+    const h = Math.round(node.clientHeight);
+    return {
+      width: Math.min(1280, Math.max(w > 0 ? w : 390, 320)),
+      height: Math.min(1280, Math.max(h > 0 ? h : 560, 280)),
+    };
+  };
+  const initialSize = measureParent(parent);
+
   const config = {
     type: Phaser.AUTO,
     parent,
-    width: Math.min(1280, Math.max(640, parent.clientWidth || 920)),
-    height: 560,
+    width: initialSize.width,
+    height: initialSize.height,
     backgroundColor: specPlay.theme.backgroundColor,
     resolution: dpr,
     physics: {
@@ -286,10 +296,28 @@ export function createPhaserGame(
   gameRef.current = game;
   registerPhaserQaGame(game);
 
+  const syncScaleToParent = () => {
+    if (!gameRef.current) return;
+    try {
+      const next = measureParent(parent);
+      if (next.width === game.scale.width && next.height === game.scale.height) return;
+      game.scale.resize(next.width, next.height);
+      game.scale.refresh();
+    } catch {
+      // game 已销毁
+    }
+  };
+  const resizeObserver =
+    typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncScaleToParent()) : null;
+  resizeObserver?.observe(parent);
+  window.addEventListener("orientationchange", syncScaleToParent);
+
   /** 同步 Scene 兜底；异步 Scene 在 bootstrap 完成后会再次 mark */
   const fallbackReady = window.setTimeout(() => markPhaserPlayReady(), 4200);
   game.events.once(Phaser.Core.Events.DESTROY, () => {
     window.clearTimeout(fallbackReady);
+    resizeObserver?.disconnect();
+    window.removeEventListener("orientationchange", syncScaleToParent);
     clearPhaserQaGame();
   });
 

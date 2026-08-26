@@ -1309,6 +1309,7 @@
     "expand": "(expand)",
     "creating": "Creating…",
     "play": "Play",
+    "moreActions": "More",
     "clone": "Clone",
     "createWithPrompt": "Create with this prompt",
     "startViaIntake": "Recommend format first",

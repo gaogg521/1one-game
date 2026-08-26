@@ -28,6 +28,7 @@ import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { isSampleGalleryProject } from "@/lib/sample-gallery";
 
 type CoreArtifact = { kind: string; content: unknown };
 type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
@@ -423,11 +424,17 @@ export function PlayGameClient({ id }: { id: string }) {
         })
       : meta?.prompt;
 
+  const sampleGallery = Boolean(meta?.isSampleGallery) || isSampleGalleryProject(id);
+
   return (
     <AppPageShell className="text-[var(--gc-text)]">
-      {!meta?.isSampleGallery ? <SiteHeader /> : null}
+      {!sampleGallery ? (
+        <div className="hidden sm:block">
+          <SiteHeader />
+        </div>
+      ) : null}
       <AppMain>
-      <main className={`mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-10 lg:px-8 xl:pr-12 ${meta?.isSampleGallery ? "max-w-4xl" : ""}`}>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-0 py-2 sm:gap-8 sm:px-4 sm:py-10 lg:px-8 xl:pr-12">
         {error ? (
           <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
         ) : !spec || !meta ? (
@@ -439,17 +446,39 @@ export function PlayGameClient({ id }: { id: string }) {
           <>
             {meta.isSampleGallery ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 px-3 sm:flex-wrap sm:justify-between sm:gap-3 sm:px-0">
                   <Link
                     href={withLocalePath("/samples", locale)}
-                    className="text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                    className="shrink-0 text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
                   >
                     ← {t("backToSamples")}
                   </Link>
-                  <h1 className="min-w-0 flex-1 text-center text-lg font-semibold tracking-tight text-[var(--gc-text)] sm:text-xl">
+                  <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold tracking-tight text-[var(--gc-text)] sm:text-xl">
                     {meta.title}
                   </h1>
-                  <div className="flex flex-wrap justify-end gap-2">
+                  <details className="relative sm:hidden">
+                    <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] text-lg font-medium text-[var(--gc-text)] marker:content-none [&::-webkit-details-marker]:hidden">
+                      <span className="sr-only">{t("cloneToMine")}</span>
+                      ⋯
+                    </summary>
+                    <div className="absolute right-0 z-20 mt-2 flex w-56 flex-col gap-2 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-2 shadow-xl">
+                      <button
+                        type="button"
+                        disabled={remixBusy}
+                        onClick={() => void remix()}
+                        className="rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-3 py-2 text-xs font-medium text-[var(--gc-text)] disabled:opacity-50"
+                      >
+                        {remixBusy ? t("remixing") : t("cloneToMine")}
+                      </button>
+                      <Link
+                        href={buildCreatePrefillPath(meta.prompt, locale)}
+                        className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--gc-accent)_12%,transparent)] px-3 py-2 text-center text-xs font-semibold text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)]"
+                      >
+                        {t("createWithSamplePrompt")}
+                      </Link>
+                    </div>
+                  </details>
+                  <div className="hidden flex-wrap justify-end gap-2 sm:flex">
                     <button
                       type="button"
                       disabled={remixBusy}
@@ -470,6 +499,8 @@ export function PlayGameClient({ id }: { id: string }) {
               </>
             ) : (
               <>
+            <div className="flex flex-col">
+            <div className="order-2 px-3 sm:order-1 sm:px-0">
             {parityInfo ? (
               <SampleParityTrustBadge info={parityInfo} />
             ) : null}
@@ -584,12 +615,14 @@ export function PlayGameClient({ id }: { id: string }) {
                 </div>
               }
             />
+            </div>
 
+            <div className="order-1 sm:order-2">
             <GameRuntimeTabs
               spec={spec}
               projectId={id}
               allowOfflineExport={meta.isOwner}
-              phaser={<GamePlayer spec={spec} promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} onIterate={(instr) => {
+              phaser={<GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} onIterate={(instr) => {
                 setPatchPrompt(instr);
                 setTimeout(() => {
                   document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -597,6 +630,8 @@ export function PlayGameClient({ id }: { id: string }) {
                 }, 100);
               }} />}
             />
+            </div>
+            <div className="order-3 px-3 sm:px-0">
             {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
 
             {/* Runtime AI patch panel */}
@@ -742,10 +777,14 @@ export function PlayGameClient({ id }: { id: string }) {
             {patchError ? (
               <p className="text-xs text-red-400">{patchError}</p>
             ) : null}
+            </div>
+            </div>
               </>
             )}
           {spec && meta && (
-            <WorkCommentSection workType="game" workId={id} />
+            <div className="px-3 sm:px-0">
+              <WorkCommentSection workType="game" workId={id} />
+            </div>
           )}
           </>
         )}

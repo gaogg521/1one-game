@@ -108,7 +108,7 @@ export function GameRuntimeTabs({
   return (
     <div className="space-y-3">
       {godotGloballyOn && specSupportsGodot ? (
-        <p className="text-[11px] leading-relaxed text-[var(--gc-muted)]">
+        <p className="hidden text-[11px] leading-relaxed text-[var(--gc-muted)] sm:block">
           {astrocadePhaser
             ? t("hintPhaserAstrocade")
             : t.rich("hint", {
@@ -118,7 +118,7 @@ export function GameRuntimeTabs({
       ) : null}
 
       {godotGloballyOn ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
           <span className="text-xs text-[var(--gc-muted)]">{t("engineLabel")}</span>
           {specSupportsGodot ? (
             <button

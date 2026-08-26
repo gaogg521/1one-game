@@ -30,7 +30,7 @@ export function ComicEightGridPageGrid({
   const removable = Boolean(canRemovePanel && onRemovePanel && page.panels.length > 1);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-4">
       {panels.map((panel, idx) => (
         <ComicPanelCard
           key={idx}

@@ -3,30 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { shouldHideMobileDock } from "@/components/mobile/mobile-chrome";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
-
-const HIDE_PREFIXES = ["/create", "/play/", "/console", "/admin", "/studio"];
-
-function stripLocale(pathname: string) {
-  const segs = pathname.split("/").filter(Boolean);
-  if (segs[0] && ["zh-Hans", "zh-Hant", "en", "ms", "th"].includes(segs[0])) {
-    return `/${segs.slice(1).join("/")}` || "/";
-  }
-  return pathname || "/";
-}
+import { stripLocalePrefix } from "@/i18n/routing";
 
 /** 手机底栏：快速进入三种竖滑 Feed */
 export function MobileBrowseDock() {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("mobileDock");
-  const pathname = stripLocale(usePathname());
+  const pathname = stripLocalePrefix(usePathname()).pathname;
 
-  if (HIDE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))) {
-    return null;
-  }
-  // Feed 页自带顶栏切换，不重复底栏
-  if (pathname === "/arcade" || pathname === "/novel/feed" || pathname === "/comic/feed") {
+  if (shouldHideMobileDock(pathname)) {
     return null;
   }
 

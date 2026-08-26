@@ -204,10 +204,10 @@ export class MahjongSolitaireScene extends Phaser.Scene {
     }
 
     // 3. 计算网格几何
-    const boardW = viewW - 80;
-    const boardH = viewH - 140;
-    const tileW = Math.min(54, Math.floor((boardW - (cols - 1) * 4) / cols));
-    const tileH = Math.min(68, Math.floor((boardH - (rows - 1) * 4) / rows));
+    const boardW = viewW - (viewW < 520 ? 16 : 80);
+    const boardH = viewH - (viewW < 520 ? 100 : 140);
+    const tileW = Math.floor((boardW - (cols - 1) * 4) / cols);
+    const tileH = Math.floor((boardH - (rows - 1) * 4) / rows);
     const gapX = 4;
     const gapY = 4;
     const totalGridW = cols * tileW + (cols - 1) * gapX;

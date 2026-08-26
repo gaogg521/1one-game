@@ -250,16 +250,18 @@ export class TetrisScene extends Phaser.Scene {
     this.speedMs = this.bp.startSpeedMs;
     this.speedStepMs = this.bp.speedStepMs;
 
-    // 单元格大小自适应：以网格能放进中间区域为准
-    const maxBoardW = Math.min(viewW * 0.45, 360);
-    const maxBoardH = viewH - 140;
+    // 窄屏铺满可用宽度，右侧留 HUD；桌面给侧栏留位
+    const narrow = viewW < 520;
+    const hudW = narrow ? 76 : 120;
+    const maxBoardW = narrow ? viewW - hudW - 12 : Math.min(viewW * 0.45, 360);
+    const maxBoardH = viewH - (narrow ? 96 : 140);
     const cellByW = Math.floor(maxBoardW / this.cols);
     const cellByH = Math.floor(maxBoardH / this.rows);
     this.cellPx = Math.max(16, Math.min(cellByW, cellByH));
 
     const boardW = this.cols * this.cellPx;
     const boardH = this.rows * this.cellPx;
-    this.boardX = Math.floor((viewW - boardW) * 0.5) - 60;
+    this.boardX = narrow ? 8 : Math.floor((viewW - boardW) * 0.5) - 60;
     this.boardY = Math.floor((viewH - boardH) * 0.5) + 10;
 
     this.cohesive = buildSceneCohesion(this.spec);

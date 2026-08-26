@@ -69,9 +69,31 @@ export default async function Home() {
               </div>
 
               <MobileFeedPromoStrip />
+
+              <details className="mt-6 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] xl:hidden">
+                <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-[var(--gc-text)] marker:content-none [&::-webkit-details-marker]:hidden">
+                  {t("home.firstExperience")}
+                  <span className="text-[var(--gc-muted)]" aria-hidden>
+                    ▾
+                  </span>
+                </summary>
+                <ol className="space-y-4 border-t border-[color:var(--gc-border)] px-4 py-4">
+                  {wowSteps.map((step) => (
+                    <li key={step.n} className="flex gap-3">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--gc-border)] font-mono text-[11px] text-[var(--gc-muted)]">
+                        {step.n}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--gc-text-soft)]">{step.title}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-[var(--gc-muted)]">{step.body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </details>
             </div>
 
-            <aside className="relative min-w-0 rounded-2xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-5 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:rounded-3xl sm:p-9 xl:p-10">
+            <aside className="relative hidden min-w-0 rounded-2xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-5 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:rounded-3xl sm:p-9 xl:block xl:p-10">
               <h2 className="text-[13px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">{t("home.firstExperience")}</h2>
               <p className="mt-2 text-base font-medium tracking-wide text-[var(--gc-text)]">{t("home.wowMoment")}</p>
               <ol className="mt-5 space-y-5 border-t border-[color:var(--gc-border)] pt-5 sm:mt-8 sm:space-y-7 sm:pt-8">
@@ -95,6 +117,8 @@ export default async function Home() {
           <div className="h-px w-full bg-gradient-to-r from-transparent via-[color:color-mix(in_srgb,var(--gc-muted)_35%,transparent)] to-transparent" />
         </div>
 
+        <HomeFeaturedSections />
+
         <section className="px-6 py-20 sm:px-10 sm:py-24 lg:px-14 lg:py-28 xl:px-20 2xl:px-28">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
             <div>
@@ -113,8 +137,6 @@ export default async function Home() {
           </div>
           <HomeLiteraryPipelineSection />
         </section>
-
-        <HomeFeaturedSections />
 
         <section className="mt-auto border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
           <div className="max-w-4xl">
