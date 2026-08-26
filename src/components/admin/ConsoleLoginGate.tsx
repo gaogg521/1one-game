@@ -9,13 +9,13 @@ export async function ConsoleLoginGate({ consolePath }: { consolePath: string })
   const ssoLoginHref = `/api/admin/console/sso/login?next=${encodeURIComponent(consolePath)}`;
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-[var(--gc-bg)] px-6 text-center text-[var(--gc-text)]">
+    <div className="admin-console-root relative flex min-h-screen flex-col items-center justify-center bg-[var(--gc-bg)] px-6 text-center text-[var(--gc-text)]">
       <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
         <ConsolePreferencesToolbar />
       </div>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--gc-text-faint)]">{t("eyebrow")}</p>
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight">{t("loginGateTitle")}</h1>
-      <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--gc-muted)]">{t("loginGateDesc")}</p>
+      <p className="gc-admin-type-meta">{t("eyebrow")}</p>
+      <h1 className="gc-admin-type-page mt-4">{t("loginGateTitle")}</h1>
+      <p className="gc-admin-type-body mt-3 max-w-md">{t("loginGateDesc")}</p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         {ssoEnabled ? (
           <Link
@@ -35,7 +35,7 @@ export async function ConsoleLoginGate({ consolePath }: { consolePath: string })
           {t("backToProduct")}
         </Link>
       </div>
-      <p className="mt-8 max-w-lg text-xs text-white/35">
+      <p className="gc-admin-type-label mt-8 max-w-lg">
         {ssoEnabled ? t("loginGateSsoHint") : t("loginGateLegacyHint")}
       </p>
     </div>

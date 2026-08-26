@@ -1,32 +1,30 @@
 # 项目工作进度快照
 
-最后更新：2026-08-26（CI 去 Godot · Lint 积压修复）
+最后更新：2026-08-26（账户中心 UI 层级重设计）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **编译 / Lint**：`npm run lint` → **0 errors**（221 warnings，React Compiler 规则已降为 warn）；`qa:orch-smoke` / `qa:astrocade-competitor-matrix` / `qa:template-matrix` 通过。
-- **产品决策**：游戏运行时 **Phaser-only**；Godot 导出 / 双轨从 CI 与门禁退役（`PRODUCT.godot.enabled=false` 保留，代码暂留但不再门禁）。
-- **未推送 / 未提交**：需用户明确要求后再 commit + push，以触发 GitHub CI 验证。
+- **编译 / Lint**：本次改动文件 eslint **0 errors**；全仓 `npx tsc --noEmit` 仍有既有错误 `GamePlayerInner.tsx`（`telemetry.start()` 参数，与本次无关）。
+- **账户中心 UI**：按结构层级统一字号（品牌 20px > 页面标题 22–24px > 分组 15px > 面板 16px > 导航项 13px / 正文 14px > 标签 12px > 元信息 11px）。侧栏加宽、分组加粗加缩进、选中项左侧强调条。页面 H1 改为当前页签名，不再所有运营页共用「运营后台」。
+- **浏览器核对**：本机 `http://127.0.0.1:8888/console` 桌面 1440 与手机 390 截图已核（`qa-output/admin-console-ui-*.png`）。未登录时内容区仍显示「加载中…」（账户概览等 session 拉取，既有行为）。
+- **未推送 / 未提交**：需用户明确要求后再 commit + push。
 
 ### 本会话改动摘要
 
 | 区域 | 改动 |
 |---|---|
-| `.github/workflows/ci.yml` | 删除 `godot-export` job；`bundle-e2e` 改为依赖 `quality`，去掉 Godot 安装与产物 |
-| `.github/workflows/nightly-competitor.yml` | 去掉 Godot 安装与 `GODOT_BIN` |
-| `eslint.config.mjs` + `package.json` lint | 忽略 e2e/godot；React Compiler 相关规则 → warn；lint 范围 `src scripts` |
-| Lint 积压修复 | prefer-const / require→import / `module` 变量 / `any` / `useGodotDocker` 重命名 / PuzzleScene optional chain |
-| `scripts/qa-competitor-gates.ts` | 跳过 Godot E2E；`e2eGodotOk` 固定 skipped→true |
-| `sample-play-profiles` + `astrocade-canonical-spec` | 补 `dou-dizhu` profile；精确匹配样品 prompt 时不再被错误 mock template 覆盖 |
-| `astrocade-competitor-matrix` | Godot 支柱标为 retired |
+| `src/app/globals.css` | `.admin-console-root` 字号标度与 `gc-admin-type-*` 工具类 |
+| `AdminConsoleShell.tsx` | 侧栏 256px、分组/项目层级、运营区分隔线、选中态左边条 |
+| `AdminConsolePage.tsx` | 页眉跟当前分组+页签；移动端按分组导航；KPI/表格字号 |
+| 面板组件 | Charts / UserConsole / Runtime / Email / Cache / OpsHealth / Samples / 登录门 对齐同一标度 |
 
 ### 下次启动清单
 
-1. 若用户要求：commit + push `main`，确认 GitHub Actions CI 全绿。
-2. （可选）后续物理删除 `godot-templates/`、`tools/godot` 安装脚本与死代码（本会话仅从 CI/门禁退役）。
-3. 逐步消化 React Compiler warnings（`set-state-in-effect` / `refs`）。
+1. 打开 `/console` 看侧栏「账户中心 > 分组 > 页签」与内容区 H1 是否符合预期。
+2. 若用户要求：commit + push `main`。
+3. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数；Godot 死代码清理；React Compiler warnings。
 
 ## 1. 产品与技术现状
 

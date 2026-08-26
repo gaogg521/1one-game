@@ -29,8 +29,8 @@ type RewardData = {
 function StatBadge({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-[color:var(--gc-border)] bg-[color:var(--gc-surface)] px-4 py-3 text-center">
-      <p className="text-xs text-[var(--gc-text-faint)]">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--gc-text)]">{value.toLocaleString()}</p>
+      <p className="gc-admin-type-label">{label}</p>
+      <p className="gc-admin-type-kpi mt-1">{value.toLocaleString()}</p>
     </div>
   );
 }

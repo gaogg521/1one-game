@@ -53,8 +53,8 @@ export function ChartPanel({
     >
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium text-[var(--gc-text)]">{title}</h3>
-          {subtitle ? <p className="mt-1 text-xs text-[var(--gc-text-faint)]">{subtitle}</p> : null}
+          <h3 className="gc-admin-type-sub">{title}</h3>
+          {subtitle ? <p className="gc-admin-type-label mt-1">{subtitle}</p> : null}
         </div>
       </div>
       {children}
@@ -199,8 +199,8 @@ export function AdminDonutChart({
           ))}
         </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <p className="text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">{centerLabel}</p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--gc-text)]">{centerValue}</p>
+          <p className="gc-admin-type-label">{centerLabel}</p>
+          <p className="gc-admin-type-kpi mt-0.5">{centerValue}</p>
         </div>
       </div>
       <ul className="min-w-0 flex-1 space-y-2 text-sm">
@@ -359,9 +359,9 @@ export function AdminKpiStrip({
                 : "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]"
           }`}
         >
-          <p className="text-[10px] uppercase tracking-wide text-[var(--gc-muted)]">{item.label}</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--gc-text)]">{item.value}</p>
-          {item.hint ? <p className="mt-0.5 text-[10px] text-[var(--gc-text-faint)]">{item.hint}</p> : null}
+          <p className="gc-admin-type-label">{item.label}</p>
+          <p className="gc-admin-type-kpi mt-1">{item.value}</p>
+          {item.hint ? <p className="gc-admin-type-path mt-0.5">{item.hint}</p> : null}
         </div>
       ))}
     </div>

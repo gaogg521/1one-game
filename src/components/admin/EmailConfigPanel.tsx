@@ -141,9 +141,9 @@ export function EmailConfigPanel({ headers, onNotice }: Props) {
   return (
     <div className="space-y-5 pb-28" data-testid="admin-email-config">
       <header className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5 sm:p-6">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--gc-accent)]">{t("eyebrow")}</p>
-        <h2 className="mt-1 text-xl font-semibold text-[var(--gc-text)]">{t("title")}</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)]">{t("desc")}</p>
+        <p className="gc-admin-type-meta">{t("eyebrow")}</p>
+        <h2 className="gc-admin-type-panel mt-1">{t("title")}</h2>
+        <p className="gc-admin-type-body mt-2 max-w-2xl">{t("desc")}</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-3 py-1 text-xs font-medium ${

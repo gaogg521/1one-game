@@ -65,27 +65,27 @@ function CacheStatsDisplay({ stats }: { stats: CacheStats | null }) {
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] p-3">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("statsTotalEntries")}</p>
-          <p className="mt-1 text-lg font-semibold text-[var(--gc-text)]">{stats.totalEntries}</p>
+          <p className="gc-admin-type-label">{t("statsTotalEntries")}</p>
+          <p className="gc-admin-type-kpi gc-admin-type-kpi-sm mt-1">{stats.totalEntries}</p>
         </div>
         <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] p-3">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("statsValidEntries")}</p>
-          <p className="mt-1 text-lg font-semibold text-emerald-400">{stats.validEntries}</p>
+          <p className="gc-admin-type-label">{t("statsValidEntries")}</p>
+          <p className="mt-1 text-[1.125rem] font-semibold tabular-nums tracking-tight text-emerald-400">{stats.validEntries}</p>
         </div>
         <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] p-3">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("statsExpiredEntries")}</p>
-          <p className="mt-1 text-lg font-semibold text-amber-400">{stats.expiredEntries}</p>
+          <p className="gc-admin-type-label">{t("statsExpiredEntries")}</p>
+          <p className="mt-1 text-[1.125rem] font-semibold tabular-nums tracking-tight text-amber-400">{stats.expiredEntries}</p>
         </div>
         <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] p-3">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("statsTotalSize")}</p>
-          <p className="mt-1 text-lg font-semibold text-[var(--gc-text)]">{formatBytes(stats.totalSizeBytes)}</p>
+          <p className="gc-admin-type-label">{t("statsTotalSize")}</p>
+          <p className="gc-admin-type-kpi gc-admin-type-kpi-sm mt-1">{formatBytes(stats.totalSizeBytes)}</p>
         </div>
       </div>
 
       <div className="rounded-lg border border-[color:var(--gc-border)] bg-[var(--gc-surface)] p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--gc-muted)]">{t("statsHealthScore")}</span>
-          <span className={`text-lg font-semibold ${healthColor}`}>{healthScore}%</span>
+          <span className={`text-[1.125rem] font-semibold tabular-nums ${healthColor}`}>{healthScore}%</span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           <div
@@ -209,8 +209,8 @@ export function CacheManagementPanel({ headers, onNotice }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-[var(--gc-text)]">{t("title")}</h3>
-        <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("desc")}</p>
+        <h3 className="gc-admin-type-panel">{t("title")}</h3>
+        <p className="gc-admin-type-body mt-1">{t("desc")}</p>
       </div>
 
       {/* 标签页 */}

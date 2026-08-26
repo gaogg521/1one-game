@@ -141,8 +141,8 @@ export function SampleGalleryPanel({
     <section className="space-y-5" data-testid="admin-samples-panel">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("samplesTitle")}</h2>
-          <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("samplesSubtitle")}</p>
+          <h2 className="gc-admin-type-panel">{t("samplesTitle")}</h2>
+          <p className="gc-admin-type-body mt-1">{t("samplesSubtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link

@@ -60,8 +60,8 @@ export function OpsHealthPanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-[var(--gc-text)]">{t("healthTitle")}</p>
-          <p className="mt-1 text-xs text-[var(--gc-muted)]">{t("healthSubtitle")}</p>
+          <p className="gc-admin-type-sub">{t("healthTitle")}</p>
+          <p className="gc-admin-type-label mt-1">{t("healthSubtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${STATUS_STYLE[report.overall]}`}>

@@ -263,18 +263,35 @@ export default function AdminConsolePage({
     return sections;
   }, [adminRole, canViewAdminSection, stats?.canManageRuntimeConfig]);
 
-  const flatNavItems = useMemo(
-    () =>
-      navSections.flatMap((section) =>
-        section.items.map((item) => ({
-          id: item.id,
-          label: section.superAdminOnly
-            ? t(item.labelKey as "tabOverview")
-            : tu(item.labelKey as "tabAccount"),
-        })),
-      ),
-    [navSections, t, tu],
+  const navItemLabel = useCallback(
+    (section: (typeof navSections)[number], labelKey: string) =>
+      section.superAdminOnly ? t(labelKey as "tabOverview") : tu(labelKey as "tabAccount"),
+    [t, tu],
   );
+
+  const navSectionLabel = useCallback(
+    (section: (typeof navSections)[number]) =>
+      section.superAdminOnly
+        ? t(section.labelKey as "navSectionAdminOperations")
+        : tu(section.labelKey as "navSectionGeneral"),
+    [t, tu],
+  );
+
+  const activeNav = useMemo(() => {
+    for (const section of navSections) {
+      const item = section.items.find((candidate) => candidate.id === tab);
+      if (item) {
+        return {
+          sectionLabel: navSectionLabel(section),
+          tabLabel: navItemLabel(section, item.labelKey),
+        };
+      }
+    }
+    return {
+      sectionLabel: tu("consoleTitle"),
+      tabLabel: isAdminConsoleTab(tab) ? t("pageTitle") : tu("pageTitle"),
+    };
+  }, [navSections, tab, navSectionLabel, navItemLabel, t, tu]);
 
   const headers = useCallback((): HeadersInit => {
     const h = mergeLocaleHeaders(locale) as Record<string, string>;
@@ -529,29 +546,25 @@ export default function AdminConsolePage({
       }
     >
         <main className="flex min-h-0 w-full flex-col text-[var(--gc-text)]">
-          <header className="sticky top-0 z-20 border-b border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,transparent)] px-4 py-5 backdrop-blur-md sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-20 border-b border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg)_88%,transparent)] px-4 py-4 backdrop-blur-md sm:px-6 lg:px-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--gc-text-faint)]">
-                  {isAdminConsoleTab(tab) ? "Operations" : tu("consoleTitle")}
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-3xl">
-                  {isAdminConsoleTab(tab) ? t("pageTitle") : tu("pageTitle")}
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-[15px]">
+                <p className="gc-admin-type-label">{activeNav.sectionLabel}</p>
+                <h1 className="gc-admin-type-page mt-1">{activeNav.tabLabel}</h1>
+                <p className="gc-admin-type-body mt-1.5 max-w-2xl">
                   {isAdminConsoleTab(tab) ? t("pageDesc") : tu("pageDesc")}
                 </p>
               </div>
               <Link
                 href="/studio"
-                className="shrink-0 rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm font-medium text-[var(--gc-muted)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
+                className="gc-admin-type-nav shrink-0 rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-[var(--gc-muted)] transition hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:text-[var(--gc-text)]"
               >
                 {t("backStudio")}
               </Link>
             </div>
 
             {stats && !error && isAdminConsoleTab(tab) ? (
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
                 <MiniStat label={t("statUsers")} value={stats.users} />
                 <MiniStat
                   label={t("statWorks")}
@@ -569,22 +582,29 @@ export default function AdminConsolePage({
               </div>
             ) : null}
 
-            <nav className="gc-mobile-nav-scroll mt-5 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label={t("navAria")}>
-              {flatNavItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => selectTab(item.id)}
-                  data-testid={`admin-tab-${item.id}`}
-                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-                    tab === item.id
-                      ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] text-[var(--gc-text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
-                      : "border border-[color:var(--gc-border)] text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
-                  }`}
-                >
-                  {item.label}
-                  {item.id === "pending" && stats?.moderation.pendingReview ? ` · ${stats.moderation.pendingReview}` : ""}
-                </button>
+            <nav className="mt-4 space-y-3 lg:hidden" aria-label={t("navAria")}>
+              {navSections.map((section) => (
+                <div key={section.id}>
+                  <p className="gc-admin-type-group mb-1.5">{navSectionLabel(section)}</p>
+                  <div className="gc-mobile-nav-scroll flex gap-1.5 overflow-x-auto pb-1">
+                    {section.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectTab(item.id)}
+                        data-testid={`admin-tab-${item.id}`}
+                        className={`gc-admin-type-nav shrink-0 rounded-lg px-3 py-1.5 transition ${
+                          tab === item.id
+                            ? "bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] font-medium text-[var(--gc-text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gc-accent)_35%,transparent)]"
+                            : "border border-[color:var(--gc-border)] text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                        }`}
+                      >
+                        {navItemLabel(section, item.labelKey)}
+                        {item.id === "pending" && stats?.moderation.pendingReview ? ` · ${stats.moderation.pendingReview}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </nav>
           </header>
@@ -995,7 +1015,7 @@ export default function AdminConsolePage({
             {!loading && !error && isAdminConsoleTab(tab) && tab === "pending" ? (
               <section className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("pendingTitle")}</h2>
+                  <h2 className="gc-admin-type-panel">{t("pendingTitle")}</h2>
                   {pending.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -1040,7 +1060,7 @@ export default function AdminConsolePage({
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "works" ? (
               <section className="space-y-4">
-                <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("recentWorksTitle")}</h2>
+                <h2 className="gc-admin-type-panel">{t("recentWorksTitle")}</h2>
                 {visibleWorks.length === 0 ? (
                   <EmptyCard title={t("emptyWorksTitle")} body={t("emptyWorksBody")} />
                 ) : (
@@ -1170,7 +1190,7 @@ export default function AdminConsolePage({
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "users" ? (
               <section className="space-y-4">
-                <h2 className="text-lg font-medium text-[var(--gc-text)]">{t("usersTitle")}</h2>
+                <h2 className="gc-admin-type-panel">{t("usersTitle")}</h2>
                 {visibleUsers.length === 0 ? (
                   <EmptyCard title={t("emptyUsersTitle")} body={t("emptyUsersBody")} />
                 ) : (
@@ -1421,8 +1441,8 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
           : "border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)]"
       }`}
     >
-      <p className="text-[10px] uppercase tracking-wide text-[var(--gc-muted)]">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--gc-text)]">{value}</p>
+      <p className="gc-admin-type-label">{label}</p>
+      <p className="gc-admin-type-kpi gc-admin-type-kpi-sm mt-0.5">{value}</p>
     </div>
   );
 }
@@ -1430,8 +1450,8 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
 function EmptyCard({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-surface-glass)_60%,transparent)] px-6 py-12 text-center">
-      <p className="text-base font-medium text-[var(--gc-text)]">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--gc-muted)]">{body}</p>
+      <p className="gc-admin-type-panel">{title}</p>
+      <p className="gc-admin-type-body mx-auto mt-2 max-w-md">{body}</p>
     </div>
   );
 }
@@ -1589,17 +1609,17 @@ function WorksTable({
         })}
       </div>
       <div className="hidden overflow-x-auto rounded-2xl border border-[color:var(--gc-border)] lg:block">
-        <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="bg-[var(--gc-surface-glass)] text-[var(--gc-muted)]">
+        <table className="w-full min-w-[960px] text-left text-[length:var(--gc-admin-fs-body)]">
+          <thead className="bg-[var(--gc-surface-glass)]">
             <tr>
               {selectable ? <th className="px-4 py-3" /> : null}
-              <th className="px-4 py-3 font-medium">{t("colCover")}</th>
-              <th className="px-4 py-3 font-medium">{t("colType")}</th>
-              <th className="px-4 py-3 font-medium">{t("colTitle")}</th>
-              <th className="px-4 py-3 font-medium">{t("colEngagement")}</th>
-              <th className="px-4 py-3 font-medium">{t("colRelation")}</th>
-              <th className="px-4 py-3 font-medium">{t("colVisibility")}</th>
-              <th className="px-4 py-3 font-medium">{t("colActions")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colCover")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colType")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colTitle")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colEngagement")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colRelation")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colVisibility")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colActions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -2065,9 +2085,9 @@ function AdminOpsActionQueue({
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
     <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5">
-      <p className="text-sm text-[var(--gc-muted)]">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums text-[var(--gc-text)]">{value}</p>
-      {sub ? <p className="mt-2 text-sm text-[var(--gc-text-faint)]">{sub}</p> : null}
+      <p className="gc-admin-type-label">{label}</p>
+      <p className="gc-admin-type-kpi mt-2">{value}</p>
+      {sub ? <p className="gc-admin-type-body mt-2">{sub}</p> : null}
     </div>
   );
 }

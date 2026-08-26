@@ -36,21 +36,21 @@ export function UserAccountOverview() {
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
-        <h2 className="text-lg font-semibold text-[var(--gc-text)]">{t("welcome", { name: user.displayName ?? user.username ?? t("guest") })}</h2>
-        <p className="mt-2 text-sm text-[var(--gc-muted)]">{t("accountDesc")}</p>
+        <h2 className="gc-admin-type-panel">{t("welcome", { name: user.displayName ?? user.username ?? t("guest") })}</h2>
+        <p className="gc-admin-type-body mt-2">{t("accountDesc")}</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {user.quota ? (
             <div className="rounded-xl border border-[color:var(--gc-border)] px-4 py-3">
-              <p className="text-xs text-[var(--gc-text-faint)]">{t("quotaBalance")}</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">{user.quota.balance}</p>
-              <p className="mt-1 text-xs text-[var(--gc-muted)]">
+              <p className="gc-admin-type-label">{t("quotaBalance")}</p>
+              <p className="gc-admin-type-kpi mt-1">{user.quota.balance}</p>
+              <p className="gc-admin-type-label mt-1">
                 {localizedPlanName(locale, user.quota.plan.id, user.quota.plan.name)}
               </p>
             </div>
           ) : null}
           <div className="rounded-xl border border-[color:var(--gc-border)] px-4 py-3">
-            <p className="text-xs text-[var(--gc-text-faint)]">{t("referralCode")}</p>
-            <p className="mt-1 font-mono text-sm">{user.referralCode}</p>
+            <p className="gc-admin-type-label">{t("referralCode")}</p>
+            <p className="mt-1 font-mono text-[length:var(--gc-admin-fs-body)]">{user.referralCode}</p>
           </div>
         </div>
       </div>
@@ -125,12 +125,12 @@ export function UserProfilePanel() {
   return (
     <section className="max-w-lg space-y-6">
       <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
-        <h2 className="text-lg font-semibold">{t("tabProfile")}</h2>
+        <h2 className="gc-admin-type-panel">{t("tabProfile")}</h2>
         <dl className="mt-4 space-y-3">
           {rows.map((row) => (
             <div key={row.label} className="flex flex-col gap-0.5 border-b border-[color:var(--gc-border)] pb-3 last:border-0">
-              <dt className="text-xs text-[var(--gc-text-faint)]">{row.label}</dt>
-              <dd className="text-sm text-[var(--gc-text)]">{row.value}</dd>
+              <dt className="gc-admin-type-label">{row.label}</dt>
+              <dd className="text-[length:var(--gc-admin-fs-body)] leading-[var(--gc-admin-lh-body)] text-[var(--gc-text)]">{row.value}</dd>
             </div>
           ))}
         </dl>
@@ -138,10 +138,10 @@ export function UserProfilePanel() {
 
       {user.username ? (
         <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
-          <h2 className="text-base font-semibold">{t("changePasswordTitle")}</h2>
+          <h2 className="gc-admin-type-panel">{t("changePasswordTitle")}</h2>
           <form className="mt-4 space-y-3" onSubmit={(e) => void handleChangePassword(e)}>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[var(--gc-text-faint)]">{t("changePasswordCurrent")}</label>
+              <label className="gc-admin-type-label">{t("changePasswordCurrent")}</label>
               <input
                 ref={currentPwdRef}
                 type="password"
@@ -152,7 +152,7 @@ export function UserProfilePanel() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[var(--gc-text-faint)]">{t("changePasswordNew")}</label>
+              <label className="gc-admin-type-label">{t("changePasswordNew")}</label>
               <input
                 ref={newPwdRef}
                 type="password"
@@ -196,16 +196,16 @@ export function UserWalletPanel() {
   return (
     <section className="space-y-4">
       <div className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-6">
-        <h2 className="text-lg font-semibold">{t("tabWallet")}</h2>
+        <h2 className="gc-admin-type-panel">{t("tabWallet")}</h2>
         {quota ? (
-          <p className="mt-3 text-sm text-[var(--gc-muted)]">
+          <p className="gc-admin-type-body mt-3">
             {t("walletSummary", {
               balance: quota.balance,
               plan: localizedPlanName(locale, quota.plan.id, quota.plan.name),
             })}
           </p>
         ) : (
-          <p className="mt-3 text-sm text-[var(--gc-muted)]">{t("walletGuest")}</p>
+          <p className="gc-admin-type-body mt-3">{t("walletGuest")}</p>
         )}
       </div>
       <Link href={withLocalePath("/billing", locale)} className="text-sm text-[var(--gc-accent)] hover:underline">

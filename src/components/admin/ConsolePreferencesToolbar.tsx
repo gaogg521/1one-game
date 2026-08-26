@@ -18,11 +18,11 @@ export function ConsolePreferencesToolbar({ className = "" }: { className?: stri
       data-testid="admin-console-preferences"
     >
       <div className="flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("language")}</span>
+        <span className="gc-admin-type-meta">{t("language")}</span>
         <LocaleSwitcher compact menuPlacement="bottom" />
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-[var(--gc-text-faint)]">{t("theme")}</span>
+        <span className="gc-admin-type-meta">{t("theme")}</span>
         <ThemeSwitcher touchFriendly />
       </div>
     </div>

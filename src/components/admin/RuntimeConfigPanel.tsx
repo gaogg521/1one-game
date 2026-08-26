@@ -259,7 +259,7 @@ function LiveRuntimeSummary({
       <div className="border-b border-emerald-500/15 px-4 py-4 sm:px-5">
         <div className="flex flex-wrap items-center gap-2">
           <StatusDot ok />
-          <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("liveSummaryTitle")}</h3>
+          <h3 className="gc-admin-type-sub">{t("liveSummaryTitle")}</h3>
           <EditStateBadge state="live" />
         </div>
         <p className="mt-2 text-sm leading-relaxed text-[var(--gc-muted)]">{t("liveSummaryHint")}</p>
@@ -334,7 +334,7 @@ function EnvLegacySecretsPanel({ view }: { view: RuntimeConfigView }) {
       className="rounded-xl border border-amber-500/20 bg-[color:color-mix(in_srgb,#f59e0b_6%,transparent)] px-4 py-4 sm:px-5"
       data-testid="admin-runtime-env-legacy"
     >
-      <h3 className="text-sm font-semibold text-[var(--gc-text)]">{t("legacyEnvTitle")}</h3>
+      <h3 className="gc-admin-type-sub">{t("legacyEnvTitle")}</h3>
       <p className="mt-1 text-xs leading-relaxed text-[var(--gc-muted)]">{t("legacyEnvHint")}</p>
       <ul className="mt-3 space-y-2">
         {rows.map((row) => (
@@ -366,7 +366,7 @@ function BgmServicePanel({ view }: { view: RuntimeConfigView }) {
       className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4 sm:px-5"
       data-testid="admin-bgm-service-panel"
     >
-      <h3 className="text-base font-semibold text-[var(--gc-text)]">BGM 生成服务</h3>
+      <h3 className="gc-admin-type-sub">BGM 生成服务</h3>
       <p className="mt-1 text-xs leading-relaxed text-[var(--gc-muted)]">
         游戏创建任务会先调用 <code>game_bgm</code> 路由中的音频输出模型，校验并保存可播放音频；模型未产出 BGM、返回口播或不可用时，同一任务立即降级为 LLM 音符序列与 Web Audio。
       </p>
@@ -907,7 +907,7 @@ function ProviderPricingEditor({
   return (
     <section className="overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" data-testid="admin-runtime-pricing-editor">
       <div className="border-b border-white/8 px-4 py-4 sm:px-5">
-        <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("pricingTitle")}</h3>
+        <h3 className="gc-admin-type-sub">{t("pricingTitle")}</h3>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">{t("pricingHint")}</p>
       </div>
       <div className="space-y-3 p-4 sm:p-5">
@@ -1249,8 +1249,8 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
     <div className="space-y-5 pb-28" data-testid="admin-runtime-config">
       <div className="flex flex-wrap items-start justify-between gap-4" data-testid="admin-runtime-hero">
         <div>
-          <h2 className="text-xl font-semibold text-[var(--gc-text)]">{t("title")}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--gc-muted)]">{t("desc")}</p>
+          <h2 className="gc-admin-type-panel">{t("title")}</h2>
+          <p className="gc-admin-type-body mt-1 max-w-2xl">{t("desc")}</p>
           {view.updatedAt ? (
             <p className="mt-2 text-xs text-[var(--gc-text-faint)]">
               {t("lastUpdated", { at: new Date(view.updatedAt).toLocaleString() })}
@@ -1298,7 +1298,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           {draftProviders.length > 0 ? (
             <section className="space-y-3" data-testid="admin-runtime-draft-providers">
               <div>
-                <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("sectionDraftProviders")}</h3>
+                <h3 className="gc-admin-type-sub">{t("sectionDraftProviders")}</h3>
                 <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("sectionDraftProvidersHint")}</p>
               </div>
               <div className="space-y-3">
@@ -1324,7 +1324,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
           <section className="space-y-3 rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 sm:p-5" data-testid="admin-runtime-add-provider-zone">
             <div>
-              <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("addProviderTemplate")}</h3>
+              <h3 className="gc-admin-type-sub">{t("addProviderTemplate")}</h3>
               <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("sectionDraftProvidersHint")}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1348,7 +1348,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
 
           <section className="space-y-3" data-testid="admin-runtime-saved-providers">
             <div>
-              <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("sectionSavedProviders")}</h3>
+              <h3 className="gc-admin-type-sub">{t("sectionSavedProviders")}</h3>
               <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("sectionSavedProvidersHint")}</p>
             </div>
             {savedProviderForms.length === 0 ? (
@@ -1382,7 +1382,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
         <div className="overflow-hidden rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)]" data-testid="admin-runtime-routing-editor">
           <div className="border-b border-white/8 px-4 py-4 sm:px-5">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-semibold text-[var(--gc-text)]">{t("sectionRoutingEdit")}</h3>
+              <h3 className="gc-admin-type-sub">{t("sectionRoutingEdit")}</h3>
               {dirty ? <EditStateBadge state="routePending" /> : <EditStateBadge state="live" />}
             </div>
             <p className="mt-1 text-sm text-[var(--gc-muted)]">{t("routingEditHint")}</p>
