@@ -51,11 +51,21 @@ for (const flagship of FLAGSHIPS) {
       return body.project?.quality?.engagement?.firstMinuteRate ?? -1;
     }, { timeout: 12_000, intervals: [500, 1000, 2000] }).toBeGreaterThanOrEqual(100);
 
+    await expect.poll(async () => {
+      const detail = await page.request.get(`/api/projects/${project.id}`);
+      if (!detail.ok()) return false;
+      const body = (await detail.json()) as { core?: { revision?: { artifacts?: Array<{ kind?: string }> } } };
+      return body.core?.revision?.artifacts?.some((artifact) => artifact.kind === "game_playtest_first_minute") ?? false;
+    }, { timeout: 12_000, intervals: [500, 1000, 2000] }).toBeTruthy();
+
     const detail = await page.request.get(`/api/projects/${project.id}`);
     const body = (await detail.json()) as {
       project?: { quality?: { engagement?: { starts?: number; firstActionRate?: number } } };
+      core?: { revision?: { artifacts?: Array<{ kind?: string; content?: unknown }> } };
     };
     expect(body.project?.quality?.engagement?.starts).toBeGreaterThanOrEqual(1);
     expect(body.project?.quality?.engagement?.firstActionRate).toBeGreaterThanOrEqual(100);
+    const playtestArtifact = body.core?.revision?.artifacts?.find((artifact) => artifact.kind === "game_playtest_first_minute");
+    expect(playtestArtifact?.content).toMatchObject({ event: "first_minute", templateId: project.templateId });
   });
 }

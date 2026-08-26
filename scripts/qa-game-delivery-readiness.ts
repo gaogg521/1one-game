@@ -21,6 +21,8 @@ async function main() {
     const readiness = evaluateGameDeliveryReadiness(spec);
     assert.notEqual(readiness.verdict, "blocked", `${prompt}: default kernel must pass delivery preflight`);
     assert.ok(readiness.metrics.estimatedSuccessRate >= 0.42, `${prompt}: numeric envelope must avoid immediate failure`);
+    assert.equal(readiness.balance.kind, "deterministic_scenario_sweep", `${prompt}: balance check must be auditable scenario sweep`);
+    assert.notEqual(readiness.balance.verdict, "blocked", `${prompt}: default kernel must pass balance scenario sweep`);
   }
   const broken = evaluateGameDeliveryReadiness({
     ...firstSpec!,

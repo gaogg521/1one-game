@@ -50,6 +50,15 @@ export async function mirrorGameToCreatorCore(input: {
   await createCreativeArtifact({
     ...revisionInput,
     artifact: {
+      kind: "game_balance_simulation",
+      mediaType: "report",
+      content: deliveryReadiness.balance,
+      metadata: { templateId: spec.templateId, verdict: deliveryReadiness.balance.verdict, passRate: deliveryReadiness.balance.passRate },
+    },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: {
       kind: "game_delivery_contract",
       mediaType: "json",
       content: spec.production?.delivery ?? null,

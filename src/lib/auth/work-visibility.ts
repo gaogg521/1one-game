@@ -1,8 +1,12 @@
 export type WorkVisibility = "public" | "hidden" | "pending_review";
 
-/** 新作品默认进入作者检查；可通过 DEFAULT_WORK_VISIBILITY 环境变量覆盖。 */
+/**
+ * New creations always require an explicit author publication decision.
+ * Deployment configuration may make a draft less visible, but must never
+ * silently make newly generated work public.
+ */
 export function defaultWorkVisibility(): WorkVisibility {
   const v = process.env.DEFAULT_WORK_VISIBILITY?.trim();
-  if (v === "pending_review" || v === "hidden" || v === "public") return v;
+  if (v === "hidden") return v;
   return "pending_review";
 }

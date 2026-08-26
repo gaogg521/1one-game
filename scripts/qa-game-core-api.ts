@@ -68,7 +68,11 @@ async function main() {
 
     const publicDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`);
     const publicDetail = (await publicDetailResponse.json()) as { core?: unknown };
-    assert(publicDetailResponse.status === 404 && publicDetail.core === undefined, "unpublished game must be hidden from non-owners");
+    const persistedVisibility = (await prisma.project.findUnique({ where: { id: projectId }, select: { visibility: true } }))?.visibility;
+    assert(
+      publicDetailResponse.status === 404 && publicDetail.core === undefined,
+      `unpublished game must be hidden from non-owners (status=${publicDetailResponse.status}, persisted=${persistedVisibility ?? "missing"})`,
+    );
     console.log("[OK] qa-game-core-api");
   } finally {
     if (projectId) await prisma.project.delete({ where: { id: projectId } }).catch(() => undefined);

@@ -16,6 +16,10 @@ async function main() {
   assert(defaultWorkVisibility() === "pending_review", "new creations must default to creator review");
   if (previousDefault === undefined) delete process.env.DEFAULT_WORK_VISIBILITY;
   else process.env.DEFAULT_WORK_VISIBILITY = previousDefault;
+  process.env.DEFAULT_WORK_VISIBILITY = "public";
+  assert(defaultWorkVisibility() === "pending_review", "deployment configuration must not auto-publish new creations");
+  if (previousDefault === undefined) delete process.env.DEFAULT_WORK_VISIBILITY;
+  else process.env.DEFAULT_WORK_VISIBILITY = previousDefault;
   assert(!canReadWorkPublicly({ visibility: "pending_review", status: "ready" }), "review work must not be publicly readable");
   assert(canReadWorkPublicly({ visibility: "public", status: "ready" }), "explicitly published ready work must be readable");
   const ownerKey = `qa-publication-${Date.now()}`;

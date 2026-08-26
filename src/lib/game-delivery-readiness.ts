@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { simulateGameBalance, type GameBalanceSimulation } from "@/lib/game-balance-simulation";
 
 export type GameDeliveryReadiness = {
   version: 1;
@@ -12,6 +13,7 @@ export type GameDeliveryReadiness = {
     climaxBySecond: number;
     estimatedSuccessRate: number;
   };
+  balance: GameBalanceSimulation;
 };
 
 /**
@@ -24,6 +26,7 @@ export function evaluateGameDeliveryReadiness(spec: GameSpec): GameDeliveryReadi
   const production = spec.production;
   const delivery = production?.delivery;
   const gameplay = spec.gameplay;
+  const balance = simulateGameBalance(spec);
   const evidence: string[] = [];
   let score = 0;
 
@@ -62,11 +65,18 @@ export function evaluateGameDeliveryReadiness(spec: GameSpec): GameDeliveryReadi
   ));
   if (estimatedSuccessRate >= 0.42 && estimatedSuccessRate <= 0.86) score += 10;
   else evidence.push("estimated_first_session_balance_needs_review");
+  evidence.push(...balance.evidence);
+  if (balance.verdict === "blocked") evidence.push("balance_scenario_sweep_blocked");
 
   evidence.push(`target_session_seconds:${targetSessionSeconds}`);
   evidence.push(`first_reward_by_second:${firstRewardBySecond}`);
   evidence.push(`estimated_success_rate:${Math.round(estimatedSuccessRate * 100)}%`);
   score = Math.min(100, score);
-  const verdict = score < 55 ? "blocked" : score < 85 ? "needs_review" : "ready";
-  return { version: 1, verdict, score, evidence, metrics: { targetSessionSeconds, firstRewardBySecond, variationBySecond, climaxBySecond, estimatedSuccessRate } };
+  const preflightVerdict = score < 55 ? "blocked" : score < 85 ? "needs_review" : "ready";
+  const verdict = balance.verdict === "blocked" || preflightVerdict === "blocked"
+    ? "blocked"
+    : balance.verdict === "needs_review" || preflightVerdict === "needs_review"
+      ? "needs_review"
+      : "ready";
+  return { version: 1, verdict, score, evidence, metrics: { targetSessionSeconds, firstRewardBySecond, variationBySecond, climaxBySecond, estimatedSuccessRate }, balance };
 }

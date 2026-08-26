@@ -2,7 +2,7 @@
 
 const HEADER = "x-super-admin-key";
 
-/** 开发期临时开关：非 production 且 DEV_SUPER_ADMIN=1 时免密钥删任意作品。上线前务必关掉。 */
+/** 开发期临时开关：非 production 且 DEV_SUPER_ADMIN=1 时允许本地作者会话免密钥管理。上线前务必关掉。 */
 export function isDevSuperAdminEnabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.DEV_SUPER_ADMIN === "1";
 }
@@ -24,7 +24,11 @@ export function getSuperAdminKeyFromRequest(req: Request): string | null {
 
 /** 当前请求是否携带有效超级管理员凭证 */
 export function isSuperAdmin(req: Request, ownerKey?: string | null): boolean {
-  if (isDevSuperAdminEnabled()) return true;
+  // Never turn an anonymous public-read request into an administrator merely
+  // because a local development convenience flag is on. This keeps local
+  // privacy tests aligned with production while preserving the author-session
+  // admin shortcut used by the console.
+  if (isDevSuperAdminEnabled() && ownerKey) return true;
   const secret = process.env.SUPER_ADMIN_SECRET?.trim();
   const headerKey = getSuperAdminKeyFromRequest(req);
   if (secret && headerKey && headerKey === secret) return true;

@@ -845,3 +845,15 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - Creator Core 每个游戏 revision 新增不可变 `game_delivery_contract` 和 `game_delivery_preflight` artifact，便于发布和后续运营回溯到具体版本的目标/预检结果。
 - 已通过：`npx tsc --noEmit`、`qa:game-delivery-readiness`（4 种生成玩法 + 人为破坏失败闭环）、`qa:game-generation-kernel`、`qa:game-production-contract`、`qa:creator-workflow`、`qa:creator-core`、定向 ESLint。真实本地 HTTP 创建/worker 路径已执行并完成 BGM 与资产任务。
 - 已知验证边界：旧 `qa:game-core-api` 的“未发布应 404”断言在当前开发环境得到 200，需单独校验默认可见性/权限基线；不能作为本次通过。下一步：补按五种内核的浏览器首分钟行为验证并把其结果写成可消费的 playtest artifact，再升级发布门禁。
+
+## P51：游戏交付证据、数值扫测与匿名权限基线（2026-08-26）
+
+- 浏览器真实 `first_minute` 匿名事件现在会异步写入对应最新、ready 的 Core revision：不可变 `game_playtest_first_minute` artifact 与 `playtest` evaluation。产物只含事件类型、模板、时长和静态切片分；不保存 session id、提示词、输入、账号、设备或指纹。同一 revision 只保留一次该证据，事件写入失败不影响玩家继续游戏。
+- 游戏数值预检升级为透明的 `deterministic_scenario_sweep`：按新手、普通、预期、熟练、高手五档操作效率扫描速度、刷怪、生命与目标压力。它只是可审阅的数值守卫，明确不等同真实玩家留存；真实浏览器试玩与上线遥测仍是唯一观察证据。每个 Core revision 新增 `game_balance_simulation` artifact；无法通过预期玩家场景时会随交付预检阻止发布。
+- 新作品一律进入 `pending_review`（或更严格的 hidden），环境变量不能再将生成作品自动设为 public；本地 `DEV_SUPER_ADMIN=1` 也不再把匿名请求升级为管理员，避免开发期绕过掩盖“未发布作品必须 404”的回归。
+- 验证：`qa:game-delivery-readiness`、`qa:creator-core`、`qa:creator-quality`、`qa:creator-publication`、`qa:game-core-api`、`qa:game-playtest-evidence`、`npx tsc --noEmit` 与定向 ESLint 均通过。Playwright 真实 H5 `avoider` 首分钟回归通过（实际 1.9 分钟，含 60 秒运行与回写轮询），确认 telemetry、Core playtest artifact 与质量读取能够闭环。
+
+### 下一步
+
+1. 将同一真实首分钟浏览器回归扩展到 puzzle、physics、platformer 与 farming，作为周期性发布套件；单用例已验证整条证据写入链路。
+2. 基于至少 5 位真实试玩者的匿名聚合数据校准场景扫测阈值，不能把当前数值模拟当作留存结论。
