@@ -34,8 +34,6 @@ export async function seedSampleGalleryProjects(): Promise<{ upserted: number; i
         likeCount: 0,
       },
       update: {
-        visibility: "public",
-        featured: s.shelf === "featured",
         title: s.title,
         prompt: s.prompt,
         specJson: JSON.stringify(spec),

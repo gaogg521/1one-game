@@ -29,6 +29,7 @@ import { ReferralRewardsPanel } from "@/components/admin/ReferralRewardsPanel";
 import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
+import { isSampleGalleryProject } from "@/lib/sample-gallery";
 import type { UserRole } from "@/lib/auth/types";
 import {
   buildConsoleNavSections,
@@ -47,11 +48,15 @@ const AUDIT_ACTION_FILTERS = [
   "orders_export",
   "work_moderate",
   "work_moderate_batch",
+  "work_delete",
+  "work_delete_batch",
   "user_role",
   "runtime_config_update",
   "email_config_update",
   "sample_gallery_sync",
   "sample_gallery_copy_project",
+  "sample_gallery_unlist",
+  "sample_gallery_remove",
 ] as const;
 
 type Stats = {
@@ -489,6 +494,26 @@ export default function AdminConsolePage({
     await moderate(batch, "public");
   }
 
+  async function deleteWorks(items: Array<{ type: string; id: string }>) {
+    if (!items.length) {
+      setNotice({ kind: "error", text: t("selectWorksFirst") });
+      return;
+    }
+    const res = await fetch("/api/admin/works", {
+      method: "DELETE",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ batch: items }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { deleted?: number; missing?: number };
+    if (!res.ok) {
+      setNotice({ kind: "error", text: t("actionFailed") });
+      return;
+    }
+    setSelected(new Set());
+    setNotice({ kind: "ok", text: t("deleteDone", { count: data.deleted ?? items.length }) });
+    void load();
+  }
+
   async function copyGameToSamples(id: string) {
     const res = await fetch("/api/admin/samples/copy-project", {
       method: "POST",
@@ -502,6 +527,34 @@ export default function AdminConsolePage({
     }
     setNotice({ kind: "ok", text: t("copyToSamplesDone", { id: data.sample.id }) });
     await loadOverview();
+  }
+
+  async function removeGameFromSamples(id: string, title: string) {
+    const message = t("confirmUnlistCatalogSample", { title });
+    if (!window.confirm(message)) return;
+    const res = await fetch("/api/admin/samples", {
+      method: "DELETE",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: id }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      unlisted?: number;
+      deleted?: number;
+      error?: string;
+    };
+    if (!res.ok) {
+      setNotice({ kind: "error", text: data.error || t("actionFailed") });
+      return;
+    }
+    setNotice({
+      kind: "ok",
+      text: t("samplesRemoveDone", {
+        count: (data.unlisted ?? 0) + (data.deleted ?? 0),
+        unlisted: data.unlisted ?? 0,
+        deleted: data.deleted ?? 0,
+      }),
+    });
+    void load();
   }
 
   function toggleSelect(key: string) {
@@ -1027,6 +1080,23 @@ export default function AdminConsolePage({
                       </button>
                       <button
                         type="button"
+                        className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-400"
+                        onClick={() => {
+                          const batch = pending
+                            .filter((w) => selected.has(`${w.type}:${w.id}`))
+                            .map((w) => ({ type: w.type, id: w.id }));
+                          if (!batch.length) {
+                            setNotice({ kind: "error", text: t("selectPendingFirst") });
+                            return;
+                          }
+                          if (!window.confirm(t("confirmDeleteBatch", { count: batch.length }))) return;
+                          void deleteWorks(batch);
+                        }}
+                      >
+                        {selected.size > 0 ? t("batchDeleteCount", { count: selected.size }) : t("batchDelete")}
+                      </button>
+                      <button
+                        type="button"
                         className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-muted)]"
                         onClick={() => setSelected(new Set(pending.map((w) => `${w.type}:${w.id}`)))}
                       >
@@ -1047,6 +1117,17 @@ export default function AdminConsolePage({
                       onModerate={(type, id, vis) => void moderate([{ type, id }], vis)}
                       onFeatured={(type, id, featured) => void moderate([{ type, id }], undefined, featured)}
                       onCopyGameToSamples={(id) => void copyGameToSamples(id)}
+                      onRemoveFromSamples={(id, title) => void removeGameFromSamples(id, title)}
+                      onDelete={(type, id, title) => {
+                        const message =
+                          type === "novel"
+                            ? t("confirmDeleteNovel", { title })
+                            : type === "comic"
+                              ? t("confirmDeleteComic", { title })
+                              : t("confirmDeleteGame", { title });
+                        if (!window.confirm(message)) return;
+                        void deleteWorks([{ type, id }]);
+                      }}
                     />
                     <AdminPagination page={clampedPage} pageCount={pageCount} onPageChange={setPage} />
                   </>
@@ -1060,16 +1141,60 @@ export default function AdminConsolePage({
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "works" ? (
               <section className="space-y-4">
-                <h2 className="gc-admin-type-panel">{t("recentWorksTitle")}</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="gc-admin-type-panel">{t("recentWorksTitle")}</h2>
+                  {visibleWorks.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-400"
+                        onClick={() => {
+                          const batch = visibleWorks
+                            .filter((w) => selected.has(`${w.type}:${w.id}`))
+                            .map((w) => ({ type: w.type, id: w.id }));
+                          if (!batch.length) {
+                            setNotice({ kind: "error", text: t("selectWorksFirst") });
+                            return;
+                          }
+                          if (!window.confirm(t("confirmDeleteBatch", { count: batch.length }))) return;
+                          void deleteWorks(batch);
+                        }}
+                      >
+                        {selected.size > 0 ? t("batchDeleteCount", { count: selected.size }) : t("batchDelete")}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-muted)]"
+                        onClick={() => setSelected(new Set(visibleWorks.map((w) => `${w.type}:${w.id}`)))}
+                      >
+                        {t("selectAll")}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {visibleWorks.length === 0 ? (
                   <EmptyCard title={t("emptyWorksTitle")} body={t("emptyWorksBody")} />
                 ) : (
                   <>
                     <WorksTable
                       works={pagedWorks}
+                      selectable
+                      selected={selected}
+                      onToggle={toggleSelect}
                       onModerate={(type, id, vis) => void moderate([{ type, id }], vis)}
                       onFeatured={(type, id, featured) => void moderate([{ type, id }], undefined, featured)}
                       onCopyGameToSamples={(id) => void copyGameToSamples(id)}
+                      onRemoveFromSamples={(id, title) => void removeGameFromSamples(id, title)}
+                      onDelete={(type, id, title) => {
+                        const message =
+                          type === "novel"
+                            ? t("confirmDeleteNovel", { title })
+                            : type === "comic"
+                              ? t("confirmDeleteComic", { title })
+                              : t("confirmDeleteGame", { title });
+                        if (!window.confirm(message)) return;
+                        void deleteWorks([{ type, id }]);
+                      }}
                     />
                     <AdminPagination page={clampedPage} pageCount={pageCount} onPageChange={setPage} />
                   </>
@@ -1564,6 +1689,8 @@ function WorksTable({
   onModerate,
   onFeatured,
   onCopyGameToSamples,
+  onRemoveFromSamples,
+  onDelete,
 }: {
   works: WorkRow[];
   selectable?: boolean;
@@ -1572,6 +1699,8 @@ function WorksTable({
   onModerate: (type: string, id: string, visibility: string) => void;
   onFeatured: (type: string, id: string, featured: boolean) => void;
   onCopyGameToSamples?: (id: string) => void;
+  onRemoveFromSamples?: (id: string, title: string) => void;
+  onDelete?: (type: string, id: string, title: string) => void;
 }) {
   const t = useTranslations("adminPage");
   return (
@@ -1600,7 +1729,7 @@ function WorksTable({
                   </p>
                   <WorkEngagementMeta work={w} />
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} />
+                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} onRemoveFromSamples={onRemoveFromSamples} onDelete={onDelete} />
                   </div>
                 </div>
               </div>
@@ -1648,7 +1777,7 @@ function WorksTable({
                     {w.featured ? t("featuredBadge") : ""}
                   </td>
                   <td className="px-4 py-3">
-                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} />
+                    <WorkActions work={w} onModerate={onModerate} onFeatured={onFeatured} onCopyGameToSamples={onCopyGameToSamples} onRemoveFromSamples={onRemoveFromSamples} onDelete={onDelete} />
                   </td>
                 </tr>
               );
@@ -1727,14 +1856,25 @@ function WorkActions({
   onModerate,
   onFeatured,
   onCopyGameToSamples,
+  onRemoveFromSamples,
+  onDelete,
 }: {
   work: WorkRow;
   onModerate: (type: string, id: string, visibility: string) => void;
   onFeatured: (type: string, id: string, featured: boolean) => void;
   onCopyGameToSamples?: (id: string) => void;
+  onRemoveFromSamples?: (id: string, title: string) => void;
+  onDelete?: (type: string, id: string, title: string) => void;
 }) {
   const t = useTranslations("adminPage");
   const locale = useLocale() as AppLocale;
+  const readHref =
+    work.type === "novel"
+      ? withLocalePath(`/novel/${work.id}`, locale)
+      : work.type === "comic"
+        ? withLocalePath(`/comic/${work.id}`, locale)
+        : null;
+  const isSampleGame = work.type === "game" && isSampleGalleryProject(work.id);
   return (
     <div className="flex flex-wrap gap-2">
       {work.visibility !== "public" ? (
@@ -1753,12 +1893,24 @@ function WorkActions({
           {t("actionHide")}
         </button>
       )}
-      <button type="button" className="text-sm text-[var(--gc-accent)]" onClick={() => onFeatured(work.type, work.id, !work.featured)}>
+      <button
+        type="button"
+        className={`text-sm ${work.featured ? "text-rose-400" : "text-[var(--gc-accent)]"}`}
+        onClick={() => {
+          if (work.featured && !window.confirm(t("confirmUnfeature"))) return;
+          onFeatured(work.type, work.id, !work.featured);
+        }}
+      >
         {work.featured ? t("actionUnfeature") : t("actionFeature")}
       </button>
-      {work.type === "game" && onCopyGameToSamples ? (
+      {work.type === "game" && !isSampleGame && onCopyGameToSamples ? (
         <button type="button" className="text-sm text-sky-400" onClick={() => onCopyGameToSamples(work.id)}>
           {t("actionCopyToSamples")}
+        </button>
+      ) : null}
+      {isSampleGame && onRemoveFromSamples ? (
+        <button type="button" className="text-sm text-rose-400" onClick={() => onRemoveFromSamples(work.id, work.title)}>
+          {t("actionRemoveFromSamples")}
         </button>
       ) : null}
       {work.type === "game" ? (
@@ -1770,6 +1922,21 @@ function WorkActions({
         >
           {t("actionPlay")}
         </Link>
+      ) : null}
+      {readHref ? (
+        <Link href={readHref} className="text-sm text-sky-400 hover:underline" target="_blank" rel="noreferrer">
+          {t("actionOpen")}
+        </Link>
+      ) : null}
+      {onDelete ? (
+        <button
+          type="button"
+          data-testid={`admin-work-delete-${work.type}-${work.id}`}
+          className="text-sm text-rose-400"
+          onClick={() => onDelete(work.type, work.id, work.title)}
+        >
+          {t("actionDelete")}
+        </button>
       ) : null}
     </div>
   );

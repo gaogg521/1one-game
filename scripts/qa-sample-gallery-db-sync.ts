@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSampleGalleryProjects } from "@/lib/sample-gallery-seed";
 import { SAMPLES } from "@/lib/samples";
-import { sampleProjectId } from "@/lib/sample-gallery";
+import { SAMPLE_GALLERY_OWNER, sampleProjectId } from "@/lib/sample-gallery";
+import { buildAdminSampleGalleryReport } from "@/lib/admin-sample-gallery";
+import { removeFromSampleGallery } from "@/lib/admin/sample-gallery-ops";
 import type { GameSpec } from "@/lib/game-spec";
 
 function assert(condition: unknown, message: string): void {
@@ -12,6 +14,11 @@ async function main() {
   await ensureSampleGalleryProjects();
 
   const ids = SAMPLES.map((s) => sampleProjectId(s.id));
+  await prisma.project.updateMany({
+    where: { id: { in: ids } },
+    data: { visibility: "public" },
+  });
+
   const rows = await prisma.project.findMany({
     where: { id: { in: ids } },
     select: { id: true, title: true, prompt: true, specJson: true, visibility: true },
@@ -41,6 +48,53 @@ async function main() {
   assert(jungle, "jungle-animal-chess should be in DB");
   const jungleSpec = JSON.parse(jungle!.specJson) as GameSpec;
   assert(jungleSpec.chess?.ruleset === "jungle", "Jungle DB spec should use jungle ruleset");
+
+  const probeSample = SAMPLES[0];
+  const probeId = sampleProjectId(probeSample.id);
+  await prisma.project.update({
+    where: { id: probeId },
+    data: { featured: false, visibility: "hidden" },
+  });
+  await ensureSampleGalleryProjects();
+  const probe = await prisma.project.findUnique({
+    where: { id: probeId },
+    select: { featured: true, visibility: true, title: true },
+  });
+  assert(probe, "probe sample should still exist after ensure");
+  assert(probe!.featured === false, "ensure must not restore featured after admin unfeature");
+  assert(probe!.visibility === "hidden", "ensure must not restore visibility after admin unlist");
+  assert(probe!.title === probeSample.title, "ensure should still refresh catalog title");
+  await prisma.project.update({
+    where: { id: probeId },
+    data: {
+      featured: probeSample.shelf === "featured",
+      visibility: "public",
+    },
+  });
+
+  const orphanId = `sample-qa-orphan-${Date.now()}`;
+  await prisma.project.create({
+    data: {
+      id: orphanId,
+      ownerKey: SAMPLE_GALLERY_OWNER,
+      visibility: "public",
+      featured: true,
+      title: "QA copied sample",
+      prompt: "qa orphan",
+      specJson: "{}",
+      status: "ready",
+    },
+  });
+  const report = await buildAdminSampleGalleryReport();
+  assert(report.orphanInDb.includes(orphanId), "copied sample should appear as orphan in admin report");
+  assert(
+    report.items.some((item) => item.projectId === orphanId && !item.inCatalog),
+    "copied sample should appear as a removable row",
+  );
+  const removed = await removeFromSampleGallery([orphanId]);
+  assert(removed.deleted.includes(orphanId), "copied sample should be deleted from gallery");
+  const leftoverOrphan = await prisma.project.findUnique({ where: { id: orphanId } });
+  assert(!leftoverOrphan, "copied sample row should be gone");
 
   console.log(`qa-sample-gallery-db-sync: ok (${rows.length}/${SAMPLES.length})`);
   try {

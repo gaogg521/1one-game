@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminCapability, writeAdminAudit } from "@/lib/auth/admin";
 import { attachWorkShareCounts } from "@/lib/admin/work-engagement";
+import { deleteAdminWork, isAdminWorkType } from "@/lib/admin/delete-work";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
 
@@ -165,8 +166,6 @@ export async function GET(req: Request) {
 
 type ModerateItem = { type: string; id: string };
 
-const VALID_WORK_TYPES = new Set(["game", "novel", "comic"]);
-
 async function moderateOne(
   item: ModerateItem,
   data: { visibility?: string; featured?: boolean },
@@ -204,7 +203,7 @@ export async function PATCH(req: Request) {
   if (!items.length) return localizedJsonError(req, "adminMissingTypeId", 400);
 
   for (const item of items) {
-    if (!VALID_WORK_TYPES.has(item.type)) {
+    if (!isAdminWorkType(item.type)) {
       return localizedJsonError(req, "adminUnknownWorkType", 400, { params: { type: item.type } });
     }
     await moderateOne(item, data);
@@ -220,4 +219,49 @@ export async function PATCH(req: Request) {
   }
 
   return NextResponse.json({ ok: true, count: items.length });
+}
+
+export async function DELETE(req: Request) {
+  const gate = await requireAdminCapability(req, "content");
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
+  let body: { type?: string; id?: string; batch?: ModerateItem[] };
+  try {
+    body = (await req.json()) as { type?: string; id?: string; batch?: ModerateItem[] };
+  } catch {
+    return localizedJsonError(req, "badJson", 400);
+  }
+
+  const items: ModerateItem[] = Array.isArray(body.batch)
+    ? body.batch.filter((b) => b?.type && b?.id)
+    : body.type && body.id
+      ? [{ type: body.type, id: body.id }]
+      : [];
+  if (!items.length) return localizedJsonError(req, "adminMissingTypeId", 400);
+
+  let deleted = 0;
+  const missing: ModerateItem[] = [];
+  for (const item of items) {
+    if (!isAdminWorkType(item.type)) {
+      return localizedJsonError(req, "adminUnknownWorkType", 400, { params: { type: item.type } });
+    }
+    const ok = await deleteAdminWork(item.type, item.id);
+    if (!ok) {
+      missing.push(item);
+      continue;
+    }
+    deleted += 1;
+    await writeAdminAudit({
+      req,
+      action: items.length > 1 ? "work_delete_batch" : "work_delete",
+      targetType: item.type,
+      targetId: item.id,
+      detail: { titleDeleted: true },
+      actorUserId: gate.user?.id,
+      actorOwnerKey: gate.ownerKey,
+    });
+  }
+
+  if (deleted === 0) return localizedJsonError(req, "notFound", 404);
+  return NextResponse.json({ ok: true, deleted, missing: missing.length });
 }

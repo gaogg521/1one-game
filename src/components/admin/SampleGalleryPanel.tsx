@@ -8,7 +8,7 @@ import { withLocalePath } from "@/i18n/navigation";
 import { AdminKpiStrip } from "@/components/admin/AdminCharts";
 import type { AdminSampleGalleryReport, AdminSampleRow } from "@/lib/admin-sample-gallery";
 
-type Filter = "all" | "missing" | "noCover";
+type Filter = "all" | "missing" | "noCover" | "hidden" | "copied";
 
 export function SampleGalleryPanel({
   headers,
@@ -51,8 +51,10 @@ export function SampleGalleryPanel({
     if (!report) return [];
     const q = query.trim().toLowerCase();
     return report.items.filter((item) => {
-      if (filter === "missing" && item.synced) return false;
+      if (filter === "missing" && item.inDb) return false;
       if (filter === "noCover" && item.hasCover) return false;
+      if (filter === "hidden" && item.visibility !== "hidden") return false;
+      if (filter === "copied" && item.inCatalog) return false;
       if (!q) return true;
       return `${item.title} ${item.sampleId} ${item.projectId}`.toLowerCase().includes(q);
     });
@@ -77,6 +79,53 @@ export function SampleGalleryPanel({
     }
   }
 
+  async function patchSamples(ids: string[], body: { featured?: boolean; visibility?: "public" | "hidden" }) {
+    if (!ids.length) {
+      onNotice({ kind: "error", text: t("samplesSelectFirst") });
+      return false;
+    }
+    const res = await fetch("/api/admin/samples", {
+      method: "PATCH",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ projectIds: ids, ...body }),
+    });
+    if (!res.ok) {
+      onNotice({ kind: "error", text: t("actionFailed") });
+      return false;
+    }
+    return true;
+  }
+
+  async function removeSamples(ids: string[]) {
+    if (!ids.length) {
+      onNotice({ kind: "error", text: t("samplesSelectFirst") });
+      return false;
+    }
+    const res = await fetch("/api/admin/samples", {
+      method: "DELETE",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ projectIds: ids }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      unlisted?: number;
+      deleted?: number;
+      error?: string;
+    };
+    if (!res.ok) {
+      onNotice({ kind: "error", text: data.error || t("actionFailed") });
+      return false;
+    }
+    onNotice({
+      kind: "ok",
+      text: t("samplesRemoveDone", {
+        count: (data.unlisted ?? 0) + (data.deleted ?? 0),
+        unlisted: data.unlisted ?? 0,
+        deleted: data.deleted ?? 0,
+      }),
+    });
+    return true;
+  }
+
   async function batchFeatured(featured: boolean) {
     const ids = [...selected];
     if (!ids.length) {
@@ -85,16 +134,46 @@ export function SampleGalleryPanel({
     }
     setBatchBusy(true);
     try {
-      const res = await fetch("/api/admin/samples", {
-        method: "PATCH",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ projectIds: ids, featured }),
-      });
-      if (!res.ok) {
-        onNotice({ kind: "error", text: t("actionFailed") });
-        return;
-      }
+      const ok = await patchSamples(ids, { featured });
+      if (!ok) return;
       onNotice({ kind: "ok", text: t("samplesBatchDone", { count: ids.length }) });
+      setSelected(new Set());
+      await load();
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function batchUnlist() {
+    const ids = [...selected];
+    if (!ids.length) {
+      onNotice({ kind: "error", text: t("samplesSelectFirst") });
+      return;
+    }
+    if (!window.confirm(t("confirmBatchUnlistSamples", { count: ids.length }))) return;
+    setBatchBusy(true);
+    try {
+      const ok = await patchSamples(ids, { visibility: "hidden", featured: false });
+      if (!ok) return;
+      onNotice({ kind: "ok", text: t("samplesBatchDone", { count: ids.length }) });
+      setSelected(new Set());
+      await load();
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function batchRemove() {
+    const ids = [...selected];
+    if (!ids.length) {
+      onNotice({ kind: "error", text: t("samplesSelectFirst") });
+      return;
+    }
+    if (!window.confirm(t("confirmBatchRemoveSamples", { count: ids.length }))) return;
+    setBatchBusy(true);
+    try {
+      const ok = await removeSamples(ids);
+      if (!ok) return;
       setSelected(new Set());
       await load();
     } finally {
@@ -112,16 +191,33 @@ export function SampleGalleryPanel({
   }
 
   async function toggleFeatured(item: AdminSampleRow) {
-    const res = await fetch("/api/admin/samples", {
-      method: "PATCH",
-      headers: { ...headers(), "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: item.projectId, featured: !item.featured }),
-    });
-    if (!res.ok) {
-      onNotice({ kind: "error", text: t("actionFailed") });
-      return;
+    if (item.featured && !window.confirm(t("confirmUnfeature"))) return;
+    const ok = await patchSamples([item.projectId], { featured: !item.featured });
+    if (!ok) return;
+    onNotice({ kind: "ok", text: t("actionDone") });
+    await load();
+  }
+
+  async function toggleListed(item: AdminSampleRow) {
+    if (item.listed) {
+      if (!window.confirm(t("confirmUnlistSample", { title: item.title }))) return;
+      const ok = await patchSamples([item.projectId], { visibility: "hidden", featured: false });
+      if (!ok) return;
+    } else {
+      const ok = await patchSamples([item.projectId], { visibility: "public" });
+      if (!ok) return;
     }
     onNotice({ kind: "ok", text: t("actionDone") });
+    await load();
+  }
+
+  async function removeOne(item: AdminSampleRow) {
+    const message = item.inCatalog
+      ? t("confirmUnlistCatalogSample", { title: item.title })
+      : t("confirmRemoveCopiedSample", { title: item.title });
+    if (!window.confirm(message)) return;
+    const ok = await removeSamples([item.projectId]);
+    if (!ok) return;
     await load();
   }
 
@@ -136,6 +232,8 @@ export function SampleGalleryPanel({
       </div>
     );
   }
+
+  const hiddenCount = report.items.filter((i) => i.visibility === "hidden").length;
 
   return (
     <section className="space-y-5" data-testid="admin-samples-panel">
@@ -179,9 +277,9 @@ export function SampleGalleryPanel({
             tone: report.missingInDb.length > 0 ? "warn" : "default",
           },
           {
-            label: t("samplesKpiNoCover"),
-            value: report.items.filter((i) => !i.hasCover).length,
-            tone: report.items.some((i) => !i.hasCover) ? "warn" : "default",
+            label: t("samplesKpiHidden"),
+            value: hiddenCount,
+            tone: hiddenCount > 0 ? "warn" : "default",
           },
         ]}
       />
@@ -206,7 +304,7 @@ export function SampleGalleryPanel({
           className="min-w-[14rem] flex-1 rounded-xl border border-[color:var(--gc-border)] bg-black/20 px-3 py-2 text-sm text-[var(--gc-text)]"
         />
         <div className="flex flex-wrap gap-2">
-          {(["all", "missing", "noCover"] as const).map((f) => (
+          {(["all", "missing", "noCover", "hidden", "copied"] as const).map((f) => (
             <button
               key={f}
               type="button"
@@ -229,7 +327,7 @@ export function SampleGalleryPanel({
           <button
             type="button"
             className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)]"
-            onClick={() => setSelected(new Set(filtered.map((i) => i.projectId)))}
+            onClick={() => setSelected(new Set(filtered.filter((i) => i.inDb).map((i) => i.projectId)))}
           >
             {t("selectAll")}
           </button>
@@ -246,10 +344,26 @@ export function SampleGalleryPanel({
               <button
                 type="button"
                 disabled={batchBusy}
-                className="rounded-full border border-[color:var(--gc-border)] px-3 py-1.5 text-xs text-[var(--gc-muted)] disabled:opacity-50"
+                className="rounded-full border border-rose-500/40 px-3 py-1.5 text-xs text-rose-300 disabled:opacity-50"
                 onClick={() => void batchFeatured(false)}
               >
                 {t("samplesBatchUnfeature", { count: selected.size })}
+              </button>
+              <button
+                type="button"
+                disabled={batchBusy}
+                className="rounded-full border border-amber-500/40 px-3 py-1.5 text-xs text-amber-300 disabled:opacity-50"
+                onClick={() => void batchUnlist()}
+              >
+                {t("samplesBatchUnlist", { count: selected.size })}
+              </button>
+              <button
+                type="button"
+                disabled={batchBusy}
+                className="rounded-full border border-rose-500/40 px-3 py-1.5 text-xs text-rose-400 disabled:opacity-50"
+                onClick={() => void batchRemove()}
+              >
+                {t("samplesBatchRemove", { count: selected.size })}
               </button>
             </>
           ) : null}
@@ -277,6 +391,8 @@ export function SampleGalleryPanel({
                 checked={selected.has(item.projectId)}
                 onToggleSelect={() => toggleSelect(item.projectId)}
                 onToggleFeatured={() => void toggleFeatured(item)}
+                onToggleListed={() => void toggleListed(item)}
+                onRemove={() => void removeOne(item)}
               />
             ))}
           </tbody>
@@ -292,12 +408,16 @@ function SampleRow({
   checked,
   onToggleSelect,
   onToggleFeatured,
+  onToggleListed,
+  onRemove,
 }: {
   item: AdminSampleRow;
   locale: AppLocale;
   checked: boolean;
   onToggleSelect: () => void;
   onToggleFeatured: () => void;
+  onToggleListed: () => void;
+  onRemove: () => void;
 }) {
   const t = useTranslations("adminPage");
   const coverSrc = item.coverPath || item.coverImageSrc;
@@ -305,7 +425,7 @@ function SampleRow({
   return (
     <tr className="border-t border-[color:var(--gc-border)]" data-testid={`admin-sample-row-${item.sampleId}`}>
       <td className="px-4 py-3">
-        <input type="checkbox" checked={checked} onChange={onToggleSelect} aria-label={item.title} />
+        <input type="checkbox" checked={checked} onChange={onToggleSelect} aria-label={item.title} disabled={!item.inDb} />
       </td>
       <td className="px-4 py-3">
         <div className="relative h-14 w-11 overflow-hidden rounded-lg border border-[color:var(--gc-border)] bg-black/30">
@@ -315,15 +435,20 @@ function SampleRow({
       </td>
       <td className="px-4 py-3">
         <p className="font-medium text-[var(--gc-text)]">{item.title}</p>
-        <p className="mt-0.5 text-xs text-[var(--gc-muted)]">{item.subtitle}</p>
+        {item.subtitle ? <p className="mt-0.5 text-xs text-[var(--gc-muted)]">{item.subtitle}</p> : null}
         <p className="mt-1 font-mono text-[10px] text-[var(--gc-text-faint)]">{item.sampleId}</p>
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-col gap-1 text-xs">
-          <span className={item.synced ? "text-emerald-400" : "text-amber-400"}>
-            {item.synced ? t("samplesStatusSynced") : t("samplesStatusMissing")}
-          </span>
+          {!item.inDb ? (
+            <span className="text-amber-400">{t("samplesStatusMissing")}</span>
+          ) : item.listed ? (
+            <span className="text-emerald-400">{t("samplesStatusListed")}</span>
+          ) : (
+            <span className="text-amber-400">{t("samplesStatusUnlisted")}</span>
+          )}
           {item.featured ? <span className="text-[var(--gc-accent)]">{t("samplesShelfFeatured")}</span> : null}
+          {!item.inCatalog && item.inDb ? <span className="text-sky-300">{t("samplesCopiedBadge")}</span> : null}
           {!item.hasCover ? <span className="text-amber-400">{t("samplesStatusNoCover")}</span> : null}
         </div>
       </td>
@@ -332,17 +457,46 @@ function SampleRow({
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={withLocalePath(item.playPath, locale)}
-            className="text-sm text-sky-400 hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t("actionPlay")}
-          </Link>
-          <button type="button" className="text-sm text-[var(--gc-accent)]" onClick={onToggleFeatured}>
-            {item.featured ? t("actionUnfeature") : t("actionFeature")}
-          </button>
+          {item.inDb ? (
+            <Link
+              href={withLocalePath(item.playPath, locale)}
+              className="text-sm text-sky-400 hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("actionPlay")}
+            </Link>
+          ) : null}
+          {item.inDb ? (
+            <button
+              type="button"
+              data-testid={`admin-sample-unfeature-${item.sampleId}`}
+              className={`text-sm ${item.featured ? "text-rose-400" : "text-[var(--gc-accent)]"}`}
+              onClick={onToggleFeatured}
+            >
+              {item.featured ? t("actionUnfeature") : t("actionFeature")}
+            </button>
+          ) : null}
+          {item.inDb ? (
+            <button
+              type="button"
+              data-testid={`admin-sample-unlist-${item.sampleId}`}
+              className={`text-sm ${item.listed ? "text-amber-400" : "text-emerald-400"}`}
+              onClick={onToggleListed}
+            >
+              {item.listed ? t("samplesUnlist") : t("samplesRelist")}
+            </button>
+          ) : null}
+          {item.inDb ? (
+            <button
+              type="button"
+              data-testid={`admin-sample-remove-${item.sampleId}`}
+              className="text-sm text-rose-400"
+              onClick={onRemove}
+            >
+              {t("samplesRemove")}
+            </button>
+          ) : null}
         </div>
       </td>
     </tr>

@@ -1,30 +1,32 @@
 # 项目工作进度快照
 
-最后更新：2026-08-26（账户中心 UI 层级重设计）
+最后更新：2026-08-26（后台删除作品 + 样品馆可取消精选/移出）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **编译 / Lint**：本次改动文件 eslint **0 errors**；全仓 `npx tsc --noEmit` 仍有既有错误 `GamePlayerInner.tsx`（`telemetry.start()` 参数，与本次无关）。
-- **账户中心 UI**：按结构层级统一字号（品牌 20px > 页面标题 22–24px > 分组 15px > 面板 16px > 导航项 13px / 正文 14px > 标签 12px > 元信息 11px）。侧栏加宽、分组加粗加缩进、选中项左侧强调条。页面 H1 改为当前页签名，不再所有运营页共用「运营后台」。
-- **浏览器核对**：本机 `http://127.0.0.1:8888/console` 桌面 1440 与手机 390 截图已核（`qa-output/admin-console-ui-*.png`）。未登录时内容区仍显示「加载中…」（账户概览等 session 拉取，既有行为）。
-- **未推送 / 未提交**：需用户明确要求后再 commit + push。
+- **编译 / Lint**：本次改动文件 eslint **0 errors**（样品馆面板既有 `set-state-in-effect` warning）；全仓 `npx tsc --noEmit` 仍有既有错误 `GamePlayerInner.tsx`（`telemetry.start()` 参数，与本次无关）。
+- **QA**：`npm run qa:admin-works-delete` 通过；`npm run qa:sample-gallery-db-sync` 通过（含取消精选/下架不被 sync 覆盖、复制样品可移出）。
+- **后台作品治理**：小说/漫画/游戏可永久删除（小说级联删改编漫画）；批量删除。入口 `/console?tab=works`。
+- **样品馆 / 精选**：公开页每次 seed **不再覆盖** 后台取消的精选与下架。样品馆列表可「取消精选 / 下架 / 重新上架 / 移出样品馆」；复制进馆的样品出现在表内并可删除。作品治理里精选作品有红色「取消精选」。
+- **发布**：本次完成后 commit + push `origin/main` 并跑 `python scripts/deploy-prod-cee8b1d.py`。
 
 ### 本会话改动摘要
 
 | 区域 | 改动 |
 |---|---|
-| `src/app/globals.css` | `.admin-console-root` 字号标度与 `gc-admin-type-*` 工具类 |
-| `AdminConsoleShell.tsx` | 侧栏 256px、分组/项目层级、运营区分隔线、选中态左边条 |
-| `AdminConsolePage.tsx` | 页眉跟当前分组+页签；移动端按分组导航；KPI/表格字号 |
-| 面板组件 | Charts / UserConsole / Runtime / Email / Cache / OpsHealth / Samples / 登录门 对齐同一标度 |
+| `src/lib/admin/delete-work.ts` | 后台永久删除游戏/小说/漫画及评论、资产、Core 关联 |
+| `src/app/api/admin/works/route.ts` | `DELETE` 单条/批量 |
+| `src/lib/sample-gallery-seed.ts` | update 不再重置 `featured` / `visibility` |
+| `src/lib/admin/sample-gallery-ops.ts` | 精选/上下架/移出（目录下架、复制样品删除） |
+| `SampleGalleryPanel` / `AdminConsolePage` | 删除、取消精选、下架、移出入口 |
+| 五语文案 | 删除确认与样品馆取消/移出 |
 
 ### 下次启动清单
 
-1. 打开 `/console` 看侧栏「账户中心 > 分组 > 页签」与内容区 H1 是否符合预期。
-2. 若用户要求：commit + push `main`。
-3. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数；Godot 死代码清理；React Compiler warnings。
+1. 强刷 `https://operone.1oneclaw.com/console?tab=works` 删小说/漫画；`/console?tab=samples` 取消精选、下架、移出。
+2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数；Godot 死代码清理；React Compiler warnings。
 
 ## 1. 产品与技术现状
 

@@ -14,6 +14,7 @@ export type AdminSampleRow = {
   inCatalog: boolean;
   inDb: boolean;
   synced: boolean;
+  listed: boolean;
   featured: boolean;
   shelf: "featured" | "trending";
   playCount: number;
@@ -56,6 +57,7 @@ export async function buildAdminSampleGalleryReport(): Promise<AdminSampleGaller
     if (!db) missingInDb.push(s.id);
 
     const featured = db?.featured ?? s.shelf === "featured";
+    const listed = db?.visibility === "public";
     items.push({
       sampleId: s.id,
       projectId,
@@ -67,7 +69,8 @@ export async function buildAdminSampleGalleryReport(): Promise<AdminSampleGaller
       hasCover: Boolean(db?.coverPath ?? (s.photoCover && s.coverImageSrc.startsWith("/"))),
       inCatalog: true,
       inDb: Boolean(db),
-      synced: Boolean(db && db.status === "ready" && db.visibility === "public"),
+      synced: Boolean(db && db.status === "ready" && listed),
+      listed,
       featured,
       shelf: featured ? "featured" : "trending",
       playCount: db?.playCount ?? 0,
@@ -79,7 +82,34 @@ export async function buildAdminSampleGalleryReport(): Promise<AdminSampleGaller
   }
 
   const catalogIds = new Set(SAMPLES.map((s) => sampleProjectId(s.id)));
-  const orphanInDb = dbRows.filter((r) => !catalogIds.has(r.id)).map((r) => r.id);
+  const orphanRows = dbRows.filter((r) => !catalogIds.has(r.id));
+  const orphanInDb = orphanRows.map((r) => r.id);
+
+  for (const row of orphanRows) {
+    const sampleId = row.id.startsWith("sample-") ? row.id.slice("sample-".length) : row.id;
+    const listed = row.visibility === "public";
+    items.push({
+      sampleId,
+      projectId: row.id,
+      title: row.title,
+      catalogTitle: row.title,
+      subtitle: "",
+      coverImageSrc: row.coverPath || "/samples/td-carrot.svg",
+      coverPath: row.coverPath,
+      hasCover: Boolean(row.coverPath),
+      inCatalog: false,
+      inDb: true,
+      synced: Boolean(row.status === "ready" && listed),
+      listed,
+      featured: row.featured,
+      shelf: row.featured ? "featured" : "trending",
+      playCount: row.playCount,
+      status: row.status,
+      visibility: row.visibility,
+      playPath: `/play/${row.id}`,
+      photoCover: Boolean(row.coverPath),
+    });
+  }
 
   return {
     catalogCount: SAMPLES.length,
