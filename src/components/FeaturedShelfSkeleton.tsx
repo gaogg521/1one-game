@@ -1,14 +1,21 @@
 export function FeaturedShelfSkeleton({
   count = 6,
   aspect = "3/4",
+  cols = 3,
 }: {
   count?: number;
   aspect?: string;
+  cols?: 3 | 4;
 }) {
+  const grid =
+    cols === 4
+      ? "mt-5 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:mt-6 lg:grid-cols-4 lg:gap-4"
+      : "mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 lg:gap-6";
+
   return (
     <section className="border-t border-[color:var(--gc-border)] px-5 py-8 sm:px-10 sm:py-10 lg:px-14 xl:px-20 2xl:px-28">
       <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--gc-surface-glass)]" />
-      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 lg:gap-6">
+      <div className={grid}>
         {Array.from({ length: count }, (_, i) => (
           <div
             key={i}

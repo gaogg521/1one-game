@@ -11,7 +11,7 @@ const FeaturedGamesSection = dynamic(
 );
 const FeaturedNovelsSection = dynamic(
   () => import("@/components/FeaturedNovelsSection").then((m) => m.FeaturedNovelsSection),
-  { loading: () => <FeaturedShelfSkeleton count={6} aspect="3/4" /> },
+  { loading: () => <FeaturedShelfSkeleton count={8} aspect="3/4" cols={4} /> },
 );
 const FeaturedComicsSection = dynamic(
   () => import("@/components/FeaturedComicsSection").then((m) => m.FeaturedComicsSection),

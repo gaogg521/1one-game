@@ -128,8 +128,10 @@ export function FeaturedComicsSection() {
                       {t("ctaComic")}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-1.5 px-4 py-3.5">
-                    <p className="line-clamp-2 text-sm font-semibold tracking-tight text-[var(--gc-text)]">{c.title}</p>
+                  <div className="flex flex-col gap-1.5 px-3.5 py-3 sm:px-4 sm:py-3.5">
+                    <p className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-tight text-[var(--gc-text)]">
+                      {c.title}
+                    </p>
                     {blurb ? (
                       <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--gc-muted)]">{blurb}</p>
                     ) : null}

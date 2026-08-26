@@ -26,13 +26,13 @@ export const comicCoverDetailFrameClass =
 export const gameCoverFeaturedFrameClass =
   "relative w-full aspect-[16/10] overflow-hidden bg-[var(--gc-bg-elevated)]";
 
-/** 首页社区热门小说封面（竖版放大） */
+/** 首页社区热门小说封面（竖版，略收高度避免压过样品货架） */
 export const novelCoverFeaturedFrameClass =
-  "relative w-full max-h-[480px] aspect-[3/4] overflow-hidden bg-[var(--gc-bg-elevated)]";
+  "relative w-full max-h-[340px] aspect-[3/4] overflow-hidden bg-[var(--gc-bg-elevated)]";
 
-/** 首页社区热门漫画封面（竖版放大，与小说货架对齐） */
+/** 首页社区热门漫画封面（竖版，与小说略对齐但可稍高） */
 export const comicCoverFeaturedFrameClass =
-  "relative w-full max-h-[480px] aspect-[3/4] overflow-hidden bg-[var(--gc-bg-elevated)]";
+  "relative w-full max-h-[400px] aspect-[3/4] overflow-hidden bg-[var(--gc-bg-elevated)]";
 
 export type StudioCoverWorkType = "project" | "novel" | "comic";
 

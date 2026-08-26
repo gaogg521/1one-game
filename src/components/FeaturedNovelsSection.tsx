@@ -19,8 +19,9 @@ interface FeaturedNovel {
   likeCount: number;
 }
 
+/** 小说竖图略收：4 列 + 更紧字阶，避免封面压过样品馆 */
 const shelfGrid =
-  "mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 lg:gap-6";
+  "mt-5 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:mt-6 lg:grid-cols-4 lg:gap-4";
 const cardClass =
   "group flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition duration-300 hover:-translate-y-1 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,var(--gc-border))] hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.55)]";
 
@@ -33,10 +34,10 @@ export function FeaturedNovelsSection() {
 
   useIdleEffect(() => {
     const ac = new AbortController();
-    fetch("/api/novel?limit=6", { signal: ac.signal })
+    fetch("/api/novel?limit=8", { signal: ac.signal })
       .then((r) => r.json())
       .then((d: { novels?: FeaturedNovel[] }) => {
-        setNovels((d.novels ?? []).slice(0, 6));
+        setNovels((d.novels ?? []).slice(0, 8));
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -62,7 +63,7 @@ export function FeaturedNovelsSection() {
 
       <div className={shelfGrid}>
         {!loaded
-          ? Array.from({ length: 6 }, (_, i) => (
+          ? Array.from({ length: 8 }, (_, i) => (
               <div key={i} className={`${novelCoverFeaturedFrameClass} animate-pulse rounded-2xl bg-[var(--gc-surface-glass)]`} />
             ))
           : novels.map((n, i) => {
@@ -72,7 +73,7 @@ export function FeaturedNovelsSection() {
                   key={n.id}
                   href={withLocalePath(`/novel/${n.id}`, locale)}
                   className={`${cardClass} gc-home-reveal`}
-                  style={{ animationDelay: `${Math.min(i, 5) * 0.06}s` }}
+                  style={{ animationDelay: `${Math.min(i, 7) * 0.05}s` }}
                 >
                   <div className={novelCoverFeaturedFrameClass}>
                     {n.coverPath ? (
@@ -83,21 +84,23 @@ export function FeaturedNovelsSection() {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl text-[var(--gc-muted)] opacity-30">
+                      <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--gc-muted)] opacity-30">
                         📖
                       </div>
                     )}
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-70 transition duration-300 group-hover:opacity-90" />
-                    <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-black opacity-0 translate-y-1 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                    <span className="absolute bottom-2.5 left-2.5 rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-semibold text-black opacity-0 translate-y-1 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                       {t("ctaRead")}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-1.5 px-4 py-3.5">
-                    <p className="line-clamp-2 text-sm font-semibold tracking-tight text-[var(--gc-text)]">{n.title}</p>
+                  <div className="flex flex-col gap-1 px-3 py-2.5">
+                    <p className="line-clamp-2 text-[13px] font-semibold leading-snug tracking-tight text-[var(--gc-text)]">
+                      {n.title}
+                    </p>
                     {blurb ? (
-                      <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--gc-muted)]">{blurb}</p>
+                      <p className="line-clamp-2 text-[11px] leading-relaxed text-[var(--gc-muted)]">{blurb}</p>
                     ) : null}
-                    <div className="flex items-center gap-2 pt-0.5 text-[11px] text-[var(--gc-text-faint)]">
+                    <div className="flex items-center gap-2 pt-0.5 text-[10px] text-[var(--gc-text-faint)]">
                       {n.playCount > 0 && <span>{t("readsShort", { count: n.playCount })}</span>}
                       {n.likeCount > 0 && <span>♥ {n.likeCount}</span>}
                     </div>

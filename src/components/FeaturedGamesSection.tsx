@@ -90,10 +90,14 @@ export function FeaturedGamesSection() {
                       {t("ctaPlay")}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-1.5 px-4 py-3.5">
-                    <p className="line-clamp-1 text-sm font-semibold tracking-tight text-[var(--gc-text)]">{g.title}</p>
+                  <div className="flex flex-col gap-1.5 px-4 py-3.5 sm:px-5 sm:py-4">
+                    <p className="line-clamp-1 text-[15px] font-semibold tracking-tight text-[var(--gc-text)] sm:text-base">
+                      {g.title}
+                    </p>
                     {blurb ? (
-                      <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--gc-muted)]">{blurb}</p>
+                      <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--gc-muted)] sm:text-[13px]">
+                        {blurb}
+                      </p>
                     ) : null}
                     <div className="flex items-center gap-2 pt-0.5 text-[11px] text-[var(--gc-text-faint)]">
                       {g.playCount > 0 && <span>{t("playsShort", { count: g.playCount })}</span>}

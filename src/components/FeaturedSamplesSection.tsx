@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { getLocalizedSample, getLocalizedSamplesByShelf } from "@/lib/i18n/samples-localized";
+import { deriveFeaturedBlurb } from "@/lib/featured-blurb";
 import { sampleProjectId } from "@/lib/sample-gallery";
 
 const SHOWCASE_COUNT = 6;
@@ -73,6 +74,7 @@ function SampleShowcaseCard({
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const playHref = withLocalePath(`/play/${sampleProjectId(sample.id)}`, locale);
+  const blurb = deriveFeaturedBlurb(sample.subtitle, sample.prompt);
 
   return (
     <Link
@@ -80,7 +82,11 @@ function SampleShowcaseCard({
       data-testid={hero ? "home-featured-hero" : undefined}
       className={`group relative flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition duration-500 hover:-translate-y-1 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,var(--gc-border))] hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.65)] ${className}`}
     >
-      <div className={`relative w-full overflow-hidden bg-[var(--gc-bg-elevated)] ${hero ? "aspect-[16/10] min-h-[220px] sm:min-h-[300px]" : "aspect-[4/5]"}`}>
+      <div
+        className={`relative w-full overflow-hidden bg-[var(--gc-bg-elevated)] ${
+          hero ? "aspect-[16/10] min-h-[220px] sm:min-h-[300px]" : "aspect-[4/5]"
+        }`}
+      >
         <div className="absolute inset-0" style={{ background: sample.coverGradient }} />
         {!coverFailed ? (
           <Image
@@ -93,17 +99,47 @@ function SampleShowcaseCard({
             onError={() => setCoverFailed(true)}
           />
         ) : null}
-        <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,transparent_42%,rgba(0,0,0,0.78)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,transparent_38%,rgba(0,0,0,0.82)_100%)]" />
         <div className="absolute inset-0 z-[2] flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
-          <span className="rounded-full border border-white/30 bg-black/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+          <span
+            className={`rounded-full border border-white/30 bg-black/45 font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md ${
+              hero ? "px-5 py-2.5 text-xs" : "px-3 py-1.5 text-[10px]"
+            }`}
+          >
             Play
           </span>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-[3] p-3 sm:p-4">
-          <p className={`line-clamp-2 font-semibold leading-tight text-white drop-shadow-sm ${hero ? "text-base sm:text-xl" : "text-xs"}`}>
+        {/* 字阶随封面尺寸：主卡放大标题/简介，侧卡压缩 */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-[3] ${
+            hero ? "p-4 sm:p-5 lg:p-6" : "p-2.5 sm:p-3"
+          }`}
+        >
+          <p
+            className={`line-clamp-2 font-semibold leading-tight tracking-tight text-white drop-shadow-sm ${
+              hero ? "text-lg sm:text-2xl" : "text-[12px] sm:text-[13px]"
+            }`}
+          >
             {sample.title}
           </p>
-          <p className={`mt-1 line-clamp-1 text-white/75 ${hero ? "text-sm" : "text-[10px]"}`}>{sample.plays}</p>
+          {blurb ? (
+            <p
+              className={`mt-1.5 text-white/82 ${
+                hero
+                  ? "line-clamp-2 max-w-xl text-sm leading-relaxed sm:text-[15px] sm:leading-6"
+                  : "line-clamp-2 text-[10px] leading-snug sm:text-[11px]"
+              }`}
+            >
+              {blurb}
+            </p>
+          ) : null}
+          <p
+            className={`mt-1.5 font-medium text-white/70 ${
+              hero ? "text-sm sm:text-base" : "text-[10px]"
+            }`}
+          >
+            {sample.plays}
+          </p>
         </div>
       </div>
     </Link>
