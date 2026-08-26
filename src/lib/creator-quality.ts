@@ -9,6 +9,7 @@ import {
   type CreatorQualityUnit,
 } from "@/lib/creator-workflow";
 import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
+import { evaluateGameDeliveryReadiness } from "@/lib/game-delivery-readiness";
 import type { GameAssetReadiness } from "@/lib/game-asset-readiness";
 import type { GameSpec } from "@/lib/game-spec";
 import { assessNovelCompleteness } from "@/lib/novel-completeness";
@@ -56,6 +57,7 @@ export function assessGameCreatorQuality(
   assetReadiness?: GameAssetReadiness | null,
 ): CreatorQualityAssessment {
   const scorecard = evaluateGameVerticalSlice(spec, brief ?? undefined);
+  const delivery = evaluateGameDeliveryReadiness(spec);
   const report = buildCreatorQualityReport({
     kind: "game",
     score: scorecard.score,
@@ -63,13 +65,15 @@ export function assessGameCreatorQuality(
       `template:${scorecard.templateId}`,
       `first_minute_beats:${scorecard.contract.firstMinute.length}`,
       `art_direction:${scorecard.artDirection.visual.assetStyle}`,
+      `delivery_preflight:${delivery.verdict}:${delivery.score}`,
+      ...delivery.evidence,
       ...scorecard.reasons,
       ...(assetReadiness?.evidence ?? []),
     ],
   });
   return {
     scorecard,
-    report: assetReadiness && !assetReadiness.ok ? { ...report, verdict: "blocked" } : report,
+    report: assetReadiness && !assetReadiness.ok || delivery.verdict === "blocked" ? { ...report, verdict: "blocked" } : report,
   };
 }
 

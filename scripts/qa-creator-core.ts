@@ -192,6 +192,7 @@ async function main() {
       const gameArtifacts = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
       const gameEvaluation = await prisma.creativeEvaluation.findFirst({ where: { creativeRevisionId: mirroredGame.creativeRevisionId } });
       assert(gameArtifacts.some((artifact) => artifact.kind === "game_spec"), "game mirror must retain the executable spec");
+      assert(gameArtifacts.some((artifact) => artifact.kind === "game_delivery_preflight"), "game mirror must retain delivery preflight evidence");
       assert(gameArtifacts.some((artifact) => artifact.kind === "evaluation"), "game mirror must retain creator quality evidence");
       assert(gameEvaluation?.evaluator === "deterministic_quality", "game mirror must persist its quality evaluation");
       const sceneGraph = gameArtifacts.find((artifact) => artifact.kind === "scene_graph");

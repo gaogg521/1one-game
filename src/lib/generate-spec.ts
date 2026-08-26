@@ -43,6 +43,7 @@ import { buildDirector } from "@/lib/director";
 import { buildSystems } from "@/lib/systems";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { evaluateGameVerticalSlice, type GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
+import { evaluateGameDeliveryReadiness, type GameDeliveryReadiness } from "@/lib/game-delivery-readiness";
 import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { fetchUrlPlainText } from "@/lib/fetch-url-text";
 import { tavilySearch } from "@/lib/web-search/tavily";
@@ -490,6 +491,7 @@ export type GenerationDebug = {
   criticVerdict?: import("@/lib/game-quality-critic").GameCriticVerdict;
   /** 确定性首分钟体验评分卡；仅作质量可观察性，不改变运行时规格。 */
   verticalSlice?: GameVerticalSliceScorecard;
+  deliveryReadiness?: GameDeliveryReadiness;
   /** 可审阅的内核编译计划；不向创作页暴露内部模板术语。 */
   kernelPlan?: { label: string; coreLoop: string; controls: string; production: GameProductionContract; checks: readonly string[] };
 };
@@ -1439,6 +1441,7 @@ export async function generateGameSpecWithMeta(
     const spec = finalizeSpec(plan.prompt, compileGameGenerationPlan(plan));
     const issues = validateGameGenerationPlan(plan, spec);
     const verticalSlice = evaluateGameVerticalSlice(spec);
+    const deliveryReadiness = evaluateGameDeliveryReadiness(spec);
     orch?.note("game_kernel_compile", {
       kernel: plan.kernel,
       runtime: plan.runtime,
@@ -1452,6 +1455,7 @@ export async function generateGameSpecWithMeta(
       dimensions: verticalSlice.dimensions,
       reasons: verticalSlice.reasons,
     });
+    orch?.note("game_delivery_preflight", deliveryReadiness);
     if (issues.length) {
       throw new Error(`game kernel validation failed: ${issues.join(",")}`);
     }
@@ -1462,6 +1466,7 @@ export async function generateGameSpecWithMeta(
       enhancedApplied: false,
       templateHint: plan.kernel,
       verticalSlice,
+      deliveryReadiness,
       kernelPlan: {
         label: plan.label,
         coreLoop: plan.coreLoop,

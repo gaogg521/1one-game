@@ -837,3 +837,11 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `llmJson`、`llmText`、`llmTextStream`、游戏 BGM 和 OpenAI-compatible 图片生成均按候选项逐一调用。流式输出只在首个 chunk 之前切换候选；已输出后失败会如实失败，避免拼接两家模型文本。BGM 面板展示真实的 `服务商 · 模型` 链路。
 - Console 路由编辑从单一逗号备用框改为“添加备用候选项”：每项可独立选服务商与模型，删除服务商时也清理指向它的候选项。后台 E2E 同步更新为当前控制台布局，并实际覆盖新增候选项。
 - 验证：`npx tsc --noEmit`、定向 ESLint、`qa:runtime-cross-provider-routing`、`qa:runtime-config-admin`、`qa:game-bgm-audio` 通过；`npx playwright test e2e/admin-runtime-config.smoke.spec.ts --workers=1` 通过。待精确提交、部署，再将生产 `game_bgm` 的错误 DeepSeek 字符串备用清为空候选。
+
+## P50：游戏交付合同与数值预检（2026-08-26，进行中）
+
+- 新游戏的 `production.delivery` 现在持久化目标设备（mobile H5）、60 秒首局、主输入、目标、胜负条件、首次奖励/变化/高潮时点；这是可审查玩法规格的一部分，不再只是生成提示词。
+- 新增 `game-delivery-readiness`：对交付节奏和速度、压力、生命、胜负分等数值包络做确定性预检，明确标记为 preflight，不冒充真实玩家模拟。破坏交付合同和数值包络会 `blocked`；正常新内核进入质量报告与发布判断。
+- Creator Core 每个游戏 revision 新增不可变 `game_delivery_contract` 和 `game_delivery_preflight` artifact，便于发布和后续运营回溯到具体版本的目标/预检结果。
+- 已通过：`npx tsc --noEmit`、`qa:game-delivery-readiness`（4 种生成玩法 + 人为破坏失败闭环）、`qa:game-generation-kernel`、`qa:game-production-contract`、`qa:creator-workflow`、`qa:creator-core`、定向 ESLint。真实本地 HTTP 创建/worker 路径已执行并完成 BGM 与资产任务。
+- 已知验证边界：旧 `qa:game-core-api` 的“未发布应 404”断言在当前开发环境得到 200，需单独校验默认可见性/权限基线；不能作为本次通过。下一步：补按五种内核的浏览器首分钟行为验证并把其结果写成可消费的 playtest artifact，再升级发布门禁。

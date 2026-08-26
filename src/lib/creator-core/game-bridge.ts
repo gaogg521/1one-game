@@ -3,6 +3,7 @@ import { assessGameCreatorQuality } from "@/lib/creator-quality";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { parseGameSpec } from "@/lib/game-spec";
 import { buildGameDesignGraphs } from "@/lib/creator-core/game-design-graph";
+import { evaluateGameDeliveryReadiness } from "@/lib/game-delivery-readiness";
 import {
   createCreativeArtifact,
   createCreativeRevision,
@@ -21,6 +22,7 @@ export async function mirrorGameToCreatorCore(input: {
   const spec = parseGameSpec(JSON.parse(input.project.specJson));
   const brief = parseStoredCreativeBrief(input.project.creativeBriefJson);
   const quality = assessGameCreatorQuality(spec, brief).report;
+  const deliveryReadiness = evaluateGameDeliveryReadiness(spec);
   const { sceneGraph, behaviorGraph } = buildGameDesignGraphs(spec);
   const project = await ensureLegacyCreativeProject({
     ownerKey: input.project.ownerKey,
@@ -44,6 +46,24 @@ export async function mirrorGameToCreatorCore(input: {
   await createCreativeArtifact({
     ...revisionInput,
     artifact: { kind: "game_spec", mediaType: "json", content: spec, metadata: { templateId: spec.templateId } },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: {
+      kind: "game_delivery_contract",
+      mediaType: "json",
+      content: spec.production?.delivery ?? null,
+      metadata: { templateId: spec.templateId, targetDevice: spec.production?.delivery?.targetDevice ?? "unknown" },
+    },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: {
+      kind: "game_delivery_preflight",
+      mediaType: "report",
+      content: deliveryReadiness,
+      metadata: { templateId: spec.templateId, verdict: deliveryReadiness.verdict, score: deliveryReadiness.score },
+    },
   });
   await createCreativeArtifact({
     ...revisionInput,

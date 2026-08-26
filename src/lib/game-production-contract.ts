@@ -43,6 +43,18 @@ export const GameAudioProductionSchema = z.object({
 
 export const GameProductionContractSchema = z.object({
   version: z.literal(1),
+  /** Product acceptance criteria, persisted beside the playable rules. */
+  delivery: z.object({
+    targetDevice: z.literal("mobile_h5"),
+    targetSessionSeconds: z.number().int().min(45).max(90),
+    primaryInput: z.string().min(1).max(80),
+    playerGoal: z.string().min(1).max(120),
+    winCondition: z.string().min(1).max(120),
+    failCondition: z.string().min(1).max(120),
+    firstRewardBySecond: z.number().int().min(3).max(20),
+    variationBySecond: z.number().int().min(20).max(45),
+    climaxBySecond: z.number().int().min(40).max(60),
+  }).optional(),
   levelFlow: z
     .array(
       z.object({
@@ -88,6 +100,17 @@ export function buildDefaultGameProductionContract(input: ContractInput): GamePr
   const ambience = inferAmbience(input);
   return {
     version: 1,
+    delivery: {
+      targetDevice: "mobile_h5",
+      targetSessionSeconds: 60,
+      primaryInput: input.templateId === "puzzle" ? "点击或拖拽交换" : "单指轻触、拖拽或方向控制",
+      playerGoal: coreGoal(input.templateId),
+      winCondition: "完成当前明确目标或在首局高潮中达成结算条件",
+      failCondition: "生命、步数、时间或防线耗尽时清晰结算并可立即重开",
+      firstRewardBySecond: 20,
+      variationBySecond: 40,
+      climaxBySecond: 60,
+    },
     levelFlow: [
       { phase: "onboarding", window: "0-5", goal: coreGoal(input.templateId), musicSection: "intro" },
       { phase: "core-loop", window: "5-20", goal: "重复核心循环，形成可理解的奖励与风险", musicSection: "build" },

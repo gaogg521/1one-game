@@ -19,7 +19,7 @@ export type GameGenerationPlan = {
   coreLoop: string;
   controls: string;
   production: GameProductionContract;
-  checks: readonly ["goal", "input", "level-flow", "audio", "mix", "end-state", "mobile-runtime"];
+  checks: readonly ["goal", "input", "level-flow", "delivery", "audio", "mix", "end-state", "mobile-runtime"];
 };
 
 const KERNEL_COPY: Partial<Record<GameTemplateId, Pick<GameGenerationPlan, "label" | "coreLoop" | "controls">>> = {
@@ -70,7 +70,7 @@ export function buildGameGenerationPlan(
     runtime: resolveTemplateRuntime(kernel).phaser,
     ...copy,
     production: buildDefaultGameProductionContract({ prompt: clean, templateId: kernel }),
-    checks: ["goal", "input", "level-flow", "audio", "mix", "end-state", "mobile-runtime"],
+    checks: ["goal", "input", "level-flow", "delivery", "audio", "mix", "end-state", "mobile-runtime"],
   };
 }
 
@@ -89,6 +89,7 @@ export function validateGameGenerationPlan(plan: GameGenerationPlan, spec: GameS
   if (!Number.isFinite(spec.gameplay.winScore) || (spec.gameplay.winScore ?? 0) <= 0) issues.push("missing_goal");
   if (!Number.isFinite(spec.gameplay.lives) || (spec.gameplay.lives ?? 0) <= 0) issues.push("missing_recovery");
   if (spec.production?.levelFlow.length !== 4) issues.push("missing_level_flow");
+  if (!spec.production?.delivery) issues.push("missing_delivery_contract");
   if (spec.production?.audio.sections.length !== 4) issues.push("missing_music_arc");
   if (!spec.production?.audio.ambience) issues.push("missing_ambience");
   if ((spec.production?.audio.mix.maxConcurrentSfx ?? 99) > 4) issues.push("mobile_sfx_budget_exceeded");
