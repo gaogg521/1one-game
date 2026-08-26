@@ -2,167 +2,82 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
+import { HomeHero } from "@/components/HomeHero";
+import { HomeCreateLanes } from "@/components/HomeCreateLanes";
 import { HomeFeaturedSections } from "@/components/HomeFeaturedSections";
 import { HomeLiteraryPipelineSection } from "@/components/HomeLiteraryPipelineSection";
 import { MobileFeedPromoStrip } from "@/components/mobile/MobileFeedPromoStrip";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
-import { getProductPromise, getWowSteps } from "@/lib/product-ia";
 
 export default async function Home() {
   const locale = (await getLocale()) as AppLocale;
   const t = await getTranslations();
-  const productPromise = getProductPromise(locale);
-  const wowSteps = getWowSteps(locale);
+
   return (
     <AppPageShell>
       <SiteHeader />
       <AppMain>
-      <main className="@container/main relative flex min-h-full w-full flex-col">
-        <section className="relative overflow-hidden px-5 pb-12 pt-10 sm:px-10 sm:pb-28 sm:pt-24 lg:min-h-[min(88vh,920px)] lg:px-14 lg:pb-32 lg:pt-28 xl:px-20 2xl:px-28">
-          <div aria-hidden className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_70%_at_50%_-30%,rgba(124,58,237,0.18),transparent_55%),radial-gradient(ellipse_80%_50%_at_100%_10%,rgba(34,211,238,0.1),transparent_50%),radial-gradient(ellipse_70%_45%_at_0%_80%,rgba(244,114,182,0.06),transparent_50%)]" />
-            <div className="gc-home-noise" />
-            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[var(--gc-bg)] to-transparent" />
+        <main className="@container/main relative flex min-h-full w-full flex-col">
+          <HomeHero />
+          <HomeCreateLanes />
+
+          <div className="px-5 sm:px-10 lg:px-14 xl:px-20 2xl:px-28">
+            <MobileFeedPromoStrip />
           </div>
 
-          <div className="relative grid min-w-0 gap-8 sm:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-start xl:gap-x-16 2xl:gap-x-24">
-            <div className="min-w-0 pl-0 xl:pl-8 2xl:pl-10">
-              <p className="inline-flex items-center gap-2 rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.32em] text-[var(--gc-muted)] shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)] backdrop-blur-sm">
-                <span
-                  className="h-1 w-1 rounded-full shadow-[0_0_10px_color-mix(in_srgb,var(--gc-cta-b)_60%,transparent)]"
-                  style={{ background: "linear-gradient(90deg, var(--gc-cta-a), var(--gc-cta-c))" }}
-                />
-                {t("home.badge")}
-              </p>
+          <HomeFeaturedSections />
 
-              <h1
-                className="gc-theme-hero mt-6 max-w-3xl text-pretty bg-gradient-to-br from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text py-2 font-normal leading-[1.1] tracking-[0.01em] text-transparent sm:mt-12 [filter:drop-shadow(0_4px_48px_color-mix(in_srgb,var(--gc-text)_14%,transparent))]"
-                style={{ fontSize: "clamp(2rem, 1rem + 2.8cqi, 3.75rem)" }}
-              >
-                {productPromise.headline}
-              </h1>
-
-              <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-[1.75] text-[var(--gc-muted)] sm:mt-8 sm:text-base lg:mt-10 lg:text-[17px] lg:leading-8">
-                {productPromise.subhead}
-              </p>
-
-              <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-14 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
+          <section className="px-5 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-24 xl:px-20 2xl:px-28">
+            <div className="mx-auto max-w-6xl">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">
+                    {t("home.literaryPipelineLabel")}
+                  </p>
+                  <h2 className="mt-3 text-2xl font-medium tracking-tight text-[var(--gc-text)] sm:text-3xl">
+                    {t("home.strategyTitle")}
+                  </h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
+                    {t("home.literaryPipelineDesc")}
+                  </p>
+                </div>
                 <Link
                   href={withLocalePath("/start", locale)}
-                  className="gc-theme-cta col-span-2 inline-flex min-h-[52px] items-center justify-center px-6 py-4 text-sm font-semibold transition duration-300 hover:scale-[1.02] sm:px-9"
+                  className="self-start rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] px-5 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)] lg:self-auto"
                 >
-                  {productPromise.primaryCta}
-                </Link>
-                <Link
-                  href={withLocalePath("/samples", locale)}
-                  className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-3 text-sm font-medium text-[var(--gc-text)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--gc-text)_10%,transparent)] backdrop-blur-md transition duration-300 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] hover:bg-[var(--gc-surface-glass-strong)] sm:px-8 sm:py-4"
-                >
-                  {productPromise.secondaryCta}
-                </Link>
-                <Link
-                  href={withLocalePath("/studio", locale)}
-                  className="inline-flex min-h-[48px] items-center justify-center rounded-full px-3 py-3 text-sm font-medium text-[var(--gc-muted)] transition duration-300 hover:text-[var(--gc-text)] sm:px-7 sm:py-4"
-                >
-                  {t("home.workspaceCta")}
+                  {t("home.enterLauncher")}
                 </Link>
               </div>
-
-              <MobileFeedPromoStrip />
-
-              <details className="mt-6 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] xl:hidden">
-                <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-[var(--gc-text)] marker:content-none [&::-webkit-details-marker]:hidden">
-                  {t("home.firstExperience")}
-                  <span className="text-[var(--gc-muted)]" aria-hidden>
-                    ▾
-                  </span>
-                </summary>
-                <ol className="space-y-4 border-t border-[color:var(--gc-border)] px-4 py-4">
-                  {wowSteps.map((step) => (
-                    <li key={step.n} className="flex gap-3">
-                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--gc-border)] font-mono text-[11px] text-[var(--gc-muted)]">
-                        {step.n}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-[var(--gc-text-soft)]">{step.title}</p>
-                        <p className="mt-1 text-sm leading-relaxed text-[var(--gc-muted)]">{step.body}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </details>
+              <HomeLiteraryPipelineSection />
             </div>
+          </section>
 
-            <aside className="relative hidden min-w-0 rounded-2xl border border-[color:var(--gc-border)] bg-gradient-to-b from-[var(--gc-surface-glass-strong)] via-[var(--gc-surface-glass)] to-transparent p-5 shadow-[0_0_0_1px_rgba(0,0,0,0.35),0_32px_64px_-28px_rgba(0,0,0,0.55),0_0_80px_-30px_rgba(124,58,237,0.25)] backdrop-blur-xl sm:rounded-3xl sm:p-9 xl:block xl:p-10">
-              <h2 className="text-[13px] font-medium uppercase tracking-[0.2em] text-[var(--gc-muted)]">{t("home.firstExperience")}</h2>
-              <p className="mt-2 text-base font-medium tracking-wide text-[var(--gc-text)]">{t("home.wowMoment")}</p>
-              <ol className="mt-5 space-y-5 border-t border-[color:var(--gc-border)] pt-5 sm:mt-8 sm:space-y-7 sm:pt-8">
-                {wowSteps.map((step) => (
-                  <li key={step.n} className="group flex gap-4">
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] font-mono text-[11px] tabular-nums text-[var(--gc-muted)] transition group-hover:border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] group-hover:text-[color:color-mix(in_srgb,var(--gc-accent)_90%,var(--gc-text))]">
-                      {step.n}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--gc-text-soft)]">{step.title}</p>
-                      <p className="mt-1 text-sm leading-relaxed text-[var(--gc-muted)]">{step.body}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </aside>
-          </div>
-        </section>
-
-        <div className="relative mx-6 h-px shrink-0 sm:mx-10 lg:mx-14 xl:mx-20 2xl:mx-28">
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-[color:color-mix(in_srgb,var(--gc-muted)_35%,transparent)] to-transparent" />
-        </div>
-
-        <HomeFeaturedSections />
-
-        <section className="px-6 py-20 sm:px-10 sm:py-24 lg:px-14 lg:py-28 xl:px-20 2xl:px-28">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--gc-text-faint)]">{t("home.literaryPipelineLabel")}</p>
-              <h2 className="mt-2 text-2xl font-medium tracking-tight text-[var(--gc-text)] sm:text-3xl">{t("home.strategyTitle")}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
-                {t("home.literaryPipelineDesc")}
-              </p>
-            </div>
-            <Link
-              href={withLocalePath("/start", locale)}
-              className="self-start rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_35%,transparent)] px-5 py-2 text-sm font-medium text-[color:color-mix(in_srgb,var(--gc-accent)_95%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)] lg:self-auto"
-            >
-              {t("home.enterLauncher")}
-            </Link>
-          </div>
-          <HomeLiteraryPipelineSection />
-        </section>
-
-        <section className="mt-auto border-t border-[color:var(--gc-border)] px-6 py-16 sm:px-10 sm:py-20 lg:px-14 lg:py-20 xl:px-20 2xl:px-28">
-          <div className="max-w-4xl">
-            <p
-              className="gc-theme-hero bg-gradient-to-r from-[var(--gc-text)] via-[var(--gc-text-soft)] to-[var(--gc-muted)] bg-clip-text font-normal leading-tight text-transparent"
-              style={{ fontSize: "clamp(1.35rem, 0.55rem + 2.2cqi, 2.65rem)" }}
-            >
-              {t("home.ctaTitle")}
-            </p>
-            <p className="gc-theme-soft mt-5 max-w-2xl text-[clamp(0.95rem,0.4rem+1.1cqi,1.2rem)] leading-relaxed text-[var(--gc-muted)] sm:mt-6">
-              {t("home.ctaDesc")}
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href={withLocalePath("/start", locale)} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold">
-                {t("common.startCreating")}
-              </Link>
-              <Link
-                href={withLocalePath("/discover", locale)}
-                className="rounded-full border border-[color:var(--gc-border)] px-6 py-2.5 text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+          <section className="mt-auto border-t border-[color:var(--gc-border)] px-5 py-16 sm:px-10 sm:py-20 lg:px-14 xl:px-20 2xl:px-28">
+            <div className="mx-auto max-w-6xl">
+              <p
+                className="font-medium tracking-tight text-[var(--gc-text)]"
+                style={{ fontSize: "clamp(1.5rem, 0.7rem + 2.4cqi, 2.75rem)", lineHeight: 1.15 }}
               >
-                {t("common.browseCommunity")}
-              </Link>
+                {t("home.ctaTitle")}
+              </p>
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[var(--gc-muted)] sm:text-base">
+                {t("home.ctaDesc")}
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link href={withLocalePath("/start", locale)} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold">
+                  {t("common.startCreating")}
+                </Link>
+                <Link
+                  href={withLocalePath("/discover", locale)}
+                  className="rounded-full border border-[color:var(--gc-border)] px-6 py-2.5 text-sm font-medium text-[var(--gc-muted)] hover:text-[var(--gc-text)]"
+                >
+                  {t("common.browseCommunity")}
+                </Link>
+              </div>
             </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
       </AppMain>
     </AppPageShell>
   );

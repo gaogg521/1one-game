@@ -255,6 +255,54 @@ body {
   color: #fff;
 }
 
+@keyframes gc-home-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gc-home-hero-pan {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.gc-home-reveal {
+  animation: gc-home-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gc-home-reveal-delay-1 {
+  animation-delay: 0.08s;
+}
+.gc-home-reveal-delay-2 {
+  animation-delay: 0.16s;
+}
+.gc-home-reveal-delay-3 {
+  animation-delay: 0.24s;
+}
+.gc-home-reveal-delay-4 {
+  animation-delay: 0.32s;
+}
+
+.gc-home-hero-pan {
+  animation: gc-home-hero-pan 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc-home-reveal,
+  .gc-home-hero-pan {
+    animation: none;
+  }
+}
+
 .gc-theme-hero {
   position: relative;
 }

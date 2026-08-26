@@ -867,3 +867,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 第二轮（全产品线）：所有试玩页（含非样品）手机先画布后 banner；用户游戏手机隐藏顶栏；Godot 引擎切换条仅桌面显示。斗兽棋/2048/俄罗斯方块/农场/麻将消消乐等 Scene 窄屏铺满。小说/漫画详情手机隐藏顶栏与封面 Banner，阅读区上提；八格漫画手机单列全宽。
 - 验证：`npx tsc --noEmit` 与 `qa:mobile-puzzle-layout` 通过。已提交并发布到生产（`deploy-prod-with-assets.py`）。
 - **发布约定（2026-08-26）**：完成本仓库改动后默认 `git commit`（只含本次相关文件）并 `python scripts/deploy-prod-with-assets.py`（先 push `origin/main`）。
+
+## P53：首页创作者平台级改版（2026-08-26）
+
+- 对标 Midjourney / Runway / Roblox Creator：首屏只保留品牌、一句承诺、一组 CTA；去掉步骤侧栏与首屏内 Feed 条。
+- 新组件 `HomeHero`：真实样品封面全幅视觉；`HomeCreateLanes`：游戏/小说/漫画三条独立介质入口；精选样品改为杂志式大图货架。
+- 文案从「实验室」语气改为「创作者平台 / 可发布作品」；五语同步。
+- 验证：首页相关 ESLint 通过。本地全仓 `tsc` 仍可能被未提交的 telemetry WIP 干扰，不以该噪音阻塞本次发布。
