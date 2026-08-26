@@ -50,6 +50,7 @@ export const SAMPLE_GAMEPLAY_CASES: SampleGameplayCase[] = [
   { sampleId: "elastic-thief-2", expectedScene: "PlatformerScene", interaction: "arrow-right", animated: true, clickBurst: 8 },
   { sampleId: "blade-defender-merge", expectedScene: "TowerDefenseScene", interaction: "click-lower", animated: true, clickRel: { x: 0.71, y: 0.84 }, clickRel2: { x: 0.81, y: 0.84 }, clickBurst: 2 },
   { sampleId: "pottery-master-3d", expectedScene: "CustomizationScene", interaction: "click-center", animated: true, clickRel: { x: 0.5, y: 0.46 }, clickBurst: 3 },
+  { sampleId: "dou-dizhu", expectedScene: "DouDizhuScene", interaction: "click-center", clickRel: { x: 0.5, y: 0.72 }, clickBurst: 2 },
 ];
 
 export function defaultClickRel(kind: SampleInteractionKind): { x: number; y: number } {

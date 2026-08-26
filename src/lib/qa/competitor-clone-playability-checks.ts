@@ -23,6 +23,7 @@ export const EXPECTED_SCENE_BY_SAMPLE: Record<string, string> = {
   "blade-defender-merge": "TowerDefenseScene",
   "pottery-master-3d": "CustomizationScene",
   "crashy-roads": "CoasterScene",
+  "dou-dizhu": "DouDizhuScene",
 };
 
 export function buildCompetitorClonePlayabilityChecks(

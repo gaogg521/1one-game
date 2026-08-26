@@ -25,6 +25,7 @@ export const GAMEPLAY_DEPTH_BY_SAMPLE: Record<string, GameplayDepthExpect> = {
   "blade-defender-merge": { field: "qaTouches", change: "increased", minDelta: 1 },
   "pottery-master-3d": { field: "potteryHeight", change: "increased", minDelta: 1 },
   "crashy-roads": { field: "coasterDistance", change: "increased", minDelta: 1 },
+  "dou-dizhu": { field: "qaTouches", change: "increased", minDelta: 1 },
 };
 
 export function gameplayDepthForCase(c: SampleGameplayCase): GameplayDepthExpect | undefined {

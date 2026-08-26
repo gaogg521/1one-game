@@ -4,7 +4,7 @@ import { HudFrame } from "@/game/engine/HudFrame";
 import { juiceBurst, juiceFail, juicePickup, juiceWin, themeParticleHex } from "@/game/engine/gameJuice";
 import { buildSceneCohesion } from "@/lib/scene-experience";
 import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
-import { setPhaserQaState } from "@/game/engine/phaser-qa-state";
+import { bumpQaTouch, initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
 import { drawQqCharacter, preloadQqCharacterTextures } from "@/game/engine/avatar-draw";
 import type { GameSpec } from "@/lib/game-spec";
@@ -368,7 +368,7 @@ export class DouDizhuScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(1, 0.5).setDepth(20);
     this.showBottomCardsDisplay();
-    setPhaserQaState({ playerX: Math.round(viewW / 2) });
+    initQaState({ qaTouches: 0, playerX: Math.round(viewW / 2) });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(viewW / 2) });
 
     this.startBidding();
@@ -917,6 +917,7 @@ export class DouDizhuScene extends Phaser.Scene {
     cont.add([bg, text]);
     bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
       ptr.event.stopPropagation();
+      bumpQaTouch();
       onClick();
     });
     bg.on("pointerover", () => { bg.setAlpha(1); bg.setStrokeStyle(2, 0xfbbf24, 0.9); });
@@ -1240,6 +1241,7 @@ export class DouDizhuScene extends Phaser.Scene {
       bg.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
         ptr.event.stopPropagation();
         if (this.finished || this.bidPhase || this.currentSeat !== 0) return;
+        bumpQaTouch();
         if (this.selectedIds.has(card.id)) this.selectedIds.delete(card.id);
         else this.selectedIds.add(card.id);
         this.layoutHand();
