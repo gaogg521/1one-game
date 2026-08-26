@@ -4,6 +4,7 @@ import { getOwnerKey } from "@/lib/owner";
 import { parseGameSpec } from "@/lib/game-spec";
 import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
+import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 import { newShareCode } from "@/lib/share-code";
 import { deleteProjectCoverFile, saveProjectCoverJpeg } from "@/lib/project-cover";
@@ -67,6 +68,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const core = isOwner
       ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
       : null;
+    const playRevisionId = isOwner ? core?.revision?.id ?? null : acceptedGameSpec?.creativeRevisionId ?? null;
     const assetJob = isOwner && core
       ? await prisma.generationJob.findFirst({
           where: {
@@ -94,7 +96,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     // corrupt while that process is waiting for a safe restart/regeneration.
     const gameplayEvents = prisma.gameplayEvent
       ? await prisma.gameplayEvent.findMany({
-          where: { projectId: id },
+          where: { projectId: id, ...(playRevisionId ? { creativeRevisionId: playRevisionId } : {}) },
           select: { event: true, sessionId: true, elapsedMs: true, won: true },
         })
       : [];
@@ -133,6 +135,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
       },
       spec,
+      ...(playRevisionId ? { playRevisionId } : {}),
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
       ...(core ? { core } : {}),
@@ -220,6 +223,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       title?: string;
       specJson?: string;
       status?: string;
+      generationProvider?: string | null;
+      generationModel?: string | null;
     } = {};
 
     if (promptRaw !== undefined) {
@@ -239,6 +244,11 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         updateData.specJson = JSON.stringify(spec);
         updateData.title = spec.title;
         updateData.status = "ready";
+        const generation = parseWorkGenerationFromUnknown(body);
+        if (generation.generationModel || generation.generationProvider) {
+          updateData.generationProvider = generation.generationProvider;
+          updateData.generationModel = generation.generationModel;
+        }
       } catch {
         return localizedJsonError(req, "specSaveInvalid", 400);
       }
@@ -279,7 +289,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     select: { id: true, ownerKey: true, title: true, shareCode: true, coverPath: true, prompt: true, status: true, specJson: true, visibility: true, creativeBriefJson: true },
   });
   let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" } | undefined;
-  if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined || coverJpegBase64 !== undefined)) {
+  // Cover/background delivery is an asset mutation on the current gameplay
+  // revision, not a new gameplay design. Creating a revision for cover-only
+  // updates races active playtests and strands their exact-revision evidence.
+  if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined)) {
     try {
       core = await mirrorGameToCreatorCore({ project: fresh, cause: "refine" });
     } catch (error) {

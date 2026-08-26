@@ -73,6 +73,7 @@ import {
   saveNovelCheckpointAndContent,
 } from "@/lib/novel-generate-checkpoint";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
+import { normalizeWorkGenerationProvenance } from "@/lib/work-generation-meta";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { shouldChargeNovelStreamQuota } from "@/lib/literary-safety";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
@@ -432,6 +433,7 @@ export async function POST(req: Request) {
                 content,
                 summary,
                 pipelineMeta,
+                ...normalizeWorkGenerationProvenance({ provider: String(providerLabel), model }),
               });
               if (briefJsonToPersist) {
                 await saveNovelCreativeBriefJson(draftNovelId, briefJsonToPersist);
@@ -611,6 +613,7 @@ export async function POST(req: Request) {
                   : summary,
               status: "ready",
               visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
+              ...normalizeWorkGenerationProvenance({ provider: String(providerLabel), model }),
             },
           });
           await recordCreatorFunnelEvent({ event: "create", workType: "novel" });

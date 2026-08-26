@@ -23,6 +23,7 @@ import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
+import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);
+    const generation = parseWorkGenerationFromUnknown(body);
     const project = await createProjectRecord({
       ownerKey,
       title: spec.title,
@@ -118,6 +120,8 @@ export async function POST(req: Request) {
       creativeBriefJson: briefJson,
       status: "ready",
       visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
+      generationProvider: generation.generationProvider,
+      generationModel: generation.generationModel,
     });
     await recordCreatorFunnelEvent({ event: "create", workType: "game" });
     if (briefJson && !project.creativeBriefJson) {

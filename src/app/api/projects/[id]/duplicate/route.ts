@@ -51,6 +51,8 @@ export async function POST(req: Request, ctx: RouteContext) {
       prompt: source.prompt,
       specJson: JSON.stringify(canonicalSpec),
       status: source.status,
+      generationProvider: source.generationProvider,
+      generationModel: source.generationModel,
     });
   } catch (e) {
     return NextResponse.json(

@@ -4,6 +4,7 @@ import { attachWorkShareCounts } from "@/lib/admin/work-engagement";
 import { deleteAdminWork, isAdminWorkType } from "@/lib/admin/delete-work";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
+import { formatWorkGenerationLabel } from "@/lib/work-generation-meta";
 
 export async function GET(req: Request) {
   const gate = await requireAdminCapability(req, "content");
@@ -29,6 +30,9 @@ export async function GET(req: Request) {
     coverPath?: string | null;
     novelId?: string | null;
     novelTitle?: string | null;
+    generationProvider?: string | null;
+    generationModel?: string | null;
+    generationLabel?: string;
   }> = [];
 
   const visFilter = visibility && ["public", "hidden", "pending_review"].includes(visibility)
@@ -54,6 +58,8 @@ export async function GET(req: Request) {
         playCount: true,
         likeCount: true,
         coverPath: true,
+        generationProvider: true,
+        generationModel: true,
       },
     });
     items.push(
@@ -69,6 +75,9 @@ export async function GET(req: Request) {
         playCount: r.playCount,
         likeCount: r.likeCount,
         coverPath: r.coverPath,
+        generationProvider: r.generationProvider,
+        generationModel: r.generationModel,
+        generationLabel: formatWorkGenerationLabel(r.generationProvider, r.generationModel),
       })),
     );
   }
@@ -92,6 +101,8 @@ export async function GET(req: Request) {
         playCount: true,
         likeCount: true,
         coverPath: true,
+        generationProvider: true,
+        generationModel: true,
       },
     });
     items.push(
@@ -107,6 +118,9 @@ export async function GET(req: Request) {
         playCount: r.playCount,
         likeCount: r.likeCount,
         coverPath: r.coverPath,
+        generationProvider: r.generationProvider,
+        generationModel: r.generationModel,
+        generationLabel: formatWorkGenerationLabel(r.generationProvider, r.generationModel),
       })),
     );
   }
@@ -130,6 +144,8 @@ export async function GET(req: Request) {
         likeCount: true,
         novelId: true,
         coverPath: true,
+        generationProvider: true,
+        generationModel: true,
       },
     });
     const novelIds = [...new Set(rows.map((r) => r.novelId).filter((id): id is string => Boolean(id)))];
@@ -155,6 +171,9 @@ export async function GET(req: Request) {
         novelId: r.novelId,
         novelTitle: r.novelId ? novelTitleMap.get(r.novelId) ?? null : null,
         coverPath: r.coverPath,
+        generationProvider: r.generationProvider,
+        generationModel: r.generationModel,
+        generationLabel: formatWorkGenerationLabel(r.generationProvider, r.generationModel),
       })),
     );
   }

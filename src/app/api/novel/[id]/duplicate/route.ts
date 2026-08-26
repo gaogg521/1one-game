@@ -49,6 +49,8 @@ export async function POST(req: Request, ctx: RouteContext) {
           status: source.status,
           visibility: defaultWorkVisibility(),
           shareCode: newShareCode(),
+          generationProvider: source.generationProvider,
+          generationModel: source.generationModel,
         },
       });
       break;

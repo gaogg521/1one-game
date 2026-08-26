@@ -177,6 +177,7 @@
     "qa:studio-duplicate": "tsx scripts/qa-studio-duplicate.ts",
     "qa:studio-batch-delete": "tsx scripts/qa-studio-batch-delete.ts",
     "qa:admin-works-delete": "tsx scripts/qa-admin-works-delete.ts",
+    "qa:work-generation-meta": "tsx scripts/qa-work-generation-meta.ts",
     "qa:admin-console": "tsx scripts/qa-admin-console.ts",
     "qa:console-sso-config": "tsx scripts/qa-console-sso-config.ts",
     "qa:comic-storyboard-resilience": "tsx scripts/qa-comic-storyboard-resilience.ts",

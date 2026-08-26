@@ -242,6 +242,8 @@ model CreativeArtifact {
   provider           String?
   sourceArtifactId   String?
   metadataJson       String?
+  /// Optional producer-owned idempotency key for singleton evidence artifacts.
+  idempotencyKey     String?  @unique
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -429,19 +431,33 @@ model GameplayEvent {
   id                 String   @id @default(cuid())
   /// 已保存作品时关联 Project id；创作台预览可为空。
   projectId          String?
+  /// Exact immutable revision rendered by this browser session.
+  creativeRevisionId String?
   templateId         String
   /// start | first_action | first_minute | end | retry
   event              String
   /// 每个浏览器试玩回合生成的随机 UUID，不与账户或设备标识关联。
   sessionId          String
   elapsedMs          Int?
+  /// Foreground gameplay time, excluding hidden-tab time.
+  activeMs           Int?
+  /// Coarse action count only; raw input is never retained.
+  actionCount        Int?
+  /// mobile | desktop, derived without user-agent or fingerprint storage.
+  deviceClass        String?
+  /// portrait | landscape.
+  orientation        String?
+  touchCapable       Boolean?
   score              Int?
   won                Boolean?
   /// 生成时的静态首分钟质量分，便于校准质量评分与真实留存之间的关系。
   verticalSliceScore Int?
+  /// Deduplicates retries without retaining any additional identity data.
+  eventKey           String?  @unique
   createdAt          DateTime @default(now())
 
   @@index([projectId, createdAt])
+  @@index([creativeRevisionId, createdAt])
   @@index([templateId, event, createdAt])
   @@index([sessionId])
 }
@@ -538,6 +554,10 @@ model Project {
   bgmNotesJson      String?
   /// 音频模型实际产出的 BGM 资产元数据（URL / MIME / provider / model；不保存密钥）
   bgmAudioJson      String?
+  /// 生成该作品规格时实际命中的服务商 ID（不含密钥）
+  generationProvider String?
+  /// 生成该作品规格时实际命中的模型 ID；本地规则回退记为 mock
+  generationModel    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -568,6 +588,10 @@ model Novel {
   coverPath           String?
   playCount           Int      @default(0)
   likeCount           Int      @default(0)
+  /// 生成该小说时实际命中的服务商 ID
+  generationProvider  String?
+  /// 生成该小说时实际命中的模型 ID
+  generationModel     String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -593,6 +617,10 @@ model Comic {
   status            String   @default("ready")
   coverPath         String?
   likeCount         Int      @default(0)
+  /// 生成该漫画分镜时实际命中的服务商 ID
+  generationProvider String?
+  /// 生成该漫画分镜时实际命中的模型 ID
+  generationModel    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

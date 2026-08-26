@@ -1,20 +1,21 @@
 # 项目工作进度快照
 
-最后更新：2026-08-26（运行时网关页纠偏）
+最后更新：2026-08-26（后台作品日期与生成模型）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **编译 / Lint**：本次改动文件 eslint **0 errors**。
-- **QA**：`qa:runtime-provider-saved-test`（含客户端凭证不被 process.env 覆盖）、`qa:runtime-cross-provider-routing`、`qa:runtime-config-admin` 通过。
-- **网关页**：语言覆盖不再把目录短名和下拉外的真 ID 显示成两套值；线上表备用列读 `fallbackCandidates`；兼容层密钥不再伪装成 .env。
-- **调用**：OpenAI 兼容客户端按服务商 apiKey/baseUrl 构造，不再靠改 `process.env` 抢全局状态。
+- **编译 / Lint**：本次改动文件 eslint **0 errors**（`comic-generate-run.ts` 仍有 3 条既有 unused warning）。
+- **QA**：`qa:work-generation-meta` 通过（规范化 + Project/Novel/Comic 落库 `generationProvider` / `generationModel` / `createdAt`）。
+- **后台**：作品列表与待审核共用 `WorksTable`，新增「日期」「生成模型」列；手机卡片同步展示。
+- **写入**：游戏保存带 SSE `debug`；小说 create/finalize 记实际模型；漫画分镜 create/update 记 `provider · model`。存量作品显示「未记录」，直至重新生成或保存。
 
 ### 下次启动清单
 
-1. 强刷 `https://operone.1oneclaw.com/console?tab=runtime`：业务模型路由、语言覆盖、当前线上生效。
-2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
+1. 强刷 `https://operone.1oneclaw.com/console?tab=pending` 与 `tab=works`：确认日期、生成模型列；新生成作品应显示 `provider · model`。
+2. （遗留）管线路由 locale/scene WIP 仍在工作区，未随本次提交。
+3. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
 
 ## 1. 产品与技术现状
 

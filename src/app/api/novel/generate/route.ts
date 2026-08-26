@@ -38,6 +38,7 @@ import {
   type NovelLengthOptions,
 } from "@/lib/novel-length";
 import { persistNovelLengthTier } from "@/lib/novel-length-tier-db";
+import { normalizeWorkGenerationProvenance } from "@/lib/work-generation-meta";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { getOwnerKey } from "@/lib/owner";
 import { rateLimit } from "@/lib/rate-limit";
@@ -377,6 +378,7 @@ export async function POST(req: Request) {
             : summary,
         status: "ready",
         visibility: visibilityWithQualityGuard(defaultWorkVisibility(), quality),
+        ...normalizeWorkGenerationProvenance({ provider: providerUsed, model: modelUsed }),
       },
     });
     await recordCreatorFunnelEvent({ event: "create", workType: "novel" });

@@ -43,6 +43,8 @@ export async function copyProjectToSampleGallery(args: CopyProjectToSampleGaller
       coverPath: source.coverPath,
       playCount: Math.max(source.playCount ?? 0, 1),
       likeCount: source.likeCount ?? 0,
+      generationProvider: source.generationProvider,
+      generationModel: source.generationModel,
     },
     update: {
       ownerKey: SAMPLE_GALLERY_OWNER,
@@ -55,6 +57,8 @@ export async function copyProjectToSampleGallery(args: CopyProjectToSampleGaller
       coverPath: source.coverPath,
       playCount: Math.max(source.playCount ?? 0, 1),
       likeCount: source.likeCount ?? 0,
+      generationProvider: source.generationProvider,
+      generationModel: source.generationModel,
     },
   });
 

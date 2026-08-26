@@ -90,6 +90,7 @@ import {
 } from "@/lib/novel-creative-brief-db";
 import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { prisma } from "@/lib/prisma";
+import { normalizeWorkGenerationProvenance } from "@/lib/work-generation-meta";
 import { PRODUCT } from "@/lib/product-config";
 import type { AppLocale } from "@/i18n/routing";
 import { progressComicMessage } from "@/lib/i18n/progress-message";
@@ -575,6 +576,13 @@ export async function runComicGeneration(
     throw new ComicGenerationRunError("storyboardFailed");
   }
 
+  if (draftComicId) {
+    await prisma.comic.update({
+      where: { id: draftComicId },
+      data: normalizeWorkGenerationProvenance({ provider: gen.provider, model: gen.model }),
+    });
+  }
+
   let pages = gen.pages;
   const segments = splitNovelIntoSegments(novelContent, 24, outputLocale);
   if (segments.length > 0) {
@@ -801,6 +809,7 @@ export async function runComicGeneration(
         prompt: novelContent.slice(0, 200),
         imageUrls,
         status: finalStatus,
+        ...normalizeWorkGenerationProvenance({ provider: gen?.provider, model: gen?.model }),
       },
     });
     comicId = draftComicId;
@@ -814,6 +823,7 @@ export async function runComicGeneration(
         imageUrls,
         status: finalStatus,
         visibility: defaultWorkVisibility(),
+        ...normalizeWorkGenerationProvenance({ provider: gen?.provider, model: gen?.model }),
       },
     });
     comicId = created.id;

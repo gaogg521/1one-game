@@ -12,6 +12,8 @@ type CreateArgs = {
   status?: string;
   visibility?: WorkVisibility;
   creativeBriefJson?: string | null;
+  generationProvider?: string | null;
+  generationModel?: string | null;
 };
 
 /** 创建作品并分配唯一 shareCode；极低概率碰撞时自动重试。 */
@@ -29,6 +31,8 @@ export async function createProjectRecord(args: CreateArgs) {
           status,
           visibility: args.visibility ?? defaultWorkVisibility(),
           shareCode: newShareCode(),
+          generationProvider: args.generationProvider ?? null,
+          generationModel: args.generationModel ?? null,
         },
       });
     } catch (e) {

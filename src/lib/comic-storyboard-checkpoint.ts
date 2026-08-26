@@ -12,6 +12,7 @@ import type { ComicReadMode } from "@/lib/comic-format";
 import type { ComicLayoutId } from "@/lib/comic-layout";
 import { defaultWorkVisibility } from "@/lib/auth/work-visibility";
 import { prisma } from "@/lib/prisma";
+import type { WorkGenerationProvenance } from "@/lib/work-generation-meta";
 
 export const COMIC_STATUS_DRAFT_STORYBOARD = "draft_storyboard";
 
@@ -73,12 +74,19 @@ export async function upsertStoryboardDraftComic(opts: {
   title: string;
   prompt: string;
   doc: ComicDocument;
+  generation?: WorkGenerationProvenance;
 }): Promise<string> {
   const imageUrls = serializeComicDocument(opts.doc);
+  const generationData = opts.generation
+    ? {
+        generationProvider: opts.generation.generationProvider,
+        generationModel: opts.generation.generationModel,
+      }
+    : {};
   if (opts.comicId) {
     await prisma.comic.update({
       where: { id: opts.comicId },
-      data: { imageUrls, status: COMIC_STATUS_DRAFT_STORYBOARD },
+      data: { imageUrls, status: COMIC_STATUS_DRAFT_STORYBOARD, ...generationData },
     });
     return opts.comicId;
   }
@@ -91,6 +99,7 @@ export async function upsertStoryboardDraftComic(opts: {
       imageUrls,
       status: COMIC_STATUS_DRAFT_STORYBOARD,
       visibility: defaultWorkVisibility(),
+      ...generationData,
     },
   });
   return comic.id;

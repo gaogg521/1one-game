@@ -85,6 +85,9 @@ type WorkRow = {
   coverPath?: string | null;
   novelId?: string | null;
   novelTitle?: string | null;
+  generationProvider?: string | null;
+  generationModel?: string | null;
+  generationLabel?: string;
 };
 
 type ShareReport = {
@@ -439,7 +442,7 @@ export default function AdminConsolePage({
       if (workTypeFilter !== "all" && w.type !== workTypeFilter) return false;
       if (visibilityFilter !== "all" && w.visibility !== visibilityFilter) return false;
       if (!q) return true;
-      return `${w.title} ${w.type} ${w.id} ${w.visibility}`.toLowerCase().includes(q);
+      return `${w.title} ${w.type} ${w.id} ${w.visibility} ${w.generationLabel ?? ""} ${w.generationModel ?? ""}`.toLowerCase().includes(q);
     });
   }, [pending, query, tab, visibilityFilter, workTypeFilter, works]);
 
@@ -1681,6 +1684,38 @@ function AdminPagination({
   );
 }
 
+function formatAdminWorkDate(iso: string, locale: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function WorkGenerationMeta({ work, compact = false }: { work: WorkRow; compact?: boolean }) {
+  const t = useTranslations("adminPage");
+  const locale = useLocale();
+  const mock = (work.generationModel ?? "").trim().toLowerCase() === "mock";
+  const label = mock
+    ? t("generationModelMock")
+    : (work.generationLabel || work.generationModel || "").trim() || t("generationModelUnknown");
+  const date = formatAdminWorkDate(work.createdAt, locale);
+  const cls = compact
+    ? "flex flex-col gap-0.5 text-xs text-[var(--gc-muted)]"
+    : "mt-1 flex flex-col gap-0.5 text-xs text-[var(--gc-muted)]";
+  return (
+    <div className={cls} data-testid={`admin-work-generation-${work.type}-${work.id}`}>
+      <span className="tabular-nums" title={work.createdAt}>{date}</span>
+      <span className="font-mono text-[11px] text-[var(--gc-text-soft)]" title={label}>{label}</span>
+    </div>
+  );
+}
+
 function WorksTable({
   works,
   selectable,
@@ -1703,6 +1738,7 @@ function WorksTable({
   onDelete?: (type: string, id: string, title: string) => void;
 }) {
   const t = useTranslations("adminPage");
+  const locale = useLocale();
   return (
     <>
       <div className="space-y-3 lg:hidden">
@@ -1723,6 +1759,7 @@ function WorksTable({
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] uppercase tracking-wide text-[var(--gc-muted)]">{w.type}</p>
                   <p className="mt-1 font-medium text-[var(--gc-text)]">{w.title}</p>
+                  <WorkGenerationMeta work={w} />
                   <p className="mt-1 text-sm text-[var(--gc-muted)]">
                     {w.visibility}
                     {w.featured ? t("featuredBadge") : ""}
@@ -1738,13 +1775,15 @@ function WorksTable({
         })}
       </div>
       <div className="hidden overflow-x-auto rounded-2xl border border-[color:var(--gc-border)] lg:block">
-        <table className="w-full min-w-[960px] text-left text-[length:var(--gc-admin-fs-body)]">
+        <table className="w-full min-w-[1180px] text-left text-[length:var(--gc-admin-fs-body)]">
           <thead className="bg-[var(--gc-surface-glass)]">
             <tr>
               {selectable ? <th className="px-4 py-3" /> : null}
               <th className="gc-admin-type-label px-4 py-3">{t("colCover")}</th>
               <th className="gc-admin-type-label px-4 py-3">{t("colType")}</th>
               <th className="gc-admin-type-label px-4 py-3">{t("colTitle")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colCreatedAt")}</th>
+              <th className="gc-admin-type-label px-4 py-3">{t("colGenerationModel")}</th>
               <th className="gc-admin-type-label px-4 py-3">{t("colEngagement")}</th>
               <th className="gc-admin-type-label px-4 py-3">{t("colRelation")}</th>
               <th className="gc-admin-type-label px-4 py-3">{t("colVisibility")}</th>
@@ -1766,6 +1805,12 @@ function WorksTable({
                   </td>
                   <td className="px-4 py-3 text-[var(--gc-muted)]">{w.type}</td>
                   <td className="max-w-[220px] truncate px-4 py-3">{w.title}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-[var(--gc-muted)]">
+                    {formatAdminWorkDate(w.createdAt, locale)}
+                  </td>
+                  <td className="max-w-[220px] px-4 py-3">
+                    <WorkModelCell work={w} />
+                  </td>
                   <td className="px-4 py-3">
                     <WorkEngagementMeta work={w} compact />
                   </td>
@@ -1786,6 +1831,23 @@ function WorksTable({
         </table>
       </div>
     </>
+  );
+}
+
+function WorkModelCell({ work }: { work: WorkRow }) {
+  const t = useTranslations("adminPage");
+  const mock = (work.generationModel ?? "").trim().toLowerCase() === "mock";
+  const label = mock
+    ? t("generationModelMock")
+    : (work.generationLabel || work.generationModel || "").trim() || t("generationModelUnknown");
+  return (
+    <span
+      className="block max-w-[220px] truncate font-mono text-xs text-[var(--gc-text-soft)]"
+      title={label}
+      data-testid={`admin-work-model-${work.type}-${work.id}`}
+    >
+      {label}
+    </span>
   );
 }
 

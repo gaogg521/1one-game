@@ -133,6 +133,8 @@ export async function finalizeDraftNovel(
     content: string;
     summary: string | null;
     pipelineMeta: NovelGenerationMeta;
+    generationProvider?: string | null;
+    generationModel?: string | null;
   },
 ): Promise<void> {
   await prisma.novel.update({
@@ -142,6 +144,12 @@ export async function finalizeDraftNovel(
       content: data.content,
       summary: data.summary,
       status: "ready",
+      ...(data.generationProvider !== undefined || data.generationModel !== undefined
+        ? {
+            generationProvider: data.generationProvider ?? null,
+            generationModel: data.generationModel ?? null,
+          }
+        : {}),
     },
   });
   const { generating, ...cleanMeta } = data.pipelineMeta;

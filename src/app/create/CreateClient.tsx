@@ -32,6 +32,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
   const [prompt, setPrompt] = useState(() => props.initialPrompt?.slice(0, 4000) ?? "");
   const [spec, setSpec] = useState<GameSpec | null>(null);
+  const [generationDebug, setGenerationDebug] = useState<{ model?: string; provider?: string; fallback?: boolean } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(props.replayFromProjectId?.trim() || null);
   const [busy, setBusy] = useState<"idle" | "generating" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setBusy("generating");
     setError(null);
     setSpec(null);
+    setGenerationDebug(null);
     setStatus({ step: "kernel", message: "正在确定核心规则与操作方式", lines: [] });
     try {
       const res = await fetch("/api/generate/stream", {
@@ -96,6 +98,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         }
         if (step === "done" && event.spec) {
           setSpec(event.spec as GameSpec);
+          const debug = event.debug && typeof event.debug === "object" ? (event.debug as { model?: string; provider?: string; fallback?: boolean }) : null;
+          setGenerationDebug(debug);
           setStatus((old) => ({ ...old, step: "ready", message: "可玩版本已准备好" }));
         }
         if (step === "error") setError(message || t("errors.generateFailed"));
@@ -117,7 +121,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
       const res = await fetch(updating ? `/api/projects/${projectId}` : "/api/projects", {
         method: updating ? "PATCH" : "POST",
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ prompt, spec: specToSave }),
+        body: JSON.stringify({ prompt, spec: specToSave, debug: generationDebug }),
       });
       const data = (await res.json()) as { project?: { id?: string }; error?: string; errorKey?: string; errorParams?: Record<string, string | number> };
       if (!res.ok) {
@@ -137,7 +141,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     } finally {
       setBusy("idle");
     }
-  }, [busy, locale, projectId, prompt, router, spec, t]);
+  }, [busy, locale, projectId, prompt, router, spec, generationDebug, t]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
