@@ -48,28 +48,26 @@ export async function withProviderEnv<T>(provider: RuntimeLlmProvider, fn: () =>
   }
 }
 
+function credsForProvider(provider: RuntimeLlmProvider) {
+  return {
+    apiKey: provider.apiKey,
+    baseURL: provider.baseUrl,
+    userAgent: provider.userAgent,
+  };
+}
+
 export function createOpenAIClientForProvider(
   provider: RuntimeLlmProvider,
   headerOverride?: Record<string, string>,
 ): OpenAI {
-  return withProviderEnvSync(provider, () => createOpenAIClient(headerOverride));
+  return createOpenAIClient(headerOverride, credsForProvider(provider));
 }
 
 export function createNovelOpenAIClientForProvider(
   provider: RuntimeLlmProvider,
   tier: import("@/lib/novel-length").NovelLengthTier = "medium",
 ): OpenAI {
-  return withProviderEnvSync(provider, () => createNovelOpenAIClient(tier));
-}
-
-function withProviderEnvSync<T>(provider: RuntimeLlmProvider, fn: () => T): T {
-  const prev = snapshotProviderEnv();
-  applyProviderToProcessEnv(provider);
-  try {
-    return fn();
-  } finally {
-    restoreProviderEnv(prev);
-  }
+  return createNovelOpenAIClient(tier, credsForProvider(provider));
 }
 
 export function providerCredentialOk(provider: RuntimeLlmProvider): { ok: boolean; reason?: string } {

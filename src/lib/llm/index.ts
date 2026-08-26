@@ -37,20 +37,27 @@ function normalizeProvider(p: string | undefined): LlmProvider {
 }
 
 let _openaiClient: OpenAI | null = null;
-const _novelOpenaiClients = new Map<NovelLengthTier, OpenAI>();
+let _openaiClientKey = "";
+const _novelOpenaiClients = new Map<string, OpenAI>();
+
+function envClientKey(prefix = ""): string {
+  return `${prefix}|${process.env.OPENAI_API_KEY ?? ""}|${process.env.OPENAI_BASE_URL ?? ""}|${process.env.OPENAI_USER_AGENT ?? ""}`;
+}
 
 function getOpenAIClient(): OpenAI {
-  if (_openaiClient) return _openaiClient;
+  const key = envClientKey();
+  if (_openaiClient && _openaiClientKey === key) return _openaiClient;
   _openaiClient = createOpenAIClient();
+  _openaiClientKey = key;
   return _openaiClient;
 }
 
 function getNovelOpenAIClient(tier: NovelLengthTier = "medium"): OpenAI {
-  let client = _novelOpenaiClients.get(tier);
-  if (!client) {
-    client = createNovelOpenAIClient(tier);
-    _novelOpenaiClients.set(tier, client);
-  }
+  const key = envClientKey(tier);
+  const cached = _novelOpenaiClients.get(key);
+  if (cached) return cached;
+  const client = createNovelOpenAIClient(tier);
+  _novelOpenaiClients.set(key, client);
   return client;
 }
 

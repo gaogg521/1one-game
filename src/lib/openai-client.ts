@@ -37,15 +37,24 @@ function mergeDefaultHeaders(override?: Record<string, string>): Record<string, 
  * 默认附带 x-openclaw-timeout-ms（见 product-config）；小说按篇幅在 createNovelOpenAIClient 中覆盖。
  * 若 BASE_URL 不含 /v1，会自动补全（与 OpenAI SDK 默认路径一致）。
  */
-export function createOpenAIClient(headerOverride?: Record<string, string>): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+export type OpenAIClientCreds = {
+  apiKey?: string;
+  baseURL?: string;
+  userAgent?: string;
+};
+
+export function createOpenAIClient(headerOverride?: Record<string, string>, creds?: OpenAIClientCreds): OpenAI {
+  const apiKey = creds?.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY 未配置");
   }
 
-  const baseRaw = process.env.OPENAI_BASE_URL?.trim();
+  const baseRaw = creds?.baseURL?.trim() || process.env.OPENAI_BASE_URL?.trim();
   const baseURL = baseRaw ? normalizeBaseURL(baseRaw) : undefined;
-  const defaultHeaders = mergeDefaultHeaders(headerOverride);
+  const ua = creds?.userAgent?.trim();
+  const defaultHeaders = mergeDefaultHeaders(
+    ua ? { "User-Agent": ua, ...(headerOverride ?? {}) } : headerOverride,
+  );
 
   return new OpenAI({
     apiKey,
@@ -55,7 +64,7 @@ export function createOpenAIClient(headerOverride?: Record<string, string>): Ope
 }
 
 /** 小说正文 LLM：按篇幅覆盖网关 x-openclaw-timeout-ms（长篇默认 30 分钟）。 */
-export function createNovelOpenAIClient(tier: NovelLengthTier = "medium"): OpenAI {
+export function createNovelOpenAIClient(tier: NovelLengthTier = "medium", creds?: OpenAIClientCreds): OpenAI {
   const ms = novelLlmTimeoutMs(tier);
-  return createOpenAIClient({ "x-openclaw-timeout-ms": String(ms) });
+  return createOpenAIClient({ "x-openclaw-timeout-ms": String(ms) }, creds);
 }

@@ -81,6 +81,16 @@ type ProviderFormState = {
   templateId?: ProviderTemplateId;
 };
 
+function providerEndpointHost(baseUrl?: string | null): string {
+  const raw = baseUrl?.trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).host;
+  } catch {
+    return raw.replace(/^https?:\/\//i, "").split("/")[0] ?? "";
+  }
+}
+
 function parseModelsText(raw: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -283,6 +293,9 @@ function LiveRuntimeSummary({
                 const provider = providers.find((p) => p.id === route?.providerId);
                 const domain =
                   meta.domain === "game" ? DOMAIN.game : meta.domain === "novel" ? DOMAIN.novel : DOMAIN.comic;
+                const candidates = route ? routeModelCandidates(route) : [];
+                const fallbacks = candidates.slice(1).map((c) => c.model);
+                const endpoint = providerEndpointHost(provider?.baseUrl);
                 return (
                   <tr key={meta.scene} className="border-t border-white/6">
                     <td className="py-2.5 pr-4 align-top">
@@ -297,14 +310,19 @@ function LiveRuntimeSummary({
                       </span>
                       <span className="text-[var(--gc-text)]">{t(meta.labelKey)}</span>
                     </td>
-                    <td className="py-2.5 pr-4 align-top font-mono text-[12px] text-[var(--gc-muted)]">
-                      {provider?.name.trim() || route?.providerId || "—"}
+                    <td className="py-2.5 pr-4 align-top">
+                      <p className="text-[12px] text-[var(--gc-text)]">{provider?.name.trim() || route?.providerId || "—"}</p>
+                      {endpoint ? (
+                        <p className="mt-0.5 font-mono text-[10px] text-[var(--gc-text-faint)]" title={provider?.baseUrl}>
+                          {endpoint}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="py-2.5 pr-4 align-top font-mono text-[12px] text-[var(--gc-text)]">
                       {route?.primary || "—"}
                     </td>
                     <td className="py-2.5 align-top font-mono text-[12px] text-[var(--gc-muted)]">
-                      {(route?.fallbacks ?? []).join(", ") || "—"}
+                      {fallbacks.length ? fallbacks.join(" → ") : "—"}
                     </td>
                   </tr>
                 );
@@ -706,25 +724,27 @@ function RouteModelPicker({
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
   const inputCls =
-    "w-full rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
+    "w-full min-w-0 rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
+  const catalog = [...new Set(modelSuggestions.map((model) => model.trim()).filter(Boolean))];
+  const options = value && !catalog.includes(value) ? [value, ...catalog] : catalog;
 
   return (
     <div className="space-y-1.5">
       <span className="text-[10px] text-[var(--gc-text-faint)]">{label}</span>
-      {modelSuggestions.length > 0 ? (
+      {options.length > 0 ? (
         <select
           aria-label={t("routeCatalogSelectAria", { label })}
           className={inputCls}
           data-testid={`admin-runtime-route-${sceneKey}-${field}-catalog`}
-          value=""
+          value={value}
           onChange={(event) => onChange(event.target.value)}
         >
           <option value="" disabled>
             {t("routeCatalogPlaceholder")}
           </option>
-          {modelSuggestions.map((model) => (
+          {options.map((model) => (
             <option key={model} value={model}>
-              {model}
+              {catalog.includes(model) ? model : t("routeCatalogUnlisted", { model })}
             </option>
           ))}
         </select>
@@ -737,6 +757,7 @@ function RouteModelPicker({
         data-testid={`admin-runtime-route-${sceneKey}-${field}-model`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        placeholder={t("routeModelInputPlaceholder")}
       />
       <p className="text-[10px] leading-relaxed text-[var(--gc-text-faint)]">{t("routeModelPickerHint")}</p>
     </div>
@@ -782,7 +803,7 @@ function RouteRow({
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
   const selectCls =
-    "w-full appearance-none rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
+    "w-full min-w-0 appearance-none rounded-lg border border-[color:var(--gc-border)] bg-[color:color-mix(in_srgb,var(--gc-bg-elevated)_92%,transparent)] px-3 py-2 font-mono text-[12px] text-[var(--gc-text)] outline-none focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,var(--gc-border))]";
   return (
     <tr className="border-b border-white/6 last:border-0">
       <td className="py-4 pr-4 align-top">
@@ -1390,28 +1411,28 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
           <details className="group border-b border-white/8 bg-sky-500/5" data-testid="admin-runtime-locale-routing">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
               <div>
-                <h4 className="text-base font-semibold text-[var(--gc-text)]">语言覆盖（可选）</h4>
-                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">
-                  默认使用下方每个场景的主路由；只有需要中西文化或供应商差异时，才展开为中文池和国际池设置覆盖。
-                </p>
+                <h4 className="text-base font-semibold text-[var(--gc-text)]">{t("localeRoutingTitle")}</h4>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--gc-muted)]">{t("localeRoutingHint")}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">{localeRoutesForm.length} 个覆盖</span>
+                <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">
+                  {t("localeOverrideCount", { count: localeRoutesForm.length })}
+                </span>
                 <span className="text-xs text-[var(--gc-text-faint)] transition group-open:rotate-180">⌄</span>
               </div>
             </summary>
             <div className="grid gap-4 px-4 pb-5 sm:px-6 xl:grid-cols-2">
               {(["zh", "international"] as const).map((localeGroup) => (
                 <div key={localeGroup} className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h5 className="font-medium text-[var(--gc-text)]">{localeGroup === "zh" ? "中文池（简体 / 繁体）" : "国际池（非中文）"}</h5>
-                      <p className="mt-1 text-xs text-[var(--gc-text-faint)]">
-                        {localeGroup === "zh" ? "建议中文图像使用 doubao-seedream-5-0-pro" : "建议国际图像使用 gpt-image-2"}
-                      </p>
-                    </div>
+                  <div>
+                    <h5 className="font-medium text-[var(--gc-text)]">
+                      {localeGroup === "zh" ? t("localePoolZh") : t("localePoolIntl")}
+                    </h5>
+                    <p className="mt-1 text-xs text-[var(--gc-text-faint)]">
+                      {localeGroup === "zh" ? t("localePoolZhHint") : t("localePoolIntlHint")}
+                    </p>
                   </div>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-3">
                     {RUNTIME_SCENE_CATALOG.map((meta) => {
                       const override = localeRouteByScene(meta.scene, localeGroup);
                       const inherited = routesForm.find((route) => route.scene === meta.scene);
@@ -1419,24 +1440,45 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
                       const provider = providersForm.find((item) => item.id === route?.providerId);
                       const suggestions = provider ? parseModelsText(provider.modelsText) : [];
                       return (
-                        <div key={meta.scene} className="grid gap-2 rounded-lg border border-white/6 p-2.5 md:grid-cols-[minmax(118px,0.8fr)_minmax(120px,1fr)_minmax(150px,1.2fr)_auto] md:items-center">
-                          <div>
-                            <p className="text-xs font-medium text-[var(--gc-text)]">{t(meta.labelKey)}</p>
-                            <p className="text-[10px] text-[var(--gc-text-faint)]">{override ? "语言覆盖" : "继承全局"}</p>
+                        <div key={meta.scene} className="space-y-2 rounded-lg border border-white/8 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[var(--gc-text)]">{t(meta.labelKey)}</p>
+                              <p className="text-[11px] text-[var(--gc-text-faint)]">
+                                {override ? t("localeOverride") : t("localeInherit")}
+                              </p>
+                            </div>
+                            {override ? (
+                              <button
+                                type="button"
+                                onClick={() => clearLocaleRoute(meta.scene, localeGroup)}
+                                className="shrink-0 text-xs text-[var(--gc-muted)] hover:text-red-200"
+                              >
+                                {t("localeRestore")}
+                              </button>
+                            ) : (
+                              <span className="shrink-0 text-xs text-[var(--gc-text-faint)]">{t("localeGlobal")}</span>
+                            )}
                           </div>
-                          <select className={inputCls} value={route?.providerId ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { providerId: e.target.value })}>
-                            {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                          <select
+                            className={`${inputCls} min-w-0`}
+                            value={route?.providerId ?? ""}
+                            onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { providerId: e.target.value })}
+                          >
+                            {providerOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
                           </select>
-                          <div className="space-y-1">
-                            {suggestions.length > 0 ? (
-                              <select className={inputCls} value={route?.primary ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { primary: e.target.value })}>
-                                <option value="">选择模型</option>
-                                {suggestions.map((model) => <option key={model} value={model}>{model}</option>)}
-                              </select>
-                            ) : null}
-                            <input className={inputCls} value={route?.primary ?? ""} onChange={(e) => updateLocaleRoute(meta.scene, localeGroup, { primary: e.target.value })} placeholder="模型 ID" />
-                          </div>
-                          {override ? <button type="button" onClick={() => clearLocaleRoute(meta.scene, localeGroup)} className="text-xs text-[var(--gc-muted)] hover:text-red-200">恢复继承</button> : <span className="text-xs text-[var(--gc-text-faint)]">全局</span>}
+                          <RouteModelPicker
+                            sceneKey={meta.scene}
+                            field={`locale-${localeGroup}-primary`}
+                            label={t("routePrimary")}
+                            value={route?.primary ?? ""}
+                            onChange={(primary) => updateLocaleRoute(meta.scene, localeGroup, { primary })}
+                            modelSuggestions={suggestions}
+                          />
                         </div>
                       );
                     })}

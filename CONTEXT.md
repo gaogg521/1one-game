@@ -1,32 +1,20 @@
 # 项目工作进度快照
 
-最后更新：2026-08-26（后台删除作品 + 样品馆可取消精选/移出）
+最后更新：2026-08-26（运行时网关页纠偏）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **编译 / Lint**：本次改动文件 eslint **0 errors**（样品馆面板既有 `set-state-in-effect` warning）；全仓 `npx tsc --noEmit` 仍有既有错误 `GamePlayerInner.tsx`（`telemetry.start()` 参数，与本次无关）。
-- **QA**：`npm run qa:admin-works-delete` 通过；`npm run qa:sample-gallery-db-sync` 通过（含取消精选/下架不被 sync 覆盖、复制样品可移出）。
-- **后台作品治理**：小说/漫画/游戏可永久删除（小说级联删改编漫画）；批量删除。入口 `/console?tab=works`。
-- **样品馆 / 精选**：公开页每次 seed **不再覆盖** 后台取消的精选与下架。样品馆列表可「取消精选 / 下架 / 重新上架 / 移出样品馆」；复制进馆的样品出现在表内并可删除。作品治理里精选作品有红色「取消精选」。
-- **发布**：本次完成后 commit + push `origin/main` 并跑 `python scripts/deploy-prod-cee8b1d.py`。
-
-### 本会话改动摘要
-
-| 区域 | 改动 |
-|---|---|
-| `src/lib/admin/delete-work.ts` | 后台永久删除游戏/小说/漫画及评论、资产、Core 关联 |
-| `src/app/api/admin/works/route.ts` | `DELETE` 单条/批量 |
-| `src/lib/sample-gallery-seed.ts` | update 不再重置 `featured` / `visibility` |
-| `src/lib/admin/sample-gallery-ops.ts` | 精选/上下架/移出（目录下架、复制样品删除） |
-| `SampleGalleryPanel` / `AdminConsolePage` | 删除、取消精选、下架、移出入口 |
-| 五语文案 | 删除确认与样品馆取消/移出 |
+- **编译 / Lint**：本次改动文件 eslint **0 errors**。
+- **QA**：`qa:runtime-provider-saved-test`（含客户端凭证不被 process.env 覆盖）、`qa:runtime-cross-provider-routing`、`qa:runtime-config-admin` 通过。
+- **网关页**：语言覆盖不再把目录短名和下拉外的真 ID 显示成两套值；线上表备用列读 `fallbackCandidates`；兼容层密钥不再伪装成 .env。
+- **调用**：OpenAI 兼容客户端按服务商 apiKey/baseUrl 构造，不再靠改 `process.env` 抢全局状态。
 
 ### 下次启动清单
 
-1. 强刷 `https://operone.1oneclaw.com/console?tab=works` 删小说/漫画；`/console?tab=samples` 取消精选、下架、移出。
-2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数；Godot 死代码清理；React Compiler warnings。
+1. 强刷 `https://operone.1oneclaw.com/console?tab=runtime`：业务模型路由、语言覆盖、当前线上生效。
+2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
 
 ## 1. 产品与技术现状
 

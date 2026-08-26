@@ -17,7 +17,8 @@ async function main() {
 
   const { getRuntimeConfigPublicView, getSavedRuntimeProvider, invalidateRuntimeConfigCache, saveRuntimeConfig } =
     await import("@/lib/runtime-config");
-  const { normalizeOpenAIBaseURL } = await import("@/lib/openai-client");
+  const { normalizeOpenAIBaseURL, createOpenAIClient } = await import("@/lib/openai-client");
+  const { createOpenAIClientForProvider } = await import("@/lib/runtime-llm-client");
   const { prisma } = await import("@/lib/prisma");
 
   const providerId = "qa-saved-provider";
@@ -54,6 +55,35 @@ async function main() {
     { name: "Ark /api/v3 stays unmodified", ok: normalizeOpenAIBaseURL("https://ark.cn-beijing.volces.com/api/v3") === "https://ark.cn-beijing.volces.com/api/v3" },
     { name: "ordinary OpenAI base still receives /v1", ok: normalizeOpenAIBaseURL("https://provider.example.test") === "https://provider.example.test/v1" },
   ];
+  process.env.OPENAI_API_KEY = "sk-env-should-not-win";
+  process.env.OPENAI_BASE_URL = "https://env.example.test/v1";
+  const routed = createOpenAIClientForProvider({
+    id: "qa-route",
+    name: "QA route",
+    protocol: "openai_compatible",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    apiKey: "sk-provider-should-win",
+    models: ["qa-model"],
+    enabled: true,
+  });
+  const explicit = createOpenAIClient(undefined, {
+    apiKey: "sk-explicit",
+    baseURL: "https://provider.example.test/v1",
+  });
+  checks.push(
+    {
+      name: "provider client uses provider key not process.env",
+      ok: routed.apiKey === "sk-provider-should-win",
+    },
+    {
+      name: "provider client uses provider base URL not process.env",
+      ok: routed.baseURL === "https://ark.cn-beijing.volces.com/api/v3",
+    },
+    {
+      name: "explicit creds ignore process.env",
+      ok: explicit.apiKey === "sk-explicit" && explicit.baseURL === "https://provider.example.test/v1",
+    },
+  );
   for (const check of checks) console.log(`${check.ok ? "✓" : "✗"} ${check.name}`);
   await prisma.$disconnect();
   if (checks.some((check) => !check.ok)) process.exitCode = 1;
