@@ -41,18 +41,18 @@ export function FeaturedSamplesSection() {
           </Link>
         </div>
 
-        <div className="mt-7 grid gap-3 lg:grid-cols-12 lg:gap-4">
+        <div className="mt-7 grid items-stretch gap-3 lg:grid-cols-12 lg:gap-4">
           {hero ? (
             <SampleShowcaseCard
               sample={getLocalizedSample(hero, locale)}
               locale={locale}
               hero
-              className="lg:col-span-7"
+              className="lg:col-span-7 lg:h-full"
             />
           ) : null}
-          <div className="grid grid-cols-2 gap-3 lg:col-span-5 lg:grid-cols-2 lg:grid-rows-2">
+          <div className="grid h-full grid-cols-2 gap-3 lg:col-span-5 lg:grid-cols-2 lg:grid-rows-2">
             {rest.slice(0, 4).map((s) => (
-              <SampleShowcaseCard key={s.id} sample={getLocalizedSample(s, locale)} locale={locale} />
+              <SampleShowcaseCard key={s.id} sample={getLocalizedSample(s, locale)} locale={locale} className="h-full" />
             ))}
           </div>
         </div>
@@ -80,11 +80,17 @@ function SampleShowcaseCard({
     <Link
       href={playHref}
       data-testid={hero ? "home-featured-hero" : undefined}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition duration-500 hover:-translate-y-1 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,var(--gc-border))] hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.65)] ${className}`}
+      className={`group relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] transition duration-500 hover:-translate-y-1 hover:border-[color:color-mix(in_srgb,var(--gc-accent)_40%,var(--gc-border))] hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.65)] ${className}`}
     >
+      {/*
+        主卡在桌面会被右侧 2×2 货架拉高；封面必须跟着铺满，
+        否则 Link 多出来的高度会露出卡片灰底（不是留给简介的区域）。
+      */}
       <div
-        className={`relative w-full overflow-hidden bg-[var(--gc-bg-elevated)] ${
-          hero ? "aspect-[16/10] min-h-[220px] sm:min-h-[300px]" : "aspect-[4/5]"
+        className={`relative w-full flex-1 overflow-hidden bg-[var(--gc-bg-elevated)] ${
+          hero
+            ? "aspect-[16/10] min-h-[220px] sm:min-h-[300px] lg:aspect-auto lg:min-h-0"
+            : "aspect-[4/5] min-h-0"
         }`}
       >
         <div className="absolute inset-0" style={{ background: sample.coverGradient }} />
