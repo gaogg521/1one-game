@@ -296,7 +296,7 @@ export class PlayScene extends Phaser.Scene {
     this.winScore = this.spec.gameplay.winScore ?? 40;
     this.deliveryDeadlineMs = gameDeliveryDeadlineMs(this.spec);
     this.lives = this.spec.gameplay.lives ?? 3;
-    if (this.spec.templateId === "collector") this.invulnUntil = 4_000;
+    if (this.spec.templateId === "collector") this.invulnUntil = this.time.now + 4_000;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
     const ui = buildSceneCohesion(this.spec);
