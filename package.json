@@ -107,6 +107,7 @@
     "qa:game-delivery-readiness": "tsx scripts/qa-game-delivery-readiness.ts",
     "qa:game-session-resolution": "tsx scripts/qa-game-session-resolution.ts",
     "qa:game-asset-fallback": "tsx scripts/qa-game-asset-fallback.ts",
+    "qa:runtime-public-assets": "tsx scripts/qa-runtime-public-assets.ts",
     "qa:game-bgm-audio": "tsx scripts/qa-game-bgm-audio.ts",
     "qa:gameplay-telemetry": "tsx scripts/qa-gameplay-telemetry.ts",
     "qa:game-playtest-evidence": "tsx scripts/qa-game-playtest-evidence.ts",

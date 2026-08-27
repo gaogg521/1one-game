@@ -78,6 +78,27 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
   throw new Error(`交付制品等待超时：${lastKinds.join(",")}`);
 }
 
+async function verifyRuntimeAssets(page: Page, detail: ProjectDetail, stages: StageRecord[]) {
+  const manifestArtifact = detail.core?.revision?.artifacts?.find((item) => item.kind === "asset_manifest");
+  const content = manifestArtifact?.content as {
+    backgroundUrl?: unknown;
+    sprites?: Array<{ kind?: unknown; url?: unknown }>;
+  } | undefined;
+  const requiredUrls = [
+    typeof content?.backgroundUrl === "string" ? content.backgroundUrl : null,
+    ...(content?.sprites ?? [])
+      .filter((entry) => entry.kind === "player" || entry.kind === "hazard")
+      .map((entry) => typeof entry.url === "string" ? entry.url : null),
+  ].filter((url): url is string => Boolean(url));
+  assert(requiredUrls.length >= 3, "资产清单缺少背景、玩家或敌人 URL");
+  for (const url of requiredUrls) {
+    const response = await page.request.get(`${baseUrl}${url}`);
+    assert(response.ok(), `运行时资源不可访问：${url} HTTP ${response.status()}`);
+    assert((response.headers()["content-type"] ?? "").startsWith("image/"), `运行时资源类型错误：${url}`);
+  }
+  stages.push({ at: new Date().toISOString(), stage: "runtime_assets_verified", detail: { urls: requiredUrls } });
+}
+
 async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[]) {
   const events: Array<Record<string, unknown>> = [];
   page.on("request", (request) => {
@@ -225,6 +246,7 @@ async function main() {
 
     await playUntilDeliveryEvidence(page, stages);
     const ready = await waitForDeliveryArtifacts(page, projectId, stages);
+    await verifyRuntimeAssets(page, ready, stages);
     const artifacts = ready.core?.revision?.artifacts ?? [];
     summary.artifacts = artifacts.map((item) => item.kind).filter(Boolean);
     summary.bgmSource = artifacts.find((item) => item.kind === "bgm")?.storageUri ? "audio_model" : "llm_notes";
