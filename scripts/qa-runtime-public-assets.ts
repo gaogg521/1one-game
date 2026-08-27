@@ -19,8 +19,12 @@ async function main() {
     assert.equal(background.status, 200);
     const traversal = await runtimePublicAssetResponse({ directory: "game-bg", parts: ["..", "secret.png"], rootDir: root });
     assert.equal(traversal.status, 404, "runtime asset routes must reject path traversal");
+    const pendingKnownAsset = await runtimePublicAssetResponse({ directory: "game-sprites", parts: ["project-1", "hazard.png"], rootDir: root });
+    assert.equal(pendingKnownAsset.status, 200, "known pending assets need a visible fallback instead of a browser 404");
+    assert.equal(pendingKnownAsset.headers.get("x-operone-asset-fallback"), "1");
+    assert.match(pendingKnownAsset.headers.get("content-type") ?? "", /^image\/svg\+xml/);
     const missing = await runtimePublicAssetResponse({ directory: "game-sprites", parts: ["project-1", "missing.png"], rootDir: root });
-    assert.equal(missing.status, 404);
+    assert.equal(missing.status, 404, "unknown asset names must remain unavailable");
     console.log("[OK] qa-runtime-public-assets: post-build generated game files are served safely at runtime");
   } finally {
     await fs.rm(root, { recursive: true, force: true });

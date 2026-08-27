@@ -95,6 +95,7 @@ async function verifyRuntimeAssets(page: Page, detail: ProjectDetail, stages: St
     const response = await page.request.get(`${baseUrl}${url}`);
     assert(response.ok(), `运行时资源不可访问：${url} HTTP ${response.status()}`);
     assert((response.headers()["content-type"] ?? "").startsWith("image/"), `运行时资源类型错误：${url}`);
+    assert(response.headers()["x-operone-asset-fallback"] !== "1", `交付完成后仍在使用临时资源：${url}`);
   }
   stages.push({ at: new Date().toISOString(), stage: "runtime_assets_verified", detail: { urls: requiredUrls } });
 }
