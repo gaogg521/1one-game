@@ -296,6 +296,7 @@ export class PlayScene extends Phaser.Scene {
     this.winScore = this.spec.gameplay.winScore ?? 40;
     this.deliveryDeadlineMs = gameDeliveryDeadlineMs(this.spec);
     this.lives = this.spec.gameplay.lives ?? 3;
+    if (this.spec.templateId === "collector") this.invulnUntil = 4_000;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
     const ui = buildSceneCohesion(this.spec);
@@ -576,7 +577,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {
       if (this.finished) return;
-      if ((this.spec.templateId === "survivor" || this.spec.templateId === "avoider") && this.time.now < this.invulnUntil) return;
+      if ((this.spec.templateId === "survivor" || this.spec.templateId === "avoider" || this.spec.templateId === "collector") && this.time.now < this.invulnUntil) return;
       const hazard = h as Phaser.Physics.Arcade.Image;
       // 重型敌人需要多次击杀
       const hp: number = hazard.getData("hp") ?? 1;
@@ -1901,8 +1902,12 @@ export class PlayScene extends Phaser.Scene {
         this.refreshHud();
         return;
       }
-      // loseLife: lose a life
+      // loseLife: lose a life, then give a recovery window so overlapping
+      // hazards cannot drain every life in a single frame.
       this.lives -= 1;
+      this.invulnUntil = this.time.now + 1_500;
+      this.player.setAlpha(0.35);
+      this.time.delayedCall(200, () => this.player.setAlpha(1));
       this.refreshHud();
       if (this.lives === 1) {
         this.soundscape?.triggerEvent("danger");
