@@ -1,6 +1,6 @@
 ﻿import type { AppLocale } from "@/i18n/routing";
 import type { GameSpec } from "@/lib/game-spec";
-import type { GameProductionContract } from "@/lib/game-production-contract";
+import { buildDefaultGameProductionContract, type GameProductionContract } from "@/lib/game-production-contract";
 import { buildContextPack, resolveQualityTierFromEnv } from "@/lib/orchestration/context-pack";
 import type { OrchestrationRunTrace, RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
@@ -517,6 +517,37 @@ async function withGenerationLocale<T>(locale: AppLocale, fn: () => Promise<T>):
   }
 }
 
+const PRODUCTION_CONTRACT_ISSUES = new Set([
+  "missing_level_flow",
+  "missing_delivery_contract",
+  "missing_music_arc",
+  "missing_ambience",
+  "mobile_sfx_budget_exceeded",
+  "missing_mobile_audio_gesture_policy",
+]);
+
+function productionContractIncomplete(spec: GameSpec): boolean {
+  const production = spec.production;
+  return (
+    !production ||
+    production.levelFlow.length !== 4 ||
+    !production.delivery ||
+    production.audio.sections.length !== 4 ||
+    !production.audio.ambience ||
+    (production.audio.mix.maxConcurrentSfx ?? 99) > 4 ||
+    production.audio.mobile.startsAfterFirstGesture !== true
+  );
+}
+
+/** LLM JSON 通常不含 production 合同；缺了只补合同，不要整份换成内核规格。 */
+function withPlayableProductionContract(prompt: string, spec: GameSpec): GameSpec {
+  if (!productionContractIncomplete(spec)) return spec;
+  return {
+    ...spec,
+    production: buildDefaultGameProductionContract({ prompt, templateId: spec.templateId }),
+  };
+}
+
 /** LLM 的 strict JSON 通常不含 director/systems；缺口在此用 `buildDirector` / `buildSystems`（及塔防蓝图）补齐 —— 与 `finalizePatchedSpec`（patch/refine）语义一致。 */
 function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   let next = spec;
@@ -611,6 +642,7 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
+  next = withPlayableProductionContract(prompt, next);
   return applyExplicitPromptGoals(
     applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt),
     prompt,
@@ -1725,7 +1757,14 @@ export async function generateGameSpecWithMeta(
         ? spec.templateId
         : normalizeTemplateHint(options?.templateHint);
       const validationPlan = buildGameGenerationPlan(prompt, validationHint);
-      const playabilityIssues = validateGameGenerationPlan(validationPlan, spec);
+      let playabilityIssues = validateGameGenerationPlan(validationPlan, spec);
+      if (
+        playabilityIssues.length > 0 &&
+        playabilityIssues.every((issue) => PRODUCTION_CONTRACT_ISSUES.has(issue))
+      ) {
+        spec = withPlayableProductionContract(prompt, spec);
+        playabilityIssues = validateGameGenerationPlan(validationPlan, spec);
+      }
       const preflight = evaluateGameDeliveryReadiness(spec);
       orch?.note("game_kernel_validate", {
         kernel: validationPlan.kernel,

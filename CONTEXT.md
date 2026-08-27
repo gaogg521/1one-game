@@ -1,5 +1,28 @@
 # 项目工作进度快照
-最后更新：2026-08-27（会话：LLM-first 管线 + 生成采集）
+最后更新：2026-08-27（会话：文学线采集复查）
+
+## 当前状态
+- 游戏：LLM-first，内核只校验。文档 `docs/game-generation-pipeline.md`。
+- 小说/漫画：**本来就是 LLM 作者**（没有 Phaser 内核可锁）。缺口是采集：长篇草稿、分镜 checkpoint、长导演/应急 `provider: ""`。
+- 已补：草稿创建即写模型；checkpoint 带 provenance；空 provider 改为 `getActiveProvider()`。
+- 铁律文档：`docs/literary-generation-pipeline.md`。
+- 后台这一对字段记正文/分镜 LLM；逐格文生图不覆盖。
+
+## 本会话修改文件表
+- `src/lib/novel-generate-checkpoint.ts` / `src/app/api/novel/generate/stream/route.ts` — 长篇草稿创建即写 provenance
+- `src/lib/comic-generate-run.ts` — 分镜 checkpoint 带 provider/model
+- `src/lib/comic-pipeline.ts` — 长导演与应急分镜不再写空 provider
+- `docs/literary-generation-pipeline.md`、`PROJECT_MEMORY/DECISIONS.md`
+
+## 下次启动清单
+1. 读 `docs/literary-generation-pipeline.md`（若动小说/漫画）。
+2. 新小说/漫画在 `/console?tab=works` 应有 `provider · model`，不应因空 provider 变成「未记录」。
+3. 游戏线仍见 `docs/game-generation-pipeline.md`。
+
+## 会话记录（按日期追加）
+### 2026-08-27 · 文学线采集
+- 结论：不要给小说/漫画加内核作者。补草稿与空 provider 采集。
+- 状态：待测后提交部署。
 
 ## 当前状态
 - 游戏默认管线改为 **LLM 围绕提示词出 spec**，内核只校验/兜底（`pipeline` 缺省 `"llm"`）。
@@ -49,16 +72,15 @@
 - **生产实测（小说 / 小说转漫画）已通过**（约 16 分钟）：
   - 小说 `cmtbnmf56000xglpm5xxj9io8`：SSE 与落库均为 `openrouter/free`（1598 字，非 mock）。
   - 改编漫画 `cmtbnwqxj001nglpmqtswhtg3`：分镜模型 `doubao-seed-2-1-turbo-260628`（与中文池 comic_storyboard 一致），已绑定该小说。`generationProvider` 仍可能为空字符串规范化成 null，模型已落库。
-- **游戏实测**：首次 `qa:prod-game-create-delivery` 在 30s 内等不到 `/api/generate/stream` 响应。根因是游戏 SSE 缺少 `X-Accel-Buffering: no`，nginx 缓冲整段 LLM 流。已补该头（续写/分格流同样补上）；nginx 会吞掉该响应头，QA 不再断言客户端能看见它。
+- **游戏实测**：SSE 已发出；模型路由生效为 `litellm · deepseek-v4-flash-ga-260731`。失败点是 LLM spec 缺 production 合同（levelFlow/audio 等），校验把整份规格换成内核并标 `fallback:true`。已改为只补 production 合同，不再因此整份替换。
 
 ### 下次启动清单
 
-1. 只提交游戏/续写/分格 SSE `X-Accel-Buffering` 与 QA 脚本修正（不要混入工作区里另一路 `generate-spec` LLM-first WIP）。
-2. `python scripts/deploy-prod-cee8b1d.py`
-3. `$env:QA_PROD_GAME_CREATE="1"; npm run qa:prod-game-create-delivery`
-4. 强刷 `/console?tab=works`：新小说/漫画应显示真实模型，不应再「未记录」。
-5. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
-6. （已知）漫画 provenance 的 provider 在轻分镜路径仍可能为 null；模型字段已生效。
+1. 提交并部署 production 合同回填修复。
+2. `$env:QA_PROD_GAME_CREATE="1"; npm run qa:prod-game-create-delivery`
+3. 强刷 `/console?tab=works`：新小说/漫画应显示真实模型；新游戏应显示 LLM 模型而非仅内核。
+4. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
+5. （已知）漫画 provenance 的 provider 在轻分镜路径仍可能为 null；模型字段已生效。
 
 ## 1. 产品与技术现状
 

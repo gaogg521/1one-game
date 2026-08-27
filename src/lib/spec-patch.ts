@@ -53,7 +53,16 @@ export function prepareGameSpecForPersist(
 
 export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
   let next = spec;
-  if (!next.production) {
+  const production = next.production;
+  const productionIncomplete =
+    !production ||
+    production.levelFlow.length !== 4 ||
+    !production.delivery ||
+    production.audio.sections.length !== 4 ||
+    !production.audio.ambience ||
+    (production.audio.mix.maxConcurrentSfx ?? 99) > 4 ||
+    production.audio.mobile.startsAfterFirstGesture !== true;
+  if (productionIncomplete) {
     next = {
       ...next,
       production: buildDefaultGameProductionContract({ prompt, templateId: next.templateId }),
