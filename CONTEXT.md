@@ -1,11 +1,11 @@
 # 项目工作进度快照
-最后更新：2026-08-27（生产创作链路复查）
+最后更新：2026-08-28（生产创作链路复查）
 
 ## 生产验收（本会话）
 
 - 小说 / 小说转漫画：通过。`openrouter/free`；改编漫画分镜 `doubao-seed-2-1-turbo-260628`。
-- 游戏创作 + 模型：通过。`litellm · deepseek-v4-flash-ga-260731` 已落库（`cmtbowrf6000d2yjp32ldru1x`）。
-- 游戏 60s 试玩：未过。collector 468ms 内失败；QA 未点到「再来一局」。待部署 collector 无敌窗。
+- 游戏创作 + 模型：通过。`litellm · deepseek-v4-flash-ga-260731`，无 kernel fallback。
+- 游戏 60s 试玩 + 发布：通过。`e960de12` 上线后 collector 前 60 秒可玩；作品 [月种萤语：夜林护送](https://operone.1oneclaw.com/zh-Hans/play/cmtbqrfts000dqzf6o0cw46k6) `first_minute` 60s / 102 次操作后已公开。
 
 ## 当前状态
 - 游戏：LLM-first，内核只校验。文档 `docs/game-generation-pipeline.md`。
