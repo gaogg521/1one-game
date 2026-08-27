@@ -16,15 +16,19 @@
   - 漫画创作选中小说后拉详情并 merge 正文；分镜按钮带上 `content`。
   - SSE `consumeSSE` 结束 flush 尾包，避免 provenance 丢失。
 - **本地验证**：`npx tsc --noEmit` 通过；`qa:work-generation-meta` 通过；`qa:runtime-locale-routing`（含 job locale）通过。
-- **待生产实测**：部署后跑 `qa:prod-game-create-delivery` 与 `qa:prod-literary-create`。
+- **生产实测（小说 / 小说转漫画）已通过**（约 16 分钟）：
+  - 小说 `cmtbnmf56000xglpm5xxj9io8`：SSE 与落库均为 `openrouter/free`（1598 字，非 mock）。
+  - 改编漫画 `cmtbnwqxj001nglpmqtswhtg3`：分镜模型 `doubao-seed-2-1-turbo-260628`（与中文池 comic_storyboard 一致），已绑定该小说。`generationProvider` 仍可能为空字符串规范化成 null，模型已落库。
+- **游戏实测**：首次 `qa:prod-game-create-delivery` 在 30s 内等不到 `/api/generate/stream` 响应。根因是游戏 SSE 缺少 `X-Accel-Buffering: no`，nginx 缓冲整段 LLM 流。已补该头（续写/分格流同样补上）；nginx 会吞掉该响应头，QA 不再断言客户端能看见它。
 
 ### 下次启动清单
 
-1. 推送本提交后执行 `python scripts/deploy-prod-cee8b1d.py`（代码+migrate+重启；不必为本次修 BUG 再同步样品资产）。
-2. `$env:QA_PROD_GAME_CREATE="1"; npm run qa:prod-game-create-delivery`（约 10+ 分钟，含 60s 试玩+发布）。
-3. `$env:QA_PROD_LITERARY_CREATE="1"; npm run qa:prod-literary-create`（短篇 SSE + 改编 2 页轻分镜）。
-4. 强刷 `/console?tab=works`：新作品不应再显示「未记录」。
+1. 只提交游戏/续写/分格 SSE `X-Accel-Buffering` 与 QA 脚本修正（不要混入工作区里另一路 `generate-spec` LLM-first WIP）。
+2. `python scripts/deploy-prod-cee8b1d.py`
+3. `$env:QA_PROD_GAME_CREATE="1"; npm run qa:prod-game-create-delivery`
+4. 强刷 `/console?tab=works`：新小说/漫画应显示真实模型，不应再「未记录」。
 5. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
+6. （已知）漫画 provenance 的 provider 在轻分镜路径仍可能为 null；模型字段已生效。
 
 ## 1. 产品与技术现状
 

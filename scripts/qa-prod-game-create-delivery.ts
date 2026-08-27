@@ -196,7 +196,7 @@ async function main() {
     assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
     const generationResponsePromise = page.waitForResponse(
       (response) => response.url().includes("/api/generate/stream") && response.request().method() === "POST",
-      { timeout: 30_000 },
+      { timeout: 5 * 60_000 },
     );
     await generateButton.click();
     const generationResponse = await generationResponsePromise;

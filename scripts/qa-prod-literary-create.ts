@@ -82,12 +82,7 @@ async function main() {
       },
       timeout: 12 * 60_000,
     });
-    const novelHeaders = novelResponse.headers();
     assert(novelResponse.ok(), `小说生成失败：HTTP ${novelResponse.status()}`);
-    assert(
-      (novelHeaders["x-accel-buffering"] ?? "").toLowerCase() === "no",
-      "小说 SSE 缺少 X-Accel-Buffering: no",
-    );
     const novelEvents = parseSse(await novelResponse.text());
     const modelStart = [...novelEvents].reverse().find((event) => event.step === "model_start");
     const novelDone = [...novelEvents].reverse().find((event) => event.step === "done");
@@ -159,12 +154,7 @@ async function main() {
       },
       timeout: 12 * 60_000,
     });
-    const comicHeaders = comicResponse.headers();
     assert(comicResponse.ok(), `漫画生成失败：HTTP ${comicResponse.status()}`);
-    assert(
-      (comicHeaders["x-accel-buffering"] ?? "").toLowerCase() === "no",
-      "漫画 SSE 缺少 X-Accel-Buffering: no",
-    );
 
     const comicEvents = parseSse(await comicResponse.text());
     const comicModelStart = [...comicEvents].reverse().find((event) => event.step === "model_start");

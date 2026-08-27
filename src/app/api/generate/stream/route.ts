@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
         // The kernel is built before assets/copy.  Streaming remains useful, but
         // no hidden "creative extraction" gets to rewrite the requested game.
-        send({ step: "kernel", message: uiLocale.startsWith("zh") ? "正在确定核心规则与操作方式" : "Building the core rules and controls" });
+        send({ step: "kernel", message: uiLocale.startsWith("zh") ? "正在围绕你的描述生成可玩规格" : "Writing a playable spec around your prompt" });
         const result = await generateGameSpecWithMeta(parsed.prompt, {
           templateHint: parsed.templateHint,
           uiLocale,
@@ -141,6 +141,7 @@ export async function POST(req: Request) {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
