@@ -149,8 +149,22 @@ async function main() {
     assert((await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)), "创作页手机端横向溢出");
     stages.push({ at: new Date().toISOString(), stage: "create_page_ready", detail: { url: page.url() } });
 
-    await page.locator("textarea").first().fill(prompt);
-    await page.getByRole("button", { name: /生成可玩版本/i }).click();
+    const promptInput = page.locator("textarea").first();
+    const generateButton = page.getByRole("button", { name: /生成可玩版本/i });
+    // A production navigation can expose server-rendered controls a fraction
+    // before React attaches. A human cannot type that quickly, so wait for the
+    // interactive layer and verify the controlled value before submission.
+    await page.waitForTimeout(1_200);
+    await promptInput.fill(prompt);
+    if (!(await generateButton.isEnabled())) {
+      await page.waitForTimeout(800);
+      await promptInput.click();
+      await promptInput.fill("");
+      await promptInput.pressSequentially(prompt, { delay: 1 });
+    }
+    assert((await promptInput.inputValue()) === prompt, "创作输入没有进入 React 受控状态");
+    assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
+    await generateButton.click();
     stages.push({ at: new Date().toISOString(), stage: "generation_started", detail: { promptChars: prompt.length } });
 
     const saveButton = page.getByRole("button", { name: /保存并打开/i });
@@ -158,7 +172,7 @@ async function main() {
     await saveButton.waitFor({ state: "visible" });
     assert(await saveButton.isEnabled(), "生成完成但保存按钮不可用");
     const previewTitle = (await page.locator("main h2").first().textContent())?.trim() ?? "";
-    assert(await page.locator("canvas").first().isVisible(), "生成结果没有可玩 canvas");
+    await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
     stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });
 
     await Promise.all([

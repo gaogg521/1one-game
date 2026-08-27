@@ -82,6 +82,7 @@ import {
   hudDefaultSkill,
   playStageMessage,
 } from "@/lib/i18n/game-hud-labels";
+import { collectorDeadlineOutcome, gameDeliveryDeadlineMs } from "@/lib/game-session-resolution";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -159,6 +160,8 @@ export class PlayScene extends Phaser.Scene {
   private pad = 40;
 
   private winScore = 40;
+
+  private deliveryDeadlineMs = 65_000;
 
   private intensity = 0.58;
 
@@ -291,6 +294,7 @@ export class PlayScene extends Phaser.Scene {
     this.runtimeRng = seededRandom(runtimeSeedFromSpec(this.spec));
     this.pad = this.spec.gameplay.arenaPadding ?? 40;
     this.winScore = this.spec.gameplay.winScore ?? 40;
+    this.deliveryDeadlineMs = gameDeliveryDeadlineMs(this.spec);
     this.lives = this.spec.gameplay.lives ?? 3;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
@@ -864,7 +868,13 @@ export class PlayScene extends Phaser.Scene {
 
     const acts = this.spec.director?.acts ?? null;
     const label = acts?.[this.actIndex]?.label;
-    this.actText.setText(label ? hudActChapter(this.uiLocale, label) : "");
+    const deadlineLabel =
+      this.spec.templateId === "collector"
+        ? this.uiLocale === "zh-Hans"
+          ? `剩余 ${Math.max(0, Math.ceil((this.deliveryDeadlineMs - this.time.now) / 1000))} 秒`
+          : `${Math.max(0, Math.ceil((this.deliveryDeadlineMs - this.time.now) / 1000))}s left`
+        : "";
+    this.actText.setText([label ? hudActChapter(this.uiLocale, label) : "", deadlineLabel].filter(Boolean).join(" · "));
 
     const cdLeft = Math.max(0, this.skillReadyAt - this.time.now);
     if (cdLeft <= 0) {
@@ -1961,6 +1971,16 @@ export class PlayScene extends Phaser.Scene {
   update(_time: number, delta = 16) {
     this.goalPanel?.update();
     if (this.finished) return;
+    const deadlineOutcome = collectorDeadlineOutcome({
+      spec: this.spec,
+      elapsedMs: this.time.now,
+      score: this.score,
+    });
+    if (deadlineOutcome) {
+      this.finish(deadlineOutcome);
+      return;
+    }
+    if (this.spec.templateId === "collector") this.refreshHud();
     this.updateBoss();
     if (this.spec.templateId === "survivor") {
       this.maybeStartSurvivorLastStandByProgress();
