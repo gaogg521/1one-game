@@ -6,13 +6,13 @@
 
 ## 当前状态（本会话）
 
-- **问题**：后台「生成模型」列在，但今日游戏显示「未记录」。根因是游戏主路径已改为内核编译，debug 未写 provider/model。
-- **修复**：内核结果落库 `kernel · {templateId}`；后台显示「内核编译 · 模板」。存量今日空字段可用 `scripts/backfill-kernel-generation-meta.ts` 回填。
+- **问题**：后台「生成模型」列在，但今日游戏显示「未记录」。根因是别的提交把游戏主路径改成内核编译后直接 return，大模型没被调用。
+- **修复**：内核仍先锁定玩法，然后继续走 LLM 润色；后台记实际模型。已回填 5 条「萤火虫护送」为 `kernel · collector`（当时确实没走模型）。
 - **QA**：`qa:work-generation-meta` 通过。
 
 ### 下次启动清单
 
-1. 强刷 `/console?tab=works`：新游戏应显示「内核编译 · {template}」；走 LLM 的小说/漫画仍显示 `provider · model`。
+1. 强刷 `/console?tab=works`：已有萤火虫护送应显示「内核编译 · collector」；新生成游戏应显示真实 LLM 模型。
 2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
 
 ## 1. 产品与技术现状

@@ -15,6 +15,7 @@ import {
   buildGameGenerationPlan,
   compileGameGenerationPlan,
   validateGameGenerationPlan,
+  type GameGenerationPlan,
 } from "@/lib/game-generation-plan";
 import { buildLlmTemplateCatalogLines, llmTemplateIdEnum } from "@/lib/game-templates/llm-catalog";
 import { isGameTemplateId } from "@/lib/game-templates/registry";
@@ -1450,9 +1451,9 @@ export async function generateGameSpecWithMeta(
   return withGenerationLocale(options?.uiLocale ?? "zh-Hans", async () => {
   const orch = options?.orchestration;
 
-  // The public path deliberately compiles a playable kernel before any AI work.
-  // This removes the former race where prompt expansion, template guessing and
-  // agentic routing could each make a conflicting decision about basic controls.
+  // Kernel first: lock the playable interaction, then let the LLM enrich copy
+  // and assets. The model must not replace the kernel by returning early.
+  let compiledKernel: { plan: GameGenerationPlan; spec: GameSpec } | null = null;
   if ((options?.pipeline ?? "kernel") === "kernel") {
     const plan = buildGameGenerationPlan(prompt, options?.templateHint ?? "auto");
     const spec = finalizeSpec(plan.prompt, compileGameGenerationPlan(plan));
@@ -1476,47 +1477,29 @@ export async function generateGameSpecWithMeta(
     if (issues.length) {
       throw new Error(`game kernel validation failed: ${issues.join(",")}`);
     }
-    const debug: GenerationDebug = {
-      source: "kernel",
-      provider: "kernel",
-      model: plan.kernel,
-      fallback: false,
-      searchEnhance: false,
-      enhancedRequested: false,
-      enhancedApplied: false,
-      templateHint: plan.kernel,
-      verticalSlice,
-      deliveryReadiness,
-      kernelPlan: {
-        label: plan.label,
-        coreLoop: plan.coreLoop,
-        controls: plan.controls,
-        production: plan.production,
-        checks: plan.checks,
-      },
-    };
-    return {
-      spec,
-      source: "kernel",
-      web: null,
-      debug: orch ? { ...debug, orchestrationTrace: orch.snapshot() } : debug,
-    };
+    compiledKernel = { plan, spec };
   }
+
+  const lockedTemplateHint = compiledKernel?.plan.kernel ?? options?.templateHint;
 
   let briefPre = options?.creativeBriefPreExpanded;
   if (!briefPre && PRODUCT.game.creativeBriefExpand) {
     briefPre = await expandCreativeBrief({
       prompt: prompt.trim(),
-      templateHint: options?.templateHint,
+      templateHint: lockedTemplateHint,
       orchestration: orch,
     });
   }
-  const genOpts: GenerateOptions = { ...options, creativeBriefPreExpanded: briefPre };
+  const genOpts: GenerateOptions = {
+    ...options,
+    templateHint: lockedTemplateHint,
+    creativeBriefPreExpanded: briefPre,
+  };
 
   if (orch) {
     const pack = buildContextPack({
       prompt: prompt.trim(),
-      templateHint: options?.templateHint ?? "auto",
+      templateHint: lockedTemplateHint ?? "auto",
       searchEnhance: Boolean(options?.searchEnhance),
       enhancePass: options?.enhancePass !== false,
     });
@@ -1557,9 +1540,21 @@ export async function generateGameSpecWithMeta(
     debug: GenerationDebug;
   }) => {
     const debug = attachBriefToDebug(r.debug, briefPre ?? null);
+    const kernelFields = compiledKernel
+      ? {
+          kernelPlan: {
+            label: compiledKernel.plan.label,
+            coreLoop: compiledKernel.plan.coreLoop,
+            controls: compiledKernel.plan.controls,
+            production: compiledKernel.plan.production,
+            checks: compiledKernel.plan.checks,
+          } as GenerationDebug["kernelPlan"],
+          templateHint: compiledKernel.plan.kernel,
+        }
+      : {};
     return orch
-      ? { ...r, debug: { ...debug, source: debug.source ?? r.source, orchestrationTrace: orch.snapshot() } }
-      : { ...r, debug: { ...debug, source: debug.source ?? r.source } };
+      ? { ...r, debug: { ...debug, ...kernelFields, source: debug.source ?? r.source, orchestrationTrace: orch.snapshot() } }
+      : { ...r, debug: { ...debug, ...kernelFields, source: debug.source ?? r.source } };
   };
 
   const finish = async (r: {
@@ -1569,8 +1564,12 @@ export async function generateGameSpecWithMeta(
     debug: GenerationDebug;
   }) => {
     let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
-    const hint = resolveEffectiveTemplateHint(options?.templateHint, briefPre ?? null);
+    const hint = resolveEffectiveTemplateHint(lockedTemplateHint, briefPre ?? null);
     spec = applyTemplateHint(spec, hint);
+    if (compiledKernel) {
+      spec = overlaySpec(compiledKernel.spec, spec);
+      spec = applyTemplateHint(spec, compiledKernel.plan.kernel);
+    }
     const agenticOn = PRODUCT.game.agenticModuleEnabled;
     if (agenticOn) {
       const complexity = classifyPromptComplexity(prompt.trim(), spec);
