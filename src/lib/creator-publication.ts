@@ -192,17 +192,25 @@ async function persistPublication(input: {
         select: { id: true },
       });
       if (!requested) throw new CreatorPublicationError("revision_not_ready");
+      const latest = await tx.creativeRevision.findFirst({
+        where: { creativeProjectId: core.id, status: "ready" },
+        orderBy: { sequence: "desc" },
+        select: { id: true },
+      });
       const display = await tx.creativeArtifact.findFirst({
         where: { creativeProjectId: core.id, creativeRevisionId: requested.id, kind: "publication_display", status: "ready" },
         orderBy: { createdAt: "asc" },
         select: { contentJson: true },
       });
       // A historical version must carry its own immutable reader-facing
-      // metadata. Never rebuild it from the current editable legacy row.
-      if (!display?.contentJson) throw new CreatorPublicationError("revision_not_ready");
+      // metadata. The latest ready revision is the one exception: its snapshot
+      // is created by this first explicit publish decision.
+      if (!display?.contentJson && requested.id !== latest?.id) throw new CreatorPublicationError("revision_not_ready");
       revisionId = requested.id;
-      displayJson = display.contentJson;
-      writeDisplaySnapshot = false;
+      if (display?.contentJson) {
+        displayJson = display.contentJson;
+        writeDisplaySnapshot = false;
+      }
     }
     // Publishing is the author's explicit confirmation of this immutable
     // revision. A later generate/refine creates a new revision but never

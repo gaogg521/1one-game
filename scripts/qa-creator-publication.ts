@@ -89,7 +89,13 @@ async function main() {
       },
       data: { contentJson: JSON.stringify({ version: 1, verdict: "needs_review", score: 100 }) },
     });
-    const published = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish" });
+    const published = await setCreatorWorkPublication({
+      type: "game",
+      id: game.id,
+      ownerKey,
+      action: "publish",
+      revisionId: mirrored.creativeRevisionId,
+    });
     assert(published.visibility === "public" && published.quality.verdict !== "blocked", "a complete game with advisory balance review should publish");
     const persisted = await prisma.project.findUniqueOrThrow({ where: { id: game.id } });
     const core = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
@@ -123,9 +129,16 @@ async function main() {
     assert(historySnapshot?.project.recentRevisions?.[0]?.id === newerRevision.creativeRevisionId, "revision history must place the current draft first");
     assert(historySnapshot?.project.recentRevisions?.[1]?.id === core.acceptedRevisionId, "revision history must retain the confirmed public version");
     assert(historySnapshot?.project.recentRevisions?.[1]?.canRepublish, "a previously published revision must be explicitly safe to republish");
-    await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish", revisionId: newerRevision.creativeRevisionId })
-      .then(() => { throw new Error("a revision without an immutable publication display must not be republished"); })
-      .catch((error) => assert(error instanceof CreatorPublicationError && error.code === "revision_not_ready", "republish must reject versions without immutable display metadata"));
+    const publishedLatest = await setCreatorWorkPublication({
+      type: "game",
+      id: game.id,
+      ownerKey,
+      action: "publish",
+      revisionId: newerRevision.creativeRevisionId,
+    });
+    assert(publishedLatest.visibility === "public", "the latest ready revision should create its immutable display on explicit publish");
+    const coreAfterLatestPublish = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
+    assert(coreAfterLatestPublish.acceptedRevisionId === newerRevision.creativeRevisionId, "explicit latest-version publish must advance the accepted pointer");
     const republished = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish", revisionId: core.acceptedRevisionId! });
     assert(republished.visibility === "public", "a historical confirmed version should republish");
     const coreAfterRepublish = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
@@ -137,9 +150,9 @@ async function main() {
     assert(hiddenCore.visibility === "hidden" && hiddenCore.status === "ready", "core must reflect unpublish");
     assert(hiddenCore.acceptedRevisionId === core.acceptedRevisionId, "unpublish must not silently change the accepted revision");
     const publicationHistory = await prisma.creativePublication.findMany({ where: { creativeProjectId: coreId }, orderBy: { createdAt: "asc" } });
-    assert(publicationHistory.length === 3 && publicationHistory[2]?.action === "unpublish", "republish and unpublish must append rather than overwrite publication history");
-    assert(publicationHistory[1]?.creativeRevisionId === core.acceptedRevisionId, "republish must record the selected historical version");
-    assert(publicationHistory[2]?.creativeRevisionId === core.acceptedRevisionId, "unpublish must remain linked to the version that was actually published");
+    assert(publicationHistory.length === 4 && publicationHistory[3]?.action === "unpublish", "each publish and unpublish must append rather than overwrite publication history");
+    assert(publicationHistory[2]?.creativeRevisionId === core.acceptedRevisionId, "republish must record the selected historical version");
+    assert(publicationHistory[3]?.creativeRevisionId === core.acceptedRevisionId, "unpublish must remain linked to the version that was actually published");
 
     await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey: `${ownerKey}-other`, action: "publish" })
       .then(() => { throw new Error("other owners must not publish this work"); })
