@@ -2324,6 +2324,8 @@
     "colGenerationModel": "生成模型",
     "generationModelUnknown": "未記錄",
     "generationModelMock": "本地規則（未走模型）",
+    "generationModelKernel": "內核編譯 · {kernel}",
+    "generationModelKernelPlain": "內核編譯（未走大模型）",
     "colEngagement": "互動數據",
     "colRelation": "關聯",
     "colVisibility": "可见性",

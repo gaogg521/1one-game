@@ -470,7 +470,9 @@ export type GenerationDebug = {
   model?: string;
   draftModel?: string;
   enhanceModel?: string;
-  provider?: ReturnType<typeof getActiveProvider>;
+  provider?: string;
+  /** 与 generate 返回的 source 对齐，供后台落库。 */
+  source?: GenerationSource;
   fallback: boolean;
   /** fallback=true 时给用户可读原因；fallback=false 时可为空。 */
   fallbackReason?: string;
@@ -1475,6 +1477,9 @@ export async function generateGameSpecWithMeta(
       throw new Error(`game kernel validation failed: ${issues.join(",")}`);
     }
     const debug: GenerationDebug = {
+      source: "kernel",
+      provider: "kernel",
+      model: plan.kernel,
       fallback: false,
       searchEnhance: false,
       enhancedRequested: false,
@@ -1552,7 +1557,9 @@ export async function generateGameSpecWithMeta(
     debug: GenerationDebug;
   }) => {
     const debug = attachBriefToDebug(r.debug, briefPre ?? null);
-    return orch ? { ...r, debug: { ...debug, orchestrationTrace: orch.snapshot() } } : { ...r, debug };
+    return orch
+      ? { ...r, debug: { ...debug, source: debug.source ?? r.source, orchestrationTrace: orch.snapshot() } }
+      : { ...r, debug: { ...debug, source: debug.source ?? r.source } };
   };
 
   const finish = async (r: {

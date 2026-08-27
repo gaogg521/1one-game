@@ -30,6 +30,11 @@ import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
 import { isSampleGalleryProject } from "@/lib/sample-gallery";
+import {
+  isKernelGeneration,
+  isMockGenerationModel,
+  kernelGenerationTemplate,
+} from "@/lib/work-generation-meta";
 import type { UserRole } from "@/lib/auth/types";
 import {
   buildConsoleNavSections,
@@ -1697,13 +1702,22 @@ function formatAdminWorkDate(iso: string, locale: string): string {
   });
 }
 
+function formatAdminWorkGenerationLabel(
+  work: WorkRow,
+  t: ReturnType<typeof useTranslations<"adminPage">>,
+): string {
+  if (isMockGenerationModel(work.generationModel)) return t("generationModelMock");
+  if (isKernelGeneration(work.generationProvider, work.generationModel)) {
+    const kernel = kernelGenerationTemplate(work.generationProvider, work.generationModel);
+    return kernel ? t("generationModelKernel", { kernel }) : t("generationModelKernelPlain");
+  }
+  return (work.generationLabel || work.generationModel || "").trim() || t("generationModelUnknown");
+}
+
 function WorkGenerationMeta({ work, compact = false }: { work: WorkRow; compact?: boolean }) {
   const t = useTranslations("adminPage");
   const locale = useLocale();
-  const mock = (work.generationModel ?? "").trim().toLowerCase() === "mock";
-  const label = mock
-    ? t("generationModelMock")
-    : (work.generationLabel || work.generationModel || "").trim() || t("generationModelUnknown");
+  const label = formatAdminWorkGenerationLabel(work, t);
   const date = formatAdminWorkDate(work.createdAt, locale);
   const cls = compact
     ? "flex flex-col gap-0.5 text-xs text-[var(--gc-muted)]"
@@ -1836,10 +1850,7 @@ function WorksTable({
 
 function WorkModelCell({ work }: { work: WorkRow }) {
   const t = useTranslations("adminPage");
-  const mock = (work.generationModel ?? "").trim().toLowerCase() === "mock";
-  const label = mock
-    ? t("generationModelMock")
-    : (work.generationLabel || work.generationModel || "").trim() || t("generationModelUnknown");
+  const label = formatAdminWorkGenerationLabel(work, t);
   return (
     <span
       className="block max-w-[220px] truncate font-mono text-xs text-[var(--gc-text-soft)]"

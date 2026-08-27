@@ -8,9 +8,30 @@ export type WorkGenerationProvenance = {
 const PROVIDER_MAX = 120;
 const MODEL_MAX = 240;
 const MOCK_MODEL = "mock";
+export const KERNEL_GENERATION_PROVIDER = "kernel";
 
 export function isMockGenerationModel(model: string | null | undefined): boolean {
   return (model ?? "").trim().toLowerCase() === MOCK_MODEL;
+}
+
+export function isKernelGeneration(
+  provider?: string | null,
+  model?: string | null,
+): boolean {
+  const p = (provider ?? "").trim().toLowerCase();
+  const m = (model ?? "").trim().toLowerCase();
+  return p === KERNEL_GENERATION_PROVIDER || m === KERNEL_GENERATION_PROVIDER;
+}
+
+/** 内核路径记下的模板 ID；纯 "kernel" 时返回空。 */
+export function kernelGenerationTemplate(
+  provider?: string | null,
+  model?: string | null,
+): string {
+  if (!isKernelGeneration(provider, model)) return "";
+  const m = (model ?? "").trim();
+  if (!m || m.toLowerCase() === KERNEL_GENERATION_PROVIDER) return "";
+  return m;
 }
 
 export function normalizeWorkGenerationProvenance(input: {
@@ -33,18 +54,29 @@ export function parseWorkGenerationFromUnknown(body: unknown): WorkGenerationPro
     root.debug && typeof root.debug === "object" && !Array.isArray(root.debug)
       ? (root.debug as Record<string, unknown>)
       : null;
+  const source = pickString(root.source) ?? pickString(debug?.source);
+  const templateHint = pickString(debug?.templateHint);
+  let provider =
+    pickString(root.generationProvider) ??
+    pickString(debug?.provider) ??
+    pickString(root.provider);
+  let model =
+    pickString(root.generationModel) ??
+    pickString(debug?.model) ??
+    pickString(debug?.enhanceModel) ??
+    pickString(debug?.draftModel) ??
+    pickString(root.model);
+  if (source === "kernel") {
+    provider = provider ?? KERNEL_GENERATION_PROVIDER;
+    model =
+      model ??
+      (templateHint && templateHint.toLowerCase() !== "auto" ? templateHint : undefined) ??
+      KERNEL_GENERATION_PROVIDER;
+  }
   return normalizeWorkGenerationProvenance({
-    provider:
-      pickString(root.generationProvider) ??
-      pickString(debug?.provider) ??
-      pickString(root.provider),
-    model:
-      pickString(root.generationModel) ??
-      pickString(debug?.model) ??
-      pickString(debug?.enhanceModel) ??
-      pickString(debug?.draftModel) ??
-      pickString(root.model),
-    fallback: debug?.fallback === true || root.fallback === true,
+    provider,
+    model,
+    fallback: debug?.fallback === true || root.fallback === true || source === "mock",
   });
 }
 

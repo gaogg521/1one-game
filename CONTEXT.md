@@ -1,21 +1,19 @@
 # 项目工作进度快照
 
-最后更新：2026-08-26（后台作品日期与生成模型）
+最后更新：2026-08-27（内核游戏写出生成模型）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **编译 / Lint**：本次改动文件 eslint **0 errors**（`comic-generate-run.ts` 仍有 3 条既有 unused warning）。
-- **QA**：`qa:work-generation-meta` 通过（规范化 + Project/Novel/Comic 落库 `generationProvider` / `generationModel` / `createdAt`）。
-- **后台**：作品列表与待审核共用 `WorksTable`，新增「日期」「生成模型」列；手机卡片同步展示。
-- **写入**：游戏保存带 SSE `debug`；小说 create/finalize 记实际模型；漫画分镜 create/update 记 `provider · model`。存量作品显示「未记录」，直至重新生成或保存。
+- **问题**：后台「生成模型」列在，但今日游戏显示「未记录」。根因是游戏主路径已改为内核编译，debug 未写 provider/model。
+- **修复**：内核结果落库 `kernel · {templateId}`；后台显示「内核编译 · 模板」。存量今日空字段可用 `scripts/backfill-kernel-generation-meta.ts` 回填。
+- **QA**：`qa:work-generation-meta` 通过。
 
 ### 下次启动清单
 
-1. 强刷 `https://operone.1oneclaw.com/console?tab=pending` 与 `tab=works`：确认日期、生成模型列；新生成作品应显示 `provider · model`。
-2. （遗留）管线路由 locale/scene WIP 仍在工作区，未随本次提交。
-3. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
+1. 强刷 `/console?tab=works`：新游戏应显示「内核编译 · {template}」；走 LLM 的小说/漫画仍显示 `provider · model`。
+2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
 
 ## 1. 产品与技术现状
 

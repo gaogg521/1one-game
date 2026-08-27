@@ -32,6 +32,17 @@ function testHelpers() {
     "ark · doubao-seed-2-pro",
   );
 
+  const fromKernel = parseWorkGenerationFromUnknown({
+    source: "kernel",
+    debug: { source: "kernel", provider: "kernel", model: "platformer", fallback: false },
+  });
+  assert.equal(fromKernel.generationProvider, "kernel");
+  assert.equal(fromKernel.generationModel, "platformer");
+
+  const kernelBySourceOnly = parseWorkGenerationFromUnknown({ source: "kernel" });
+  assert.equal(kernelBySourceOnly.generationProvider, "kernel");
+  assert.equal(kernelBySourceOnly.generationModel, "kernel");
+
   const mock = parseWorkGenerationFromUnknown({ debug: { fallback: true } });
   assert.equal(mock.generationModel, "mock");
   assert.equal(isMockGenerationModel(mock.generationModel), true);

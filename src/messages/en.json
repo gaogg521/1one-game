@@ -2400,6 +2400,8 @@
     "colGenerationModel": "Generation model",
     "generationModelUnknown": "Not recorded",
     "generationModelMock": "Local rules (no model)",
+    "generationModelKernel": "Kernel · {kernel}",
+    "generationModelKernelPlain": "Kernel compiler (no LLM)",
     "colEngagement": "Engagement",
     "colRelation": "Relation",
     "colVisibility": "Visibility",
