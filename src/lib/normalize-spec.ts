@@ -187,7 +187,7 @@ export function coerceGameSpec(
     }
   }
 
-  const candidate: GameSpec = {
+  const candidate: Record<string, unknown> = {
     version: 1,
     templateId,
     title,
@@ -224,6 +224,17 @@ export function coerceGameSpec(
     ...(agenticPlayRouteOpt !== undefined ? { agenticPlayRoute: agenticPlayRouteOpt } : {}),
     ...(visualOpt !== undefined ? { visual: visualOpt } : {}),
   };
+
+  // Preserve every valid vertical/game-production field declared by the
+  // canonical schema. The old hand-written candidate silently discarded
+  // puzzle, farming, physics/sample profiles, platformer and other template
+  // blueprints even when the submitted spec was already valid.
+  for (const key of Object.keys(GameSpecSchema.shape)) {
+    if (key in candidate || !(key in o)) continue;
+    const fieldSchema = GameSpecSchema.shape[key as keyof typeof GameSpecSchema.shape];
+    const field = fieldSchema.safeParse(o[key]);
+    if (field.success) candidate[key] = field.data;
+  }
 
   const parsed = GameSpecSchema.safeParse(candidate);
   if (parsed.success) {

@@ -13,6 +13,8 @@ export function GamePlayer(props: {
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
+  /** Exact immutable revision represented by spec. */
+  creativeRevisionId?: string;
   promptHint?: string;
   /** 样品馆试玩：隐藏 dev 叠层，更沉浸 */
   immersive?: boolean;

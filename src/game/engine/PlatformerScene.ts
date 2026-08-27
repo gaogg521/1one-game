@@ -280,10 +280,14 @@ export class PlatformerScene extends Phaser.Scene {
       this.physics.world.gravity.y = this.baseGravity;
     }
     this.worldW = platBp.worldWidth ?? this.worldW;
+    // Camera bounds alone do not expand Arcade Physics. Without this, the
+    // player's collideWorldBounds body is clamped to the mobile viewport
+    // (about 393px) and can never enter the generated multi-screen level.
+    this.physics.world.setBounds(0, 0, this.worldW, viewH);
     const suggestedWin = platBp.suggestedWinScore ?? this.winScore;
-    if ((this.spec.gameplay.winScore ?? 0) < suggestedWin) {
-      this.winScore = suggestedWin;
-    }
+    // This target is derived from the actual procedural level density. Taking
+    // max(gameplay, suggested) made shorter levels mathematically impossible.
+    this.winScore = suggestedWin;
     this.grappleGfx = this.add.graphics().setDepth(50);
     this.trailGfx = this.add.graphics().setDepth(6);
 
@@ -1212,6 +1216,14 @@ export class PlatformerScene extends Phaser.Scene {
   update() {
     this.hud.update({});
     if (this.finished) return;
+    // Standard platformer contract is "reach the end". The golden endpoint is
+    // a reward cue, not a hidden pixel-perfect requirement after traversal.
+    if (!this.treasureHeist && this.player.x >= this.worldW - 24) {
+      this.score = Math.max(this.score, this.winScore);
+      this.refreshHud();
+      this.finish({ score: this.score, won: true });
+      return;
+    }
     const speed = this.spec.gameplay.playerSpeed;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
@@ -1246,7 +1258,10 @@ export class PlatformerScene extends Phaser.Scene {
       shift: this.keyShift,
     };
     const axis = readMoveAxis(keys, { allowVertical: false });
-    const ptr = pointerSteerX(this, this.player.x);
+    // Scrolling platformers use the screen halves as a virtual direction pad.
+    // Target-point steering reaches the finger near the first camera deadzone
+    // and then stops forever, making mobile H5 levels impossible to finish.
+    const ptr = pointerSteerX(this, this.player.x, 0.34, { viewportDirectional: true });
     const vx = (axis.x !== 0 ? axis.x : ptr) * speed * (dashOn ? 1.22 : 1);
     this.player.setVelocityX(vx);
     if (this.stealthMode && vx !== 0) {

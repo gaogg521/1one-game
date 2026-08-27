@@ -361,7 +361,7 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(25);
 
     const showLives =
-      this.spec.templateId === "survivor" || this.spec.templateId === "collector";
+      this.spec.templateId === "survivor" || this.spec.templateId === "collector" || this.spec.templateId === "avoider";
     this.livesText = showLives
       ? this.add
           .text(18, 44, hudLives(this.uiLocale, this.lives), {
@@ -572,7 +572,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {
       if (this.finished) return;
-      if (this.spec.templateId === "survivor" && this.time.now < this.invulnUntil) return;
+      if ((this.spec.templateId === "survivor" || this.spec.templateId === "avoider") && this.time.now < this.invulnUntil) return;
       const hazard = h as Phaser.Physics.Arcade.Image;
       // 重型敌人需要多次击杀
       const hp: number = hazard.getData("hp") ?? 1;
@@ -1841,6 +1841,24 @@ export class PlayScene extends Phaser.Scene {
   private hitHazard() {
     if (this.finished) return;
 
+    if (this.spec.templateId === "avoider") {
+      // A mobile one-screen avoider can present several overlapping waves at
+      // once. A readable recovery window prevents one contact from cascading
+      // through every configured life before the player can reposition.
+      this.invulnUntil = this.time.now + 7_500;
+      this.lives -= 1;
+      this.fxDamage();
+      this.player.setAlpha(0.35);
+      this.time.delayedCall(180, () => this.player.setAlpha(1));
+      this.refreshHud();
+      if (this.lives === 1) {
+        this.soundscape?.triggerEvent("danger");
+        this.startDangerVignette();
+      }
+      if (this.lives <= 0) this.finish({ score: this.score, won: false });
+      return;
+    }
+
     if (this.spec.templateId === "survivor") {
       this.survivorDodgeStreak = 0;
       this.invulnUntil = this.time.now + 720;
@@ -2115,7 +2133,22 @@ export class PlayScene extends Phaser.Scene {
 
   private publishActorState() {
     const actor = this.actorState.snapshot();
-    setPhaserQaState({ actorState: actor.state, actorStateTransitions: actor.transitions });
+    const nearestHazard = this.hazards?.getChildren()
+      .map((entry) => entry as Phaser.Physics.Arcade.Image)
+      .filter((entry) => entry.active)
+      .map((entry) => ({ entry, distance: Phaser.Math.Distance.Between(entry.x, entry.y, this.player.x, this.player.y) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    setPhaserQaState({
+      actorState: actor.state,
+      actorStateTransitions: actor.transitions,
+      playerX: Math.round(this.player.x),
+      playerY: Math.round(this.player.y),
+      playLives: this.lives,
+      playScore: this.score,
+      nearestHazardX: Math.round(nearestHazard?.entry.x ?? -1),
+      nearestHazardY: Math.round(nearestHazard?.entry.y ?? -1),
+      nearestHazardDistance: Math.round(nearestHazard?.distance ?? -1),
+    });
   }
 
   private showFloater(x: number, y: number, message: string, color: string) {    const floater = this.add

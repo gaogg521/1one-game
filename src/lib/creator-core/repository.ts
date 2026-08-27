@@ -161,10 +161,11 @@ export async function getAcceptedLegacyArtifact(input: {
       status: "ready",
     },
     orderBy: { createdAt: "asc" },
-    select: { contentJson: true, textContent: true, metadataJson: true },
+    select: { creativeRevisionId: true, contentJson: true, textContent: true, metadataJson: true },
   });
   if (!artifact) return null;
   return {
+    creativeRevisionId: artifact.creativeRevisionId,
     content: parseJson(artifact.contentJson),
     textContent: artifact.textContent,
     metadata: parseJson(artifact.metadataJson),

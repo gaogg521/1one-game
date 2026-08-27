@@ -68,6 +68,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const core = isOwner
       ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
       : null;
+    const playRevisionId = isOwner ? core?.revision?.id ?? null : acceptedGameSpec?.creativeRevisionId ?? null;
     const assetJob = isOwner && core
       ? await prisma.generationJob.findFirst({
           where: {
@@ -95,7 +96,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     // corrupt while that process is waiting for a safe restart/regeneration.
     const gameplayEvents = prisma.gameplayEvent
       ? await prisma.gameplayEvent.findMany({
-          where: { projectId: id },
+          where: { projectId: id, ...(playRevisionId ? { creativeRevisionId: playRevisionId } : {}) },
           select: { event: true, sessionId: true, elapsedMs: true, won: true },
         })
       : [];
@@ -134,6 +135,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
       },
       spec,
+      ...(playRevisionId ? { playRevisionId } : {}),
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
       ...(core ? { core } : {}),
@@ -287,7 +289,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     select: { id: true, ownerKey: true, title: true, shareCode: true, coverPath: true, prompt: true, status: true, specJson: true, visibility: true, creativeBriefJson: true },
   });
   let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" } | undefined;
-  if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined || coverJpegBase64 !== undefined)) {
+  // Cover/background delivery is an asset mutation on the current gameplay
+  // revision, not a new gameplay design. Creating a revision for cover-only
+  // updates races active playtests and strands their exact-revision evidence.
+  if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined)) {
     try {
       core = await mirrorGameToCreatorCore({ project: fresh, cause: "refine" });
     } catch (error) {

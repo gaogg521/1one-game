@@ -13,6 +13,7 @@ import { withPresentationDefaults } from "@/lib/cohesive-presentation";
 import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { applyMinecraftThemeOverlay } from "@/lib/minecraft-franchise";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
+import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
 
 /** 与 `/api/generate/patch` 共用；修改规则时请同步验收「director / systems 不被无损删掉」。 */
 export const SPEC_PATCH_SYSTEM = `你是「游戏规格修改器」。根据用户的一句话修改指令，在现有 GameSpec 基础上做出精准修改。
@@ -51,6 +52,12 @@ export function prepareGameSpecForPersist(
 
 export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
   let next = spec;
+  if (!next.production) {
+    next = {
+      ...next,
+      production: buildDefaultGameProductionContract({ prompt, templateId: next.templateId }),
+    };
+  }
   if (spec.templateId === "towerDefense" && !spec.towerDefense) {
     next = { ...next, towerDefense: buildTowerDefenseBlueprint({ prompt, spec: next }) };
   }

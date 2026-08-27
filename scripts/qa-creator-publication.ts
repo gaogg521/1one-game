@@ -56,10 +56,31 @@ async function main() {
       },
     });
   }
+  async function addDeliveryEvidence(creativeProjectId: string, creativeRevisionId: string) {
+    await createCreativeArtifact({
+      creativeProjectId,
+      creativeRevisionId,
+      artifact: { kind: "bgm_notes", mediaType: "json", content: { bpm: 112, notes: [{ at: 0, duration: 0.2, frequency: 220 }] } },
+    });
+    await prisma.creativeArtifact.create({
+      data: {
+        creativeProjectId,
+        creativeRevisionId,
+        kind: "game_playtest_delivery",
+        mediaType: "report",
+        contentJson: JSON.stringify({ version: 1, templateId: spec.templateId, activeMs: 60_000, actionCount: 4, deviceClass: "mobile", touchCapable: true, outcome: "won" }),
+        idempotencyKey: `game_playtest_delivery:${creativeRevisionId}`,
+      },
+    });
+  }
   try {
     const mirrored = await mirrorGameToCreatorCore({ project: game });
     coreId = mirrored.creativeProjectId;
     await addReadyAssets(mirrored.creativeProjectId, mirrored.creativeRevisionId);
+    await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish" })
+      .then(() => { throw new Error("a game without BGM and observed playtest evidence must not publish"); })
+      .catch((error) => assert(error instanceof CreatorPublicationError && error.code === "quality_blocked", "delivery evidence must fail closed"));
+    await addDeliveryEvidence(mirrored.creativeProjectId, mirrored.creativeRevisionId);
     const published = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish" });
     assert(published.visibility === "public" && published.quality.verdict !== "blocked", "ready game should publish");
     const persisted = await prisma.project.findUniqueOrThrow({ where: { id: game.id } });
@@ -82,6 +103,7 @@ async function main() {
 
     const newerRevision = await mirrorGameToCreatorCore({ project: game, cause: "refine" });
     await addReadyAssets(newerRevision.creativeProjectId, newerRevision.creativeRevisionId);
+    await addDeliveryEvidence(newerRevision.creativeProjectId, newerRevision.creativeRevisionId);
     assert(newerRevision.creativeRevisionId !== core.acceptedRevisionId, "a refinement must create a separate immutable revision");
     const coreAfterRefine = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
     assert(

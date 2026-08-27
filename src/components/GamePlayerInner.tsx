@@ -32,6 +32,7 @@ export default function GamePlayerInner({
   spec,
   coverCapture,
   projectId,
+  creativeRevisionId,
   promptHint,
   immersive = false,
   previewMode = false,
@@ -42,6 +43,7 @@ export default function GamePlayerInner({
   spec: GameSpec;
   coverCapture?: { projectId: string } | null;
   projectId?: string;
+  creativeRevisionId?: string;
   promptHint?: string;
   immersive?: boolean;
   /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
@@ -214,28 +216,61 @@ export default function GamePlayerInner({
     setNewLocalBest(false);
     const telemetry = previewMode
       ? null
-      : createGameplayTelemetrySession({ spec, projectId, verticalSliceScore });
+      : createGameplayTelemetrySession({ spec, projectId, creativeRevisionId, verticalSliceScore });
     telemetryRef.current = telemetry;
     // React Strict Mode intentionally mounts, cleans up, and mounts again in
     // development. Defer session activation by one task so its probe mount is
     // cancelled before it can become a false `start` denominator.
     let telemetryStarted = false;
     let firstMinuteTimer: number | null = null;
+    let activeStartedAt: number | null = null;
+    let activeElapsedMs = 0;
+    let actionCount = 0;
+    let gameEnded = false;
     const activateTelemetry = () => {
       if (!telemetry || telemetryStarted) return;
       telemetryStarted = true;
       telemetry.start();
-      firstMinuteTimer = window.setTimeout(() => telemetry.firstMinute(), 60_000);
     };
     const deferredStartTimer = window.setTimeout(activateTelemetry, 0);
-    const recordFirstAction = () => {
-      activateTelemetry();
-      telemetry?.firstAction();
+    const scheduleFirstMinute = () => {
+      if (!telemetry || gameEnded || firstMinuteTimer !== null || activeStartedAt === null) return;
+      const remaining = Math.max(0, 60_000 - activeElapsedMs);
+      firstMinuteTimer = window.setTimeout(() => {
+        if (activeStartedAt !== null) activeElapsedMs += performance.now() - activeStartedAt;
+        activeStartedAt = null;
+        firstMinuteTimer = null;
+        telemetry.firstMinute(Math.round(activeElapsedMs), actionCount);
+      }, remaining);
     };
-    el.addEventListener("pointerdown", recordFirstAction, { once: true });
-    el.addEventListener("keydown", recordFirstAction, { once: true });
+    const recordAction = () => {
+      activateTelemetry();
+      actionCount += 1;
+      telemetry?.firstAction();
+      if (!gameEnded && document.visibilityState === "visible" && activeStartedAt === null) activeStartedAt = performance.now();
+      scheduleFirstMinute();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (activeStartedAt !== null) activeElapsedMs += performance.now() - activeStartedAt;
+        activeStartedAt = null;
+        if (firstMinuteTimer !== null) window.clearTimeout(firstMinuteTimer);
+        firstMinuteTimer = null;
+      } else if (actionCount > 0 && activeElapsedMs < 60_000) {
+        activeStartedAt = performance.now();
+        scheduleFirstMinute();
+      }
+    };
+    el.addEventListener("pointerdown", recordAction);
+    el.addEventListener("keydown", recordAction);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     const refPayloads = readReferenceImagePayloadsFromSession();
     const handle = createPhaserGame(el, spec, (r) => {
+      gameEnded = true;
+      if (activeStartedAt !== null) activeElapsedMs += performance.now() - activeStartedAt;
+      activeStartedAt = null;
+      if (firstMinuteTimer !== null) window.clearTimeout(firstMinuteTimer);
+      firstMinuteTimer = null;
       setResult(r);
       telemetry?.end(r.won, r.score);
       onEndRef.current?.({ won: r.won, score: r.score });
@@ -262,14 +297,15 @@ export default function GamePlayerInner({
     return () => {
       window.clearTimeout(deferredStartTimer);
       if (firstMinuteTimer !== null) window.clearTimeout(firstMinuteTimer);
-      el.removeEventListener("pointerdown", recordFirstAction);
-      el.removeEventListener("keydown", recordFirstAction);
+      el.removeEventListener("pointerdown", recordAction);
+      el.removeEventListener("keydown", recordAction);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (telemetryRef.current === telemetry) telemetryRef.current = null;
       handle.game.destroy(true);
       gameRef.current = null;
       bootAudioRef.current = null;
     };
-  }, [spec, session, locale, effectiveProjectId, projectId, resolvedPromptHint, previewMode, verticalSliceScore]);
+  }, [spec, session, locale, effectiveProjectId, projectId, creativeRevisionId, resolvedPromptHint, previewMode, verticalSliceScore]);
 
   /** 用户侧：避免引擎 bootstrap 前闪黑/半成品帧 */
   useEffect(() => {
@@ -397,6 +433,8 @@ export default function GamePlayerInner({
 
         {result && !arcadeMode ? (
           <div
+            data-testid="game-result-overlay"
+            data-outcome={result.won ? "won" : "lost"}
             className={`pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center backdrop-blur-md transition-colors duration-700 ${
               result.won
                 ? "bg-[color:color-mix(in_srgb,#052814_72%,transparent)]"
@@ -556,6 +594,7 @@ export default function GamePlayerInner({
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 type="button"
+                data-testid="game-result-restart"
                 onClick={restart}
                 className="gc-theme-cta rounded-full px-8 py-2.5 text-sm font-semibold shadow-lg"
               >

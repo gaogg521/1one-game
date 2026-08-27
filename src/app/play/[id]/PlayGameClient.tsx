@@ -89,6 +89,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const [playtestAdvice, setPlaytestAdvice] = useState<PlaytestAdvice[]>([]);
   const [assetJob, setAssetJob] = useState<AssetJob | null>(null);
   const [assetJobBusy, setAssetJobBusy] = useState(false);
+  const [playRevisionId, setPlayRevisionId] = useState<string | null>(null);
 
   const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
 
@@ -113,6 +114,7 @@ export function PlayGameClient({ id }: { id: string }) {
           core?: CoreSnapshot;
           assetJob?: AssetJob;
           playtestAdvice?: PlaytestAdvice[];
+          playRevisionId?: string;
           error?: string;
           errorKey?: string;
           errorParams?: Record<string, string | number>;
@@ -157,6 +159,7 @@ export function PlayGameClient({ id }: { id: string }) {
           setCore(data.core ?? null);
           setAssetJob(data.assetJob ?? null);
           setPlaytestAdvice(Array.isArray(data.playtestAdvice) ? data.playtestAdvice : []);
+          setPlayRevisionId(data.playRevisionId ?? null);
         }
       } catch {
         if (!cancelled) setError(t("networkError"));
@@ -495,7 +498,7 @@ export function PlayGameClient({ id }: { id: string }) {
                     </Link>
                   </div>
                 </div>
-                <GamePlayer spec={spec} immersive projectId={id} promptHint={meta.prompt} />
+                <GamePlayer spec={spec} immersive projectId={id} creativeRevisionId={playRevisionId ?? undefined} promptHint={meta.prompt} />
               </>
             ) : (
               <>
@@ -622,7 +625,7 @@ export function PlayGameClient({ id }: { id: string }) {
               spec={spec}
               projectId={id}
               allowOfflineExport={meta.isOwner}
-              phaser={<GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} onIterate={(instr) => {
+              phaser={<GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} creativeRevisionId={playRevisionId ?? undefined} onIterate={(instr) => {
                 setPatchPrompt(instr);
                 setTimeout(() => {
                   document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });

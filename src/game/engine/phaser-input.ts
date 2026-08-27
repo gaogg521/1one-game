@@ -70,9 +70,18 @@ export function justPressedSlide(keys: WasdKeys): boolean {
 }
 
 /** 鼠标/触控：相对玩家位置的横向 steering，无需按住 */
-export function pointerSteerX(scene: Phaser.Scene, anchorX: number, bandRatio = 0.34): number {
-  const px = scene.input.activePointer.x;
-  const dx = px - anchorX;
+export function pointerSteerX(
+  scene: Phaser.Scene,
+  anchorX: number,
+  bandRatio = 0.34,
+  opts?: { viewportDirectional?: boolean },
+): number {
+  // anchorX is a world coordinate. Pointer.x is viewport-local and diverges
+  // as soon as a following camera scrolls, which previously made mobile
+  // platformers stop/turn back near the first screen edge.
+  const px = opts?.viewportDirectional ? scene.input.activePointer.x : scene.input.activePointer.worldX;
+  const origin = opts?.viewportDirectional ? scene.scale.width / 2 : anchorX;
+  const dx = px - origin;
   const threshold = Math.max(28, scene.scale.width * 0.06);
   if (Math.abs(dx) < threshold) return 0;
   const band = scene.scale.width * bandRatio;
@@ -81,8 +90,8 @@ export function pointerSteerX(scene: Phaser.Scene, anchorX: number, bandRatio = 
 
 /** 鼠标/触控：全向 steering（collector / survivor） */
 export function pointerSteer2D(scene: Phaser.Scene, anchorX: number, anchorY: number): MoveAxis {
-  const px = scene.input.activePointer.x;
-  const py = scene.input.activePointer.y;
+  const px = scene.input.activePointer.worldX;
+  const py = scene.input.activePointer.worldY;
   const dx = px - anchorX;
   const dy = py - anchorY;
   const dist = Math.hypot(dx, dy);

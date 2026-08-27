@@ -39,11 +39,11 @@ export function buildCanonicalAstrocadeSpec(
     opts.persistedSpec?.agenticPlayRoute === "agentic";
 
   /**
-   * Exact gallery-prompt match must follow the sample route (Astrocade parity),
-   * even when a freshly mocked persistedSpec guessed a different templateId.
-   * Keep persistedSpec only when the prompt is not an exact sample match.
+   * Only an explicit gallery identity may replace an existing spec. A prompt
+   * match is useful for creating a new game, but must never silently swap the
+   * gameplay/template that a user or an upstream agent already supplied.
    */
-  const preferPersisted = Boolean(opts.persistedSpec) && !explicitSampleId && !promptMatchedSampleId;
+  const preferPersisted = Boolean(opts.persistedSpec) && !explicitSampleId;
 
   /** 已知样品 prompt / variant：mock 起跑；Agentic 生成物保留 persisted，避免入库时剥离模块 */
   const base: GameSpec = preferPersisted

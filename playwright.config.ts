@@ -60,6 +60,17 @@ export default defineConfig({
     trace: "on-first-retry",
     navigationTimeout: 60_000,
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      testIgnore: /flagship-first-minute\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-h5",
+      testMatch: /flagship-first-minute\.spec\.ts/,
+      use: { ...devices["Pixel 5"] },
+    },
+  ],
   ...(webServer ? { webServer } : {}),
 });

@@ -318,7 +318,7 @@ export function createPhaserGame(
     window.clearTimeout(fallbackReady);
     resizeObserver?.disconnect();
     window.removeEventListener("orientationchange", syncScaleToParent);
-    clearPhaserQaGame();
+    clearPhaserQaGame(game);
   });
 
   const bootAudio = () => {

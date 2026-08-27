@@ -892,3 +892,20 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - **P53.3 小说收尺寸 + 样品馆简介**：小说改为 4 列、`max-h-340`；样品馆主卡/侧卡叠加 subtitle·prompt 短简介；标题/简介/播放数字阶随封面尺寸缩放（主卡大、侧卡与小说小卡收紧）。
 - **P53.4 样品主卡下方内容区**：桌面被右侧货架拉高的空白改为转化区——钩子文案、prompt 简介、标签、立即试玩 + 用同样灵感开写双 CTA、打开次数。
 
+## P54：游戏默认生产流水线与手机 H5 交付门禁（2026-08-27）
+
+- 游戏 Core revision 新增不可变 `game_production_pipeline`：把需求、玩法定义、原型、技术设计、开发、数值平衡、手机测试、发布和运营九阶段落成可读取状态；确定性预检通过不冒充真实设备验收，手机测试/发布/运营只有观察证据后才推进。
+- 发布门禁绑定作者选定的 immutable revision，必须同时具备该版本的 `game_spec`、生产流水线预检、交付预检、移动 H5 真实试玩证据、BGM 音频或 notes，以及完整资产清单；不能再拿当前可编辑 legacy spec 或浏览器临时素材冒充已验收版本。
+- 匿名遥测绑定 `creativeRevisionId`，首分钟证据记录前台活跃时长、操作次数、设备类别、方向与触控能力；同一 revision 的真实结算会生成 `game_playtest_delivery`，不保存 session、prompt、账号、IP 或设备指纹。
+- 手机运行时修复：Phaser active canvas 生命周期标记；滚动场景 pointer world 坐标；平台跳跃扩展 Arcade Physics world bounds、按屏幕方向触控、关卡实际目标分和到达终点结算；躲避玩法恢复生命值、生命 HUD、受击恢复窗，并将默认危险速度限制在手机可读范围。
+- 规格保存/局部修改会补齐默认 production contract；规范化会保留所有通过 schema 的模板 blueprint；canonical 样品只在显式样品身份下替换规格，不再根据 prompt 关键词覆盖创作者玩法。
+- 真实 Pixel 5 串行矩阵 5/5 通过：avoider、puzzle、physics、platformer、farming 均完成真实输入、60 秒前台活跃、首分钟 Core artifact、正常胜负、delivery artifact 和重开，总耗时 6.0 分钟。
+- 发布前验证通过：`npx tsc --noEmit`、`npx prisma validate`、完整 `npm run build`（106 routes）、`qa:gameplay-telemetry`、`qa:game-playtest-evidence`、`qa:creator-publication`、`qa:game-delivery-readiness`、`qa:spec-canonical-parity`、`qa:game-quality-contracts`、`qa:play-scene-semantic-juice`。37 条迁移在全新隔离 SQLite 从零应用成功，隔离 `qa:creator-core` 通过。
+- 共享 QA 数据库里残留的旧 `game_asset` queued job 会让 `qa:creator-core` 的“消费下一任务”断言拿到别的任务；本轮未删除共享任务，以隔离数据库完成真实验证。定向 ESLint 0 error，保留既有 unused/hook dependency warnings。
+
+### 下次启动清单（P54）
+
+1. 仅精确暂存 P54 游戏流水线、遥测、运行时、QA、两条迁移和本节 `CONTEXT.md`；不要混入当前另一个会话的小说、漫画、locale/model 路由、README、PNG、数据库或 QA 输出。
+2. 推送 `origin/main` 后执行 `python scripts/deploy-prod-with-assets.py`；要求生产 `.next/BUILD_ID`、`operone`/worker active、TLS/SNI health 与首页全部 JS chunks 通过。
+3. 公网真实浏览器强刷首页并打开一个手机游戏，确认不是旧游戏页、无 ChunkLoadError、Canvas 可操作与结算可重开。
+

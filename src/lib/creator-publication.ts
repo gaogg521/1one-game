@@ -56,22 +56,54 @@ export async function setCreatorWorkPublication(input: {
       select: { id: true, revisions: { where: { status: "ready" }, orderBy: { sequence: "desc" }, take: 1, select: { id: true } } },
     });
     const candidateRevisionId = input.revisionId ?? core?.revisions[0]?.id;
-    const asset = core && candidateRevisionId
-      ? await prisma.creativeArtifact.findFirst({
-          where: { creativeProjectId: core.id, creativeRevisionId: candidateRevisionId, kind: "asset_manifest", status: "ready" },
-          orderBy: { createdAt: "desc" },
-          select: { contentJson: true },
+    const artifacts = core && candidateRevisionId
+      ? await prisma.creativeArtifact.findMany({
+          where: {
+            creativeProjectId: core.id,
+            creativeRevisionId: candidateRevisionId,
+            kind: { in: ["game_spec", "asset_manifest", "game_production_pipeline", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
+            status: "ready",
+          },
+          orderBy: { createdAt: "asc" },
+          select: { kind: true, contentJson: true, storageUri: true },
         })
-      : null;
+      : [];
+    const artifact = (kind: string) => artifacts.find((entry) => entry.kind === kind);
+    const asset = artifact("asset_manifest") ?? null;
     let assetContent: unknown = null;
     try { assetContent = asset?.contentJson ? JSON.parse(asset.contentJson) : null; } catch { /* corrupted artifact fails closed */ }
-    const quality = assessGameCreatorQuality(
-      parseGameSpec(JSON.parse(row.specJson)),
+    let candidateSpec: unknown = null;
+    try { candidateSpec = artifact("game_spec")?.contentJson ? JSON.parse(artifact("game_spec")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    const baseQuality = assessGameCreatorQuality(
+      parseGameSpec(candidateSpec ?? JSON.parse(row.specJson)),
       parseStoredCreativeBrief(row.creativeBriefJson),
       assessGameAssetReadiness(assetContent),
     ).report;
+    const deliveryIssues: string[] = [];
+    let preflight: { verdict?: unknown } | null = null;
+    try { preflight = artifact("game_delivery_preflight")?.contentJson ? JSON.parse(artifact("game_delivery_preflight")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    let pipeline: { preflightVerdict?: unknown } | null = null;
+    try { pipeline = artifact("game_production_pipeline")?.contentJson ? JSON.parse(artifact("game_production_pipeline")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    let playtest: { activeMs?: unknown; actionCount?: unknown; deviceClass?: unknown; touchCapable?: unknown; outcome?: unknown } | null = null;
+    try { playtest = artifact("game_playtest_delivery")?.contentJson ? JSON.parse(artifact("game_playtest_delivery")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    if (!candidateRevisionId) deliveryIssues.push("publication_revision_missing");
+    if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
+    if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
+    if (preflight?.verdict !== "ready") deliveryIssues.push("publication_delivery_preflight_not_ready");
+    if (
+      playtest?.deviceClass !== "mobile" ||
+      playtest.touchCapable !== true ||
+      typeof playtest.activeMs !== "number" || playtest.activeMs < 60_000 ||
+      typeof playtest.actionCount !== "number" || playtest.actionCount < 3 ||
+      (playtest.outcome !== "won" && playtest.outcome !== "lost")
+    ) deliveryIssues.push("publication_mobile_playtest_delivery_missing");
+    if (!artifact("bgm")?.storageUri && !artifact("bgm_notes")?.contentJson) deliveryIssues.push("publication_bgm_missing");
+    const quality: CreatorQualityReport = deliveryIssues.length > 0
+      ? { ...baseQuality, verdict: "blocked", evidence: [...baseQuality.evidence, ...deliveryIssues] }
+      : baseQuality;
     return persistPublication({
       input,
+      selectedRevisionId: candidateRevisionId,
       quality,
       legacyType: "project",
       publicationDisplay: { title: row.title, prompt: row.prompt, coverPath: row.coverPath },
@@ -130,6 +162,7 @@ async function persistPublication(input: {
   legacyType: string;
   publicationDisplay: Record<string, string | null>;
   update: (tx: Prisma.TransactionClient, visibility: WorkVisibility) => Promise<unknown>;
+  selectedRevisionId?: string;
 }): Promise<{ visibility: WorkVisibility; quality: CreatorQualityReport }> {
   if (input.input.action === "publish" && input.quality.verdict === "blocked") {
     throw new CreatorPublicationError("quality_blocked");
@@ -144,7 +177,7 @@ async function persistPublication(input: {
     if (!core) return;
     let revisionId = input.input.action === "unpublish"
       ? core.acceptedRevisionId
-      : (await tx.creativeRevision.findFirst({
+      : input.selectedRevisionId ?? (await tx.creativeRevision.findFirst({
         where: { creativeProjectId: core.id, status: "ready" },
         orderBy: { sequence: "desc" },
         select: { id: true },

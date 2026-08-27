@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { GameplayEventPayloadSchema } from "@/lib/gameplay-telemetry";
-import { persistFirstMinutePlaytestEvidenceWithRetry } from "@/lib/game-playtest-evidence";
+import { persistFirstMinutePlaytestEvidenceWithRetry, persistGameDeliveryPlaytestEvidenceWithRetry } from "@/lib/game-playtest-evidence";
+import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
 
 export const runtime = "nodejs";
 
@@ -31,15 +32,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    await gameplayEvent.create({ data: parsed.data });
-  } catch {
+    const eventKey = parsed.data.projectId && parsed.data.creativeRevisionId
+      ? `${parsed.data.projectId}:${parsed.data.creativeRevisionId}:${parsed.data.sessionId}:${parsed.data.event}`
+      : null;
+    await gameplayEvent.create({ data: { ...parsed.data, eventKey } });
+  } catch (error) {
+    if (isPrismaUniqueViolation(error)) {
+      // A keepalive retry is still allowed to repair a previously missed Core
+      // evidence write below; the gameplay row itself remains exactly-once.
+    } else {
     // The client deliberately treats this telemetry route as non-blocking.
-    return NextResponse.json({ ok: false }, { status: 503 });
+      return NextResponse.json({ ok: false }, { status: 503 });
+    }
   }
   // Runtime proof must never slow or break the game. A failed Core write is
   // retriable through a later first-minute event, while telemetry remains kept.
   if (parsed.data.event === "first_minute" && parsed.data.projectId) {
     void persistFirstMinutePlaytestEvidenceWithRetry(parsed.data).catch(() => undefined);
+  }
+  if ((parsed.data.event === "first_minute" || parsed.data.event === "end") && parsed.data.projectId && parsed.data.creativeRevisionId) {
+    void persistGameDeliveryPlaytestEvidenceWithRetry(parsed.data).catch(() => undefined);
   }
   return NextResponse.json({ ok: true }, { status: 202 });
 }

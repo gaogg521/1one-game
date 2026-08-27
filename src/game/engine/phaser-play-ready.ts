@@ -43,12 +43,18 @@ export function setPhaserQaClickHints(hints: QaClickHint[]): void {
 
 export function registerPhaserQaGame(game: import("phaser").Game): void {
   if (typeof window !== "undefined") {
+    document.querySelectorAll<HTMLCanvasElement>('canvas[data-phaser-active="true"]').forEach((canvas) => {
+      delete canvas.dataset.phaserActive;
+    });
+    game.canvas.dataset.phaserActive = "true";
     window.__PHASER_QA_GAME__ = game;
   }
 }
 
-export function clearPhaserQaGame(): void {
+export function clearPhaserQaGame(game?: import("phaser").Game): void {
   if (typeof window !== "undefined") {
+    if (game && window.__PHASER_QA_GAME__ !== game) return;
+    if (window.__PHASER_QA_GAME__?.canvas) delete window.__PHASER_QA_GAME__.canvas.dataset.phaserActive;
     delete window.__PHASER_QA_GAME__;
   }
 }

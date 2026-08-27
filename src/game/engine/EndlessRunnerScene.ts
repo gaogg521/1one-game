@@ -211,7 +211,14 @@ export class EndlessRunnerScene extends Phaser.Scene {
     this.nextCoinX = this.viewW + 60;
 
     initQaState({ playerX: Math.round(this.playerScreenX) });
-    setPhaserQaState({ playerX: Math.round(this.playerScreenX) });
+    setPhaserQaState({
+      playerX: Math.round(this.playerScreenX),
+      runnerLane: this.playerLane,
+      runnerLives: this.lives,
+      runnerScore: this.score,
+      runnerNextObstacleLane: -1,
+      runnerNextObstacleDistance: -1,
+    });
     schedulePhaserPlayReady(this, 350, { playerX: Math.round(this.playerScreenX) });
 
     this.refreshHud();
@@ -522,7 +529,19 @@ export class EndlessRunnerScene extends Phaser.Scene {
       this.combo = 0;
     }
 
-    setPhaserQaState({ playerX: Math.round(this.playerScreenX) });
+    const nextObstacle = this.obstacles
+      .filter((entry) => !entry.passed)
+      .map((entry) => ({ entry, distance: (entry.obj.getData("screenX") as number) - this.playerScreenX }))
+      .filter(({ distance }) => distance >= 0)
+      .sort((a, b) => a.distance - b.distance)[0];
+    setPhaserQaState({
+      playerX: Math.round(this.playerScreenX),
+      runnerLane: this.playerLane,
+      runnerLives: this.lives,
+      runnerScore: this.score,
+      runnerNextObstacleLane: nextObstacle?.entry.lane ?? -1,
+      runnerNextObstacleDistance: Math.round(nextObstacle?.distance ?? -1),
+    });
   }
 
   /**

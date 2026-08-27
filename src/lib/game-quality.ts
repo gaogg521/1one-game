@@ -21,7 +21,7 @@ const TEMPLATE_FLOORS: Record<string, GameplayFloor> = {
   towerDefense: { hazardSpeed: 180, spawnIntervalMs: 420, winScore: 9, startingCoins: 120, baseHealth: 48 },
   collector: { playerSpeed: 300, hazardSpeed: 260, spawnIntervalMs: 520, winScore: 36, lives: 3 },
   survivor: { playerSpeed: 300, hazardSpeed: 300, spawnIntervalMs: 520, winScore: 50, lives: 3 },
-  avoider: { playerSpeed: 300, hazardSpeed: 300, spawnIntervalMs: 520, winScore: 50, lives: 1 },
+  avoider: { playerSpeed: 300, hazardSpeed: 140, spawnIntervalMs: 720, winScore: 50, lives: 3 },
   coaster: { playerSpeed: 260, hazardSpeed: 220, spawnIntervalMs: 640, winScore: 100, lives: 3 },
   puzzle: { playerSpeed: 260, hazardSpeed: 220, spawnIntervalMs: 760, winScore: 20, lives: 3 },
   customization: { playerSpeed: 240, hazardSpeed: 200, spawnIntervalMs: 760, winScore: 18, lives: 3 },
@@ -31,15 +31,26 @@ const TEMPLATE_FLOORS: Record<string, GameplayFloor> = {
   physics: { playerSpeed: 280, hazardSpeed: 220, spawnIntervalMs: 760, winScore: 18, lives: 3 },
 };
 
+// Difficulty values are not universally "better when larger". In a one-life
+// mobile avoider, the previous 300px/s floor made first-session survival
+// impossible on a 393px viewport. Keep the action readable while still
+// allowing faster variants to be authored explicitly outside the default
+// quality pass.
+const TEMPLATE_CEILINGS: Record<string, GameplayFloor> = {
+  avoider: { hazardSpeed: 220 },
+};
+
 function floorGameplay(spec: GameSpec): GameSpec {
   const floor = TEMPLATE_FLOORS[spec.templateId] ?? {};
+  const ceiling = TEMPLATE_CEILINGS[spec.templateId] ?? {};
   const gp = spec.gameplay;
+  const flooredHazardSpeed = Math.max(gp.hazardSpeed, floor.hazardSpeed ?? gp.hazardSpeed);
   return {
     ...spec,
     gameplay: {
       ...gp,
       playerSpeed: Math.max(gp.playerSpeed, floor.playerSpeed ?? gp.playerSpeed),
-      hazardSpeed: Math.max(gp.hazardSpeed, floor.hazardSpeed ?? gp.hazardSpeed),
+      hazardSpeed: Math.min(flooredHazardSpeed, ceiling.hazardSpeed ?? flooredHazardSpeed),
       spawnIntervalMs: Math.max(gp.spawnIntervalMs, floor.spawnIntervalMs ?? gp.spawnIntervalMs),
       winScore: Math.max(gp.winScore ?? 0, floor.winScore ?? 0) || gp.winScore,
       lives: Math.max(gp.lives ?? 0, floor.lives ?? 0) || gp.lives,
