@@ -327,6 +327,10 @@ export async function POST(req: Request) {
             ownerKey,
             title: titleTrim || progressNovelMessage(uiLocale, "draftTitle"),
             prompt: promptTrim,
+            generation: normalizeWorkGenerationProvenance({
+              provider: String(providerLabel),
+              model: cascade[0],
+            }),
           });
           draftNovelId = draft.id;
           await persistNovelLengthTier(draft.id, lengthTier);

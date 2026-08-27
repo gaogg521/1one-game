@@ -43,6 +43,7 @@
 
 | 日期 | 自述来源（可选） | 摘要 | 主要证据 |
 |------|------------------|------|----------|
+| 2026-08-27 | 文学生成采集 | 小说/漫画 LLM 是作者；草稿与 checkpoint 必须记模型；禁止空 provider | `docs/literary-generation-pipeline.md` |
 | 2026-08-27 | 游戏生成管线 | **LLM 是作者、内核只校验**；采集与管线分离。禁止正则先锁核、禁止空 debug 推断 kernel | `docs/game-generation-pipeline.md`，`DECISIONS.md` 置顶 |
 | 2026-05-16 | 稳定性会话 | Studio 加载容错 + `mine=1`；漫画分镜 normalize / 放宽 Schema / body 上限；Prisma generate 阻塞说明 | `SESSION_LOG.md`，`iterations/2026-05-16.md` §二轮 |
 | 2026-05-16 | 全自动迭代 | 塔防引擎优化；`/games` `/novels` `/comics`；Studio 三类型；小说漫画封面与分享 | `iterations/2026-05-16.md`，commit `d380c4e` |

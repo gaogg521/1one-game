@@ -9,6 +9,7 @@ import {
 import { persistNovelGenerationMeta, loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import type { NovelLengthTier } from "@/lib/novel-length";
 import { prisma } from "@/lib/prisma";
+import type { WorkGenerationProvenance } from "@/lib/work-generation-meta";
 
 export const NOVEL_STATUS_DRAFT_GENERATING = "draft_generating";
 
@@ -29,6 +30,7 @@ export async function createDraftGeneratingNovel(opts: {
   ownerKey: string;
   title: string;
   prompt: string;
+  generation?: WorkGenerationProvenance;
 }): Promise<{ id: string }> {
   const row = await prisma.novel.create({
     data: {
@@ -38,6 +40,12 @@ export async function createDraftGeneratingNovel(opts: {
       content: "",
       status: NOVEL_STATUS_DRAFT_GENERATING,
       visibility: "hidden",
+      ...(opts.generation
+        ? {
+            generationProvider: opts.generation.generationProvider,
+            generationModel: opts.generation.generationModel,
+          }
+        : {}),
     },
   });
   return { id: row.id };

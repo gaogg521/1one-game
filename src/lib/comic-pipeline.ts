@@ -672,7 +672,7 @@ async function generateComicPagesLong(params: {
     pages = enrichPagesFromNovelSegments(pages, segments);
   }
 
-  return { pages, director, provider: "", model, directorStoryboardStats };
+  return { pages, director, provider: getActiveProvider(), model, directorStoryboardStats };
 }
 
 async function resolveComicRosterAndDigest(opts: {
@@ -1006,7 +1006,7 @@ export async function generateComicPages(opts: {
       pipeline: "light",
       storyboardSource: "emergency",
       director: null,
-      provider: "",
+      provider: getActiveProvider(),
       model: opts.model,
       consistencyIssues: [],
       readMode,

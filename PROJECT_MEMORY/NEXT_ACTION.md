@@ -1,6 +1,10 @@
-更新时间：**2026-08-27**（游戏生成：LLM-first + 采集）
+更新时间：**2026-08-27**（文学线采集）
 
-## 游戏生成（当前）
+## 小说 / 漫画（当前）
+
+LLM 是作者。草稿和 checkpoint 必须记模型。完整逻辑：`docs/literary-generation-pipeline.md`。
+
+## 游戏生成
 
 默认 **LLM 围绕提示词出 spec**，内核只校验/兜底。完整逻辑：`docs/game-generation-pipeline.md`。
 

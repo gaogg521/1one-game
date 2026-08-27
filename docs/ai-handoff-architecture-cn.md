@@ -22,6 +22,7 @@
 | 优先级 | 文件 | 内容 |
 |--------|------|------|
 | 0 | [`game-generation-pipeline.md`](game-generation-pipeline.md) | **游戏生成铁律**：LLM 是作者，内核只校验/兜底；采集 ≠ 改管线 |
+| 0 | [`literary-generation-pipeline.md`](literary-generation-pipeline.md) | **小说/漫画铁律**：LLM 是作者；草稿就要记模型；空 provider 禁止落库 |
 | 1 | [`README.md`](../README.md) | 产品能力、路由表、环境变量、API、开发命令、CI、参考图策略；含英文概览 |
 | 2 | **本文** | 接手总览 + **当前架构** + 源码索引 |
 | 3 | [`recent-progress.md`](recent-progress.md) | 近期功能迭代细节（一致性、音频、参考图、并行、塔防稳健性等） |

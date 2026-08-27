@@ -247,6 +247,7 @@
 
 1. **优先读取** 根目录 **`CONTEXT.md`** 恢复当前工作进度快照（包括修改文件、待办、下一步）。  
    若任务涉及 **游戏生成 / GameSpec / 内核 / 后台生成模型**：先读 **`docs/game-generation-pipeline.md`** 与 **`PROJECT_MEMORY/DECISIONS.md` 置顶条**，不要把内核重新做成默认作者。  
+   若任务涉及 **小说 / 漫画 / 分镜 / 文学 provenance**：先读 **`docs/literary-generation-pipeline.md`**，不要把游戏内核搬到文学线，也不要让草稿带着空模型进后台。  
 2. 根据 CONTEXT.md 中的「下次启动清单」执行对应操作（通常是编译验证、dev 启动、回归测试）。  
 3. 若无 CONTEXT.md，则按 **INITIALIZATION PHASE** 流程全仓扫描恢复上下文。  
 4. **每完成一大段进度后**，立即更新 CONTEXT.md 中的「当前状态」与「下次启动清单」，保持快照最新。

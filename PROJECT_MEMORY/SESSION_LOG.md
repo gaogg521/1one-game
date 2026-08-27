@@ -1,3 +1,11 @@
+## 2026-08-27 — 小说/漫画采集：草稿即写模型，禁止空 provider
+
+- 文学线没有游戏内核；作者是 LLM。圣经/章纲/导演包只编排。
+- 长篇草稿、分镜 checkpoint 写入 provenance；长导演/应急不再 `provider: ""`。
+- 文档：`docs/literary-generation-pipeline.md`。
+
+---
+
 ## 2026-08-27 — 游戏生成 LLM-first + 采集与管线分离
 
 - 默认 `pipeline=llm`：模型围绕提示词写 spec；内核校验失败或未调到模型才兜底。

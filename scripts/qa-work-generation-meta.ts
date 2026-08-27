@@ -82,6 +82,13 @@ function testHelpers() {
   assert.equal(sourceKernelWithLlm.generationProvider, "openai");
   assert.equal(sourceKernelWithLlm.generationModel, "gpt-5.2");
 
+  const emptyProviderKeepsModel = normalizeWorkGenerationProvenance({
+    provider: "",
+    model: "doubao-seed-2-pro",
+  });
+  assert.equal(emptyProviderKeepsModel.generationProvider, null);
+  assert.equal(emptyProviderKeepsModel.generationModel, "doubao-seed-2-pro");
+
   const trimmed = normalizeWorkGenerationProvenance({ provider: "  volc  ", model: "  ep-xxx  " });
   assert.equal(trimmed.generationProvider, "volc");
   assert.equal(trimmed.generationModel, "ep-xxx");

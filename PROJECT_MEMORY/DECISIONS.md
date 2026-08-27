@@ -21,6 +21,20 @@
 
 ---
 
+## 2026-08-27 — 小说 / 漫画：同样是 LLM 作者，补采集不要改成模板作者
+
+**背景**：游戏线曾被误做成「内核当作者」。文学线没有 Phaser 内核——读者拿到的就是模型正文 / 分镜 JSON。缺口是采集：长篇草稿、分镜 checkpoint、长导演/应急路径 `provider: ""`，后台显示「未记录」。
+
+**决策**：
+
+- 小说、漫画分镜的默认作者仍是 LLM。圣经、章纲、完整性、导演包、一致性 = 编排/校验，不是作者。
+- 应急分镜 `buildEmergencyComicPages` 才是兜底（类似游戏内核），不要当默认作者。
+- 草稿创建与 checkpoint 就要写 provenance；空 provider 禁止落库。
+- 后台这一对字段记**分镜/正文 LLM**；逐格文生图是另一条模型，配图重跑不得覆盖。
+- 完整说明：**`docs/literary-generation-pipeline.md`**。
+
+---
+
 ## 2026-06-22 — 生产服务器可迁移性（备份/恢复脚本）
 
 **背景**：生产在 CentOS 7，未来需迁到 Ubuntu 22 / Rocky 9 等新机。SSH 目标通过 `scripts/deploy.local.env`（gitignore）或 `OPERONE_DEPLOY_*` 环境变量配置，**真实 IP/密码不得写入 Git**。

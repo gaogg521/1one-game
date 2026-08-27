@@ -14,7 +14,7 @@ import {
   type ComicCharacterRoster,
 } from "@/lib/comic-character-roster";
 import { resolveComicStylePreset } from "@/lib/comic-style-presets";
-import { getComicStoryboardModelCascade } from "@/lib/llm";
+import { getActiveProvider, getComicStoryboardModelCascade } from "@/lib/llm";
 import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import {
   ComicGenerateError,
@@ -473,6 +473,11 @@ export async function runComicGeneration(
     }
   }
 
+  const cascade = getComicStoryboardModelCascade(runtimeLocaleGroup(uiLocale));
+  let attemptedStoryboardModel = cascade[0] ?? "";
+  let gen = null as Awaited<ReturnType<typeof generateComicPages>> | null;
+  let lastError = "";
+
   const onChunkCheckpoint = async (ev: ComicChunkCheckpoint) => {
     // P1 修复：checkpoint 时使用 gen 返回的 director（若已有），避免续跑时 director 丢失
     const checkpointDirector = gen?.director ?? existingDirector ?? null;
@@ -493,6 +498,10 @@ export async function runComicGeneration(
       title: storageTitle,
       prompt: novelContent.slice(0, 200),
       doc: partialDoc,
+      generation: normalizeWorkGenerationProvenance({
+        provider: gen?.provider || getActiveProvider(),
+        model: gen?.model || attemptedStoryboardModel,
+      }),
     });
     send({
       step: "checkpoint_saved",
@@ -505,10 +514,6 @@ export async function runComicGeneration(
     });
   };
 
-  const cascade = getComicStoryboardModelCascade(runtimeLocaleGroup(uiLocale));
-  let gen = null as Awaited<ReturnType<typeof generateComicPages>> | null;
-  let lastError = "";
-
   let effectiveCharacterRoster = input.characterRoster ?? null;
   if (actualNovelId) {
     const serverRoster = await loadNovelCharacterRoster(actualNovelId);
@@ -519,6 +524,7 @@ export async function runComicGeneration(
   }
 
   for (const model of cascade) {
+    attemptedStoryboardModel = model;
     send({ step: "model_start", model });
     // 关键修复：cascade retry 时从 DB checkpoint 恢复，不让前模型已生成内容丢弃
     // model A 可能在 chunk 2 失败但已 checkpoint 了 chunk 0-1，model B 应从 chunk 2 继续
