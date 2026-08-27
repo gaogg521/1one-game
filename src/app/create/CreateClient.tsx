@@ -36,8 +36,10 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     model?: string;
     provider?: string;
     fallback?: boolean;
+    kernelFallback?: boolean;
     source?: string;
     templateHint?: string;
+    scene?: string;
   } | null>(null);
   const [generationSource, setGenerationSource] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(props.replayFromProjectId?.trim() || null);
@@ -107,7 +109,15 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
         if (step === "done" && event.spec) {
           setSpec(event.spec as GameSpec);
           const debug = event.debug && typeof event.debug === "object"
-            ? (event.debug as { model?: string; provider?: string; fallback?: boolean; source?: string; templateHint?: string })
+            ? (event.debug as {
+                model?: string;
+                provider?: string;
+                fallback?: boolean;
+                kernelFallback?: boolean;
+                source?: string;
+                templateHint?: string;
+                scene?: string;
+              })
             : null;
           setGenerationDebug(debug);
           setGenerationSource(typeof event.source === "string" ? event.source : debug?.source ?? null);
@@ -135,7 +145,9 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             model: generationDebug.model,
             source: generationDebug.source ?? generationSource ?? undefined,
             fallback: generationDebug.fallback,
+            kernelFallback: generationDebug.kernelFallback,
             templateHint: generationDebug.templateHint,
+            scene: generationDebug.scene,
           }
         : null;
       const res = await fetch(updating ? `/api/projects/${projectId}` : "/api/projects", {
@@ -145,7 +157,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           prompt,
           spec: specToSave,
           debug: provenanceDebug,
-          source: generationSource ?? provenanceDebug?.source ?? "kernel",
+          source: generationSource ?? provenanceDebug?.source,
         }),
       });
       const data = (await res.json()) as { project?: { id?: string }; error?: string; errorKey?: string; errorParams?: Record<string, string | number> };

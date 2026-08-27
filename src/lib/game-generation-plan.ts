@@ -5,10 +5,13 @@ import { resolveTemplateRuntime, type GameTemplateId } from "@/lib/game-template
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 
 /**
- * Public game generation is intentionally not a template picker.  This is the
- * small, inspectable compiler contract between a user's sentence and a tested
- * runtime kernel.  Template IDs remain an implementation detail for the
- * runtime and old projects.
+ * Kernel = playable compiler for a chosen template, NOT the default author.
+ *
+ * Product rule (2026-08-27): the LLM writes the spec around the user's prompt.
+ * This plan validates goal / input / win-lose / one mobile session, and can
+ * compile a fallback spec when the model output is unplayable or missing.
+ * Regex `resolveKernel` must not override an LLM-chosen template on the
+ * default path. See `docs/game-generation-pipeline.md`.
  */
 export type GameGenerationPlan = {
   version: 1;
@@ -74,7 +77,7 @@ export function buildGameGenerationPlan(
   };
 }
 
-/** Compile mechanics deterministically; LLMs may enrich copy/assets later but never choose the base interaction. */
+/** Compile a playable spec for `plan.kernel`. Used as validator/fallback, not as the default author. */
 export function compileGameGenerationPlan(plan: GameGenerationPlan): GameSpec {
   return {
     ...mockSpecFromPrompt(plan.prompt, { templateId: plan.kernel }),

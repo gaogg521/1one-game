@@ -1,6 +1,36 @@
 # 项目工作进度快照
+最后更新：2026-08-27（会话：LLM-first 管线 + 生成采集）
 
-最后更新：2026-08-27（生产创作链路复查）
+## 当前状态
+- 游戏默认管线改为 **LLM 围绕提示词出 spec**，内核只校验/兜底（`pipeline` 缺省 `"llm"`）。
+- 采集与管线分离：debug 带 provider/model/scene/kernelFallback；空 debug 不再推断成 kernel。
+- 铁律文档：`docs/game-generation-pipeline.md`（下一任必读）。
+- 编译 / QA：`npx tsc --noEmit` 通过；`qa:work-generation-meta`、`qa:game-generation-kernel`、`qa:game-production-contract`、`qa:game-delivery-readiness` 通过。
+
+## 本会话修改文件表
+- `src/lib/generate-spec.ts` — 默认 llm-first；校验失败才 kernel fallback；debug 打全 provenance
+- `src/lib/game-generation-plan.ts` — 注释改为「校验/兜底，不当作者」
+- `src/lib/work-generation-meta.ts` — 真实模型优先于 source=kernel
+- `src/lib/multi-agent-spec.ts` — 返回 model/scene
+- `src/app/api/projects/route.ts` — 去掉空 debug→kernel 推断
+- `src/app/create/CreateClient.tsx` — 上送 kernelFallback；source 不再默认 kernel
+- `src/app/api/generate/stream/route.ts` — 进度文案改为围绕描述生成
+- `scripts/qa-work-generation-meta.ts` / `qa-game-generation-kernel.ts` 等
+- `docs/game-generation-pipeline.md`、`PROJECT_MEMORY/DECISIONS.md`、`CONTEXT.md`
+
+## 下次启动清单
+1. 读 `docs/game-generation-pipeline.md`（若动游戏生成）。
+2. 生产实测：新游戏在 `/console?tab=works` 应显示真实 `provider · model`，不应再把 LLM 作品标成「内核编译」。
+3. 「萤火虫护送」类提示词走默认管线时，玩法由模型选模板，不再被正则锁成 collector（无模型时内核兜底仍可能是 collector，那是兜底不是作者）。
+
+## 已完成功能全表
+- 管理后台作品表：日期 + 生成模型列（pending / works 共用）。
+- 小说 / 漫画生成路径已写 provenance；游戏现与管线决策对齐。
+
+## 会话记录（按日期追加）
+### 2026-08-27 · LLM-first + 采集
+- 操作：默认生成改为 LLM 作者；内核只 validate/fallback；采集补全；写决策文档。
+- 状态：本地 QA 通过，准备提交部署。
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
@@ -9,7 +39,7 @@
 - **复查范围**：生产环境游戏 / 小说 / 小说转漫画创作流程，以及后台业务模型路由是否真正生效。
 - **生产现状（修前）**：健康检查通过，但近期游戏/小说/漫画 `generationProvider` / `generationModel` 大量为 null；游戏资产 worker 写死 `zh-Hans`，localeRoutes 在 job 内不生效；小说转漫画在列表无正文时不拉详情。
 - **已修**：
-  - 游戏保存无 debug 时按 kernel + `templateId` 落库；owner GET 项目返回 provenance。
+  - 游戏保存按 debug 落 provenance；**空 debug 保持未记录**，不再推断成 kernel。owner GET 项目返回 provenance。
   - 游戏资产任务带请求 locale；worker ALS 注入 `uiLocale`，`runtimeLocaleGroupForCurrentRequest` 优先读 job locale。
   - 长导演分镜 `provider` 不再空字符串；漫画 SSE 加 `X-Accel-Buffering: no`。
   - 小说/漫画详情 owner 返回 generation 字段；短篇写作传递 AbortSignal。

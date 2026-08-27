@@ -7,7 +7,9 @@
 
 ## 1. 项目一句话
 
-**1ONE 游戏平台**：用户自然语言描述玩法 → **大模型产出 `GameSpec`（JSON）** → **`enrichGameSpecForRuntime` 补全导演/蓝图** → 浏览器 **Phaser 4** 即时试玩（或 **Godot Web** 完整版）→ 保存 / 工作室 / 短链分享。
+**1ONE 游戏平台**：用户自然语言描述玩法 → **大模型围绕提示词产出 `GameSpec`（JSON）** → 内核只校验可玩性（过不了再兜底）→ 浏览器 **Phaser 4** 即时试玩 → 保存 / 工作室 / 短链分享。
+
+> 不要把内核当成默认作者。详见 [`game-generation-pipeline.md`](game-generation-pipeline.md)。
 
 - **前端**：Next.js App Router、React 19、`data-theme` 全站主题。  
 - **后端**：Route Handlers、Prisma + **SQLite**、`Project.specJson` 存规格。  
@@ -19,6 +21,7 @@
 
 | 优先级 | 文件 | 内容 |
 |--------|------|------|
+| 0 | [`game-generation-pipeline.md`](game-generation-pipeline.md) | **游戏生成铁律**：LLM 是作者，内核只校验/兜底；采集 ≠ 改管线 |
 | 1 | [`README.md`](../README.md) | 产品能力、路由表、环境变量、API、开发命令、CI、参考图策略；含英文概览 |
 | 2 | **本文** | 接手总览 + **当前架构** + 源码索引 |
 | 3 | [`recent-progress.md`](recent-progress.md) | 近期功能迭代细节（一致性、音频、参考图、并行、塔防稳健性等） |

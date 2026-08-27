@@ -14,10 +14,18 @@ export function isMockGenerationModel(model: string | null | undefined): boolean
   return (model ?? "").trim().toLowerCase() === MOCK_MODEL;
 }
 
+export function isLikelyLlmModelId(model: string | null | undefined): boolean {
+  const m = (model ?? "").trim().toLowerCase();
+  if (!m || m === MOCK_MODEL || m === KERNEL_GENERATION_PROVIDER) return false;
+  if (m.includes(".") || m.includes("/") || m.includes(":")) return true;
+  return /^(gpt|o[1-9]|claude|gemini|doubao|ep-|deepseek|qwen|grok|mistral|llama)/i.test(m);
+}
+
 export function isKernelGeneration(
   provider?: string | null,
   model?: string | null,
 ): boolean {
+  if (isLikelyLlmModelId(model)) return false;
   const p = (provider ?? "").trim().toLowerCase();
   const m = (model ?? "").trim().toLowerCase();
   return p === KERNEL_GENERATION_PROVIDER || m === KERNEL_GENERATION_PROVIDER;
@@ -56,6 +64,7 @@ export function parseWorkGenerationFromUnknown(body: unknown): WorkGenerationPro
       : null;
   const source = pickString(root.source) ?? pickString(debug?.source);
   const templateHint = pickString(debug?.templateHint);
+  const kernelFallback = debug?.kernelFallback === true;
   let provider =
     pickString(root.generationProvider) ??
     pickString(debug?.provider) ??
@@ -66,7 +75,12 @@ export function parseWorkGenerationFromUnknown(body: unknown): WorkGenerationPro
     pickString(debug?.enhanceModel) ??
     pickString(debug?.draftModel) ??
     pickString(root.model);
-  if (source === "kernel") {
+  // 采到真实模型就记模型。不要用 source=kernel 把 LLM 调用伪装成「内核编译」。
+  if (isLikelyLlmModelId(model)) {
+    if ((provider ?? "").toLowerCase() === KERNEL_GENERATION_PROVIDER) {
+      provider = undefined;
+    }
+  } else if (source === "kernel" || (kernelFallback && !model)) {
     provider = provider ?? KERNEL_GENERATION_PROVIDER;
     model =
       model ??

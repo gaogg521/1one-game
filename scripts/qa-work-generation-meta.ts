@@ -58,6 +58,30 @@ function testHelpers() {
   assert.equal(empty.generationModel, null);
   assert.equal(formatWorkGenerationLabel(null, null), "");
 
+  const emptyBody = parseWorkGenerationFromUnknown({});
+  assert.equal(emptyBody.generationProvider, null);
+  assert.equal(emptyBody.generationModel, null);
+
+  const llmKeptAfterKernelFallback = parseWorkGenerationFromUnknown({
+    source: "llm",
+    debug: {
+      provider: "ark",
+      model: "doubao-seed-2-pro",
+      kernelFallback: true,
+      fallback: true,
+      source: "llm",
+    },
+  });
+  assert.equal(llmKeptAfterKernelFallback.generationProvider, "ark");
+  assert.equal(llmKeptAfterKernelFallback.generationModel, "doubao-seed-2-pro");
+
+  const sourceKernelWithLlm = parseWorkGenerationFromUnknown({
+    source: "kernel",
+    debug: { provider: "openai", model: "gpt-5.2", source: "kernel" },
+  });
+  assert.equal(sourceKernelWithLlm.generationProvider, "openai");
+  assert.equal(sourceKernelWithLlm.generationModel, "gpt-5.2");
+
   const trimmed = normalizeWorkGenerationProvenance({ provider: "  volc  ", model: "  ep-xxx  " });
   assert.equal(trimmed.generationProvider, "volc");
   assert.equal(trimmed.generationModel, "ep-xxx");

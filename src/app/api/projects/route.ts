@@ -23,7 +23,7 @@ import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
-import { parseWorkGenerationFromUnknown, KERNEL_GENERATION_PROVIDER, normalizeWorkGenerationProvenance } from "@/lib/work-generation-meta";
+import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export async function GET(req: Request) {
@@ -112,13 +112,7 @@ export async function POST(req: Request) {
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);
-    let generation = parseWorkGenerationFromUnknown(body);
-    if (!generation.generationProvider && !generation.generationModel) {
-      generation = normalizeWorkGenerationProvenance({
-        provider: KERNEL_GENERATION_PROVIDER,
-        model: spec.templateId || KERNEL_GENERATION_PROVIDER,
-      });
-    }
+    const generation = parseWorkGenerationFromUnknown(body);
     const uiLocale = resolveRequestLocaleSync(req);
     const project = await createProjectRecord({
       ownerKey,

@@ -1,3 +1,11 @@
+## 2026-08-27 — 游戏生成 LLM-first + 采集与管线分离
+
+- 默认 `pipeline=llm`：模型围绕提示词写 spec；内核校验失败或未调到模型才兜底。
+- 禁止空 debug 推断 kernel；有真实模型就落库模型。
+- 文档：`docs/game-generation-pipeline.md`、`DECISIONS.md` 置顶。
+
+---
+
 ## 2026-06-20 — 迭代一百零九 · 漫画管线 Phase 3 完整实现 + 管理后台集成 ✅
 
 ### 管理后台 UI 集成

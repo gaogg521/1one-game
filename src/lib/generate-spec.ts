@@ -474,7 +474,11 @@ export type GenerationDebug = {
   provider?: string;
   /** 与 generate 返回的 source 对齐，供后台落库。 */
   source?: GenerationSource;
+  /** 游戏模型路由 scene（game_text / game_vision 等），仅观测。 */
+  scene?: string;
   fallback: boolean;
+  /** LLM 出了 spec，但可玩性校验失败后改用内核编译的可玩规格。仍保留本次调用的 provider/model。 */
+  kernelFallback?: boolean;
   /** fallback=true 时给用户可读原因；fallback=false 时可为空。 */
   fallbackReason?: string;
   /** LiteLLM/OpenAI 调用报错（脱敏且截断）。 */
@@ -861,8 +865,12 @@ function specsEqual(a: GameSpec, b: GameSpec): boolean {
 }
 
 export type GenerateOptions = {
-  /** 默认走可验证的内核编译；legacy 仅供历史回归和受控实验。 */
-  pipeline?: "kernel" | "legacy";
+  /**
+   * 默认 `llm`：模型围绕提示词出 spec，内核只校验/兜底。
+   * `kernel`：正则先锁模板再编译，仅供离线 QA / 对照实验。
+   * 后台要看生成模型 ≠ 生成必须走内核；采集与管线分开。
+   */
+  pipeline?: "llm" | "kernel";
   /** 附在用户消息末尾，用于多套方案差异化（不影响离线 mock 的标题推断基准）。 */
   flavorSuffix?: string;
   /** 是否启用联网检索增强（需要 TAVILY_API_KEY）。默认 true。 */
@@ -1154,18 +1162,22 @@ export async function generateGameSpecDraftWithMeta(
     options?.orchestration?.note("web_search_skipped", { reason: "disabled" });
   }
 
-  // 规则驱动预选：在 LLM 之前通过关键词锁定模板，避免"保卫萝卜"→shooter 的误判
-  const ruleHint = detectTemplateFromPrompt(clean);
+  // 仅 kernel 管线或用户显式指定模板时才用正则预锁。默认 LLM 路径让模型围着提示词选玩法。
+  const userHint = normalizeTemplateHint(options?.templateHint);
+  const lockFromRules = options?.pipeline === "kernel";
+  const ruleHint = lockFromRules ? detectTemplateFromPrompt(clean) : null;
   const hint = resolveEffectiveTemplateHint(
-    options?.templateHint ?? (ruleHint ?? undefined),
+    userHint !== "auto" ? userHint : (ruleHint ?? undefined),
     briefResult,
   );
   const mock = mockSpecFromPrompt(clean);
   const base = augmented;
-  // 如果规则预选了模板，在用户 prompt 前附加强制说明，确保 LLM 不越过规则路由
-  const templateForcePrefix = ruleHint
-    ? `【系统强制】本游戏 templateId 必须是 "${ruleHint}"，不得选其他模板。\n\n`
-    : "";
+  const templateForcePrefix =
+    userHint !== "auto"
+      ? `【系统】用户指定 templateId 必须是 "${userHint}"。\n\n`
+      : lockFromRules && ruleHint
+        ? `【系统强制】本游戏 templateId 必须是 "${ruleHint}"，不得选其他模板。\n\n`
+        : "";
   const userContent = options?.flavorSuffix
     ? `${templateForcePrefix}${base}\n\n${options.flavorSuffix}`
     : `${templateForcePrefix}${base}`;
@@ -1189,6 +1201,9 @@ export async function generateGameSpecDraftWithMeta(
         {
           fallback: true,
           fallbackReason: "未配置可用模型或 Provider",
+          provider,
+          source: "mock",
+          scene: gameRoute.scene,
           searchEnhance: Boolean(options?.searchEnhance),
           enhancedRequested: false,
           enhancedApplied: false,
@@ -1227,6 +1242,8 @@ export async function generateGameSpecDraftWithMeta(
           fallback: false,
           llmMode,
           provider,
+          source: fromLlm.source,
+          scene: gameRoute.scene,
           searchEnhance: Boolean(options?.searchEnhance),
           enhancedRequested: false,
           enhancedApplied: false,
@@ -1248,6 +1265,9 @@ export async function generateGameSpecDraftWithMeta(
         fallbackReason: "模型调用失败或超时，已回退本地规则生成",
         llmError,
         provider,
+        source: "mock",
+        scene: gameRoute.scene,
+        model: models[0],
         searchEnhance: Boolean(options?.searchEnhance),
         enhancedRequested: false,
         enhancedApplied: false,
@@ -1302,6 +1322,9 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
         model: enhanced.model,
         draftModel: params.draftDebug.model,
         enhanceModel: enhanced.model,
+        provider: params.draftDebug.provider ?? getActiveProvider(),
+        source: enhanced.source,
+        scene: params.draftDebug.scene ?? gameRoute.scene,
         fallback: false,
         searchEnhance: false,
         enhancedRequested: true,
@@ -1323,6 +1346,9 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
       enhancedApplied: false,
       templateHint: hint,
       draftModel: params.draftDebug.model,
+      provider: params.draftDebug.provider ?? getActiveProvider(),
+      scene: params.draftDebug.scene ?? gameRoute.scene,
+      source: params.draftDebug.source ?? params.draftSource,
       enhanceWarning: "二次强化未完成（超时或模型不可用），已保留初稿结果",
     },
   };
@@ -1443,7 +1469,9 @@ async function tryWebEnhance(cleanPrompt: string): Promise<{ prompt: string; met
   }
 }
 
-/** 返回规格与来源，便于前端区分「大模型 / 融合纠错 / 离线 mock」。 */
+/** 返回规格与来源，便于前端区分「大模型 / 融合纠错 / 离线 mock」。
+ * 默认 LLM-first：见 `docs/game-generation-pipeline.md`。不要把内核重新做成默认作者。
+ */
 export async function generateGameSpecWithMeta(
   prompt: string,
   options?: GenerateOptions,
@@ -1451,10 +1479,11 @@ export async function generateGameSpecWithMeta(
   return withGenerationLocale(options?.uiLocale ?? "zh-Hans", async () => {
   const orch = options?.orchestration;
 
-  // Kernel first: lock the playable interaction, then let the LLM enrich copy
-  // and assets. The model must not replace the kernel by returning early.
+  // Default is LLM-first. Kernel pipeline is opt-in for QA / experiments.
+  // Do not lock templateHint from regex before the model writes the spec.
+  const pipeline = options?.pipeline ?? "llm";
   let compiledKernel: { plan: GameGenerationPlan; spec: GameSpec } | null = null;
-  if ((options?.pipeline ?? "kernel") === "kernel") {
+  if (pipeline === "kernel") {
     const plan = buildGameGenerationPlan(prompt, options?.templateHint ?? "auto");
     const spec = finalizeSpec(plan.prompt, compileGameGenerationPlan(plan));
     const issues = validateGameGenerationPlan(plan, spec);
@@ -1483,7 +1512,7 @@ export async function generateGameSpecWithMeta(
   const lockedTemplateHint = compiledKernel?.plan.kernel ?? options?.templateHint;
 
   let briefPre = options?.creativeBriefPreExpanded;
-  if (!briefPre && PRODUCT.game.creativeBriefExpand) {
+  if (pipeline !== "kernel" && !briefPre && PRODUCT.game.creativeBriefExpand) {
     briefPre = await expandCreativeBrief({
       prompt: prompt.trim(),
       templateHint: lockedTemplateHint,
@@ -1557,6 +1586,26 @@ export async function generateGameSpecWithMeta(
       : { ...r, debug: { ...debug, ...kernelFields, source: debug.source ?? r.source } };
   };
 
+  if (pipeline === "kernel" && compiledKernel) {
+    return withTrace({
+      spec: compiledKernel.spec,
+      source: "kernel",
+      web: null,
+      debug: {
+        fallback: false,
+        source: "kernel",
+        provider: "kernel",
+        model: compiledKernel.plan.kernel,
+        templateHint: compiledKernel.plan.kernel,
+        searchEnhance: false,
+        enhancedRequested: false,
+        enhancedApplied: false,
+        deliveryReadiness: evaluateGameDeliveryReadiness(compiledKernel.spec),
+        verticalSlice: evaluateGameVerticalSlice(compiledKernel.spec),
+      },
+    });
+  }
+
   const finish = async (r: {
     spec: GameSpec;
     source: GenerationSource;
@@ -1564,9 +1613,13 @@ export async function generateGameSpecWithMeta(
     debug: GenerationDebug;
   }) => {
     let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
-    const hint = resolveEffectiveTemplateHint(lockedTemplateHint, briefPre ?? null);
+    const hint = resolveEffectiveTemplateHint(
+      pipeline === "kernel" ? lockedTemplateHint : options?.templateHint,
+      pipeline === "kernel" ? briefPre ?? null : null,
+    );
     spec = applyTemplateHint(spec, hint);
-    if (compiledKernel) {
+    // kernel 管线才用正则核覆盖 LLM 玩法。默认路径保留模型围绕提示词选的 templateId。
+    if (pipeline === "kernel" && compiledKernel) {
       spec = overlaySpec(compiledKernel.spec, spec);
       spec = applyTemplateHint(spec, compiledKernel.plan.kernel);
     }
@@ -1662,6 +1715,49 @@ export async function generateGameSpecWithMeta(
       }
     }
 
+    let source = r.source;
+    let kernelFallback = r.debug.kernelFallback === true;
+    let fallback = r.debug.fallback;
+    let fallbackReason = r.debug.fallbackReason;
+
+    if (pipeline !== "kernel") {
+      const validationHint = isGameTemplateId(spec.templateId)
+        ? spec.templateId
+        : normalizeTemplateHint(options?.templateHint);
+      const validationPlan = buildGameGenerationPlan(prompt, validationHint);
+      const playabilityIssues = validateGameGenerationPlan(validationPlan, spec);
+      const preflight = evaluateGameDeliveryReadiness(spec);
+      orch?.note("game_kernel_validate", {
+        kernel: validationPlan.kernel,
+        issues: playabilityIssues,
+        delivery: preflight.verdict,
+        source: r.source,
+      });
+      const unplayable = playabilityIssues.length > 0 || preflight.verdict === "blocked";
+      if (r.source === "mock" || unplayable) {
+        const fallbackHint = isGameTemplateId(spec.templateId)
+          ? spec.templateId
+          : normalizeTemplateHint(options?.templateHint);
+        const plan = buildGameGenerationPlan(prompt, fallbackHint);
+        spec = finalizeSpec(plan.prompt, compileGameGenerationPlan(plan));
+        compiledKernel = { plan, spec };
+        kernelFallback = true;
+        fallback = true;
+        fallbackReason =
+          r.source === "mock"
+            ? (r.debug.fallbackReason ?? "未调用到大模型，已用内核兜底可玩规格")
+            : `内核校验未通过：${playabilityIssues.join(",") || preflight.verdict}`;
+        if (r.source === "mock") source = "kernel";
+        orch?.note("game_kernel_fallback", {
+          reason: fallbackReason,
+          kernel: plan.kernel,
+          keptLlmModel: Boolean(r.debug.model),
+        });
+      } else {
+        compiledKernel = { plan: validationPlan, spec };
+      }
+    }
+
     const verticalSlice = evaluateGameVerticalSlice(spec, briefPre?.brief);
     orch?.note("game_vertical_slice", {
       templateId: verticalSlice.templateId,
@@ -1671,13 +1767,27 @@ export async function generateGameSpecWithMeta(
       reasons: verticalSlice.reasons,
     });
 
+    const deliveryReadiness = evaluateGameDeliveryReadiness(spec);
+    orch?.note("game_delivery_preflight", deliveryReadiness);
+
     const debugWithCritic: GenerationDebug = {
       ...r.debug,
+      source,
+      fallback,
+      ...(fallbackReason ? { fallbackReason } : {}),
+      ...(kernelFallback ? { kernelFallback: true } : {}),
+      provider:
+        source === "kernel" && !r.debug.model
+          ? "kernel"
+          : (r.debug.provider ?? getActiveProvider()),
+      model: r.debug.model ?? (source === "kernel" ? compiledKernel?.plan.kernel : undefined),
+      templateHint: compiledKernel?.plan.kernel ?? r.debug.templateHint,
       ...(criticVerdict ? { criticVerdict } : {}),
       verticalSlice,
+      deliveryReadiness,
     };
 
-    return withTrace({ ...r, spec, debug: debugWithCritic });
+    return withTrace({ ...r, spec, source, debug: debugWithCritic });
   };
 
   // Rich tier: three specialized agents run in parallel (World / Gameplay / Art).
@@ -1711,6 +1821,10 @@ export async function generateGameSpecWithMeta(
         source: "llm",
         web: null,
         debug: {
+          model: maResult.model,
+          provider: getActiveProvider(),
+          source: "llm",
+          scene: maResult.scene,
           fallback: false,
           searchEnhance: false,
           enhancedRequested: false,

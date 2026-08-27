@@ -11,7 +11,7 @@ const cases = [
 
 async function main() {
   for (const testCase of cases) {
-    const { spec, debug } = await generateGameSpecWithMeta(testCase.prompt);
+    const { spec, debug } = await generateGameSpecWithMeta(testCase.prompt, { pipeline: "kernel" });
     const contract = spec.production;
     assert.ok(contract, `${testCase.prompt}: generated games require a production contract`);
     assert.deepEqual(contract.levelFlow.map((beat) => beat.window), ["0-5", "5-20", "20-40", "40-60"]);

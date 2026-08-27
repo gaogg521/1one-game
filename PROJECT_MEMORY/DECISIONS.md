@@ -1,6 +1,25 @@
 # DECISIONS
 
-更新时间：**2026-06-22**
+更新时间：**2026-08-27**
+
+## 2026-08-27 — 游戏生成：LLM 是作者，内核只校验；采集 ≠ 改管线
+
+**背景**：管理员要在后台看每份作品的日期和生成模型。有人把这件事做成「默认内核编译、LLM 只润色」，正则先锁核（护送萤火虫 → collector），甚至内核编译后提前 return 导致模型根本没调用。另一段代码在 POST `/api/projects` 无 debug 时推断成 kernel，把「没采到」伪装成「内核生成」。
+
+**用户拍板**：
+
+1. 不要用固定内核当作者。Claude 聊天能围着提示词做出丰富可玩游戏；Operone 玩家跑的是有限 Phaser 模板，内核本质是关键词→模板 + `mockSpecFromPrompt`。正则先锁核会伤害提示词。
+2. 「要看模型质量」只要求 **全程观察采集**，不构成改生成架构的理由。
+
+**决策**：
+
+- 默认 `generateGameSpecWithMeta` 的 `pipeline` 为 **`llm`**：模型先围绕提示词出 spec；内核只做可玩性校验（目标 / 操作 / 胜负 / 手机一局）；过不了再兜底。
+- **禁止**用 `applyTemplateHint` / `overlaySpec` 把 LLM 选的玩法扳回正则核。
+- `pipeline: "kernel"` 仅供离线 QA / 对照实验。
+- Debug 必须带真实 `provider`/`model`；LLM 成功（含随后内核兜底）后台显示模型，不得显示成「内核编译」。空 debug 保持「未记录」。
+- 完整说明：**`docs/game-generation-pipeline.md`**（下一任 AI 必读）。
+
+---
 
 ## 2026-06-22 — 生产服务器可迁移性（备份/恢复脚本）
 

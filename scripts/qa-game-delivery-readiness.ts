@@ -12,7 +12,7 @@ const cases = [
 async function main() {
   let firstSpec: Awaited<ReturnType<typeof generateGameSpecWithMeta>>["spec"] | undefined;
   for (const prompt of cases) {
-    const { spec, debug } = await generateGameSpecWithMeta(prompt);
+    const { spec, debug } = await generateGameSpecWithMeta(prompt, { pipeline: "kernel" });
     firstSpec ??= spec;
     assert.equal(spec.production?.delivery?.targetDevice, "mobile_h5", `${prompt}: delivery target must be mobile H5`);
     assert.equal(spec.production?.delivery?.targetSessionSeconds, 60, `${prompt}: first session must have a 60-second target`);

@@ -303,6 +303,8 @@ export type MultiAgentResult = {
   worldOk: boolean;
   gameplayOk: boolean;
   artOk: boolean;
+  model: string;
+  scene: string;
 };
 
 /**
@@ -334,6 +336,8 @@ export async function generateWithMultiAgent(
     worldOk: worldResult !== null,
     gameplayOk: gameplayResult !== null,
     artOk: artResult !== null,
+    model,
+    scene: route.scene,
   };
 }
 
