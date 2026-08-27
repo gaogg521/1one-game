@@ -89,7 +89,9 @@ export async function setCreatorWorkPublication(input: {
     if (!candidateRevisionId) deliveryIssues.push("publication_revision_missing");
     if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
     if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
-    if (preflight?.verdict !== "ready") deliveryIssues.push("publication_delivery_preflight_not_ready");
+    if (!preflight || (preflight.verdict !== "ready" && preflight.verdict !== "needs_review")) {
+      deliveryIssues.push("publication_delivery_preflight_not_ready");
+    }
     if (
       playtest?.deviceClass !== "mobile" ||
       playtest.touchCapable !== true ||

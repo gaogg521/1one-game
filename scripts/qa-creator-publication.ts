@@ -81,8 +81,16 @@ async function main() {
       .then(() => { throw new Error("a game without BGM and observed playtest evidence must not publish"); })
       .catch((error) => assert(error instanceof CreatorPublicationError && error.code === "quality_blocked", "delivery evidence must fail closed"));
     await addDeliveryEvidence(mirrored.creativeProjectId, mirrored.creativeRevisionId);
+    await prisma.creativeArtifact.updateMany({
+      where: {
+        creativeProjectId: mirrored.creativeProjectId,
+        creativeRevisionId: mirrored.creativeRevisionId,
+        kind: "game_delivery_preflight",
+      },
+      data: { contentJson: JSON.stringify({ version: 1, verdict: "needs_review", score: 100 }) },
+    });
     const published = await setCreatorWorkPublication({ type: "game", id: game.id, ownerKey, action: "publish" });
-    assert(published.visibility === "public" && published.quality.verdict !== "blocked", "ready game should publish");
+    assert(published.visibility === "public" && published.quality.verdict !== "blocked", "a complete game with advisory balance review should publish");
     const persisted = await prisma.project.findUniqueOrThrow({ where: { id: game.id } });
     const core = await prisma.creativeProject.findUniqueOrThrow({ where: { id: coreId } });
     assert(persisted.visibility === "public", "legacy work must become public");
