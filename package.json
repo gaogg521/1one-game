@@ -112,6 +112,7 @@
     "qa:gameplay-telemetry": "tsx scripts/qa-gameplay-telemetry.ts",
     "qa:game-playtest-evidence": "tsx scripts/qa-game-playtest-evidence.ts",
     "qa:prod-game-create-delivery": "tsx scripts/qa-prod-game-create-delivery.ts",
+    "qa:prod-literary-create": "tsx scripts/qa-prod-literary-create.ts",
     "qa:runtime-actor-state": "tsx scripts/qa-runtime-actor-state.ts",
     "qa:creator-workflow": "tsx scripts/qa-creator-workflow.ts",
     "qa:creator-quality": "tsx scripts/qa-creator-quality.ts",

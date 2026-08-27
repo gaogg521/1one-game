@@ -498,6 +498,7 @@ export async function POST(req: Request) {
                 lengthOpts,
                 uiLocale,
                 emit: send,
+                signal: abortSignal,
               });
               content = planned.content;
               pipelineMeta = planned.pipelineMeta;
@@ -523,6 +524,7 @@ export async function POST(req: Request) {
                     temperature: novelLlmTemperature(lengthTier),
                     maxTokens,
                     timeoutMs,
+                    localeGroup: runtimeLocaleGroup(uiLocale),
                   },
                   lengthTier,
                 ),

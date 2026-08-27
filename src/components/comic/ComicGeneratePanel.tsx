@@ -84,6 +84,7 @@ export function ComicGeneratePanel({
       ) : null}
       <ComicGenerateButton
         novelId={novelId}
+        content={novelContent}
         lengthTier={lengthTier}
         pageCount={pageCount}
         stylePreset={opts.stylePreset}

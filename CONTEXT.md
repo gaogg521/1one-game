@@ -1,19 +1,30 @@
 # 项目工作进度快照
 
-最后更新：2026-08-27（内核游戏写出生成模型）
+最后更新：2026-08-27（生产创作链路复查）
 
 > 本文件已按当前决策重建，只保留今天的项目状态、发现与计划，不保留旧会话历史。
 
 ## 当前状态（本会话）
 
-- **问题**：后台「生成模型」列在，但今日游戏显示「未记录」。根因是别的提交把游戏主路径改成内核编译后直接 return，大模型没被调用。
-- **修复**：内核仍先锁定玩法，然后继续走 LLM 润色；后台记实际模型。已回填 5 条「萤火虫护送」为 `kernel · collector`（当时确实没走模型）。
-- **QA**：`qa:work-generation-meta` 通过。
+- **复查范围**：生产环境游戏 / 小说 / 小说转漫画创作流程，以及后台业务模型路由是否真正生效。
+- **生产现状（修前）**：健康检查通过，但近期游戏/小说/漫画 `generationProvider` / `generationModel` 大量为 null；游戏资产 worker 写死 `zh-Hans`，localeRoutes 在 job 内不生效；小说转漫画在列表无正文时不拉详情。
+- **已修**：
+  - 游戏保存无 debug 时按 kernel + `templateId` 落库；owner GET 项目返回 provenance。
+  - 游戏资产任务带请求 locale；worker ALS 注入 `uiLocale`，`runtimeLocaleGroupForCurrentRequest` 优先读 job locale。
+  - 长导演分镜 `provider` 不再空字符串；漫画 SSE 加 `X-Accel-Buffering: no`。
+  - 小说/漫画详情 owner 返回 generation 字段；短篇写作传递 AbortSignal。
+  - 漫画创作选中小说后拉详情并 merge 正文；分镜按钮带上 `content`。
+  - SSE `consumeSSE` 结束 flush 尾包，避免 provenance 丢失。
+- **本地验证**：`npx tsc --noEmit` 通过；`qa:work-generation-meta` 通过；`qa:runtime-locale-routing`（含 job locale）通过。
+- **待生产实测**：部署后跑 `qa:prod-game-create-delivery` 与 `qa:prod-literary-create`。
 
 ### 下次启动清单
 
-1. 强刷 `/console?tab=works`：已有萤火虫护送应显示「内核编译 · collector」；新生成游戏应显示真实 LLM 模型。
-2. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
+1. 推送本提交后执行 `python scripts/deploy-prod-cee8b1d.py`（代码+migrate+重启；不必为本次修 BUG 再同步样品资产）。
+2. `$env:QA_PROD_GAME_CREATE="1"; npm run qa:prod-game-create-delivery`（约 10+ 分钟，含 60s 试玩+发布）。
+3. `$env:QA_PROD_LITERARY_CREATE="1"; npm run qa:prod-literary-create`（短篇 SSE + 改编 2 页轻分镜）。
+4. 强刷 `/console?tab=works`：新作品不应再显示「未记录」。
+5. （遗留）`GamePlayerInner.tsx` `telemetry.start()` 类型参数。
 
 ## 1. 产品与技术现状
 

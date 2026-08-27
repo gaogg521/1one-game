@@ -131,6 +131,12 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(isOwner ? { literaryEngagement } : {}),
       ...(isOwner ? { creatorCore } : {}),
       isOwner: Boolean(isOwner),
+      ...(isOwner
+        ? {
+            generationProvider: row.generationProvider,
+            generationModel: row.generationModel,
+          }
+        : {}),
       canDelete,
       panelsWithImage: panelStats.withImage,
       panelsTotal: panelStats.total,

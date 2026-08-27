@@ -1,6 +1,11 @@
+type JobContextStore = {
+  generationJobId: string;
+  uiLocale?: string;
+};
+
 type JobContextStorage = {
-  run<T>(store: { generationJobId: string }, callback: () => T): T;
-  getStore(): { generationJobId: string } | undefined;
+  run<T>(store: JobContextStore, callback: () => T): T;
+  getStore(): JobContextStore | undefined;
 };
 
 let storage: JobContextStorage | null | undefined;
@@ -21,12 +26,21 @@ function getStorage(): JobContextStorage | null {
   return storage;
 }
 
-/** Carries only the durable job ID across worker-owned provider calls. */
-export function withGenerationJobContext<T>(generationJobId: string, work: () => Promise<T>): Promise<T> {
+export function withGenerationJobContext<T>(
+  generationJobId: string,
+  work: () => Promise<T>,
+  opts?: { uiLocale?: string },
+): Promise<T> {
   const context = getStorage();
-  return context ? context.run({ generationJobId }, work) : work();
+  return context
+    ? context.run({ generationJobId, uiLocale: opts?.uiLocale }, work)
+    : work();
 }
 
 export function currentGenerationJobId(): string | undefined {
   return getStorage()?.getStore()?.generationJobId;
+}
+
+export function currentGenerationJobLocale(): string | undefined {
+  return getStorage()?.getStore()?.uiLocale;
 }

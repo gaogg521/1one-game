@@ -1,5 +1,6 @@
 import type { AppLocale } from "@/i18n/routing";
 import { detectLocaleFromAcceptLanguage, isAppLocale } from "@/i18n/routing";
+import { currentGenerationJobLocale } from "@/lib/generation-job-context";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 
 const LOCALE_HEADER = "x-app-locale";
@@ -18,6 +19,8 @@ export function runtimeLocaleGroup(locale: AppLocale | string | undefined | null
  * routing undefined and safely inherit the global scene route.
  */
 export async function runtimeLocaleGroupForCurrentRequest(): Promise<RuntimeLocaleGroup | undefined> {
+  const jobLocale = currentGenerationJobLocale();
+  if (jobLocale) return runtimeLocaleGroup(jobLocale);
   try {
     // This helper is reached through shared generation utilities that also have
     // client-side consumers. Keep the App Router-only API out of that static

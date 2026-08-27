@@ -163,7 +163,7 @@ export async function llmJson(
 
 /** 长篇流水线 JSON（设定圣经 / 章规划）：使用小说网关超时头。 */
 export async function llmNovelJson(
-  req: Omit<LlmJsonRequest, "provider">,
+  req: Omit<LlmJsonRequest, "provider"> & { localeGroup?: RuntimeLocaleGroup },
   lengthTier: NovelLengthTier = "long",
 ): Promise<LlmJsonResult> {
   return llmJson({ ...req, scene: "novel_plan" }, { novelLongRun: true, lengthTier });
@@ -219,7 +219,7 @@ export async function llmText(
 }
 
 export function llmNovelText(
-  req: Omit<LlmTextRequest, "provider">,
+  req: Omit<LlmTextRequest, "provider"> & { localeGroup?: RuntimeLocaleGroup },
   lengthTier: NovelLengthTier = "medium",
 ): Promise<LlmTextResult> {
   return llmText({ ...req, scene: "novel" }, { novelLongRun: true, lengthTier });
@@ -320,7 +320,7 @@ export async function* llmTextStream(
 
 /** 小说正文流式：按篇幅使用对应网关超时头（长篇默认 30 分钟）。 */
 export async function* llmNovelTextStream(
-  req: Omit<LlmTextRequest, "provider">,
+  req: Omit<LlmTextRequest, "provider"> & { localeGroup?: RuntimeLocaleGroup },
   lengthTier: NovelLengthTier = "medium",
 ): AsyncGenerator<string> {
   yield* llmTextStream({ ...req, scene: "novel" }, { novelLongRun: true, lengthTier });

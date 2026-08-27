@@ -247,6 +247,17 @@ async function executeNovelContinueJob(
   }
 }
 
+function jobUiLocale(payloadJson: string): string | undefined {
+  try {
+    const payload = JSON.parse(payloadJson) as { uiLocale?: unknown };
+    return typeof payload.uiLocale === "string" && payload.uiLocale.trim()
+      ? payload.uiLocale.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Durable-job execution boundary. New job types are added here only after
  * their payload schema and idempotency behavior have an integration test.
@@ -254,45 +265,49 @@ async function executeNovelContinueJob(
 export async function processNextGenerationJob(workerId: string) {
   const job = await claimGenerationJob(workerId);
   if (!job) return null;
-  return withGenerationJobContext(job.id, async () => {
-    try {
-      if (job.type === "artifact_write") {
-        const payload = ArtifactWritePayloadSchema.parse(JSON.parse(job.payloadJson));
-        const artifact = await createCreativeArtifact({
-          creativeProjectId: job.creativeProjectId,
-          creativeRevisionId: job.creativeRevisionId ?? undefined,
-          artifact: payload.artifact,
-        });
-        await completeGenerationJob(job.id, artifact.id);
-        return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
-      }
-      if (job.type === "comic_panel") {
-        await executeComicPanelJob(job, workerId);
-        await completeGenerationJob(job.id);
-        return { id: job.id, type: job.type, status: "completed" as const };
-      }
-      if (job.type === "game_asset") {
-        const artifact = await executeGameAssetJob(job, workerId);
-        await completeGenerationJob(job.id, artifact.id);
-        return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
-      }
-      if (job.type === "novel_continue") {
-        const result = await executeNovelContinueJob(job, workerId);
-        if (result.status === "conflict") {
-          const failed = await failGenerationJob(job.id, new Error("novel_continuation_conflict"), {
-            retry: false,
-            errorCode: "novel_continuation_conflict",
+  return withGenerationJobContext(
+    job.id,
+    async () => {
+      try {
+        if (job.type === "artifact_write") {
+          const payload = ArtifactWritePayloadSchema.parse(JSON.parse(job.payloadJson));
+          const artifact = await createCreativeArtifact({
+            creativeProjectId: job.creativeProjectId,
+            creativeRevisionId: job.creativeRevisionId ?? undefined,
+            artifact: payload.artifact,
           });
-          return { id: job.id, type: job.type, status: failed.status as "failed" };
+          await completeGenerationJob(job.id, artifact.id);
+          return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
-        if (result.status !== "completed") throw new Error("novel_continue_all_models_failed");
-        await completeGenerationJob(job.id);
-        return { id: job.id, type: job.type, status: "completed" as const };
+        if (job.type === "comic_panel") {
+          await executeComicPanelJob(job, workerId);
+          await completeGenerationJob(job.id);
+          return { id: job.id, type: job.type, status: "completed" as const };
+        }
+        if (job.type === "game_asset") {
+          const artifact = await executeGameAssetJob(job, workerId);
+          await completeGenerationJob(job.id, artifact.id);
+          return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
+        }
+        if (job.type === "novel_continue") {
+          const result = await executeNovelContinueJob(job, workerId);
+          if (result.status === "conflict") {
+            const failed = await failGenerationJob(job.id, new Error("novel_continuation_conflict"), {
+              retry: false,
+              errorCode: "novel_continuation_conflict",
+            });
+            return { id: job.id, type: job.type, status: failed.status as "failed" };
+          }
+          if (result.status !== "completed") throw new Error("novel_continue_all_models_failed");
+          await completeGenerationJob(job.id);
+          return { id: job.id, type: job.type, status: "completed" as const };
+        }
+        throw new Error(`unsupported_generation_job:${job.type}`);
+      } catch (error) {
+        const failed = await failGenerationJob(job.id, error);
+        return { id: job.id, type: job.type, status: failed.status as "retrying" | "failed" };
       }
-      throw new Error(`unsupported_generation_job:${job.type}`);
-    } catch (error) {
-      const failed = await failGenerationJob(job.id, error);
-      return { id: job.id, type: job.type, status: failed.status as "retrying" | "failed" };
-    }
-  });
+    },
+    { uiLocale: jobUiLocale(job.payloadJson) },
+  );
 }

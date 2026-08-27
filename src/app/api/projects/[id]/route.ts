@@ -133,6 +133,12 @@ export async function GET(req: Request, ctx: RouteContext) {
         quality,
         isOwner: Boolean(isOwner),
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
+        ...(isOwner
+          ? {
+              generationProvider: row.generationProvider,
+              generationModel: row.generationModel,
+            }
+          : {}),
       },
       spec,
       ...(playRevisionId ? { playRevisionId } : {}),

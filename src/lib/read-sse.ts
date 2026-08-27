@@ -19,6 +19,22 @@ export async function consumeSSE(
     const { done, value } = await reader.read();
     if (done) {
       doneReading = true;
+      if (value) buffer += decoder.decode(value, { stream: true });
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        for (const block of buffer.split("\n\n")) {
+          for (const line of block.split("\n")) {
+            const t = line.trim();
+            if (t.startsWith("data: ")) {
+              try {
+                onData(JSON.parse(t.slice(6)) as Record<string, unknown>);
+              } catch {
+                /* 忽略损坏帧 */
+              }
+            }
+          }
+        }
+      }
       break;
     }
     buffer += decoder.decode(value, { stream: true });

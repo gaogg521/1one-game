@@ -48,6 +48,7 @@ export async function GET(req: Request) {
         likeCount: true,
         createdAt: true,
         updatedAt: true,
+        lengthTier: true,
         status: true,
         shareCode: true,
       },

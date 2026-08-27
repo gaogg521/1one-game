@@ -23,7 +23,8 @@ import { visibilityWithQualityGuard } from "@/lib/creator-publication";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
-import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
+import { parseWorkGenerationFromUnknown, KERNEL_GENERATION_PROVIDER, normalizeWorkGenerationProvenance } from "@/lib/work-generation-meta";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    let spec = prepareGameSpecForPersist(specRaw, trimmed);
+    let spec = prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req));
     if (
       PRODUCT.game.agenticModuleEnabled &&
       !shouldUseAgenticRuntime(spec) &&
@@ -111,7 +112,14 @@ export async function POST(req: Request) {
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);
-    const generation = parseWorkGenerationFromUnknown(body);
+    let generation = parseWorkGenerationFromUnknown(body);
+    if (!generation.generationProvider && !generation.generationModel) {
+      generation = normalizeWorkGenerationProvenance({
+        provider: KERNEL_GENERATION_PROVIDER,
+        model: spec.templateId || KERNEL_GENERATION_PROVIDER,
+      });
+    }
+    const uiLocale = resolveRequestLocaleSync(req);
     const project = await createProjectRecord({
       ownerKey,
       title: spec.title,
@@ -136,14 +144,14 @@ export async function POST(req: Request) {
         creativeRevisionId: core.creativeRevisionId,
         type: "game_asset",
         idempotencyKey: `game-asset:${project.id}:${core.creativeRevisionId}`,
-        payload: { projectId: project.id, ownerKey, spec, brief, uiLocale: "zh-Hans" },
+        payload: { projectId: project.id, ownerKey, spec, brief, uiLocale },
       });
       assetJob = { id: job.id, status: job.status };
     } catch (error) {
       console.error("[game-core-mirror]", { projectId: project.id, error });
       core = { status: "degraded" };
       // Preserve the legacy non-blocking path only when Core persistence is unavailable.
-      scheduleProjectAssetPipeline({ projectId: project.id, spec, brief, uiLocale: "zh-Hans" });
+      scheduleProjectAssetPipeline({ projectId: project.id, spec, brief, uiLocale });
     }
     return NextResponse.json({
       project: {

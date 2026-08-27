@@ -165,6 +165,12 @@ export async function GET(req: Request, ctx: RouteContext) {
       quality,
       ...(isOwner ? { literaryEngagement } : {}),
       isOwner: Boolean(isOwner),
+      ...(isOwner
+        ? {
+            generationProvider: row.generationProvider,
+            generationModel: row.generationModel,
+          }
+        : {}),
       canDelete,
       canContinue: Boolean(isOwner) && continuation.canContinue,
       continuationReason: continuation.reason,

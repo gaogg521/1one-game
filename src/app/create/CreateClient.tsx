@@ -127,12 +127,26 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     setBusy("saving");
     setError(null);
     try {
-      const specToSave = prepareGameSpecForPersist(spec, prompt);
+      const specToSave = prepareGameSpecForPersist(spec, prompt, locale);
       const updating = Boolean(projectId);
+      const provenanceDebug = generationDebug
+        ? {
+            provider: generationDebug.provider,
+            model: generationDebug.model,
+            source: generationDebug.source ?? generationSource ?? undefined,
+            fallback: generationDebug.fallback,
+            templateHint: generationDebug.templateHint,
+          }
+        : null;
       const res = await fetch(updating ? `/api/projects/${projectId}` : "/api/projects", {
         method: updating ? "PATCH" : "POST",
         headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ prompt, spec: specToSave, debug: generationDebug, source: generationSource }),
+        body: JSON.stringify({
+          prompt,
+          spec: specToSave,
+          debug: provenanceDebug,
+          source: generationSource ?? provenanceDebug?.source ?? "kernel",
+        }),
       });
       const data = (await res.json()) as { project?: { id?: string }; error?: string; errorKey?: string; errorParams?: Record<string, string | number> };
       if (!res.ok) {

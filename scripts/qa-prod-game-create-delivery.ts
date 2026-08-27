@@ -10,7 +10,15 @@ const outputDir = path.join(process.cwd(), "qa-output", "prod-game-create-delive
 
 type StageRecord = { at: string; stage: string; detail: unknown };
 type ProjectDetail = {
-  project?: { id?: string; title?: string; visibility?: string; workflow?: { stage?: string }; quality?: unknown };
+  project?: {
+    id?: string;
+    title?: string;
+    visibility?: string;
+    workflow?: { stage?: string };
+    quality?: unknown;
+    generationProvider?: string | null;
+    generationModel?: string | null;
+  };
   spec?: { templateId?: string; title?: string };
   playRevisionId?: string;
   assetJob?: { id?: string; status?: string; progress?: unknown };
@@ -236,6 +244,17 @@ async function main() {
     const created = await readProject(page, projectId);
     const revisionId = created.playRevisionId ?? created.core?.revision?.id;
     assert(revisionId, "项目缺少不可变创意版本");
+    assert(created.project?.generationModel, "游戏 generationModel 未落库，后台将显示未记录");
+    assert(created.project.generationModel !== "mock", "游戏落库模型是 mock，正文模型路由未生效");
+    summary.persistedGeneration = {
+      generationProvider: created.project.generationProvider ?? null,
+      generationModel: created.project.generationModel ?? null,
+    };
+    stages.push({
+      at: new Date().toISOString(),
+      stage: "generation_provenance_persisted",
+      detail: summary.persistedGeneration,
+    });
     summary.revisionId = revisionId;
     summary.templateId = created.spec?.templateId;
     summary.title = created.project?.title ?? created.spec?.title ?? previewTitle;

@@ -36,7 +36,7 @@ import {
   type DirectorStoryboardChunkStat,
   type DirectorStoryboardRunStats,
 } from "@/lib/comic-director-chunk-stats";
-import { llmJson } from "@/lib/llm";
+import { getActiveProvider, llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
@@ -888,7 +888,7 @@ export async function generateComicPages(opts: {
         pipeline: "long_director",
         storyboardSource: "llm",
         director,
-        provider: "",
+        provider: getActiveProvider(),
         model,
         consistencyIssues: report.issues,
         readMode,

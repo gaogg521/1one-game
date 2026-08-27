@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
+import { withGenerationJobContext } from "@/lib/generation-job-context";
+import { runtimeLocaleGroup, runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import { resolveSceneRoute, type RuntimeLlmProvider } from "@/lib/runtime-providers";
 import type { RuntimeSecretsPayload } from "@/lib/runtime-config";
 
@@ -25,4 +26,23 @@ assert.equal(resolveSceneRoute(payload, "comic_image_openai", "zh")?.models[0], 
 assert.equal(resolveSceneRoute(payload, "comic_image_openai", "international")?.provider.id, "global");
 assert.equal(resolveSceneRoute({ ...payload, localeRoutes: [] }, "comic_image_openai", "zh")?.models[0], "legacy-image");
 
-console.info("runtime locale routing: OK");
+void (async () => {
+  await withGenerationJobContext(
+    "job-locale",
+    async () => {
+      assert.equal(await runtimeLocaleGroupForCurrentRequest(), "zh");
+    },
+    { uiLocale: "zh-Hans" },
+  );
+  await withGenerationJobContext(
+    "job-locale-en",
+    async () => {
+      assert.equal(await runtimeLocaleGroupForCurrentRequest(), "international");
+    },
+    { uiLocale: "en" },
+  );
+  console.info("runtime locale routing: OK");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

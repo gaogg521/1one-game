@@ -123,7 +123,8 @@ export default function ComicCreatePage() {
 
   useEffect(() => {
     if (mode !== "fromNovel" || !selectedNovelId || novelsLoading) return;
-    if (mineNovels.some((n) => n.id === selectedNovelId)) {
+    const listed = mineNovels.find((n) => n.id === selectedNovelId);
+    if (listed?.content?.trim()) {
       setPrefillNovel(null);
       setPrefillError("");
       return;
@@ -167,8 +168,18 @@ export default function ComicCreatePage() {
   }, [mode, selectedNovelId, mineNovels, novelsLoading, locale, t]);
 
   const novelOptions = useMemo(() => {
-    if (!prefillNovel || mineNovels.some((n) => n.id === prefillNovel.id)) return mineNovels;
-    return [prefillNovel, ...mineNovels];
+    if (!prefillNovel) return mineNovels;
+    const idx = mineNovels.findIndex((n) => n.id === prefillNovel.id);
+    if (idx < 0) return [prefillNovel, ...mineNovels];
+    return mineNovels.map((n, i) =>
+      i === idx
+        ? {
+            ...n,
+            content: prefillNovel.content || n.content,
+            lengthTier: prefillNovel.lengthTier ?? n.lengthTier,
+          }
+        : n,
+    );
   }, [mineNovels, prefillNovel]);
 
   const selectedNovel = novelOptions.find((n) => n.id === selectedNovelId) ?? null;
@@ -474,6 +485,7 @@ export default function ComicCreatePage() {
                         <ComicGeneratePanel
                         novelId={selectedNovel.id}
                         novelPrompt={selectedNovel.prompt}
+                        novelContent={selectedNovel.content}
                         lengthTier={selectedNovel.lengthTier ?? undefined}
                         onError={setError}
                         label={t("generateFromNovel")}

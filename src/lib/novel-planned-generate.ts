@@ -54,8 +54,9 @@ export async function streamPlannedNovelBody(params: {
   lengthOpts?: NovelLengthOptions;
   uiLocale?: AppLocale;
   emit: NovelStreamEmitter;
+  signal?: AbortSignal;
 }): Promise<PlannedNovelGenerateResult> {
-  const { model, promptTrim, titleTrim, lengthTier, lengthOpts, uiLocale = "zh-Hans", emit } = params;
+  const { model, promptTrim, titleTrim, lengthTier, lengthOpts, uiLocale = "zh-Hans", emit, signal } = params;
   const scope = planNovelScope(lengthTier, lengthOpts);
   const segmentPlan = scopeToSegmentPlan(scope);
   const outputLocale = resolveNovelOutputLocale(promptTrim);
@@ -118,6 +119,7 @@ export async function streamPlannedNovelBody(params: {
     stopWhenLength: scope.maxChars,
     polish: false,
     requireAllPlannedChapters: true,
+    signal,
   });
 
   let content = segmented.trim();
