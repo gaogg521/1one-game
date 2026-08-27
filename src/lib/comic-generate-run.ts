@@ -15,6 +15,7 @@ import {
 } from "@/lib/comic-character-roster";
 import { resolveComicStylePreset } from "@/lib/comic-style-presets";
 import { getComicStoryboardModelCascade } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import {
   ComicGenerateError,
   ComicGenerationRunError,
@@ -504,7 +505,7 @@ export async function runComicGeneration(
     });
   };
 
-  const cascade = getComicStoryboardModelCascade();
+  const cascade = getComicStoryboardModelCascade(runtimeLocaleGroup(uiLocale));
   let gen = null as Awaited<ReturnType<typeof generateComicPages>> | null;
   let lastError = "";
 

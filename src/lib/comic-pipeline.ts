@@ -38,6 +38,7 @@ import {
 } from "@/lib/comic-director-chunk-stats";
 import { llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import type { NovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { NovelLengthTier } from "@/lib/novel-length";
 import {
@@ -255,6 +256,8 @@ async function fetchLightStoryboardChunk(params: {
     const storySource = buildSource(startPage, startPage + pagesInChunk - 1, pagesInChunk);
     const result = await llmJson({
       model: params.model,
+      scene: "comic_storyboard",
+      localeGroup: runtimeLocaleGroup(params.outputLocale),
       system: comicSystem,
       user: buildComicLightUserMessage({
         locale: params.outputLocale,

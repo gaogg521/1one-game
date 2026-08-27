@@ -2,7 +2,7 @@ import { normalizeOpenAIModelId } from "@/lib/model-config";
 import { inferHasReferenceSnippet } from "@/lib/orchestration/context-pack";
 import { PRODUCT } from "@/lib/product-config";
 import { getSceneModelCascade } from "@/lib/runtime-config";
-import type { RuntimeSceneKey } from "@/lib/runtime-providers";
+import type { RuntimeLocaleGroup, RuntimeSceneKey } from "@/lib/runtime-providers";
 
 export type GameModelRouteMode = "text" | "vision";
 
@@ -10,6 +10,7 @@ export type GameModelRouteInput = {
   prompt?: string;
   assetManifestItemCount?: number;
   hasReferenceAssets?: boolean;
+  localeGroup?: RuntimeLocaleGroup;
 };
 
 function dedupeModelIds(ids: string[]): string[] {
@@ -38,9 +39,9 @@ export function gameSceneKeyForMode(mode: GameModelRouteMode): RuntimeSceneKey {
   return mode === "vision" ? "game_vision" : "game_text";
 }
 
-export function getGameModelCascade(mode: GameModelRouteMode): string[] {
+export function getGameModelCascade(mode: GameModelRouteMode, localeGroup?: RuntimeLocaleGroup): string[] {
   const scene = gameSceneKeyForMode(mode);
-  const fromRoute = getSceneModelCascade(scene);
+  const fromRoute = getSceneModelCascade(scene, localeGroup);
   if (fromRoute.length) return dedupeModelIds(fromRoute);
 
   const m = PRODUCT.models;
@@ -61,6 +62,6 @@ export function resolveGameModelRoute(input: GameModelRouteInput = {}) {
   return {
     mode,
     scene: gameSceneKeyForMode(mode),
-    models: getGameModelCascade(mode),
+    models: getGameModelCascade(mode, input.localeGroup),
   };
 }

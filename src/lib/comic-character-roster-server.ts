@@ -1,4 +1,5 @@
 import { llmJson } from "@/lib/llm";
+import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import type { ComicCharacterRoster, ComicCharacterRosterEntry } from "@/lib/comic-character-roster";
 
 const ROSTER_JSON_SCHEMA = {
@@ -36,9 +37,12 @@ export async function fetchComicCharacterRoster(params: {
   novelTitle: string;
   novelSummary: string;
   contentExcerpt: string;
+  localeGroup?: RuntimeLocaleGroup;
 }): Promise<ComicCharacterRoster | null> {
   const result = await llmJson({
     model: params.model,
+    scene: "comic_storyboard",
+    localeGroup: params.localeGroup,
     system: `你是漫画人设总监。通读小说节选后输出主要角色人设卡（2～6 人），整本漫画脸型服饰必须一致。
 只输出 JSON。appearanceZh/outfitZh 用中文，写清五官、发型、身高感、标志性配饰。`,
     user: `书名：${params.novelTitle}

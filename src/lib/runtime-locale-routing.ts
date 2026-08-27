@@ -7,7 +7,9 @@ const LOCALE_HEADER = "x-app-locale";
 /** Chinese scripts share one cultural/model pool; other product languages use
  * the international pool. This is model policy, not UI translation. */
 export function runtimeLocaleGroup(locale: AppLocale | string | undefined | null): RuntimeLocaleGroup {
-  return locale === "zh-Hans" || locale === "zh-Hant" ? "zh" : "international";
+  const v = (locale ?? "").trim().toLowerCase();
+  if (v === "zh" || v === "zh-hans" || v === "zh-hant" || v.startsWith("zh-")) return "zh";
+  return "international";
 }
 
 /**

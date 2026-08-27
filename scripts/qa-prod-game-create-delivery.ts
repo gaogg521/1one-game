@@ -1,0 +1,226 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { chromium, type Page } from "@playwright/test";
+
+const baseUrl = (process.env.QA_BASE_URL ?? "https://operone.1oneclaw.com").replace(/\/$/, "");
+const locale = process.env.QA_LOCALE?.trim() || "zh-Hans";
+const prompt = process.env.QA_GAME_PROMPT?.trim() ||
+  "做一个手机单手玩的萤火虫护送小游戏：手指左右移动，引导萤火虫穿过夜森林，避开蜘蛛网，收集三颗月光种子，前60秒友好且有三次容错，随后进入高潮并在90秒内明确胜负；环境有虫鸣和风声，越接近终点音乐越紧张，胜利时转为温暖旋律。";
+const outputDir = path.join(process.cwd(), "qa-output", "prod-game-create-delivery");
+
+type StageRecord = { at: string; stage: string; detail: unknown };
+type ProjectDetail = {
+  project?: { id?: string; title?: string; visibility?: string; workflow?: { stage?: string }; quality?: unknown };
+  spec?: { templateId?: string; title?: string };
+  playRevisionId?: string;
+  assetJob?: { id?: string; status?: string; progress?: unknown };
+  core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string; content?: unknown; storageUri?: string | null }> } };
+};
+
+function assert(value: unknown, message: string): asserts value {
+  if (!value) throw new Error(message);
+}
+
+async function writeReport(stages: StageRecord[], summary: Record<string, unknown>) {
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.writeFile(path.join(outputDir, "summary.json"), JSON.stringify({ ...summary, stages }, null, 2), "utf8");
+  const lines = [
+    "# 生产环境新游戏全链路验收",
+    "",
+    `- 时间：${new Date().toISOString()}`,
+    `- 站点：${baseUrl}`,
+    `- 结果：${summary.pass === true ? "通过" : "失败"}`,
+    `- 项目：${String(summary.projectId ?? "尚未创建")}`,
+    `- 试玩：${String(summary.playUrl ?? "—")}`,
+    `- 模板：${String(summary.templateId ?? "—")}`,
+    `- 版本：${String(summary.revisionId ?? "—")}`,
+    "",
+    "## 阶段记录",
+    "",
+    ...stages.map((entry) => `- ${entry.at} · **${entry.stage}** · \`${JSON.stringify(entry.detail)}\``),
+  ];
+  await fs.writeFile(path.join(outputDir, "REPORT.md"), lines.join("\n"), "utf8");
+}
+
+async function readProject(page: Page, projectId: string): Promise<ProjectDetail> {
+  const response = await page.request.get(`${baseUrl}/api/projects/${encodeURIComponent(projectId)}`);
+  const body = await response.json().catch(() => ({})) as ProjectDetail;
+  assert(response.ok(), `读取项目失败：HTTP ${response.status()} ${JSON.stringify(body)}`);
+  return body;
+}
+
+async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: StageRecord[]): Promise<ProjectDetail> {
+  const required = [
+    "game_spec",
+    "game_production_pipeline",
+    "game_delivery_preflight",
+    "game_playtest_delivery",
+    "asset_manifest",
+  ];
+  const deadline = Date.now() + 10 * 60_000;
+  let lastKinds: string[] = [];
+  while (Date.now() < deadline) {
+    const detail = await readProject(page, projectId);
+    const kinds = (detail.core?.revision?.artifacts ?? []).map((item) => item.kind ?? "").filter(Boolean);
+    const bgmReady = kinds.includes("bgm") || kinds.includes("bgm_notes");
+    lastKinds = kinds;
+    if (required.every((kind) => kinds.includes(kind)) && bgmReady && !detail.assetJob) {
+      stages.push({ at: new Date().toISOString(), stage: "delivery_artifacts_ready", detail: { kinds } });
+      return detail;
+    }
+    stages.push({
+      at: new Date().toISOString(),
+      stage: "delivery_artifacts_wait",
+      detail: { assetJob: detail.assetJob?.status ?? "none", kinds },
+    });
+    await page.waitForTimeout(5_000);
+  }
+  throw new Error(`交付制品等待超时：${lastKinds.join(",")}`);
+}
+
+async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[]) {
+  const events: Array<Record<string, unknown>> = [];
+  page.on("request", (request) => {
+    if (!request.url().includes("/api/gameplay/events") || request.method() !== "POST") return;
+    try {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      events.push(payload);
+      const event = String(payload.event ?? "unknown");
+      if (["start", "first_action", "first_minute", "end", "retry"].includes(event)) {
+        stages.push({ at: new Date().toISOString(), stage: `gameplay_${event}`, detail: payload });
+      }
+    } catch {
+      // Malformed telemetry will be caught by the missing-evidence assertion.
+    }
+  });
+
+  await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
+  const startedAt = Date.now();
+  let outcome: string | null = null;
+  while (Date.now() - startedAt < 150_000) {
+    const canvas = page.locator("canvas").first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      const phase = Math.floor((Date.now() - startedAt) / 1_200) % 4;
+      const x = box.x + box.width * ([0.22, 0.78, 0.35, 0.65][phase] ?? 0.5);
+      const y = box.y + box.height * (phase % 2 === 0 ? 0.72 : 0.45);
+      await page.touchscreen.tap(x, y).catch(() => undefined);
+      await page.mouse.move(x, y).catch(() => undefined);
+      await page.keyboard.press(phase % 2 === 0 ? "ArrowLeft" : "ArrowRight").catch(() => undefined);
+    }
+    const result = page.locator("[data-outcome]").first();
+    if (await result.isVisible().catch(() => false)) {
+      outcome = await result.getAttribute("data-outcome");
+      const hasMinute = events.some((event) => event.event === "first_minute");
+      if (hasMinute) break;
+      const retry = page.getByRole("button", { name: /重试|再来一次|重新开始|retry/i }).first();
+      if (await retry.isVisible().catch(() => false)) await retry.click();
+    }
+    await page.waitForTimeout(1_000);
+  }
+
+  const firstMinute = events.find((event) => event.event === "first_minute");
+  const end = [...events].reverse().find((event) => event.event === "end" && typeof event.won === "boolean");
+  assert(firstMinute, "真实手机试玩未产生 first_minute 事件");
+  assert((Number(firstMinute.activeMs) || 0) >= 60_000, "前台活跃时长不足 60 秒");
+  assert((Number(firstMinute.actionCount) || 0) >= 3, "有效操作不足 3 次");
+  assert(firstMinute.deviceClass === "mobile" && firstMinute.touchCapable === true, "未记录为可触控手机试玩");
+  assert(end, "真实试玩未产生明确胜负结算");
+  stages.push({ at: new Date().toISOString(), stage: "mobile_play_complete", detail: { outcome, firstMinute, end } });
+}
+
+async function main() {
+  if (process.env.QA_PROD_GAME_CREATE !== "1") {
+    throw new Error("拒绝调用真实模型和发布：请显式设置 QA_PROD_GAME_CREATE=1");
+  }
+
+  const stages: StageRecord[] = [];
+  const summary: Record<string, unknown> = { pass: false, baseUrl, prompt };
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  page.on("console", (message) => {
+    if (message.type() === "error") stages.push({ at: new Date().toISOString(), stage: "browser_console_error", detail: message.text() });
+  });
+
+  try {
+    await page.goto(`${baseUrl}/${locale}/create`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    assert(await page.locator("textarea").first().isVisible(), "创作输入框不可见");
+    assert((await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)), "创作页手机端横向溢出");
+    stages.push({ at: new Date().toISOString(), stage: "create_page_ready", detail: { url: page.url() } });
+
+    await page.locator("textarea").first().fill(prompt);
+    await page.getByRole("button", { name: /生成可玩版本/i }).click();
+    stages.push({ at: new Date().toISOString(), stage: "generation_started", detail: { promptChars: prompt.length } });
+
+    const saveButton = page.getByRole("button", { name: /保存并打开/i });
+    await saveButton.waitFor({ state: "visible", timeout: 5 * 60_000 });
+    await saveButton.waitFor({ state: "visible" });
+    assert(await saveButton.isEnabled(), "生成完成但保存按钮不可用");
+    const previewTitle = (await page.locator("main h2").first().textContent())?.trim() ?? "";
+    assert(await page.locator("canvas").first().isVisible(), "生成结果没有可玩 canvas");
+    stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });
+
+    await Promise.all([
+      page.waitForURL(/\/play\//, { timeout: 90_000 }),
+      saveButton.click(),
+    ]);
+    const projectId = decodeURIComponent(page.url().split("/play/")[1]?.split(/[?#]/)[0] ?? "");
+    assert(projectId, "保存后没有获得项目 ID");
+    summary.projectId = projectId;
+    summary.playUrl = page.url();
+    stages.push({ at: new Date().toISOString(), stage: "project_saved", detail: { projectId, playUrl: page.url() } });
+
+    const created = await readProject(page, projectId);
+    const revisionId = created.playRevisionId ?? created.core?.revision?.id;
+    assert(revisionId, "项目缺少不可变创意版本");
+    summary.revisionId = revisionId;
+    summary.templateId = created.spec?.templateId;
+    summary.title = created.project?.title ?? created.spec?.title ?? previewTitle;
+    stages.push({
+      at: new Date().toISOString(),
+      stage: "core_revision_ready",
+      detail: { revisionId, templateId: created.spec?.templateId, assetJob: created.assetJob?.status ?? "none" },
+    });
+
+    await playUntilDeliveryEvidence(page, stages);
+    const ready = await waitForDeliveryArtifacts(page, projectId, stages);
+    const artifacts = ready.core?.revision?.artifacts ?? [];
+    summary.artifacts = artifacts.map((item) => item.kind).filter(Boolean);
+    summary.bgmSource = artifacts.find((item) => item.kind === "bgm")?.storageUri ? "audio_model" : "llm_notes";
+
+    const publishResponse = await page.request.post(`${baseUrl}/api/works/game/${encodeURIComponent(projectId)}/publication`, {
+      data: { action: "publish", revisionId },
+    });
+    const publishBody = await publishResponse.json().catch(() => ({})) as Record<string, unknown>;
+    assert(publishResponse.ok(), `发布门禁拒绝：HTTP ${publishResponse.status()} ${JSON.stringify(publishBody)}`);
+    assert(publishBody.visibility === "public", "发布成功响应未返回 public");
+    stages.push({ at: new Date().toISOString(), stage: "published", detail: publishBody });
+
+    const publicContext = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+    const publicPage = await publicContext.newPage();
+    const publicResponse = await publicPage.goto(`${baseUrl}/${locale}/play/${encodeURIComponent(projectId)}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    assert(publicResponse?.ok(), `公开试玩页不可访问：HTTP ${publicResponse?.status() ?? "none"}`);
+    await publicPage.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
+    assert(await publicPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "公开试玩页手机端横向溢出");
+    await publicContext.close();
+    stages.push({ at: new Date().toISOString(), stage: "public_mobile_verified", detail: { playUrl: `${baseUrl}/${locale}/play/${projectId}` } });
+
+    summary.pass = true;
+    await writeReport(stages, summary);
+    console.log(JSON.stringify(summary, null, 2));
+    console.log("[OK] qa:prod-game-create-delivery");
+  } catch (error) {
+    summary.error = error instanceof Error ? error.message : String(error);
+    await writeReport(stages, summary);
+    throw error;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+void main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

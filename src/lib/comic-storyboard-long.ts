@@ -1,4 +1,5 @@
 import { llmJson } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import type { ComicPage } from "@/lib/comic-format";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { PRODUCT } from "@/lib/product-config";
@@ -85,6 +86,8 @@ async function tryDirectorStoryboardOnce(params: {
 
   const result = await llmJson({
     model,
+    scene: "comic_storyboard",
+    localeGroup: runtimeLocaleGroup(outputLocale),
     system: storyboardSystem,
     user: buildStoryboardChunkUserMessage({
       locale: outputLocale,

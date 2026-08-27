@@ -52,6 +52,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+/.qa-*.log
+/temp-*.log
+/temp-*.err.log
+/temp-*.json
+/temp-*.txt
+/cos.txt
+/dev.db
+/scripts/__pycache__/
 
 # env files (can opt-in for committing if needed)
 .env
@@ -68,6 +76,8 @@ next-env.d.ts
 # prisma local db
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/prisma/*.db
+/prisma/prisma/*.db-journal
 
 # 本地样例导出包（直接 scp 上传，不入库）
 /data/literary-samples-bundle/

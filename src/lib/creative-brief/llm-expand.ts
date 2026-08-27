@@ -2,6 +2,7 @@ import { z } from "zod";
 import { llmJson } from "@/lib/llm";
 import { getNovelStyleTextModelCascade } from "@/lib/model-config";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { PRODUCT } from "@/lib/product-config";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
@@ -120,21 +121,23 @@ export async function llmExpandCreativeBrief(
 ): Promise<CreativeBrief> {
   if (!briefLlmEnabled(medium)) return base;
 
+  const locale = base.inputLocale ?? detectBriefInputLocale(base.userPrompt);
+  const localeGroup = runtimeLocaleGroup(locale);
   const route =
     medium === "game"
       ? resolveGameModelRoute({
           prompt: base.userPrompt,
           hasReferenceAssets: Boolean(referenceSnippet?.trim()),
+          localeGroup,
         })
       : null;
   const models =
     medium === "game"
       ? (route?.models ?? [])
-      : getNovelStyleTextModelCascade();
+      : getNovelStyleTextModelCascade(localeGroup);
   if (!models.length) return base;
 
   const timeoutMs = Math.max(4_000, Math.min(28_000, briefExpandTimeoutMs(medium)));
-  const locale = base.inputLocale ?? detectBriefInputLocale(base.userPrompt);
   const system = buildBriefLlmSystemPrompt(locale, medium);
   const refBlock = referenceSnippet?.trim()
     ? `\n【参考素材摘录】\n${referenceSnippet.trim().slice(0, 1200)}\n`
@@ -144,7 +147,8 @@ export async function llmExpandCreativeBrief(
     try {
       const res = await llmJson({
         model,
-        ...(route ? { scene: route.scene } : {}),
+        scene: route?.scene ?? (medium === "comic" ? "comic_storyboard" : "novel"),
+        localeGroup,
         system,
         user:
           `用户原话：\n${base.userPrompt}\n\n` +

@@ -1,4 +1,5 @@
 import { llmJson } from "@/lib/llm";
+import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import { fetchComicCharacterRoster } from "@/lib/comic-character-roster-server";
 import {
   buildPrereadExcerpt,
@@ -40,9 +41,12 @@ export async function fetchComicPlotDigest(params: {
   model: string;
   novelTitle: string;
   contentExcerpt: string;
+  localeGroup?: RuntimeLocaleGroup;
 }): Promise<ComicPlotDigest | null> {
   const result = await llmJson({
     model: params.model,
+    scene: "comic_storyboard",
+    localeGroup: params.localeGroup,
     system: `你是漫画改编责编。请先通读全书节选，在锁定人物/场景一致性的前提下输出剧情精读包 JSON。
 禁止编造节选中没有的情节；summary 覆盖全书起承转合；emotionalArc 写情绪曲线；keyProps 列关键道具与场景；keyBeats 提炼 8 条跨章关键情节（供后续按章再精炼）。`,
     user: `书名：${params.novelTitle}
@@ -93,12 +97,14 @@ export async function buildComicPrereadPack(params: {
   novelContent: string;
   novelMeta: NovelGenerationMeta | null;
   userRoster?: ComicCharacterRoster | null;
+  localeGroup?: RuntimeLocaleGroup;
 }): Promise<ComicPrereadPack | null> {
   const excerpt = buildPrereadExcerpt(params.novelContent);
   const digest = await fetchComicPlotDigest({
     model: params.model,
     novelTitle: params.novelTitle,
     contentExcerpt: excerpt,
+    localeGroup: params.localeGroup,
   });
   if (!digest) return null;
 
@@ -114,6 +120,7 @@ export async function buildComicPrereadPack(params: {
         novelTitle: params.novelTitle,
         novelSummary: params.novelSummary,
         contentExcerpt: excerpt,
+        localeGroup: params.localeGroup,
       })) ?? null;
   }
 

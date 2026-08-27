@@ -11,6 +11,8 @@ import {
   type ChildrenCreativeBrief,
 } from "@/lib/literary-brief/children-brief-types";
 import { getNovelStyleTextModelCascade, llmJson } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
+import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { PRODUCT } from "@/lib/product-config";
 
 export async function llmExpandChildrenBriefFromSeed(
@@ -20,7 +22,8 @@ export async function llmExpandChildrenBriefFromSeed(
   if (!PRODUCT.novel.creativeBriefLlm) return base;
 
   // 儿童故事同样属于小说创作，不应退回游戏默认模型池。
-  const models = getNovelStyleTextModelCascade();
+  const localeGroup = runtimeLocaleGroup(detectBriefInputLocale(base.userPrompt));
+  const models = getNovelStyleTextModelCascade(localeGroup);
   if (!models.length) return base;
 
   const age = parseChildrenTargetAge(base.targetAge);
@@ -41,6 +44,8 @@ export async function llmExpandChildrenBriefFromSeed(
     try {
       const res = await llmJson({
         model,
+        scene: "novel",
+        localeGroup,
         system: buildChildrenBriefExtractSystem(age, base.userPrompt),
         user: userPrompt,
         temperature: briefTemp,

@@ -302,11 +302,10 @@ export function getLocaleRouteOverride(
 export function routeModelCascade(route: RuntimeModelRoute): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of [route.primary, ...route.fallbacks]) {
-    const m = raw?.trim();
-    if (m && !seen.has(m)) {
-      seen.add(m);
-      out.push(m);
+  for (const candidate of routeModelCandidates(route)) {
+    if (!seen.has(candidate.model)) {
+      seen.add(candidate.model);
+      out.push(candidate.model);
     }
   }
   return out;
@@ -334,14 +333,11 @@ export function routeModelCandidates(route: RuntimeModelRoute): RuntimeModelCand
   return out;
 }
 
-export function resolveSceneRouteCandidates(
-  payload: RuntimeSecretsPayload,
+function resolveCandidatesForRoute(
   scene: RuntimeSceneKey,
-  localeGroup?: RuntimeLocaleGroup,
+  route: RuntimeModelRoute | undefined,
+  providers: RuntimeLlmProvider[],
 ): ResolvedSceneCandidate[] {
-  const providers = getEffectiveProviders(payload);
-  const routes = getEffectiveRoutes(payload);
-  const route = getLocaleRouteOverride(payload, scene, localeGroup) ?? routes.find((r) => r.scene === scene);
   if (!route) return [];
   return routeModelCandidates(route).flatMap((candidate) => {
     const provider = providers.find((item) => item.id === candidate.providerId && item.enabled !== false);
@@ -349,6 +345,31 @@ export function resolveSceneRouteCandidates(
     if (provider.protocol === "openai_compatible" && !provider.baseUrl?.trim()) return [];
     return [{ scene, provider, model: candidate.model }];
   });
+}
+
+export function resolveSceneRouteCandidates(
+  payload: RuntimeSecretsPayload,
+  scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
+): ResolvedSceneCandidate[] {
+  const providers = getEffectiveProviders(payload);
+  const routes = getEffectiveRoutes(payload);
+  const localeRoute = getLocaleRouteOverride(payload, scene, localeGroup);
+  const fromLocale = resolveCandidatesForRoute(scene, localeRoute, providers);
+  if (fromLocale.length) return fromLocale;
+  return resolveCandidatesForRoute(scene, routes.find((r) => r.scene === scene), providers);
+}
+
+/** Put the caller-selected model first so cascade retries actually switch IDs. */
+export function preferRequestedModel<T extends { model: string }>(
+  candidates: T[],
+  requested?: string,
+): T[] {
+  const want = requested?.trim().toLowerCase();
+  if (!want || candidates.length <= 1) return candidates;
+  const hit = candidates.findIndex((c) => c.model.trim().toLowerCase() === want);
+  if (hit <= 0) return candidates;
+  return [candidates[hit]!, ...candidates.filter((_, i) => i !== hit)];
 }
 
 export function resolveSceneRoute(

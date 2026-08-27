@@ -1,5 +1,5 @@
 {
-  "at": "2026-06-17T02:43:01.121Z",
+  "at": "2026-08-26T12:49:19.065Z",
   "pass": true,
   "dbUrl": "file:./dev.db",
   "checks": [
@@ -25,6 +25,10 @@
       "ok": true
     },
     {
+      "name": "stored production route survives code-default changes",
+      "ok": true
+    },
+    {
       "name": "persist gamePrimary",
       "ok": true
     },
@@ -44,6 +48,30 @@
       "name": "modelSources.gamePrimary is db after seed",
       "ok": true,
       "detail": "db"
+    },
+    {
+      "name": "persist provider pricing",
+      "ok": true
+    },
+    {
+      "name": "persist daily model budget",
+      "ok": true,
+      "detail": "987654"
+    },
+    {
+      "name": "provider pricing exact match",
+      "ok": true,
+      "detail": "800"
+    },
+    {
+      "name": "provider pricing wildcard match",
+      "ok": true,
+      "detail": "1200"
+    },
+    {
+      "name": "provider pricing unmatched remains null",
+      "ok": true,
+      "detail": "null"
     },
     {
       "name": "HTTP dev server reachable",
@@ -78,6 +106,14 @@
     }
   ],
   "seededModels": {
+    "gameTextPrimary": "glm-5-2",
+    "gameTextFallbacks": [
+      "deepseek-v4-pro"
+    ],
+    "gameVisionPrimary": "gpt-5-4",
+    "gameVisionFallbacks": [
+      "kimi-k2-6"
+    ],
     "gamePrimary": "gpt-5.2",
     "gameFallbacks": [
       "gemini-3.1-pro-preview"

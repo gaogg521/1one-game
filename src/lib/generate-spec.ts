@@ -7,7 +7,8 @@ import { lintGameSpecForOrchestration } from "@/lib/orchestration/lint-spec";
 import { getComfyBaseUrl, probeComfyHealthDetailed } from "@/lib/orchestration/comfy-gateway";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-model-route";
-import type { RuntimeSceneKey } from "@/lib/runtime-providers";
+import { runtimeLocaleGroup, runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
+import type { RuntimeLocaleGroup, RuntimeSceneKey } from "@/lib/runtime-providers";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import {
@@ -641,11 +642,12 @@ function safeErrorSummary(e: unknown): string {
 
 function gameLlmRouteInput(
   prompt: string,
-  options?: Pick<GenerateOptions, "assetManifestSummary">,
+  options?: Pick<GenerateOptions, "assetManifestSummary" | "uiLocale">,
 ): GameModelRouteInput {
   return {
     prompt,
     assetManifestItemCount: options?.assetManifestSummary?.itemCount,
+    localeGroup: options?.uiLocale ? runtimeLocaleGroup(options.uiLocale) : undefined,
   };
 }
 
@@ -653,11 +655,13 @@ async function callPrimaryLLM(
   model: string,
   userPrompt: string,
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<unknown | null> {
   const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.genTimeoutMs);
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system: SYSTEM,
     user: userPrompt,
     temperature: 0.55,
@@ -674,11 +678,13 @@ async function callRepairLLM(
   broken: unknown,
   issues: string[],
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<unknown | null> {
   const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.repairTimeoutMs);
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system:
       "你是 JSON 修复器。用户要一个小游戏规格。你只输出一个完整 JSON 对象，符合既定 schema，颜色必须是 #RRGGBB，不要 markdown。",
     user: `原始创意：\n${userPrompt}\n\n校验问题：\n${issues.slice(0, 12).join("\n")}\n\n残缺输出（请修正为合法规格）：\n${JSON.stringify(broken).slice(0, 6000)}`,
@@ -695,13 +701,15 @@ export async function repairGameSpecFromIssues(
   userPrompt: string,
   broken: unknown,
   issues: string[],
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<GameSpec | null> {
   const clean = userPrompt.trim();
-  const route = resolveGameModelRoute({ prompt: userPrompt });
+  const locale = localeGroup ?? await runtimeLocaleGroupForCurrentRequest();
+  const route = resolveGameModelRoute({ prompt: userPrompt, localeGroup: locale });
   const models = route.models;
   for (const model of models) {
     try {
-      const repairedRaw = await callRepairLLM(model, userPrompt, broken, issues, route.scene);
+      const repairedRaw = await callRepairLLM(model, userPrompt, broken, issues, route.scene, locale);
       if (!repairedRaw) continue;
       const repaired = coerceGameSpec(repairedRaw);
       if (repaired.ok) {
@@ -776,11 +784,13 @@ async function callEnhanceLLM(
   userPrompt: string,
   draft: GameSpec,
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<unknown | null> {
   const timeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.enhanceTimeoutMs);
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system:
       "你是「游戏规格强化器」。输入：用户创意 + 一份初稿 GameSpec。输出：一份更成品、更有系统深度的 GameSpec（严格符合 schema）。\n" +
       "硬约束：\n" +
@@ -804,11 +814,12 @@ async function tryGenerateWithModelChain(
   clean: string,
   mock: GameSpec,
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<{ spec: GameSpec; source: GenerationSource; model: string } | null> {
   for (const model of models) {
     let raw: unknown | null = null;
     try {
-      raw = await callPrimaryLLM(model, userContent, scene);
+      raw = await callPrimaryLLM(model, userContent, scene, localeGroup);
     } catch {
       continue;
     }
@@ -825,7 +836,7 @@ async function tryGenerateWithModelChain(
     }
 
     try {
-      const repairedRaw = await callRepairLLM(model, userContent, raw, direct.issues, scene);
+      const repairedRaw = await callRepairLLM(model, userContent, raw, direct.issues, scene, localeGroup);
       if (repairedRaw) {
         const repaired = coerceGameSpec(repairedRaw);
         if (repaired.ok) {
@@ -1035,11 +1046,12 @@ async function tryEnhanceWithModelChain(
   draft: GameSpec,
   mock: GameSpec,
   scene: RuntimeSceneKey,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<{ spec: GameSpec; source: GenerationSource; model: string } | null> {
   for (const model of models) {
     let raw: unknown | null = null;
     try {
-      raw = await callEnhanceLLM(model, userPrompt, draft, scene);
+      raw = await callEnhanceLLM(model, userPrompt, draft, scene, localeGroup);
     } catch {
       continue;
     }
@@ -1186,7 +1198,7 @@ export async function generateGameSpecDraftWithMeta(
   let llmMode: "json_schema" | "json_object" | undefined;
   const runDraftChain = async () =>
     withTimeout(
-      tryGenerateWithModelChain(models, userContent, clean, mock, gameRoute.scene),
+      tryGenerateWithModelChain(models, userContent, clean, mock, gameRoute.scene, gameLlmRouteInput(clean, options).localeGroup),
       totalTimeoutMs,
       "openai total",
     ).catch((e) => {
@@ -1246,7 +1258,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   draftSource: GenerationSource;
   draftDebug: GenerationDebug;
   web?: WebEnhanceMeta | null;
-  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "assetManifestSummary">;
+  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "assetManifestSummary" | "uiLocale">;
 }): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
   const clean0 = params.prompt.trim();
   const clean = clean0;
@@ -1267,7 +1279,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   const orch = params.options?.orchestration;
   const runEnhance = async () =>
     await withTimeout(
-      tryEnhanceWithModelChain(models, enhancePromptForProduction(params.prompt), clean, draft, mock, gameRoute.scene),
+      tryEnhanceWithModelChain(models, enhancePromptForProduction(params.prompt), clean, draft, mock, gameRoute.scene, gameLlmRouteInput(clean, params.options).localeGroup),
       totalTimeoutMs,
       "openai enhance total",
     ).catch(() => null);
@@ -1614,7 +1626,7 @@ export async function generateGameSpecWithMeta(
         const gameRoute = resolveGameModelRoute(gameLlmRouteInput(prompt.trim(), options));
         const firstModel = gameRoute.models[0];
         orch?.note("spec_critic_re_enhance", { triggerScore: criticVerdict.score, model: firstModel });
-        const reEnhancedRaw = await callEnhanceLLM(firstModel, reEnhancePrompt, spec, gameRoute.scene);
+        const reEnhancedRaw = await callEnhanceLLM(firstModel, reEnhancePrompt, spec, gameRoute.scene, gameLlmRouteInput(prompt.trim(), options).localeGroup);
         if (reEnhancedRaw) {
           const coerced = coerceGameSpec(reEnhancedRaw);
           if (coerced.ok) {

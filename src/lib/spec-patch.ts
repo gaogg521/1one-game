@@ -1,5 +1,6 @@
 import { llmJson } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { sanitizeSpecRaw } from "@/lib/sanitize-spec-raw";
@@ -104,8 +105,10 @@ export async function patchGameSpecWithLlm(params: {
   }
 
   const currentPrompt = (params.currentPrompt ?? "").trim();
+  const localeGroup = await runtimeLocaleGroupForCurrentRequest();
   const gameRoute = resolveGameModelRoute({
     prompt: `${currentPrompt}\n${prompt}`.trim(),
+    localeGroup,
   });
   const models = gameRoute.models;
   if (!models.length) {
@@ -119,6 +122,7 @@ export async function patchGameSpecWithLlm(params: {
       const res = await llmJson({
         model,
         scene: gameRoute.scene,
+        localeGroup,
         system: SPEC_PATCH_SYSTEM,
         user: userMsg,
         temperature: 0.3,

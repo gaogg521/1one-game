@@ -4,6 +4,7 @@
  */
 import { llmJson } from "@/lib/llm";
 import { getSceneModelCascade } from "@/lib/runtime-config";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { GameSpec } from "@/lib/game-spec";
 
 export type BgmNote = { freq: number; dur: number; vol?: number };
@@ -37,12 +38,14 @@ export async function generateBgmNotesFromSpec(spec: GameSpec): Promise<BgmNoteS
   // `game_bgm` may be intentionally configured with an audio-output model.
   // The fallback needs a text-capable model to produce JSON notes, so it uses
   // the ordinary game-text route rather than sending a JSON request to audio.
-  const model = getSceneModelCascade("game_text")[0];
+  const localeGroup = await runtimeLocaleGroupForCurrentRequest();
+  const model = getSceneModelCascade("game_text", localeGroup)[0];
   if (!model) return null;
 
   const result = await llmJson({
     model,
     scene: "game_text",
+    localeGroup,
     system: "You are a game music composer that outputs JSON note sequences. Respond ONLY with valid JSON matching the schema.",
     user,
     mode: "json_object",

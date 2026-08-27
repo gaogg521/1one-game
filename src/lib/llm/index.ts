@@ -12,8 +12,8 @@ import { getModelCascadeForProvider, getProviderKeyStatus } from "@/lib/llm/mode
 import type { GameModelRouteInput } from "@/lib/game-model-route";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { LlmJsonRequest, LlmJsonResult, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
-import { resolveSceneRoute, resolveSceneRouteCandidates, protocolToLlmProvider, RUNTIME_SCENE_KEYS, type RuntimeLocaleGroup, type RuntimeSceneKey } from "@/lib/runtime-providers";
-import { getRuntimeConfigSync } from "@/lib/runtime-config";
+import { resolveSceneRouteCandidates, protocolToLlmProvider, preferRequestedModel, RUNTIME_SCENE_KEYS, type RuntimeLocaleGroup, type RuntimeSceneKey } from "@/lib/runtime-providers";
+import { getRuntimeConfigSync, getSceneModelCascade } from "@/lib/runtime-config";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import {
   createNovelOpenAIClientForProvider,
@@ -65,19 +65,19 @@ export function getActiveProvider(): LlmProvider {
   return normalizeProvider(process.env.LLM_PROVIDER);
 }
 
-function inferSceneForModel(model: string): RuntimeSceneKey | undefined {
+function inferSceneForModel(model: string, localeGroup?: RuntimeLocaleGroup): RuntimeSceneKey | undefined {
   const payload = getRuntimeConfigSync().payload;
   const normalized = model.trim();
   if (!normalized) return undefined;
   for (const scene of RUNTIME_SCENE_KEYS) {
-    const ctx = resolveSceneRoute(payload, scene);
-    if (ctx?.models.includes(normalized)) return scene;
+    if (resolveSceneRouteCandidates(payload, scene, localeGroup).some((item) => item.model === normalized)) {
+      return scene;
+    }
+  }
+  for (const scene of RUNTIME_SCENE_KEYS) {
+    if (getSceneModelCascade(scene, localeGroup).includes(normalized)) return scene;
   }
   return undefined;
-}
-
-function resolveRequestScene(req: { scene?: RuntimeSceneKey; model: string }): RuntimeSceneKey | undefined {
-  return req.scene ?? inferSceneForModel(req.model);
 }
 
 async function observeLlmResult<T extends LlmJsonResult | LlmTextResult>(
@@ -106,11 +106,14 @@ export async function llmJson(
 ): Promise<LlmJsonResult> {
   return observeLlmResult(req.model, "json", async () => {
   const { localeGroup: suppliedLocaleGroup, ...request } = req;
-  const scene = resolveRequestScene(request);
+  const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+  const scene = request.scene ?? inferSceneForModel(request.model, localeGroup);
   if (scene) {
-    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
     const payload = getRuntimeConfigSync().payload;
-    const candidates = resolveSceneRouteCandidates(payload, scene, localeGroup);
+    const candidates = preferRequestedModel(
+      resolveSceneRouteCandidates(payload, scene, localeGroup),
+      request.model,
+    );
     if (!candidates.length) {
       return {
         ok: false,
@@ -172,11 +175,14 @@ export async function llmText(
 ): Promise<LlmTextResult> {
   return observeLlmResult(req.model, "text", async () => {
   const { localeGroup: suppliedLocaleGroup, ...request } = req;
-  const scene = resolveRequestScene(request);
+  const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+  const scene = request.scene ?? inferSceneForModel(request.model, localeGroup);
   if (scene) {
-    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
     const payload = getRuntimeConfigSync().payload;
-    const candidates = resolveSceneRouteCandidates(payload, scene, localeGroup);
+    const candidates = preferRequestedModel(
+      resolveSceneRouteCandidates(payload, scene, localeGroup),
+      request.model,
+    );
     if (!candidates.length) {
       return { ok: false, provider: "openai_compatible", model: request.model, error: `未配置场景 ${scene} 的服务商` };
     }
@@ -225,11 +231,14 @@ export async function* llmTextStream(
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): AsyncGenerator<string> {
   const { localeGroup: suppliedLocaleGroup, ...request } = req;
-  const scene = resolveRequestScene(request);
+  const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
+  const scene = request.scene ?? inferSceneForModel(request.model, localeGroup);
   if (scene) {
-    const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
     const payload = getRuntimeConfigSync().payload;
-    const candidates = resolveSceneRouteCandidates(payload, scene, localeGroup);
+    const candidates = preferRequestedModel(
+      resolveSceneRouteCandidates(payload, scene, localeGroup),
+      request.model,
+    );
     if (!candidates.length) throw new Error(`未配置场景 ${scene} 的服务商`);
     const tier = opts?.lengthTier ?? "medium";
     let lastError = `场景 ${scene} 没有可用候选项`;

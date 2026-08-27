@@ -4,6 +4,7 @@ import {
 } from "@/lib/children-comic-sections";
 import { parseNovelChapters } from "@/lib/novel-chapters";
 import { llmJson } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { getComicStylePreset, type ComicStylePresetId } from "@/lib/comic-style-presets";
 import type { BriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
@@ -202,6 +203,8 @@ export async function fetchComicDirectorPack(params: {
   );
   const result = await llmJson({
     model: params.model,
+    scene: "comic_storyboard",
+    localeGroup: runtimeLocaleGroup(outputLocale),
     system: buildDirectorSystemPrompt(outputLocale),
     user: buildComicDirectorUserMessage({
       novelTitle: params.novelTitle,

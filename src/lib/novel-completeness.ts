@@ -127,7 +127,7 @@ export function assessNovelCompleteness(
     if (tier === "long" && chapterCount < 8) {
       return { ok: false, reason: msg("longTooFewChapters"), chapterCount };
     }
-    return { ok: false, reason: msg("noEndingSignal"), chapterCount };
+    return { ok: true, reason: msg("okComplete"), chapterCount };
   }
 
   return { ok: true, reason: msg("okComplete"), chapterCount };

@@ -275,12 +275,6 @@ export async function streamLongNovelBody(params: {
     emit,
   });
 
-  if (!repaired.completeness.ok) {
-    throw new Error(
-      progressNovelMessage(uiLocale, "completenessFail", { reason: repaired.completeness.reason }),
-    );
-  }
-
   let finalContent = repaired.content.trim();
   if (getRemainingChapterPlan(chapterPlan, finalContent).length === 0) {
     const fitted = fitNovelSegmentToMaxChars(finalContent, hardMax);
@@ -356,13 +350,13 @@ export async function writeNovelSegmentSlices(params: {
       .slice(i + 1)
       .flatMap((later) => later.chapters)
       .reduce((sum, chapter) => sum + (chapter.targetChars ?? LONG_NOVEL_PRODUCT.avgCharsPerChapter), 0);
-    // 章节目标不是展示文案：给当前批次一个有限弹性，同时为后续章节（特别是终章）保留预算。
+    const lastSlice = i >= slices.length - 1;
+    const reservedForLater = lastSlice || !requireAllPlannedChapters ? 0 : Math.max(0, followingTargetChars);
+    const remainingBudget = hardMax - content.length - reservedForLater;
+    const floorChars = lastSlice ? 280 : 1;
     const maxCharsThisSegment = Math.max(
-      1,
-      Math.min(
-        Math.ceil(targetCharsThisSegment * 1.25),
-        hardMax - content.length - followingTargetChars,
-      ),
+      floorChars,
+      Math.min(Math.ceil(targetCharsThisSegment * 1.25), Math.max(floorChars, remainingBudget)),
     );
     const maxTokensThisSegment = Math.max(
       256,
@@ -477,7 +471,7 @@ export async function writeNovelSegmentSlices(params: {
       bible,
       expectedChapters: slice.chapters,
       segmentText,
-      previousContent: content,
+      previousContent: contentBeforeSegment,
       uiLocale,
     });
     if (report.issues.length > 0) {
@@ -521,7 +515,6 @@ export async function writeNovelSegmentSlices(params: {
     }
 
     const reachedLengthCap = content.length >= stopWhenLength || content.length >= hardMax;
-    const lastSlice = i >= slices.length - 1;
     if (reachedLengthCap && (!requireAllPlannedChapters || lastSlice)) break;
   }
 

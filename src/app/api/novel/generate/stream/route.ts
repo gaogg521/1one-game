@@ -7,6 +7,7 @@ import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelTextStream } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import {
@@ -229,7 +230,7 @@ export async function POST(req: Request) {
       ? resumeState.checkpoint.polish
       : polishRaw !== false && (polishRaw === true || PRODUCT.novel.longSegmented.polishAfterSegment));
   const maxCharsLimit = novelMaxChars(lengthTier, lengthOpts);
-  const cascade = getNovelStyleTextModelCascade();
+  const cascade = getNovelStyleTextModelCascade(runtimeLocaleGroup(uiLocale));
   const providerLabel = getActiveProvider();
 
   const encoder = new TextEncoder();
@@ -583,7 +584,13 @@ export async function POST(req: Request) {
               minChars: acceptChars,
               message: progressNovelMessage(uiLocale, "completenessFail", { reason: completeness.reason }),
             });
-            continue;
+            if (pipelineMeta && finalContent.trim().length >= Math.min(400, acceptChars)) {
+              // Planned/long already spent the expensive pipeline. Persist instead of restarting bible+plan.
+            } else if (pipelineMeta) {
+              break;
+            } else {
+              continue;
+            }
           }
 
           send({ step: "synopsis_start", message: progressNovelMessage(uiLocale, "synopsisStart") });

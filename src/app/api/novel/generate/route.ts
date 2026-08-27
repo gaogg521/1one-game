@@ -7,6 +7,7 @@ import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { readLimitedJson } from "@/lib/api/read-json-body";
 import { getActiveProvider, getNovelStyleTextModelCascade, llmNovelText } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
 import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import {
@@ -156,7 +157,7 @@ export async function POST(req: Request) {
   }
 
   const startedAt = Date.now();
-  const cascade = getNovelStyleTextModelCascade();
+  const cascade = getNovelStyleTextModelCascade(runtimeLocaleGroup(uiLocale));
 
   try {
     let content = "";
@@ -228,7 +229,7 @@ export async function POST(req: Request) {
             lengthOpts,
             uiLocale,
           });
-          if (longResult.content.length >= longPlan.minAcceptChars && longResult.completeness.ok) {
+          if (longResult.content.length >= Math.min(400, longPlan.minAcceptChars)) {
             content = longResult.content;
             pipelineMeta = longResult.pipelineMeta;
             pipelineCompleteness = longResult.completeness;
@@ -249,7 +250,7 @@ export async function POST(req: Request) {
             lengthOpts,
             uiLocale,
           });
-          if (planned.content.length >= minChars && planned.completeness.ok) {
+          if (planned.content.length >= Math.min(400, minChars)) {
             content = planned.content;
             pipelineMeta = planned.pipelineMeta;
             pipelineCompleteness = planned.completeness;

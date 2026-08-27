@@ -13,6 +13,7 @@ import {
   isOpenGameBrowserBenchRequired,
 } from "@/lib/opengame-skills/browser-bench-env";
 import { llmJson, getActiveProvider, getProviderModelCascade } from "@/lib/llm";
+import { resolveGameModelRoute } from "@/lib/game-model-route";
 
 async function serverReachable(baseUrl: string): Promise<boolean> {
   try {
@@ -72,11 +73,13 @@ export async function maybeVerifyAgenticModuleInBrowser(
     }
 
     const hints = buildDebugSkillRepairHints(result.checks);
-    const model = getProviderModelCascade()[0];
+    const route = resolveGameModelRoute({ prompt });
+    const model = route.models[0] ?? getProviderModelCascade()[0];
     if (!model) return { module: candidate, benchOk: false, benchSkipped: false };
 
     const repairResult = await llmJson({
       model,
+      scene: route.scene,
       system: buildAgenticSystemPrompt(),
       user: buildAgenticRepairPrompt(
         prompt,

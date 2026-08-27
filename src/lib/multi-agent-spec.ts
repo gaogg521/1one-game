@@ -12,7 +12,8 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { llmJson } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
-import type { RuntimeSceneKey } from "@/lib/runtime-providers";
+import type { RuntimeLocaleGroup, RuntimeSceneKey } from "@/lib/runtime-providers";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
@@ -20,8 +21,8 @@ import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
 import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
 
-function pickGameRoute(prompt: string) {
-  return resolveGameModelRoute({ prompt });
+function pickGameRoute(prompt: string, localeGroup?: RuntimeLocaleGroup) {
+  return resolveGameModelRoute({ prompt, localeGroup });
 }
 
 function safeJson(raw: unknown | null): Record<string, unknown> | null {
@@ -66,10 +67,12 @@ async function callWorldAgent(
   prompt: string,
   scene: RuntimeSceneKey,
   model: string,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<{ templateId: string; title: string; labels: GameSpec["labels"] } | null> {
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system: WORLD_SYSTEM,
     user: prompt,
     temperature: 0.6,
@@ -137,10 +140,12 @@ async function callGameplayAgent(
   prompt: string,
   scene: RuntimeSceneKey,
   model: string,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<{ templateId: string; gameplay: GameSpec["gameplay"] } | null> {
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system: GAMEPLAY_SYSTEM,
     user: prompt,
     temperature: 0.4,
@@ -213,10 +218,12 @@ async function callArtAgent(
   prompt: string,
   scene: RuntimeSceneKey,
   model: string,
+  localeGroup?: RuntimeLocaleGroup,
 ): Promise<{ theme: GameSpec["theme"]; musicProfile?: string } | null> {
   const res = await llmJson({
     model,
     scene,
+    localeGroup,
     system: ART_SYSTEM,
     user: prompt,
     temperature: 0.55,
@@ -306,7 +313,8 @@ export async function generateWithMultiAgent(
   prompt: string,
   orch?: RunTraceRecorder,
 ): Promise<MultiAgentResult> {
-  const route = pickGameRoute(prompt);
+  const localeGroup = await runtimeLocaleGroupForCurrentRequest();
+  const route = pickGameRoute(prompt, localeGroup);
   const model = route.models[0] ?? "gpt-4o-mini";
   orch?.note("game_model_route", { mode: route.mode, scene: route.scene, models: route.models });
 
@@ -314,9 +322,9 @@ export async function generateWithMultiAgent(
     orch ? orch.span(label, fn) : fn();
 
   const [worldResult, gameplayResult, artResult] = await Promise.all([
-    run("agent_world", () => callWorldAgent(prompt, route.scene, model)),
-    run("agent_gameplay", () => callGameplayAgent(prompt, route.scene, model)),
-    run("agent_art", () => callArtAgent(prompt, route.scene, model)),
+    run("agent_world", () => callWorldAgent(prompt, route.scene, model, localeGroup)),
+    run("agent_gameplay", () => callGameplayAgent(prompt, route.scene, model, localeGroup)),
+    run("agent_art", () => callArtAgent(prompt, route.scene, model, localeGroup)),
   ]);
 
   const partial = mergeAgentOutputs(worldResult, gameplayResult, artResult);

@@ -12,6 +12,7 @@ import {
   normalizeProviderPatch,
   providerApiKeySource,
   resolveSceneRoute,
+  resolveSceneRouteCandidates,
   routeModelCascade,
   syncLegacySecretsFromProviders,
   type RuntimeLlmProvider,
@@ -397,13 +398,29 @@ export type RuntimeConfigPatch = {
   dailyBudgetMicros?: number | null;
 };
 
-export function getSceneModelCascade(scene: RuntimeSceneKey, localeGroup?: RuntimeLocaleGroup): string[] {
-  const payload = getRuntimeConfigSync().payload;
-  const route = (localeGroup
-    ? payload.localeRoutes?.find((item) => item.scene === scene && item.localeGroup === localeGroup)
-    : undefined) ?? mergeRoutesWithDefaults(payload.routes, payload).find((r) => r.scene === scene);
+function modelIdsFromRoute(route: RuntimeModelRoute | undefined): string[] {
   if (!route) return [];
   return routeModelCascade(route);
+}
+
+export function getSceneModelCascade(scene: RuntimeSceneKey, localeGroup?: RuntimeLocaleGroup): string[] {
+  const payload = getRuntimeConfigSync().payload;
+  const callable: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of resolveSceneRouteCandidates(payload, scene, localeGroup)) {
+    const id = candidate.model.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    callable.push(id);
+  }
+  if (callable.length) return callable;
+  const localeIds = localeGroup
+    ? modelIdsFromRoute(
+        payload.localeRoutes?.find((item) => item.scene === scene && item.localeGroup === localeGroup),
+      )
+    : [];
+  if (localeIds.length) return localeIds;
+  return modelIdsFromRoute(mergeRoutesWithDefaults(payload.routes, payload).find((r) => r.scene === scene));
 }
 
 export { getEffectiveProviders, getEffectiveRoutes, resolveSceneRoute, type RuntimeLocaleGroup, type RuntimeSceneKey } from "@/lib/runtime-providers";

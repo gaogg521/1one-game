@@ -129,18 +129,18 @@ function resolveGeminiImageConfig(localeGroup?: RuntimeLocaleGroup): { base: str
   return { base, key, model };
 }
 
-export function getImageGenAvailability(): {
+export function getImageGenAvailability(localeGroup?: RuntimeLocaleGroup): {
   ok: boolean;
   message: string;
   openaiModel: string;
   hasOpenAI: boolean;
   hasGemini: boolean;
 } {
-  const openaiCtx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai");
-  const geminiCfg = resolveGeminiImageConfig();
+  const openaiCtx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_openai", localeGroup);
+  const geminiCfg = resolveGeminiImageConfig(localeGroup);
   const hasOpenAI = Boolean(openaiCtx?.provider.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim());
   const hasGemini = Boolean(geminiCfg?.key);
-  const openaiModel = getImageGenOpenAIModel();
+  const openaiModel = getImageGenOpenAIModel(localeGroup);
   if (!hasOpenAI && !hasGemini) {
     return {
       ok: false,
@@ -155,7 +155,7 @@ export function getImageGenAvailability(): {
     ok: true,
     message: hasOpenAI
       ? `将经 ${openaiLabel} 调用 ${openaiModel}（短篇可一次 n=4 批量，约 2～8 分钟）`
-      : `将使用 Gemini ${getImageGenGeminiModel()}`,
+      : `将使用 Gemini ${getImageGenGeminiModel(localeGroup)}`,
     openaiModel,
     hasOpenAI,
     hasGemini,

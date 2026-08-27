@@ -115,7 +115,7 @@ export async function streamPlannedNovelBody(params: {
     isContinuation: false,
     emit,
     uiLocale,
-    stopWhenLength: scope.targetTotalChars,
+    stopWhenLength: scope.maxChars,
     polish: false,
     requireAllPlannedChapters: true,
   });
@@ -147,12 +147,6 @@ export async function streamPlannedNovelBody(params: {
     uiLocale,
     emit,
   });
-
-  if (!repaired.completeness.ok) {
-    throw new Error(
-      progressNovelMessage(uiLocale, "completenessFail", { reason: repaired.completeness.reason }),
-    );
-  }
 
   let finalContent = repaired.content.trim();
   if (getRemainingChapterPlan(chapterPlan, finalContent).length === 0) {

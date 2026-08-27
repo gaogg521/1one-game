@@ -18,6 +18,7 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { llmJson } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 
 export type GameCriticDim =
   | "pacing" // 节奏：director 4 幕 + 5-8 事件类型多样
@@ -95,13 +96,15 @@ const SCHEMA = {
  * 评一次。失败返回 null，调用方可静默回退（不阻塞主链路）。
  */
 export async function critiqueGameSpec(spec: GameSpec, userPrompt: string): Promise<GameCriticVerdict | null> {
-  const route = resolveGameModelRoute({ prompt: userPrompt });
+  const localeGroup = await runtimeLocaleGroupForCurrentRequest();
+  const route = resolveGameModelRoute({ prompt: userPrompt, localeGroup });
   // 评论员可以用更便宜的模型（取 cascade 的第一个）
   for (const model of route.models.slice(0, 2)) {
     try {
       const res = await llmJson({
         model,
         scene: route.scene,
+        localeGroup,
         system: SYSTEM,
         user: `用户原 prompt：\n${userPrompt}\n\n待评审的 GameSpec：\n${JSON.stringify(spec).slice(0, 6000)}`,
         temperature: 0.2,

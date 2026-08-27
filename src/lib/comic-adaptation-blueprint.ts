@@ -1,6 +1,7 @@
 import { formatCharacterRosterForPrompt, type ComicCharacterRoster } from "@/lib/comic-character-roster";
 import type { NovelChapter } from "@/lib/novel-chapters";
 import { llmJson } from "@/lib/llm";
+import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import type { ComicPlotDigest } from "@/lib/comic-preread";
 import { formatPlotDigestForPrompt } from "@/lib/comic-preread";
 
@@ -56,6 +57,7 @@ export async function fetchComicAdaptationBlueprint(params: {
   chapters: NovelChapter[];
   plotDigest: ComicPlotDigest;
   characterRoster: ComicCharacterRoster;
+  localeGroup?: RuntimeLocaleGroup;
 }): Promise<ComicAdaptationBlueprint | null> {
   if (params.chapters.length === 0) return null;
 
@@ -69,6 +71,8 @@ export async function fetchComicAdaptationBlueprint(params: {
 
   const result = await llmJson({
     model: params.model,
+    scene: "comic_storyboard",
+    localeGroup: params.localeGroup,
     system: `你是漫画改编总策划。在已给出的全书精读与人设锁定前提下：
 1. consistencyLock：用 2–4 句话写清全书人物外貌/称呼/主要场景的视觉一致性约束，禁止前后矛盾。
 2. 对每一章输出 4–8 条 keyBeats：必须是该章最值得画成漫画格的关键情节瞬间（冲突、决定、反转、高潮），禁止泛泛概述或重复上一章。

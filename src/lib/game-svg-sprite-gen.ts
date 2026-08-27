@@ -7,6 +7,8 @@ import path from "path";
 import type { GameSpec } from "@/lib/game-spec";
 import { repoPublicPath } from "@/lib/public-path";
 import { llmText } from "@/lib/llm";
+import { getSceneModelCascade } from "@/lib/runtime-config";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 
 const SPRITE_DIR = repoPublicPath("game-sprites");
 
@@ -167,8 +169,12 @@ async function generateOneSvg(spec: GameSpec, kind: SvgSpriteKind, dir: string):
 
   const userPrompt = buildSvgPrompt(spec, kind);
   try {
+    const localeGroup = await runtimeLocaleGroupForCurrentRequest();
+    const model = getSceneModelCascade("game_text", localeGroup)[0] ?? "gpt-4.1-mini";
     const result = await llmText({
-      model: "gpt-4.1-mini",
+      model,
+      scene: "game_text",
+      localeGroup,
       system: SYSTEM_PROMPT,
       user: userPrompt,
       maxTokens: 1200,

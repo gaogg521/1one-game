@@ -23,6 +23,7 @@ import {
 import { resolveAgenticPlayRoute, stampAgenticPlayRoute, stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
 
@@ -166,7 +167,8 @@ export async function generateAgenticGameModule(
     }
   }
 
-  const gameRoute = resolveGameModelRoute({ prompt });
+  const localeGroup = await runtimeLocaleGroupForCurrentRequest();
+  const gameRoute = resolveGameModelRoute({ prompt, localeGroup });
   const models = gameRoute.models;
   if (!models.length || !getActiveProvider()) {
     orch?.note("agentic_gen_result", { source: "fallback", reason: "no_llm" });
@@ -190,6 +192,7 @@ export async function generateAgenticGameModule(
         const result = await llmJson({
           model,
           scene: gameRoute.scene,
+          localeGroup,
           system,
           user,
           temperature: attempt === 0 ? 0.52 : 0.35,
@@ -238,6 +241,8 @@ export async function generateAgenticGameModule(
           try {
             const repairResult = await llmJson({
               model,
+              scene: gameRoute.scene,
+              localeGroup,
               system,
               user: repairUser,
               temperature: 0.32,

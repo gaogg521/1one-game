@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { getNovelStyleTextModelCascade, llmJson } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { PRODUCT } from "@/lib/product-config";
 import {
   NOVEL_CREATIVE_BRIEF_SCHEMA,
@@ -94,10 +95,10 @@ export async function llmExpandNovelBrief(
   if (!PRODUCT.novel.creativeBriefLlm) return base;
 
   // 创意 Brief 是小说流水线的一部分，必须与正文使用同一可配置模型池。
-  const models = getNovelStyleTextModelCascade();
+  const locale = base.inputLocale ?? detectBriefInputLocale(base.userPrompt);
+  const models = getNovelStyleTextModelCascade(runtimeLocaleGroup(locale));
   if (!models.length) return base;
 
-  const locale = base.inputLocale ?? detectBriefInputLocale(base.userPrompt);
   const lang =
     locale === "zh"
       ? "简体中文"
@@ -125,6 +126,8 @@ export async function llmExpandNovelBrief(
     try {
       const res = await llmJson({
         model,
+        scene: "novel",
+        localeGroup: runtimeLocaleGroup(locale),
         system,
         user:
           `类型：${base.genreLabel}\n` +

@@ -30,8 +30,8 @@ function dedupeModelIds(ids: string[]): string[] {
 }
 
 /** 游戏文本链路默认池（无参考图）；请优先使用 resolveGameModelRoute / getGameModelCascade */
-export function getModelCascade(): string[] {
-  const fromRoute = getSceneModelCascade("game_text");
+export function getModelCascade(localeGroup?: RuntimeLocaleGroup): string[] {
+  const fromRoute = getSceneModelCascade("game_text", localeGroup);
   if (fromRoute.length) return dedupeModelIds(fromRoute);
   const { gameTextPrimary, gameTextFallbacks, gamePrimary, gameFallbacks } = getEffectiveModels();
   return dedupeModelIds([
@@ -50,8 +50,8 @@ export {
 } from "@/lib/game-model-route";
 
 /** 小说正文、漫画分镜 JSON */
-export function getNovelStyleTextModelCascade(): string[] {
-  const fromRoute = getSceneModelCascade("novel");
+export function getNovelStyleTextModelCascade(localeGroup?: RuntimeLocaleGroup): string[] {
+  const fromRoute = getSceneModelCascade("novel", localeGroup);
   if (fromRoute.length) return dedupeModelIds(fromRoute);
   const { novelTextPrimary, novelTextFallback } = getEffectiveModels();
   return dedupeModelIds([
@@ -61,17 +61,17 @@ export function getNovelStyleTextModelCascade(): string[] {
 }
 
 /** 长篇设定圣经 / 章规划 JSON（可走独立 LiteLLM 池） */
-export function getNovelPlanModelCascade(): string[] {
-  const fromRoute = getSceneModelCascade("novel_plan");
+export function getNovelPlanModelCascade(localeGroup?: RuntimeLocaleGroup): string[] {
+  const fromRoute = getSceneModelCascade("novel_plan", localeGroup);
   if (fromRoute.length) return dedupeModelIds(fromRoute);
-  return getNovelStyleTextModelCascade();
+  return getNovelStyleTextModelCascade(localeGroup);
 }
 
 /** 漫画分镜 / 导演包 JSON（可与正文分池） */
-export function getComicStoryboardModelCascade(): string[] {
-  const fromRoute = getSceneModelCascade("comic_storyboard");
+export function getComicStoryboardModelCascade(localeGroup?: RuntimeLocaleGroup): string[] {
+  const fromRoute = getSceneModelCascade("comic_storyboard", localeGroup);
   if (fromRoute.length) return dedupeModelIds(fromRoute);
-  return getNovelStyleTextModelCascade();
+  return getNovelStyleTextModelCascade(localeGroup);
 }
 
 export function getImageGenOpenAIModel(localeGroup?: RuntimeLocaleGroup): string {

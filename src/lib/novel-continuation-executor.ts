@@ -2,6 +2,7 @@ import type { Novel } from "@prisma/client";
 import type { AppLocale } from "@/i18n/routing";
 import { emitGenerateServeLog } from "@/lib/api/generate-serve-log";
 import { getActiveProvider, getNovelStyleTextModelCascade } from "@/lib/llm";
+import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { mirrorNovelToCreatorCore } from "@/lib/creator-core/novel-bridge";
 import { progressNovelMessage } from "@/lib/i18n/progress-message";
 import { generateNovelSynopsis } from "@/lib/novel-synopsis";
@@ -58,7 +59,7 @@ export async function executeNovelContinuation(input: {
   const { novel, meta, uiLocale } = input;
   const emit = input.emit ?? (() => undefined);
   const dependencies = input.dependencies ?? {};
-  const models = dependencies.models ?? getNovelStyleTextModelCascade();
+  const models = dependencies.models ?? getNovelStyleTextModelCascade(runtimeLocaleGroup(uiLocale));
   const providerLabel = dependencies.providerLabel ?? getActiveProvider();
   const continueLong = dependencies.continueLong ?? streamLongNovelContinue;
   const assessCompleteness = dependencies.assessCompleteness ?? assessNovelCompleteness;
