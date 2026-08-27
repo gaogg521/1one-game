@@ -10,7 +10,7 @@ import { resolveGameModelRoute, type GameModelRouteInput } from "@/lib/game-mode
 import { runtimeLocaleGroup, runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { RuntimeLocaleGroup, RuntimeSceneKey } from "@/lib/runtime-providers";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
-import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { applyExplicitPromptGoals, mockSpecFromPrompt } from "@/lib/mock-spec";
 import {
   buildGameGenerationPlan,
   compileGameGenerationPlan,
@@ -604,7 +604,10 @@ function finalizeSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
-  return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt);
+  return applyExplicitPromptGoals(
+    applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt),
+    prompt,
+  );
 }
 
 function gameLlmCallTimeoutMs(configured: number): number {

@@ -19,6 +19,14 @@ async function main() {
     assert.ok(debug.kernelPlan?.coreLoop, "must expose an inspectable core loop");
     assert.equal(debug.fallback, false, "kernel compile is not an LLM fallback");
   }
+  const fireflyPrompt = "做一个手机单手玩的萤火虫护送小游戏：手指左右移动，引导萤火虫穿过夜森林，避开蜘蛛网，收集三颗月光种子";
+  const firefly = await generateGameSpecWithMeta(fireflyPrompt);
+  assert.equal(firefly.spec.templateId, "collector", "firefly escort must compile to the collector runtime");
+  assert.equal(firefly.spec.title, "萤火虫护送", "title must describe the game rather than repeat the request boilerplate");
+  assert.equal(firefly.spec.labels.player, "萤火虫", "player label must not capture an unrelated sentence fragment");
+  assert.equal(firefly.spec.labels.hazard, "蜘蛛网", "explicit hazards must outrank a generic forest hazard");
+  assert.equal(firefly.spec.labels.collectible, "三颗月光种子", "explicit collectibles must remain aligned with the request");
+  assert.equal(firefly.spec.gameplay.winScore, 3, "an explicit three-item win condition must stay three, not become a generic score target");
   console.log(`[OK] qa-game-generation-kernel: ${cases.length} intents compiled into tested runtimes`);
 }
 

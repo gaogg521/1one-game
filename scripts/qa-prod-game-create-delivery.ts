@@ -164,13 +164,39 @@ async function main() {
     }
     assert((await promptInput.inputValue()) === prompt, "创作输入没有进入 React 受控状态");
     assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
+    const generationResponsePromise = page.waitForResponse(
+      (response) => response.url().includes("/api/generate/stream") && response.request().method() === "POST",
+      { timeout: 30_000 },
+    );
     await generateButton.click();
+    const generationResponse = await generationResponsePromise;
+    const generationBodyPromise = generationResponse.text();
     stages.push({ at: new Date().toISOString(), stage: "generation_started", detail: { promptChars: prompt.length } });
 
     const saveButton = page.getByRole("button", { name: /保存并打开/i });
     await saveButton.waitFor({ state: "visible", timeout: 5 * 60_000 });
     await saveButton.waitFor({ state: "visible" });
     assert(await saveButton.isEnabled(), "生成完成但保存按钮不可用");
+    const generationBody = await generationBodyPromise;
+    const generationEvents = generationBody
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => {
+        try { return JSON.parse(line.slice(6)) as Record<string, unknown>; } catch { return null; }
+      })
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+    const generationDone = [...generationEvents].reverse().find((entry) => entry.step === "done");
+    const generationDebug = generationDone?.debug as { fallback?: unknown; fallbackReason?: unknown; provider?: unknown; model?: unknown } | undefined;
+    summary.generation = {
+      source: generationDone?.source ?? null,
+      fallback: generationDebug?.fallback ?? null,
+      fallbackReason: generationDebug?.fallbackReason ?? null,
+      provider: generationDebug?.provider ?? null,
+      model: generationDebug?.model ?? null,
+    };
+    stages.push({ at: new Date().toISOString(), stage: "model_generation_verified", detail: summary.generation });
+    assert(generationDone, "生成 SSE 缺少完成帧");
+    assert(generationDebug?.fallback !== true, `游戏正文模型未打通：${String(generationDebug?.fallbackReason ?? "unknown fallback")}`);
     const previewTitle = (await page.locator("main h2").first().textContent())?.trim() ?? "";
     await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
     stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });

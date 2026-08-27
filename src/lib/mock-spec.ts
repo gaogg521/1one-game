@@ -36,7 +36,12 @@ function extractTitle(prompt: string, seed: number): string {
   const t = prompt.trim();
   if (!t) return pick(["星际小游戏", "奇妙冒险", "指尖挑战"], seed, 0);
   const first = t.split(/[。！？\n]/)[0]?.trim() ?? t;
-  const core = first.replace(/^[\s"'「」]+|[\s"'」]+$/g, "");
+  const subject = /的([^，。！？：:\s]{2,14}?)(?:小游戏|游戏)/.exec(first)?.[1];
+  const core = (subject ?? first)
+    .replace(/^[\s"'「」]+|[\s"'」]+$/g, "")
+    .replace(/^(?:请)?(?:帮我)?(?:设计|制作|创建|生成|做)(?:一个|一款)?/, "")
+    .replace(/(?:小游戏|游戏)$/, "")
+    .trim();
   if (core.length <= 28) return core.slice(0, 80);
   return `${core.slice(0, 26)}…`;
 }
@@ -54,7 +59,7 @@ function guessLabels(prompt: string): {
 
   const role =
     /(?:操控|扮演|控制|我是|扮演一只|扮演一个)([^，。！？\s]{1,8})/.exec(prompt)?.[1] ??
-    /([\u4e00-\u9fa5]{2,6})(?:在|于)/.exec(prompt)?.[1];
+    /(?:引导|护送|帮助)([^，。；！？\s]{1,8}?)(?:穿过|通过|抵达|前往|避开|收集)/.exec(prompt)?.[1];
   const hazardGuess =
     /(?:躲避|躲开|避开|躲)([^，。！？\s]{1,8})/.exec(prompt)?.[1] ??
     /(?:陨石|陷阱|敌人|障碍|弹幕|滚木|墨汁)/.exec(prompt)?.[0];
@@ -77,6 +82,29 @@ export type MockSpecOptions = {
   subtitle?: string;
   sampleId?: string;
 };
+
+export function applyExplicitPromptGoals(spec: GameSpec, prompt: string): GameSpec {
+  const countToken = /(?:收集|捡起|拾取)([一二三四五六七八九十两\d]{1,3})(?:颗|个|枚|件|朵|只)/.exec(prompt)?.[1];
+  const chineseSmallNumbers: Record<string, number> = {
+    一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  };
+  const target = countToken
+    ? /^\d+$/.test(countToken)
+      ? Number(countToken)
+      : chineseSmallNumbers[countToken]
+    : undefined;
+  if (spec.templateId !== "collector" || !target || target < 1 || target > 20) return spec;
+  return {
+    ...spec,
+    gameplay: { ...spec.gameplay, winScore: target },
+    collector: spec.collector
+      ? {
+          ...spec.collector,
+          items: spec.collector.items.map(({ isGolden: _isGolden, ...item }) => ({ ...item, points: 1 })),
+        }
+      : spec.collector,
+  };
+}
 
 export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): GameSpec {
   const p = prompt.toLowerCase();
@@ -210,6 +238,8 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
 
   const baseHazardLabel = isRooc
     ? "魔物"
+    : guessed.hazard !== "障碍"
+      ? guessed.hazard
     : space
       ? "陨石"
       : ocean
@@ -335,5 +365,6 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
     spec.systems = buildSystems({ prompt, spec });
   }
 
-  return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(spec)), prompt);
+  const finalized = applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(spec)), prompt);
+  return applyExplicitPromptGoals(finalized, prompt);
 }

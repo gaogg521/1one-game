@@ -10,6 +10,7 @@ import { generateSvgSprites } from "@/lib/game-svg-sprite-gen";
 import { generateGameCoverFromBrief } from "@/lib/game-brief-comfy-cover";
 import { buildRuntimeAssetManifest } from "@/lib/assets/asset-runtime-resolver";
 import { PRODUCT } from "@/lib/product-config";
+import { completeRequiredGameAssets } from "@/lib/game-asset-fallback";
 
 export type ProjectAssetPipelineResult = {
   backgroundUrl: string | null;
@@ -39,11 +40,20 @@ export async function runProjectAssetPipeline(
   const brief = opts.brief ?? null;
 
   // SVG sprites（文本 LLM，快速）与背景/PNG sprites 并行
-  const [backgroundUrl, sprites] = await Promise.all([
+  const [generatedBackgroundUrl, svgSprites, pngSprites] = await Promise.all([
     generateGameBackground(opts.projectId, opts.spec, brief),
     generateSvgSprites(opts.projectId, opts.spec).catch(() => []), // SVG first — no image API needed
     generateGameSprites(opts.projectId, opts.spec, uiLocale, brief),
-  ]).then(([bg, _svgResults, pngSprites]) => [bg, pngSprites] as const);
+  ]);
+  const completed = await completeRequiredGameAssets({
+    projectId: opts.projectId,
+    spec: opts.spec,
+    backgroundUrl: generatedBackgroundUrl,
+    pngSprites,
+    svgSprites,
+  });
+  const backgroundUrl = completed.backgroundUrl;
+  const sprites = completed.sprites;
 
   const spritePayload = sprites.filter((s) => s.url).map((s) => ({ kind: s.kind, url: s.url! }));
   const assetManifest = buildRuntimeAssetManifest({
