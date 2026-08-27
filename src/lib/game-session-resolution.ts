@@ -25,3 +25,20 @@ export function collectorDeadlineOutcome(input: {
     won: input.score >= (input.spec.gameplay.winScore ?? 40),
   };
 }
+
+const COLLECTOR_OPENING_FRIENDLY_MS = 60_000;
+
+/**
+ * Opening minute stays non-lethal so a first-play session can actually last
+ * long enough for first-minute telemetry. After that, honor the authored penalty.
+ */
+export function collectorHitPenalty(input: {
+  hazardPenalty?: "loseLife" | "loseScore" | "none";
+  playElapsedMs: number;
+  openingFriendlyMs?: number;
+}): "loseLife" | "loseScore" | "none" {
+  if (input.playElapsedMs < (input.openingFriendlyMs ?? COLLECTOR_OPENING_FRIENDLY_MS)) {
+    return input.hazardPenalty === "none" ? "none" : "loseScore";
+  }
+  return input.hazardPenalty ?? "loseLife";
+}

@@ -173,6 +173,25 @@ async function main() {
     if (message.type() === "error") stages.push({ at: new Date().toISOString(), stage: "browser_console_error", detail: message.text() });
   });
 
+  const dumpFailure = async (label: string) => {
+    try {
+      await fs.mkdir(outputDir, { recursive: true });
+      await page.screenshot({ path: path.join(outputDir, `${label}.png`), fullPage: true });
+      const visible = await page.locator("main").innerText().catch(() => "");
+      stages.push({
+        at: new Date().toISOString(),
+        stage: "failure_dump",
+        detail: { label, url: page.url(), visible: visible.slice(0, 2_000) },
+      });
+    } catch (dumpError) {
+      stages.push({
+        at: new Date().toISOString(),
+        stage: "failure_dump_error",
+        detail: dumpError instanceof Error ? dumpError.message : String(dumpError),
+      });
+    }
+  };
+
   try {
     await page.goto(`${baseUrl}/${locale}/create`, { waitUntil: "domcontentloaded", timeout: 45_000 });
     assert(await page.locator("textarea").first().isVisible(), "创作输入框不可见");
@@ -221,7 +240,14 @@ async function main() {
     stages.push({ at: new Date().toISOString(), stage: "generation_started", detail: { promptChars: prompt.length } });
 
     const saveButton = page.getByRole("button", { name: /保存并打开/i });
-    await saveButton.waitFor({ state: "visible", timeout: 5 * 60_000 });
+    // Draft/enhance each cap at 300s; brief + critic can add another minute or two.
+    const saveWaitMs = Number(process.env.QA_GAME_SAVE_WAIT_MS) || 12 * 60_000;
+    try {
+      await saveButton.waitFor({ state: "visible", timeout: saveWaitMs });
+    } catch (waitError) {
+      await dumpFailure("save-button-timeout");
+      throw waitError;
+    }
     assert(await saveButton.isEnabled(), "生成完成但保存按钮不可用");
     for (let i = 0; i < 20 && !generationBody.includes('"step":"done"'); i += 1) {
       await page.waitForTimeout(250);
@@ -309,7 +335,12 @@ async function main() {
       detail: { revisionId, templateId: created.spec?.templateId, assetJob: created.assetJob?.status ?? "none" },
     });
 
-    await playUntilDeliveryEvidence(page, stages);
+    try {
+      await playUntilDeliveryEvidence(page, stages);
+    } catch (playError) {
+      await dumpFailure("play-timeout");
+      throw playError;
+    }
     const ready = await waitForDeliveryArtifacts(page, projectId, stages);
     await verifyRuntimeAssets(page, ready, stages);
     const artifacts = ready.core?.revision?.artifacts ?? [];

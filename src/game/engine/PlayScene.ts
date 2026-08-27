@@ -82,7 +82,7 @@ import {
   hudDefaultSkill,
   playStageMessage,
 } from "@/lib/i18n/game-hud-labels";
-import { collectorDeadlineOutcome, gameDeliveryDeadlineMs } from "@/lib/game-session-resolution";
+import { collectorDeadlineOutcome, collectorHitPenalty, gameDeliveryDeadlineMs } from "@/lib/game-session-resolution";
 
 type EndPayload = { score: number; won: boolean };
 type DirectorEvent = NonNullable<NonNullable<GameSpec["director"]>["events"]>[number];
@@ -155,7 +155,11 @@ export class PlayScene extends Phaser.Scene {
   private finished = false;
   private actorState = new RuntimeActorStateMachine();
 
-  private invulnUntil = 0;
+  /** Remaining hit-immune time. Phaser Clock.now is RAF time since page load, so do not compare it to create()-time stamps. */
+  private invulnRemainingMs = 0;
+
+  /** Scene-local elapsed play time from update deltas. */
+  private playElapsedMs = 0;
 
   private pad = 40;
 
@@ -296,7 +300,9 @@ export class PlayScene extends Phaser.Scene {
     this.winScore = this.spec.gameplay.winScore ?? 40;
     this.deliveryDeadlineMs = gameDeliveryDeadlineMs(this.spec);
     this.lives = this.spec.gameplay.lives ?? 3;
-    if (this.spec.templateId === "collector") this.invulnUntil = this.time.now + 4_000;
+    this.playElapsedMs = 0;
+    this.invulnRemainingMs = 0;
+    if (this.spec.templateId === "collector") this.invulnRemainingMs = 4_000;
     this.intensity = this.spec.director?.intensity ?? 0.58;
 
     const ui = buildSceneCohesion(this.spec);
@@ -577,7 +583,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.hazards, (_p, h) => {
       if (this.finished) return;
-      if ((this.spec.templateId === "survivor" || this.spec.templateId === "avoider" || this.spec.templateId === "collector") && this.time.now < this.invulnUntil) return;
+      if (this.isHitImmune()) return;
       const hazard = h as Phaser.Physics.Arcade.Image;
       // 重型敌人需要多次击杀
       const hp: number = hazard.getData("hp") ?? 1;
@@ -1025,15 +1031,16 @@ export class PlayScene extends Phaser.Scene {
         );
       }
       for (let i = 0; i <= extraHazards; i += 1) {
+        if (this.invulnRemainingMs > 0) break;
         this.spawnHazard(
           Phaser.Math.Between(margin, width - margin),
-          Phaser.Math.Between(120, this.scale.height - 120),
+          -40 - i * 28,
         );
       }
-      if (this.time.now < this.miniBossUntil && Phaser.Math.Between(0, 1) === 0) {
+      if (this.invulnRemainingMs <= 0 && this.time.now < this.miniBossUntil && Phaser.Math.Between(0, 1) === 0) {
         this.spawnEliteHazard();
       }
-      if (isFinale && Phaser.Math.Between(0, 1) === 0) {
+      if (this.invulnRemainingMs <= 0 && isFinale && Phaser.Math.Between(0, 1) === 0) {
         this.spawnEliteHazard();
       }
       if (
@@ -1107,7 +1114,7 @@ export class PlayScene extends Phaser.Scene {
     const { width } = this.scale;
     const collectorMode = this.spec.templateId === "collector";
     const x = Phaser.Math.Between(90, width - 90);
-    const y = collectorMode ? Phaser.Math.Between(100, this.scale.height - 100) : -70;
+    const y = -70;
     const h = this.hazards.create(x, y, "texHazard");
     h.setDepth(6);
     h.setScale(collectorMode ? 1.42 : 1.55);
@@ -1833,7 +1840,7 @@ export class PlayScene extends Phaser.Scene {
       const old = this.intensity;
       // dash：短时间提升操控速度（不改 spec）
       this.intensity = Math.max(0.2, old - 0.12);
-      this.invulnUntil = Math.max(this.invulnUntil, this.time.now + 520);
+      this.invulnRemainingMs = Math.max(this.invulnRemainingMs, 520);
       this.time.delayedCall(boostUntil - this.time.now, () => {
         this.intensity = old;
       });
@@ -1849,6 +1856,10 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  private isHitImmune(): boolean {
+    return this.invulnRemainingMs > 0;
+  }
+
   private hitHazard() {
     if (this.finished) return;
 
@@ -1856,7 +1867,7 @@ export class PlayScene extends Phaser.Scene {
       // A mobile one-screen avoider can present several overlapping waves at
       // once. A readable recovery window prevents one contact from cascading
       // through every configured life before the player can reposition.
-      this.invulnUntil = this.time.now + 7_500;
+      this.invulnRemainingMs = Math.max(this.invulnRemainingMs, 7_500);
       this.lives -= 1;
       this.fxDamage();
       this.player.setAlpha(0.35);
@@ -1872,7 +1883,7 @@ export class PlayScene extends Phaser.Scene {
 
     if (this.spec.templateId === "survivor") {
       this.survivorDodgeStreak = 0;
-      this.invulnUntil = this.time.now + 720;
+      this.invulnRemainingMs = Math.max(this.invulnRemainingMs, 720);
       this.lives -= 1;
       this.fxDamage();
       this.player.setAlpha(0.35);
@@ -1889,7 +1900,10 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (this.spec.templateId === "collector") {
-      const penalty = this.spec.collector?.hazardPenalty ?? "loseLife";
+      const penalty = collectorHitPenalty({
+        hazardPenalty: this.spec.collector?.hazardPenalty,
+        playElapsedMs: this.playElapsedMs,
+      });
       this.collectorCombo = 0;
       this.lastCollectorPickupAt = 0;
       this.fxDamage();
@@ -1899,13 +1913,14 @@ export class PlayScene extends Phaser.Scene {
       }
       if (penalty === "loseScore") {
         this.score = Math.max(0, this.score - Math.max(2, Math.floor(this.score * 0.08)));
+        this.invulnRemainingMs = Math.max(this.invulnRemainingMs, 720);
         this.refreshHud();
         return;
       }
       // loseLife: lose a life, then give a recovery window so overlapping
       // hazards cannot drain every life in a single frame.
       this.lives -= 1;
-      this.invulnUntil = this.time.now + 1_500;
+      this.invulnRemainingMs = Math.max(this.invulnRemainingMs, 1_500);
       this.player.setAlpha(0.35);
       this.time.delayedCall(200, () => this.player.setAlpha(1));
       this.refreshHud();
@@ -1976,9 +1991,11 @@ export class PlayScene extends Phaser.Scene {
   update(_time: number, delta = 16) {
     this.goalPanel?.update();
     if (this.finished) return;
+    this.playElapsedMs += Math.max(0, delta);
+    this.invulnRemainingMs = Math.max(0, this.invulnRemainingMs - Math.max(0, delta));
     const deadlineOutcome = collectorDeadlineOutcome({
       spec: this.spec,
-      elapsedMs: this.time.now,
+      elapsedMs: this.playElapsedMs,
       score: this.score,
     });
     if (deadlineOutcome) {
@@ -2067,7 +2084,7 @@ export class PlayScene extends Phaser.Scene {
     const ptrX = pointerSteerX(this, this.player.x);
     const vx = (kb.x !== 0 ? kb.x : ptrX) * speed;
     this.player.setVelocityX(vx);
-    this.actorState.set(this.time.now < this.invulnUntil ? "hit" : Math.abs(vx) > 8 ? "move" : "idle", this.time.now);
+    this.actorState.set(this.isHitImmune() ? "hit" : Math.abs(vx) > 8 ? "move" : "idle", this.time.now);
     this.publishActorState();
     this.player.setVelocityY(0);
     this.player.y = height - this.pad;
