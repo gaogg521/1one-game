@@ -5,6 +5,7 @@
  * 业务页通过 useTheme / useClipboardImageQueue 消费，不要把粘贴监听散落在各路由。
  */
 import { DevCanonicalOriginBanner } from "@/components/DevCanonicalOriginBanner";
+import { StaleBundleRecovery } from "@/components/StaleBundleRecovery";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ClipboardImageQueueProvider } from "@/providers/ClipboardImageQueueProvider";
 
@@ -12,6 +13,7 @@ export function AppCapabilitiesRoot({ children }: { children: React.ReactNode })
   return (
     <ThemeProvider>
       <ClipboardImageQueueProvider>
+        <StaleBundleRecovery />
         <DevCanonicalOriginBanner />
         {children}
       </ClipboardImageQueueProvider>

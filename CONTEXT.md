@@ -1,28 +1,56 @@
 # 项目工作进度快照
-最后更新：2026-08-28（管理员封面：上传入口 + 坏链不自动重生）
+最后更新：2026-08-28（过期分块自动刷新）
 
 ## 当前状态
+- 「页面加载失败 / 请重启 npm run dev」是 `app/error.tsx`。生产上最常见原因是**刚发布后旧页还握着已替换的 JS 分块**（`ChunkLoadError`），不是本地 dev。
+- 已加：过期分块自动 `location.reload()` 一次（20s 冷却防死循环）；生产文案改为「站点可能刚更新」；`npm run dev` 提示只在开发模式显示。
+- 验证：`npx tsc --noEmit`、`npm run qa:stale-client-bundle`。
+
+## 本会话修改文件表
+- `src/lib/stale-client-bundle.ts` / `src/components/StaleBundleRecovery.tsx`
+- `src/app/error.tsx` / `src/app/global-error.tsx`
+- `src/providers/AppCapabilitiesRoot.tsx`
+- `src/messages/*` 的 `errors.globalDesc*`
+- `scripts/qa-stale-client-bundle.ts`
+
+## 下次启动清单
+1. 部署后：不要关旧标签硬点进站，应自动刷新一次；仍失败才看到错误页（不再提 npm run dev）。
+2. 强刷 https://operone.1oneclaw.com/zh-Hans/novel/cmqds0lkr0001jm60q5ytvniq 确认封面旁上传按钮仍在。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · 页面加载失败频繁
+- 用户截图错误页写着重启 npm run dev，生产也会显示。
+- 根因：发布后 ChunkLoadError + 错误文案写死成开发提示。
+- 状态：待 commit / push / deploy。
+
+# 项目工作进度快照
+最后更新：2026-08-28（后台作品仅切换本页选择）
+
+## 当前状态
+- 管理后台「最近作品」的批量选择只作用于当前分页；全选后按钮变为「取消全选本页」，不会再将全部筛选结果（如 93 条）一并勾选。
 - 编译：`npx tsc --noEmit` 通过；`npm run qa:cover-heal` 通过。
 - 《小奇的战场梦》`cmqds0lkr0001jm60q5ytvniq`：封面位「失效/点击重试」是坏链；点缩略图会 **force POST** 重生。坏链 **不再自动 POST**（避免一进页就刷「封面生成失败」）。
 - 管理员用 `canInspectAnyWork` 打开别人的小说/漫画时，详情 API 返回 `canManageCover=true`。封面缩略图旁有 **重做封面 / 上传封面**（不再藏在横向工具条、也不再只给 `isOwner`）。
 - 点重试不会先把死链图闪回来（`retryCover` 保持 `brokenCover` 直到新图成功）；同路径 force 重生会 cache-bust。
 
 ## 本会话修改文件表
+- `src/components/admin/AdminConsolePage.tsx` — 全选按钮改为当前页可逆选择。
+- `src/messages/{zh-Hans,zh-Hant,en,ms,th}.json` — 新增当前页选择/取消选择文案。
 - `src/hooks/use-auto-work-cover.tsx` — 坏链不自动生成；重试不闪死链；force 同路径可接受
 - `src/app/api/novel/[id]/route.ts` / `comic/[id]/route.ts` — `canManageCover`
 - `src/app/novel/[id]/page.tsx` — 封面旁上传/重做，管理员可见
 - `src/app/comic/[id]/page.tsx` + `ComicDetailCoverPreview.tsx` — 同样用 `canManageCover`
 
 ## 下次启动清单
-1. 部署后用管理员打开 https://operone.1oneclaw.com/zh-Hans/novel/cmqds0lkr0001jm60q5ytvniq ：封面旁应有「重做封面」「上传封面」。
-2. 点缩略图「点击重试」应走生成；失败只出红字，不要自动连打。旁边可上传 jpeg/png/webp。
-3. 漫画详情同样验证管理员能上传封面。
+1. 部署后确认「最近作品」仅全选当前页，再点击可取消当前页选择。
+2. 用管理员打开 https://operone.1oneclaw.com/zh-Hans/novel/cmqds0lkr0001jm60q5ytvniq ：封面旁应有「重做封面」「上传封面」。
+3. 点缩略图「点击重试」应走生成；失败只出红字，不要自动连打。旁边可上传 jpeg/png/webp。
 
 ## 会话记录（按日期追加）
 ### 2026-08-28 · 管理员封面入口
 - 现象：编号能复制，封面失效且点重试无效；管理员看不到上传。
 - 根因：坏链 `onError` 触发自动 POST；封面按钮只给 `isOwner`；重试先清 `brokenCover` 导致死链 img 再 error。
-- 状态：待 commit / push / deploy。
+- 状态：已上线 `12c7686a`，`DEPLOY_OK @ operone.1oneclaw.com`。
 
 # 项目工作进度快照
 最后更新：2026-08-28（线上生效表合并语言覆盖）

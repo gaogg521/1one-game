@@ -447,7 +447,9 @@
   },
   "errors": {
     "globalTitle": "Halaman gagal dimuatkan",
-    "globalDesc": "Jika anda baru menjalankan ujian panjang atau mengubah konfigurasi dalam mod pembangunan, mulakan semula npm run dev dan cuba lagi.",
+    "globalDesc": "Halaman tidak dapat dibuka. Tapak mungkin baru dikemas kini — ketik Cuba semula atau muat semula.",
+    "globalDescDev": "Dalam mod pembangunan, jika anda baru menjalankan ujian panjang atau mengubah konfigurasi, mulakan semula npm run dev dan cuba lagi.",
+    "globalDescStale": "Tapak baru dikemas kini. Memuatkan halaman terbaru…",
     "notFoundTitle": "Karya ini tidak ditemui",
     "notFoundDesc": "Pautan mungkin telah tamat tempoh, atau karya telah dipadam.",
     "goCreate": "Mula Mencipta"

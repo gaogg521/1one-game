@@ -447,7 +447,9 @@
   },
   "errors": {
     "globalTitle": "頁面載入失敗",
-    "globalDesc": "開發模式下若剛跑過長測試或改了設定，請重啟 npm run dev 後再試。",
+    "globalDesc": "頁面暫時打不開。網站可能剛更新，請點「重試」或重新整理瀏覽器。",
+    "globalDescDev": "本機開發時若剛跑過長測試或改了設定，請重啟 npm run dev 後再試。",
+    "globalDescStale": "網站剛更新，正在載入最新頁面…",
     "notFoundTitle": "找不到這個作品",
     "notFoundDesc": "連結可能已失效，或作品已被刪除。",
     "goCreate": "去創作"

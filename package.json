@@ -184,6 +184,7 @@
     "qa:studio-batch-delete": "tsx scripts/qa-studio-batch-delete.ts",
     "qa:admin-works-delete": "tsx scripts/qa-admin-works-delete.ts",
     "qa:cover-heal": "tsx scripts/qa-cover-heal.ts",
+    "qa:stale-client-bundle": "tsx scripts/qa-stale-client-bundle.ts",
     "qa:work-generation-meta": "tsx scripts/qa-work-generation-meta.ts",
     "qa:admin-console": "tsx scripts/qa-admin-console.ts",
     "qa:console-sso-config": "tsx scripts/qa-console-sso-config.ts",

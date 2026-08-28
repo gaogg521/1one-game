@@ -5,8 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect } from "react";
 import type { AppLocale } from "@/i18n/routing";
 import { withLocalePath } from "@/i18n/navigation";
+import { isStaleClientBundleError, reloadOnceForStaleClientBundle } from "@/lib/stale-client-bundle";
 
-export default function GlobalError({
+export default function AppError({
   error,
   reset,
 }: {
@@ -15,16 +16,23 @@ export default function GlobalError({
 }) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
+  const stale = isStaleClientBundleError(error);
+  const isDev = process.env.NODE_ENV === "development";
+
   useEffect(() => {
     console.error("[app-error]", error);
-  }, [error]);
+    if (stale) reloadOnceForStaleClientBundle();
+  }, [error, stale]);
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
       <h1 className="text-lg font-semibold text-[var(--gc-text)]">{t("errors.globalTitle")}</h1>
       <p className="text-sm text-[var(--gc-muted)]">
-        {t("errors.globalDesc")}
+        {stale ? t("errors.globalDescStale") : t("errors.globalDesc")}
       </p>
+      {isDev && !stale ? (
+        <p className="text-xs text-[var(--gc-muted)]">{t("errors.globalDescDev")}</p>
+      ) : null}
       <div className="flex flex-wrap justify-center gap-3">
         <button
           type="button"

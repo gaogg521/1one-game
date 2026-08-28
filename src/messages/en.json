@@ -447,7 +447,9 @@
   },
   "errors": {
     "globalTitle": "Page failed to load",
-    "globalDesc": "If you just ran a long test or changed config in development mode, restart npm run dev and try again.",
+    "globalDesc": "This page could not load. The site may have just updated — tap Retry or refresh.",
+    "globalDescDev": "In development, if you just ran a long test or changed config, restart npm run dev and try again.",
+    "globalDescStale": "The site just updated. Loading the latest page…",
     "notFoundTitle": "This work could not be found",
     "notFoundDesc": "The link may have expired, or the work may have been removed.",
     "goCreate": "Start Creating"

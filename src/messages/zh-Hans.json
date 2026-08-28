@@ -447,7 +447,9 @@
   },
   "errors": {
     "globalTitle": "页面加载失败",
-    "globalDesc": "开发模式下若刚跑过长测试或改了配置，请重启 npm run dev 后再试。",
+    "globalDesc": "页面暂时打不开。站点可能刚更新，请点「重试」或刷新浏览器。",
+    "globalDescDev": "本地开发时若刚跑过长测试或改了配置，请重启 npm run dev 后再试。",
+    "globalDescStale": "站点刚更新，正在加载最新页面…",
     "notFoundTitle": "找不到这个作品",
     "notFoundDesc": "链接可能已失效，或作品已被删除。",
     "goCreate": "去创作"
