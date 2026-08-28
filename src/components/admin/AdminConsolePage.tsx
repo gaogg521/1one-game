@@ -26,6 +26,7 @@ import { OpsHealthPanel } from "@/components/admin/OpsHealthPanel";
 import { GenErrorsPanel } from "@/components/admin/GenErrorsPanel";
 import { CacheManagementPanel } from "@/components/admin/CacheManagementPanel";
 import { ReferralRewardsPanel } from "@/components/admin/ReferralRewardsPanel";
+import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
 import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
