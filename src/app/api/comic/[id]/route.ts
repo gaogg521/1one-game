@@ -22,7 +22,7 @@ import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
-import { canReadWorkPublicly } from "@/lib/literary-safety";
+import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
 import { deleteComicAssetFiles } from "@/lib/comic-assets-gc";
 import { summarizeLiteraryEngagement } from "@/lib/literary-engagement";
 import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
@@ -69,7 +69,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
-  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canReadWorkPublicly(row)) {
+  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canAccessWorkByDirectLink(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
   const [acceptedComicDocument, acceptedDisplay] = !isOwner

@@ -1,6 +1,19 @@
 # DECISIONS
 
-更新时间：**2026-08-27**
+更新时间：**2026-08-28**
+
+## 2026-08-28 — pending_review 直链可读，发现页仍不列出
+
+**背景**：生产实测生成的小说/漫画默认 `pending_review`。GET 详情对非作者走 `canReadWorkPublicly`（仅 `public`+`ready`），把「待审核」伪装成 404。分享链接或另一台浏览器打开就是「小说不存在 / 未找到」，看起来像生成失败。
+
+**决策**：
+
+- 新作品默认仍是 `pending_review`，**禁止**静默改成 `public`（发现页 / 推荐 feed 仍只用 `publicReadyWorkWhere`）。
+- `pending_review` + `ready`：**持有 URL 即可阅读**（unlisted）。`hidden` 仍仅作者。
+- 详情 GET 改用 `canAccessWorkByDirectLink`。作者点「发布」才会进发现页。
+- 漫画配图未齐时 status 常为 `pending_images`（不是 `ready`）。旧逻辑把这也当成 404，分享链接会显示「未找到」。直链必须把 `pending_images` 当作可读。
+
+---
 
 ## 2026-08-27 — 游戏生成：LLM 是作者，内核只校验；采集 ≠ 改管线
 

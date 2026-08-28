@@ -26,7 +26,7 @@ async function main() {
   try {
     coreId = (await mirrorGameToCreatorCore({ project: game })).creativeProjectId;
     const unauthenticated = await fetch(`${base}/api/projects/${game.id}`);
-    assert(unauthenticated.status === 404, `pending work must be hidden from public, got ${unauthenticated.status}`);
+    assert(unauthenticated.ok, `pending review work must be readable via the share URL, got ${unauthenticated.status}`);
     const headers = { Cookie: `gcreator_owner=${ownerKey}; gcreator_funnel=${funnelSessionId}`, "Content-Type": "application/json" };
     const ownerRead = await fetch(`${base}/api/projects/${game.id}`, { headers });
     assert(ownerRead.ok, `owner must be able to read pending work, got ${ownerRead.status}`);

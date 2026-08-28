@@ -52,3 +52,18 @@
 2. 应急分镜 `provider: ""`，只剩 model 或全空。
 3. 长篇/分镜草稿不写 provenance，后台列表里生成中的作品全是「未记录」。
 4. 把文学线理解成「也要先锁一个内核模板」。小说/漫画的产品就是模型文本，不是模板编译器。
+
+---
+
+## 可见性（直链 vs 发现页）
+
+新作品默认 `pending_review`，**不会**静默变成 `public`。
+
+| | 发现页 / 推荐 | 打开 `/novel/[id]` `/comic/[id]` |
+|--|--|--|
+| `public` + `ready` | 列出 | 可读 |
+| `public` / `pending_review` + `pending_images` | 不列出 | **持有 URL 可读**（分镜已出、配图未齐） |
+| `pending_review` + `ready` | 不列出 | **持有 URL 可读** |
+| `hidden` | 不列出 | 仅作者 |
+
+详情 GET 用 `canAccessWorkByDirectLink`；列表仍用 `publicReadyWorkWhere`。不要再把待审核伪装成「作品不存在」。

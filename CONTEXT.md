@@ -1,5 +1,28 @@
 # 项目工作进度快照
-最后更新：2026-08-28（生产创作链路复查）
+最后更新：2026-08-28（直链 pending_review）
+
+## 当前状态
+- 小说/漫画「未找到」根因：作品已生成，默认 `pending_review`，非作者 cookie 被详情 API 伪装成 404。
+- 已改：`pending_review` + `ready`/`pending_images` 持有 URL 可读；发现页仍仅 `public`+`ready`。`hidden` 仍仅作者。
+- 本轮漫画根因还有一层：分镜已出但配图 0/16，status=`pending_images`，旧逻辑要求 `ready` 所以即使用 public 也 404。生产已把该条临时改成 `ready`，用户刷新即可看。
+
+## 本会话修改文件表
+- `src/lib/literary-safety.ts` — 新增 `canAccessWorkByDirectLink`
+- `src/app/api/novel/[id]/route.ts` / `comic/[id]` / `projects/[id]` — 详情 GET 用直链权限
+- `src/app/novel/[id]/page.tsx` — 缺正文时展示 API 错误文案
+- `scripts/qa-literary-safety-contracts.ts` / `qa-creator-publication.ts` / `qa-creator-publication-api.ts`
+- `docs/literary-generation-pipeline.md`、`PROJECT_MEMORY/DECISIONS.md`
+
+## 下次启动清单
+1. 打开小说 https://operone.1oneclaw.com/zh-Hans/novel/cmtbqbuip00ea10ayzs8yevbz 与漫画 https://operone.1oneclaw.com/zh-Hans/comic/cmtbqxftk002bqzf6mbu93rr0 应能阅读（部署后 pending_review 直链也可读）。
+2. 发现页仍不应列出未点「发布」的新作品。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · 直链 pending_review
+- 现象：漫画「未找到」、小说「小说不存在」。
+- 根因：`canReadWorkPublicly` 仅 public+ready；QA cookie 与用户浏览器不同。
+- 修复：unlisted 直链；`pending_images` 也可读；生产该漫画已改为 ready 以便立刻打开。
+- 状态：完结（待提交部署）。
 
 ## 生产验收（本会话）
 

@@ -4,7 +4,7 @@ import { mirrorGameToCreatorCore } from "../src/lib/creator-core/game-bridge";
 import { createCreativeArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "../src/lib/creator-core/repository";
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { defaultWorkVisibility } from "../src/lib/auth/work-visibility";
-import { canReadWorkPublicly } from "../src/lib/literary-safety";
+import { canAccessWorkByDirectLink, canReadWorkPublicly } from "../src/lib/literary-safety";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -20,8 +20,10 @@ async function main() {
   assert(defaultWorkVisibility() === "pending_review", "deployment configuration must not auto-publish new creations");
   if (previousDefault === undefined) delete process.env.DEFAULT_WORK_VISIBILITY;
   else process.env.DEFAULT_WORK_VISIBILITY = previousDefault;
-  assert(!canReadWorkPublicly({ visibility: "pending_review", status: "ready" }), "review work must not be publicly readable");
-  assert(canReadWorkPublicly({ visibility: "public", status: "ready" }), "explicitly published ready work must be readable");
+  assert(!canReadWorkPublicly({ visibility: "pending_review", status: "ready" }), "review work must not appear in public listings");
+  assert(canAccessWorkByDirectLink({ visibility: "pending_review", status: "ready" }), "ready review work must be readable via the share URL");
+  assert(!canAccessWorkByDirectLink({ visibility: "hidden", status: "ready" }), "hidden work must remain owner-only");
+  assert(canReadWorkPublicly({ visibility: "public", status: "ready" }), "explicitly published ready work must be listed");
   const ownerKey = `qa-publication-${Date.now()}`;
   const spec = prepareGameSpecForPersist(undefined, "霓虹飞船穿过机械舰队");
   const game = await prisma.project.create({
