@@ -92,6 +92,8 @@
     "qa:competitor-parity-validation": "tsx scripts/qa-competitor-parity-validation.ts",
     "qa:template-polish": "tsx scripts/qa-template-polish.ts",
     "qa:sample-profiles": "tsx scripts/qa-sample-profiles.ts",
+    "qa:competitor-home-clones": "tsx scripts/qa-competitor-home-clones.ts",
+    "qa:competitor-home-clones:browser": "tsx scripts/qa-competitor-home-clones-browser.ts",
     "qa:prompt-parity-compare": "tsx scripts/qa-prompt-parity-compare.ts",
     "qa:prompt-profile-infer": "tsx scripts/qa-prompt-profile-infer.ts",
     "qa:scene-hud-i18n": "tsx scripts/qa-scene-hud-i18n.ts",

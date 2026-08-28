@@ -4,7 +4,7 @@
  */
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { SAMPLES, type Sample } from "@/lib/samples";
-import { specForSample } from "@/lib/sample-specs";
+import { buildCanonicalAstrocadeSpec } from "@/lib/astrocade-canonical-spec";
 
 export type GameplayDepthChange = "increased" | "decreased" | "changed";
 
@@ -31,7 +31,9 @@ export type DefaultInteraction = {
 };
 
 export function expectedSceneForSample(sample: Sample): string {
-  return expectedPhaserSceneName(specForSample(sample));
+  return expectedPhaserSceneName(
+    buildCanonicalAstrocadeSpec(sample.prompt, "zh-Hans", { sampleId: sample.id }),
+  );
 }
 
 /** 持续动画 Scene 族 — idle burst 对比 */

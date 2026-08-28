@@ -24,6 +24,16 @@ export const SAMPLE_TEMPLATE_OVERRIDES: Partial<Record<string, GameTemplateId>> 
   "blade-defender-merge": "towerDefense",
   "pottery-master-3d": "customization",
   "crashy-roads": "racing",
+  "voxel-power-frontier": "sandbox",
+  "neon-territory-loop": "strategy",
+  "hundred-gate-breaker": "physics",
+  "grand-estate-merge": "merge",
+  "blockland-sharpshooter": "sniper",
+  "voxel-daybreak-survival": "farming",
+  "passenger-rail-express": "racing",
+  "fusion-legends-arena": "merge",
+  "sparkle-auto-spa": "customization",
+  "red-blue-arsenal": "shooter",
 };
 
 /**

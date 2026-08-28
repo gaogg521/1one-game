@@ -3,8 +3,7 @@ import path from "node:path";
 import type { GameSpec } from "@/lib/game-spec";
 import type { Sample } from "@/lib/samples";
 import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
-import { specForSample } from "@/lib/sample-specs";
-import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
+import { buildCanonicalAstrocadeSpec } from "@/lib/astrocade-canonical-spec";
 import { runDebugSkillPipeline } from "@/lib/opengame-skills/debug-skill";
 import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
 import {
@@ -44,7 +43,7 @@ export const SAMPLE_TEMPLATE_SKILL_PILOTS: Partial<Record<string, string[]>> = {
 };
 
 export function buildSampleTemplateSkillParityRow(sample: Sample): SampleTemplateSkillParityRow {
-  const spec = normalizeAstrocadePlaySpec(specForSample(sample));
+  const spec = buildCanonicalAstrocadeSpec(sample.prompt, "zh-Hans", { sampleId: sample.id });
   const archetype = resolveTemplateArchetype(spec, sample.prompt);
   return {
     sampleId: sample.id,
@@ -58,7 +57,7 @@ export function buildSampleTemplateSkillParityRow(sample: Sample): SampleTemplat
 
 export function checkSampleTemplateSkillParity(sample: Sample): string[] {
   const issues: string[] = [];
-  const spec = normalizeAstrocadePlaySpec(specForSample(sample));
+  const spec = buildCanonicalAstrocadeSpec(sample.prompt, "zh-Hans", { sampleId: sample.id });
   const row = buildSampleTemplateSkillParityRow(sample);
 
   if (row.expectDedicatedRoute !== true) {
@@ -68,10 +67,17 @@ export function checkSampleTemplateSkillParity(sample: Sample): string[] {
     issues.push(`${sample.id}: sample spec should not be agenticPlayRoute=agentic`);
   }
 
-  const fallback = buildTemplateFallbackModule(spec);
-  const debug = runDebugSkillPipeline(fallback);
-  if (!debug.ok) {
-    issues.push(`${sample.id}: template fallback failed Debug Skill (${debug.reason})`);
+  const ownsDedicatedRuntime = row.phaserScene === "CompetitorCloneScene" || row.phaserScene === "DouDizhuScene";
+  if (ownsDedicatedRuntime) {
+    if (row.phaserScene === "CompetitorCloneScene" && !spec.samplePlayProfile?.competitorClone) {
+      issues.push(`${sample.id}: competitor clone runtime contract missing`);
+    }
+  } else {
+    const fallback = buildTemplateFallbackModule(spec);
+    const debug = runDebugSkillPipeline(fallback);
+    if (!debug.ok) {
+      issues.push(`${sample.id}: template fallback failed Debug Skill (${debug.reason})`);
+    }
   }
 
   if (row.pilotSceneHooks?.length) {
@@ -108,6 +114,7 @@ function sceneSourcePath(sceneName: string): string | null {
     ChessScene: "src/game/engine/ChessScene.ts",
     CustomizationScene: "src/game/engine/CustomizationScene.ts",
     StrategyScene: "src/game/engine/StrategyScene.ts",
+    CompetitorCloneScene: "src/game/engine/CompetitorCloneScene.ts",
     AgenticScene: "src/game/engine/AgenticScene.ts",
   };
   const rel = map[sceneName];
