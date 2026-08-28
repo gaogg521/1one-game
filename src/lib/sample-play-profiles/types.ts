@@ -3,23 +3,7 @@ import { z } from "zod";
 /** 烘焙进 specJson 的样品/克隆定制层（Astrocade 式 per-game logic，非运行时 SAMPLE_MODES） */
 export const SamplePlayProfileSchema = z.object({
   variantId: z.string().min(1).max(48),
-  competitorClone: z
-    .object({
-      mode: z.enum([
-        "voxel-builder",
-        "territory-loop",
-        "tower-punch",
-        "estate-merge",
-        "voxel-sniper",
-        "daybreak-survival",
-        "passenger-rail",
-        "fusion-legends",
-        "auto-spa",
-        "team-arsenal",
-      ]),
-      target: z.number().int().min(1).max(200),
-    })
-    .optional(),
+  showcaseRuntime: z.enum(["voxel-frontier", "territory-loop", "estate-merge"]).optional(),
   platformer: z
     .object({
       treasureHeist: z.boolean().optional(),

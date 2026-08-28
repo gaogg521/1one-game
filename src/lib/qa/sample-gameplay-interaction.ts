@@ -57,6 +57,9 @@ const SAMPLE_GAMEPLAY_OVERRIDES: Partial<
   },
   "grow-a-garden": { interaction: "click-center", clickRel: { x: 0.38, y: 0.24 }, clickBurst: 2 },
   "color-bloom": { interaction: "click-center", clickRel: { x: 0.38, y: 0.52 }, clickBurst: 2 },
+  "voxel-power-frontier": { interaction: "click-center", clickRel: { x: 0.5, y: 0.5 }, clickBurst: 2 },
+  "neon-territory-loop": { interaction: "click-lower", clickRel: { x: 0.14, y: 0.94 }, clickBurst: 2 },
+  "grand-estate-merge": { interaction: "click-center", clickRel: { x: 0.37, y: 0.27 }, clickRel2: { x: 0.43, y: 0.27 }, clickBurst: 1 },
 };
 
 function buildCaseForSample(sampleId: string): SampleGameplayCase {

@@ -41,7 +41,9 @@ import { ZhaJinHuaScene } from "@/game/engine/ZhaJinHuaScene";
 import { NiuNiuScene } from "@/game/engine/NiuNiuScene";
 import { ShuangKouScene } from "@/game/engine/ShuangKouScene";
 import { AgenticScene } from "@/game/engine/AgenticScene";
-import { CompetitorCloneScene } from "@/game/engine/CompetitorCloneScene";
+import { VoxelFrontierScene } from "@/game/engine/VoxelFrontierScene";
+import { TerritoryLoopScene } from "@/game/engine/TerritoryLoopScene";
+import { EstateMergeScene } from "@/game/engine/EstateMergeScene";
 import { createPhaserSceneForSpec } from "@/lib/game-templates/runtime";
 import { resolveRuntimeAssets } from "@/lib/assets/asset-runtime-resolver";
 import { readAssetManifestFromSession } from "@/lib/assets/asset-manifest-session.client";
@@ -248,7 +250,9 @@ export function createPhaserGame(
     NiuNiuScene,
     ShuangKouScene,
     AgenticScene,
-    CompetitorCloneScene,
+    VoxelFrontierScene,
+    TerritoryLoopScene,
+    EstateMergeScene,
   });
   scene.backgroundUrl = assets.backgroundUrl ?? null;
   scene.projectId = assetProjectId ?? opts?.projectId ?? null;

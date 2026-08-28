@@ -33,21 +33,18 @@ function defaultSampleProfile(sampleId: string): SampleProfileDef {
   };
 }
 
-function competitorCloneProfile(
-  mode: NonNullable<SamplePlayProfile["competitorClone"]>["mode"],
-  target: number,
-): SampleProfileDef {
+function showcaseProfile(runtime: NonNullable<SamplePlayProfile["showcaseRuntime"]>): SampleProfileDef {
   return {
-    variantId: mode,
+    variantId: runtime,
     apply: (spec, sample) =>
       withProfile(
         {
           ...spec,
           title: sample.title,
           labels: { ...spec.labels, subtitle: sample.subtitle },
-          gameplay: { ...spec.gameplay, winScore: target, lives: Math.max(spec.gameplay.lives ?? 3, 3) },
+          gameplay: { ...spec.gameplay, winScore: 100, lives: Math.max(spec.gameplay.lives ?? 3, 3) },
         },
-        { variantId: sample.id, competitorClone: { mode, target } },
+        { variantId: sample.id, showcaseRuntime: runtime },
       ),
   };
 }
@@ -414,16 +411,9 @@ const SAMPLE_PLAY_PROFILE_CURATED: Record<string, SampleProfileDef> = {
         { variantId: "crashy-roads", coaster: { speedBoost: 1.08 } },
       ),
   },
-  "voxel-power-frontier": competitorCloneProfile("voxel-builder", 8),
-  "neon-territory-loop": competitorCloneProfile("territory-loop", 12),
-  "hundred-gate-breaker": competitorCloneProfile("tower-punch", 10),
-  "grand-estate-merge": competitorCloneProfile("estate-merge", 8),
-  "blockland-sharpshooter": competitorCloneProfile("voxel-sniper", 8),
-  "voxel-daybreak-survival": competitorCloneProfile("daybreak-survival", 9),
-  "passenger-rail-express": competitorCloneProfile("passenger-rail", 12),
-  "fusion-legends-arena": competitorCloneProfile("fusion-legends", 8),
-  "sparkle-auto-spa": competitorCloneProfile("auto-spa", 12),
-  "red-blue-arsenal": competitorCloneProfile("team-arsenal", 10),
+  "voxel-power-frontier": showcaseProfile("voxel-frontier"),
+  "neon-territory-loop": showcaseProfile("territory-loop"),
+  "grand-estate-merge": showcaseProfile("estate-merge"),
   "dou-dizhu": {
     variantId: "dou-dizhu",
     apply: (spec, sample) =>

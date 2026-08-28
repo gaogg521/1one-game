@@ -1,7 +1,9 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import type { AgenticScene } from "@/game/engine/AgenticScene";
-import type { CompetitorCloneScene } from "@/game/engine/CompetitorCloneScene";
+import type { VoxelFrontierScene } from "@/game/engine/VoxelFrontierScene";
+import type { TerritoryLoopScene } from "@/game/engine/TerritoryLoopScene";
+import type { EstateMergeScene } from "@/game/engine/EstateMergeScene";
 import type { StrategyScene } from "@/game/engine/StrategyScene";
 import type { ChessScene } from "@/game/engine/ChessScene";
 import type { CoasterScene } from "@/game/engine/CoasterScene";
@@ -181,7 +183,9 @@ export type PhaserSceneImports = {
   NiuNiuScene: typeof NiuNiuScene;
   ShuangKouScene: typeof ShuangKouScene;
   AgenticScene: typeof AgenticScene;
-  CompetitorCloneScene: typeof CompetitorCloneScene;
+  VoxelFrontierScene: typeof VoxelFrontierScene;
+  TerritoryLoopScene: typeof TerritoryLoopScene;
+  EstateMergeScene: typeof EstateMergeScene;
 };
 
 export type PhaserSceneInstance =
@@ -215,7 +219,9 @@ export type PhaserSceneInstance =
   | NiuNiuScene
   | ShuangKouScene
   | AgenticScene
-  | CompetitorCloneScene;
+  | VoxelFrontierScene
+  | TerritoryLoopScene
+  | EstateMergeScene;
 
 export function createPhaserSceneForSpec(
   spec: GameSpec,
@@ -224,8 +230,10 @@ export function createPhaserSceneForSpec(
   soundscape: GameSoundscape | null,
   imports: PhaserSceneImports,
 ): PhaserSceneInstance {
-  const clone = spec.samplePlayProfile?.competitorClone;
-  if (clone) return new imports.CompetitorCloneScene(spec, onEnd, soundscape ?? null);
+  const showcase = spec.samplePlayProfile?.showcaseRuntime;
+  if (showcase === "voxel-frontier") return new imports.VoxelFrontierScene(spec, onEnd, soundscape ?? null);
+  if (showcase === "territory-loop") return new imports.TerritoryLoopScene(spec, onEnd, soundscape ?? null);
+  if (showcase === "estate-merge") return new imports.EstateMergeScene(spec, onEnd, soundscape ?? null);
   const family = phaserFamilyFor(spec);
   const playSpec = toPhaserPlaySpec(spec);
   const sfxOpt = soundscape ?? undefined;
@@ -302,7 +310,10 @@ export function isGodotExportSupportedForTemplate(templateId: string): boolean {
 
 /** Phase 4 QA：模板 → 期望 Phaser 场景类名 */
 export function expectedPhaserSceneName(spec: GameSpec): string {
-  if (spec.samplePlayProfile?.competitorClone) return "CompetitorCloneScene";
+  const showcase = spec.samplePlayProfile?.showcaseRuntime;
+  if (showcase === "voxel-frontier") return "VoxelFrontierScene";
+  if (showcase === "territory-loop") return "TerritoryLoopScene";
+  if (showcase === "estate-merge") return "EstateMergeScene";
   const family = phaserFamilyFor(spec);
   const map: Record<PhaserRuntimeFamily, string> = {
     arena: "PlayScene",

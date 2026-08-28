@@ -1132,3 +1132,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 验证通过：`npx tsc --noEmit`、定向 ESLint（0 error，保留一个既有 unused warning）、`qa:competitor-home-clones` 10/10、`qa:competitor-home-clones:browser` 10/10、定向 `qa:sample-gameplay-interaction` 10/10、`qa:sample-profiles` 25/25、`qa:sample-template-skill-parity` 25/25、`qa:sample-gameplay-interaction:offline`，以及完整 `npm run build`（106 routes）。build 仅保留既有 Turbopack 动态文件追踪警告。
 - 知识产权边界：本实现只复刻可观察的玩法循环和完成条件；人物、品牌名、画面素材、源码和关卡数据均未复制。已发布提交 `d7152191`；生产部署返回 `DEPLOY_FULL_OK`，25 个样品播种完成，服务、worker、TLS/SNI health 正常，十款游戏公网完成态 QA 10/10、封面 HTTP 200。顺带修复通用 `healthOk` 将 HTTPS URL 交给 HTTP transport 的 QA 缺陷。
 
+## P57：否决十款换皮原型，重做三款独立可玩样品（2026-08-28）
+
+- P56 的 `CompetitorCloneScene` 被判定为失败实现：十种模式共用“点击→计数→结算”，自动化只证明计数器可达，不能证明玩法复刻。该 Scene、旧 profile 合同、两条伪完成 QA 和十张旧封面已删除；七款不再重做的样品加入 `PRUNED_SAMPLE_IDS`，seed 时会从本地与生产数据库删除。
+- 仅保留并重做三款：`VoxelFrontierScene` 是带第一人称投影、移动/转向、射线目标、方块采掘/背包/放置、扫描能力及“3 核心 + 4 结构方块”任务链的 voxel 世界；`TerritoryLoopScene` 是带安全区、脆弱轨迹、闭环填充、敌人切线、生命与 20% 领地目标的圈地游戏；`EstateMergeScene` 是真实 5×5 拖放棋盘、同阶合并、金币/能量与 16 个一级建筑合成最高阶庄园的合成游戏。
+- 三款分别拥有独立 Scene、独立状态机和独立完成证据。`qa:showcase-games:browser` 实际完成移动采掘放置、3 次闭环（20%+）、15 次拖放合并（Lv.5），不再循环点击统一按钮；通用 Canvas 交互/深度审计 3/3 通过。
+- 旧十张封面删除后只重新生成三张新运行时实机封面。验证通过：`npx tsc --noEmit`、定向 ESLint（0 error，保留一个既有 unused warning）、`qa:showcase-games`、`qa:showcase-games:browser`、`qa:sample-profiles` 18/18、`qa:sample-template-skill-parity` 18/18、`qa:sample-gameplay-interaction:offline`、定向真实 Canvas 审计 3/3，以及完整 `npm run build`（106 routes；仅既有 Turbopack 动态追踪警告）。
+

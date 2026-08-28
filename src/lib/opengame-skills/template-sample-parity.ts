@@ -67,10 +67,11 @@ export function checkSampleTemplateSkillParity(sample: Sample): string[] {
     issues.push(`${sample.id}: sample spec should not be agenticPlayRoute=agentic`);
   }
 
-  const ownsDedicatedRuntime = row.phaserScene === "CompetitorCloneScene" || row.phaserScene === "DouDizhuScene";
+  const showcaseScenes = new Set(["VoxelFrontierScene", "TerritoryLoopScene", "EstateMergeScene"]);
+  const ownsDedicatedRuntime = showcaseScenes.has(row.phaserScene) || row.phaserScene === "DouDizhuScene";
   if (ownsDedicatedRuntime) {
-    if (row.phaserScene === "CompetitorCloneScene" && !spec.samplePlayProfile?.competitorClone) {
-      issues.push(`${sample.id}: competitor clone runtime contract missing`);
+    if (showcaseScenes.has(row.phaserScene) && !spec.samplePlayProfile?.showcaseRuntime) {
+      issues.push(`${sample.id}: showcase runtime contract missing`);
     }
   } else {
     const fallback = buildTemplateFallbackModule(spec);
@@ -114,7 +115,9 @@ function sceneSourcePath(sceneName: string): string | null {
     ChessScene: "src/game/engine/ChessScene.ts",
     CustomizationScene: "src/game/engine/CustomizationScene.ts",
     StrategyScene: "src/game/engine/StrategyScene.ts",
-    CompetitorCloneScene: "src/game/engine/CompetitorCloneScene.ts",
+    VoxelFrontierScene: "src/game/engine/VoxelFrontierScene.ts",
+    TerritoryLoopScene: "src/game/engine/TerritoryLoopScene.ts",
+    EstateMergeScene: "src/game/engine/EstateMergeScene.ts",
     AgenticScene: "src/game/engine/AgenticScene.ts",
   };
   const rel = map[sceneName];
