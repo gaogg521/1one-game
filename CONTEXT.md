@@ -1130,5 +1130,5 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 新增 `CompetitorCloneScene` 专用 Phaser 运行时和 `samplePlayProfile.competitorClone` 合同；十种模式拥有独立目标、配色、棋盘/瞄准/合成等场景表达、进度与胜利条件。canonical spec、运行时工厂、样品配置、模板推断、技能模板一致性和 QA 期望场景已经贯通，不会退回泛用模板。
 - 新增十张由真实本地 Canvas 运行画面生成的样品封面；样品馆与直接试玩共用同一 canonical profile。新增静态合同 QA 和 Playwright 完成态 QA，后者逐款执行到 `cloneCompleted=true`，不以“能打开 Canvas”冒充可完成。
 - 验证通过：`npx tsc --noEmit`、定向 ESLint（0 error，保留一个既有 unused warning）、`qa:competitor-home-clones` 10/10、`qa:competitor-home-clones:browser` 10/10、定向 `qa:sample-gameplay-interaction` 10/10、`qa:sample-profiles` 25/25、`qa:sample-template-skill-parity` 25/25、`qa:sample-gameplay-interaction:offline`，以及完整 `npm run build`（106 routes）。build 仅保留既有 Turbopack 动态文件追踪警告。
-- 知识产权边界：本实现只复刻可观察的玩法循环和完成条件；人物、品牌名、画面素材、源码和关卡数据均未复制。发布后仍需在公网逐款跑完成态 QA，并检查首页静态 chunks 与样品封面资源。
+- 知识产权边界：本实现只复刻可观察的玩法循环和完成条件；人物、品牌名、画面素材、源码和关卡数据均未复制。已发布提交 `d7152191`；生产部署返回 `DEPLOY_FULL_OK`，25 个样品播种完成，服务、worker、TLS/SNI health 正常，十款游戏公网完成态 QA 10/10、封面 HTTP 200。顺带修复通用 `healthOk` 将 HTTPS URL 交给 HTTP transport 的 QA 缺陷。
 

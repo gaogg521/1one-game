@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { chromium, type Page } from "@playwright/test";
 import { sampleProjectId } from "@/lib/sample-gallery";
@@ -28,7 +29,8 @@ export async function healthOk(baseUrl: string): Promise<boolean> {
     try {
       const url = new URL(`${baseUrl.replace(/\/$/, "")}/api/health`);
       const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
-      const req = http.get(
+      const transport = url.protocol === "https:" ? https : http;
+      const req = transport.get(
         {
           hostname: url.hostname,
           port,
