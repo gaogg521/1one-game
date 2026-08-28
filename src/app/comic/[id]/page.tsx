@@ -35,6 +35,7 @@ import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { reportLiteraryEngagement } from "@/lib/literary-engagement.client";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
 import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
+import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 
 interface Comic {
   id: string;
@@ -650,15 +651,20 @@ export default function ComicDetailPage() {
       <AppMain>
       <main className="px-2 py-3 sm:px-6 sm:py-10 lg:px-10">
         <div className="mx-auto max-w-3xl">
-          <h1 className="mb-3 px-1 text-lg font-bold tracking-tight sm:hidden">{heading}</h1>
-          <div className="mb-6 hidden justify-center sm:flex">
+          <h1 className="mb-1 px-1 text-lg font-bold tracking-tight sm:hidden">{heading}</h1>
+          <div className="mb-3 px-1 sm:hidden">
+            <WorkUidCopy id={comic.id} compact />
+          </div>
+          <div className="mb-6 flex justify-center">
             <ComicDetailCoverPreview
               comicId={comic.id}
               title={heading}
               coverPath={comic.coverPath ?? null}
               imageUrls={comic.imageUrls}
               locale={locale}
+              isOwner={Boolean(comic.isOwner)}
               onCoverUpdate={(path) => setComic((prev) => (prev ? { ...prev, coverPath: path } : prev))}
+              onCoverError={setError}
             />
           </div>
           {adaptationInfo ? (
@@ -739,6 +745,9 @@ export default function ComicDetailPage() {
               </p>
             }
           />
+          <div className="mt-2 hidden sm:block">
+            <WorkUidCopy id={comic.id} />
+          </div>
           {comic.isOwner ? <CreatorVersionStatus core={comic.creatorCore} work={{ type: "comic", id: comic.id }} className="mt-4 hidden sm:block" /> : null}
           </div>
 

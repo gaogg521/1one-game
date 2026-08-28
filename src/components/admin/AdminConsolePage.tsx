@@ -26,7 +26,7 @@ import { OpsHealthPanel } from "@/components/admin/OpsHealthPanel";
 import { GenErrorsPanel } from "@/components/admin/GenErrorsPanel";
 import { CacheManagementPanel } from "@/components/admin/CacheManagementPanel";
 import { ReferralRewardsPanel } from "@/components/admin/ReferralRewardsPanel";
-import { AdminConsoleShell } from "@/components/admin/AdminConsoleShell";
+import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 import { UserAccountOverview, UserProfilePanel, UserWalletPanel } from "@/components/admin/UserConsolePanels";
 import { getSuperAdminKey, setSuperAdminKey } from "@/lib/super-admin-client";
 import { isSampleGalleryProject } from "@/lib/sample-gallery";
@@ -209,6 +209,7 @@ export default function AdminConsolePage({
   const [adminKey, setAdminKeyDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [workTypeFilter, setWorkTypeFilter] = useState<"all" | string>("all");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | string>("all");
   const [page, setPage] = useState(1);
@@ -313,24 +314,33 @@ export default function AdminConsolePage({
     return h;
   }, [locale]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 280);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   const loadOverview = useCallback(async () => {
+    const params = new URLSearchParams({ limit: "100" });
+    if (debouncedQuery) params.set("q", debouncedQuery);
     const [sRes, wRes] = await Promise.all([
       fetch("/api/admin/stats", { headers: headers() }),
-      fetch("/api/admin/works?limit=100", { headers: headers() }),
+      fetch(`/api/admin/works?${params}`, { headers: headers() }),
     ]);
     if (sRes.status === 403) throw new Error("forbidden");
     setStats((await sRes.json()) as Stats);
     const wData = (await wRes.json()) as { items?: WorkRow[] };
     setWorks(wData.items ?? []);
-  }, [headers]);
+  }, [debouncedQuery, headers]);
 
   const loadPending = useCallback(async () => {
-    const res = await fetch("/api/admin/works?visibility=pending_review&limit=100", { headers: headers() });
+    const params = new URLSearchParams({ visibility: "pending_review", limit: "100" });
+    if (debouncedQuery) params.set("q", debouncedQuery);
+    const res = await fetch(`/api/admin/works?${params}`, { headers: headers() });
     if (res.status === 403) throw new Error("forbidden");
     const data = (await res.json()) as { items?: WorkRow[] };
     setPending(data.items ?? []);
     setSelected(new Set());
-  }, [headers]);
+  }, [debouncedQuery, headers]);
 
   const loadShares = useCallback(async () => {
     const [shareRes, analyticsRes] = await Promise.all([
@@ -508,13 +518,19 @@ export default function AdminConsolePage({
       return;
     }
     const res = await fetch("/api/admin/works", {
-      method: "DELETE",
+      method: "POST",
       headers: { ...headers(), "Content-Type": "application/json" },
-      body: JSON.stringify({ batch: items }),
+      body: JSON.stringify({ action: "delete", batch: items }),
     });
-    const data = (await res.json().catch(() => ({}))) as { deleted?: number; missing?: number };
+    const data = (await res.json().catch(() => ({}))) as {
+      deleted?: number;
+      missing?: number;
+      error?: string;
+      errorKey?: string;
+      errorParams?: Record<string, string | number>;
+    };
     if (!res.ok) {
-      setNotice({ kind: "error", text: t("actionFailed") });
+      setNotice({ kind: "error", text: data.error || t("actionFailed") });
       return;
     }
     setSelected(new Set());
@@ -1779,6 +1795,7 @@ function WorksTable({
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] uppercase tracking-wide text-[var(--gc-muted)]">{w.type}</p>
                   <p className="mt-1 font-medium text-[var(--gc-text)]">{w.title}</p>
+                  <WorkUidCopy id={w.id} compact className="-ml-1.5 mt-0.5" />
                   <WorkGenerationMeta work={w} />
                   <p className="mt-1 text-sm text-[var(--gc-muted)]">
                     {w.visibility}
@@ -1824,7 +1841,10 @@ function WorksTable({
                     <WorkCoverThumb work={w} compact />
                   </td>
                   <td className="px-4 py-3 text-[var(--gc-muted)]">{w.type}</td>
-                  <td className="max-w-[220px] truncate px-4 py-3">{w.title}</td>
+                  <td className="max-w-[280px] px-4 py-3">
+                    <p className="truncate">{w.title}</p>
+                    <WorkUidCopy id={w.id} compact className="-ml-1.5 mt-0.5" />
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-[var(--gc-muted)]">
                     {formatAdminWorkDate(w.createdAt, locale)}
                   </td>
@@ -1884,7 +1904,14 @@ function WorkCoverThumb({ work, compact = false }: { work: WorkRow; compact?: bo
   return (
     <div className={`relative ${size} shrink-0 overflow-hidden rounded-lg border border-[color:var(--gc-border)] bg-black/30`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={work.coverPath} alt="" className="h-full w-full object-cover" />
+      <img
+        src={work.coverPath}
+        alt=""
+        className="h-full w-full object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
     </div>
   );
 }

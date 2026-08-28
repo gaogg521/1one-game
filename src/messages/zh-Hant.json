@@ -22,7 +22,10 @@
     "viewAllArrow": "查看全部 →",
     "startCreateArrow": "開始創作 →",
     "charactersUnit": "字",
-    "requestFailed": "請求失敗（{status}）"
+    "requestFailed": "請求失敗（{status}）",
+    "workUid": "編號",
+    "copyWorkUid": "複製",
+    "workUidCopied": "已複製"
   },
   "nav": {
     "home": "首頁",
@@ -648,6 +651,10 @@
     "generateComic": "生成漫畫",
     "coverGenerating": "封面生成中…",
     "regenerateCover": "重做封面",
+    "uploadCover": "上傳封面",
+    "coverUploading": "封面上傳中…",
+    "coverUploadFailed": "封面上傳失敗",
+    "coverBroken": "封面失效，點擊重試",
     "generateNewStoryboard": "生成新一版分鏡",
     "startStoryboard": "開始生成分鏡（約 5～20 分鐘）",
     "loginToAdapt": "請登入帳號以繼續改編；登入後會自動合併本機作品。",
@@ -1046,6 +1053,8 @@
     "novelGenerateFailed": "小說生成失敗，模型未返回足夠內容",
     "novelNotFound": "小說不存在",
     "coverGenFailed": "封面生成失敗，請檢查 OPENAI_API_KEY / GEMINI_API_KEY 是否已配置",
+    "coverUnsupportedType": "僅支援 JPEG / PNG / WebP 封面",
+    "adminDeleteFailed": "刪除失敗：{detail}",
     "noBrief": "作品無 Creative Brief，請先生成或保存",
     "specInvalid": "規格無效",
     "coverComfyFailed": "封面生成失敗（Comfy 未配置或超時）",
@@ -1535,6 +1544,11 @@
     "pageOf": "第 {current} / {total} 页",
     "nextPage": "下一頁",
     "unknownError": "未知错误",
+    "regenerateCover": "重做封面",
+    "coverGenerating": "封面生成中…",
+    "uploadCover": "上傳封面",
+    "coverUploading": "封面上傳中…",
+    "coverUploadFailed": "封面上傳失敗",
     "subtitleStandalone": "独立创作 · {total} 页分镜",
     "standaloneWork": "独立漫画"
   },

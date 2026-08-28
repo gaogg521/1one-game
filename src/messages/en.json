@@ -22,7 +22,10 @@
     "viewAllArrow": "View all →",
     "startCreateArrow": "Start creating →",
     "charactersUnit": "chars",
-    "requestFailed": "Request failed ({status})"
+    "requestFailed": "Request failed ({status})",
+    "workUid": "ID",
+    "copyWorkUid": "Copy",
+    "workUidCopied": "Copied"
   },
   "nav": {
     "home": "Home",
@@ -648,6 +651,10 @@
     "generateComic": "Generate comic",
     "coverGenerating": "Generating cover…",
     "regenerateCover": "Redo cover",
+    "uploadCover": "Upload cover",
+    "coverUploading": "Uploading cover…",
+    "coverUploadFailed": "Cover upload failed",
+    "coverBroken": "Cover broken — tap to retry",
     "generateNewStoryboard": "Generate new storyboard",
     "startStoryboard": "Start storyboard generation (about 5–20 min)",
     "loginToAdapt": "Sign in to continue adapting; your local works will merge after login.",
@@ -1046,6 +1053,8 @@
     "novelGenerateFailed": "Novel generation failed — model returned insufficient content",
     "novelNotFound": "Novel not found",
     "coverGenFailed": "Cover generation failed. Check OPENAI_API_KEY / GEMINI_API_KEY configuration.",
+    "coverUnsupportedType": "Only JPEG / PNG / WebP covers are supported",
+    "adminDeleteFailed": "Delete failed: {detail}",
     "noBrief": "Work has no Creative Brief. Generate or save one first.",
     "specInvalid": "Invalid spec",
     "coverComfyFailed": "Cover generation failed (Comfy not configured or timed out)",
@@ -1536,7 +1545,12 @@
     "prevPage": "Previous page",
     "pageOf": "Page {current} / {total}",
     "nextPage": "Next page",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "regenerateCover": "Redo cover",
+    "coverGenerating": "Generating cover…",
+    "uploadCover": "Upload cover",
+    "coverUploading": "Uploading cover…",
+    "coverUploadFailed": "Cover upload failed"
   },
   "comicCreatePage": {
     "title": "Create Comic",

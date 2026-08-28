@@ -51,7 +51,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
-import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
+import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 
 interface Novel {
   id: string;
@@ -121,8 +121,10 @@ export default function NovelDetailPage() {
   const [editing, setEditing] = useState(false);
   const [repairChapter, setRepairChapter] = useState<number | null>(null);
   const [coverRegenerating, setCoverRegenerating] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [readerTheme, setReaderTheme] = useState<NovelReaderThemeId>("paper");
   const coverRef = useRef<NovelReadCoverHandle>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -189,10 +191,41 @@ export default function NovelDetailPage() {
   }, [novel, displayMeta?.displayTitle, initialChapterScope, locale]);
 
   function handleRegenerateCover() {
-    if (!novel || coverRegenerating) return;
+    if (!novel || coverRegenerating || coverUploading) return;
     setError("");
     setCoverRegenerating(true);
     coverRef.current?.regenerate();
+  }
+
+  async function handleUploadCoverFile(file: File) {
+    if (!novel || coverUploading || coverRegenerating) return;
+    setError("");
+    setCoverUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/novel/${encodeURIComponent(novel.id)}/cover`, {
+        method: "PUT",
+        headers: mergeLocaleHeaders(locale),
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        coverPath?: string;
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
+      if (!res.ok || !data.coverPath) {
+        setError(resolveClientApiError(locale, data, "coverSaveFailed"));
+        return;
+      }
+      setNovel((prev) => (prev ? { ...prev, coverPath: data.coverPath! } : prev));
+    } catch {
+      setError(t("coverUploadFailed"));
+    } finally {
+      setCoverUploading(false);
+      if (coverFileRef.current) coverFileRef.current.value = "";
+    }
   }
 
   if (loading) {
@@ -328,7 +361,6 @@ export default function NovelDetailPage() {
           }
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3 lg:px-6">
-            <div className="hidden sm:block">
             <NovelReadCoverThumb
               ref={coverRef}
               novelId={novel.id}
@@ -340,10 +372,9 @@ export default function NovelDetailPage() {
                 setNovel((prev) => (prev ? { ...prev, coverPath: path } : prev));
                 setError("");
               }}
-              onCoverFailed={() => setError(t("coverFailed"))}
+              onCoverFailed={(message) => setError(message?.trim() || t("coverFailed"))}
               onRegenerateSettled={() => setCoverRegenerating(false)}
             />
-            </div>
 
             <div className="min-w-0 flex-1">
               <h1
@@ -360,6 +391,7 @@ export default function NovelDetailPage() {
                 {!editing && !isChildrenReader ? ` · ${t("chapterCount", { count: chapters.length })}` : null}
                 {!editing && isChildrenReader ? ` · ${t("childrenShort")}` : null}
               </p>
+              <WorkUidCopy id={novel.id} className="mt-1 -ml-1.5" compact />
               {!editing && blurb && (
                 <div className="hidden sm:block">
                   <NovelSynopsisBlurb text={blurb} mutedColor={readPalette.muted} />
@@ -462,18 +494,42 @@ export default function NovelDetailPage() {
                     />
                   )}
                   {novel.isOwner && (
-                    <button
-                      type="button"
-                      onClick={handleRegenerateCover}
-                      disabled={coverRegenerating}
-                      className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
-                      style={{
-                        borderColor: readPalette.border,
-                        color: readPalette.muted,
-                      }}
-                    >
-                      {coverRegenerating ? t("coverGenerating") : t("regenerateCover")}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateCover}
+                        disabled={coverRegenerating || coverUploading}
+                        className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
+                        style={{
+                          borderColor: readPalette.border,
+                          color: readPalette.muted,
+                        }}
+                      >
+                        {coverRegenerating ? t("coverGenerating") : t("regenerateCover")}
+                      </button>
+                      <input
+                        ref={coverFileRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleUploadCoverFile(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => coverFileRef.current?.click()}
+                        disabled={coverRegenerating || coverUploading}
+                        className="rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50"
+                        style={{
+                          borderColor: readPalette.border,
+                          color: readPalette.muted,
+                        }}
+                      >
+                        {coverUploading ? t("coverUploading") : t("uploadCover")}
+                      </button>
+                    </>
                   )}
                   <WorkShareBar
                     workType="novel"

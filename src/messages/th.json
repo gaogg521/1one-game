@@ -22,7 +22,10 @@
     "viewAllArrow": "ดูทั้งหมด →",
     "startCreateArrow": "เริ่มสร้าง →",
     "charactersUnit": "ตัวอักษร",
-    "requestFailed": "คำขอล้มเหลว ({status})"
+    "requestFailed": "คำขอล้มเหลว ({status})",
+    "workUid": "รหัส",
+    "copyWorkUid": "คัดลอก",
+    "workUidCopied": "คัดลอกแล้ว"
   },
   "nav": {
     "home": "หน้าแรก",
@@ -648,6 +651,10 @@
     "generateComic": "สร้างการ์ตูน",
     "coverGenerating": "กำลังสร้างปก…",
     "regenerateCover": "สร้างปกใหม่",
+    "uploadCover": "อัปโหลดปก",
+    "coverUploading": "กำลังอัปโหลดปก…",
+    "coverUploadFailed": "อัปโหลดปกไม่สำเร็จ",
+    "coverBroken": "ปกเสีย แตะเพื่อลองใหม่",
     "generateNewStoryboard": "สร้างสตอรีบอร์ดใหม่",
     "startStoryboard": "เริ่มสร้างสตอรีบอร์ด (ประมาณ 5–20 นาที)",
     "loginToAdapt": "เข้าสู่ระบบเพื่อดัดแปลงต่อ งานในเครื่องจะรวมหลังเข้าสู่ระบบ",
@@ -1046,6 +1053,8 @@
     "novelGenerateFailed": "สร้างนิยายล้มเหลว — โมเดลคืนเนื้อหาไม่เพียงพอ",
     "novelNotFound": "ไม่พบนิยาย",
     "coverGenFailed": "สร้างปกล้มเหลว ตรวจสอบ OPENAI_API_KEY / GEMINI_API_KEY",
+    "coverUnsupportedType": "รองรับเฉพาะปก JPEG / PNG / WebP",
+    "adminDeleteFailed": "ลบล้มเหลว: {detail}",
     "noBrief": "งานไม่มี Creative Brief กรุณาสร้างหรือบันทึกก่อน",
     "specInvalid": "สเปกไม่ถูกต้อง",
     "coverComfyFailed": "สร้างปกล้มเหลว (Comfy ไม่ได้ตั้งค่าหรือหมดเวลา)",
@@ -1535,6 +1544,11 @@
     "pageOf": "Page {current} / {total}",
     "nextPage": "Next page",
     "unknownError": "Unknown error",
+    "regenerateCover": "Redo cover",
+    "coverGenerating": "Generating cover…",
+    "uploadCover": "Upload cover",
+    "coverUploading": "Uploading cover…",
+    "coverUploadFailed": "Cover upload failed",
     "subtitleStandalone": "独立创作 · {total} 页分镜",
     "standaloneWork": "独立漫画"
   },

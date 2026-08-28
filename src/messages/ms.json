@@ -22,7 +22,10 @@
     "viewAllArrow": "Lihat semua →",
     "startCreateArrow": "Mula mencipta →",
     "charactersUnit": "aksara",
-    "requestFailed": "Permintaan gagal ({status})"
+    "requestFailed": "Permintaan gagal ({status})",
+    "workUid": "ID",
+    "copyWorkUid": "Salin",
+    "workUidCopied": "Disalin"
   },
   "nav": {
     "home": "Laman Utama",
@@ -648,6 +651,10 @@
     "generateComic": "Jana komik",
     "coverGenerating": "Menjana kulit…",
     "regenerateCover": "Buat semula kulit",
+    "uploadCover": "Muat naik kulit",
+    "coverUploading": "Memuat naik kulit…",
+    "coverUploadFailed": "Muat naik kulit gagal",
+    "coverBroken": "Kulit rosak — ketik untuk cuba semula",
     "generateNewStoryboard": "Jana storyboard baharu",
     "startStoryboard": "Mula storyboard (kira-kira 5–20 min)",
     "loginToAdapt": "Log masuk untuk terus adaptasi; karya tempatan akan digabung selepas log masuk.",
@@ -1046,6 +1053,8 @@
     "novelGenerateFailed": "Penjanaan novel gagal — model tidak mengembalikan kandungan mencukupi",
     "novelNotFound": "Novel tidak dijumpai",
     "coverGenFailed": "Penjanaan kulit gagal. Semak konfigurasi OPENAI_API_KEY / GEMINI_API_KEY.",
+    "coverUnsupportedType": "Hanya kulit JPEG / PNG / WebP disokong",
+    "adminDeleteFailed": "Padam gagal: {detail}",
     "noBrief": "Karya tiada Creative Brief. Jana atau simpan dahulu.",
     "specInvalid": "Spesifikasi tidak sah",
     "coverComfyFailed": "Penjanaan kulit gagal (Comfy tidak dikonfigurasi atau tamat masa)",
@@ -1535,6 +1544,11 @@
     "pageOf": "Page {current} / {total}",
     "nextPage": "Next page",
     "unknownError": "Unknown error",
+    "regenerateCover": "Redo cover",
+    "coverGenerating": "Generating cover…",
+    "uploadCover": "Upload cover",
+    "coverUploading": "Uploading cover…",
+    "coverUploadFailed": "Cover upload failed",
     "subtitleStandalone": "独立创作 · {total} 页分镜",
     "standaloneWork": "独立漫画"
   },

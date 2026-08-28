@@ -30,6 +30,7 @@ import { buildConsoleNavSections, canAccessConsoleTab } from "../src/lib/console
 import { THEME_SWATCH_COLORS, THEME_META_COLOR, type ThemeId } from "../src/lib/themes";
 import { canInspectUnlistedWork } from "../src/lib/auth/admin-capabilities";
 import { pickEffectiveSceneRoute } from "../src/lib/runtime-providers";
+import { adminWorkSearchWhere } from "../src/lib/admin/work-search";
 
 config();
 
@@ -77,6 +78,15 @@ function runOfflineChecks(): Check[] {
   checks.push(
     assert("isAdminConsolePath", isAdminConsolePath(path) && isAdminConsolePath(`${path}/audit`)),
   );
+
+  const byId = adminWorkSearchWhere("cmtbqbuip00ea10ayzs8yevbz");
+  checks.push(
+    assert(
+      "admin work search includes exact id",
+      Boolean(byId.OR?.some((clause) => "id" in clause && clause.id === "cmtbqbuip00ea10ayzs8yevbz")),
+    ),
+  );
+  checks.push(assert("empty admin work search is open", Object.keys(adminWorkSearchWhere("")).length === 0));
 
   const contentTabs = buildConsoleNavSections(true, "content_operator").flatMap((section) => section.items.map((item) => item.id));
   checks.push(

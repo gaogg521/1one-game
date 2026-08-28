@@ -3,6 +3,8 @@ import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureNovelCoverAfterCreate } from "@/lib/cover-generation";
+import { isStoredCoverUsable } from "@/lib/cover-asset";
+import { handleCoverUploadPut } from "@/lib/cover-upload";
 import { resolveNovelCoverGenre } from "@/lib/cover-genre";
 import { inferNovelGenreTagFromStoredPrompt } from "@/lib/novel-genre-tags";
 import { deleteNovelCoverFile } from "@/lib/novel-cover-persist";
@@ -12,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** 为已有小说补生成封面（广场/列表无封面时可用） */
+/** 为已有小说补生成封面（广场/列表无封面或坏链时可用） */
 export async function POST(req: Request, ctx: RouteContext) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
@@ -31,10 +33,13 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   if (row.coverPath && !force) {
-    return NextResponse.json(
-      { ok: true, coverPath: row.coverPath, novel: { id: row.id, coverPath: row.coverPath } },
-      { headers: ridHeaders(requestId) },
-    );
+    const usable = await isStoredCoverUsable(row.coverPath);
+    if (usable) {
+      return NextResponse.json(
+        { ok: true, coverPath: row.coverPath, novel: { id: row.id, coverPath: row.coverPath } },
+        { headers: ridHeaders(requestId) },
+      );
+    }
   }
 
   const quotaBlock = await gateGenerationQuota("cover", { refId: id });
@@ -43,7 +48,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json(body, { status: 402, headers: ridHeaders(requestId) });
   }
 
-  if (force && row.coverPath) {
+  if (row.coverPath) {
     await deleteNovelCoverFile(row.id);
     await persistNovelCoverPath(id, null);
   }
@@ -89,4 +94,25 @@ export async function POST(req: Request, ctx: RouteContext) {
     { ok: true, coverPath, novel: fresh },
     { headers: ridHeaders(requestId) },
   );
+}
+
+/** 作者/管理员上传封面（jpeg/png/webp） */
+export async function PUT(req: Request, ctx: RouteContext) {
+  const requestId = newGenerateRequestId();
+  const { id } = await ctx.params;
+  const row = await prisma.novel.findUnique({ where: { id }, select: { id: true, ownerKey: true } });
+  if (!row) {
+    return NextResponse.json(
+      localizedApiErrorPayload(req, "novelNotFound", { requestId }),
+      { status: 404, headers: ridHeaders(requestId) },
+    );
+  }
+  return handleCoverUploadPut({
+    req,
+    workId: id,
+    ownerKey: row.ownerKey,
+    persistPath: (coverPath) => persistNovelCoverPath(id, coverPath),
+    requestId,
+    wrapBody: (coverPath) => ({ novel: { id, coverPath } }),
+  });
 }

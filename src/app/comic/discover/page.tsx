@@ -13,7 +13,7 @@ import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { comicCoverFromImageUrls } from "@/lib/comic-display";
-import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
+import { cacheBustedCoverSrc, useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { comicCoverCardFrameClass } from "@/lib/cover-display-sizes";
 import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 import { ComicNovelSourceMeta } from "@/components/comic/ComicNovelSourceMeta";
@@ -49,7 +49,7 @@ function ComicCard({
     () => (c.imageUrls ? comicCoverFromImageUrls(c.imageUrls) : null),
     [c.imageUrls],
   );
-  const { displayCover, coverFailed, coverPending, retryCover } = useAutoWorkCover({
+  const { displayCover, coverCacheKey, coverFailed, coverPending, retryCover, markCoverBroken } = useAutoWorkCover({
     kind: "comic",
     id: c.id,
     coverPath: c.coverPath,
@@ -96,10 +96,11 @@ function ComicCard({
       <div className={comicCoverCardFrameClass}>
         {displayCover ? (
           <img
-            src={displayCover}
+            src={cacheBustedCoverSrc(displayCover, coverCacheKey)}
             alt={c.title}
-            className="h-full w-full object-cover transition group-hover:scale-105"
+            className={`h-full w-full object-cover transition group-hover:scale-105 ${c.featured ? "scale-[1.12]" : ""}`}
             loading="lazy"
+            onError={markCoverBroken}
           />
         ) : (
           <WorkCoverPlaceholder

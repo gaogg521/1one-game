@@ -82,6 +82,9 @@ export function FeaturedNovelsSection() {
                         alt={n.title}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]"
                         loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--gc-muted)] opacity-30">

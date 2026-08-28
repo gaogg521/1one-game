@@ -3,13 +3,17 @@ import { generationErrorCodes } from "@/lib/api/json-error-response";
 import { localizedApiErrorPayload } from "@/lib/api/localized-error";
 import { newGenerateRequestId, ridHeaders } from "@/lib/api/request-id";
 import { ensureComicCoverAfterCreate } from "@/lib/cover-generation";
+import { isStoredCoverUsable } from "@/lib/cover-asset";
+import { handleCoverUploadPut } from "@/lib/cover-upload";
 import { resolveComicStoryContext } from "@/lib/comic-story-genre";
+import { persistComicCoverPath } from "@/lib/cover-path-db";
+import { deleteProjectCoverFile } from "@/lib/project-cover";
 import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** 为已有漫画补生成封面（广场/列表无封面时可用） */
+/** 为已有漫画补生成封面（广场/列表无封面或坏链时可用） */
 export async function POST(req: Request, ctx: RouteContext) {
   const codes = generationErrorCodes();
   const requestId = newGenerateRequestId();
@@ -25,16 +29,24 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   if (row.coverPath && !force) {
-    return NextResponse.json(
-      { ok: true, coverPath: row.coverPath, comic: { id: row.id, coverPath: row.coverPath } },
-      { headers: ridHeaders(requestId) },
-    );
+    const usable = await isStoredCoverUsable(row.coverPath);
+    if (usable) {
+      return NextResponse.json(
+        { ok: true, coverPath: row.coverPath, comic: { id: row.id, coverPath: row.coverPath } },
+        { headers: ridHeaders(requestId) },
+      );
+    }
   }
 
   const quotaBlock = await gateGenerationQuota("cover", { refId: id });
   if (quotaBlock) {
     const body = await quotaBlock.json();
     return NextResponse.json(body, { status: 402, headers: ridHeaders(requestId) });
+  }
+
+  if (row.coverPath) {
+    await deleteProjectCoverFile(id).catch(() => {});
+    await persistComicCoverPath(id, null);
   }
 
   const ctxStory = await resolveComicStoryContext(row);
@@ -62,4 +74,25 @@ export async function POST(req: Request, ctx: RouteContext) {
   });
 
   return NextResponse.json({ ok: true, coverPath, comic: fresh }, { headers: ridHeaders(requestId) });
+}
+
+/** 作者/管理员上传封面（jpeg/png/webp） */
+export async function PUT(req: Request, ctx: RouteContext) {
+  const requestId = newGenerateRequestId();
+  const { id } = await ctx.params;
+  const row = await prisma.comic.findUnique({ where: { id }, select: { id: true, ownerKey: true } });
+  if (!row) {
+    return NextResponse.json(
+      localizedApiErrorPayload(req, "notFound", { requestId }),
+      { status: 404, headers: ridHeaders(requestId) },
+    );
+  }
+  return handleCoverUploadPut({
+    req,
+    workId: id,
+    ownerKey: row.ownerKey,
+    persistPath: (coverPath) => persistComicCoverPath(id, coverPath),
+    requestId,
+    wrapBody: (coverPath) => ({ comic: { id, coverPath } }),
+  });
 }

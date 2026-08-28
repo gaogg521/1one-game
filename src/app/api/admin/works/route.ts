@@ -4,7 +4,10 @@ import { attachWorkShareCounts } from "@/lib/admin/work-engagement";
 import { deleteAdminWork, isAdminWorkType } from "@/lib/admin/delete-work";
 import { prisma } from "@/lib/prisma";
 import { localizedJsonError } from "@/lib/api/localized-error";
+import { persistSanitizedComicCoverFromSource } from "@/lib/cover-generation";
+import { resolveComicCoverPath } from "@/lib/comic-display";
 import { formatWorkGenerationLabel } from "@/lib/work-generation-meta";
+import { adminWorkSearchWhere } from "@/lib/admin/work-search";
 
 export async function GET(req: Request) {
   const gate = await requireAdminCapability(req, "content");
@@ -38,12 +41,13 @@ export async function GET(req: Request) {
   const visFilter = visibility && ["public", "hidden", "pending_review"].includes(visibility)
     ? { visibility }
     : undefined;
+  const searchWhere = adminWorkSearchWhere(q);
 
   if (type === "all" || type === "game") {
     const rows = await prisma.project.findMany({
       where: {
         ...visFilter,
-        ...(q ? { OR: [{ title: { contains: q } }, { prompt: { contains: q } }] } : {}),
+        ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -86,7 +90,7 @@ export async function GET(req: Request) {
     const rows = await prisma.novel.findMany({
       where: {
         ...visFilter,
-        ...(q ? { OR: [{ title: { contains: q } }, { prompt: { contains: q } }] } : {}),
+        ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -129,7 +133,7 @@ export async function GET(req: Request) {
     const rows = await prisma.comic.findMany({
       where: {
         ...visFilter,
-        ...(q ? { OR: [{ title: { contains: q } }, { prompt: { contains: q } }] } : {}),
+        ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -191,8 +195,21 @@ async function moderateOne(
 ): Promise<void> {
   if (item.type === "game") await prisma.project.update({ where: { id: item.id }, data });
   else if (item.type === "novel") await prisma.novel.update({ where: { id: item.id }, data });
-  else if (item.type === "comic") await prisma.comic.update({ where: { id: item.id }, data });
-  else throw new Error(`unknown_type:${item.type}`);
+  else if (item.type === "comic") {
+    await prisma.comic.update({ where: { id: item.id }, data });
+    if (data.featured === true) {
+      const row = await prisma.comic.findUnique({
+        where: { id: item.id },
+        select: { coverPath: true, imageUrls: true },
+      });
+      const src = row ? resolveComicCoverPath(row.imageUrls, row.coverPath) : null;
+      if (src) {
+        await persistSanitizedComicCoverFromSource(item.id, src).catch((e) => {
+          console.warn("[admin-works] sanitize featured comic cover failed", item.id, e);
+        });
+      }
+    }
+  } else throw new Error(`unknown_type:${item.type}`);
 }
 
 export async function PATCH(req: Request) {
@@ -240,6 +257,76 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true, count: items.length });
 }
 
+type DeleteBody = { action?: string; type?: string; id?: string; batch?: ModerateItem[] };
+
+function parseWorkItems(body: DeleteBody): ModerateItem[] {
+  return Array.isArray(body.batch)
+    ? body.batch.filter((b) => b?.type && b?.id)
+    : body.type && body.id
+      ? [{ type: body.type, id: body.id }]
+      : [];
+}
+
+async function deleteWorksFromBody(
+  req: Request,
+  body: DeleteBody,
+  actor: { userId?: string; ownerKey?: string },
+) {
+  const items = parseWorkItems(body);
+  if (!items.length) return localizedJsonError(req, "adminMissingTypeId", 400);
+
+  let deleted = 0;
+  const missing: ModerateItem[] = [];
+  for (const item of items) {
+    if (!isAdminWorkType(item.type)) {
+      return localizedJsonError(req, "adminUnknownWorkType", 400, { params: { type: item.type } });
+    }
+    let ok = false;
+    try {
+      ok = await deleteAdminWork(item.type, item.id);
+    } catch (e) {
+      console.error("[admin-works] delete failed", item, e);
+      return localizedJsonError(req, "adminDeleteFailed", 500, {
+        params: { detail: e instanceof Error ? e.message : "error" },
+      });
+    }
+    if (!ok) {
+      missing.push(item);
+      continue;
+    }
+    deleted += 1;
+    await writeAdminAudit({
+      req,
+      action: items.length > 1 ? "work_delete_batch" : "work_delete",
+      targetType: item.type,
+      targetId: item.id,
+      detail: { titleHidden: true },
+      actorUserId: actor.userId,
+      actorOwnerKey: actor.ownerKey,
+    });
+  }
+
+  if (deleted === 0) return localizedJsonError(req, "notFound", 404);
+  return NextResponse.json({ ok: true, deleted, missing: missing.length });
+}
+
+/** 部分网关会丢掉 DELETE body，删除走 POST { action: "delete" }。 */
+export async function POST(req: Request) {
+  const gate = await requireAdminCapability(req, "content");
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
+  let body: DeleteBody;
+  try {
+    body = (await req.json()) as DeleteBody;
+  } catch {
+    return localizedJsonError(req, "badJson", 400);
+  }
+  if (body.action !== "delete") {
+    return localizedJsonError(req, "adminNoValidFields", 400);
+  }
+  return deleteWorksFromBody(req, body, { userId: gate.user?.id, ownerKey: gate.ownerKey });
+}
+
 export async function DELETE(req: Request) {
   const gate = await requireAdminCapability(req, "content");
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
@@ -264,7 +351,15 @@ export async function DELETE(req: Request) {
     if (!isAdminWorkType(item.type)) {
       return localizedJsonError(req, "adminUnknownWorkType", 400, { params: { type: item.type } });
     }
-    const ok = await deleteAdminWork(item.type, item.id);
+    let ok = false;
+    try {
+      ok = await deleteAdminWork(item.type, item.id);
+    } catch (e) {
+      console.error("[admin-works] delete failed", item, e);
+      return localizedJsonError(req, "adminDeleteFailed", 500, {
+        params: { detail: e instanceof Error ? e.message : "error" },
+      });
+    }
     if (!ok) {
       missing.push(item);
       continue;

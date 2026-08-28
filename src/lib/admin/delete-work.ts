@@ -17,6 +17,11 @@ function legacyTypeFor(type: AdminWorkType): string {
 
 async function detachLegacyCore(type: AdminWorkType, id: string): Promise<void> {
   await prisma.comment.deleteMany({ where: { workType: type, workId: id } });
+  await prisma.shareEvent.deleteMany({ where: { workType: type, workId: id } });
+  await prisma.literaryEngagementEvent.deleteMany({ where: { workType: type, workId: id } });
+  if (type === "game") {
+    await prisma.gameplayEvent.deleteMany({ where: { projectId: id } });
+  }
   await prisma.creativeProject.deleteMany({
     where: { legacyType: legacyTypeFor(type), legacyId: id },
   });

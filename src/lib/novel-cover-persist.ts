@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getBlobStore } from "@/lib/storage/blob-store";
 import { repoPublicPath } from "@/lib/public-path";
 
 const COVERS_DIR = repoPublicPath("covers");
@@ -11,7 +12,7 @@ function extFromBuffer(buf: Buffer): "jpg" | "png" | "webp" {
   return "png";
 }
 
-/** 将文生图结果持久化到 public/covers/{novelId}.{ext}，返回站内可访问路径。 */
+/** 将文生图结果持久化到 covers/{novelId}.{ext}（blob 或本地 public），返回可访问路径。 */
 export async function persistNovelCoverFile(novelId: string, imageUrl: string): Promise<string | null> {
   try {
     let buf: Buffer;
@@ -28,11 +29,8 @@ export async function persistNovelCoverFile(novelId: string, imageUrl: string): 
     if (buf.length < 512) return null;
 
     const ext = extFromBuffer(buf);
-    await fs.mkdir(COVERS_DIR, { recursive: true });
-    const rel = `/covers/${novelId}.${ext}`;
-    const abs = path.join(/*turbopackIgnore: true*/ COVERS_DIR, `${novelId}.${ext}`);
-    await fs.writeFile(abs, buf, { mode: 0o644 });
-    return rel;
+    const store = await getBlobStore();
+    return store.put(`covers/${novelId}.${ext}`, buf, ext === "jpg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png");
   } catch {
     return null;
   }
@@ -42,11 +40,8 @@ export async function persistNovelCoverFile(novelId: string, imageUrl: string): 
 export async function persistNovelCoverBuffer(novelId: string, buf: Buffer): Promise<string | null> {
   try {
     if (buf.length < 512) return null;
-    await fs.mkdir(COVERS_DIR, { recursive: true });
-    const rel = `/covers/${novelId}.jpg`;
-    const abs = path.join(/*turbopackIgnore: true*/ COVERS_DIR, `${novelId}.jpg`);
-    await fs.writeFile(abs, buf, { mode: 0o644 });
-    return rel;
+    const store = await getBlobStore();
+    return store.put(`covers/${novelId}.jpg`, buf, "image/jpeg");
   } catch {
     return null;
   }

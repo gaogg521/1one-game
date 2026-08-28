@@ -14,7 +14,7 @@ import { SuperAdminPanel } from "@/components/SuperAdminPanel";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
-import { useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
+import { cacheBustedCoverSrc, useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { novelCoverCardFrameClass } from "@/lib/cover-display-sizes";
 import { MobileSwipeFeedPromo } from "@/components/mobile/MobileSwipeFeedPromo";
 import { DiscoverSortBar, type NovelDiscoverSort } from "@/components/work/DiscoverSortBar";
@@ -49,7 +49,7 @@ function NovelCard({
   const router = useRouter();
   const title = normalizeNovelTitle(n.title, n.prompt, undefined, locale);
   const blurb = displayNovelSummary(n.summary, title, n.prompt, undefined, locale);
-  const { displayCover, coverFailed, coverPending, retryCover } = useAutoWorkCover({
+  const { displayCover, coverCacheKey, coverFailed, coverPending, retryCover, markCoverBroken } = useAutoWorkCover({
     kind: "novel",
     id: n.id,
     coverPath: n.coverPath,
@@ -110,10 +110,11 @@ function NovelCard({
         ) : null}
         {displayCover ? (
           <img
-            src={displayCover}
+            src={cacheBustedCoverSrc(displayCover, coverCacheKey)}
             alt={title}
             className="h-full w-full object-cover transition group-hover:scale-105"
             loading="lazy"
+            onError={markCoverBroken}
           />
         ) : (
           <WorkCoverPlaceholder

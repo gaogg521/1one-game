@@ -115,7 +115,7 @@ export function FeaturedComicsSection() {
                       <img
                         src={img}
                         alt={c.title}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]"
+                        className="h-full w-full scale-[1.12] object-cover transition duration-500 group-hover:scale-[1.18]"
                         loading="lazy"
                       />
                     ) : (

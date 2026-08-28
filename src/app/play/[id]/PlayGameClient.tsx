@@ -24,6 +24,7 @@ import { WorkCommentSection } from "@/components/work/WorkCommentSection";
 import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { PublishWorkButton } from "@/components/work/PublishWorkButton";
 import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
+import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
@@ -588,6 +589,7 @@ export function PlayGameClient({ id }: { id: string }) {
               }
               details={
                 <div className="space-y-3 text-xs text-[var(--gc-muted)]">
+                  <WorkUidCopy id={id} />
                   {shortUrl ? (
                     <p>
                       {t("shortLinkLabel")}{" "}

@@ -1,6 +1,7 @@
 import { persistComicCoverPath, persistNovelCoverPath } from "./cover-path-db";
 import { generateImage } from "./image-generation";
-import { persistNovelCoverFile, persistNovelCoverBuffer } from "./novel-cover-persist";
+import { persistNovelCoverBuffer } from "./novel-cover-persist";
+import { stripGeneratorCornerMarks } from "./cover-asset";
 import {
   inferStoryGenre,
   inferCoverGenre,
@@ -131,11 +132,12 @@ export async function generateCover(opts: CoverGenOptions): Promise<string | nul
     if (!result?.url) return null;
 
     const bgBuf = await readImageBuffer(result.url);
-    if (!bgBuf) return result.url;
+    if (!bgBuf) return null;
 
     const uiLocale = opts.uiLocale ?? "zh-Hans";
     const displayTitle = normalizeNovelTitle(opts.title, opts.storyHint, undefined, uiLocale);
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre, uiLocale });
+    const stripped = await stripGeneratorCornerMarks(bgBuf);
+    const composed = await compositeNovelCover(stripped, { title: displayTitle, genre, uiLocale });
     const tmpName = `composed-${Date.now()}.jpg`;
     const tmpRel = `/covers/${tmpName}`;
     const tmpAbs = repoPublicPath("covers", tmpName);
@@ -186,7 +188,8 @@ export async function generateNovelCover(
     const bgBuf = await readImageBuffer(result.url);
     if (!bgBuf) return null;
 
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre: g, uiLocale });
+    const stripped = await stripGeneratorCornerMarks(bgBuf);
+    const composed = await compositeNovelCover(stripped, { title: displayTitle, genre: g, uiLocale });
     const coverPath = await persistNovelCoverBuffer(novelId, composed);
     if (!coverPath) return null;
 
@@ -239,7 +242,8 @@ export async function composeAndPersistNovelCoverFromBackground(
   if (!bgBuf) return null;
 
   try {
-    const composed = await compositeNovelCover(bgBuf, { title: displayTitle, genre, uiLocale });
+    const stripped = await stripGeneratorCornerMarks(bgBuf);
+    const composed = await compositeNovelCover(stripped, { title: displayTitle, genre, uiLocale });
     const coverPath = await persistNovelCoverBuffer(novelId, composed);
     if (!coverPath) return null;
 
@@ -270,9 +274,33 @@ export async function generateComicCover(
   });
   if (!coverUrl) return null;
 
-  await persistComicCoverPath(comicId, coverUrl);
+  const buf = await readImageBuffer(coverUrl);
+  const persisted = buf ? await persistNovelCoverBuffer(comicId, buf) : null;
+  const path = persisted ?? coverUrl;
+  if (/^https?:\/\//i.test(path) && !persisted) return null;
+  await persistComicCoverPath(comicId, path);
+  return path;
+}
 
-  return coverUrl;
+/** 精选/列表用：把分镜首图或过期 TOS 链洗成站内封面（擦左下角标）。 */
+export async function persistSanitizedComicCoverFromSource(
+  comicId: string,
+  sourceUrl: string,
+): Promise<string | null> {
+  const bgBuf = await readImageBuffer(sourceUrl);
+  if (!bgBuf) return null;
+  try {
+    const stripped = await stripGeneratorCornerMarks(bgBuf);
+    const coverPath = await persistNovelCoverBuffer(comicId, stripped);
+    if (!coverPath) return null;
+    await persistComicCoverPath(comicId, coverPath);
+    return coverPath;
+  } catch (e) {
+    if (process.env.GENERATE_STRUCTURED_LOG === "1") {
+      console.warn("[cover] sanitize comic cover failed", comicId, e);
+    }
+    return null;
+  }
 }
 
 /** 漫画入库后生成封面（带超时，避免 SSE 永久挂起） */
