@@ -1117,3 +1117,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 2. 推送 `origin/main` 后执行 `python scripts/deploy-prod-with-assets.py`；要求生产 `.next/BUILD_ID`、`operone`/worker active、TLS/SNI health 与首页全部 JS chunks 通过。
 3. 公网真实浏览器强刷首页并打开一个手机游戏，确认不是旧游戏页、无 ChunkLoadError、Canvas 可操作与结算可重开。
 
+## P55：后台作品治理服务端筛选与真实分页（2026-08-28）
+
+- 修复作品治理先截取最近 100 条、再在浏览器按媒介筛选的问题；漫画和小说不再被大量新游戏挤出可见结果。
+- `/api/admin/works` 现在接收 `type`、`visibility`、`q`、`limit`、`offset`，返回当前筛选的真实 `total` 与指定页数据；跨媒介列表保持全局创建时间倒序。
+- Console 的作品治理与待审队列改为服务端筛选、每页 12 条；总数和分页页数使用 API 的真实总数，概览仍保留最近作品语义。
+- 验证：`npx tsc --noEmit`、定向 ESLint、完整 `npm run build`（106 routes）通过；当前数据库小说 46 条、漫画 30 条的前两页各返回 12 条且无重复。匿名 HTTP 请求按权限基线返回 403，未绕过真实后台登录做浏览器验收。
+

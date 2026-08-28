@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const visibility = searchParams.get("visibility");
   const q = searchParams.get("q")?.trim();
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "40", 10) || 40, 100);
+  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10) || 0, 0);
 
   const items: Array<{
     type: string;
@@ -42,6 +43,18 @@ export async function GET(req: Request) {
     ? { visibility }
     : undefined;
   const searchWhere = adminWorkSearchWhere(q);
+  const querySkip = type === "all" ? 0 : offset;
+  const queryTake = type === "all" ? offset + limit : limit;
+  const countWhere = {
+    ...visFilter,
+    ...searchWhere,
+  };
+  const [gameTotal, novelTotal, comicTotal] = await Promise.all([
+    type === "all" || type === "game" ? prisma.project.count({ where: countWhere }) : 0,
+    type === "all" || type === "novel" ? prisma.novel.count({ where: countWhere }) : 0,
+    type === "all" || type === "comic" ? prisma.comic.count({ where: countWhere }) : 0,
+  ]);
+  const total = gameTotal + novelTotal + comicTotal;
 
   if (type === "all" || type === "game") {
     const rows = await prisma.project.findMany({
@@ -50,7 +63,8 @@ export async function GET(req: Request) {
         ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
-      take: limit,
+      skip: querySkip,
+      take: queryTake,
       select: {
         id: true,
         title: true,
@@ -93,7 +107,8 @@ export async function GET(req: Request) {
         ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
-      take: limit,
+      skip: querySkip,
+      take: queryTake,
       select: {
         id: true,
         title: true,
@@ -136,7 +151,8 @@ export async function GET(req: Request) {
         ...searchWhere,
       },
       orderBy: { createdAt: "desc" },
-      take: limit,
+      skip: querySkip,
+      take: queryTake,
       select: {
         id: true,
         title: true,
@@ -183,8 +199,9 @@ export async function GET(req: Request) {
   }
 
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const enriched = await attachWorkShareCounts(items.slice(0, limit));
-  return NextResponse.json({ items: enriched });
+  const pageItems = type === "all" ? items.slice(offset, offset + limit) : items.slice(0, limit);
+  const enriched = await attachWorkShareCounts(pageItems);
+  return NextResponse.json({ items: enriched, total, limit, offset });
 }
 
 type ModerateItem = { type: string; id: string };

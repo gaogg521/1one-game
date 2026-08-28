@@ -202,7 +202,9 @@ export default function AdminConsolePage({
   const tab = canAccessConsoleTab(resolvedTab, canViewAdminSection, adminRole) ? resolvedTab : defaultConsoleTab();
   const [stats, setStats] = useState<Stats | null>(null);
   const [works, setWorks] = useState<WorkRow[]>([]);
+  const [worksTotal, setWorksTotal] = useState(0);
   const [pending, setPending] = useState<WorkRow[]>([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [shares, setShares] = useState<ShareReport | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -321,27 +323,40 @@ export default function AdminConsolePage({
   }, [query]);
 
   const loadOverview = useCallback(async () => {
-    const params = new URLSearchParams({ limit: "100" });
+    const isWorksListing = tab === "works";
+    const params = new URLSearchParams({
+      limit: String(isWorksListing ? ADMIN_PAGE_SIZE : 100),
+      offset: String(isWorksListing ? (page - 1) * ADMIN_PAGE_SIZE : 0),
+    });
     if (debouncedQuery) params.set("q", debouncedQuery);
+    if (isWorksListing && workTypeFilter !== "all") params.set("type", workTypeFilter);
+    if (isWorksListing && visibilityFilter !== "all") params.set("visibility", visibilityFilter);
     const [sRes, wRes] = await Promise.all([
       fetch("/api/admin/stats", { headers: headers() }),
       fetch(`/api/admin/works?${params}`, { headers: headers() }),
     ]);
     if (sRes.status === 403) throw new Error("forbidden");
     setStats((await sRes.json()) as Stats);
-    const wData = (await wRes.json()) as { items?: WorkRow[] };
+    const wData = (await wRes.json()) as { items?: WorkRow[]; total?: number };
     setWorks(wData.items ?? []);
-  }, [debouncedQuery, headers]);
+    setWorksTotal(wData.total ?? wData.items?.length ?? 0);
+  }, [debouncedQuery, headers, page, tab, visibilityFilter, workTypeFilter]);
 
   const loadPending = useCallback(async () => {
-    const params = new URLSearchParams({ visibility: "pending_review", limit: "100" });
+    const params = new URLSearchParams({
+      visibility: "pending_review",
+      limit: String(ADMIN_PAGE_SIZE),
+      offset: String((page - 1) * ADMIN_PAGE_SIZE),
+    });
     if (debouncedQuery) params.set("q", debouncedQuery);
+    if (workTypeFilter !== "all") params.set("type", workTypeFilter);
     const res = await fetch(`/api/admin/works?${params}`, { headers: headers() });
     if (res.status === 403) throw new Error("forbidden");
-    const data = (await res.json()) as { items?: WorkRow[] };
+    const data = (await res.json()) as { items?: WorkRow[]; total?: number };
     setPending(data.items ?? []);
+    setPendingTotal(data.total ?? data.items?.length ?? 0);
     setSelected(new Set());
-  }, [debouncedQuery, headers]);
+  }, [debouncedQuery, headers, page, workTypeFilter]);
 
   const loadShares = useCallback(async () => {
     const [shareRes, analyticsRes] = await Promise.all([
@@ -453,6 +468,7 @@ export default function AdminConsolePage({
 
   const visibleWorks = useMemo(() => {
     const source = tab === "pending" ? pending : works;
+    if (tab === "pending" || tab === "works") return source;
     const q = query.trim().toLowerCase();
     return source.filter((w) => {
       if (workTypeFilter !== "all" && w.type !== workTypeFilter) return false;
@@ -472,12 +488,12 @@ export default function AdminConsolePage({
     );
   }, [query, users]);
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil((tab === "users" ? visibleUsers.length : visibleWorks.length) / ADMIN_PAGE_SIZE),
-  );
+  const currentWorksTotal = tab === "pending" ? pendingTotal : tab === "works" ? worksTotal : visibleWorks.length;
+  const pageCount = Math.max(1, Math.ceil((tab === "users" ? visibleUsers.length : currentWorksTotal) / ADMIN_PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
-  const pagedWorks = visibleWorks.slice((clampedPage - 1) * ADMIN_PAGE_SIZE, clampedPage * ADMIN_PAGE_SIZE);
+  const pagedWorks = tab === "pending" || tab === "works"
+    ? visibleWorks
+    : visibleWorks.slice((clampedPage - 1) * ADMIN_PAGE_SIZE, clampedPage * ADMIN_PAGE_SIZE);
   const pagedUsers = visibleUsers.slice((clampedPage - 1) * ADMIN_PAGE_SIZE, clampedPage * ADMIN_PAGE_SIZE);
   const isCurrentWorksPageSelected =
     pagedWorks.length > 0 && pagedWorks.every((work) => selected.has(`${work.type}:${work.id}`));
@@ -730,7 +746,7 @@ export default function AdminConsolePage({
                 onWorkTypeFilterChange={updateWorkTypeFilter}
                 visibilityFilter={visibilityFilter}
                 onVisibilityFilterChange={updateVisibilityFilter}
-                total={tab === "users" ? visibleUsers.length : visibleWorks.length}
+                total={tab === "users" ? visibleUsers.length : currentWorksTotal}
               />
             ) : null}
 
