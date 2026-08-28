@@ -29,6 +29,7 @@ import { chartScaleMax } from "../src/lib/admin-chart-scale";
 import { buildConsoleNavSections, canAccessConsoleTab } from "../src/lib/console-nav";
 import { THEME_SWATCH_COLORS, THEME_META_COLOR, type ThemeId } from "../src/lib/themes";
 import { canInspectUnlistedWork } from "../src/lib/auth/admin-capabilities";
+import { pickEffectiveSceneRoute } from "../src/lib/runtime-providers";
 
 config();
 
@@ -92,6 +93,24 @@ function runOfflineChecks(): Check[] {
         canInspectUnlistedWork("content_operator", false) &&
         !canInspectUnlistedWork("user", false) &&
         canInspectUnlistedWork("user", true),
+    ),
+  );
+  const zhNovel = pickEffectiveSceneRoute(
+    [{ scene: "novel", providerId: "ark", primary: "deepseek-v4-flash-ga-260731", fallbacks: [] }],
+    [{ scene: "novel", localeGroup: "zh", providerId: "or", primary: "openrouter/free", fallbacks: [] }],
+    "novel",
+    "zh",
+  );
+  const intlGame = pickEffectiveSceneRoute(
+    [{ scene: "game_text", providerId: "ark", primary: "deepseek-v4-flash-ga-260731", fallbacks: [] }],
+    [],
+    "game_text",
+    "international",
+  );
+  checks.push(
+    assert(
+      "live routing summary uses locale overlay",
+      zhNovel.overridden && zhNovel.route?.primary === "openrouter/free" && !intlGame.overridden && intlGame.route?.primary === "deepseek-v4-flash-ga-260731",
     ),
   );
   checks.push(

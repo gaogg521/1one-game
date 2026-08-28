@@ -316,7 +316,7 @@ export default function AdminConsolePage({
   const loadOverview = useCallback(async () => {
     const [sRes, wRes] = await Promise.all([
       fetch("/api/admin/stats", { headers: headers() }),
-      fetch("/api/admin/works?limit=30", { headers: headers() }),
+      fetch("/api/admin/works?limit=100", { headers: headers() }),
     ]);
     if (sRes.status === 403) throw new Error("forbidden");
     setStats((await sRes.json()) as Stats);
@@ -325,7 +325,7 @@ export default function AdminConsolePage({
   }, [headers]);
 
   const loadPending = useCallback(async () => {
-    const res = await fetch("/api/admin/works?visibility=pending_review&limit=50", { headers: headers() });
+    const res = await fetch("/api/admin/works?visibility=pending_review&limit=100", { headers: headers() });
     if (res.status === 403) throw new Error("forbidden");
     const data = (await res.json()) as { items?: WorkRow[] };
     setPending(data.items ?? []);
@@ -1075,8 +1075,11 @@ export default function AdminConsolePage({
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "pending" ? (
               <section className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="gc-admin-type-panel">{t("pendingTitle")}</h2>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="gc-admin-type-panel">{t("pendingTitle")}</h2>
+                    <p className="mt-1 max-w-3xl text-sm text-[var(--gc-muted)]">{t("emptyPendingBody")}</p>
+                  </div>
                   {pending.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -1149,8 +1152,11 @@ export default function AdminConsolePage({
 
             {!loading && !error && isAdminConsoleTab(tab) && tab === "works" ? (
               <section className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="gc-admin-type-panel">{t("recentWorksTitle")}</h2>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="gc-admin-type-panel">{t("recentWorksTitle")}</h2>
+                    <p className="mt-1 max-w-3xl text-sm text-[var(--gc-muted)]">{t("worksCatalogHint")}</p>
+                  </div>
                   {visibleWorks.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       <button

@@ -12,7 +12,7 @@ import type {
   RuntimeProviderPublic,
   RuntimeSceneKey,
 } from "@/lib/runtime-providers";
-import { routeModelCandidates } from "@/lib/runtime-providers";
+import { pickEffectiveSceneRoute, routeModelCandidates } from "@/lib/runtime-providers";
 import { createProviderFromTemplate, type ProviderTemplateId } from "@/lib/runtime-provider-templates";
 import { RUNTIME_SCENE_CATALOG } from "@/lib/runtime-scene-catalog";
 import {
@@ -253,11 +253,56 @@ function EditStateBadge({ state }: { state: ProviderEditState | "routePending" }
   );
 }
 
+function LiveRouteCell({
+  route,
+  overridden,
+  providers,
+}: {
+  route: RuntimeModelRoute | undefined;
+  overridden: boolean;
+  providers: ProviderFormState[];
+}) {
+  const t = useTranslations("adminPage.runtimeConfig");
+  const provider = providers.find((p) => p.id === route?.providerId);
+  const endpoint = providerEndpointHost(provider?.baseUrl);
+  const candidates = route ? routeModelCandidates(route) : [];
+  const fallbacks = candidates.slice(1).map((c) => c.model);
+  return (
+    <td className="py-2.5 pr-4 align-top">
+      <p className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[12px] text-[var(--gc-text)]">{provider?.name.trim() || route?.providerId || "—"}</span>
+        {route ? (
+          <span
+            className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] ${
+              overridden
+                ? "border-amber-400/30 bg-amber-400/10 text-amber-100"
+                : "border-white/10 bg-white/5 text-[var(--gc-text-faint)]"
+            }`}
+          >
+            {overridden ? t("liveOverrideBadge") : t("liveInheritBadge")}
+          </span>
+        ) : null}
+      </p>
+      {endpoint ? (
+        <p className="mt-0.5 font-mono text-[10px] text-[var(--gc-text-faint)]" title={provider?.baseUrl}>
+          {endpoint}
+        </p>
+      ) : null}
+      <p className="mt-1 font-mono text-[12px] text-[var(--gc-text)]">{route?.primary || "—"}</p>
+      {fallbacks.length ? (
+        <p className="mt-0.5 font-mono text-[11px] text-[var(--gc-muted)]">{fallbacks.join(" → ")}</p>
+      ) : null}
+    </td>
+  );
+}
+
 function LiveRuntimeSummary({
   routes,
+  localeRoutes,
   providers,
 }: {
   routes: RuntimeModelRoute[];
+  localeRoutes: RuntimeLocaleModelRoute[];
   providers: ProviderFormState[];
 }) {
   const t = useTranslations("adminPage.runtimeConfig");
@@ -278,26 +323,22 @@ function LiveRuntimeSummary({
         {routes.length === 0 ? (
           <p className="text-sm text-[var(--gc-muted)]">{t("liveSummaryEmpty")}</p>
         ) : (
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--gc-text-faint)]">
                 <th className="pb-2 pr-4 font-medium">{t("routeColScene")}</th>
-                <th className="pb-2 pr-4 font-medium">{t("routeColProvider")}</th>
-                <th className="pb-2 pr-4 font-medium">{t("routeColPrimary")}</th>
-                <th className="pb-2 font-medium">{t("routeColFallback")}</th>
+                <th className="pb-2 pr-4 font-medium">{t("liveColZh")}</th>
+                <th className="pb-2 font-medium">{t("liveColIntl")}</th>
               </tr>
             </thead>
             <tbody>
               {RUNTIME_SCENE_CATALOG.map((meta) => {
-                const route = routes.find((r) => r.scene === meta.scene);
-                const provider = providers.find((p) => p.id === route?.providerId);
+                const zh = pickEffectiveSceneRoute(routes, localeRoutes, meta.scene, "zh");
+                const intl = pickEffectiveSceneRoute(routes, localeRoutes, meta.scene, "international");
                 const domain =
                   meta.domain === "game" ? DOMAIN.game : meta.domain === "novel" ? DOMAIN.novel : DOMAIN.comic;
-                const candidates = route ? routeModelCandidates(route) : [];
-                const fallbacks = candidates.slice(1).map((c) => c.model);
-                const endpoint = providerEndpointHost(provider?.baseUrl);
                 return (
-                  <tr key={meta.scene} className="border-t border-white/6">
+                  <tr key={meta.scene} className="border-t border-white/6" data-testid={`admin-runtime-live-${meta.scene}`}>
                     <td className="py-2.5 pr-4 align-top">
                       <span
                         className="mr-2 inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase"
@@ -310,20 +351,8 @@ function LiveRuntimeSummary({
                       </span>
                       <span className="text-[var(--gc-text)]">{t(meta.labelKey)}</span>
                     </td>
-                    <td className="py-2.5 pr-4 align-top">
-                      <p className="text-[12px] text-[var(--gc-text)]">{provider?.name.trim() || route?.providerId || "—"}</p>
-                      {endpoint ? (
-                        <p className="mt-0.5 font-mono text-[10px] text-[var(--gc-text-faint)]" title={provider?.baseUrl}>
-                          {endpoint}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="py-2.5 pr-4 align-top font-mono text-[12px] text-[var(--gc-text)]">
-                      {route?.primary || "—"}
-                    </td>
-                    <td className="py-2.5 align-top font-mono text-[12px] text-[var(--gc-muted)]">
-                      {fallbacks.length ? fallbacks.join(" → ") : "—"}
-                    </td>
+                    <LiveRouteCell route={zh.route} overridden={zh.overridden} providers={providers} />
+                    <LiveRouteCell route={intl.route} overridden={intl.overridden} providers={providers} />
                   </tr>
                 );
               })}
@@ -1283,7 +1312,7 @@ export function RuntimeConfigPanel({ headers, onNotice }: Props) {
         </p>
       </div>
 
-      <LiveRuntimeSummary routes={savedRoutes} providers={savedProviders} />
+      <LiveRuntimeSummary routes={savedRoutes} localeRoutes={savedLocaleRoutes} providers={savedProviders} />
 
       <EnvLegacySecretsPanel view={view} />
 

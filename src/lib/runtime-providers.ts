@@ -299,6 +299,18 @@ export function getLocaleRouteOverride(
   return payload.localeRoutes?.find((route) => route.scene === scene && route.localeGroup === localeGroup);
 }
 
+/** Merge global scene routes with a locale overlay. Used by the live admin summary. */
+export function pickEffectiveSceneRoute<T extends RuntimeModelRoute>(
+  routes: T[],
+  localeRoutes: Array<T & { localeGroup: RuntimeLocaleGroup }>,
+  scene: RuntimeSceneKey,
+  localeGroup: RuntimeLocaleGroup,
+): { route: T | undefined; overridden: boolean } {
+  const override = localeRoutes.find((item) => item.scene === scene && item.localeGroup === localeGroup);
+  if (override) return { route: override, overridden: true };
+  return { route: routes.find((item) => item.scene === scene), overridden: false };
+}
+
 export function routeModelCascade(route: RuntimeModelRoute): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
