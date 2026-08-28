@@ -21,6 +21,27 @@ import { recordGameResult } from "@/game/engine/win-rate-guard";
 import { recordScore, getHighScore } from "@/game/engine/local-highscore";
 import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
 import { createGameplayTelemetrySession } from "@/lib/gameplay-telemetry.client";
+import { VoxelSandboxPlayer } from "@/components/VoxelSandboxPlayer";
+
+type GamePlayerInnerProps = {
+  spec: GameSpec;
+  coverCapture?: { projectId: string } | null;
+  projectId?: string;
+  creativeRevisionId?: string;
+  promptHint?: string;
+  immersive?: boolean;
+  previewMode?: boolean;
+  arcadeMode?: boolean;
+  onIterate?: (instruction: string) => void;
+  onEnd?: (result: { won: boolean; score: number }) => void;
+};
+
+export default function GamePlayerInner(props: GamePlayerInnerProps) {
+  if (props.spec.samplePlayProfile?.showcaseRuntime === "voxel-frontier") {
+    return <VoxelSandboxPlayer spec={props.spec} projectId={props.projectId} onEnd={props.onEnd} />;
+  }
+  return <PhaserGamePlayerInner {...props} />;
+}
 
 function formatRecapTime(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -28,7 +49,7 @@ function formatRecapTime(sec: number): string {
   return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
 }
 
-export default function GamePlayerInner({
+function PhaserGamePlayerInner({
   spec,
   coverCapture,
   projectId,
@@ -39,22 +60,7 @@ export default function GamePlayerInner({
   arcadeMode = false,
   onIterate,
   onEnd,
-}: {
-  spec: GameSpec;
-  coverCapture?: { projectId: string } | null;
-  projectId?: string;
-  creativeRevisionId?: string;
-  promptHint?: string;
-  immersive?: boolean;
-  /** 创作台预览模式：游戏结束自动重启，不显示结算画面 */
-  previewMode?: boolean;
-  /** Arcade Feed 模式：拉伸容器填满父元素高度，结算时通知父组件 */
-  arcadeMode?: boolean;
-  /** 结算画面显示"继续调整"输入框，提交后以此 instruction 再次生成 */
-  onIterate?: (instruction: string) => void;
-  /** 游戏结算回调（arcadeMode 自动切换下一关） */
-  onEnd?: (result: { won: boolean; score: number }) => void;
-}) {
+}: GamePlayerInnerProps) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("gamePlayer");
   const hostRef = useRef<HTMLDivElement>(null);

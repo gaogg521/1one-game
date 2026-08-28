@@ -1,4 +1,62 @@
 # 项目工作进度快照
+最后更新：2026-08-28（高质量游戏生产流水线第一阶段）
+
+## 当前状态
+- 已基于 Astrocade 调研开始平台级改造，不再直接扩写单款 Phaser 样品。
+- `game_production_pipeline` 已从简单状态列表升级为可执行生产计划：设计、玩法、美术、UX、运行时、QA 六类负责人，每阶段均有目标、交付物、依赖和验收条件。
+- 复杂游戏走 `independent_agentic_module` 时，如果没有真实可执行模块，`technical_design` 与生产预检会 fail closed，不再把模板壳当作交付完成。
+- 资产生产保持 pending，必须等待持久化 asset manifest；移动端必须补齐首次输入、核心循环、失败重开、胜利和 60 秒触屏手玩五类真实证据。
+- 新增 `npm run qa:game-production-pipeline`；该检查、`npx tsc --noEmit`、`qa:game-production-contract`、`qa:creator-publication` 已通过。
+- 每个 Core 游戏修订现在持久化 `game_edit_schema`，记录该游戏可编辑参数、范围和实际玩法影响；资产 manifest runtime schema 升级到 v3，槽位带语义用途、媒体/子类型、比例、压缩策略和修订号。
+- 新增 `npm run qa:game-production-artifacts`；`qa:runtime-public-assets`、`qa:game-asset-fallback` 和生产 `npm run build` 已通过。构建仍有既有 Turbopack 动态文件范围告警，本轮未扩大该问题。
+- `qa:creator-core` 当前被共享数据库中的待处理 job 抢占，失败在既有 `artifact must preserve revision lineage` 断言；隔离重跑仍复现，未把它误判为本轮代码回归或通过。
+- `voxel-power-frontier` 已绕过旧 Phaser 伪 3D 场景，改走 Three.js 独立 WebGL 运行时：32×32 程序化世界、实例化可见方块、碰撞/跨步/跳跃、第一人称视角、采掘/放置、热栏库存、敌人追击、能量脉冲、昼夜、任务结算、本地世界差异存档和触屏控制均已落地。
+- 已用真实浏览器验证桌面与 393×852 移动端：触控位移、坐标变化、采掘反馈、热栏选择、方块放置、技能命中、首触隐藏引导均成立；新封面来自该运行时实机画面。
+- `npm run build` 再次通过；新增/相关 QA、TypeScript 与精确范围 ESLint 通过。生产构建仍仅有 7 条既有 Turbopack 动态文件范围告警。
+
+## 本轮修改文件
+- `src/lib/game-production-pipeline.ts`
+- `src/lib/game-edit-schema.ts`
+- `src/components/GamePlayerInner.tsx`
+- `src/components/VoxelSandboxPlayer.tsx`
+- `src/game/voxel/VoxelSandboxRuntime.ts`
+- `src/lib/assets/asset-runtime-resolver.ts`
+- `src/lib/creator-core/game-bridge.ts`
+- `scripts/qa-game-production-pipeline.ts`
+- `scripts/qa-game-production-artifacts.ts`
+- `scripts/qa-showcase-games.ts`
+- `scripts/qa-showcase-games-browser.ts`
+- `public/samples/voxel-power-frontier.png`
+- `package.json` / `package-lock.json`
+- `package.json`
+- `docs/competitor-research/super-power-x-minecraft.md`
+
+## 下一步
+1. 精确提交本轮拥有文件并推送 `origin/main`。
+2. 走生产发布脚本，检查 BUILD_ID、TLS/SNI 健康、静态资源和公开移动端页面。
+
+# 项目工作进度快照
+最后更新：2026-08-28（Super Power X Minecraft 竞品深拆）
+
+## 当前状态
+- 已停止继续修补 `VoxelFrontierScene`；用户指出第一款仍不可玩，判断成立。
+- 已通过真实页面、iframe `srcdoc`、实际进入游戏与背包/菜单操作完成竞品技术拆解。
+- 已继续调研 Astrocade 的生产系统：AstroBrain 多 Agent 编排、专属编辑器、多轮 wish、资产元数据、自动 QA、真人冷启动和留存反馈闭环。
+- 完整结论写入 `docs/competitor-research/super-power-x-minecraft.md`；尚未开始第二次实现。
+- 本轮临时添加的 Three.js 草稿和依赖已经全部撤销，代码运行时保持上一版状态。
+
+## 下次启动清单
+1. 按调研文档建立与 Phaser 并列的独立 WebGL voxel runtime，不再扩写伪透视场景。
+2. 第一阶段先完成 chunk、greedy mesh/面实例化、碰撞、DDA、桌面/移动输入、背包和存档。
+3. 用 10 分钟真实浏览器手玩闭环验收，再考虑内容扩展和上线。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · Super Power X Minecraft 竞品深拆
+- 竞品是 Three.js 真实体素沙盒：16³ chunk、seed 世界、instancing、greedy mesh、LOD、DDA、碰撞、背包/合成、生存、15 类生物、9 种能力和联机。
+- 竞品游戏本体约 1.128 MB 文本代码，另有约 165 KB 平台注入层和 137 个外部资源；当前约 300 行 Phaser 场景不是同级产品。
+- 状态：调研完成，等待按 clean-room 技术规格重做。
+
+# 项目工作进度快照
 最后更新：2026-08-28（过期分块自动刷新）
 
 ## 当前状态

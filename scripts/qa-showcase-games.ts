@@ -5,9 +5,9 @@ import { expectedPhaserSceneName } from "@/lib/game-templates/runtime";
 import { SAMPLES } from "@/lib/samples";
 
 const CASES = [
-  { id: "voxel-power-frontier", runtime: "voxel-frontier", scene: "VoxelFrontierScene", hooks: ["targetCell", "mine()", "place()", "renderWorld", "voxelCompleted"] },
-  { id: "neon-territory-loop", runtime: "territory-loop", scene: "TerritoryLoopScene", hooks: ["closeLoop", "crashTrail", "territoryCoverage", "territoryCompleted"] },
-  { id: "grand-estate-merge", runtime: "estate-merge", scene: "EstateMergeScene", hooks: ["moveOrMerge", "spawnBuilding", "estateBoard", "estateCompleted"] },
+  { id: "voxel-power-frontier", runtime: "voxel-frontier", scene: "VoxelSandboxRuntime", source: "src/game/voxel/VoxelSandboxRuntime.ts", hooks: ["rebuildWorldMeshes", "mine()", "place()", "pulse()", "checkComplete", "THREE.InstancedMesh"] },
+  { id: "neon-territory-loop", runtime: "territory-loop", scene: "TerritoryLoopScene", source: "src/game/engine/TerritoryLoopScene.ts", hooks: ["closeLoop", "crashTrail", "territoryCoverage", "territoryCompleted"] },
+  { id: "grand-estate-merge", runtime: "estate-merge", scene: "EstateMergeScene", source: "src/game/engine/EstateMergeScene.ts", hooks: ["moveOrMerge", "spawnBuilding", "estateBoard", "estateCompleted"] },
 ] as const;
 
 const REMOVED = [
@@ -24,10 +24,10 @@ for (const test of CASES) {
   if (!sample) throw new Error(`${test.id}: sample missing`);
   const spec = buildCanonicalAstrocadeSpec(sample.prompt, "zh-Hans", { sampleId: sample.id });
   if (spec.samplePlayProfile?.showcaseRuntime !== test.runtime) throw new Error(`${test.id}: runtime contract mismatch`);
-  if (expectedPhaserSceneName(spec) !== test.scene) throw new Error(`${test.id}: expected ${test.scene}`);
-  const source = fs.readFileSync(path.join(process.cwd(), "src/game/engine", `${test.scene}.ts`), "utf8");
+  if (test.runtime !== "voxel-frontier" && expectedPhaserSceneName(spec) !== test.scene) throw new Error(`${test.id}: expected ${test.scene}`);
+  const source = fs.readFileSync(path.join(process.cwd(), test.source), "utf8");
   for (const hook of test.hooks) if (!source.includes(hook)) throw new Error(`${test.id}: missing gameplay hook ${hook}`);
   console.log(`[OK] ${test.id} -> ${test.scene}`);
 }
 
-console.log("qa:showcase-games: ok (3 independent runtimes; 7 rejected prototypes removed)");
+console.log("qa:showcase-games: ok (1 independent WebGL runtime + 2 dedicated Phaser runtimes; 7 rejected prototypes removed)");

@@ -18,37 +18,25 @@ async function state(page: Page): Promise<QaState> {
   return page.evaluate(() => ({ ...((window as Window & { __PHASER_QA_STATE__?: QaState }).__PHASER_QA_STATE__ ?? {}) }));
 }
 
-async function hold(page: Page, key: string, ms: number) {
-  await page.keyboard.down(key);
-  await page.waitForTimeout(ms);
-  await page.keyboard.up(key);
-  await page.waitForTimeout(100);
-}
-
-async function tap(page: Page, key: string) {
-  await page.keyboard.down(key);
-  await page.waitForTimeout(70);
-  await page.keyboard.up(key);
-  await page.waitForTimeout(90);
-}
-
 async function completeVoxel(page: Page) {
-  await openGame(page, "voxel-power-frontier");
-  await tap(page, "e");
-  for (const targetZ of [5, 2]) {
-    for (let guard = 0; guard < 30; guard += 1) {
-      const qa = await state(page);
-      if (Number(qa.targetZ) <= targetZ) break;
-      await hold(page, "w", 140);
-    }
-    await tap(page, "e");
-  }
-  await tap(page, "e");
-  for (let i = 0; i < 4; i += 1) await tap(page, "q");
-  await page.waitForFunction(() => (window as Window & { __PHASER_QA_STATE__?: QaState }).__PHASER_QA_STATE__?.voxelCompleted === true, null, { timeout: 5_000 });
-  const qa = await state(page);
-  if (Number(qa.crystals) !== 3 || Number(qa.placed) < 4) throw new Error(`voxel task chain invalid: ${JSON.stringify(qa)}`);
-  console.log(`[OK] voxel: moved, mined ${qa.crystals} crystals, placed ${qa.placed} blocks`);
+  await page.goto(`${BASE}/zh-Hans/play/sample-voxel-power-frontier`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  const runtime = page.getByTestId("voxel-sandbox-runtime");
+  await runtime.waitFor({ state: "visible", timeout: 25_000 });
+  await page.waitForFunction(() => Boolean((window as Window & { __VOXEL_QA__?: QaState }).__VOXEL_QA__), null, { timeout: 15_000 });
+  const voxelState = () => page.evaluate(() => ({ ...((window as Window & { __VOXEL_QA__?: QaState }).__VOXEL_QA__ ?? {}) }));
+  const before = await voxelState();
+  for (let i = 0; i < 4; i += 1) await page.getByRole("button", { name: "前进", exact: true }).click();
+  for (let i = 0; i < 3; i += 1) await page.getByRole("button", { name: "左移", exact: true }).click();
+  const moved = await voxelState();
+  if (JSON.stringify(before.position) === JSON.stringify(moved.position)) throw new Error(`voxel movement did not change position: ${JSON.stringify(moved)}`);
+  await page.getByRole("button", { name: "采掘", exact: true }).click();
+  await page.getByRole("button", { name: "土块", exact: true }).click();
+  await page.getByRole("button", { name: "放置", exact: true }).click();
+  await page.getByRole("button", { name: "脉冲", exact: true }).click();
+  const after = await voxelState();
+  if (Number(after.placed) < 1) throw new Error(`voxel placement did not persist: ${JSON.stringify(after)}`);
+  if (Number(after.powerCooldown) <= 0) throw new Error(`voxel power did not fire: ${JSON.stringify(after)}`);
+  console.log(`[OK] voxel WebGL: moved, mined, placed ${after.placed} block(s), fired power`);
 }
 
 async function completeTerritory(page: Page) {
@@ -108,7 +96,7 @@ async function main() {
     await completeVoxel(page);
     await completeTerritory(page);
     await completeEstate(page);
-    console.log("qa:showcase-games:browser: ok (3/3 real task chains)");
+    console.log("qa:showcase-games:browser: ok (WebGL voxel action loop + 2 Phaser task chains)");
   } finally {
     await browser.close();
   }

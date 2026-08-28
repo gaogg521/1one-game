@@ -106,6 +106,8 @@
     "qa:game-vertical-slice": "tsx scripts/qa-game-vertical-slice.ts",
     "qa:game-generation-kernel": "tsx scripts/qa-game-generation-kernel.ts",
     "qa:game-production-contract": "tsx scripts/qa-game-production-contract.ts",
+    "qa:game-production-pipeline": "tsx scripts/qa-game-production-pipeline.ts",
+    "qa:game-production-artifacts": "tsx scripts/qa-game-production-artifacts.ts",
     "qa:game-delivery-readiness": "tsx scripts/qa-game-delivery-readiness.ts",
     "qa:game-session-resolution": "tsx scripts/qa-game-session-resolution.ts",
     "qa:game-asset-fallback": "tsx scripts/qa-game-asset-fallback.ts",
@@ -285,6 +287,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.34.5",
+    "three": "^0.180.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -296,6 +299,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.180.0",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",

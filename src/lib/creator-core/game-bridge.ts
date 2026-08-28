@@ -6,6 +6,7 @@ import { buildGameDesignGraphs } from "@/lib/creator-core/game-design-graph";
 import { evaluateGameDeliveryReadiness } from "@/lib/game-delivery-readiness";
 import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
 import { buildGameProductionPipelineReport } from "@/lib/game-production-pipeline";
+import { buildGameEditSchema } from "@/lib/game-edit-schema";
 import {
   createCreativeArtifact,
   createCreativeRevision,
@@ -33,6 +34,7 @@ export async function mirrorGameToCreatorCore(input: {
     sceneCount: sceneGraph.scenes.length,
     behaviorNodeCount: behaviorGraph.nodes.length,
   });
+  const editSchema = buildGameEditSchema(spec);
   const project = await ensureLegacyCreativeProject({
     ownerKey: input.project.ownerKey,
     kind: "game",
@@ -55,6 +57,15 @@ export async function mirrorGameToCreatorCore(input: {
   await createCreativeArtifact({
     ...revisionInput,
     artifact: { kind: "game_spec", mediaType: "json", content: spec, metadata: { templateId: spec.templateId } },
+  });
+  await createCreativeArtifact({
+    ...revisionInput,
+    artifact: {
+      kind: "game_edit_schema",
+      mediaType: "json",
+      content: editSchema,
+      metadata: { templateId: spec.templateId, runtimeStrategy: editSchema.runtimeStrategy, controls: editSchema.controls.length },
+    },
   });
   await createCreativeArtifact({
     ...revisionInput,
