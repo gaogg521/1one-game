@@ -479,6 +479,8 @@ export default function AdminConsolePage({
   const clampedPage = Math.min(page, pageCount);
   const pagedWorks = visibleWorks.slice((clampedPage - 1) * ADMIN_PAGE_SIZE, clampedPage * ADMIN_PAGE_SIZE);
   const pagedUsers = visibleUsers.slice((clampedPage - 1) * ADMIN_PAGE_SIZE, clampedPage * ADMIN_PAGE_SIZE);
+  const isCurrentWorksPageSelected =
+    pagedWorks.length > 0 && pagedWorks.every((work) => selected.has(`${work.type}:${work.id}`));
 
   async function moderate(
     items: Array<{ type: string; id: string }>,
@@ -1196,9 +1198,19 @@ export default function AdminConsolePage({
                       <button
                         type="button"
                         className="rounded-full border border-[color:var(--gc-border)] px-4 py-2 text-sm text-[var(--gc-muted)]"
-                        onClick={() => setSelected(new Set(visibleWorks.map((w) => `${w.type}:${w.id}`)))}
+                        onClick={() => {
+                          setSelected((previous) => {
+                            const next = new Set(previous);
+                            for (const work of pagedWorks) {
+                              const key = `${work.type}:${work.id}`;
+                              if (isCurrentWorksPageSelected) next.delete(key);
+                              else next.add(key);
+                            }
+                            return next;
+                          });
+                        }}
                       >
-                        {t("selectAll")}
+                        {isCurrentWorksPageSelected ? t("clearCurrentPage") : t("selectCurrentPage")}
                       </button>
                     </div>
                   ) : null}

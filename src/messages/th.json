@@ -2283,6 +2283,8 @@
     "batchDelete": "Delete selected",
     "batchDeleteCount": "Delete selected ({count})",
     "selectAll": "Select all",
+    "selectCurrentPage": "Select this page",
+    "clearCurrentPage": "Clear this page",
     "emptyPendingTitle": "No pending works",
     "emptyPendingBody": "Unpublished submissions land here. Discover and the sample gallery only list public works.",
     "recentWorksTitle": "Recent works",

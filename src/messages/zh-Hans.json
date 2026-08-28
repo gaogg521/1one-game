@@ -2358,6 +2358,8 @@
     "batchDelete": "批量删除",
     "batchDeleteCount": "删除所选 ({count})",
     "selectAll": "全选",
+    "selectCurrentPage": "全选本页",
+    "clearCurrentPage": "取消全选本页",
     "emptyPendingTitle": "暂无待审作品",
     "emptyPendingBody": "新提交、尚未点「发布」的作品在这里。发现页和样品馆只展示已公开作品。",
     "recentWorksTitle": "最近作品",
