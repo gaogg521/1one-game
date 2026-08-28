@@ -48,6 +48,7 @@ import type { ConsistencyReport } from "@/lib/novel-long-consistency";
 import type { ComicCharacterRoster } from "@/lib/comic-character-roster";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
 import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
@@ -125,7 +126,10 @@ export default function NovelDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/novel/${encodeURIComponent(id as string)}`, { headers: mergeLocaleHeaders(locale) })
+    fetch(
+      `/api/novel/${encodeURIComponent(id as string)}`,
+      superAdminFetchInit({ headers: mergeLocaleHeaders(locale) }),
+    )
       .then(async (r) => {
         const data = (await r.json()) as { novel?: Novel; error?: string; errorKey?: string };
         if (data.novel) setNovel(data.novel);

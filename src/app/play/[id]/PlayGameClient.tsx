@@ -27,6 +27,7 @@ import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { getSuperAdminKey } from "@/lib/super-admin-client";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { isSampleGalleryProject } from "@/lib/sample-gallery";
 
@@ -91,7 +92,12 @@ export function PlayGameClient({ id }: { id: string }) {
   const [assetJobBusy, setAssetJobBusy] = useState(false);
   const [playRevisionId, setPlayRevisionId] = useState<string | null>(null);
 
-  const apiHeaders = (init?: HeadersInit) => mergeLocaleHeaders(locale, init);
+  const apiHeaders = (init?: HeadersInit) => {
+    const headers = mergeLocaleHeaders(locale, init);
+    const key = getSuperAdminKey();
+    if (key) headers["X-Super-Admin-Key"] = key;
+    return headers;
+  };
 
   useEffect(() => {
     let cancelled = false;

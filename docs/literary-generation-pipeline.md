@@ -65,5 +65,8 @@
 | `public` / `pending_review` + `pending_images` | 不列出 | **持有 URL 可读**（分镜已出、配图未齐） |
 | `pending_review` + `ready` | 不列出 | **持有 URL 可读** |
 | `hidden` | 不列出 | 仅作者 |
+| 已登录管理员（`content` 权限或超管密钥） | 后台作品表看全局 | **任意 URL 可读** |
 
-详情 GET 用 `canAccessWorkByDirectLink`；列表仍用 `publicReadyWorkWhere`。不要再把待审核伪装成「作品不存在」。
+详情 GET：作者 / `canInspectAnyWork` / `canAccessWorkByDirectLink`。列表仍用 `publicReadyWorkWhere`。不要再把待审核伪装成「作品不存在」。
+
+漫画生成分两步：先 LLM 写分镜（格数、台词、出图提示词），再逐格文生图。只完成第一步时 status=`pending_images`，页面上看得到格子和台词，格子里还没有图。

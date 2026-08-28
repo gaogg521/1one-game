@@ -25,6 +25,7 @@ import { WorkEngagementStats } from "@/components/work/WorkEngagementStats";
 import { WorkLikeButton } from "@/components/work/WorkLikeButton";
 import { PublishWorkButton } from "@/components/work/PublishWorkButton";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 import { LiteraryAdaptationTrustBadge } from "@/components/LiteraryAdaptationTrustBadge";
 import { ComicDetailCoverPreview } from "@/components/comic/ComicDetailCoverPreview";
 import { ComicStoryboardOutline } from "@/components/literary/ComicStoryboardOutline";
@@ -125,9 +126,10 @@ export default function ComicDetailPage() {
 
   const loadComic = useCallback(async () => {
     if (!id) return;
-    const res = await fetch(`/api/comic/${encodeURIComponent(id as string)}`, {
-      headers: mergeLocaleHeaders(locale),
-    });
+    const res = await fetch(
+      `/api/comic/${encodeURIComponent(id as string)}`,
+      superAdminFetchInit({ headers: mergeLocaleHeaders(locale) }),
+    );
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.includes("application/json")) {
       throw new Error(tr("loadFailedHttp", { status: String(res.status) }));

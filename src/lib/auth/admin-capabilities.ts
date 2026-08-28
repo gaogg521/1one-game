@@ -20,3 +20,11 @@ export function roleHasAdminCapability(role: UserRole | null | undefined, capabi
 export function hasAdminCapability(user: AuthUser | null | undefined, viaLegacy: boolean, capability: AdminCapability): boolean {
   return viaLegacy || roleHasAdminCapability(user?.role, capability);
 }
+
+/** Logged-in content staff / admin, or the legacy super-admin key, may open any work URL. */
+export function canInspectUnlistedWork(
+  role: UserRole | null | undefined,
+  viaLegacySuperAdmin: boolean,
+): boolean {
+  return viaLegacySuperAdmin || roleHasAdminCapability(role, "content");
+}

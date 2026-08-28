@@ -25,6 +25,7 @@ import {
   serializeCreativeBrief,
 } from "@/lib/project-creative-brief-parse";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
+import { canInspectAnyWork } from "@/lib/auth/admin";
 import { assessGameCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
 import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
@@ -44,7 +45,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
-  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canAccessWorkByDirectLink(row)) {
+  if (!isOwner && !(await canInspectAnyWork(req, ownerKey)) && !canAccessWorkByDirectLink(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
   const likeCount = row.likeCount ?? 0;

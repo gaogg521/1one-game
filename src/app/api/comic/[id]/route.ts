@@ -17,6 +17,7 @@ import {
 } from "@/lib/comic-format";
 import { normalizeNovelTitle } from "@/lib/novel-display";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
+import { canInspectAnyWork } from "@/lib/auth/admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { assessComicCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
@@ -69,7 +70,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
-  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canAccessWorkByDirectLink(row)) {
+  if (!isOwner && !(await canInspectAnyWork(req, ownerKey)) && !canAccessWorkByDirectLink(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
   const [acceptedComicDocument, acceptedDisplay] = !isOwner

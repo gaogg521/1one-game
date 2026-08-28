@@ -12,6 +12,7 @@
 - `pending_review` + `ready`：**持有 URL 即可阅读**（unlisted）。`hidden` 仍仅作者。
 - 详情 GET 改用 `canAccessWorkByDirectLink`。作者点「发布」才会进发现页。
 - 漫画配图未齐时 status 常为 `pending_images`（不是 `ready`）。旧逻辑把这也当成 404，分享链接会显示「未找到」。直链必须把 `pending_images` 当作可读。
+- 已登录 `admin` / `super_admin` / `content_operator`（或后台超管密钥）打开 `/novel` `/comic` `/play` 必须能看任意作品，不能只在 `/console` 生效。
 
 ---
 

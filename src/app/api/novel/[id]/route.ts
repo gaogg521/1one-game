@@ -21,6 +21,7 @@ import { isChildrenNovelTier } from "@/lib/novel-length";
 import type { NovelLengthTier } from "@/lib/novel-length";
 import { loadNovelCharacterRoster } from "@/lib/novel-character-roster-db";
 import { canDeleteOwnedResource, isSuperAdmin } from "@/lib/super-admin";
+import { canInspectAnyWork } from "@/lib/auth/admin";
 import { localizedJsonError } from "@/lib/api/localized-error";
 import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
 import { assessNovelCreatorQuality, withCreatorEngagementQuality } from "@/lib/creator-quality";
@@ -51,7 +52,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
-  if (!isOwner && !isSuperAdmin(req, ownerKey) && !canAccessWorkByDirectLink(row)) {
+  if (!isOwner && !(await canInspectAnyWork(req, ownerKey)) && !canAccessWorkByDirectLink(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
   const [acceptedManuscript, acceptedDisplay] = !isOwner

@@ -28,6 +28,7 @@ import {
 import { chartScaleMax } from "../src/lib/admin-chart-scale";
 import { buildConsoleNavSections, canAccessConsoleTab } from "../src/lib/console-nav";
 import { THEME_SWATCH_COLORS, THEME_META_COLOR, type ThemeId } from "../src/lib/themes";
+import { canInspectUnlistedWork } from "../src/lib/auth/admin-capabilities";
 
 config();
 
@@ -81,6 +82,16 @@ function runOfflineChecks(): Check[] {
     assert(
       "content operator console scope",
       contentTabs.includes("pending") && contentTabs.includes("works") && !contentTabs.includes("runtime"),
+    ),
+  );
+  checks.push(
+    assert(
+      "admin can inspect unlisted work URLs",
+      canInspectUnlistedWork("admin", false) &&
+        canInspectUnlistedWork("super_admin", false) &&
+        canInspectUnlistedWork("content_operator", false) &&
+        !canInspectUnlistedWork("user", false) &&
+        canInspectUnlistedWork("user", true),
     ),
   );
   checks.push(

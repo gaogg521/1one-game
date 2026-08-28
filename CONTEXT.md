@@ -1,5 +1,25 @@
 # 项目工作进度快照
-最后更新：2026-08-28（直链 pending_review）
+最后更新：2026-08-28（管理员全局可读）
+
+## 当前状态
+- 管理员打开作品页 404：详情 GET 只认创作 cookie / 超管 header，后台登录角色没带过去。已改为 `canInspectAnyWork`（admin / super_admin / content_operator + 超管密钥）。
+- 「16 格没画」= 分镜 JSON 已写好（2 页 × 8 格），文生图没跑。`panelsWithImage=0/16`。配图要作者在漫画页点生成（`?renderPanels=1`）。
+- 直链：`pending_review` / `pending_images` 持有 URL 可读；发现页仍仅 public+ready。
+
+## 本会话修改文件表
+- `src/lib/auth/admin.ts` / `admin-capabilities.ts` — `canInspectAnyWork`
+- `src/app/api/novel|comic|projects/[id]/route.ts` — 管理员可读任意作品
+- 小说/漫画/游戏详情页带超管密钥
+
+## 下次启动清单
+1. 用管理员账号打开任意 `/novel/[id]` `/comic/[id]` 应能看，不要再「未找到」。
+2. 漫画配图仍要作者点生成；管理员目前不能代跑配图（panels API 仍要求 owner）。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · 管理员全局可读
+- 管理员应看全局；详情页此前不认后台登录角色。
+- 16 格：分镜有、配图无。
+- 状态：待 QA / 提交 / 部署。
 
 ## 当前状态
 - 小说/漫画「未找到」根因：作品已生成，默认 `pending_review`，非作者 cookie 被详情 API 伪装成 404。

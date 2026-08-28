@@ -4,9 +4,9 @@ import type { AuthUser, UserRole } from "@/lib/auth/types";
 import { apiErrorMessage } from "@/lib/i18n/progress-message";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { prisma } from "@/lib/prisma";
-import { hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
+import { canInspectUnlistedWork, hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
 
-export { hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
+export { canInspectUnlistedWork, hasAdminCapability, type AdminCapability } from "@/lib/auth/admin-capabilities";
 
 async function safeGetCurrentAuthUser(): Promise<AuthUser | null> {
   try {
@@ -131,4 +131,11 @@ export function canManageRuntimeConfig(
 /** 仅已登录 super_admin 账号可 UI/API 升权；legacy 密钥不能代升（请用 CLI）。 */
 export function canPromoteSuperAdmin(user: AuthUser | null | undefined): boolean {
   return user?.role === "super_admin";
+}
+
+/** Console admins must be able to open /novel /comic /play URLs, not only /console. */
+export async function canInspectAnyWork(req: Request, ownerKey?: string | null): Promise<boolean> {
+  if (isSuperAdmin(req, ownerKey)) return true;
+  const user = await safeGetCurrentAuthUser();
+  return canInspectUnlistedWork(user?.role, false);
 }
