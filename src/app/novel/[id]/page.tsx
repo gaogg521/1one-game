@@ -51,6 +51,7 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { superAdminFetchInit } from "@/lib/super-admin-client";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 import { CreatorConsumptionPanel, type CreatorConsumptionSummary } from "@/components/work/CreatorConsumptionPanel";
+import { CreatorVersionStatus } from "@/components/work/CreatorVersionStatus";
 import { WorkUidCopy } from "@/components/work/WorkUidCopy";
 
 interface Novel {
