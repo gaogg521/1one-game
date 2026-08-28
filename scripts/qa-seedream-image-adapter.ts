@@ -6,6 +6,7 @@ import {
   seedreamGenerationEndpoint,
   shouldUseJoySeedreamAdapter,
 } from "../src/lib/image-generation";
+import { isLikelyGeminiNativeImageModel, isLikelyImageGenerationModel } from "../src/lib/image-model-guard";
 
 const SEEDREAM_MODEL = "doubao-seedream-5-0-pro";
 
@@ -40,6 +41,12 @@ async function main() {
     quality: "standard",
   });
   assert(gptBodies[0]?.quality === "auto", "gpt-image-2 first attempt must send quality=auto");
+  assert(isLikelyImageGenerationModel("doubao-seedream-5-0-pro-260628"), "Seedream is an image model");
+  assert(isLikelyImageGenerationModel("gpt-image-2"), "gpt-image-2 is an image model");
+  assert(!isLikelyImageGenerationModel("openrouter/free"), "chat free models must not be used for comic panels");
+  assert(isLikelyGeminiNativeImageModel("gemini-2.0-flash-preview-image-generation"), "Gemini image models stay on the Gemini path");
+  assert(!isLikelyGeminiNativeImageModel("doubao-seedream-5-0-pro-260628"), "Seedream must not be sent to Gemini generateContent");
+  assert(!isLikelyGeminiNativeImageModel("openrouter/free"), "chat models must not be sent to Gemini image path");
   console.log("[OK] qa-seedream-image-adapter");
 }
 

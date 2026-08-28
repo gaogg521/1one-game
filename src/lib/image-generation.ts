@@ -8,6 +8,7 @@ import {
 } from "@/lib/comic-style-reference";
 import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
 import type { CoverGenre } from "@/lib/cover-genre";
+import { isLikelyGeminiNativeImageModel, isLikelyImageGenerationModel } from "@/lib/image-model-guard";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
 import { createOpenAIClient } from "@/lib/openai-client";
 import { getRuntimeConfigSync } from "@/lib/runtime-config";
@@ -142,17 +143,28 @@ function resolveSeedreamImageConfig(localeGroup?: RuntimeLocaleGroup, modelOverr
 }
 
 function resolveGeminiImageConfig(localeGroup?: RuntimeLocaleGroup): { base: string; key: string; model: string } | null {
-  const ctx = resolveSceneRoute(getRuntimeConfigSync().payload, "comic_image_gemini", localeGroup);
-  const model = getImageGenGeminiModel(localeGroup);
+  const payload = getRuntimeConfigSync().payload;
+  const localeCandidates = resolveSceneRouteCandidates(payload, "comic_image_gemini", localeGroup).filter((candidate) =>
+    isLikelyGeminiNativeImageModel(candidate.model),
+  );
+  const candidates =
+    localeCandidates.length > 0
+      ? localeCandidates
+      : resolveSceneRouteCandidates(payload, "comic_image_gemini", undefined).filter((candidate) =>
+          isLikelyGeminiNativeImageModel(candidate.model),
+        );
+  const ctx = candidates[0];
   if (ctx) {
     return {
       base: (ctx.provider.baseUrl?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, ""),
       key: ctx.provider.apiKey.trim(),
-      model,
+      model: ctx.model,
     };
   }
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return null;
+  const model = getImageGenGeminiModel(localeGroup);
+  if (!isLikelyGeminiNativeImageModel(model)) return null;
   const base = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
   return { base, key, model };
 }
@@ -255,7 +267,16 @@ export async function generateImageWithOpenAIDetail(
   const t0 = Date.now();
   const model = options?.modelOverride ?? options?.routeCandidate?.model ?? getImageGenOpenAIModel(options?.localeGroup);
   if (!options?.routeCandidate && !options?.modelOverride) {
-    const candidates = resolveSceneRouteCandidates(getRuntimeConfigSync().payload, "comic_image_openai", options?.localeGroup);
+    const payload = getRuntimeConfigSync().payload;
+    const localeCandidates = resolveSceneRouteCandidates(payload, "comic_image_openai", options?.localeGroup).filter(
+      (candidate) => isLikelyImageGenerationModel(candidate.model),
+    );
+    const candidates =
+      localeCandidates.length > 0
+        ? localeCandidates
+        : resolveSceneRouteCandidates(payload, "comic_image_openai", undefined).filter((candidate) =>
+            isLikelyImageGenerationModel(candidate.model),
+          );
     if (candidates.length > 0) {
       let last: ImageGenDetail | undefined;
       for (const candidate of candidates) {

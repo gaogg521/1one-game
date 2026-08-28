@@ -2,6 +2,17 @@
 
 更新时间：**2026-08-28**
 
+## 2026-08-28 — 文生图场景禁止文本模型；locale 非法则回退全局图模
+
+**背景**：生产 locale `zh` 的 `comic_image_openai` 被配成 `openrouter/free`。`renderComicPanels` 固定走 `runtimeLocaleGroup(uiLocale)`，于是 16 格全部 404。全局路由其实是 Seedream。Gemini 场景也被配成 Seedream / `openrouter/free`，风格参考图会先走 Gemini 并可能拖满超时。
+
+**决策**：
+- `isLikelyImageGenerationModel` 挡住 chat ID；locale 候选项滤空则用全局 `comic_image_openai`。
+- Gemini `generateContent` 只接受 Gemini/Imagen；Seedream 不得走这条路径。
+- 不把漫画默认可见性改成 public。不把配图模型写入分镜 provenance。
+
+---
+
 ## 2026-08-28 — pending_review 直链可读，发现页仍不列出
 
 **背景**：生产实测生成的小说/漫画默认 `pending_review`。GET 详情对非作者走 `canReadWorkPublicly`（仅 `public`+`ready`），把「待审核」伪装成 404。分享链接或另一台浏览器打开就是「小说不存在 / 未找到」，看起来像生成失败。

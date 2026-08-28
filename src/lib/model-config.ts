@@ -3,6 +3,7 @@
  */
 import { PRODUCT } from "@/lib/product-config";
 import { getEffectiveModels, getSceneModelCascade } from "@/lib/runtime-config";
+import { isLikelyGeminiNativeImageModel, isLikelyImageGenerationModel } from "@/lib/image-model-guard";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 
 export type ImageGenSizeOption = import("@/lib/product-config").ImageGenSizeOption;
@@ -75,15 +76,19 @@ export function getComicStoryboardModelCascade(localeGroup?: RuntimeLocaleGroup)
 }
 
 export function getImageGenOpenAIModel(localeGroup?: RuntimeLocaleGroup): string {
-  const cascade = getSceneModelCascade("comic_image_openai", localeGroup);
-  if (cascade[0]) return cascade[0];
+  const localeCascade = getSceneModelCascade("comic_image_openai", localeGroup).filter(isLikelyImageGenerationModel);
+  if (localeCascade[0]) return localeCascade[0];
+  const globalCascade = getSceneModelCascade("comic_image_openai", undefined).filter(isLikelyImageGenerationModel);
+  if (globalCascade[0]) return globalCascade[0];
   const { imageOpenAI } = getEffectiveModels();
   return imageOpenAI ?? PRODUCT.models.imageOpenAI;
 }
 
 export function getImageGenGeminiModel(localeGroup?: RuntimeLocaleGroup): string {
-  const cascade = getSceneModelCascade("comic_image_gemini", localeGroup);
-  if (cascade[0]) return cascade[0];
+  const localeCascade = getSceneModelCascade("comic_image_gemini", localeGroup).filter(isLikelyGeminiNativeImageModel);
+  if (localeCascade[0]) return localeCascade[0];
+  const globalCascade = getSceneModelCascade("comic_image_gemini", undefined).filter(isLikelyGeminiNativeImageModel);
+  if (globalCascade[0]) return globalCascade[0];
   const { imageGemini } = getEffectiveModels();
   return imageGemini ?? PRODUCT.models.imageGemini;
 }

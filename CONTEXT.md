@@ -1,4 +1,31 @@
 # 项目工作进度快照
+最后更新：2026-08-28（漫画 16 格已画出）
+
+## 当前状态
+- 《残谱夜雨 · 漫画版》`cmtbqxftk002bqzf6mbu93rr0`：**16/16 格已用 Seedream 画出**，status=`ready`。刷新 https://operone.1oneclaw.com/zh-Hans/comic/cmtbqxftk002bqzf6mbu93rr0 即可看图。
+- 画面问题（看图即可）：第 1 格把整页六格画进一格；多数格是云海悬崖剑客插画，不是雨夜客栈夺谱；分镜 caption 大量复读用户原提示词；人物服饰颜色飘；Seedream 带「AI 生成」水印。
+- 根因：locale `zh` 的 `comic_image_openai` 配成了文本模型 `openrouter/free`，文生图 404。已加图模守卫：locale 非法则回退全局 Seedream。
+- 编译：`qa:seedream-image-adapter` 通过。路由守卫已写入源码，待 commit/push/deploy 后新漫画才会走同一逻辑。
+
+## 本会话修改文件表
+- `src/lib/image-model-guard.ts` — `isLikelyImageGenerationModel` / `isLikelyGeminiNativeImageModel`
+- `src/lib/image-generation.ts` / `src/lib/model-config.ts` — locale 文本模型过滤，回退全局图模；Gemini 路径不接 Seedream
+- `scripts/qa-seedream-image-adapter.ts` — 守卫断言
+
+## 下次启动清单
+1. 刷新漫画页确认 16 格有图。
+2. commit + push 图模守卫，再 `python scripts/deploy-prod-cee8b1d.py`（生产 Next 进程尚未吃到该守卫；本条漫画的图已在 DB）。
+3. Console 把 locale `zh` 的 `comic_image_openai` 从 `openrouter/free` 改回图模。
+4. 分镜 caption 复读用户提示词是下一刀（文学线，不是 Phaser）。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · 16 格文生图画上
+- 用户：要通过画画看到问题。
+- 第一次 oneshot：`quality=standard` 非法。第二次：`openrouter/free` 404。
+- 第三次：过滤文本模型后 16/16 Seedream 成功。
+- 状态：图已上；守卫待部署。
+
+# 项目工作进度快照
 最后更新：2026-08-28（管理员全局可读）
 
 ## 当前状态
