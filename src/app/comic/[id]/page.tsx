@@ -51,6 +51,7 @@ interface Comic {
   shareCode: string | null;
   likeCount?: number;
   isOwner?: boolean;
+  canManageCover?: boolean;
   status?: string;
   visibility?: string;
   panelsWithImage?: number;
@@ -662,7 +663,7 @@ export default function ComicDetailPage() {
               coverPath={comic.coverPath ?? null}
               imageUrls={comic.imageUrls}
               locale={locale}
-              isOwner={Boolean(comic.isOwner)}
+              isOwner={Boolean(comic.isOwner || comic.canManageCover)}
               onCoverUpdate={(path) => setComic((prev) => (prev ? { ...prev, coverPath: path } : prev))}
               onCoverError={setError}
             />

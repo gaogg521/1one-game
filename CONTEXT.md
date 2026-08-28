@@ -1,4 +1,30 @@
 # 项目工作进度快照
+最后更新：2026-08-28（管理员封面：上传入口 + 坏链不自动重生）
+
+## 当前状态
+- 编译：`npx tsc --noEmit` 通过；`npm run qa:cover-heal` 通过。
+- 《小奇的战场梦》`cmqds0lkr0001jm60q5ytvniq`：封面位「失效/点击重试」是坏链；点缩略图会 **force POST** 重生。坏链 **不再自动 POST**（避免一进页就刷「封面生成失败」）。
+- 管理员用 `canInspectAnyWork` 打开别人的小说/漫画时，详情 API 返回 `canManageCover=true`。封面缩略图旁有 **重做封面 / 上传封面**（不再藏在横向工具条、也不再只给 `isOwner`）。
+- 点重试不会先把死链图闪回来（`retryCover` 保持 `brokenCover` 直到新图成功）；同路径 force 重生会 cache-bust。
+
+## 本会话修改文件表
+- `src/hooks/use-auto-work-cover.tsx` — 坏链不自动生成；重试不闪死链；force 同路径可接受
+- `src/app/api/novel/[id]/route.ts` / `comic/[id]/route.ts` — `canManageCover`
+- `src/app/novel/[id]/page.tsx` — 封面旁上传/重做，管理员可见
+- `src/app/comic/[id]/page.tsx` + `ComicDetailCoverPreview.tsx` — 同样用 `canManageCover`
+
+## 下次启动清单
+1. 部署后用管理员打开 https://operone.1oneclaw.com/zh-Hans/novel/cmqds0lkr0001jm60q5ytvniq ：封面旁应有「重做封面」「上传封面」。
+2. 点缩略图「点击重试」应走生成；失败只出红字，不要自动连打。旁边可上传 jpeg/png/webp。
+3. 漫画详情同样验证管理员能上传封面。
+
+## 会话记录（按日期追加）
+### 2026-08-28 · 管理员封面入口
+- 现象：编号能复制，封面失效且点重试无效；管理员看不到上传。
+- 根因：坏链 `onError` 触发自动 POST；封面按钮只给 `isOwner`；重试先清 `brokenCover` 导致死链 img 再 error。
+- 状态：待 commit / push / deploy。
+
+# 项目工作进度快照
 最后更新：2026-08-28（线上生效表合并语言覆盖）
 
 ## 当前状态

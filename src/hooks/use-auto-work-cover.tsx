@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 
 type CoverKind = "novel" | "comic";
 
@@ -77,11 +78,14 @@ export function useAutoWorkCover(opts: {
       try {
         const base = kind === "novel" ? `/api/novel/${id}/cover` : `/api/comic/${id}/cover`;
         const url = force ? `${base}?force=1` : base;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: mergeLocaleHeaders(locale),
-          signal: controller?.signal,
-        });
+        const res = await fetch(
+          url,
+          superAdminFetchInit({
+            method: "POST",
+            headers: mergeLocaleHeaders(locale),
+            signal: controller?.signal,
+          }),
+        );
         const data = (await res.json()) as CoverResponse;
         if (!res.ok) {
           setCoverFailed(true);
@@ -92,7 +96,7 @@ export function useAutoWorkCover(opts: {
           data.coverPath ??
           (kind === "novel" ? data.novel?.coverPath : data.comic?.coverPath);
         if (path) {
-          const sameDead = brokenCover && path === coverPath;
+          const sameDead = !force && brokenCover && path === coverPath;
           if (sameDead) {
             setCoverFailed(true);
             onFailed?.("empty");
@@ -125,15 +129,15 @@ export function useAutoWorkCover(opts: {
   useEffect(() => {
     if (!autoFetch) return;
     if (displayCover) return;
+    if (brokenCover) return;
     void requestCover(false);
-  }, [autoFetch, displayCover, requestCover]);
+  }, [autoFetch, brokenCover, displayCover, requestCover]);
 
   const retryCover = useCallback(
     (e?: MouseEvent) => {
       e?.preventDefault();
       e?.stopPropagation();
       coverRequested.current = false;
-      setBrokenCover(false);
       void requestCover(true);
     },
     [requestCover],

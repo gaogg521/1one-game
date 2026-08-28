@@ -8,6 +8,7 @@ import { comicCoverFromImageUrls } from "@/lib/comic-display";
 import { cacheBustedCoverSrc, useAutoWorkCover, WorkCoverPlaceholder } from "@/hooks/use-auto-work-cover";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
+import { superAdminFetchInit } from "@/lib/super-admin-client";
 
 type Props = {
   comicId: string;
@@ -52,11 +53,14 @@ export function ComicDetailCoverPreview({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`/api/comic/${encodeURIComponent(comicId)}/cover`, {
-        method: "PUT",
-        headers: mergeLocaleHeaders(locale),
-        body: fd,
-      });
+      const res = await fetch(
+        `/api/comic/${encodeURIComponent(comicId)}/cover`,
+        superAdminFetchInit({
+          method: "PUT",
+          headers: mergeLocaleHeaders(locale),
+          body: fd,
+        }),
+      );
       const data = (await res.json().catch(() => ({}))) as {
         coverPath?: string;
         error?: string;

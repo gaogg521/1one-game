@@ -52,7 +52,8 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   const isOwner = ownerKey && row.ownerKey === ownerKey;
   const canDelete = canDeleteOwnedResource(row.ownerKey, ownerKey, req);
-  if (!isOwner && !(await canInspectAnyWork(req, ownerKey)) && !canAccessWorkByDirectLink(row)) {
+  const inspectAny = await canInspectAnyWork(req, ownerKey);
+  if (!isOwner && !inspectAny && !canAccessWorkByDirectLink(row)) {
     return localizedJsonError(req, "notFound", 404);
   }
   const [acceptedManuscript, acceptedDisplay] = !isOwner
@@ -166,6 +167,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       quality,
       ...(isOwner ? { literaryEngagement } : {}),
       isOwner: Boolean(isOwner),
+      canManageCover: Boolean(isOwner) || inspectAny,
       ...(isOwner
         ? {
             generationProvider: row.generationProvider,
