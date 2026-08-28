@@ -62,6 +62,34 @@ type OpenAIImageOptions = {
   routeCandidate?: ResolvedSceneCandidate;
 } & LocaleImageOptions;
 
+/**
+ * DALL·E 3 uses `standard`/`hd`. gpt-image-1/2 reject those and want
+ * `auto`/`low`/`medium`/`high`. Callers still pass the DALL·E names.
+ */
+export function resolveOpenAIImagesQuality(
+  model: string,
+  quality?: "standard" | "high",
+): "standard" | "hd" | "auto" | "low" | "medium" | "high" | undefined {
+  if (!quality) return undefined;
+  if (/gpt-image|chatgpt-image/i.test(model)) {
+    return quality === "high" ? "high" : "auto";
+  }
+  return quality === "high" ? "hd" : "standard";
+}
+
+export function buildOpenAIImageRequestBodies(input: {
+  model: string;
+  prompt: string;
+  size: string;
+  n: number;
+  quality?: "standard" | "high";
+}): Record<string, unknown>[] {
+  const base = { model: input.model, prompt: input.prompt, size: input.size, n: input.n };
+  const mapped = resolveOpenAIImagesQuality(input.model, input.quality);
+  if (!mapped) return [base];
+  return [{ ...base, quality: mapped }, base];
+}
+
 export function isSeedreamImageModel(model: string): boolean {
   return model.trim().toLowerCase().startsWith("doubao-seedream-");
 }
@@ -250,10 +278,13 @@ export async function generateImageWithOpenAIDetail(
   const size = options?.size ?? getImageGenDefaultSize();
   const n = options?.n ?? 1;
   const timeoutMs = resolveImageGenTimeoutMs(options?.timeoutMs);
-  const attempts: Record<string, unknown>[] = [{ model, prompt, size, n }];
-  if (options?.quality) {
-    attempts.push({ model, prompt, size, n, quality: options.quality });
-  }
+  const attempts = buildOpenAIImageRequestBodies({
+    model,
+    prompt,
+    size,
+    n,
+    quality: options?.quality,
+  });
 
   let lastErr = "网关未返回图片数据";
   for (const body of attempts) {
@@ -348,10 +379,13 @@ export async function generateImagesBatchOpenAIDetail(
   const n = prompts.length;
   const timeoutMs = resolveImageGenTimeoutMs(options?.timeoutMs);
   const combinedPrompt = buildBatchCombinedPrompt(prompts);
-  const attempts: Record<string, unknown>[] = [{ model, prompt: combinedPrompt, size, n }];
-  if (options?.quality) {
-    attempts.push({ model, prompt: combinedPrompt, size, n, quality: options.quality });
-  }
+  const attempts = buildOpenAIImageRequestBodies({
+    model,
+    prompt: combinedPrompt,
+    size,
+    n,
+    quality: options?.quality,
+  });
 
   let lastErr = "网关未返回足够图片";
   for (const body of attempts) {

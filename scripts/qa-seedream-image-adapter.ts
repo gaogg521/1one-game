@@ -1,6 +1,8 @@
 import {
+  buildOpenAIImageRequestBodies,
   buildSeedreamGenerationRequest,
   isSeedreamImageModel,
+  resolveOpenAIImagesQuality,
   seedreamGenerationEndpoint,
   shouldUseJoySeedreamAdapter,
 } from "../src/lib/image-generation";
@@ -26,6 +28,18 @@ async function main() {
     body.size === "2K" && body.output_format === "png" && body.watermark === false && body.stream === false,
     "Seedream must use the verified 2K PNG no-watermark request contract",
   );
+  assert(resolveOpenAIImagesQuality("gpt-image-2", "standard") === "auto", "gpt-image-2 must not send DALL·E quality=standard");
+  assert(resolveOpenAIImagesQuality("gpt-image-2", "high") === "high", "gpt-image-2 high stays high");
+  assert(resolveOpenAIImagesQuality("dall-e-3", "standard") === "standard", "DALL·E 3 keeps standard");
+  assert(resolveOpenAIImagesQuality("dall-e-3", "high") === "hd", "DALL·E 3 high maps to hd");
+  const gptBodies = buildOpenAIImageRequestBodies({
+    model: "gpt-image-2",
+    prompt: "rain",
+    size: "1024x1024",
+    n: 1,
+    quality: "standard",
+  });
+  assert(gptBodies[0]?.quality === "auto", "gpt-image-2 first attempt must send quality=auto");
   console.log("[OK] qa-seedream-image-adapter");
 }
 
