@@ -61,7 +61,7 @@ export async function setCreatorWorkPublication(input: {
           where: {
             creativeProjectId: core.id,
             creativeRevisionId: candidateRevisionId,
-            kind: { in: ["game_spec", "asset_manifest", "game_production_pipeline", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
+            kind: { in: ["game_spec", "asset_manifest", "game_production_pipeline", "game_production_candidate", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
             status: "ready",
           },
           orderBy: { createdAt: "asc" },
@@ -84,11 +84,14 @@ export async function setCreatorWorkPublication(input: {
     try { preflight = artifact("game_delivery_preflight")?.contentJson ? JSON.parse(artifact("game_delivery_preflight")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     let pipeline: { preflightVerdict?: unknown } | null = null;
     try { pipeline = artifact("game_production_pipeline")?.contentJson ? JSON.parse(artifact("game_production_pipeline")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    let productionCandidate: { decision?: unknown } | null = null;
+    try { productionCandidate = artifact("game_production_candidate")?.contentJson ? JSON.parse(artifact("game_production_candidate")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     let playtest: { activeMs?: unknown; actionCount?: unknown; deviceClass?: unknown; touchCapable?: unknown; outcome?: unknown } | null = null;
     try { playtest = artifact("game_playtest_delivery")?.contentJson ? JSON.parse(artifact("game_playtest_delivery")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     if (!candidateRevisionId) deliveryIssues.push("publication_revision_missing");
     if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
     if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
+    if (productionCandidate?.decision !== "ready_for_playtest") deliveryIssues.push("publication_production_candidate_not_ready");
     if (!preflight || (preflight.verdict !== "ready" && preflight.verdict !== "needs_review")) {
       deliveryIssues.push("publication_delivery_preflight_not_ready");
     }

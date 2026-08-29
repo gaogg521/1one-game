@@ -132,12 +132,12 @@ export async function POST(req: Request) {
     let core: { creativeProjectId: string; creativeRevisionId: string } | { status: "degraded" };
     let assetJob: { id: string; status: string } | undefined;
     try {
-      core = await mirrorGameToCreatorCore({ project, cause: "generate" });
+      core = await mirrorGameToCreatorCore({ project, cause: "generate", deferFinalization: true });
       const job = await enqueueGenerationJob({
         creativeProjectId: core.creativeProjectId,
         creativeRevisionId: core.creativeRevisionId,
-        type: "game_asset",
-        idempotencyKey: `game-asset:${project.id}:${core.creativeRevisionId}`,
+        type: "game_production",
+        idempotencyKey: `game-production:${project.id}:${core.creativeRevisionId}`,
         payload: { projectId: project.id, ownerKey, spec, brief, uiLocale },
       });
       assetJob = { id: job.id, status: job.status };
@@ -157,6 +157,7 @@ export async function POST(req: Request) {
       },
       core,
       ...(assetJob ? { assetJob } : {}),
+      ...(assetJob ? { productionJob: assetJob } : {}),
     });
   } catch (e) {
     return NextResponse.json({ error: apiErrorFromUnknown(req, e, "saveFailed") }, { status: 400 });

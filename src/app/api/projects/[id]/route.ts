@@ -32,6 +32,8 @@ import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLega
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
 import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
+import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
+import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -74,11 +76,11 @@ export async function GET(req: Request, ctx: RouteContext) {
       ? await prisma.generationJob.findFirst({
           where: {
             creativeProjectId: core.project.id,
-            type: "game_asset",
+            type: { in: ["game_production", "game_asset"] },
             status: { in: ["queued", "running", "retrying"] },
           },
           orderBy: { createdAt: "desc" },
-          select: { id: true, status: true, attempts: true, maxAttempts: true, progressJson: true },
+          select: { id: true, type: true, status: true, attempts: true, maxAttempts: true, progressJson: true },
         })
       : null;
     let assetJobProgress: unknown = null;
@@ -147,6 +149,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),
       ...(core ? { core } : {}),
       ...(assetJob ? { assetJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
+      ...(assetJob?.type === "game_production" ? { productionJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(isOwner ? { playtestAdvice: buildGamePlaytestAdvice(quality.engagement ?? { sampleSize: 0 }) } : {}),
     });
   } catch (error) {
@@ -301,7 +304,16 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // updates races active playtests and strands their exact-revision evidence.
   if (fresh && (titleRaw !== undefined || promptRaw !== undefined || specRaw !== undefined || briefRaw !== undefined)) {
     try {
-      core = await mirrorGameToCreatorCore({ project: fresh, cause: "refine" });
+      core = await mirrorGameToCreatorCore({ project: fresh, cause: "refine", deferFinalization: true });
+      const spec = parseGameSpec(JSON.parse(fresh.specJson));
+      const brief = parseStoredCreativeBrief(fresh.creativeBriefJson);
+      await enqueueGenerationJob({
+        creativeProjectId: core.creativeProjectId,
+        creativeRevisionId: core.creativeRevisionId,
+        type: "game_production",
+        idempotencyKey: `game-production:${fresh.id}:${core.creativeRevisionId}`,
+        payload: { projectId: fresh.id, ownerKey, spec, brief, uiLocale: resolveRequestLocaleSync(req) },
+      });
     } catch (error) {
       console.error("[game-core-mirror]", { projectId: id, error });
       core = { status: "degraded" };

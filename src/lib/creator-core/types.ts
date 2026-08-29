@@ -59,6 +59,9 @@ export const GameAssetJobPayloadSchema = z.object({
   uiLocale: z.string().min(2).max(16).default("zh-Hans"),
 });
 
+/** Full game-production request. Assets are one stage, not the final product. */
+export const GameProductionJobPayloadSchema = GameAssetJobPayloadSchema;
+
 /** A continuation request is immutable at enqueue time; the worker revalidates ownership before execution. */
 export const NovelContinueJobPayloadSchema = z.object({
   novelId: z.string().min(1).max(96),
@@ -73,4 +76,5 @@ export type CreativeRevisionInput = z.infer<typeof CreativeRevisionInputSchema>;
 export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
 export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
 export type GameAssetJobPayload = z.infer<typeof GameAssetJobPayloadSchema>;
+export type GameProductionJobPayload = z.infer<typeof GameProductionJobPayloadSchema>;
 export type NovelContinueJobPayload = z.infer<typeof NovelContinueJobPayloadSchema>;

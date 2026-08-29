@@ -2,9 +2,15 @@ import {
   ArtifactWritePayloadSchema,
   ComicPanelJobPayloadSchema,
   GameAssetJobPayloadSchema,
+  GameProductionJobPayloadSchema,
   NovelContinueJobPayloadSchema,
 } from "@/lib/creator-core/types";
-import { createCreativeArtifact } from "@/lib/creator-core/repository";
+import {
+  createCreativeArtifact,
+  finalizeCreativeRevision,
+  markCreativeRevisionFailed,
+  markCreativeRevisionGenerating,
+} from "@/lib/creator-core/repository";
 import { mirrorComicToCreatorCore } from "@/lib/creator-core/comic-bridge";
 import { generateComicCover } from "@/lib/cover-generation";
 import {
@@ -31,6 +37,7 @@ import { ensureProjectBgm } from "@/lib/game-bgm-pipeline";
 import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
+import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -63,6 +70,20 @@ async function executeGameAssetJob(
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_asset_brief_invalid");
 
+  const [existingManifest, existingAudio] = job.creativeRevisionId
+    ? await Promise.all([
+        prisma.creativeArtifact.findFirst({
+          where: { creativeRevisionId: job.creativeRevisionId, kind: "asset_manifest", status: "ready" },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.creativeArtifact.findFirst({
+          where: { creativeRevisionId: job.creativeRevisionId, kind: { in: ["bgm", "bgm_notes"] }, status: "ready" },
+          orderBy: { createdAt: "desc" },
+        }),
+      ])
+    : [null, null];
+  if (existingManifest && existingAudio) return existingManifest;
+
   await heartbeatGenerationJob(job.id, workerId, { percent: 4, stage: "generating_audio", detail: "generating project BGM" });
   const bgm = await ensureProjectBgm(project.id, spec);
   await heartbeatGenerationJob(job.id, workerId, {
@@ -81,6 +102,7 @@ async function executeGameAssetJob(
   const assetManifest = await createCreativeArtifact({
     creativeProjectId: job.creativeProjectId,
     creativeRevisionId: job.creativeRevisionId ?? undefined,
+    idempotencyKey: job.creativeRevisionId ? `asset_manifest:${job.creativeRevisionId}` : undefined,
     artifact: {
       kind: "asset_manifest",
       mediaType: "json",
@@ -101,6 +123,7 @@ async function executeGameAssetJob(
     await createCreativeArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId ?? undefined,
+      idempotencyKey: job.creativeRevisionId ? `bgm:${job.creativeRevisionId}` : undefined,
       artifact: {
         kind: "bgm",
         mediaType: "audio",
@@ -113,6 +136,7 @@ async function executeGameAssetJob(
     await createCreativeArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId ?? undefined,
+      idempotencyKey: job.creativeRevisionId ? `bgm_notes:${job.creativeRevisionId}` : undefined,
       artifact: {
         kind: "bgm_notes",
         mediaType: "json",
@@ -122,6 +146,69 @@ async function executeGameAssetJob(
     });
   }
   return assetManifest;
+}
+
+async function executeGameProductionJob(
+  job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
+  workerId: string,
+) {
+  if (!job.creativeRevisionId) throw new Error("game_production_revision_missing");
+  const payload = GameProductionJobPayloadSchema.parse(JSON.parse(job.payloadJson));
+  const spec = parseGameSpec(payload.spec);
+  const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
+  if (!briefResult.success) throw new Error("game_production_brief_invalid");
+
+  await markCreativeRevisionGenerating(job.creativeRevisionId);
+  await heartbeatGenerationJob(job.id, workerId, { percent: 3, stage: "design_director", detail: "locking player fantasy and first-minute contract" });
+  const assetArtifact = await executeGameAssetJob(job, workerId);
+  let assetManifest: unknown = null;
+  try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
+
+  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "gameplay_and_art_review", detail: "reviewing gameplay, art and interaction deliverables" });
+  const run = buildGameProductionRun({ spec, brief: briefResult.data, assetManifest });
+  let lastArtifact = assetArtifact;
+  for (let index = 0; index < run.artifacts.length; index += 1) {
+    const artifact = run.artifacts[index]!;
+    await heartbeatGenerationJob(job.id, workerId, {
+      percent: 74 + index * 3,
+      stage: String(artifact.metadata.role ?? "production"),
+      detail: `persisting ${artifact.kind}`,
+    });
+    lastArtifact = await createCreativeArtifact({
+      creativeProjectId: job.creativeProjectId,
+      creativeRevisionId: job.creativeRevisionId,
+      idempotencyKey: `${artifact.kind}:${job.creativeRevisionId}`,
+      artifact,
+    });
+  }
+  await createCreativeArtifact({
+    creativeProjectId: job.creativeProjectId,
+    creativeRevisionId: job.creativeRevisionId,
+    idempotencyKey: `game_production_run:${job.creativeRevisionId}`,
+    artifact: {
+      kind: "game_production_run",
+      mediaType: "report",
+      content: { version: run.version, kind: run.kind, status: run.status, passes: run.passes },
+      metadata: { status: run.status, passes: run.passes.length },
+    },
+  });
+  const candidateArtifact = await createCreativeArtifact({
+    creativeProjectId: job.creativeProjectId,
+    creativeRevisionId: job.creativeRevisionId,
+    idempotencyKey: `game_production_candidate:${job.creativeRevisionId}`,
+    artifact: {
+      kind: "game_production_candidate",
+      mediaType: "report",
+      content: run.candidate,
+      metadata: { decision: run.candidate.decision, score: run.candidate.score },
+    },
+  });
+  if (run.candidate.decision === "ready_for_playtest") {
+    await finalizeCreativeRevision(job.creativeRevisionId, `production candidate ${run.candidate.score}/100 · ready for observed playtest`);
+  } else {
+    await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
+  }
+  return candidateArtifact ?? lastArtifact;
 }
 
 async function executeComicPanelJob(job: { id: string; payloadJson: string }, workerId: string) {
@@ -289,6 +376,11 @@ export async function processNextGenerationJob(workerId: string) {
           await completeGenerationJob(job.id, artifact.id);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
+        if (job.type === "game_production") {
+          const artifact = await executeGameProductionJob(job, workerId);
+          await completeGenerationJob(job.id, artifact.id);
+          return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
+        }
         if (job.type === "novel_continue") {
           const result = await executeNovelContinueJob(job, workerId);
           if (result.status === "conflict") {
@@ -305,6 +397,9 @@ export async function processNextGenerationJob(workerId: string) {
         throw new Error(`unsupported_generation_job:${job.type}`);
       } catch (error) {
         const failed = await failGenerationJob(job.id, error);
+        if (job.type === "game_production" && failed.status === "failed" && job.creativeRevisionId) {
+          await markCreativeRevisionFailed(job.creativeRevisionId, `production execution failed · ${error instanceof Error ? error.message : String(error)}`);
+        }
         return { id: job.id, type: job.type, status: failed.status as "retrying" | "failed" };
       }
     },

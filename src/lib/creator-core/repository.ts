@@ -89,11 +89,17 @@ export async function createCreativeRevision(
 export async function createCreativeArtifact(input: {
   creativeProjectId: string;
   creativeRevisionId?: string;
+  idempotencyKey?: string;
   artifact: CreativeArtifactInput;
 }) {
   const artifact = CreativeArtifactInputSchema.parse(input.artifact);
-  return prisma.creativeArtifact.create({
-    data: {
+  if (input.idempotencyKey) {
+    const existing = await prisma.creativeArtifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) return existing;
+  }
+  try {
+    return await prisma.creativeArtifact.create({
+      data: {
       creativeProjectId: input.creativeProjectId,
       creativeRevisionId: input.creativeRevisionId,
       kind: artifact.kind,
@@ -105,8 +111,16 @@ export async function createCreativeArtifact(input: {
       provider: artifact.provider,
       sourceArtifactId: artifact.sourceArtifactId,
       metadataJson: stringify(artifact.metadata),
-    },
-  });
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+  } catch (error) {
+    if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.creativeArtifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing) return existing;
+    }
+    throw error;
+  }
 }
 
 /** Stores the exact quality decision used for a revision, independently of report artifacts. */
@@ -135,6 +149,20 @@ export async function finalizeCreativeRevision(creativeRevisionId: string, summa
   return prisma.creativeRevision.update({
     where: { id: creativeRevisionId },
     data: { status: "ready", finalizedAt: new Date(), ...(summary ? { summary } : {}) },
+  });
+}
+
+export async function markCreativeRevisionGenerating(creativeRevisionId: string) {
+  return prisma.creativeRevision.update({
+    where: { id: creativeRevisionId },
+    data: { status: "generating", finalizedAt: null },
+  });
+}
+
+export async function markCreativeRevisionFailed(creativeRevisionId: string, summary?: string) {
+  return prisma.creativeRevision.update({
+    where: { id: creativeRevisionId },
+    data: { status: "failed", finalizedAt: new Date(), ...(summary ? { summary } : {}) },
   });
 }
 

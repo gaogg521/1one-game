@@ -27,16 +27,18 @@ async function main() {
       project?: { id?: string };
       core?: { creativeProjectId?: string; creativeRevisionId?: string };
       assetJob?: { id?: string; status?: string };
+      productionJob?: { id?: string; status?: string };
     };
     assert(createdResponse.ok && created.project?.id, "game create API must return a project");
     assert(created.core?.creativeProjectId && created.core.creativeRevisionId, "game create API must create a Core revision");
-    assert(created.assetJob?.id && created.assetJob.status === "queued", "game create must enqueue a durable asset job");
+    assert(created.assetJob?.id && created.assetJob.status === "queued", "game create must enqueue a durable production job");
+    assert(created.productionJob?.id === created.assetJob.id, "create response must identify the production orchestrator explicitly");
     projectId = created.project.id;
     coreProjectId = created.core.creativeProjectId;
 
     const queuedDetailResponse = await fetch(`${baseUrl}/api/projects/${projectId}`, { headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` } });
     const queuedDetail = (await queuedDetailResponse.json()) as { assetJob?: { id?: string; status?: string } };
-    assert(queuedDetailResponse.ok && queuedDetail.assetJob?.id === created.assetJob.id, "owner detail must expose only its active asset job");
+    assert(queuedDetailResponse.ok && queuedDetail.assetJob?.id === created.assetJob.id, "owner detail must expose its active production job");
 
     const spriteDir = repoPublicPath("game-sprites", projectId);
     await fs.mkdir(spriteDir, { recursive: true });
@@ -54,9 +56,9 @@ async function main() {
       headers: { "x-worker-id": "qa-game-assets-worker" },
     });
     const processed = (await processedResponse.json()) as { processed?: boolean; job?: { id?: string; status?: string; outputArtifactId?: string } };
-    assert(processedResponse.ok && processed.processed, "worker must claim a queued game asset job");
-    assert(processed.job?.id === created.assetJob.id && processed.job.status === "completed", "worker must complete the requested game asset job");
-    assert(processed.job.outputArtifactId, "game asset job must retain its manifest artifact");
+    assert(processedResponse.ok && processed.processed, "worker must claim a queued game production job");
+    assert(processed.job?.id === created.assetJob.id && processed.job.status === "completed", "worker must complete the requested game production job");
+    assert(processed.job.outputArtifactId, "game production job must retain its promoted candidate artifact");
 
     const statusResponse = await fetch(`${baseUrl}/api/jobs/${created.assetJob.id}`, {
       headers: { Cookie: `${OWNER_COOKIE}=${ownerKey}` },
@@ -72,6 +74,7 @@ async function main() {
     const manifest = detail.core.revision.artifacts?.find((artifact) => artifact.kind === "asset_manifest");
     assert(manifest, "Core revision must retain its generated asset manifest");
     assert(["audio_model", "llm_notes", "procedural_notes"].includes(manifest.content?.bgm?.source ?? ""), "durable game task must record its BGM outcome");
+    assert(detail.core.revision.artifacts?.some((artifact) => artifact.kind === "game_production_candidate"), "Core revision must retain its production candidate decision");
 
     const recoveryResponse = await fetch(`${baseUrl}/api/projects/${projectId}/background`, {
       method: "POST",

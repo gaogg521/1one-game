@@ -1,5 +1,14 @@
 # 项目工作进度快照
-最后更新：2026-08-28（高质量游戏生产流水线第一阶段）
+最后更新：2026-08-29（游戏生产主链路开始真实执行）
+
+## 2026-08-29 平台生产主链路重构
+- 新建与改稿不再把 Core 修订立即标记为 `ready`；API 现在创建 `game_production` 持久任务，修订依次经历 `preparing -> generating -> ready/failed`。
+- 新增 `game-production-orchestrator`：设计总监、玩法设计、美术总监、UX、运行时、QA 六个生产 pass 会分别持久化可检查交付物，并显式记录上下游 consumes/produces。
+- 生产任务先完成真实资产与 BGM，再产出 `game_design_directive`、`gameplay_revision`、`art_direction_pack`、`ux_interaction_contract`、`runtime_build_manifest`、`automated_playtest_preflight`、`game_production_run` 与 `game_production_candidate`。
+- 自动扫测被标记为 `observed:false`，不能冒充真实玩家；只有候选版本通过才能进入 `ready_for_playtest`，公开发布仍必须有移动端 60 秒、首次动作、核心循环与真实胜负证据。
+- 发布门禁新增 `game_production_candidate.decision === ready_for_playtest`；缺失候选、资产、BGM、生产预检或真实移动试玩任一项都会 fail closed。
+- 资产与角色产物引入 producer-owned idempotency key，任务重试不会重复写 singleton 证据；终态失败会同步标记修订失败。
+- 新增 `qa:game-production-orchestrator` 与 `qa:game-production-worker`；纯逻辑、隔离数据库 worker、发布门禁、TypeScript、精确 ESLint 与生产构建均已通过。生产构建仍只有既有 7 条 Turbopack 动态文件范围告警。
 
 ## 当前状态
 - 已基于 Astrocade 调研开始平台级改造，不再直接扩写单款 Phaser 样品。

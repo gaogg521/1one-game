@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export type NewGenerationJob = {
   creativeProjectId: string;
   creativeRevisionId?: string;
-  type: "artifact_write" | "novel_plan" | "novel_scene" | "novel_continue" | "comic_panel" | "game_build" | "game_asset" | "evaluation";
+  type: "artifact_write" | "novel_plan" | "novel_scene" | "novel_continue" | "comic_panel" | "game_build" | "game_asset" | "game_production" | "evaluation";
   payload: Record<string, unknown>;
   idempotencyKey?: string;
   maxAttempts?: number;

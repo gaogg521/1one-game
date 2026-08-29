@@ -57,6 +57,15 @@ async function main() {
         },
       },
     });
+    await createCreativeArtifact({
+      creativeProjectId,
+      creativeRevisionId,
+      artifact: {
+        kind: "game_production_candidate",
+        mediaType: "report",
+        content: { version: 1, kind: "game_production_candidate", decision: "ready_for_playtest", score: 90, blockers: [] },
+      },
+    });
   }
   async function addDeliveryEvidence(creativeProjectId: string, creativeRevisionId: string) {
     await createCreativeArtifact({

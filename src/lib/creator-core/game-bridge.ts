@@ -21,6 +21,7 @@ export type GameCoreMirror = { creativeProjectId: string; creativeRevisionId: st
 export async function mirrorGameToCreatorCore(input: {
   project: Pick<Project, "id" | "ownerKey" | "title" | "prompt" | "specJson" | "status" | "visibility" | "coverPath" | "creativeBriefJson">;
   cause?: "generate" | "refine" | "import";
+  deferFinalization?: boolean;
 }): Promise<GameCoreMirror> {
   const spec = parseGameSpec(JSON.parse(input.project.specJson));
   const brief = parseStoredCreativeBrief(input.project.creativeBriefJson);
@@ -134,6 +135,6 @@ export async function mirrorGameToCreatorCore(input: {
     creativeRevisionId: revision.id,
     report: quality,
   });
-  await finalizeCreativeRevision(revision.id);
+  if (!input.deferFinalization) await finalizeCreativeRevision(revision.id);
   return { creativeProjectId: project.id, creativeRevisionId: revision.id };
 }

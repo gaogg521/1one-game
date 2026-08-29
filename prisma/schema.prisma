@@ -261,7 +261,7 @@ model GenerationJob {
   id                 String    @id @default(cuid())
   creativeProjectId  String
   creativeRevisionId String?
-  /// artifact_write | novel_plan | novel_scene | comic_panel | game_build | game_asset | evaluation
+  /// artifact_write | novel_plan | novel_scene | comic_panel | game_build | game_asset | game_production | evaluation
   type               String
   payloadJson        String
   /// queued | running | retrying | completed | failed | cancelled

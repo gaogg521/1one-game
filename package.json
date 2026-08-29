@@ -108,6 +108,8 @@
     "qa:game-production-contract": "tsx scripts/qa-game-production-contract.ts",
     "qa:game-production-pipeline": "tsx scripts/qa-game-production-pipeline.ts",
     "qa:game-production-artifacts": "tsx scripts/qa-game-production-artifacts.ts",
+    "qa:game-production-orchestrator": "tsx scripts/qa-game-production-orchestrator.ts",
+    "qa:game-production-worker": "tsx scripts/qa-game-production-worker.ts",
     "qa:game-delivery-readiness": "tsx scripts/qa-game-delivery-readiness.ts",
     "qa:game-session-resolution": "tsx scripts/qa-game-session-resolution.ts",
     "qa:game-asset-fallback": "tsx scripts/qa-game-asset-fallback.ts",
