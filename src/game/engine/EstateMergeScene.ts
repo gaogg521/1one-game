@@ -18,6 +18,21 @@ const LEVELS: Record<BuildingLevel, { name: string; icon: string; color: number;
   5: { name: "中央大庄园", icon: "♛", color: 0xf59e0b, roof: 0xfef3c7 },
 };
 
+const ESTATE_ASSETS = {
+  valley: "showcase-estate-valley",
+  buildings: "showcase-estate-buildings",
+} as const;
+
+// These source rectangles deliberately leave breathing room around each hand-painted
+// building.  The asset is an original sprite strip, rather than another vector roof.
+const BUILDING_CROPS: Record<BuildingLevel, { x: number; y: number; width: number; height: number }> = {
+  1: { x: 0, y: 38, width: 390, height: 610 },
+  2: { x: 390, y: 28, width: 330, height: 625 },
+  3: { x: 710, y: 18, width: 430, height: 660 },
+  4: { x: 1120, y: 8, width: 460, height: 690 },
+  5: { x: 1535, y: 0, width: 635, height: 720 },
+};
+
 /** 独立庄园合成玩法：真实 5×5 棋盘、拖放移动、同阶合并、资源与最高阶胜利。 */
 export class EstateMergeScene extends Phaser.Scene {
   public backgroundUrl: string | null = null;
@@ -30,6 +45,8 @@ export class EstateMergeScene extends Phaser.Scene {
   private board: Array<BuildingLevel | 0> = Array(25).fill(0);
   private boardGraphics!: Phaser.GameObjects.Graphics;
   private buildingTexts: Phaser.GameObjects.Text[] = [];
+  private buildingSprites: Phaser.GameObjects.Image[] = [];
+  private valley!: Phaser.GameObjects.Image;
   private statusText!: Phaser.GameObjects.Text;
   private orderText!: Phaser.GameObjects.Text;
   private dragIndex: number | null = null;
@@ -48,13 +65,19 @@ export class EstateMergeScene extends Phaser.Scene {
     this.soundscape = soundscape;
   }
 
+  preload() {
+    if (!this.textures.exists(ESTATE_ASSETS.valley)) this.load.image(ESTATE_ASSETS.valley, "/game-showcase/estate/estate-valley.png");
+    if (!this.textures.exists(ESTATE_ASSETS.buildings)) this.load.image(ESTATE_ASSETS.buildings, "/game-showcase/estate/estate-buildings.png");
+  }
+
   create() {
     for (let i = 0; i < 16; i += 1) this.board[i] = 1;
+    this.valley = this.add.image(0, 0, ESTATE_ASSETS.valley).setOrigin(0).setDepth(-10);
     this.boardGraphics = this.add.graphics();
-    styleHudText(this.add.text(18, 14, "GRAND ESTATE", { fontSize: "20px", fontStyle: "bold", color: "#fff7ed" })).setDepth(30);
-    styleHudText(this.add.text(18, 42, "拖动两个同阶建筑完成合并，从木料堆一路建设中央大庄园。", { fontSize: "11px", color: "#fde68a", wordWrap: { width: this.scale.width - 36 } })).setDepth(30);
-    this.statusText = styleHudText(this.add.text(18, 66, "", { fontSize: "15px", color: "#ffffff" })).setDepth(30);
-    this.orderText = styleHudText(this.add.text(this.scale.width - 18, 66, "", { fontSize: "13px", color: "#fef3c7", align: "right" }).setOrigin(1, 0)).setDepth(30);
+    styleHudText(this.add.text(18, 14, "GRAND ESTATE", { fontSize: "20px", fontStyle: "bold", color: "#fffdf5", stroke: "#31531d", strokeThickness: 4 })).setDepth(30);
+    styleHudText(this.add.text(18, 42, "拖动同阶庄园合并，点亮整座河谷领地。", { fontSize: "11px", color: "#fff8db", wordWrap: { width: this.scale.width - 36 }, stroke: "#31531d", strokeThickness: 3 })).setDepth(30);
+    this.statusText = styleHudText(this.add.text(18, 66, "", { fontSize: "15px", color: "#fffdf5", stroke: "#31531d", strokeThickness: 3 })).setDepth(30);
+    this.orderText = styleHudText(this.add.text(this.scale.width - 18, 66, "", { fontSize: "13px", color: "#fff8db", align: "right", stroke: "#31531d", strokeThickness: 3 }).setOrigin(1, 0)).setDepth(30);
     this.createShopButton();
     this.layoutGrid();
     this.bindBoardInput();
@@ -156,33 +179,40 @@ export class EstateMergeScene extends Phaser.Scene {
     const h = this.scale.height;
     const { x: ox, y: oy, cell } = this.grid;
     g.clear();
-    g.fillStyle(0x24150c, 1).fillRect(0, 0, w, h);
-    g.fillStyle(0x5b341d, 0.45).fillCircle(w * 0.12, h * 0.24, 90);
-    g.fillStyle(0x365314, 0.5).fillCircle(w * 0.88, h * 0.31, 120);
-    g.fillStyle(0x1f160f, 0.9).fillRoundedRect(ox - 9, oy - 9, cell * 5 + 18, cell * 5 + 18, 14);
+    this.valley.setDisplaySize(w, h);
+    // A subtle glaze keeps the board readable but lets the real environment carry
+    // the scene.  The old scene was entirely circles, rounded rectangles and text.
+    g.fillStyle(0x10240d, 0.1).fillRect(0, 0, w, h);
+    g.fillStyle(0x17300f, 0.78).fillRoundedRect(ox - 12, oy - 12, cell * 5 + 24, cell * 5 + 24, 18);
+    g.lineStyle(2, 0xffedb0, 0.74).strokeRoundedRect(ox - 12, oy - 12, cell * 5 + 24, cell * 5 + 24, 18);
+    g.fillStyle(0x263f16, 0.82).fillRoundedRect(8, 7, Math.min(550, w - 16), 86, 14);
+    g.fillStyle(0x263f16, 0.82).fillRoundedRect(Math.max(8, w - 230), 52, 222, 43, 12);
     this.buildingTexts.forEach((text) => text.destroy());
     this.buildingTexts = [];
+    this.buildingSprites.forEach((sprite) => sprite.destroy());
+    this.buildingSprites = [];
     for (let i = 0; i < 25; i += 1) {
       const col = i % 5;
       const row = Math.floor(i / 5);
       const x = ox + col * cell;
       const y = oy + row * cell;
       const selected = this.selectedIndex === i;
-      g.fillStyle(selected ? 0xfef3c7 : ((col + row) % 2 ? 0x4d7c0f : 0x3f6212), selected ? 0.34 : 0.72);
-      g.fillRoundedRect(x + 3, y + 3, cell - 6, cell - 6, 8);
-      g.lineStyle(selected ? 3 : 1, selected ? 0xfacc15 : 0x86efac, selected ? 1 : 0.25).strokeRoundedRect(x + 3, y + 3, cell - 6, cell - 6, 8);
+      g.fillStyle(selected ? 0xfff1b8 : ((col + row) % 2 ? 0x679330 : 0x568324), selected ? 0.48 : 0.8);
+      g.fillRoundedRect(x + 3, y + 3, cell - 6, cell - 6, 10);
+      g.lineStyle(selected ? 3 : 1, selected ? 0xffcf4a : 0xe6f7b1, selected ? 1 : 0.38).strokeRoundedRect(x + 3, y + 3, cell - 6, cell - 6, 10);
       const level = this.board[i];
       if (!level) continue;
-      const meta = LEVELS[level as BuildingLevel];
       const cx = x + cell / 2;
       const cy = y + cell / 2;
-      const bw = cell * (0.42 + level * 0.045);
-      const bh = cell * (0.28 + level * 0.055);
-      g.fillStyle(0x3f2a1c, 0.5).fillEllipse(cx + 4, cy + bh * 0.55, bw * 1.15, bh * 0.38);
-      g.fillStyle(meta.color, 1).fillRoundedRect(cx - bw / 2, cy - bh * 0.15, bw, bh, 3);
-      g.fillStyle(meta.roof, 1).fillTriangle(cx - bw * 0.62, cy - bh * 0.14, cx, cy - bh * 0.7, cx + bw * 0.62, cy - bh * 0.14);
-      g.fillStyle(0xfef3c7, 0.9).fillRect(cx - bw * 0.1, cy + bh * 0.28, bw * 0.2, bh * 0.57);
-      const label = styleHudText(this.add.text(cx, y + cell - 12, `Lv.${level}`, { fontSize: `${Math.max(9, cell * 0.13)}px`, fontStyle: "bold", color: "#ffffff", backgroundColor: "rgba(15,23,42,.65)", padding: { x: 4, y: 2 } }).setOrigin(0.5)).setDepth(16);
+      g.fillStyle(0x1e3410, 0.42).fillEllipse(cx + 4, y + cell * 0.75, cell * 0.74, cell * 0.22);
+      const crop = BUILDING_CROPS[level as BuildingLevel];
+      const sprite = this.add.image(cx, y + cell * 0.48, ESTATE_ASSETS.buildings)
+        .setCrop(crop.x, crop.y, crop.width, crop.height)
+        .setDisplaySize(cell * 0.91, cell * 0.88)
+        .setDepth(15);
+      if (selected) sprite.setTint(0xfff1a8);
+      this.buildingSprites.push(sprite);
+      const label = styleHudText(this.add.text(cx, y + cell - 12, `Lv.${level}`, { fontSize: `${Math.max(9, cell * 0.13)}px`, fontStyle: "bold", color: "#ffffff", backgroundColor: "rgba(26,52,17,.84)", padding: { x: 5, y: 2 }, stroke: "#1b310e", strokeThickness: 2 }).setOrigin(0.5)).setDepth(16);
       this.buildingTexts.push(label);
     }
     const highest = Math.max(...this.board);
