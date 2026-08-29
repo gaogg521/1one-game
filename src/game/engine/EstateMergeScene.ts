@@ -20,18 +20,14 @@ const LEVELS: Record<BuildingLevel, { name: string; icon: string; color: number;
 
 const ESTATE_ASSETS = {
   valley: "showcase-estate-valley",
-  buildings: "showcase-estate-buildings",
+  buildings: {
+    1: "showcase-estate-building-1",
+    2: "showcase-estate-building-2",
+    3: "showcase-estate-building-3",
+    4: "showcase-estate-building-4",
+    5: "showcase-estate-building-5",
+  } as Record<BuildingLevel, string>,
 } as const;
-
-// These source rectangles deliberately leave breathing room around each hand-painted
-// building.  The asset is an original sprite strip, rather than another vector roof.
-const BUILDING_CROPS: Record<BuildingLevel, { x: number; y: number; width: number; height: number }> = {
-  1: { x: 0, y: 38, width: 390, height: 610 },
-  2: { x: 390, y: 28, width: 330, height: 625 },
-  3: { x: 710, y: 18, width: 430, height: 660 },
-  4: { x: 1120, y: 8, width: 460, height: 690 },
-  5: { x: 1535, y: 0, width: 635, height: 720 },
-};
 
 /** 独立庄园合成玩法：真实 5×5 棋盘、拖放移动、同阶合并、资源与最高阶胜利。 */
 export class EstateMergeScene extends Phaser.Scene {
@@ -67,7 +63,10 @@ export class EstateMergeScene extends Phaser.Scene {
 
   preload() {
     if (!this.textures.exists(ESTATE_ASSETS.valley)) this.load.image(ESTATE_ASSETS.valley, "/game-showcase/estate/estate-valley.png");
-    if (!this.textures.exists(ESTATE_ASSETS.buildings)) this.load.image(ESTATE_ASSETS.buildings, "/game-showcase/estate/estate-buildings.png");
+    for (const level of [1, 2, 3, 4, 5] as BuildingLevel[]) {
+      const key = ESTATE_ASSETS.buildings[level];
+      if (!this.textures.exists(key)) this.load.image(key, `/game-showcase/estate/building-${level}.png`);
+    }
   }
 
   create() {
@@ -205,10 +204,8 @@ export class EstateMergeScene extends Phaser.Scene {
       const cx = x + cell / 2;
       const cy = y + cell / 2;
       g.fillStyle(0x1e3410, 0.42).fillEllipse(cx + 4, y + cell * 0.75, cell * 0.74, cell * 0.22);
-      const crop = BUILDING_CROPS[level as BuildingLevel];
-      const sprite = this.add.image(cx, y + cell * 0.48, ESTATE_ASSETS.buildings)
-        .setCrop(crop.x, crop.y, crop.width, crop.height)
-        .setDisplaySize(cell * 0.91, cell * 0.88)
+      const sprite = this.add.image(cx, y + cell * 0.48, ESTATE_ASSETS.buildings[level as BuildingLevel])
+        .setDisplaySize(cell * 0.84, cell * 0.9)
         .setDepth(15);
       if (selected) sprite.setTint(0xfff1a8);
       this.buildingSprites.push(sprite);
