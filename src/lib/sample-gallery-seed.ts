@@ -48,6 +48,12 @@ export async function seedSampleGalleryProjects(): Promise<{ upserted: number; i
     await prisma.project.deleteMany({ where: { id: sampleProjectId(prunedId) } });
   }
 
+  // The gallery owner is reserved for seeded showcase projects.  Removing orphaned
+  // rows here prevents previously copied prototypes from surviving a catalog prune.
+  await prisma.project.deleteMany({
+    where: { ownerKey: SAMPLE_GALLERY_OWNER, id: { notIn: ids } },
+  });
+
   return { upserted: ids.length, ids };
 }
 
