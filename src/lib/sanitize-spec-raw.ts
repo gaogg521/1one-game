@@ -57,5 +57,20 @@ export function sanitizeSpecRaw(raw: unknown): unknown {
     o.towerDefense = td;
   }
 
+  if (typeof o.survivor === "object" && o.survivor !== null) {
+    const survivor = { ...(o.survivor as Record<string, unknown>) };
+    if (Array.isArray(survivor.supplyDrops)) {
+      survivor.supplyDrops = survivor.supplyDrops.slice(0, 4).map((drop) => {
+        if (!drop || typeof drop !== "object") return drop;
+        const next = { ...(drop as Record<string, unknown>) };
+        if (typeof next.durationMs === "number" && Number.isFinite(next.durationMs)) {
+          next.durationMs = Math.max(1000, Math.min(10000, Math.round(next.durationMs)));
+        }
+        return next;
+      });
+    }
+    o.survivor = survivor;
+  }
+
   return o;
 }
