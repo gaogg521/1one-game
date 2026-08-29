@@ -5,6 +5,7 @@ import { assessComicCreatorQuality, assessGameCreatorQuality, assessNovelCreator
 import { parseGameSpec } from "@/lib/game-spec";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { assessGameAssetReadiness } from "@/lib/game-asset-readiness";
+import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { parseNovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
 
@@ -74,8 +75,9 @@ export async function setCreatorWorkPublication(input: {
     try { assetContent = asset?.contentJson ? JSON.parse(asset.contentJson) : null; } catch { /* corrupted artifact fails closed */ }
     let candidateSpec: unknown = null;
     try { candidateSpec = artifact("game_spec")?.contentJson ? JSON.parse(artifact("game_spec")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
+    const finalSpec = parseGameSpec(candidateSpec ?? JSON.parse(row.specJson));
     const baseQuality = assessGameCreatorQuality(
-      parseGameSpec(candidateSpec ?? JSON.parse(row.specJson)),
+      finalSpec,
       parseStoredCreativeBrief(row.creativeBriefJson),
       assessGameAssetReadiness(assetContent),
     ).report;
@@ -92,6 +94,7 @@ export async function setCreatorWorkPublication(input: {
     if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
     if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
     if (productionCandidate?.decision !== "ready_for_playtest") deliveryIssues.push("publication_production_candidate_not_ready");
+    if (requiresBespokeRuntime(finalSpec) && !hasBespokeRuntime(finalSpec)) deliveryIssues.push("publication_generic_phaser_runtime_retired");
     if (!preflight || (preflight.verdict !== "ready" && preflight.verdict !== "needs_review")) {
       deliveryIssues.push("publication_delivery_preflight_not_ready");
     }

@@ -13,7 +13,7 @@ for (const symbol of ["export class HudGoalPanel", "SceneGoalGuidance", "Cohesiv
   assert(panelSource.includes(symbol), `HudGoalPanel should include ${symbol}`);
 }
 
-for (const scene of ["PlayScene", "ShooterScene", "PlatformerScene", "TowerDefenseScene", "FarmingScene", "PuzzleScene", "PhysicsScene", "CoasterScene"]) {
+for (const scene of ["ShooterScene", "PlatformerScene", "TowerDefenseScene", "FarmingScene", "PuzzleScene", "PhysicsScene", "CoasterScene"]) {
   const source = fs.readFileSync(path.join(process.cwd(), `src/game/engine/${scene}.ts`), "utf8");
   assert(source.includes("HudGoalPanel"), `${scene} should mount HudGoalPanel`);
   assert(source.includes("this.goalPanel"), `${scene} should keep a goalPanel instance`);

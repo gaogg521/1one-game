@@ -172,7 +172,7 @@ export function buildDirector(params: {
   }
 
   /**
-   * PlayScene 三模板：保底「奖励窗 → 限时目标 → 高压段」三件事都存在，
+   * legacy arena 语义：保底「奖励窗 → 限时目标 → 高压段」三件事都存在，
    * 避免仅靠随机 roll 导致一局里没有事件、不像关卡。
    */
   if (template === "avoider" || template === "collector" || template === "survivor") {
@@ -289,4 +289,3 @@ export function buildDirector(params: {
     events: events.length ? events : undefined,
   };
 }
-

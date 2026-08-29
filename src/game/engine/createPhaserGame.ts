@@ -13,7 +13,6 @@ import { applyMinecraftThemeOverlay, isMinecraftLikeSpec } from "@/lib/minecraft
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { CoasterScene } from "@/game/engine/CoasterScene";
 import { PlatformerScene } from "@/game/engine/PlatformerScene";
-import { PlayScene } from "@/game/engine/PlayScene";
 import { ShooterScene } from "@/game/engine/ShooterScene";
 import { TowerDefenseScene } from "@/game/engine/TowerDefenseScene";
 import { PuzzleScene } from "@/game/engine/PuzzleScene";
@@ -220,7 +219,6 @@ export function createPhaserGame(
       };
 
   const scene = createPhaserSceneForSpec(specPlay, effectiveOnEnd, ref, soundscape, {
-    PlayScene,
     PlatformerScene,
     TowerDefenseScene,
     ShooterScene,

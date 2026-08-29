@@ -59,7 +59,7 @@ const templeGuidance = buildSceneGoalGuidance(
 assert(templeGuidance.controls.includes("跳跃"), "temple runner guidance should mention jump");
 assert(templeGuidance.objective.includes("无尽"), "temple runner guidance should mention endless run");
 
-for (const scene of ["PlayScene", "ShooterScene", "PlatformerScene", "TowerDefenseScene", "CoasterScene"]) {
+for (const scene of ["ShooterScene", "PlatformerScene", "TowerDefenseScene", "CoasterScene"]) {
   const source = fs.readFileSync(path.join(process.cwd(), `src/game/engine/${scene}.ts`), "utf8");
   assert(source.includes("buildSceneGoalGuidance"), `${scene} should use shared goal guidance`);
 }

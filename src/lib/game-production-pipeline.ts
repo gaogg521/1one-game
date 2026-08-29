@@ -1,6 +1,7 @@
 import type { GameSpec } from "@/lib/game-spec";
 import type { GameDeliveryReadiness } from "@/lib/game-delivery-readiness";
 import type { GameVerticalSliceScorecard } from "@/lib/game-vertical-slice";
+import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 export const GAME_PREFLIGHT_STAGE_IDS = [
   "requirements",
@@ -84,6 +85,7 @@ export function buildGameProductionPipelineReport(input: {
       ? "independent_agentic_module"
       : "dedicated_runtime";
   const agenticRuntimeReady = runtimeStrategy !== "independent_agentic_module" || Boolean(spec.agenticModule);
+  const bespokeRuntimeReady = hasBespokeRuntime(spec);
   const stages: GameProductionStage[] = [
     {
       id: "requirements",
@@ -122,12 +124,20 @@ export function buildGameProductionPipelineReport(input: {
     {
       id: "technical_design",
       owner: "runtime_engineer",
-      status: input.sceneCount > 0 && input.behaviorNodeCount > 0 && agenticRuntimeReady ? "ready" : "blocked",
+      status: input.sceneCount > 0 && input.behaviorNodeCount > 0 && agenticRuntimeReady && bespokeRuntimeReady ? "ready" : "blocked",
       objective: "选择与玩法复杂度匹配的运行时，而不是把所有创意压进同一模板。",
       deliverables: ["scene_graph", "behavior_graph", "runtime_strategy"],
       acceptance: ["场景图非空", "行为图非空", "独立模块路线必须有可执行模块"],
       dependsOn: ["prototype"],
-      evidence: [`template:${spec.templateId}`, `runtime_strategy:${runtimeStrategy}`, `agentic_module:${spec.agenticModule ? "attached" : "absent"}`, `scene_count:${input.sceneCount}`, `behavior_node_count:${input.behaviorNodeCount}`],
+      evidence: [
+        `template:${spec.templateId}`,
+        `runtime_strategy:${runtimeStrategy}`,
+        `agentic_module:${spec.agenticModule ? "attached" : "absent"}`,
+        `bespoke_runtime:${bespokeRuntimeReady ? "ready" : "missing"}`,
+        ...(requiresBespokeRuntime(spec) && !bespokeRuntimeReady ? ["generic_phaser_runtime_retired"] : []),
+        `scene_count:${input.sceneCount}`,
+        `behavior_node_count:${input.behaviorNodeCount}`,
+      ],
     },
     {
       id: "ux_design",

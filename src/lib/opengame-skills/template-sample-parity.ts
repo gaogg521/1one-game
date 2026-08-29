@@ -104,7 +104,6 @@ export function checkSampleTemplateSkillParity(sample: Sample): string[] {
 
 function sceneSourcePath(sceneName: string): string | null {
   const map: Record<string, string> = {
-    PlayScene: "src/game/engine/PlayScene.ts",
     PlatformerScene: "src/game/engine/PlatformerScene.ts",
     TowerDefenseScene: "src/game/engine/TowerDefenseScene.ts",
     ShooterScene: "src/game/engine/ShooterScene.ts",

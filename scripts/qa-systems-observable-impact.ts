@@ -13,7 +13,7 @@ for (const symbol of ["applySystemImpact", "skill", "powerup", "juicePickup", "j
   assert(helperSource.includes(symbol), `systemImpact should include ${symbol}`);
 }
 
-for (const scene of ["PlayScene", "PlatformerScene"]) {
+for (const scene of ["PlatformerScene"]) {
   const source = fs.readFileSync(path.join(process.cwd(), `src/game/engine/${scene}.ts`), "utf8");
   assert(source.includes("applySystemImpact"), `${scene} should use shared systems impact`);
   assert(source.includes("private applyPowerup"), `${scene} should keep powerup runtime entry point`);

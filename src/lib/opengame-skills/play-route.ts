@@ -1,6 +1,7 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { PRODUCT } from "@/lib/product-config";
 import { shouldSkipTemplateFirstForPrompt } from "@/lib/opengame-skills/complexity-route";
+import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 /** 用户试玩路由：专用 Scene（样品同级） vs AgenticScene + OpenGame Skills */
 export type AgenticPlayRoute = "dedicated" | "agentic";
@@ -36,6 +37,10 @@ export function resolveAgenticPlayRoute(
   }
 
   if (process.env.AGENTIC_FORCE_LLM === "1") return "agentic";
+
+  // The old arena family was one shared Phaser scene.  It is retired, so it
+  // must enter the generated-module route irrespective of prompt complexity.
+  if (requiresBespokeRuntime(spec)) return "agentic";
 
   const mode = readOpenGameAgenticRouteMode();
   if (mode === "off") return "dedicated";

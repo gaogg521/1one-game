@@ -16,7 +16,7 @@ assert(visibleSpriteTargetSize("hazard", "standard") >= 36, "standard hazard spr
 assert(visibleSpriteTargetSize("collectible", "standard") >= 30, "standard collectible sprites should have a visible size floor");
 assert(visibleSpriteTargetSize("boss", "showcase") >= 72, "showcase boss sprites should feel prominent");
 
-for (const scene of ["PlayScene", "ShooterScene", "PlatformerScene", "TowerDefenseScene", "FarmingScene", "PuzzleScene", "PhysicsScene"]) {
+for (const scene of ["ShooterScene", "PlatformerScene", "TowerDefenseScene", "FarmingScene", "PuzzleScene", "PhysicsScene"]) {
   const source = fs.readFileSync(path.join(process.cwd(), `src/game/engine/${scene}.ts`), "utf8");
   assert(source.includes("assetBackgroundAlpha"), `${scene} should use shared background visibility floor`);
   assert(!source.includes(".setAlpha(0.12)"), `${scene} should not hardcode low background alpha 0.12`);

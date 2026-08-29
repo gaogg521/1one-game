@@ -95,7 +95,7 @@ export type GameTemplateDefinition = {
   id: string;
   phaser: PhaserRuntimeFamily;
   godot: GodotRuntimeKey;
-  /** arena 族在 PlayScene / arena_runtime 内的子模式 */
+  /** legacy arena family mode; web delivery now requires a bespoke module */
   arenaMode?: ArenaMode;
   godotExport: boolean;
   infer: TemplateInferRule[];

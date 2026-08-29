@@ -11,7 +11,6 @@ import type { CustomizationScene } from "@/game/engine/CustomizationScene";
 import type { FarmingScene } from "@/game/engine/FarmingScene";
 import type { PhysicsScene } from "@/game/engine/PhysicsScene";
 import type { PlatformerScene } from "@/game/engine/PlatformerScene";
-import type { PlayScene } from "@/game/engine/PlayScene";
 import type { PuzzleScene } from "@/game/engine/PuzzleScene";
 import type { ShooterScene } from "@/game/engine/ShooterScene";
 import type { TowerDefenseScene } from "@/game/engine/TowerDefenseScene";
@@ -36,6 +35,7 @@ import type { ShuangKouScene } from "@/game/engine/ShuangKouScene";
 import type { GameSoundscape } from "@/game/audio/gameSoundscape";
 import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
 import { resolveTemplateRuntime } from "@/lib/game-templates/registry";
+import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import type { ArenaMode, GodotRuntimeKey, PhaserRuntimeFamily } from "@/lib/game-templates/types";
 
 /** Godot 导出 JSON 附带的运行时解析（Godot 侧读取 _runtime） */
@@ -48,6 +48,21 @@ export type GodotRuntimePayload = {
   /** 推断的氛围，影响视觉色调 */
   mood?: string;
 };
+
+/**
+ * The former `arena -> PlayScene` fallback made distinct game ideas look like
+ * the same coloured-circle prototype.  It is deliberately retired: these
+ * semantic families now need an executable, game-specific module before they
+ * can be treated as a playable delivery.
+ */
+export { hasBespokeRuntime, requiresBespokeRuntime };
+
+export class GenericPhaserRuntimeRetiredError extends Error {
+  constructor(templateId: string) {
+    super(`generic_phaser_runtime_retired:${templateId}`);
+    this.name = "GenericPhaserRuntimeRetiredError";
+  }
+}
 
 export function buildGodotRuntimePayload(spec: GameSpec): GodotRuntimePayload {
   const rt = resolveTemplateRuntime(spec.templateId);
@@ -153,7 +168,6 @@ export function phaserFamilyFor(spec: GameSpec): PhaserRuntimeFamily {
 }
 
 export type PhaserSceneImports = {
-  PlayScene: typeof PlayScene;
   PlatformerScene: typeof PlatformerScene;
   TowerDefenseScene: typeof TowerDefenseScene;
   ShooterScene: typeof ShooterScene;
@@ -189,7 +203,6 @@ export type PhaserSceneImports = {
 };
 
 export type PhaserSceneInstance =
-  | PlayScene
   | PlatformerScene
   | TowerDefenseScene
   | ShooterScene
@@ -240,6 +253,8 @@ export function createPhaserSceneForSpec(
   const sfxNull = soundscape ?? null;
 
   switch (family) {
+    case "arena":
+      throw new GenericPhaserRuntimeRetiredError(spec.templateId);
     case "agentic":
       return new imports.AgenticScene(playSpec, onEnd, sfxNull);
     case "towerDefense":
@@ -298,9 +313,8 @@ export function createPhaserSceneForSpec(
       return new imports.NiuNiuScene(playSpec, onEnd, sfxOpt);
     case "shuangKou":
       return new imports.ShuangKouScene(playSpec, onEnd, sfxOpt);
-    case "arena":
     default:
-      return new imports.PlayScene(playSpec, onEnd, sfxOpt);
+      throw new GenericPhaserRuntimeRetiredError(spec.templateId);
   }
 }
 
@@ -316,7 +330,7 @@ export function expectedPhaserSceneName(spec: GameSpec): string {
   if (showcase === "estate-merge") return "EstateMergeScene";
   const family = phaserFamilyFor(spec);
   const map: Record<PhaserRuntimeFamily, string> = {
-    arena: "PlayScene",
+    arena: "BespokeRuntimeRequired",
     platformer: "PlatformerScene",
     towerDefense: "TowerDefenseScene",
     shooter: "ShooterScene",
@@ -347,5 +361,5 @@ export function expectedPhaserSceneName(spec: GameSpec): string {
     shuangKou: "ShuangKouScene",
     agentic: "AgenticScene",
   };
-  return map[family] ?? "PlayScene";
+  return map[family] ?? "BespokeRuntimeRequired";
 }

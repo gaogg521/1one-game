@@ -6,6 +6,7 @@ import { buildGameProductionPipelineReport, type GameProductionRole } from "@/li
 import type { GameSpec } from "@/lib/game-spec";
 import { buildGameDesignGraphs } from "@/lib/creator-core/game-design-graph";
 import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
+import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 export type GameProductionArtifact = {
   kind: string;
@@ -67,6 +68,7 @@ export function buildGameProductionRun(input: {
     ...(verticalSlice.verdict === "blocked" ? ["vertical_slice_blocked"] : []),
     ...(delivery.verdict === "blocked" ? ["delivery_preflight_blocked"] : []),
     ...(!assets.ok ? assets.evidence.filter((entry) => entry.endsWith("_missing")) : []),
+    ...(requiresBespokeRuntime(input.spec) && !hasBespokeRuntime(input.spec) ? ["generic_phaser_runtime_retired"] : []),
   ];
   const score = Math.max(0, Math.min(100, Math.round(
     verticalSlice.score * 0.45 + delivery.score * 0.35 + (assets.ok ? 20 : 0),

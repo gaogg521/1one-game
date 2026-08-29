@@ -27,7 +27,9 @@ export {
 export {
   buildGodotRuntimePayload,
   createPhaserSceneForSpec,
+  hasBespokeRuntime,
   isGodotExportSupportedForTemplate,
+  requiresBespokeRuntime,
   phaserFamilyFor,
   specJsonForGodotExport,
   toPhaserPlaySpec,

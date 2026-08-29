@@ -7,6 +7,8 @@ const prompt = "制作一款有采集、建造、敌人和超能力的体素沙�
 const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
 const spec = {
   ...base,
+  agenticPlayRoute: "agentic" as const,
+  agenticModule: { version: 1 as const, entry: "createGame", source: "function createGame(){ return { create(){} }; }" },
   production: buildDefaultGameProductionContract({ prompt, templateId: base.templateId }),
 };
 const assetManifest = {
@@ -37,5 +39,13 @@ assert.ok(run.passes.every((pass, index) => pass.index === index + 1 && pass.con
 const rejected = buildGameProductionRun({ spec, assetManifest: null });
 assert.equal(rejected.candidate.decision, "rejected");
 assert.ok(rejected.candidate.blockers.some((blocker) => blocker.includes("asset") || blocker.includes("background")));
+
+const { agenticModule: _module, ...legacyArenaSpec } = spec;
+const legacyArena = buildGameProductionRun({
+  spec: { ...legacyArenaSpec, agenticPlayRoute: "dedicated" },
+  assetManifest,
+});
+assert.equal(legacyArena.candidate.decision, "rejected");
+assert.ok(legacyArena.candidate.blockers.includes("generic_phaser_runtime_retired"));
 
 console.log("[OK] qa-game-production-orchestrator: six material passes, candidate promotion and real-playtest boundary are enforced");

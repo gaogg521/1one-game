@@ -26,6 +26,7 @@ import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
+import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 export type GenerateAgenticModuleResult =
   | {
@@ -80,7 +81,8 @@ export async function generateAgenticGameModule(
   spec: GameSpec,
   orch?: RunTraceRecorder,
 ): Promise<GenerateAgenticModuleResult> {
-  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1") {
+  const bespokeRequired = requiresBespokeRuntime(spec);
+  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !bespokeRequired) {
     const mod = buildFallbackAgenticModule(spec.title, spec);
     orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
     return { ok: true, module: mod, source: "fallback" };
@@ -155,6 +157,7 @@ export async function generateAgenticGameModule(
   }
 
   if (
+    !bespokeRequired &&
     !skipTemplateFirst &&
     templateFirst.includes(spec.templateId) &&
     process.env.AGENTIC_FORCE_LLM !== "1"
@@ -292,6 +295,10 @@ export async function generateAgenticGameModule(
     }
   }
 
+  if (bespokeRequired) {
+    orch?.note("agentic_gen_result", { source: "rejected", lastReason, reason: "bespoke_runtime_required" });
+    return { ok: false, reason: "bespoke_runtime_generation_failed" };
+  }
   orch?.note("agentic_gen_result", { source: "fallback", lastReason });
   return {
     ok: true,

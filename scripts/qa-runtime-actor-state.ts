@@ -18,7 +18,7 @@ actor.set("victory", 220);
 actor.set("idle", 500);
 assert(actor.snapshot().state === "victory", "terminal success state must remain observable");
 
-for (const scene of ["FarmingScene", "PhysicsScene", "PlatformerScene", "PlayScene", "PuzzleScene"]) {
+for (const scene of ["FarmingScene", "PhysicsScene", "PlatformerScene", "PuzzleScene"]) {
   const source = fs.readFileSync(path.join(process.cwd(), "src/game/engine", `${scene}.ts`), "utf8");
   assert(source.includes("RuntimeActorStateMachine"), `${scene} must use the shared actor state machine`);
   assert(source.includes("actorStateTransitions"), `${scene} must expose state transitions to runtime QA`);
