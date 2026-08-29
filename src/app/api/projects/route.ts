@@ -11,10 +11,6 @@ import {
 } from "@/lib/project-creative-brief-parse";
 import { saveCreativeBriefJson } from "@/lib/project-creative-brief-db";
 import { scheduleProjectAssetPipeline } from "@/lib/game-asset-pipeline";
-import { buildFallbackAgenticModule, shouldUseAgenticRuntime, shouldUseDedicatedSceneForTemplateFirst } from "@/lib/agentic/game-module";
-import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
-import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
-import { PRODUCT } from "@/lib/product-config";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { localizedJsonError, apiErrorFromUnknown } from "@/lib/api/localized-error";
@@ -103,20 +99,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    let spec = prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req));
-    if (PRODUCT.game.agenticModuleEnabled && requiresBespokeRuntime(spec) && !shouldUseAgenticRuntime(spec)) {
-      const generated = await generateAgenticGameModule(trimmed, { ...spec, agenticPlayRoute: "agentic" });
-      if (!generated.ok) {
-        return localizedJsonError(req, "gameRuntimeGenerationFailed", 422);
-      }
-      spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
-    } else if (
-      PRODUCT.game.agenticModuleEnabled &&
-      !shouldUseAgenticRuntime(spec) &&
-      !shouldUseDedicatedSceneForTemplateFirst(spec)
-    ) {
-      spec = { ...spec, agenticModule: buildFallbackAgenticModule(spec.title, spec) };
-    }
+    const spec = prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req));
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);

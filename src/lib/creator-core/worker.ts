@@ -40,10 +40,14 @@ import { assessNovelContinuation } from "@/lib/novel-long-continue";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
+import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
+import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
+import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
   workerId: string,
+  specOverride?: ReturnType<typeof parseGameSpec>,
 ) {
   const payload = GameAssetJobPayloadSchema.parse(JSON.parse(job.payloadJson));
   const [project, coreProject] = await Promise.all([
@@ -68,7 +72,7 @@ async function executeGameAssetJob(
     throw new Error("game_asset_owner_or_resource_missing");
   }
 
-  const spec = parseGameSpec(payload.spec);
+  const spec = specOverride ?? parseGameSpec(payload.spec);
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_asset_brief_invalid");
 
@@ -170,13 +174,26 @@ async function executeGameProductionJob(
 ) {
   if (!job.creativeRevisionId) throw new Error("game_production_revision_missing");
   const payload = GameProductionJobPayloadSchema.parse(JSON.parse(job.payloadJson));
-  const spec = parseGameSpec(payload.spec);
+  let spec = parseGameSpec(payload.spec);
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
+  if (requiresBespokeRuntime(spec) && !shouldUseAgenticRuntime(spec)) {
+    const project = await prisma.project.findUnique({
+      where: { id: payload.projectId },
+      select: { id: true, prompt: true, ownerKey: true },
+    });
+    if (!project || project.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
+    await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building bespoke game runtime" });
+    const generated = await generateAgenticGameModule(project.prompt, { ...spec, agenticPlayRoute: "agentic" });
+    if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
+    spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
+    await prisma.project.update({ where: { id: project.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+  }
+
   await markCreativeRevisionGenerating(job.creativeRevisionId);
   await heartbeatGenerationJob(job.id, workerId, { percent: 3, stage: "design_director", detail: "locking player fantasy and first-minute contract" });
-  const assetArtifact = await executeGameAssetJob(job, workerId);
+  const assetArtifact = await executeGameAssetJob(job, workerId, spec);
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
 
