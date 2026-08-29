@@ -7,6 +7,7 @@ import type { GameSpec } from "@/lib/game-spec";
 import { consumeSSE } from "@/lib/read-sse";
 import { prepareGameSpecForPersist } from "@/lib/spec-patch";
 import { GamePlayer } from "@/components/GamePlayer";
+import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal";
@@ -107,7 +108,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
           setStatus((old) => ({ ...old, lines }));
         }
         if (step === "done" && event.spec) {
-          setSpec(event.spec as GameSpec);
+          const generatedSpec = event.spec as GameSpec;
+          setSpec(generatedSpec);
           const debug = event.debug && typeof event.debug === "object"
             ? (event.debug as {
                 model?: string;
@@ -121,7 +123,13 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             : null;
           setGenerationDebug(debug);
           setGenerationSource(typeof event.source === "string" ? event.source : debug?.source ?? null);
-          setStatus((old) => ({ ...old, step: "ready", message: "可玩版本已准备好" }));
+          setStatus((old) => ({
+            ...old,
+            step: "ready",
+            message: requiresBespokeRuntime(generatedSpec)
+              ? "设计已准备好；保存后将构建独立玩法运行时"
+              : "可玩版本已准备好",
+          }));
         }
         if (step === "error") setError(message || t("errors.generateFailed"));
       }, { locale });

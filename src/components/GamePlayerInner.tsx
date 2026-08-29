@@ -42,23 +42,27 @@ export default function GamePlayerInner(props: GamePlayerInnerProps) {
     return <VoxelSandboxPlayer spec={props.spec} projectId={props.projectId} onEnd={props.onEnd} />;
   }
   if (requiresBespokeRuntime(props.spec) && !hasBespokeRuntime(props.spec)) {
-    return <BespokeRuntimeRequired title={props.spec.title} />;
+    return <BespokeRuntimeRequired title={props.spec.title} preview={!props.projectId} />;
   }
   return <PhaserGamePlayerInner {...props} />;
 }
 
 /** Never render the removed circle-based arena scene as if it were a game. */
-function BespokeRuntimeRequired({ title }: { title: string }) {
+function BespokeRuntimeRequired({ title, preview }: { title: string; preview: boolean }) {
   return (
     <section
       data-testid="bespoke-runtime-required"
       className="grid min-h-[min(70dvh,520px)] place-items-center overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_50%_20%,rgba(245,158,11,.14),transparent_38%),#08111f] px-6 text-center text-slate-100"
     >
       <div className="max-w-lg space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Runtime rebuild required</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+          {preview ? "Dedicated runtime pending" : "Runtime rebuild required"}
+        </p>
         <h2 className="text-2xl font-bold">{title}</h2>
         <p className="text-sm leading-6 text-slate-300">
-          旧版通用 Phaser 场景已被移除，避免用圆圈和几何体伪装成完成游戏。此版本需要重新生成独立玩法运行时后才能试玩或发布。
+          {preview
+            ? "该复杂玩法将在保存后生成独立运行时。通用圆形和几何体占位已禁用，因此不会用伪试玩替代真实构建。"
+            : "旧版通用 Phaser 场景已被移除，避免用圆圈和几何体伪装成完成游戏。此版本需要重新生成独立玩法运行时后才能试玩或发布。"}
         </p>
       </div>
     </section>

@@ -334,8 +334,17 @@ async function main() {
       });
     }
     const previewTitle = (await page.locator("main h2").first().textContent())?.trim() ?? "";
-    await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
-    stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });
+    const deferredRuntime = page.getByTestId("bespoke-runtime-required").first();
+    if (await deferredRuntime.isVisible().catch(() => false)) {
+      // Arena-family games intentionally fail closed before persistence: their
+      // real module is generated in the POST /api/projects production pass.
+      // The creation flow must save and build that module, not require the
+      // retired geometry fallback to render a preview canvas.
+      stages.push({ at: new Date().toISOString(), stage: "bespoke_runtime_build_deferred", detail: { previewTitle } });
+    } else {
+      await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
+      stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });
+    }
 
     await Promise.all([
       page.waitForURL(/\/play\//, { timeout: 90_000 }),
