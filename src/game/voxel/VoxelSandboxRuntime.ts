@@ -167,16 +167,17 @@ export class VoxelSandboxRuntime {
     const sx = Math.floor(WORLD_SIZE / 2);
     const sz = Math.floor(WORLD_SIZE / 2);
     const spawnH = this.terrainHeight(sx, sz);
-    // Keep the first minute readable: the player never spawns inside a canopy.
-    for (let x = sx - 3; x <= sx + 3; x += 1) for (let z = sz - 3; z <= sz + 3; z += 1) {
-      for (let y = 0; y <= spawnH; y += 1) this.setBase(x, y, z, y === spawnH ? "grass" : y >= spawnH - 2 ? "dirt" : "stone");
-      for (let y = spawnH + 1; y < spawnH + 8; y += 1) {
+    // The first frame is the product's handshake.  A 13×13 flat outpost gives a
+    // clear horizon and objectives instead of spawning the camera inside foliage.
+    for (let x = sx - 6; x <= sx + 6; x += 1) for (let z = sz - 6; z <= sz + 6; z += 1) {
+      for (let y = 0; y < 18; y += 1) {
         const k = key(x, y, z);
         this.blocks.delete(k);
         this.baseBlocks.delete(k);
       }
+      for (let y = 0; y <= spawnH; y += 1) this.setBase(x, y, z, y === spawnH ? "grass" : y >= spawnH - 2 ? "dirt" : "stone");
     }
-    for (const [x, z] of [[sx - 4, sz], [sx + 4, sz], [sx, sz - 4], [sx, sz + 4]]) {
+    for (const [x, z] of [[sx - 5, sz], [sx + 5, sz], [sx, sz - 5], [sx, sz + 5]]) {
       this.setBase(x!, this.terrainHeight(x!, z!) + 1, z!, "crystal");
     }
     this.camera.position.set(sx + 0.5, spawnH + PLAYER_HEIGHT + 0.2, sz + 0.5);
