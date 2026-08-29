@@ -19,7 +19,7 @@ type ProjectDetail = {
     generationProvider?: string | null;
     generationModel?: string | null;
   };
-  spec?: { templateId?: string; title?: string };
+  spec?: { templateId?: string; title?: string; agenticPlayRoute?: "dedicated" | "agentic" };
   playRevisionId?: string;
   assetJob?: { id?: string; status?: string; progress?: unknown };
   core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string; content?: unknown; storageUri?: string | null }> } };
@@ -64,6 +64,9 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     "game_delivery_preflight",
     "game_playtest_delivery",
     "asset_manifest",
+    "game_art_direction",
+    "runtime_build_manifest",
+    "game_production_candidate",
   ];
   const deadline = Date.now() + 10 * 60_000;
   let lastKinds: string[] = [];
@@ -91,7 +94,14 @@ async function verifyRuntimeAssets(page: Page, detail: ProjectDetail, stages: St
   const content = manifestArtifact?.content as {
     backgroundUrl?: unknown;
     sprites?: Array<{ kind?: unknown; url?: unknown }>;
+    artDirection?: { kind?: unknown; requiredAssetSlots?: unknown };
   } | undefined;
+  assert(content?.artDirection?.kind === "game_art_direction", "资产清单缺少可执行美术方向");
+  const artSlots = content.artDirection.requiredAssetSlots;
+  assert(
+    Array.isArray(artSlots) && ["background", "player", "enemy"].every((slot) => artSlots.includes(slot)),
+    "美术方向未覆盖背景、主角和敌人",
+  );
   const requiredUrls = [
     typeof content?.backgroundUrl === "string" ? content.backgroundUrl : null,
     ...(content?.sprites ?? [])
@@ -106,6 +116,34 @@ async function verifyRuntimeAssets(page: Page, detail: ProjectDetail, stages: St
     assert(response.headers()["x-operone-asset-fallback"] !== "1", `交付完成后仍在使用临时资源：${url}`);
   }
   stages.push({ at: new Date().toISOString(), stage: "runtime_assets_verified", detail: { urls: requiredUrls } });
+}
+
+function verifyProductionVisualDelivery(detail: ProjectDetail, stages: StageRecord[]) {
+  const artifacts = detail.core?.revision?.artifacts ?? [];
+  const candidate = artifacts.find((item) => item.kind === "game_production_candidate")?.content as {
+    decision?: unknown;
+    blockers?: unknown;
+  } | undefined;
+  assert(candidate?.decision === "ready_for_playtest", `生产候选未准入试玩：${JSON.stringify(candidate?.blockers ?? [])}`);
+
+  const runtime = artifacts.find((item) => item.kind === "runtime_build_manifest")?.content as {
+    route?: unknown;
+    visualContract?: { ok?: unknown; blockers?: unknown; evidence?: unknown };
+  } | undefined;
+  assert(runtime, "缺少运行时构建清单");
+  if (detail.spec?.agenticPlayRoute === "agentic") {
+    assert(runtime.route === "agentic", "复杂游戏没有进入专属运行时路线");
+    assert(runtime.visualContract?.ok === true, `专属运行时视觉契约未通过：${JSON.stringify(runtime.visualContract?.blockers ?? [])}`);
+  }
+  stages.push({
+    at: new Date().toISOString(),
+    stage: "production_visual_delivery_verified",
+    detail: {
+      route: detail.spec?.agenticPlayRoute ?? runtime.route ?? "unknown",
+      candidate: candidate.decision,
+      visualContract: runtime.visualContract ?? null,
+    },
+  });
 }
 
 async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[]) {
@@ -343,6 +381,7 @@ async function main() {
     }
     const ready = await waitForDeliveryArtifacts(page, projectId, stages);
     await verifyRuntimeAssets(page, ready, stages);
+    verifyProductionVisualDelivery(ready, stages);
     const artifacts = ready.core?.revision?.artifacts ?? [];
     summary.artifacts = artifacts.map((item) => item.kind).filter(Boolean);
     summary.bgmSource = artifacts.find((item) => item.kind === "bgm")?.storageUri ? "audio_model" : "llm_notes";
