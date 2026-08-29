@@ -8,6 +8,7 @@
 - 自动扫测被标记为 `observed:false`，不能冒充真实玩家；只有候选版本通过才能进入 `ready_for_playtest`，公开发布仍必须有移动端 60 秒、首次动作、核心循环与真实胜负证据。
 - 发布门禁新增 `game_production_candidate.decision === ready_for_playtest`；缺失候选、资产、BGM、生产预检或真实移动试玩任一项都会 fail closed。
 - 资产与角色产物引入 producer-owned idempotency key，任务重试不会重复写 singleton 证据；终态失败会同步标记修订失败。
+- 线上新建验收发现并修复“试玩早于生产完成”的竞态：匿名 `first_action/first_minute/end` 已落库但修订尚未 ready 时，候选晋级后会重新用同一严格规则生成真实 `game_playtest_delivery`，不伪造也不丢证据。
 - 新增 `qa:game-production-orchestrator` 与 `qa:game-production-worker`；纯逻辑、隔离数据库 worker、发布门禁、TypeScript、精确 ESLint 与生产构建均已通过。生产构建仍只有既有 7 条 Turbopack 动态文件范围告警。
 
 ## 当前状态

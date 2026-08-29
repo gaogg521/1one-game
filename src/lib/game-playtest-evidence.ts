@@ -270,3 +270,49 @@ export async function persistGameDeliveryPlaytestEvidenceWithRetry(event: Delive
   }
   throw lastError;
 }
+
+/**
+ * Repairs the legitimate race where a creator starts playing while the same
+ * revision is still producing assets. Telemetry is already durable; once the
+ * candidate becomes ready we replay only coarse first-minute/end envelopes
+ * through the normal evidence validators.
+ */
+export async function reconcileGamePlaytestEvidenceForRevision(input: {
+  projectId: string;
+  creativeRevisionId: string;
+}): Promise<{ firstMinute: number; delivery: number }> {
+  const events = await prisma.gameplayEvent.findMany({
+    where: {
+      projectId: input.projectId,
+      creativeRevisionId: input.creativeRevisionId,
+      event: { in: ["first_minute", "end"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    select: {
+      projectId: true,
+      creativeRevisionId: true,
+      templateId: true,
+      event: true,
+      sessionId: true,
+      elapsedMs: true,
+      activeMs: true,
+      actionCount: true,
+      deviceClass: true,
+      orientation: true,
+      touchCapable: true,
+      verticalSliceScore: true,
+    },
+  });
+  let firstMinute = 0;
+  let delivery = 0;
+  for (const event of events) {
+    if (event.event === "first_minute") {
+      const result = await persistFirstMinutePlaytestEvidence(event as FirstMinuteEvent);
+      if (result !== "not_applicable") firstMinute += 1;
+    }
+    const result = await persistGameDeliveryPlaytestEvidence(event as DeliveryEvent);
+    if (result !== "not_applicable") delivery += 1;
+  }
+  return { firstMinute, delivery };
+}

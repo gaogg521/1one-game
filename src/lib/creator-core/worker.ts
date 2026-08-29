@@ -38,6 +38,7 @@ import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
+import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -205,6 +206,7 @@ async function executeGameProductionJob(
   });
   if (run.candidate.decision === "ready_for_playtest") {
     await finalizeCreativeRevision(job.creativeRevisionId, `production candidate ${run.candidate.score}/100 · ready for observed playtest`);
+    await reconcileGamePlaytestEvidenceForRevision({ projectId: payload.projectId, creativeRevisionId: job.creativeRevisionId });
   } else {
     await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
   }

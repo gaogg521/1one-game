@@ -45,6 +45,14 @@ async function main() {
       idempotencyKey: `qa-production:${core.creativeRevisionId}`,
       payload: { projectId: project.id, ownerKey, spec, brief: null, uiLocale: "zh-Hans" },
     });
+    const sessionId = `qa-session-${Date.now()}`;
+    await prisma.gameplayEvent.createMany({
+      data: [
+        { projectId: project.id, creativeRevisionId: core.creativeRevisionId, templateId: spec.templateId, event: "first_action", sessionId, elapsedMs: 500, deviceClass: "mobile", orientation: "portrait", touchCapable: true },
+        { projectId: project.id, creativeRevisionId: core.creativeRevisionId, templateId: spec.templateId, event: "first_minute", sessionId, elapsedMs: 60_500, activeMs: 60_000, actionCount: 12, deviceClass: "mobile", orientation: "portrait", touchCapable: true },
+        { projectId: project.id, creativeRevisionId: core.creativeRevisionId, templateId: spec.templateId, event: "end", sessionId, elapsedMs: 68_000, score: 4, won: false, deviceClass: "mobile", orientation: "portrait", touchCapable: true },
+      ],
+    });
     const processed = await processNextGenerationJob("qa-production-worker");
     assert.equal(processed?.id, job.id);
     assert.equal(processed?.status, "completed");
@@ -56,7 +64,9 @@ async function main() {
     }
     const candidate = artifacts.find((artifact) => artifact.kind === "game_production_candidate");
     assert.equal(JSON.parse(candidate?.contentJson ?? "{}").decision, "ready_for_playtest");
-    assert.equal(artifacts.some((artifact) => artifact.kind === "game_playtest_delivery"), false, "worker must not fabricate real-player evidence");
+    assert.ok(artifacts.some((artifact) => artifact.kind === "game_playtest_delivery"), "worker must reconcile real telemetry observed before candidate promotion");
+    const playtest = artifacts.find((artifact) => artifact.kind === "game_playtest_delivery");
+    assert.equal(JSON.parse(playtest?.contentJson ?? "{}").outcome, "lost", "reconciled evidence must retain the observed outcome");
     console.log("[OK] qa-game-production-worker: preparing -> six-pass production -> ready-for-playtest is durable");
   } finally {
     await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
