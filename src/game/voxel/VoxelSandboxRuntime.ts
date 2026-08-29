@@ -258,7 +258,11 @@ export class VoxelSandboxRuntime {
   private onClick = (event: MouseEvent) => {
     const canvas = this.renderer.domElement;
     if (document.pointerLockElement !== canvas) {
-      void canvas.requestPointerLock();
+      try {
+        void canvas.requestPointerLock().catch(() => undefined);
+      } catch {
+        // Embedded/mobile browsers may reject pointer lock; touch and keyboard controls remain usable.
+      }
       return;
     }
     if (event.button === 0) this.mine();
