@@ -41,9 +41,24 @@ export const PRUNED_SAMPLE_IDS = [
   "fusion-legends-arena",
   "sparkle-auto-spa",
   "red-blue-arsenal",
+  "number-merge-2048",
+  "classic-xiangqi-board",
+  "classic-international-chess",
+  "temple-relic-runner",
+  "zen-go-board",
+  "jungle-animal-chess",
+  "smash-the-dummy",
+  "grow-a-garden",
+  "color-bloom",
+  "gun-merge-3d-zombie-apocalypse",
+  "elastic-thief-2",
+  "blade-defender-merge",
+  "pottery-master-3d",
+  "crashy-roads",
+  "dou-dizhu",
 ] as const;
 
-export const SAMPLES: Sample[] = [
+const ALL_SAMPLES: Sample[] = [
   {
     id: "number-merge-2048",
     title: "2048 Neon Merge",
@@ -336,6 +351,15 @@ export const SAMPLES: Sample[] = [
     photoCover: true,
   },
 ];
+
+/** Public gallery stays deliberately small until a title clears the flagship bar. */
+const PUBLIC_SHOWCASE_SAMPLE_IDS = new Set([
+  "voxel-power-frontier",
+  "neon-territory-loop",
+  "grand-estate-merge",
+]);
+
+export const SAMPLES = ALL_SAMPLES.filter((sample) => PUBLIC_SHOWCASE_SAMPLE_IDS.has(sample.id));
 
 const SHELF_META: Record<
   SampleShelf,
