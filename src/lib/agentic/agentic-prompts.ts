@@ -110,11 +110,13 @@ Runtime API:
 - ctx.width, ctx.height, ctx.colors.{background,player,accent}, ctx.labels.{title,subtitle}
 - ctx.onScore(delta), ctx.onEnd(won), ctx.rng()
 - ctx.assets?.backgroundKey — if set, use scene.add.image(w/2,h/2, key).setDisplaySize(ctx.width, ctx.height) behind gameplay
-- ctx.assets?.playerKey — if set, use scene.add.sprite for player instead of rectangle
-- ctx.assets?.enemyKey — optional hazard/enemy sprite key
+- ctx.assets?.playerKey — if set, use scene.add.sprite/image for the player instead of a rectangle
+- ctx.assets?.enemyKey — use for every enemy/hazard actor when supplied
+- ctx.assets?.collectibleKey / powerKey / bossKey — use for pickups, abilities and boss actors when the design needs them
 
 Rules: no fetch/XHR/WebSocket/eval/import/require. Use Phaser Arcade physics only (scene.physics.add.existing, overlap, collider, staticGroup) — do NOT use Matter-only APIs (constraint, worldConstraint, setDamping on body).
 Implement the SPECIFIC genre from the template hint — NOT a generic "click anywhere +10 score" unless unavoidable.
+For an independent agentic module, asset consumption is mandatory: render the supplied background, player and enemy keys; geometric primitives may only be used for UI, collision helpers or effects, never as the principal actor.
 Keep source under 140 lines. Must call ctx.onEnd(true) when win condition met.
 ${buildTemplateSkillSystemAppend()}`;
 }
@@ -132,6 +134,7 @@ export function buildAgenticUserPrompt(prompt: string, spec: GameSpec): string {
     `Theme: bg=${spec.theme.backgroundColor} player=${spec.theme.playerColor} hazard=${spec.theme.hazardColor} accent=${spec.theme.collectibleColor ?? "#fbbf24"}`,
     `Labels: player="${spec.labels.player}" hazard="${spec.labels.hazard}" collectible="${spec.labels.collectible ?? "item"}"`,
     `Win score or equivalent: ${win}`,
+    "Visual delivery: consume ctx.assets?.backgroundKey, ctx.assets?.playerKey and ctx.assets?.enemyKey when present. Do not substitute the player or enemies with circles/rectangles.",
     `Generate createGame(ctx, Phaser) that a player would recognize as "${spec.title}" (${spec.templateId}).`,
   ];
   const extra = TEMPLATE_PROMPT_EXTRA[spec.templateId];

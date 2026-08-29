@@ -38,6 +38,7 @@ import { executeNovelContinuation } from "@/lib/novel-continuation-executor";
 import { loadNovelGenerationMeta } from "@/lib/novel-pipeline-meta-db";
 import { assessNovelContinuation } from "@/lib/novel-long-continue";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
+import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 
 async function executeGameAssetJob(
@@ -92,12 +93,25 @@ async function executeGameAssetJob(
     stage: "generating",
     detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "procedural BGM fallback ready",
   });
+  const artDirection = buildGameArtDirection(spec, briefResult.data);
   const result = await runProjectAssetPipeline({
     projectId: project.id,
     spec,
     brief: briefResult.data,
     uiLocale: payload.uiLocale as import("@/i18n/routing").AppLocale,
     existingCoverPath: project.coverPath,
+    artDirection,
+  });
+  await createCreativeArtifact({
+    creativeProjectId: job.creativeProjectId,
+    creativeRevisionId: job.creativeRevisionId ?? undefined,
+    idempotencyKey: job.creativeRevisionId ? `game_art_direction:${job.creativeRevisionId}` : undefined,
+    artifact: {
+      kind: "game_art_direction",
+      mediaType: "json",
+      content: artDirection,
+      metadata: { projectId: project.id, templateId: spec.templateId },
+    },
   });
   await heartbeatGenerationJob(job.id, workerId, { percent: 95, stage: "persisting", detail: "saving asset manifest" });
   const assetManifest = await createCreativeArtifact({
@@ -116,6 +130,7 @@ async function executeGameAssetJob(
         bgm: bgm.source === "audio_model"
           ? { source: bgm.source, url: bgm.audio.url, mimeType: bgm.audio.mimeType, model: bgm.audio.model }
           : { source: bgm.source, bpm: bgm.notes.bpm, noteCount: bgm.notes.notes.length },
+        artDirection: result.artDirection,
       },
       metadata: { projectId: project.id, templateId: spec.templateId },
     },

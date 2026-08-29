@@ -27,6 +27,9 @@ export type AgenticEngineContext = {
     backgroundKey?: string | null;
     playerKey?: string | null;
     enemyKey?: string | null;
+    collectibleKey?: string | null;
+    powerKey?: string | null;
+    bossKey?: string | null;
     backgroundUrl?: string | null;
     playerUrl?: string | null;
   };

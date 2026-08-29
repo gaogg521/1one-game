@@ -7,6 +7,8 @@ import type { GameSpec } from "@/lib/game-spec";
 import { buildGameDesignGraphs } from "@/lib/creator-core/game-design-graph";
 import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
 import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
+import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
+import { buildGameArtDirection } from "@/lib/game-art-direction";
 
 export type GameProductionArtifact = {
   kind: string;
@@ -63,12 +65,15 @@ export function buildGameProductionRun(input: {
     behaviorNodeCount: behaviorGraph.nodes.length,
   });
   const editor = buildGameEditSchema(input.spec);
+  const artDirection = buildGameArtDirection(input.spec, input.brief ?? null);
+  const visualContract = evaluateAgenticVisualContract(input.spec, input.spec.agenticModule);
   const blockers = [
     ...(pipeline.preflightVerdict === "blocked" ? ["production_preflight_blocked"] : []),
     ...(verticalSlice.verdict === "blocked" ? ["vertical_slice_blocked"] : []),
     ...(delivery.verdict === "blocked" ? ["delivery_preflight_blocked"] : []),
     ...(!assets.ok ? assets.evidence.filter((entry) => entry.endsWith("_missing")) : []),
     ...(requiresBespokeRuntime(input.spec) && !hasBespokeRuntime(input.spec) ? ["generic_phaser_runtime_retired"] : []),
+    ...visualContract.blockers,
   ];
   const score = Math.max(0, Math.min(100, Math.round(
     verticalSlice.score * 0.45 + delivery.score * 0.35 + (assets.ok ? 20 : 0),
@@ -109,7 +114,8 @@ export function buildGameProductionRun(input: {
       mediaType: "json",
       content: {
         version: 1,
-        direction: verticalSlice.artDirection,
+        direction: artDirection,
+        gameplayArtDirection: verticalSlice.artDirection,
         assetManifest: input.assetManifest,
         readiness: assets,
       },
@@ -141,6 +147,7 @@ export function buildGameProductionRun(input: {
         sceneCount: sceneGraph.scenes.length,
         behaviorNodeCount: behaviorGraph.nodes.length,
         assetReady: assets.ok,
+        visualContract,
       },
       metadata: { role: "runtime_engineer", strategy: pipeline.runtimeStrategy },
     },
@@ -174,7 +181,7 @@ export function buildGameProductionRun(input: {
     { index: 2, role: "gameplay_designer", consumes: ["game_design_directive", "game_spec"], produces: ["gameplay_revision"], verdict: verdict(verticalSlice.verdict === "blocked"), evidence: [`vertical_slice:${verticalSlice.verdict}:${verticalSlice.score}`] },
     { index: 3, role: "art_director", consumes: ["game_design_directive", "asset_manifest"], produces: ["art_direction_pack"], verdict: verdict(!assets.ok), evidence: assets.evidence },
     { index: 4, role: "ux_designer", consumes: ["game_design_directive", "gameplay_revision"], produces: ["ux_interaction_contract"], verdict: "passed", evidence: [`controls:${editor.controls.length}`] },
-    { index: 5, role: "runtime_engineer", consumes: ["gameplay_revision", "art_direction_pack", "ux_interaction_contract"], produces: ["runtime_build_manifest"], verdict: verdict(pipeline.preflightVerdict === "blocked" || !assets.ok), evidence: [`runtime:${pipeline.runtimeStrategy}`, `assets:${assets.ok ? "ready" : "blocked"}`] },
+    { index: 5, role: "runtime_engineer", consumes: ["gameplay_revision", "art_direction_pack", "ux_interaction_contract"], produces: ["runtime_build_manifest"], verdict: verdict(pipeline.preflightVerdict === "blocked" || !assets.ok || !visualContract.ok), evidence: [`runtime:${pipeline.runtimeStrategy}`, `assets:${assets.ok ? "ready" : "blocked"}`, ...visualContract.evidence] },
     { index: 6, role: "qa_agent", consumes: ["runtime_build_manifest", "game_delivery_preflight"], produces: ["automated_playtest_preflight", "game_production_candidate"], verdict: verdict(blockers.length > 0), evidence: [`candidate:${decision}:${score}`, ...blockers] },
   ];
   return { version: 1, kind: "game_production_run", status: decision, passes, candidate, artifacts };

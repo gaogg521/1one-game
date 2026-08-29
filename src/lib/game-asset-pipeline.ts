@@ -3,6 +3,7 @@
  */
 import type { AppLocale } from "@/i18n/routing";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
+import { buildGameArtDirection, type GameArtDirection } from "@/lib/game-art-direction";
 import type { GameSpec } from "@/lib/game-spec";
 import { generateGameBackground } from "@/lib/game-background-gen";
 import { generateGameSprites, type SpriteGenResult } from "@/lib/game-sprite-gen";
@@ -18,6 +19,7 @@ export type ProjectAssetPipelineResult = {
   assetManifest: ReturnType<typeof buildRuntimeAssetManifest>;
   coverPath: string | null;
   coverSource: "comfy" | "llm" | "none" | "skipped";
+  artDirection: GameArtDirection;
 };
 
 export type RunProjectAssetPipelineOptions = {
@@ -28,6 +30,7 @@ export type RunProjectAssetPipelineOptions = {
   existingCoverPath?: string | null;
   /** 是否尝试 Brief 封面（默认读 PRODUCT.game.autoCoverFromBrief） */
   generateCover?: boolean;
+  artDirection?: GameArtDirection;
 };
 
 /**
@@ -38,12 +41,13 @@ export async function runProjectAssetPipeline(
 ): Promise<ProjectAssetPipelineResult> {
   const uiLocale = opts.uiLocale ?? "zh-Hans";
   const brief = opts.brief ?? null;
+  const artDirection = opts.artDirection ?? buildGameArtDirection(opts.spec, brief);
 
   // SVG sprites（文本 LLM，快速）与背景/PNG sprites 并行
   const [generatedBackgroundUrl, svgSprites, pngSprites] = await Promise.all([
-    generateGameBackground(opts.projectId, opts.spec, brief),
+    generateGameBackground(opts.projectId, opts.spec, brief, artDirection),
     generateSvgSprites(opts.projectId, opts.spec).catch(() => []), // SVG first — no image API needed
-    generateGameSprites(opts.projectId, opts.spec, uiLocale, brief),
+    generateGameSprites(opts.projectId, opts.spec, uiLocale, brief, artDirection),
   ]);
   const completed = await completeRequiredGameAssets({
     projectId: opts.projectId,
@@ -89,6 +93,7 @@ export async function runProjectAssetPipeline(
     assetManifest,
     coverPath,
     coverSource,
+    artDirection,
   };
 }
 

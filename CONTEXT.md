@@ -1,4 +1,26 @@
 # 项目工作进度快照
+最后更新：2026-08-29（专属游戏生产链产品化）
+
+## 当前状态
+- 已把高质量样品的制作原则固化到通用游戏生产链：`game_art_direction` 在资产生成前产生并持久化；背景与五类核心精灵均接收同一方向、镜头、构图与负面约束。
+- 复杂 arena 路线新增视觉运行时契约：专属模块必须真实使用项目背景、主角、敌人资产和 image/sprite actor；否则生产候选被拒绝，不能再以几何占位模块进入试玩或发布。
+- Agentic Scene 向模块提供背景、主角、敌人、收集物、技能和 Boss 六类资产键，生成提示也将它们列为主角/敌人的强制素材来源。
+- 验证通过：`npx tsc --noEmit`、`qa-game-production-orchestrator`、`qa-creator-publication`、`npx next build`。生产构建仍只有既有 Turbopack 动态文件范围告警。
+- `qa-game-production-worker` 在共享数据库队列中抢到历史 job，断言 projectId 不匹配；该干扰未被记为通过。该 QA 运行生成的本地忽略资产保留在工作区，未纳入交付。
+
+## 本会话修改文件表
+- `src/lib/game-art-direction.ts` — 可持久化的玩法前美术方向与资产槽位规则。
+- `src/lib/game-asset-pipeline.ts`、`game-background-gen.ts`、`game-sprite-gen.ts` — 将同一方向注入真实背景/精灵生产。
+- `src/lib/agentic/agentic-visual-contract.ts`、`generate-game-module.ts`、`agentic-prompts.ts` — 独立运行时的资产消费门禁与生成提示。
+- `src/game/engine/AgenticScene.ts`、`src/lib/agentic/game-module.ts` — 提供完整运行时资产键。
+- `src/lib/creator-core/worker.ts`、`src/lib/game-production-orchestrator.ts` — 持久化美术方向并将视觉契约接入生产候选。
+- `scripts/qa-game-production-orchestrator.ts` — 覆盖几何占位模块被拒绝的回归场景。
+
+## 下次启动清单
+1. 精确暂存本会话拥有文件并按用户授权提交/推送。
+2. 部署后新建一款复杂 arena 游戏，检查 `game_art_direction`、`asset_manifest`、`runtime_build_manifest` 均存在，且无资产消费的模块被拒绝。
+3. 用真实移动端完成新作品首局、失败重开、胜利和 60 秒证据后再允许发布。
+
 最后更新：2026-08-29（游戏生产主链路开始真实执行）
 
 ## 2026-08-29 平台生产主链路重构

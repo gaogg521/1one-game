@@ -27,6 +27,7 @@ import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routin
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
 import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
+import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
 
 export type GenerateAgenticModuleResult =
   | {
@@ -129,28 +130,33 @@ export async function generateAgenticGameModule(
       if (bridge.ok) {
         const debug = passesDebugSkill(bridge.module);
         if (debug.ok) {
-          const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
-          orch?.note("agentic_browser_bench", {
-            ok: bench.benchOk,
-            skipped: bench.benchSkipped,
-            source: "opengame_cli",
-          });
-          orch?.note("agentic_gen_result", {
-            source: "opengame_cli",
-            strategy: bridge.strategy,
-            files: bridge.files,
-          });
-          return {
-            ok: true,
-            module: bench.module,
-            source: "opengame_cli",
-            lastReason: bridge.strategy,
-          };
+          const visual = evaluateAgenticVisualContract(spec, bridge.module);
+          if (!visual.ok) {
+            orch?.note("agentic_visual_contract", { ok: false, source: "opengame_cli", blockers: visual.blockers });
+          } else {
+            const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
+            orch?.note("agentic_browser_bench", {
+              ok: bench.benchOk,
+              skipped: bench.benchSkipped,
+              source: "opengame_cli",
+            });
+            orch?.note("agentic_gen_result", {
+              source: "opengame_cli",
+              strategy: bridge.strategy,
+              files: bridge.files,
+            });
+            return {
+              ok: true,
+              module: bench.module,
+              source: "opengame_cli",
+              lastReason: bridge.strategy,
+            };
+          }
         }
         orch?.note("opengame_cli_bridge", {
           ok: false,
-          reason: debug.reason,
-          debugStage: "debug_skill",
+          reason: debug.ok ? "visual_contract_failed" : debug.reason,
+          debugStage: debug.ok ? "visual_contract" : "debug_skill",
         });
       }
     }
@@ -274,6 +280,13 @@ export async function generateAgenticGameModule(
         if (!runnable.ok) {
           lastReason = runnable.reason;
           logAgenticProgress(model, attempt, `runnable_fail: ${lastReason}`);
+          continue;
+        }
+        const visual = evaluateAgenticVisualContract(spec, candidate);
+        orch?.note("agentic_visual_contract", { ok: visual.ok, blockers: visual.blockers, evidence: visual.evidence });
+        if (!visual.ok) {
+          lastReason = visual.blockers.join(",");
+          logAgenticProgress(model, attempt, `visual_contract_fail: ${lastReason}`);
           continue;
         }
 

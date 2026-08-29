@@ -11,6 +11,7 @@ import { repoPublicPath } from "@/lib/public-path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
+import type { GameArtDirection } from "@/lib/game-art-direction";
 import {
   appendBriefVisualDirection,
   buildBriefVisualDirection,
@@ -30,11 +31,11 @@ function ensureDir(projectId: string) {
 
 type SpriteKind = "player" | "hazard" | "gem" | "power" | "boss";
 
-export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind): string {
+export function buildSpritePrompt(spec: GameSpec, kind: SpriteKind, artDirection?: GameArtDirection | null): string {
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
   const templateCtx = templateVisualStyle(spec.templateId, "casual arcade game");
   const mood = buildAssetMoodLine(spec);
-  const sceneLine = `game mood: ${mood}, scene: ${templateCtx}`;
+  const sceneLine = `game mood: ${mood}, scene: ${templateCtx}${artDirection ? `, ${artDirection.promptSuffix}` : ""}`;
   const title = (spec.title || "").toLowerCase();
   const labels = spec.labels || {};
   const playerLabel = (labels.player || "hero").toLowerCase();
@@ -267,6 +268,7 @@ async function generateOneSprite(
   kind: SpriteKind,
   dir: string,
   brief: CreativeBrief | null | undefined,
+  artDirection: GameArtDirection | null | undefined,
   ag: (key: string, p?: Record<string, string | number | undefined | null>) => string,
 ): Promise<SpriteGenResult> {
   const filePath = path.join(/*turbopackIgnore: true*/ dir, `${kind}.png`);
@@ -278,7 +280,7 @@ async function generateOneSprite(
   }
 
   const prompt = appendBriefVisualDirection(
-    buildSpritePrompt(spec, kind),
+    `${buildSpritePrompt(spec, kind, artDirection)}, avoid: ${artDirection?.negativePrompt ?? "text, watermark, logo, UI mockup, multiple characters"}`,
     buildBriefVisualDirection(brief),
   );
   console.info(`[game-sprite] 生成 ${projectId}/${kind}…`);
@@ -332,6 +334,7 @@ export async function generateGameSprites(
   spec: GameSpec,
   uiLocale: AppLocale = "zh-Hans",
   brief?: CreativeBrief | null,
+  artDirection?: GameArtDirection | null,
 ): Promise<SpriteGenResult[]> {
   const ag = (key: string, p?: Record<string, string | number | undefined | null>) =>
     assetGenMessage(uiLocale, key, p);
@@ -347,6 +350,6 @@ export async function generateGameSprites(
 
   const dir = ensureDir(projectId);
   return Promise.all(
-    kinds.map((kind) => generateOneSprite(projectId, spec, kind, dir, brief, ag)),
+    kinds.map((kind) => generateOneSprite(projectId, spec, kind, dir, brief, artDirection, ag)),
   );
 }

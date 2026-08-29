@@ -9,6 +9,7 @@ import { repoPublicPath } from "@/lib/public-path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { getImageGenAvailability } from "@/lib/image-generation";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
+import type { GameArtDirection } from "@/lib/game-art-direction";
 import {
   appendBriefVisualDirection,
   buildBriefVisualDirection,
@@ -38,7 +39,7 @@ export function resolveBackgroundTemplateStyle(spec: GameSpec): string {
   return templateStyle;
 }
 
-export function buildBackgroundPrompt(spec: GameSpec, brief?: CreativeBrief | null): string {
+export function buildBackgroundPrompt(spec: GameSpec, brief?: CreativeBrief | null, artDirection?: GameArtDirection | null): string {
   const mood = buildAssetMoodLine(spec);
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
   const templateStyle = resolveBackgroundTemplateStyle(spec);
@@ -52,13 +53,17 @@ export function buildBackgroundPrompt(spec: GameSpec, brief?: CreativeBrief | nu
     `seamless and tileable, suitable for a casual web game`,
   ].join(", ");
 
-  return appendBriefVisualDirection(base, buildBriefVisualDirection(brief));
+  return appendBriefVisualDirection(
+    `${base}${artDirection ? `, ${artDirection.promptSuffix}, avoid: ${artDirection.negativePrompt}` : ""}`,
+    buildBriefVisualDirection(brief),
+  );
 }
 
 export async function generateGameBackground(
   projectId: string,
   spec: GameSpec,
   brief?: CreativeBrief | null,
+  artDirection?: GameArtDirection | null,
 ): Promise<string | null> {
   const cachedPath = path.join(/*turbopackIgnore: true*/ BG_DIR, `${projectId}.png`);
   if (fs.existsSync(cachedPath)) {
@@ -72,7 +77,7 @@ export async function generateGameBackground(
     return null;
   }
 
-  const prompt = buildBackgroundPrompt(spec, brief);
+  const prompt = buildBackgroundPrompt(spec, brief, artDirection);
   console.info(`[game-bg] 开始为 ${projectId} 生成背景…`);
 
   try {

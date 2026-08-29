@@ -8,7 +8,7 @@ const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
 const spec = {
   ...base,
   agenticPlayRoute: "agentic" as const,
-  agenticModule: { version: 1 as const, entry: "createGame", source: "function createGame(){ return { create(){} }; }" },
+  agenticModule: { version: 1 as const, entry: "createGame", source: "function createGame(ctx){ return { create(scene){ const bg=ctx.assets?.backgroundKey; const player=ctx.assets?.playerKey; const enemy=ctx.assets?.enemyKey; if(bg) scene.add.image(1,1,bg); if(player) scene.add.sprite(2,2,player); if(enemy) scene.add.sprite(3,3,enemy); } }; }" },
   production: buildDefaultGameProductionContract({ prompt, templateId: base.templateId }),
 };
 const assetManifest = {
@@ -35,6 +35,13 @@ assert.ok(run.artifacts.some((artifact) => artifact.kind === "gameplay_revision"
 const automated = run.artifacts.find((artifact) => artifact.kind === "automated_playtest_preflight");
 assert.equal((automated?.content as { observed?: boolean }).observed, false, "preflight must not impersonate observed playtest evidence");
 assert.ok(run.passes.every((pass, index) => pass.index === index + 1 && pass.consumes.length > 0 && pass.produces.length > 0));
+
+const genericVisual = buildGameProductionRun({
+  spec: { ...spec, agenticModule: { version: 1, entry: "createGame", source: "function createGame(){ return { create(){} }; }" } },
+  assetManifest,
+});
+assert.equal(genericVisual.candidate.decision, "rejected");
+assert.ok(genericVisual.candidate.blockers.includes("runtime_player_asset_unused"));
 
 const rejected = buildGameProductionRun({ spec, assetManifest: null });
 assert.equal(rejected.candidate.decision, "rejected");

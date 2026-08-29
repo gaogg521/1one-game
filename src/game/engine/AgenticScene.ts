@@ -56,6 +56,9 @@ export class AgenticScene extends Phaser.Scene {
     if (this.projectId) {
       this.load.image("agentic_player", `/game-sprites/${this.projectId}/player.png`);
       this.load.image("agentic_hazard", `/game-sprites/${this.projectId}/hazard.png`);
+      this.load.image("agentic_collectible", `/game-sprites/${this.projectId}/gem.png`);
+      this.load.image("agentic_power", `/game-sprites/${this.projectId}/power.png`);
+      this.load.image("agentic_boss", `/game-sprites/${this.projectId}/boss.png`);
     }
   }
 
@@ -80,6 +83,9 @@ export class AgenticScene extends Phaser.Scene {
         backgroundKey: this.textures.exists("agentic_bg") ? "agentic_bg" : null,
         playerKey: this.textures.exists("agentic_player") ? "agentic_player" : null,
         enemyKey: this.textures.exists("agentic_hazard") ? "agentic_hazard" : null,
+        collectibleKey: this.textures.exists("agentic_collectible") ? "agentic_collectible" : null,
+        powerKey: this.textures.exists("agentic_power") ? "agentic_power" : null,
+        bossKey: this.textures.exists("agentic_boss") ? "agentic_boss" : null,
         backgroundUrl: this.backgroundUrl,
         playerUrl,
       },
