@@ -10,6 +10,7 @@
 - 资产与角色产物引入 producer-owned idempotency key，任务重试不会重复写 singleton 证据；终态失败会同步标记修订失败。
 - 线上新建验收发现并修复“试玩早于生产完成”的竞态：匿名 `first_action/first_minute/end` 已落库但修订尚未 ready 时，候选晋级后会重新用同一严格规则生成真实 `game_playtest_delivery`，不伪造也不丢证据。
 - 新增 `qa:game-production-orchestrator` 与 `qa:game-production-worker`；纯逻辑、隔离数据库 worker、发布门禁、TypeScript、精确 ESLint 与生产构建均已通过。生产构建仍只有既有 7 条 Turbopack 动态文件范围告警。
+- 生产 `qa:prod-game-create-delivery` 最终通过：真实 LiteLLM 模型生成「月隙流萤：衔光夜行」（`cmtdrpgak000i7inzwtm9nrfw`），22 类 Core 产物齐全，真实图片 URL 非 fallback，手机端记录 60 秒活跃/明确胜负并生成两类 playtest 证据，发布后公开移动页可访问。
 
 ## 当前状态
 - 已基于 Astrocade 调研开始平台级改造，不再直接扩写单款 Phaser 样品。
