@@ -227,8 +227,9 @@ export class EndlessRunnerScene extends Phaser.Scene {
     );
 
     // 初始生成
-    this.nextSpawnX = this.viewW + 100;
-    this.nextCoinX = this.viewW + 60;
+    // 先给移动端玩家读完手势引导并完成第一笔切道，不能开场一秒就连撞三次。
+    this.nextSpawnX = this.viewW + this.baseSpeed * 3;
+    this.nextCoinX = this.viewW + this.baseSpeed * 0.8;
 
     initQaState({ playerX: Math.round(this.playerScreenX) });
     setPhaserQaState({
@@ -537,12 +538,14 @@ export class EndlessRunnerScene extends Phaser.Scene {
     }
 
     // 生成节奏（按密度）
-    const spawnGap = 280 + (1 - this.bp.obstacleDensity) * 360;
+    // 每个障碍需要留出至少一次完整手势的反应窗口。旧的 280px 间隔
+    // 在移动端约 0.6 秒就下一辆车，三命会在几秒内耗尽，根本不可玩。
+    const spawnGap = 900 + (1 - this.bp.obstacleDensity) * 780;
     if (this.scrollOffset >= this.nextSpawnX) {
       this.nextSpawnX = this.scrollOffset + spawnGap;
       this.spawnObstacle();
     }
-    const coinGap = 140 + (1 - this.bp.obstacleDensity) * 80;
+    const coinGap = 240 + (1 - this.bp.obstacleDensity) * 180;
     if (this.scrollOffset >= this.nextCoinX) {
       this.nextCoinX = this.scrollOffset + coinGap;
       // 60% 概率出金币
