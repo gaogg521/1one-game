@@ -40,15 +40,19 @@ export function prepareGameSpecForPersist(
   const coerced = coerceGameSpec(cleaned);
   const hint = prompt.trim();
   if (coerced.ok) {
-    return buildCanonicalAstrocadeSpec(hint || coerced.spec.title, locale, {
+    const canonical = buildCanonicalAstrocadeSpec(hint || coerced.spec.title, locale, {
       persistedSpec: finalizePatchedSpec(hint || coerced.spec.title, coerced.spec),
     });
+    const checked = coerceGameSpec(sanitizeSpecRaw(canonical));
+    return checked.ok ? checked.spec : canonical;
   }
   const base = mockSpecFromPrompt(hint || "小游戏");
   const overlaid = overlaySpec(base, cleaned);
-  return buildCanonicalAstrocadeSpec(hint || overlaid.title, locale, {
+  const canonical = buildCanonicalAstrocadeSpec(hint || overlaid.title, locale, {
     persistedSpec: finalizePatchedSpec(hint || overlaid.title, overlaid),
   });
+  const checked = coerceGameSpec(sanitizeSpecRaw(canonical));
+  return checked.ok ? checked.spec : canonical;
 }
 
 export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
