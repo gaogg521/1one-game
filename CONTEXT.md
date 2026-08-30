@@ -1267,4 +1267,5 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 验证：`qa:game-generation-kernel`、`qa:game-production-orchestrator`、`npx tsc --noEmit` 和完整 `npm run build`（106 routes）通过。`qa:generate-stream-sse` 因本地 8888 未启动未执行到业务断言；生产部署后必须重新走同一创建提示词，记录生成耗时、保存、worker、实际试玩与差距。
 - 首个新门禁生产项目 `cmtfp7sh30002v848jneqtlak` 暴露上游路由错误：虽然描述的是四车名次淘汰杯赛，但 Spec 被判为 `avoider`，导致代码 Agent 同时接收弹幕模板与八项赛车合同并在 repair 窗口超时。共享模板推断与预选器现将“车辆 + 名次/淘汰/决赛/杯赛”识别为强赛车意图；路由回归新增该完整描述。
 - 路由修复后的新项目 `cmtfq4hxy00068biyolz4p0xo` 已正确生成 `racing` Spec，但仍走通用 coaster Scene；production candidate 被机制合同拒绝并逐项报告八项缺失，没有再次假成功。根因是复杂度路由未识别多机制短提示；现以显式机制数（>=3）强制 `agentic_complex`，并收紧 `hasBespokeRuntime`。
+- 第五个项目 `cmtfqgmj10003o6d3fxm21c5j` 证明复杂度已强制 agentic，但 worker 只对 arena 模板触发代码生成，非 arena 的 `agenticPlayRoute=agentic` 仍直接审查空模块。worker 现以“显式 agentic 路由或 arena 退休策略”共同决定 bespoke 生成，消除专用模板绕过代码 Agent 的分支。
 

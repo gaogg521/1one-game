@@ -189,7 +189,8 @@ async function executeGameProductionJob(
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
-  if (requiresBespokeRuntime(spec) && !shouldUseAgenticRuntime(spec)) {
+  const bespokeRequested = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
+  if (bespokeRequested && !shouldUseAgenticRuntime(spec)) {
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building bespoke game runtime" });
     const generated = await generateAgenticGameModule(
       sourceProject.prompt,
