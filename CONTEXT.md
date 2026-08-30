@@ -1236,4 +1236,5 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 修复首局障碍节奏：首个障碍延后 3 秒，障碍间距由约 0.6 秒提升为至少一次完整移动手势的反应窗口；真实 393×852 浏览器复测中，横滑与上滑后仍保持进行中且生命为 3。
 - `SpecQuickTunePanel` 补齐跑酷速度/密度与斗地主 AI 难度的多语言键，避免创作页控制台 `MISSING_MESSAGE`。
 - 已提交并推送：`dd7aad20`、`0d51d6b5`、`5295d922`。生产正在基于 `5295d922` 单一构建重新生成 `.next`，完成后必须重启服务并做 TLS/SNI health 与移动端复测；不得与并发 build 混用。
+- 追加修复：canonical 样品增强会在前置 sanitize 之后重写 survivor blueprint，必须二次 sanitize + coerce 后才允许入库；`321d3d4a` 已上线，TLS/SNI health 与 generation worker 均正常。新建 `cmtf3yeqq00099297z0f7f6hz` 已能加载专属引擎并进入资产生产，旧的 supplyDrops Zod 损坏不再复现。
 
