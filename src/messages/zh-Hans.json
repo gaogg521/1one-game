@@ -1352,6 +1352,8 @@
     "towerCooldown": "首发箭塔 · 射击间隔 ms（越低越快）",
     "playerSpeed": "主角移速（playerSpeed）",
     "threatSpeed": "威胁移速（hazardSpeed）",
+    "runnerSpeed": "跑酷前进速度",
+    "runnerDensity": "障碍密度",
     "labels": "称谓（简短）",
     "labelPlayer": "主角/塔",
     "labelHazard": "威胁物",

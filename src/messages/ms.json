@@ -1353,6 +1353,8 @@
     "towerCooldown": "First tower · cooldown ms (lower = faster)",
     "playerSpeed": "Player speed (playerSpeed)",
     "threatSpeed": "Threat speed (hazardSpeed)",
+    "runnerSpeed": "Runner forward speed",
+    "runnerDensity": "Obstacle density",
     "labels": "Short labels",
     "labelPlayer": "Player / tower",
     "labelHazard": "Threat",

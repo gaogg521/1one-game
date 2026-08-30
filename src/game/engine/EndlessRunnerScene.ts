@@ -110,6 +110,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
   private keyW!: Phaser.Input.Keyboard.Key;
   private keyS!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
+  private touchStart: { x: number; y: number } | null = null;
 
   // HUD
   private hud!: HudFrame;
@@ -190,11 +191,30 @@ export class EndlessRunnerScene extends Phaser.Scene {
     this.keyS = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    // 移动端：点击屏幕左/右半切道，上滑跳，下滑滑铲
+    // 移动端手势：横滑切道、上滑跳、下滑滑铲。不能把一次触屏
+    // 简化为“点左/右”，否则手机上没有跑酷的核心回避动作。
     this.input.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
       if (this.finished) return;
-      if (ptr.x < this.viewW * 0.5) this.tryLaneShift(-1);
-      else this.tryLaneShift(1);
+      this.touchStart = { x: ptr.x, y: ptr.y };
+    });
+    this.input.on("pointerup", (ptr: Phaser.Input.Pointer) => {
+      if (this.finished || !this.touchStart) return;
+      const start = this.touchStart;
+      this.touchStart = null;
+      const dx = ptr.x - start.x;
+      const dy = ptr.y - start.y;
+      const threshold = Math.max(18, Math.min(this.viewW, this.viewH) * 0.045);
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) >= threshold) {
+        if (dy < 0) this.tryJump();
+        else this.trySlide();
+        return;
+      }
+      if (Math.abs(dx) >= threshold) {
+        this.tryLaneShift(dx < 0 ? -1 : 1);
+        return;
+      }
+      // 轻触仍保留易发现的左右切道，但不会吞掉滑动输入。
+      this.tryLaneShift(ptr.x < this.viewW * 0.5 ? -1 : 1);
     });
 
     // HUD
@@ -202,8 +222,8 @@ export class EndlessRunnerScene extends Phaser.Scene {
     this.hud = new HudFrame(this, { title: this.spec.title }, guidance, this.cohesive);
     this.hud.setBottomHint(
       this.uiLocale === "zh-Hans"
-        ? "←→ 切道 · ↑/空格 跳 · ↓ 滑铲"
-        : "←→ switch lane · ↑/Space jump · ↓ slide",
+        ? "自动前冲 · 横滑切道 · 上滑跳跃 · 下滑滑铲"
+        : "Auto-run · swipe sideways to switch · up jump · down slide",
     );
 
     // 初始生成
@@ -385,7 +405,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
     this.isSliding = true;
     this.slideUntil = this.time.now + 600;
     // 视觉：身体压扁
-    const body = this.player.getData("body") as Phaser.GameObjects.Graphics;
+    const body = this.player.getData("body") as Phaser.GameObjects.Text | undefined;
     if (body) {
       this.tweens.add({
         targets: body,
@@ -500,6 +520,14 @@ export class EndlessRunnerScene extends Phaser.Scene {
       this.isSliding = false;
     }
     this.player.y = this.roadBotY - 60 + this.playerY;
+
+    // 自动前冲必须有持续的跑步节奏，而不只是角色在横向切道。
+    const body = this.player.getData("body") as Phaser.GameObjects.Text | undefined;
+    if (body && !this.isSliding) {
+      const stride = Math.sin(this.time.now * 0.019 * (this.scrollSpeed / this.baseSpeed));
+      body.y = -10 + stride * 4;
+      body.rotation = stride * 0.045;
+    }
 
     // 阴影随跳跃高度淡化
     const shadow = this.player.getData("shadow") as Phaser.GameObjects.Ellipse | undefined;
