@@ -45,6 +45,7 @@ import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-ev
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
+import { resolveAgenticPlayRoute } from "@/lib/opengame-skills/play-route";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
@@ -186,6 +187,8 @@ async function executeGameProductionJob(
     select: { id: true, prompt: true, ownerKey: true },
   });
   if (!sourceProject || sourceProject.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
+  const expectedPlayRoute = resolveAgenticPlayRoute(sourceProject.prompt, spec, { respectPersisted: false });
+  if (spec.agenticPlayRoute !== expectedPlayRoute) spec = { ...spec, agenticPlayRoute: expectedPlayRoute };
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
