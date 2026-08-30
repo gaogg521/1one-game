@@ -1260,5 +1260,6 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 首次部署后用同一提示复测，92 秒仍停在 1/3，证明链内 timeout 不能代表 HTTP 端到端截止；因此新增接口级 deadline race，并将 UI 改为诚实的 1/2、2/2、完成。
 - 保存后的真实项目 `cmtfeh35b000212rcz57wkgxd` 暴露第二个预算冲突：专属运行时旧策略最多串行 2 模型 × 多轮生成/repair，可能超过 systemd worker 的 640 秒请求上限。worker 生产与自动迭代现改为 bounded agentic attempt（1 模型、1 repair），失败继续走 durable retry，不生成假运行时。
 - 新 worker 的第二个真实项目 `cmtff9jx10002a4663p4as5u6` 首次快速暴露明确根因：模型路由返回 `400 json_schema must be provided`。专属模块的生成和 repair 均已切换为严格 schema 输出合同（`source`、`entry=createGame`）。
+- 严格 schema 后第三个项目 `cmtffpp0a0002130t5b45s2b6` 已越过协议错误，但 75/55 秒 fast 预算不足以返回完整运行时代码；bounded worker 仍限制 1 模型/1 repair，但恢复生产级 120/90 秒单调用预算，总串行预算仍低于 640 秒租约。
 - 验证：`qa:game-generation-kernel`、`qa:game-production-orchestrator`、`npx tsc --noEmit` 和完整 `npm run build`（106 routes）通过。`qa:generate-stream-sse` 因本地 8888 未启动未执行到业务断言；生产部署后必须重新走同一创建提示词，记录生成耗时、保存、worker、实际试玩与差距。
 

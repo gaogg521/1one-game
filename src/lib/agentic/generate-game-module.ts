@@ -65,11 +65,11 @@ function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; r
 }
 
 function agenticGenLimits(bounded = false) {
-  const fast = bounded || process.env.AGENTIC_LLM_FAST === "1";
+  const fast = process.env.AGENTIC_LLM_FAST === "1";
   return {
     fast,
-    maxModels: fast ? 1 : 2,
-    maxRepairs: fast ? 1 : REPAIR_ATTEMPTS,
+    maxModels: fast || bounded ? 1 : 2,
+    maxRepairs: fast || bounded ? 1 : REPAIR_ATTEMPTS,
     timeoutMs: fast ? 75_000 : PRODUCT.game.agenticTimeoutMs,
     repairTimeoutMs: fast ? 55_000 : PRODUCT.game.agenticRepairTimeoutMs,
   };
