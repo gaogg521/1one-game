@@ -311,7 +311,7 @@ export async function generateAgenticGameModule(
 
   if (bespokeRequired) {
     orch?.note("agentic_gen_result", { source: "rejected", lastReason, reason: "bespoke_runtime_required" });
-    return { ok: false, reason: "bespoke_runtime_generation_failed" };
+    return { ok: false, reason: `bespoke_runtime_generation_failed:${lastReason}` };
   }
   orch?.note("agentic_gen_result", { source: "fallback", lastReason });
   return {
