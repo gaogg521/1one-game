@@ -404,7 +404,7 @@ async function main() {
     });
 
     try {
-    await playUntilDeliveryEvidence(page, stages, detail.spec?.templateId);
+    await playUntilDeliveryEvidence(page, stages, created.spec?.templateId);
     } catch (playError) {
       await dumpFailure("play-timeout");
       throw playError;
