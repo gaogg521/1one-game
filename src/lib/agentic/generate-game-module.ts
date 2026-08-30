@@ -50,8 +50,8 @@ function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; r
   return { ok: false, reason: `${pipeline.stage}:${pipeline.reason}`, hints };
 }
 
-function agenticGenLimits() {
-  const fast = process.env.AGENTIC_LLM_FAST === "1";
+function agenticGenLimits(bounded = false) {
+  const fast = bounded || process.env.AGENTIC_LLM_FAST === "1";
   return {
     fast,
     maxModels: fast ? 1 : 2,
@@ -81,6 +81,7 @@ export async function generateAgenticGameModule(
   prompt: string,
   spec: GameSpec,
   orch?: RunTraceRecorder,
+  options?: { bounded?: boolean },
 ): Promise<GenerateAgenticModuleResult> {
   const bespokeRequired = requiresBespokeRuntime(spec);
   if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !bespokeRequired) {
@@ -187,7 +188,7 @@ export async function generateAgenticGameModule(
   const system = buildAgenticSystemPrompt();
   let lastSource = "";
   let lastReason = "invalid";
-  const limits = agenticGenLimits();
+  const limits = agenticGenLimits(options?.bounded);
 
   for (const model of models.slice(0, limits.maxModels)) {
     for (let attempt = 0; attempt <= limits.maxRepairs; attempt += 1) {

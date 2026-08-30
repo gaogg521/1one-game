@@ -191,7 +191,12 @@ async function executeGameProductionJob(
     });
     if (!project || project.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building bespoke game runtime" });
-    const generated = await generateAgenticGameModule(project.prompt, { ...spec, agenticPlayRoute: "agentic" });
+    const generated = await generateAgenticGameModule(
+      project.prompt,
+      { ...spec, agenticPlayRoute: "agentic" },
+      undefined,
+      { bounded: true },
+    );
     if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
     spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
     await prisma.project.update({ where: { id: project.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
@@ -278,7 +283,12 @@ async function executeGameIterationJob(
   if (!patched.ok) throw new Error(`game_iteration_llm_failed:${patched.errorKey}`);
   let nextSpec = patched.spec;
   if (shouldUseAgenticRuntime(currentSpec)) {
-    const generated = await generateAgenticGameModule(project.prompt, { ...nextSpec, agenticPlayRoute: "agentic" });
+    const generated = await generateAgenticGameModule(
+      project.prompt,
+      { ...nextSpec, agenticPlayRoute: "agentic" },
+      undefined,
+      { bounded: true },
+    );
     if (!generated.ok) throw new Error(`game_iteration_runtime_failed:${generated.reason}`);
     nextSpec = { ...nextSpec, agenticPlayRoute: "agentic", agenticModule: generated.module };
   }
