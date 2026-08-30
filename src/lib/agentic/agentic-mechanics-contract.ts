@@ -33,12 +33,19 @@ export type AgenticMechanicsContract = {
   evidence: string[];
 };
 
+export function detectRequestedAgenticMechanics(prompt: string): Array<{ id: string; label: string }> {
+  return MECHANIC_RULES
+    .filter((rule) => rule.requestedBy.test(prompt))
+    .map(({ id, label }) => ({ id, label }));
+}
+
 function executableSource(source: string) {
   return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1 ");
 }
 
 export function evaluateAgenticMechanicsContract(prompt: string, _spec: GameSpec, module?: AgenticGameModule | null): AgenticMechanicsContract {
-  const requestedRules = MECHANIC_RULES.filter((rule) => rule.requestedBy.test(prompt));
+  const requestedIds = new Set(detectRequestedAgenticMechanics(prompt).map((rule) => rule.id));
+  const requestedRules = MECHANIC_RULES.filter((rule) => requestedIds.has(rule.id));
   if (!requestedRules.length) return { required: false, ok: true, coverage: 1, requested: [], implemented: [], missing: [], blockers: [], evidence: ["mechanics:not_explicit"] };
   const source = executableSource(module?.source ?? "");
   const implemented = requestedRules.filter((rule) => rule.implementedBy.test(source)).map((rule) => rule.id);

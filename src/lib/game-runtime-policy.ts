@@ -12,8 +12,7 @@ export function requiresBespokeRuntime(spec: Pick<GameSpec, "templateId">): bool
 export function hasBespokeRuntime(spec: Pick<GameSpec, "templateId" | "agenticPlayRoute" | "agenticModule" | "samplePlayProfile">): boolean {
   const showcase = spec.samplePlayProfile?.showcaseRuntime;
   const independentShowcase = showcase === "voxel-frontier" || showcase === "territory-loop" || showcase === "estate-merge";
-  return independentShowcase || !requiresBespokeRuntime(spec) || (
-    spec.agenticPlayRoute === "agentic" &&
-    Boolean(spec.agenticModule?.source?.trim())
-  );
+  if (independentShowcase) return true;
+  if (spec.agenticPlayRoute === "agentic") return Boolean(spec.agenticModule?.source?.trim());
+  return !requiresBespokeRuntime(spec);
 }

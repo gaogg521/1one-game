@@ -1,5 +1,6 @@
 import type { GameSpec } from "@/lib/game-spec";
 import type { TemplateArchetypeId } from "@/lib/opengame-skills/types";
+import { detectRequestedAgenticMechanics } from "@/lib/agentic/agentic-mechanics-contract";
 
 /** 生成档位：对齐 OpenGame 简单 prompt 秒开 vs 复杂 prompt 需 Agentic+Skills */
 export type OpenGameGenerationTier = "spec_fast" | "agentic_standard" | "agentic_complex";
@@ -49,6 +50,12 @@ export function classifyPromptComplexity(prompt: string, spec?: Pick<GameSpec, "
       score += p.weight;
       signals.push(p.signal);
     }
+  }
+
+  const explicitMechanics = detectRequestedAgenticMechanics(prompt);
+  if (explicitMechanics.length >= 3) {
+    score += 4;
+    signals.push(`explicit_multi_mechanic:${explicitMechanics.map((item) => item.id).join("+")}`);
   }
 
   // 长 prompt 通常对应 OpenGame 式 GDD

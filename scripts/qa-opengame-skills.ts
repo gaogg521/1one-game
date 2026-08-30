@@ -67,6 +67,13 @@ if (simple.tier !== "spec_fast" && simple.tier !== "agentic_standard") {
   failures.push(`simple prompt unexpected tier: ${simple.tier}`);
 }
 
+const multiMechanicRacePrompt =
+  "四辆车辆并排自动前进，按住加速松开减速，在铁路道口躲避列车；每轮最后一名淘汰，三轮后决赛，包含车库升级和杯赛进度";
+const multiMechanicRace = classifyPromptComplexity(multiMechanicRacePrompt, SPEC);
+if (!multiMechanicRace.skipTemplateFirst || !multiMechanicRace.signals.some((signal) => signal.startsWith("explicit_multi_mechanic:"))) {
+  failures.push(`multi-mechanic race must use agentic route: ${JSON.stringify(multiMechanicRace)}`);
+}
+
 const system = buildAgenticSystemPrompt();
 if (!system.includes("Template Skill")) {
   failures.push("system prompt missing Template Skill scaffold");
