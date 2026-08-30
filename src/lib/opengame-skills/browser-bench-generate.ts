@@ -3,6 +3,7 @@ import type { AgenticGameModule } from "@/lib/agentic/game-module";
 import {
   buildAgenticRepairPrompt,
   buildAgenticSystemPrompt,
+  AGENTIC_MODULE_JSON_SCHEMA,
 } from "@/lib/agentic/agentic-prompts";
 import { validateAgenticSource, parseAgenticModule } from "@/lib/agentic/game-module";
 import { buildDebugSkillRepairHints } from "@/lib/opengame-skills/debug-skill";
@@ -89,7 +90,8 @@ export async function maybeVerifyAgenticModuleInBrowser(
         hints,
       ),
       temperature: 0.32,
-      mode: "json_object",
+      mode: "json_schema",
+      jsonSchema: AGENTIC_MODULE_JSON_SCHEMA,
       timeoutMs: 55_000,
     });
     if (!repairResult.ok) {

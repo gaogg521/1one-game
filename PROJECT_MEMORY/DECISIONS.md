@@ -14,6 +14,8 @@
 - durable worker 的一次 HTTP 执行上限约 640 秒，因此专属运行时每次 job attempt 固定为 1 个模型、最多 1 轮 repair（生成/repair 单调用 120/90 秒）；失败由持久化任务按 attempt 重试。禁止在一个租约里串行穷举多模型多轮修复，导致任务超时但状态长期停在 2%。
 - 专属运行时 LLM 输出统一使用严格 `json_schema`（`source` + `entry=createGame`），不再使用裸 `json_object`；生产模型路由会拒绝后者并要求 schema。失败必须保留最后协议/校验原因，供自动重试和运营诊断。
 - AgenticScene 在 `physics.add.existing` 后统一补齐 Shape/Image 到 Arcade body 的常用链式代理（速度、重力、弹性、阻力、世界边界等）；模块 `create` 必须捕获运行时异常并明确失败，不能让页面永久停在“正在加载引擎”。
+- 专属运行时增加通用 `agentic_mechanics_contract`：从原始 prompt 识别明确提出的竞速/输入/障碍/名次/淘汰/回合/成长/合成/拖放/建造/采集/领地/塔防/射击/卡牌机制，并逐项要求可执行源码证据；先剥离注释，避免把关键词复述冒充实现。任一显式机制缺失就进入 repair，生产候选仍缺则 rejected。
+- production orchestrator 必须读取项目原始 prompt 并把 mechanics contract 写入 runtime manifest、runtime engineer evidence 和 blockers；旧的视觉资产/runnable 分数不得覆盖玩法语义缺失。
 
 ## 2026-08-30 — 游戏完成以真实分发闭环为准，自动返工最多五轮
 

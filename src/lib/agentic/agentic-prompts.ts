@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { describeRequestedAgenticMechanics } from "@/lib/agentic/agentic-mechanics-contract";
 import { getTemplateDefinition } from "@/lib/game-templates/registry";
 import {
   buildDebugSkillRepairHints,
@@ -8,6 +9,20 @@ import {
   matchDebugSkillReactive,
   runDebugSkillProactive,
 } from "@/lib/opengame-skills";
+
+export const AGENTIC_MODULE_JSON_SCHEMA = {
+  name: "agentic_game_module",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: { type: "string", minLength: 1 },
+      entry: { type: "string", enum: ["createGame"] },
+    },
+    required: ["source", "entry"],
+  },
+} as const;
 
 /** 各模板 Agentic 玩法约束（Astrocade 级：拒绝泛化点击计数器） */
 const TEMPLATE_GAMEPLAY_HINTS: Partial<Record<GameSpec["templateId"], string>> = {
@@ -134,6 +149,8 @@ export function buildAgenticUserPrompt(prompt: string, spec: GameSpec): string {
     `Theme: bg=${spec.theme.backgroundColor} player=${spec.theme.playerColor} hazard=${spec.theme.hazardColor} accent=${spec.theme.collectibleColor ?? "#fbbf24"}`,
     `Labels: player="${spec.labels.player}" hazard="${spec.labels.hazard}" collectible="${spec.labels.collectible ?? "item"}"`,
     `Win score or equivalent: ${win}`,
+    `Explicit mechanics contract: ${describeRequestedAgenticMechanics(prompt, spec).join(", ") || "none detected"}`,
+    "Every explicit mechanic above must be implemented as executable state, input, collision, progression or HUD logic. Naming it only in comments does not count.",
     "Visual delivery: consume ctx.assets?.backgroundKey, ctx.assets?.playerKey and ctx.assets?.enemyKey when present. Do not substitute the player or enemies with circles/rectangles.",
     `Generate createGame(ctx, Phaser) that a player would recognize as "${spec.title}" (${spec.templateId}).`,
   ];

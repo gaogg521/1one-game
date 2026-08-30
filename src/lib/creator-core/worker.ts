@@ -181,25 +181,25 @@ async function executeGameProductionJob(
   if (!job.creativeRevisionId) throw new Error("game_production_revision_missing");
   const payload = GameProductionJobPayloadSchema.parse(JSON.parse(job.payloadJson));
   let spec = parseGameSpec(payload.spec);
+  const sourceProject = await prisma.project.findUnique({
+    where: { id: payload.projectId },
+    select: { id: true, prompt: true, ownerKey: true },
+  });
+  if (!sourceProject || sourceProject.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
   if (requiresBespokeRuntime(spec) && !shouldUseAgenticRuntime(spec)) {
-    const project = await prisma.project.findUnique({
-      where: { id: payload.projectId },
-      select: { id: true, prompt: true, ownerKey: true },
-    });
-    if (!project || project.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building bespoke game runtime" });
     const generated = await generateAgenticGameModule(
-      project.prompt,
+      sourceProject.prompt,
       { ...spec, agenticPlayRoute: "agentic" },
       undefined,
       { bounded: true },
     );
     if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
     spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
-    await prisma.project.update({ where: { id: project.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+    await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
   }
 
   await markCreativeRevisionGenerating(job.creativeRevisionId);
@@ -209,7 +209,7 @@ async function executeGameProductionJob(
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
 
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "gameplay_and_art_review", detail: "reviewing gameplay, art and interaction deliverables" });
-  const run = buildGameProductionRun({ spec, brief: briefResult.data, assetManifest });
+  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest });
   let lastArtifact = assetArtifact;
   for (let index = 0; index < run.artifacts.length; index += 1) {
     const artifact = run.artifacts[index]!;

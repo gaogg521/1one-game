@@ -1263,5 +1263,6 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 严格 schema 后第三个项目 `cmtffpp0a0002130t5b45s2b6` 已越过协议错误，但 75/55 秒 fast 预算不足以返回完整运行时代码；bounded worker 仍限制 1 模型/1 repair，但恢复生产级 120/90 秒单调用预算，总串行预算仍低于 640 秒租约。
 - 第三个项目最终 production candidate 98/100，但公网启动真实报错 `player.setCollideWorldBounds is not a function`，证明 mock runnable 门禁存在假阳性。AgenticScene 现为 `physics.add.existing` 的普通形状补齐常用 Arcade body 链式代理，并捕获 `create` 异常，不再永久卡加载；部署后需用同一项目重载实测。
 - `e2200289` 部署后同一项目公网重载已成功启动、控制台 0 error；但真实画面只有渐变背景与星形对象，未实现四车、铁路、淘汰轮次、速度/名次、车库/杯赛。该结果只能证明运行时兼容，不能证明玩法质量；项目保持私有且仅为 `ready for observed playtest`，不得发布或进入样品馆。下一全局优先级是“显式玩法机制覆盖证据 + 真浏览器首分钟门禁”，而非继续修这一个项目。
+- 已新增 prompt→源码的通用显式机制覆盖合同，并同时接入 Agentic 生成 repair 与 production candidate blockers；注释关键词不算实现。赛车复测 prompt 会产生 vehicles、hold_acceleration、rail_hazard、ranking、elimination、rounds、garage_upgrade、cup_progression 八项要求，缺任一项不得成为候选。
 - 验证：`qa:game-generation-kernel`、`qa:game-production-orchestrator`、`npx tsc --noEmit` 和完整 `npm run build`（106 routes）通过。`qa:generate-stream-sse` 因本地 8888 未启动未执行到业务断言；生产部署后必须重新走同一创建提示词，记录生成耗时、保存、worker、实际试玩与差距。
 

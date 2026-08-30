@@ -10,6 +10,7 @@ import {
   buildAgenticRepairPrompt,
   buildAgenticSystemPrompt,
   buildAgenticUserPrompt,
+  AGENTIC_MODULE_JSON_SCHEMA,
 } from "@/lib/agentic/agentic-prompts";
 import { validateAgenticRunnable } from "@/lib/agentic/agentic-runnable";
 import { buildDebugSkillRepairHints, runDebugSkillPipeline, shouldSkipTemplateFirstForPrompt } from "@/lib/opengame-skills";
@@ -28,6 +29,7 @@ import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 import { PRODUCT } from "@/lib/product-config";
 import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
+import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
 
 export type GenerateAgenticModuleResult =
   | {
@@ -42,20 +44,6 @@ const REPAIR_ATTEMPTS = 2;
 
 /** OpenGame Debug Skill：proactive + runnable 闭环最大轮次（含 LLM repair） */
 const DEBUG_SKILL_MAX_ROUNDS = 3;
-
-const AGENTIC_MODULE_JSON_SCHEMA = {
-  name: "agentic_game_module",
-  strict: true,
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      source: { type: "string", minLength: 1 },
-      entry: { type: "string", enum: ["createGame"] },
-    },
-    required: ["source", "entry"],
-  },
-} as const;
 
 function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; reason: string; hints: string[] } {
   const pipeline = runDebugSkillPipeline(mod);
@@ -149,23 +137,28 @@ export async function generateAgenticGameModule(
           if (!visual.ok) {
             orch?.note("agentic_visual_contract", { ok: false, source: "opengame_cli", blockers: visual.blockers });
           } else {
-            const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
-            orch?.note("agentic_browser_bench", {
-              ok: bench.benchOk,
-              skipped: bench.benchSkipped,
-              source: "opengame_cli",
-            });
-            orch?.note("agentic_gen_result", {
-              source: "opengame_cli",
-              strategy: bridge.strategy,
-              files: bridge.files,
-            });
-            return {
-              ok: true,
-              module: bench.module,
-              source: "opengame_cli",
-              lastReason: bridge.strategy,
-            };
+            const mechanics = evaluateAgenticMechanicsContract(prompt, spec, bridge.module);
+            if (!mechanics.ok) {
+              orch?.note("agentic_mechanics_contract", { ...mechanics, source: "opengame_cli" });
+            } else {
+              const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
+              orch?.note("agentic_browser_bench", {
+                ok: bench.benchOk,
+                skipped: bench.benchSkipped,
+                source: "opengame_cli",
+              });
+              orch?.note("agentic_gen_result", {
+                source: "opengame_cli",
+                strategy: bridge.strategy,
+                files: bridge.files,
+              });
+              return {
+                ok: true,
+                module: bench.module,
+                source: "opengame_cli",
+                lastReason: bridge.strategy,
+              };
+            }
           }
         }
         orch?.note("opengame_cli_bridge", {
@@ -304,6 +297,13 @@ export async function generateAgenticGameModule(
         if (!visual.ok) {
           lastReason = visual.blockers.join(",");
           logAgenticProgress(model, attempt, `visual_contract_fail: ${lastReason}`);
+          continue;
+        }
+        const mechanics = evaluateAgenticMechanicsContract(prompt, spec, candidate);
+        orch?.note("agentic_mechanics_contract", mechanics);
+        if (!mechanics.ok) {
+          lastReason = mechanics.blockers.join(",");
+          logAgenticProgress(model, attempt, `mechanics_contract_fail: ${lastReason}`);
           continue;
         }
 
