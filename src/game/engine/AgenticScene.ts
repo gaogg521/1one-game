@@ -26,6 +26,47 @@ import {
 
 type EndPayload = { score: number; won: boolean };
 
+const BODY_DELEGATES = [
+  "setAllowGravity",
+  "setBounce",
+  "setCollideWorldBounds",
+  "setDrag",
+  "setGravity",
+  "setImmovable",
+  "setVelocity",
+  "setVelocityX",
+  "setVelocityY",
+] as const;
+
+/**
+ * LLM modules often create a Rectangle/Image and then call the Arcade Sprite
+ * convenience methods after `physics.add.existing`. Phaser only exposes those
+ * methods on Arcade Sprite; shape bodies expose them on `body`. Normalize that
+ * stable subset here so generated modules behave identically for both forms.
+ */
+export function installAgenticPhysicsCompatibility(scene: Phaser.Scene) {
+  const physicsAdd = scene.physics?.add as Phaser.Physics.Arcade.Factory & {
+    existing: (gameObject: Phaser.GameObjects.GameObject, isStatic?: boolean) => Phaser.GameObjects.GameObject;
+  };
+  if (!physicsAdd?.existing) return;
+  const originalExisting = physicsAdd.existing.bind(physicsAdd);
+  physicsAdd.existing = ((gameObject: Phaser.GameObjects.GameObject, isStatic?: boolean) => {
+    const result = originalExisting(gameObject, isStatic);
+    const target = gameObject as Phaser.GameObjects.GameObject & Record<string, unknown> & {
+      body?: Record<string, unknown>;
+    };
+    for (const method of BODY_DELEGATES) {
+      if (typeof target[method] === "function") continue;
+      target[method] = (...args: unknown[]) => {
+        const bodyMethod = target.body?.[method];
+        if (typeof bodyMethod === "function") bodyMethod.apply(target.body, args);
+        return target;
+      };
+    }
+    return result;
+  }) as typeof physicsAdd.existing;
+}
+
 /** Phase 3：Agentic 沙箱场景包装器（Astrocade 级：预加载背景/精灵并注入 ctx.assets） */
 export class AgenticScene extends Phaser.Scene {
   public backgroundUrl: string | null = null;
@@ -113,6 +154,7 @@ export class AgenticScene extends Phaser.Scene {
       winScore: this.spec.gameplay.winScore ?? 500,
     };
 
+    installAgenticPhysicsCompatibility(this);
     this.moduleInstance = runAgenticModule(mod, ctx, Phaser);
     this.scoreText = styleHudText(
       this.add.text(16, 12, hudScore(this.uiLocale, 0), { fontSize: "18px", color: "#fff" }),
@@ -120,9 +162,18 @@ export class AgenticScene extends Phaser.Scene {
     this.banner = new HudBanner(this, this.cohesive.banner);
 
     if (this.moduleInstance) {
-      this.moduleInstance.create(this);
-      this.banner.show({ title: hudReady(this.uiLocale), ms: 1000 });
-      schedulePhaserPlayReady(this, 1200);
+      try {
+        this.moduleInstance.create(this);
+        this.banner.show({ title: hudReady(this.uiLocale), ms: 1000 });
+        schedulePhaserPlayReady(this, 1200);
+      } catch (error) {
+        console.error("[agentic-runtime] create failed", error);
+        this.moduleInstance = null;
+        this.add
+          .text(w / 2, h / 2, hudAgenticModuleFailed(this.uiLocale), { fontSize: "18px", color: "#f87171" })
+          .setOrigin(0.5);
+        this.time.delayedCall(2000, () => this.onEnd({ score: 0, won: false }));
+      }
     } else {
       this.add
         .text(w / 2, h / 2, hudAgenticModuleFailed(this.uiLocale), { fontSize: "18px", color: "#f87171" })
