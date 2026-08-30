@@ -146,7 +146,7 @@ function verifyProductionVisualDelivery(detail: ProjectDetail, stages: StageReco
   });
 }
 
-async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[]) {
+async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[], templateId?: string) {
   const events: Array<Record<string, unknown>> = [];
   page.on("request", (request) => {
     if (!request.url().includes("/api/gameplay/events") || request.method() !== "POST") return;
@@ -169,12 +169,26 @@ async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[]) {
     const canvas = page.locator("canvas").first();
     const box = await canvas.boundingBox();
     if (box) {
-      const phase = Math.floor((Date.now() - startedAt) / 1_200) % 4;
-      const x = box.x + box.width * ([0.22, 0.78, 0.35, 0.65][phase] ?? 0.5);
-      const y = box.y + box.height * (phase % 2 === 0 ? 0.72 : 0.45);
-      await page.touchscreen.tap(x, y).catch(() => undefined);
-      await page.mouse.move(x, y).catch(() => undefined);
-      await page.keyboard.press(phase % 2 === 0 ? "ArrowLeft" : "ArrowRight").catch(() => undefined);
+      if (templateId === "dou-dizhu") {
+        const elapsed = Date.now() - startedAt;
+        // 首轮主动抢到地主；随后每次先点“提示”再点“出牌”。坐标是
+        // DouDizhuScene 固定的底部操作栏，不能用随机 Canvas 点击冒充出牌。
+        if (elapsed < 4_000) {
+          await page.keyboard.press("Digit3").catch(() => undefined);
+        } else {
+          const actionY = box.y + box.height * 0.84;
+          await page.touchscreen.tap(box.x + box.width * 0.52, actionY).catch(() => undefined);
+          await page.touchscreen.tap(box.x + box.width * 0.73, actionY).catch(() => undefined);
+          await page.keyboard.press("KeyP").catch(() => undefined);
+        }
+      } else {
+        const phase = Math.floor((Date.now() - startedAt) / 1_200) % 4;
+        const x = box.x + box.width * ([0.22, 0.78, 0.35, 0.65][phase] ?? 0.5);
+        const y = box.y + box.height * (phase % 2 === 0 ? 0.72 : 0.45);
+        await page.touchscreen.tap(x, y).catch(() => undefined);
+        await page.mouse.move(x, y).catch(() => undefined);
+        await page.keyboard.press(phase % 2 === 0 ? "ArrowLeft" : "ArrowRight").catch(() => undefined);
+      }
     }
     const result = page.locator("[data-outcome]").first();
     if (await result.isVisible().catch(() => false)) {
@@ -390,7 +404,7 @@ async function main() {
     });
 
     try {
-      await playUntilDeliveryEvidence(page, stages);
+    await playUntilDeliveryEvidence(page, stages, detail.spec?.templateId);
     } catch (playError) {
       await dumpFailure("play-timeout");
       throw playError;
