@@ -43,6 +43,20 @@ const REPAIR_ATTEMPTS = 2;
 /** OpenGame Debug Skill：proactive + runnable 闭环最大轮次（含 LLM repair） */
 const DEBUG_SKILL_MAX_ROUNDS = 3;
 
+const AGENTIC_MODULE_JSON_SCHEMA = {
+  name: "agentic_game_module",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: { type: "string", minLength: 1 },
+      entry: { type: "string", enum: ["createGame"] },
+    },
+    required: ["source", "entry"],
+  },
+} as const;
+
 function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; reason: string; hints: string[] } {
   const pipeline = runDebugSkillPipeline(mod);
   if (pipeline.ok) return { ok: true };
@@ -206,7 +220,8 @@ export async function generateAgenticGameModule(
           system,
           user,
           temperature: attempt === 0 ? 0.52 : 0.35,
-          mode: "json_object",
+          mode: "json_schema",
+          jsonSchema: AGENTIC_MODULE_JSON_SCHEMA,
           timeoutMs: attempt === 0 ? limits.timeoutMs : limits.repairTimeoutMs,
         });
         if (!result.ok) {
@@ -256,7 +271,8 @@ export async function generateAgenticGameModule(
               system,
               user: repairUser,
               temperature: 0.32,
-              mode: "json_object",
+              mode: "json_schema",
+              jsonSchema: AGENTIC_MODULE_JSON_SCHEMA,
               timeoutMs: limits.repairTimeoutMs,
             });
             if (!repairResult.ok) break;

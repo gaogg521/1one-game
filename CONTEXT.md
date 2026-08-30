@@ -1259,5 +1259,6 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - `firstPlayablePreview` 将首个预览收敛为一次 LLM draft（40 秒模型链预算、45 秒 HTTP 硬截止）+ 确定性校验；跳过 Brief LLM、多 Agent、critic、二次强化和 Agentic 代码生成。复杂玩法只记录 agentic 路由，保存后仍由 durable production worker 真实构建，禁止通用几何占位。
 - 首次部署后用同一提示复测，92 秒仍停在 1/3，证明链内 timeout 不能代表 HTTP 端到端截止；因此新增接口级 deadline race，并将 UI 改为诚实的 1/2、2/2、完成。
 - 保存后的真实项目 `cmtfeh35b000212rcz57wkgxd` 暴露第二个预算冲突：专属运行时旧策略最多串行 2 模型 × 多轮生成/repair，可能超过 systemd worker 的 640 秒请求上限。worker 生产与自动迭代现改为 bounded agentic attempt（1 模型、1 repair），失败继续走 durable retry，不生成假运行时。
+- 新 worker 的第二个真实项目 `cmtff9jx10002a4663p4as5u6` 首次快速暴露明确根因：模型路由返回 `400 json_schema must be provided`。专属模块的生成和 repair 均已切换为严格 schema 输出合同（`source`、`entry=createGame`）。
 - 验证：`qa:game-generation-kernel`、`qa:game-production-orchestrator`、`npx tsc --noEmit` 和完整 `npm run build`（106 routes）通过。`qa:generate-stream-sse` 因本地 8888 未启动未执行到业务断言；生产部署后必须重新走同一创建提示词，记录生成耗时、保存、worker、实际试玩与差距。
 
