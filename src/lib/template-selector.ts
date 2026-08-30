@@ -140,7 +140,9 @@ const RULES: Rule[] = [
       "方程式", "拉力赛", "rally", "竞速游戏", "赛车游戏", "need for speed",
       "极品飞车", "granny Turismo", "gt赛车",
     
-      "飙车", "车赛", "赛车比赛", "竞速比赛", "速度比赛", "圈速", "开车竞速", "比谁快", "race", "racing game", "speed race", "lap time",],
+      "飙车", "车赛", "赛车比赛", "竞速比赛", "速度比赛", "圈速", "开车竞速", "比谁快", "race", "racing game", "speed race", "lap time",
+      "公路淘汰赛", "车辆并排", "每轮最后一名淘汰", "杯赛进度",
+      "car elimination", "vehicle elimination", "race ranking", "racing cup",],
   },
   // ── 狙击（明确点名才选）
   {

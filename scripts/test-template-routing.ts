@@ -57,6 +57,7 @@ const CASES: Case[] = [
   { templateId: "fruit-ninja", prompt: "水果忍者，切水果削水果" },
   { templateId: "cut-the-rope", prompt: "割绳子喂小怪兽" },
   { templateId: "racing", prompt: "极品飞车赛车竞速" },
+  { templateId: "racing", prompt: "四辆原创低多边形车辆并排自动前进，在铁路道口躲避列车；每轮最后一名淘汰，三轮后进入决赛，包含车库升级和杯赛进度" },
   { templateId: "skiing", prompt: "滑雪 downhill ski 阿尔卑斯" },
   { templateId: "sports", prompt: "篮球投篮三分球扣篮" },
 

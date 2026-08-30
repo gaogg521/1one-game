@@ -45,6 +45,11 @@ export const GAME_TEMPLATE_DEFINITIONS: GameTemplateDefinition[] = [
     llmSummary: "轨道/赛道竞速（与 coaster 同引擎，偏计时）",
     infer: [
       { pattern: /神庙逃亡|temple run|temple runner|地铁跑酷|三线.*跑酷|lane runner|无尽跑酷|endless.*runner|跑道.*闪避/i, priority: 105 },
+      {
+        pattern:
+          /(?:车辆?|汽车|卡丁车).{0,36}(?:并排|名次|淘汰赛|决赛|杯赛|最后一名)|(?:公路淘汰赛|杯赛进度|每轮最后一名淘汰)|(?:ranking|elimination|final|cup).{0,36}(?:cars?|vehicles?|racers?)/i,
+        priority: 108,
+      },
       { pattern: /竞速|赛车|racing|赛道|圈速|计时赛|crashy roads|无尽公路|撞车/i, priority: 75 },
     ],
   },
