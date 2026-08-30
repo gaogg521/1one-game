@@ -1256,6 +1256,7 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 
 - 随机抽取 Astrocade 首页 Players' Choice 的 `Cars Vs Trains Race day` 做公开行为观察，只记录可观察机制：竖屏、按住加速、即时速度/名次、每轮末位淘汰、三轮决赛、车库/杯赛；未复制名称、素材、源码或关卡。
 - 在 Operone 生产创作台提交原创 clean-room 描述后，超过一分钟仍停在“生成规格 1/3”，浏览器无错误。根因是首个预览请求与 Brief、多 Agent、critic、增强、Agentic 代码生成共用完整质量预算，单链可达 300 秒，且 UI 阶段不是实际进度。
-- `firstPlayablePreview` 将首个预览收敛为一次 LLM draft（75 秒总预算）+ 确定性校验；跳过 Brief LLM、多 Agent、critic、二次强化和 Agentic 代码生成。复杂玩法只记录 agentic 路由，保存后仍由 durable production worker 真实构建，禁止通用几何占位。
+- `firstPlayablePreview` 将首个预览收敛为一次 LLM draft（40 秒模型链预算、45 秒 HTTP 硬截止）+ 确定性校验；跳过 Brief LLM、多 Agent、critic、二次强化和 Agentic 代码生成。复杂玩法只记录 agentic 路由，保存后仍由 durable production worker 真实构建，禁止通用几何占位。
+- 首次部署后用同一提示复测，92 秒仍停在 1/3，证明链内 timeout 不能代表 HTTP 端到端截止；因此新增接口级 deadline race，并将 UI 改为诚实的 1/2、2/2、完成。
 - 验证：`qa:game-generation-kernel`、`qa:game-production-orchestrator`、`npx tsc --noEmit` 和完整 `npm run build`（106 routes）通过。`qa:generate-stream-sse` 因本地 8888 未启动未执行到业务断言；生产部署后必须重新走同一创建提示词，记录生成耗时、保存、worker、实际试玩与差距。
 

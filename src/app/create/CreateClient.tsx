@@ -200,7 +200,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
   }, [generate]);
 
   const examples = [t("examples.0"), t("examples.1"), t("examples.2")];
-  const hint = status.step === "kernel" ? "1 / 3" : status.step === "verify" ? "2 / 3" : status.step === "ready" ? "3 / 3" : "";
+  const hint = status.step === "kernel" ? "1 / 2" : status.step === "verify" ? "2 / 2" : status.step === "ready" ? "完成" : "";
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">

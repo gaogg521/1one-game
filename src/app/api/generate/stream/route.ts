@@ -77,16 +77,32 @@ export async function POST(req: Request) {
 
         // The kernel is built before assets/copy.  Streaming remains useful, but
         // no hidden "creative extraction" gets to rewrite the requested game.
-        send({ step: "kernel", message: uiLocale.startsWith("zh") ? "正在围绕你的描述生成可玩规格" : "Writing a playable spec around your prompt" });
-        const result = await generateGameSpecWithMeta(parsed.prompt, {
+        send({ step: "kernel", message: uiLocale.startsWith("zh") ? "模型正在生成首个设计；超时会自动交付可玩的基础版本" : "The model is drafting the first design; a playable base version will be delivered if it times out" });
+        const previewOptions = {
           templateHint: parsed.templateHint,
           uiLocale,
           orchestration: orch,
           firstPlayablePreview: true,
           enhancePass: false,
-          maxTotalMs: 75_000,
+          maxTotalMs: 40_000,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
+        } as const;
+        const modelPreview = generateGameSpecWithMeta(parsed.prompt, previewOptions);
+        const previewDeadlineMs = 45_000;
+        let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<null>((resolve) => {
+          deadlineTimer = setTimeout(() => resolve(null), previewDeadlineMs);
         });
+        const modelResult = await Promise.race([modelPreview, deadline]);
+        if (deadlineTimer) clearTimeout(deadlineTimer);
+        const result = modelResult ?? await generateGameSpecWithMeta(parsed.prompt, {
+          ...previewOptions,
+          pipeline: "kernel",
+          orchestration: orch,
+        });
+        if (!modelResult) {
+          orch.note("first_preview_deadline_fallback", { deadlineMs: previewDeadlineMs });
+        }
         send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查关卡节奏、声音、混音与移动端运行" : "Checking level pacing, audio, mix and mobile runtime" });
         const plan = result.debug.kernelPlan;
         const recapLines = plan
