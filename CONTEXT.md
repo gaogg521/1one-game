@@ -1230,3 +1230,10 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 三款分别拥有独立 Scene、独立状态机和独立完成证据。`qa:showcase-games:browser` 实际完成移动采掘放置、3 次闭环（20%+）、15 次拖放合并（Lv.5），不再循环点击统一按钮；通用 Canvas 交互/深度审计 3/3 通过。
 - 旧十张封面删除后只重新生成三张新运行时实机封面。验证通过：`npx tsc --noEmit`、定向 ESLint（0 error，保留一个既有 unused warning）、`qa:showcase-games`、`qa:showcase-games:browser`、`qa:sample-profiles` 18/18、`qa:sample-template-skill-parity` 18/18、`qa:sample-gameplay-interaction:offline`、定向真实 Canvas 审计 3/3，以及完整 `npm run build`（106 routes；仅既有 Turbopack 动态追踪警告）。
 
+## P58：移动跑酷可玩性修复（2026-08-30）
+
+- `EndlessRunnerScene` 的触屏输入改为真实横滑切道、上滑跳跃、下滑滑铲；轻触才作为切道兜底。跑者增加连续步态，HUD 明确“自动前冲”。
+- 修复首局障碍节奏：首个障碍延后 3 秒，障碍间距由约 0.6 秒提升为至少一次完整移动手势的反应窗口；真实 393×852 浏览器复测中，横滑与上滑后仍保持进行中且生命为 3。
+- `SpecQuickTunePanel` 补齐跑酷速度/密度与斗地主 AI 难度的多语言键，避免创作页控制台 `MISSING_MESSAGE`。
+- 已提交并推送：`dd7aad20`、`0d51d6b5`、`5295d922`。生产正在基于 `5295d922` 单一构建重新生成 `.next`，完成后必须重启服务并做 TLS/SNI health 与移动端复测；不得与并发 build 混用。
+
