@@ -62,6 +62,15 @@ export const GameAssetJobPayloadSchema = z.object({
 /** Full game-production request. Assets are one stage, not the final product. */
 export const GameProductionJobPayloadSchema = GameAssetJobPayloadSchema;
 
+export const GameIterationJobPayloadSchema = z.object({
+  projectId: z.string().min(1).max(96),
+  ownerKey: z.string().min(1).max(160),
+  sourceRevisionId: z.string().min(1).max(96),
+  diagnoses: z.array(z.string().min(1).max(96)).max(12),
+  revisionTargets: z.array(z.enum(["loading", "onboarding", "controls", "difficulty", "core_loop", "progression", "game_feel"])).max(7),
+  uiLocale: z.string().min(2).max(16).default("zh-Hans"),
+});
+
 /** A continuation request is immutable at enqueue time; the worker revalidates ownership before execution. */
 export const NovelContinueJobPayloadSchema = z.object({
   novelId: z.string().min(1).max(96),
@@ -77,4 +86,5 @@ export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
 export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
 export type GameAssetJobPayload = z.infer<typeof GameAssetJobPayloadSchema>;
 export type GameProductionJobPayload = z.infer<typeof GameProductionJobPayloadSchema>;
+export type GameIterationJobPayload = z.infer<typeof GameIterationJobPayloadSchema>;
 export type NovelContinueJobPayload = z.infer<typeof NovelContinueJobPayloadSchema>;

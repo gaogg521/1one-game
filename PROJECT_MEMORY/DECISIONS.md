@@ -2,6 +2,14 @@
 
 更新时间：**2026-08-28**
 
+## 2026-08-30 — 游戏完成以真实分发闭环为准，自动返工最多五轮
+
+**决策**：
+- 首个可玩版本只进入候选池；按 immutable revision 聚合匿名真实 session，明确区分 0–10 秒、10–30 秒、30–60 秒、1–2 分钟、2–5 分钟和 5 分钟以上。
+- 少于 20 个 start 只收样本，不做质量结论；达到门槛后才允许 `iterate / promote / retire`。晋级只改变已公开作品的 featured，绝不替作者自动公开；淘汰只退出推荐，不删除作者作品。
+- `iterate` 必须创建真实 `game_iteration` job：用指标诊断驱动 LLM 小步修改 GameSpec；专属 Agentic runtime 同步重生成；新版本记录 `parentRevisionId` 和修订原因并重新进入完整生产门禁。
+- 同一 revision 只触发一次自动返工，单作品最多五轮。每轮的指标、诊断、决策和修改关系写入不可变 artifact/evaluation，禁止用静态预检冒充真实留存。
+
 ## 2026-08-28 — 文生图场景禁止文本模型；locale 非法则回退全局图模
 
 **背景**：生产 locale `zh` 的 `comic_image_openai` 被配成 `openrouter/free`。`renderComicPanels` 固定走 `runtimeLocaleGroup(uiLocale)`，于是 16 格全部 404。全局路由其实是 Seedream。Gemini 场景也被配成 Seedream / `openrouter/free`，风格参考图会先走 Gemini 并可能拖满超时。

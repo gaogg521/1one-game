@@ -31,6 +31,7 @@ import { resolveCreatorWorkStage } from "@/lib/creator-workflow";
 import { getAcceptedLegacyArtifact, getAcceptedLegacyPublicationDisplay, getLegacyCreativeProjectSnapshot } from "@/lib/creator-core/repository";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { buildGamePlaytestAdvice } from "@/lib/game-playtest-advice";
+import { evaluateGameDistribution } from "@/lib/game-distribution-loop";
 import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
@@ -76,7 +77,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       ? await prisma.generationJob.findFirst({
           where: {
             creativeProjectId: core.project.id,
-            type: { in: ["game_production", "game_asset"] },
+            type: { in: ["game_production", "game_iteration", "game_asset"] },
             status: { in: ["queued", "running", "retrying"] },
           },
           orderBy: { createdAt: "desc" },
@@ -100,7 +101,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const gameplayEvents = prisma.gameplayEvent
       ? await prisma.gameplayEvent.findMany({
           where: { projectId: id, ...(playRevisionId ? { creativeRevisionId: playRevisionId } : {}) },
-          select: { event: true, sessionId: true, elapsedMs: true, won: true },
+          select: { event: true, sessionId: true, elapsedMs: true, activeMs: true, won: true },
         })
       : [];
     const startedSessions = new Set(gameplayEvents.filter((event) => event.event === "start").map((event) => event.sessionId));
@@ -120,6 +121,7 @@ export async function GET(req: Request, ctx: RouteContext) {
         ? { averageFailureSec: Math.round(failedEnds.reduce((sum, event) => sum + (event.elapsedMs ?? 0), 0) / failedEnds.length / 1000) }
         : {}),
     });
+    const distribution = evaluateGameDistribution(gameplayEvents);
     return NextResponse.json({
       project: {
         id: row.id,
@@ -150,7 +152,9 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(core ? { core } : {}),
       ...(assetJob ? { assetJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(assetJob?.type === "game_production" ? { productionJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
+      ...(assetJob?.type === "game_iteration" ? { iterationJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(isOwner ? { playtestAdvice: buildGamePlaytestAdvice(quality.engagement ?? { sampleSize: 0 }) } : {}),
+      ...(isOwner ? { distribution } : {}),
     });
   } catch (error) {
     console.error("[GET /api/projects/:id]", error);

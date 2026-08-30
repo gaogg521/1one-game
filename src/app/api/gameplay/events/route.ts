@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { GameplayEventPayloadSchema } from "@/lib/gameplay-telemetry";
 import { persistFirstMinutePlaytestEvidenceWithRetry, persistGameDeliveryPlaytestEvidenceWithRetry } from "@/lib/game-playtest-evidence";
 import { isPrismaUniqueViolation } from "@/lib/prisma-errors";
+import { evaluateAndPersistGameDistribution } from "@/lib/game-distribution-loop";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
   }
   if ((parsed.data.event === "first_minute" || parsed.data.event === "end") && parsed.data.projectId && parsed.data.creativeRevisionId) {
     void persistGameDeliveryPlaytestEvidenceWithRetry(parsed.data).catch(() => undefined);
+    void evaluateAndPersistGameDistribution({
+      projectId: parsed.data.projectId,
+      creativeRevisionId: parsed.data.creativeRevisionId,
+    }).catch(() => undefined);
   }
   return NextResponse.json({ ok: true }, { status: 202 });
 }

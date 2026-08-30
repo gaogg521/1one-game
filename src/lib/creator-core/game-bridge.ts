@@ -22,6 +22,8 @@ export async function mirrorGameToCreatorCore(input: {
   project: Pick<Project, "id" | "ownerKey" | "title" | "prompt" | "specJson" | "status" | "visibility" | "coverPath" | "creativeBriefJson">;
   cause?: "generate" | "refine" | "import";
   deferFinalization?: boolean;
+  parentRevisionId?: string;
+  iterationReason?: { diagnoses: string[]; targets: string[] };
 }): Promise<GameCoreMirror> {
   const spec = parseGameSpec(JSON.parse(input.project.specJson));
   const brief = parseStoredCreativeBrief(input.project.creativeBriefJson);
@@ -45,12 +47,14 @@ export async function mirrorGameToCreatorCore(input: {
   });
   const revision = await createCreativeRevision(project.id, {
     cause: input.cause ?? "generate",
+    parentRevisionId: input.parentRevisionId,
     intent: {
       prompt: input.project.prompt,
       legacyProjectId: input.project.id,
       status: input.project.status,
       visibility: input.project.visibility,
       templateId: spec.templateId,
+      ...(input.iterationReason ? { automaticIteration: input.iterationReason } : {}),
     },
     summary: `${spec.templateId} · ${quality.score}/100 · ${quality.verdict}`,
   });

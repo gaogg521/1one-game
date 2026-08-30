@@ -5,7 +5,7 @@ import { getEffectiveRoutes, loadRuntimeConfig, type ProviderPricingRule } from 
 import { getEffectiveProviders, routeModelCascade, type RuntimeSceneKey } from "@/lib/runtime-providers";
 
 function sceneForJob(type: string): RuntimeSceneKey | null {
-  if (type === "game_asset" || type === "game_build" || type === "game_production") return "game_text";
+  if (type === "game_asset" || type === "game_build" || type === "game_production" || type === "game_iteration") return "game_text";
   if (type === "novel_continue" || type === "novel_plan" || type === "novel_scene") return "novel";
   if (type === "comic_panel") return "comic_image_openai";
   return null;

@@ -1238,3 +1238,17 @@ Operone 是一个多形态 AI 创作平台，包含三条独立产品线：
 - 已提交并推送：`dd7aad20`、`0d51d6b5`、`5295d922`。生产正在基于 `5295d922` 单一构建重新生成 `.next`，完成后必须重启服务并做 TLS/SNI health 与移动端复测；不得与并发 build 混用。
 - 追加修复：canonical 样品增强会在前置 sanitize 之后重写 survivor blueprint，必须二次 sanitize + coerce 后才允许入库；`321d3d4a` 已上线，TLS/SNI health 与 generation worker 均正常。新建 `cmtf3yeqq00099297z0f7f6hz` 已能加载专属引擎并进入资产生产，旧的 supplyDrops Zod 损坏不再复现。
 
+## P59：游戏冷启动分发、自动返工与淘汰闭环（2026-08-30）
+
+- 新增版本级真实留存聚合：0–10 秒、10–30 秒、30–60 秒、1–2 分钟、2–5 分钟、5 分钟以上；少于 20 个 start 只收样本，达到门槛后输出 collect/iterate/promote/retire，不把小样本或静态预检冒充市场结论。
+- 每次实质变化持久化 `game_distribution_decision` artifact 与 playtest evaluation。已由作者公开且非官方样品的作品，达标才自动 featured；明确失败则退出 featured，但不替作者发布或删除作品。
+- `iterate` 会排入幂等 `game_iteration` worker job。该 job 根据真实失败诊断调用现有 LLM patch 实际修改 GameSpec；专属 Agentic runtime 会重生成；随后创建带 `parentRevisionId`、automaticIteration 原因的新 immutable revision，并重新排入完整 game_production。每个 revision 只触发一次、每个作品最多五轮。
+- 作者项目详情返回当前 distribution，运营错误队列识别 game_iteration。新增 `qa:game-distribution-loop` 与 `qa:game-automatic-iteration`。
+- 验证：两条新增 QA 通过；自动迭代在全新 37 迁移 SQLite 中完成“弱 cohort → patch → 子 revision → production queue”；`npx tsc --noEmit`、定向 ESLint、telemetry/playtest QA、production orchestrator QA 和完整 `npm run build`（106 routes）通过。共享开发库的 `qa:game-production-worker` 被历史 queued job 抢占而失败，属于已知共享队列隔离问题；隔离链路验证通过。
+
+### P59 后续
+
+1. 用至少 5 位真实试玩者和生产 cohort 校准当前保守阈值；阈值未校准前不要把它包装成行业基准。
+2. 增加后台 cohort/版本对比 UI，并让视觉 Agent 对真实截图差异生成可执行资产修订，而不只修改 Spec/Agentic runtime。
+3. 发布后用新建作品完成公网小流量 → 自动返工/晋级的长周期验收；这需要真实用户样本，不能由离线 QA 伪造。
+

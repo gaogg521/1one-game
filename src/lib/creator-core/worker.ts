@@ -3,6 +3,7 @@ import {
   ComicPanelJobPayloadSchema,
   GameAssetJobPayloadSchema,
   GameProductionJobPayloadSchema,
+  GameIterationJobPayloadSchema,
   NovelContinueJobPayloadSchema,
 } from "@/lib/creator-core/types";
 import {
@@ -16,6 +17,7 @@ import { generateComicCover } from "@/lib/cover-generation";
 import {
   claimGenerationJob,
   completeGenerationJob,
+  enqueueGenerationJob,
   failGenerationJob,
   heartbeatGenerationJob,
 } from "@/lib/creator-core/jobs";
@@ -43,6 +45,10 @@ import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-ev
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
+import { patchGameSpecWithLlm } from "@/lib/spec-patch";
+import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
+import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
+import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -245,6 +251,75 @@ async function executeGameProductionJob(
   return candidateArtifact ?? lastArtifact;
 }
 
+async function executeGameIterationJob(
+  job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
+  workerId: string,
+) {
+  const payload = GameIterationJobPayloadSchema.parse(JSON.parse(job.payloadJson));
+  if (job.creativeRevisionId !== payload.sourceRevisionId) throw new Error("game_iteration_source_revision_mismatch");
+  const project = await prisma.project.findUnique({ where: { id: payload.projectId } });
+  if (!project || project.ownerKey !== payload.ownerKey) throw new Error("game_iteration_project_missing");
+  const sourceRevision = await prisma.creativeRevision.findFirst({
+    where: { id: payload.sourceRevisionId, creativeProjectId: job.creativeProjectId, status: "ready" },
+    select: { id: true },
+  });
+  if (!sourceRevision) throw new Error("game_iteration_source_not_ready");
+  const currentSpec = parseGameSpec(JSON.parse(project.specJson));
+  const instruction = [
+    "根据真实匿名试玩数据做一次小步质量修订。保留游戏身份、主题和核心规则，只修改被点名的问题；必须保持手机 H5 可完成。",
+    `失败诊断：${payload.diagnoses.join("、") || "未分类"}`,
+    `修订目标：${payload.revisionTargets.join("、") || "game_feel"}`,
+    "优先缩短首次有效反馈、澄清操作、调整早期难度，并增加两分钟内可感知的成长；不要只改文案。",
+  ].join("\n");
+  await heartbeatGenerationJob(job.id, workerId, { percent: 15, stage: "automatic_iteration", detail: instruction });
+  const patched = isRefinementStubEnabled()
+    ? { ok: true as const, spec: refineSpecWithStub({ mode: "patch", spec: currentSpec, instruction, currentPrompt: project.prompt }).spec }
+    : await patchGameSpecWithLlm({ instruction, currentSpec, currentPrompt: project.prompt });
+  if (!patched.ok) throw new Error(`game_iteration_llm_failed:${patched.errorKey}`);
+  let nextSpec = patched.spec;
+  if (shouldUseAgenticRuntime(currentSpec)) {
+    const generated = await generateAgenticGameModule(project.prompt, { ...nextSpec, agenticPlayRoute: "agentic" });
+    if (!generated.ok) throw new Error(`game_iteration_runtime_failed:${generated.reason}`);
+    nextSpec = { ...nextSpec, agenticPlayRoute: "agentic", agenticModule: generated.module };
+  }
+  const updated = await prisma.project.update({
+    where: { id: project.id },
+    data: { specJson: JSON.stringify(nextSpec), title: nextSpec.title, featured: false },
+  });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 70, stage: "revision", detail: "creating immutable revised candidate" });
+  const core = await mirrorGameToCreatorCore({
+    project: updated,
+    cause: "refine",
+    deferFinalization: true,
+    parentRevisionId: payload.sourceRevisionId,
+    iterationReason: { diagnoses: payload.diagnoses, targets: payload.revisionTargets },
+  });
+  const production = await enqueueGenerationJob({
+    creativeProjectId: core.creativeProjectId,
+    creativeRevisionId: core.creativeRevisionId,
+    type: "game_production",
+    idempotencyKey: `game-production:${project.id}:${core.creativeRevisionId}`,
+    payload: {
+      projectId: project.id,
+      ownerKey: project.ownerKey,
+      spec: nextSpec,
+      brief: parseStoredCreativeBrief(project.creativeBriefJson),
+      uiLocale: payload.uiLocale,
+    },
+  });
+  return createCreativeArtifact({
+    creativeProjectId: core.creativeProjectId,
+    creativeRevisionId: core.creativeRevisionId,
+    idempotencyKey: `game_iteration_result:${core.creativeRevisionId}`,
+    artifact: {
+      kind: "game_iteration_result",
+      mediaType: "report",
+      content: { version: 1, sourceRevisionId: payload.sourceRevisionId, revisionId: core.creativeRevisionId, productionJobId: production.id, diagnoses: payload.diagnoses, revisionTargets: payload.revisionTargets },
+      metadata: { role: "iteration_agent", sourceRevisionId: payload.sourceRevisionId },
+    },
+  });
+}
+
 async function executeComicPanelJob(job: { id: string; payloadJson: string }, workerId: string) {
   const payload = ComicPanelJobPayloadSchema.parse(JSON.parse(job.payloadJson));
   const comic = await prisma.comic.findUnique({ where: { id: payload.comicId } });
@@ -412,6 +487,11 @@ export async function processNextGenerationJob(workerId: string) {
         }
         if (job.type === "game_production") {
           const artifact = await executeGameProductionJob(job, workerId);
+          await completeGenerationJob(job.id, artifact.id);
+          return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
+        }
+        if (job.type === "game_iteration") {
+          const artifact = await executeGameIterationJob(job, workerId);
           await completeGenerationJob(job.id, artifact.id);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }

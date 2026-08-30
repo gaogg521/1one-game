@@ -128,6 +128,8 @@
     "qa:game-core-api": "tsx scripts/qa-game-core-api.ts",
     "qa:game-asset-job-api": "tsx scripts/qa-game-asset-job-api.ts",
     "qa:game-playtest-advice": "tsx scripts/qa-game-playtest-advice.ts",
+    "qa:game-distribution-loop": "tsx scripts/qa-game-distribution-loop.ts",
+    "qa:game-automatic-iteration": "tsx scripts/qa-game-automatic-iteration.ts",
     "qa:provider-usage": "tsx scripts/qa-provider-usage.ts",
     "qa:payment-safety": "tsx scripts/qa-payment-safety.ts",
     "qa:novel-story-plan-api": "tsx scripts/qa-novel-story-plan-api.ts",
