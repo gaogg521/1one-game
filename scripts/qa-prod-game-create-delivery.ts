@@ -67,6 +67,7 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     "game_art_direction",
     "runtime_build_manifest",
     "game_production_candidate",
+    "gameplay_acceptance_contract",
   ];
   const deadline = Date.now() + 10 * 60_000;
   let lastKinds: string[] = [];

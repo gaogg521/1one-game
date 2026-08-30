@@ -9,6 +9,7 @@ import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
 import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
 import { buildGameArtDirection } from "@/lib/game-art-direction";
+import { buildGamePlayabilityContract } from "@/lib/game-playability-contract";
 
 export type GameProductionArtifact = {
   kind: string;
@@ -66,6 +67,7 @@ export function buildGameProductionRun(input: {
   });
   const editor = buildGameEditSchema(input.spec);
   const artDirection = buildGameArtDirection(input.spec, input.brief ?? null);
+  const playability = buildGamePlayabilityContract(input.spec);
   const visualContract = evaluateAgenticVisualContract(input.spec, input.spec.agenticModule);
   const blockers = [
     ...(pipeline.preflightVerdict === "blocked" ? ["production_preflight_blocked"] : []),
@@ -133,6 +135,12 @@ export function buildGameProductionRun(input: {
         mobileTarget: input.spec.production?.delivery?.targetDevice === "mobile_h5",
       },
       metadata: { role: "ux_designer", controls: editor.controls.length },
+    },
+    {
+      kind: "gameplay_acceptance_contract",
+      mediaType: "json",
+      content: playability,
+      metadata: { role: "qa_agent", templateId: input.spec.templateId, mobile: true },
     },
     {
       kind: "runtime_build_manifest",
