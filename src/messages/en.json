@@ -1355,6 +1355,7 @@
     "threatSpeed": "Threat speed (hazardSpeed)",
     "runnerSpeed": "Runner forward speed",
     "runnerDensity": "Obstacle density",
+    "aiDifficulty": "AI opponent difficulty",
     "labels": "Short labels",
     "labelPlayer": "Player / tower",
     "labelHazard": "Threat",

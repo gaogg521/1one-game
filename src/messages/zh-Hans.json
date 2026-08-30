@@ -1354,6 +1354,7 @@
     "threatSpeed": "威胁移速（hazardSpeed）",
     "runnerSpeed": "跑酷前进速度",
     "runnerDensity": "障碍密度",
+    "aiDifficulty": "AI 对手难度",
     "labels": "称谓（简短）",
     "labelPlayer": "主角/塔",
     "labelHazard": "威胁物",
