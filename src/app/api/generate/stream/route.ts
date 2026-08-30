@@ -82,6 +82,9 @@ export async function POST(req: Request) {
           templateHint: parsed.templateHint,
           uiLocale,
           orchestration: orch,
+          firstPlayablePreview: true,
+          enhancePass: false,
+          maxTotalMs: 75_000,
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         });
         send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查关卡节奏、声音、混音与移动端运行" : "Checking level pacing, audio, mix and mobile runtime" });

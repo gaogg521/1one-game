@@ -769,8 +769,9 @@ async function runFinalizeLintRepair(
   initial: GameSpec,
   orch?: RunTraceRecorder,
   brief?: CreativeBrief | null,
+  maxRoundsOverride?: number,
 ): Promise<GameSpec> {
-  const maxRounds = Math.min(4, Math.max(0, Math.floor(PRODUCT.game.maxRepairRounds)));
+  const maxRounds = Math.min(4, Math.max(0, Math.floor(maxRoundsOverride ?? PRODUCT.game.maxRepairRounds)));
 
   const doLint = (s: GameSpec) =>
     orch
@@ -919,6 +920,10 @@ export type GenerateOptions = {
   creativeBriefPreExpanded?: ExpandCreativeBriefResult;
   /** 生成 director 事件/章节文案所用 UI locale */
   uiLocale?: import("@/i18n/routing").AppLocale;
+  /** 首个可玩预览只执行有上限的 draft；完整多 Agent 打磨留给 durable production job。 */
+  firstPlayablePreview?: boolean;
+  /** 首个预览整段模型预算；生产任务仍使用完整质量预算。 */
+  maxTotalMs?: number;
 };
 
 const VARIANT_FLAVORS = [
@@ -1246,7 +1251,7 @@ export async function generateGameSpecDraftWithMeta(
     };
   }
 
-  const totalTimeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.totalTimeoutMs);
+  const totalTimeoutMs = gameLlmCallTimeoutMs(options?.maxTotalMs ?? PRODUCT.game.totalTimeoutMs);
   let llmError: string | undefined;
   let llmMode: "json_schema" | "json_object" | undefined;
   const runDraftChain = async () =>
@@ -1316,7 +1321,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
   draftSource: GenerationSource;
   draftDebug: GenerationDebug;
   web?: WebEnhanceMeta | null;
-  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "assetManifestSummary" | "uiLocale">;
+  options?: Pick<GenerateOptions, "templateHint" | "orchestration" | "assetManifestSummary" | "uiLocale" | "maxTotalMs">;
 }): Promise<{ spec: GameSpec; source: GenerationSource; web?: WebEnhanceMeta | null; debug: GenerationDebug }> {
   const clean0 = params.prompt.trim();
   const clean = clean0;
@@ -1333,7 +1338,7 @@ export async function enhanceGameSpecFromDraftWithMeta(params: {
     models: gameRoute.models,
   });
   const models = gameRoute.models;
-  const totalTimeoutMs = gameLlmCallTimeoutMs(PRODUCT.game.totalTimeoutMs);
+  const totalTimeoutMs = gameLlmCallTimeoutMs(params.options?.maxTotalMs ?? PRODUCT.game.totalTimeoutMs);
   const orch = params.options?.orchestration;
   const runEnhance = async () =>
     await withTimeout(
@@ -1544,7 +1549,7 @@ export async function generateGameSpecWithMeta(
   const lockedTemplateHint = compiledKernel?.plan.kernel ?? options?.templateHint;
 
   let briefPre = options?.creativeBriefPreExpanded;
-  if (pipeline !== "kernel" && !briefPre && PRODUCT.game.creativeBriefExpand) {
+  if (pipeline !== "kernel" && !options?.firstPlayablePreview && !briefPre && PRODUCT.game.creativeBriefExpand) {
     briefPre = await expandCreativeBrief({
       prompt: prompt.trim(),
       templateHint: lockedTemplateHint,
@@ -1589,10 +1594,10 @@ export async function generateGameSpecWithMeta(
     });
   }
 
-  const enhancedRequested = options?.enhancePass !== false;
+  const enhancedRequested = options?.firstPlayablePreview ? false : options?.enhancePass !== false;
   const tier = resolveQualityTierFromEnv();
   const isAstrocade = tier === "astrocade";
-  const isRich = tier === "rich" || isAstrocade;
+  const isRich = !options?.firstPlayablePreview && (tier === "rich" || isAstrocade);
 
   const withTrace = (r: {
     spec: GameSpec;
@@ -1644,7 +1649,13 @@ export async function generateGameSpecWithMeta(
     web?: WebEnhanceMeta | null;
     debug: GenerationDebug;
   }) => {
-    let spec = await runFinalizeLintRepair(prompt, r.spec, orch, briefPre?.brief ?? null);
+    let spec = await runFinalizeLintRepair(
+      prompt,
+      r.spec,
+      orch,
+      briefPre?.brief ?? null,
+      options?.firstPlayablePreview ? 0 : undefined,
+    );
     const hint = resolveEffectiveTemplateHint(
       pipeline === "kernel" ? lockedTemplateHint : options?.templateHint,
       pipeline === "kernel" ? briefPre ?? null : null,
@@ -1665,7 +1676,15 @@ export async function generateGameSpecWithMeta(
         skipTemplateFirst: complexity.skipTemplateFirst,
         playRoute: complexity.skipTemplateFirst ? "agentic" : "dedicated",
       });
-      spec = await attachAgenticModuleIfEnabled(prompt.trim(), spec, true, orch ?? undefined);
+      if (options?.firstPlayablePreview) {
+        spec = {
+          ...spec,
+          agenticPlayRoute: complexity.skipTemplateFirst ? "agentic" : "dedicated",
+          agenticModule: undefined,
+        };
+      } else {
+        spec = await attachAgenticModuleIfEnabled(prompt.trim(), spec, true, orch ?? undefined);
+      }
       orch?.note("agentic_module", {
         attached: Boolean(spec.agenticModule),
         playRoute: spec.agenticPlayRoute ?? "dedicated",
@@ -1697,18 +1716,22 @@ export async function generateGameSpecWithMeta(
      * 评分 < 7 时自动触发 critic-guided re-enhance，再过一遍强化器。
      */
     let criticVerdict: import("@/lib/game-quality-critic").GameCriticVerdict | null = null;
-    try {
-      const { critiqueGameSpec } = await import("@/lib/game-quality-critic");
-      criticVerdict = orch
-        ? await orch.span("spec_critic", () => critiqueGameSpec(spec, prompt))
-        : await critiqueGameSpec(spec, prompt);
-      orch?.note("spec_critic_verdict", {
-        ok: criticVerdict !== null,
-        score: criticVerdict?.score,
-        weakest: criticVerdict?.weakest,
-      });
-    } catch (e) {
-      orch?.note("spec_critic_error", { error: String(e).slice(0, 200) });
+    if (options?.firstPlayablePreview) {
+      orch?.note("spec_critic_skipped", { reason: "first_playable_preview" });
+    } else {
+      try {
+        const { critiqueGameSpec } = await import("@/lib/game-quality-critic");
+        criticVerdict = orch
+          ? await orch.span("spec_critic", () => critiqueGameSpec(spec, prompt))
+          : await critiqueGameSpec(spec, prompt);
+        orch?.note("spec_critic_verdict", {
+          ok: criticVerdict !== null,
+          score: criticVerdict?.score,
+          weakest: criticVerdict?.weakest,
+        });
+      } catch (e) {
+        orch?.note("spec_critic_error", { error: String(e).slice(0, 200) });
+      }
     }
 
     // Auto re-enhance when critic score < 6.8 (lowered from 7 to match new visual_distinct cap)
