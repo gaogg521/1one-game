@@ -40,7 +40,7 @@ function extractTitle(prompt: string, seed: number): string {
   const core = (subject ?? first)
     .replace(/^[\s"'「」]+|[\s"'」]+$/g, "")
     .replace(/^(?:请)?(?:帮我)?(?:设计|制作|创建|生成|做)(?:一个|一款)?/, "")
-    .replace(/(?:小游戏|游戏)$/, "")
+    .replace(/的?(?:小游戏|游戏)$/, "")
     .trim();
   if (core.length <= 28) return core.slice(0, 80);
   return `${core.slice(0, 26)}…`;

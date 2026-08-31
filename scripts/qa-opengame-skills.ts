@@ -18,6 +18,7 @@ import {
 } from "@/lib/opengame-skills";
 import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
+import { mockSpecFromPrompt } from "@/lib/mock-spec";
 
 const SPEC: GameSpec = {
   version: 1,
@@ -76,6 +77,9 @@ if (!multiMechanicRace.skipTemplateFirst || !multiMechanicRace.signals.some((sig
 }
 
 const competitorPrompt = "做一个神庙逃亡的游戏";
+if (mockSpecFromPrompt(competitorPrompt).title !== "神庙逃亡") {
+  failures.push("Chinese create prompt title must remove the trailing possessive particle");
+}
 const competitor = classifyPromptComplexity(competitorPrompt, SPEC);
 if (!competitor.skipTemplateFirst || !competitor.signals.includes("competitor_reference")) {
   failures.push(`named competitor reference must use authored agentic runtime: ${JSON.stringify(competitor)}`);
@@ -93,7 +97,7 @@ if (runnerModule.source.includes("elapsed>=65||score>=")) {
 if (!runnerModule.source.includes("elapsed>=65")) {
   failures.push("runner production scaffold must sustain a full-minute playtest");
 }
-if (!runnerModule.source.includes("setDisplaySize(88,122)") || !runnerModule.source.includes("for(let i=0;i<5;i++")) {
+if (!runnerModule.source.includes("w*.15") || !runnerModule.source.includes("for(let i=0;i<5;i++")) {
   failures.push("runner production scaffold must include foreground-scale hero and layered world dressing");
 }
 const runnerVisual = evaluateAgenticVisualContract(runnerSpec, runnerModule);
