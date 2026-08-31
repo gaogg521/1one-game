@@ -62,7 +62,6 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     "game_spec",
     "game_production_pipeline",
     "game_delivery_preflight",
-    "game_playtest_delivery",
     "asset_manifest",
     "game_art_direction",
     "runtime_build_manifest",
@@ -88,6 +87,20 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     await page.waitForTimeout(5_000);
   }
   throw new Error(`交付制品等待超时：${lastKinds.join(",")}`);
+}
+
+async function waitForObservedPlaytestArtifacts(page: Page, projectId: string, stages: StageRecord[]): Promise<ProjectDetail> {
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    const detail = await readProject(page, projectId);
+    const kinds = (detail.core?.revision?.artifacts ?? []).map((item) => item.kind ?? "").filter(Boolean);
+    if (kinds.includes("game_playtest_first_minute") && kinds.includes("game_playtest_delivery")) {
+      stages.push({ at: new Date().toISOString(), stage: "observed_playtest_artifacts_ready", detail: { kinds } });
+      return detail;
+    }
+    await page.waitForTimeout(2_000);
+  }
+  throw new Error("真实试玩已完成，但首分钟/交付证据没有在 90 秒内持久化");
 }
 
 async function verifyRuntimeAssets(page: Page, detail: ProjectDetail, stages: StageRecord[]) {
@@ -423,7 +436,8 @@ async function main() {
       await dumpFailure("play-timeout");
       throw playError;
     }
-    const artifacts = ready.core?.revision?.artifacts ?? [];
+    const observedReady = await waitForObservedPlaytestArtifacts(page, projectId, stages);
+    const artifacts = observedReady.core?.revision?.artifacts ?? [];
     summary.artifacts = artifacts.map((item) => item.kind).filter(Boolean);
     summary.bgmSource = artifacts.find((item) => item.kind === "bgm")?.storageUri ? "audio_model" : "llm_notes";
 

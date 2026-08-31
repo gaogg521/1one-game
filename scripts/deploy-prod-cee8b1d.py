@@ -51,6 +51,7 @@ def main() -> int:
         f"cd {repo} && {env} && npx prisma migrate deploy",
         f"cd {repo} && HOME={repo} NPM_CONFIG_CACHE={repo}/.npm-cache npm install --no-audit --no-fund",
         f"cd {repo} && HOME={repo} npx prisma generate",
+        "dnf install -y atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXfixes libXrandr mesa-libgbm alsa-lib",
         f"cd {repo} && mkdir -p data/ms-playwright && PLAYWRIGHT_BROWSERS_PATH={repo}/data/ms-playwright npx playwright install chromium && chmod -R a+rX data/ms-playwright",
         (
             "python3 - <<'PY'\n"

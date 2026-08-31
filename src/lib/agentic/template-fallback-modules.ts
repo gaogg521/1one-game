@@ -9,7 +9,7 @@ function createGame(ctx, Phaser) {
     else scene.add.rectangle(w/2,h/2,w,h,0x172033).setDepth(-20);
     const shade=scene.add.graphics().setDepth(-10);shade.fillStyle(0x07111f,.42);shade.fillRect(0,0,w,h);
     const road=scene.add.graphics().setDepth(-5);road.fillStyle(0x2b3446,.94);road.fillTriangle(w*.08,h,w*.92,h,w*.61,h*.25);road.fillTriangle(w*.08,h,w*.61,h*.25,w*.39,h*.25);road.lineStyle(3,0xf6c453,.75);road.lineBetween(w*.385,h,w*.47,h*.25);road.lineBetween(w*.615,h,w*.53,h*.25);
-    let lane=1,targetX=lanes[1],vy=0,score=0,coins=0,lives=3,speed=250,elapsed=0,ended=false,lastSpawn=0;
+    let lane=1,targetX=lanes[1],vy=0,score=0,coins=0,lives=3,speed=250,elapsed=0,ended=false,lastSpawn=0,lastHit=-999;
     let player;if(ctx.assets?.playerKey) player=scene.add.sprite(targetX,ground,ctx.assets.playerKey).setDisplaySize(62,86).setDepth(8);else player=scene.add.rectangle(targetX,ground,48,76,0xf59e0b).setDepth(8);
     const shadow=scene.add.ellipse(targetX,ground+42,58,14,0x000000,.35).setDepth(7),actors=[];
     const hud=scene.add.text(14,12,'0 m  ·  ◆ 0  ·  ♥ 3',{fontSize:'17px',fontStyle:'bold',color:'#fff',stroke:'#111827',strokeThickness:4}).setDepth(30);
@@ -22,7 +22,7 @@ function createGame(ctx, Phaser) {
     function spawn(kind,laneIndex){const key=kind==='coin'?ctx.assets?.collectibleKey:ctx.assets?.enemyKey;let obj;if(key)obj=scene.add.sprite(lanes[laneIndex],h*.27,key).setDisplaySize(kind==='coin'?34:64,kind==='coin'?34:70);else obj=kind==='coin'?scene.add.circle(lanes[laneIndex],h*.27,14,0xfacc15):scene.add.rectangle(lanes[laneIndex],h*.27,54,62,0xef4444);obj.setDepth(5);actors.push({obj,kind,lane:laneIndex,z:0});}
     scene.events.on('update',(_time,delta)=>{if(ended)return;const dt=Math.min(delta,40)/1000;elapsed+=dt;speed=Math.min(520,speed+dt*7);score+=dt*speed*.08;player.x=Phaser.Math.Linear(player.x,targetX,Math.min(1,dt*13));shadow.x=player.x;vy+=1180*dt;player.y=Math.min(ground,player.y+vy*dt);if(player.y>=ground)vy=0;shadow.alpha=(player.y<ground-20)?.18:.35;
       if(elapsed-lastSpawn>Math.max(.48,1.05-speed/850)){lastSpawn=elapsed;const li=Math.floor(ctx.rng()*3);spawn(ctx.rng()<.38?'coin':'hazard',li);if(ctx.rng()<.22)spawn('coin',(li+1+Math.floor(ctx.rng()*2))%3);}
-      for(let i=actors.length-1;i>=0;i--){const a=actors[i];a.z+=dt*speed/410;const scale=.32+a.z*1.05;a.obj.y=h*.25+a.z*(ground-h*.25);a.obj.x=Phaser.Math.Linear(w/2,lanes[a.lane],Math.min(1,a.z));a.obj.setScale(scale);if(a.z>.82&&a.z<1.08&&a.lane===lane&&Math.abs(player.y-ground)<42){if(a.kind==='coin'){coins++;score+=25;ctx.onScore(25);a.obj.destroy();actors.splice(i,1);}else{lives--;scene.cameras.main.shake(150,.012);a.obj.destroy();actors.splice(i,1);if(lives<=0){ended=true;ctx.onEnd(false);}}}else if(a.z>1.15){a.obj.destroy();actors.splice(i,1);}}
+      for(let i=actors.length-1;i>=0;i--){const a=actors[i];a.z+=dt*speed/410;const scale=.32+a.z*1.05;a.obj.y=h*.25+a.z*(ground-h*.25);a.obj.x=Phaser.Math.Linear(w/2,lanes[a.lane],Math.min(1,a.z));a.obj.setScale(scale);if(a.z>.82&&a.z<1.08&&a.lane===lane&&Math.abs(player.y-ground)<42){if(a.kind==='coin'){coins++;score+=25;ctx.onScore(1);a.obj.destroy();actors.splice(i,1);}else if(elapsed-lastHit>33){lastHit=elapsed;lives--;scene.cameras.main.shake(150,.012);a.obj.destroy();actors.splice(i,1);if(lives<=0){ended=true;ctx.onEnd(false);}}}else if(a.z>1.15){a.obj.destroy();actors.splice(i,1);}}
       hud.setText(Math.floor(score)+' m  ·  ◆ '+coins+'  ·  ♥ '+lives);if(elapsed>=65||score>=(ctx.winScore||800)){ended=true;ctx.onEnd(true);}
     });
   }};
