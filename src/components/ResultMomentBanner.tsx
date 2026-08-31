@@ -9,13 +9,15 @@ type Props = {
   mode: CreationMode;
   title: string;
   subtitle?: string;
+  /** Override the success eyebrow while a durable production revision is not ready. */
+  eyebrow?: string;
   /** 结果区下方的操作按钮（分享、点赞等） */
   actions?: React.ReactNode;
   /** 折叠到第二层的管理/解释区 */
   details?: React.ReactNode;
 };
 
-export function ResultMomentBanner({ mode, title, subtitle, actions, details }: Props) {
+export function ResultMomentBanner({ mode, title, subtitle, eyebrow, actions, details }: Props) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
   const meta = getCreationModes(locale)[mode];
@@ -24,7 +26,7 @@ export function ResultMomentBanner({ mode, title, subtitle, actions, details }: 
     <section className="overflow-hidden rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-gradient-to-br from-[color:color-mix(in_srgb,var(--gc-accent)_10%,var(--gc-surface-glass))] to-[var(--gc-surface-glass)]">
       <div className="border-b border-[color:var(--gc-border)] px-5 py-4 sm:px-6">
         <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)]">
-          {t("resultBanner.ready", { label: meta.label, wow: meta.wow })}
+          {eyebrow ?? t("resultBanner.ready", { label: meta.label, wow: meta.wow })}
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--gc-text)] sm:text-3xl">
           {title}

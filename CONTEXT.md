@@ -1,4 +1,13 @@
 # 项目工作进度快照
+最后更新：2026-08-31（神庙逃亡生产验收与假阳性修复）
+
+## 生产验收结论
+- 新建作品 `cmtgnoyu000059at7698hcakt` 的截图与真实手机数据均不达标：五次会话首分钟留存为 0，四次在 10–30 秒失败，一次在 30–60 秒失败。
+- Core 候选实际已 `failed/rejected`，QA/视觉账本分别是 `observed:false` / `observedScreenshot:false`；旧详情页却显示 ready 96 分，证明此前不是所有 Agent 都实际改变了交付物。
+- 竞品指名 Prompt（神庙逃亡、Temple Run、地铁跑酷等）现在强制进入独立 Agentic 运行时，不再降级成通用 endless-runner Scene；失败/生产中修订会在作品页显式告警、隐藏旧质量分和发布按钮。
+
+---
+
 最后更新：2026-08-31（Astrocade 式预发布多 Agent 迭代闭环）
 
 ## 当前状态

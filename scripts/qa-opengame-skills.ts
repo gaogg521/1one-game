@@ -74,6 +74,15 @@ if (!multiMechanicRace.skipTemplateFirst || !multiMechanicRace.signals.some((sig
   failures.push(`multi-mechanic race must use agentic route: ${JSON.stringify(multiMechanicRace)}`);
 }
 
+const competitorPrompt = "做一个神庙逃亡的游戏";
+const competitor = classifyPromptComplexity(competitorPrompt, SPEC);
+if (!competitor.skipTemplateFirst || !competitor.signals.includes("competitor_reference")) {
+  failures.push(`named competitor reference must use authored agentic runtime: ${JSON.stringify(competitor)}`);
+}
+if (resolveAgenticPlayRoute(competitorPrompt, { ...SPEC, templateId: "endless-runner" }) !== "agentic") {
+  failures.push("Temple Run reference must not resolve to the generic endless-runner scene");
+}
+
 const system = buildAgenticSystemPrompt();
 if (!system.includes("Template Skill")) {
   failures.push("system prompt missing Template Skill scaffold");

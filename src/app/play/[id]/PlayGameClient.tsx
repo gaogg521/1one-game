@@ -34,7 +34,7 @@ import { isSampleGalleryProject } from "@/lib/sample-gallery";
 import type { GameEditSchema } from "@/lib/game-edit-schema";
 
 type CoreArtifact = { kind: string; content: unknown };
-type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
+type CoreRevision = { id: string; sequence: number; cause: string; status?: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
 type CoreSnapshot = {
   revision: CoreRevision | null;
   project?: {
@@ -518,15 +518,26 @@ export function PlayGameClient({ id }: { id: string }) {
             {parityInfo ? (
               <SampleParityTrustBadge info={parityInfo} />
             ) : null}
+            {meta.isOwner && core?.revision?.status && core.revision.status !== "ready" ? (
+              <div className={`mb-3 rounded-xl border px-4 py-3 text-sm ${core.revision.status === "failed" ? "border-rose-400/40 bg-rose-950/30 text-rose-100" : "border-amber-400/40 bg-amber-950/30 text-amber-100"}`} role="status" data-testid="game-production-status">
+                <p className="font-semibold">{core.revision.status === "failed" ? "生产候选未通过，当前画面不是可交付成品" : "多 Agent 生产与自动审查仍在进行"}</p>
+                <p className="mt-1 text-xs opacity-80">{core.revision.summary ?? `revision status: ${core.revision.status}`}</p>
+              </div>
+            ) : null}
             <ResultMomentBanner
               mode="game"
               title={resultTitle}
               subtitle={resultSubtitle}
+              eyebrow={meta.isOwner && core?.revision?.status && core.revision.status !== "ready"
+                ? core.revision.status === "failed"
+                  ? "游戏生产未通过 · 禁止发布"
+                  : "多 Agent 生产中 · 当前仅为草稿预览"
+                : undefined}
               actions={
                 <>
                   <WorkEngagementStats kind="game" playCount={playCount} likeCount={likeCount} hideLikes size="md" />
                   <GameRuntimePreferenceControl />
-                  {meta.isOwner ? (
+                  {meta.isOwner && core?.revision?.status === "ready" ? (
                     <PublishWorkButton
                       type="game"
                       id={id}
@@ -753,7 +764,7 @@ export function PlayGameClient({ id }: { id: string }) {
                   <CreatorVersionStatus core={core} work={{ type: "game", id }} className="mb-2" />
                   <p className="font-medium">{t("coreRevision", { sequence: core.revision.sequence })}</p>
                   <p className="mt-1 truncate text-sky-100/70">{core.revision.summary ?? t("coreRevisionReady")}</p>
-                  {core.project?.evaluation ? (
+                  {core.project?.evaluation && core.revision.status === "ready" ? (
                     <p className="mt-1 text-sky-100/70" data-testid="game-core-evaluation">
                       {t("coreQuality", { verdict: core.project.evaluation.verdict, score: core.project.evaluation.score })}
                     </p>

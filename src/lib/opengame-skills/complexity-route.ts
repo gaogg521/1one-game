@@ -16,6 +16,10 @@ export type PromptComplexityResult = {
 };
 
 const COMPLEX_PATTERNS: { re: RegExp; weight: number; signal: string; archetype?: TemplateArchetypeId }[] = [
+  // A named competitor reference is not a request for the nearest generic
+  // template. It asks for a clean-room reproduction of recognizable mechanics,
+  // camera language and presentation, so it must receive an authored runtime.
+  { re: /神庙逃亡|temple\s*run|地铁跑酷|subway\s*surfers?|糖豆人|fall\s*guys|吸血鬼幸存者|vampire\s*survivors?/i, weight: 4, signal: "competitor_reference" },
   { re: /选角|character select|hero roster|playable heroes?/i, weight: 3, signal: "character_select", archetype: "gravity_side_view" },
   { re: /(\d+)\s*(个|关|层|stage|level)/i, weight: 2, signal: "multi_level" },
   { re: /boss|最终关|final boss|ultimate|必杀|大招/i, weight: 2, signal: "boss_or_ultimate" },
