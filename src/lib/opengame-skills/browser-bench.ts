@@ -12,6 +12,11 @@ export type AgenticBrowserBenchProbe = {
   phaserReady?: boolean;
   sceneKey?: string | null;
   errorMessage?: string;
+  /** Real synthetic touch/keyboard inputs sent after the scene has booted. */
+  syntheticActions?: number;
+  visualChangedAfterInput?: boolean;
+  beforeFrameFingerprint?: string;
+  afterFrameFingerprint?: string;
 };
 
 declare global {
@@ -133,6 +138,19 @@ export function browserBenchToDebugChecks(probe: AgenticBrowserBenchProbe): Debu
       });
     }
   }
+  if (probe.syntheticActions && probe.visualChangedAfterInput === false) {
+    checks.push({
+      entryId: "bench-no-action-response",
+      errorCode: "NO_ACTION_RESPONSE",
+      message: "Synthetic tap and keyboard inputs did not change the rendered frame",
+      rootCause: "The first action has no observable feedback in the real runtime",
+      fix: {
+        type: "edit",
+        description: "Bind the primary input and make its first action visibly change game state.",
+        patch: "Handle scene.input pointerdown and/or keyboard input; update actor position, score, animation, or particle feedback.",
+      },
+    });
+  }
   return checks;
 }
 
@@ -147,7 +165,10 @@ export async function runAgenticBrowserBench(
     goto(url: string, opts?: { waitUntil?: string; timeout?: number }): Promise<unknown>;
     waitForFunction(fn: () => boolean, arg?: unknown, opts?: { timeout?: number }): Promise<unknown>;
     evaluate<T>(fn: () => T): Promise<T>;
-    locator(sel: string): { waitFor(opts?: { timeout?: number }): Promise<unknown> };
+    locator(sel: string): { waitFor(opts?: { timeout?: number }): Promise<unknown>; click(opts?: { position?: { x: number; y: number } }): Promise<void> };
+    mouse?: { click(x: number, y: number): Promise<void> };
+    keyboard?: { press(key: string): Promise<void>; down(key: string): Promise<void>; up(key: string): Promise<void> };
+    waitForTimeout?: (timeout: number) => Promise<void>;
   },
   spec: GameSpec,
   module: AgenticGameModule,
@@ -170,6 +191,48 @@ export async function runAgenticBrowserBench(
   );
 
   const probe = await page.evaluate(() => window.__OPERONE_AGENTIC_BENCH__ ?? { status: "error" as const });
+
+  // This is intentionally generic: every runtime receives the same primary
+  // pointer and keyboard sequence. It proves that the generated module reacts
+  // to real browser input rather than merely drawing a non-empty first frame.
+  if (probe.status === "done") {
+    const before = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-testid="agentic-bench-host"] canvas') as HTMLCanvasElement | null;
+      if (!canvas) return null;
+      const pixels = canvas.toDataURL("image/png");
+      let hash = 2166136261;
+      const stride = Math.max(1, Math.floor(pixels.length / 2048));
+      for (let index = 0; index < pixels.length; index += stride) hash = Math.imul(hash ^ pixels.charCodeAt(index), 16777619);
+      const rect = canvas.getBoundingClientRect();
+      return { fingerprint: (hash >>> 0).toString(16), x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    });
+    if (before && page.mouse && page.keyboard) {
+      await page.locator('[data-testid="agentic-bench-host"]').click();
+      await page.mouse.click(before.x, before.y);
+      await page.mouse.click(before.x, before.y);
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.down("Space");
+      if (page.waitForTimeout) await page.waitForTimeout(160);
+      const after = await page.evaluate(() => {
+        const canvas = document.querySelector('[data-testid="agentic-bench-host"] canvas') as HTMLCanvasElement | null;
+        if (!canvas) return null;
+        const pixels = canvas.toDataURL("image/png");
+        let hash = 2166136261;
+        const stride = Math.max(1, Math.floor(pixels.length / 2048));
+        for (let index = 0; index < pixels.length; index += stride) hash = Math.imul(hash ^ pixels.charCodeAt(index), 16777619);
+        return (hash >>> 0).toString(16);
+      });
+      await page.keyboard.up("Space");
+      probe.syntheticActions = 6;
+      probe.beforeFrameFingerprint = before.fingerprint;
+      probe.afterFrameFingerprint = after ?? undefined;
+      probe.visualChangedAfterInput = Boolean(after && after !== before.fingerprint);
+      await page.evaluate(() => {
+        const current = window.__OPERONE_AGENTIC_BENCH__;
+        if (current) Object.assign(current, { status: current.status });
+      });
+    }
+  }
 
   const checks = browserBenchToDebugChecks(probe);
   if (checks.length || probe.status === "error") {

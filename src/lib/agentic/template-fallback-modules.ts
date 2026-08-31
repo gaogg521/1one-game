@@ -348,6 +348,9 @@ function createGame(ctx, Phaser) {
       const flag=scene.add.star(w-80,h-300,5,14,28,0xfbbf24);
       scene.physics.add.existing(flag,true);
       scene.physics.add.overlap(player,flag,()=>{ ctx.onScore(100); ctx.onEnd(true); });
+      // Mobile-first primary input: a tap has immediate, visible jump feedback.
+      // Keyboard remains available for desktop, but touch must never be a dead first action.
+      scene.input.on('pointerdown',()=>{ player.body.setVelocityY(-380); });
       scene.events.on('update', ()=>{
         if(key.SPACE.isDown||key.UP.isDown||key.W.isDown){ if(player.body.blocked.down) player.body.setVelocityY(-380); }
         if(player.x>w-100 && player.y<h-320) { score=100; st.setText('Score '+score); }

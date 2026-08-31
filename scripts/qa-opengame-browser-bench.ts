@@ -6,6 +6,7 @@
  *   QA_ROUTES_ENABLED=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:80 npm run qa:opengame-browser-bench
  * 无 server 时默认 skip（OPENGAME_BROWSER_BENCH_REQUIRED=1 则 fail）
  */
+import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
 import type { GameSpec } from "@/lib/game-spec";
@@ -83,7 +84,10 @@ async function main() {
       console.error(`[FAIL] ${name}`, result.probe, result.checks.map((c) => c.errorCode).join(", "));
       failed += 1;
     } else {
-      console.log(`[OK] ${name} canvasNonEmpty=${result.probe.canvasNonEmpty} scene=${result.probe.sceneKey ?? "?"}`);
+      console.log(`[probe] ${name} ${JSON.stringify(result.probe)}`);
+      assert.equal(result.probe.syntheticActions, 6, "browser bench must send real inputs");
+      assert.equal(result.probe.visualChangedAfterInput, true, "the first action must visibly change the game");
+      console.log(`[OK] ${name} canvasNonEmpty=${result.probe.canvasNonEmpty} action=${result.probe.syntheticActions} visualChange=${result.probe.visualChangedAfterInput} scene=${result.probe.sceneKey ?? "?"}`);
     }
   }
 
