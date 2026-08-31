@@ -116,9 +116,16 @@ export function evaluateGameDistribution(events: DistributionGameplayEvent[]): G
 export async function evaluateAndPersistGameDistribution(input: { projectId: string; creativeRevisionId: string }) {
   const core = await prisma.creativeProject.findUnique({
     where: { legacyType_legacyId: { legacyType: "project", legacyId: input.projectId } },
-    select: { id: true },
+    select: {
+      id: true,
+      revisions: {
+        where: { id: input.creativeRevisionId, status: "ready" },
+        take: 1,
+        select: { id: true },
+      },
+    },
   });
-  if (!core) return null;
+  if (!core?.revisions[0]) return null;
   const events = await prisma.gameplayEvent.findMany({
     where: { projectId: input.projectId, creativeRevisionId: input.creativeRevisionId },
     select: { sessionId: true, event: true, elapsedMs: true, activeMs: true },

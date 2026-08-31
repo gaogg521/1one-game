@@ -22,7 +22,7 @@ type ProjectDetail = {
   spec?: { templateId?: string; title?: string; agenticPlayRoute?: "dedicated" | "agentic" };
   playRevisionId?: string;
   assetJob?: { id?: string; status?: string; progress?: unknown };
-  core?: { revision?: { id?: string; artifacts?: Array<{ kind?: string; content?: unknown; storageUri?: string | null }> } };
+  core?: { revision?: { id?: string; status?: string; artifacts?: Array<{ kind?: string; content?: unknown; storageUri?: string | null }> } };
 };
 
 function assert(value: unknown, message: string): asserts value {
@@ -76,14 +76,14 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     const kinds = (detail.core?.revision?.artifacts ?? []).map((item) => item.kind ?? "").filter(Boolean);
     const bgmReady = kinds.includes("bgm") || kinds.includes("bgm_notes");
     lastKinds = kinds;
-    if (required.every((kind) => kinds.includes(kind)) && bgmReady && !detail.assetJob) {
+    if (detail.core?.revision?.status === "ready" && required.every((kind) => kinds.includes(kind)) && bgmReady && !detail.assetJob) {
       stages.push({ at: new Date().toISOString(), stage: "delivery_artifacts_ready", detail: { kinds } });
       return detail;
     }
     stages.push({
       at: new Date().toISOString(),
       stage: "delivery_artifacts_wait",
-      detail: { assetJob: detail.assetJob?.status ?? "none", kinds },
+      detail: { revisionStatus: detail.core?.revision?.status ?? "missing", assetJob: detail.assetJob?.status ?? "none", kinds },
     });
     await page.waitForTimeout(5_000);
   }
@@ -404,15 +404,23 @@ async function main() {
       detail: { revisionId, templateId: created.spec?.templateId, assetJob: created.assetJob?.status ?? "none" },
     });
 
+    const ready = await waitForDeliveryArtifacts(page, projectId, stages);
+    await verifyRuntimeAssets(page, ready, stages);
+    verifyProductionVisualDelivery(ready, stages);
+    // Saving intentionally opens a draft preview immediately. Acceptance must
+    // reload the immutable ready revision after every production Agent has
+    // finished; otherwise the generic preview pollutes playtest telemetry.
+    await page.goto(`${baseUrl}/${locale}/play/${encodeURIComponent(projectId)}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000,
+    });
+    stages.push({ at: new Date().toISOString(), stage: "ready_candidate_reloaded", detail: { revisionId } });
     try {
-    await playUntilDeliveryEvidence(page, stages, created.spec?.templateId);
+      await playUntilDeliveryEvidence(page, stages, ready.spec?.templateId);
     } catch (playError) {
       await dumpFailure("play-timeout");
       throw playError;
     }
-    const ready = await waitForDeliveryArtifacts(page, projectId, stages);
-    await verifyRuntimeAssets(page, ready, stages);
-    verifyProductionVisualDelivery(ready, stages);
     const artifacts = ready.core?.revision?.artifacts ?? [];
     summary.artifacts = artifacts.map((item) => item.kind).filter(Boolean);
     summary.bgmSource = artifacts.find((item) => item.kind === "bgm")?.storageUri ? "audio_model" : "llm_notes";

@@ -32,6 +32,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
 
+  // Draft previews are useful to the creator, but they are not production
+  // candidates. Never let their telemetry drive retention, auto-iteration or
+  // distribution. This also rejects a forged revision/project pairing.
+  if (parsed.data.projectId && parsed.data.creativeRevisionId) {
+    const core = await prisma.creativeProject.findUnique({
+      where: { legacyType_legacyId: { legacyType: "project", legacyId: parsed.data.projectId } },
+      select: {
+        revisions: {
+          where: { id: parsed.data.creativeRevisionId, status: "ready" },
+          take: 1,
+          select: { id: true },
+        },
+      },
+    });
+    if (!core?.revisions[0]) {
+      return NextResponse.json({ ok: false, ignored: "production_not_ready" }, { status: 202 });
+    }
+  }
+
   try {
     const eventKey = parsed.data.projectId && parsed.data.creativeRevisionId
       ? `${parsed.data.projectId}:${parsed.data.creativeRevisionId}:${parsed.data.sessionId}:${parsed.data.event}`
