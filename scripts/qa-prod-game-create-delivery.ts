@@ -379,7 +379,7 @@ async function main() {
     stages.push({ at: new Date().toISOString(), stage: "project_saved", detail: { projectId, playUrl: page.url() } });
 
     const created = await readProject(page, projectId);
-    const revisionId = created.playRevisionId ?? created.core?.revision?.id;
+    let revisionId = created.playRevisionId ?? created.core?.revision?.id;
     assert(revisionId, "项目缺少不可变创意版本");
     assert(created.project?.generationModel, "游戏 generationModel 未落库，后台将显示未记录");
     assert(created.project.generationModel !== "mock", "游戏落库模型是 mock，正文模型路由未生效");
@@ -405,6 +405,8 @@ async function main() {
     });
 
     const ready = await waitForDeliveryArtifacts(page, projectId, stages);
+    revisionId = ready.core?.revision?.id ?? revisionId;
+    summary.revisionId = revisionId;
     await verifyRuntimeAssets(page, ready, stages);
     verifyProductionVisualDelivery(ready, stages);
     // Saving intentionally opens a draft preview immediately. Acceptance must

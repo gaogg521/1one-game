@@ -195,8 +195,12 @@ async function executeGameProductionJob(
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
   const bespokeRequested = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (bespokeRequested && !shouldUseAgenticRuntime(spec)) {
-    await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building bespoke game runtime" });
+  if (bespokeRequested) {
+    // Never trust an agenticModule carried over from the prompt preview. That
+    // module has not necessarily passed asset usage or real-browser checks.
+    // Production owns the executable and rebuilds it on every bounded repair
+    // round so a failed visual review can actually change code.
+    await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building and browser-reviewing bespoke game runtime" });
     const generated = await generateAgenticGameModule(
       sourceProject.prompt,
       { ...spec, agenticPlayRoute: "agentic" },
@@ -300,9 +304,20 @@ async function executeGamePreflightIterationJob(
   const instruction = buildGamePreflightRevisionInstruction(payload);
   await heartbeatGenerationJob(job.id, workerId, { percent: 12, stage: "design_agent_revision", detail: `round ${payload.productionRound + 1}/${payload.maxProductionRounds}` });
   const currentSpec = parseGameSpec(JSON.parse(sourceSpecArtifact.contentJson));
-  const patched = isRefinementStubEnabled()
-    ? { ok: true as const, spec: refineSpecWithStub({ mode: "patch", spec: currentSpec, instruction, currentPrompt: project.prompt }).spec }
-    : await patchGameSpecWithLlm({ instruction, currentSpec, currentPrompt: project.prompt });
+  const runtimeRepairOnly = payload.blockers.every((blocker) =>
+    blocker.startsWith("runtime_") ||
+    blocker.startsWith("browser_") ||
+    blocker.startsWith("mechanic_missing:") ||
+    blocker === "generic_phaser_runtime_retired",
+  );
+  // Runtime and browser failures require a new executable, not another design
+  // report. Preserve the design contract and invalidate the stale module so
+  // the next production round is routed straight to the code Agent.
+  const patched = runtimeRepairOnly
+    ? { ok: true as const, spec: currentSpec }
+    : isRefinementStubEnabled()
+      ? { ok: true as const, spec: refineSpecWithStub({ mode: "patch", spec: currentSpec, instruction, currentPrompt: project.prompt }).spec }
+      : await patchGameSpecWithLlm({ instruction, currentSpec, currentPrompt: project.prompt });
   if (!patched.ok) throw new Error(`game_preflight_iteration_patch_failed:${patched.errorKey}`);
   const { agenticModule: _staleModule, ...withoutStaleModule } = patched.spec;
   const expectedRoute = resolveAgenticPlayRoute(project.prompt, withoutStaleModule, { respectPersisted: false });
@@ -343,7 +358,7 @@ async function executeGamePreflightIterationJob(
       kind: "game_preflight_iteration",
       mediaType: "report",
       content: { version: 1, round: nextRound, maxRounds: payload.maxProductionRounds, sourceRevisionId: payload.sourceRevisionId, blockers: payload.blockers, productionJobId: production.id },
-      metadata: { role: "gameplay_designer", round: nextRound, mutates: ["game_spec", "agentic_runtime"] },
+      metadata: { role: runtimeRepairOnly ? "runtime_engineer" : "gameplay_designer", round: nextRound, mutates: runtimeRepairOnly ? ["agentic_runtime"] : ["game_spec", "agentic_runtime"] },
     },
   });
 }
