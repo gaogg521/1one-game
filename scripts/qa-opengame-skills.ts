@@ -93,6 +93,9 @@ if (runnerModule.source.includes("elapsed>=65||score>=")) {
 if (!runnerModule.source.includes("elapsed>=65")) {
   failures.push("runner production scaffold must sustain a full-minute playtest");
 }
+if (!runnerModule.source.includes("setDisplaySize(88,122)") || !runnerModule.source.includes("for(let i=0;i<5;i++")) {
+  failures.push("runner production scaffold must include foreground-scale hero and layered world dressing");
+}
 const runnerVisual = evaluateAgenticVisualContract(runnerSpec, runnerModule);
 if (!runnerVisual.ok) failures.push(`runner production scaffold failed visual contract: ${runnerVisual.blockers.join(",")}`);
 
