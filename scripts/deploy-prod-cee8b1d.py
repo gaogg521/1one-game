@@ -40,10 +40,18 @@ def main() -> int:
     steps = [
         f"cd {repo} && git fetch origin && git reset --hard origin/main && git log -1 --oneline",
         f"cd {repo} && (grep -q '^PORT=' .env && sed -i 's|^PORT=.*|PORT={port}|' .env || echo 'PORT={port}' >> .env)",
+        (
+            f"cd {repo} && for pair in "
+            f"'OPENGAME_BROWSER_BENCH=1' 'OPENGAME_BROWSER_BENCH_REPAIR=1' "
+            f"'OPENGAME_BROWSER_BENCH_REQUIRED=1' 'PLAYWRIGHT_BASE_URL=http://127.0.0.1:{port}' "
+            f"'PLAYWRIGHT_BROWSERS_PATH={repo}/data/ms-playwright'; do "
+            "key=${pair%%=*}; grep -q \"^${key}=\" .env && sed -i \"s|^${key}=.*|${pair}|\" .env || echo \"${pair}\" >> .env; done"
+        ),
         f"sed -i 's/\\r$//' {repo}/.env 2>/dev/null; sed -i '/^PRISMA_CLIENT_ENGINE_TYPE=/d' {repo}/.env 2>/dev/null || true",
         f"cd {repo} && {env} && npx prisma migrate deploy",
         f"cd {repo} && HOME={repo} NPM_CONFIG_CACHE={repo}/.npm-cache npm install --no-audit --no-fund",
         f"cd {repo} && HOME={repo} npx prisma generate",
+        f"cd {repo} && mkdir -p data/ms-playwright && PLAYWRIGHT_BROWSERS_PATH={repo}/data/ms-playwright npx playwright install chromium && chmod -R a+rX data/ms-playwright",
         (
             "python3 - <<'PY'\n"
             f"p = __import__('pathlib').Path('{repo}') / 'node_modules/@parcel/watcher/index.js'\n"

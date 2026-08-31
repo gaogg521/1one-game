@@ -55,6 +55,7 @@ export async function maybeVerifyAgenticModuleInBrowser(
   if (!(await serverReachable(base))) {
     if (isOpenGameBrowserBenchRequired()) {
       console.warn("[opengame] browser bench required but server unreachable:", base);
+      return { module: mod, benchOk: false, benchSkipped: true };
     }
     return { module: mod, benchOk: true, benchSkipped: true };
   }

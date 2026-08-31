@@ -15,7 +15,12 @@ export type AgenticVisualContract = {
  * technically runs while rendering only circles and rectangles.
  */
 export function evaluateAgenticVisualContract(spec: GameSpec, module?: AgenticGameModule | null): AgenticVisualContract {
-  const required = requiresBespokeRuntime(spec);
+  // The complexity router can require an independent runtime even when the
+  // older genre policy does not recognize a short competitor-reference prompt
+  // (for example "做一个神庙逃亡的游戏"). Every agentic route must therefore
+  // consume real visual assets; otherwise a technically valid blank module can
+  // be scored as production-ready.
+  const required = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
   if (!required) return { required: false, ok: true, blockers: [], evidence: ["visual_contract:not_required"] };
   const source = module?.source ?? "";
   const usesBackground = /assets\?\.(?:backgroundKey)|assets\s*&&\s*ctx\.assets\.backgroundKey/.test(source);
