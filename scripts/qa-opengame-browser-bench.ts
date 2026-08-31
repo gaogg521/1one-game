@@ -16,6 +16,23 @@ const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 
 const BENCH_SPECS: { name: string; spec: GameSpec }[] = [
   {
+    name: "endless-runner-production-scaffold",
+    spec: {
+      version: 1,
+      templateId: "endless-runner",
+      title: "Temple Runner Bench",
+      agenticPlayRoute: "agentic",
+      theme: {
+        backgroundColor: "#172033",
+        playerColor: "#f59e0b",
+        hazardColor: "#ef4444",
+        collectibleColor: "#facc15",
+      },
+      gameplay: { playerSpeed: 320, hazardSpeed: 250, spawnIntervalMs: 700, winScore: 800, lives: 3 },
+      labels: { player: "runner", hazard: "trap", collectible: "coin" },
+    },
+  },
+  {
     name: "platformer-fallback",
     spec: {
       version: 1,

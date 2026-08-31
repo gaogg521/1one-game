@@ -26,6 +26,7 @@ export const AGENTIC_MODULE_JSON_SCHEMA = {
 
 /** 各模板 Agentic 玩法约束（Astrocade 级：拒绝泛化点击计数器） */
 const TEMPLATE_GAMEPLAY_HINTS: Partial<Record<GameSpec["templateId"], string>> = {
+  "endless-runner": "Three-lane forward runner: swipe/arrow lane changes, tap/up jump, obstacles, collectible coins, acceleration, collision lives, clear win/loss",
   avoider: "Dodge falling hazards; player moves with pointer; lose on hit, score over time",
   collector: "Move to collect gems while dodging hazards; win at target score",
   survivor: "Multi-life dodge survival with escalating spawn rate",
@@ -46,6 +47,9 @@ const TEMPLATE_GAMEPLAY_HINTS: Partial<Record<GameSpec["templateId"], string>> =
 
 /** 各模板追加 user prompt 段（template-first 失败走 LLM 时） */
 const TEMPLATE_PROMPT_EXTRA: Partial<Record<GameSpec["templateId"], string[]>> = {
+  "endless-runner": [
+    "Runner pattern (required): three perspective lanes, left/right lane changes, tap/up jump, forward hazards and coins, accelerating speed, collision lives, distance HUD, explicit win/loss.",
+  ],
   physics: [
     "Physics template pattern (required): ONE main dummy body (rectangle or sprite), scene.physics.add.existing, pointerdown applies velocity impulse toward tap, combo scoring. No ragdoll constraints, no generateTexture, no container, max 4 physics bodies total.",
     "Use ctx.assets.enemyKey as optional hazard/target prop on floor (scene.add.image, static). scene.physics.world.gravity.y=900; collider(dummy,floor).",
@@ -98,6 +102,7 @@ const TEMPLATE_PROMPT_EXTRA: Partial<Record<GameSpec["templateId"], string[]>> =
 };
 
 const TEMPLATE_REPAIR_EXTRA: Partial<Record<GameSpec["templateId"], string>> = {
+  "endless-runner": "Runner repair: three lanes, lane-change + jump input, approaching obstacle/coin actors, acceleration, lives and explicit outcome — mirror the ENDLESS_RUNNER scaffold.",
   physics: "Physics repair: one dummy body, pointerdown impulse, combo score, ctx.winScore — mirror PHYSICS_DUMMY.",
   shooter: "Shooter repair: player + bullet group + enemy group + overlap scoring.",
   sniper: "Sniper repair: aim + shoot + overlap targets — mirror shooter fallback.",

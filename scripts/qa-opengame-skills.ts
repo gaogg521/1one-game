@@ -17,6 +17,7 @@ import {
   TEMPLATE_ARCHETYPES,
 } from "@/lib/opengame-skills";
 import { normalizeAstrocadePlaySpec } from "@/lib/astrocade-play-spec";
+import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
 
 const SPEC: GameSpec = {
   version: 1,
@@ -82,6 +83,12 @@ if (!competitor.skipTemplateFirst || !competitor.signals.includes("competitor_re
 if (resolveAgenticPlayRoute(competitorPrompt, { ...SPEC, templateId: "endless-runner" }) !== "agentic") {
   failures.push("Temple Run reference must not resolve to the generic endless-runner scene");
 }
+const runnerSpec: GameSpec = { ...SPEC, templateId: "endless-runner", agenticPlayRoute: "agentic" };
+const runnerModule = buildTemplateFallbackModule(runnerSpec);
+const runnerPipeline = runDebugSkillPipeline(runnerModule);
+if (!runnerPipeline.ok) failures.push(`runner production scaffold failed debug skill: ${runnerPipeline.reason}`);
+const runnerVisual = evaluateAgenticVisualContract(runnerSpec, runnerModule);
+if (!runnerVisual.ok) failures.push(`runner production scaffold failed visual contract: ${runnerVisual.blockers.join(",")}`);
 
 const system = buildAgenticSystemPrompt();
 if (!system.includes("Template Skill")) {

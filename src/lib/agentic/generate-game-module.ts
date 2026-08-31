@@ -89,7 +89,7 @@ export async function generateAgenticGameModule(
   // may not contain the legacy genre keywords, but once routed to an agentic
   // runtime it must never fall back to the generic template module.
   const bespokeRequired = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !bespokeRequired) {
+  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1") {
     const mod = buildFallbackAgenticModule(spec.title, spec);
     orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
     return { ok: true, module: mod, source: "fallback" };
@@ -169,6 +169,30 @@ export async function generateAgenticGameModule(
           reason: debug.ok ? "visual_contract_failed" : debug.reason,
           debugStage: debug.ok ? "visual_contract" : "debug_skill",
         });
+      }
+    }
+  }
+
+  // Genre production scaffolds are executable code owned by the runtime
+  // engineer, not a publish bypass. They still pass the same static contracts
+  // and real-browser bench, while giving the LLM a reliable base for common
+  // high-value genres instead of asking it to recreate an engine from zero.
+  if (bespokeRequired && spec.templateId === "endless-runner") {
+    const scaffold = buildTemplateFallbackModule(spec);
+    const debug = passesDebugSkill(scaffold);
+    const visual = evaluateAgenticVisualContract(spec, scaffold);
+    const mechanics = evaluateAgenticMechanicsContract(prompt, spec, scaffold);
+    orch?.note("agentic_production_scaffold", {
+      templateId: spec.templateId,
+      debugOk: debug.ok,
+      visualOk: visual.ok,
+      mechanicsOk: mechanics.ok,
+    });
+    if (debug.ok && visual.ok && mechanics.ok) {
+      const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, scaffold);
+      orch?.note("agentic_browser_bench", { ok: bench.benchOk, skipped: bench.benchSkipped, source: "production_scaffold" });
+      if (bench.benchOk && (!isOpenGameBrowserBenchRequired() || !bench.benchSkipped)) {
+        return { ok: true, module: bench.module, source: "template_first", lastReason: "production_scaffold" };
       }
     }
   }

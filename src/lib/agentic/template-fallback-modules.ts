@@ -1,6 +1,33 @@
 import type { GameSpec } from "@/lib/game-spec";
 import type { AgenticGameModule } from "@/lib/agentic/game-module";
 
+const ENDLESS_RUNNER = `
+function createGame(ctx, Phaser) {
+  return { create(scene) {
+    const w=ctx.width,h=ctx.height,lanes=[w*.27,w*.5,w*.73],ground=h*.82;
+    if(ctx.assets?.backgroundKey) scene.add.image(w/2,h/2,ctx.assets.backgroundKey).setDisplaySize(w,h).setDepth(-20);
+    else scene.add.rectangle(w/2,h/2,w,h,0x172033).setDepth(-20);
+    const shade=scene.add.graphics().setDepth(-10);shade.fillStyle(0x07111f,.42);shade.fillRect(0,0,w,h);
+    const road=scene.add.graphics().setDepth(-5);road.fillStyle(0x2b3446,.94);road.fillTriangle(w*.08,h,w*.92,h,w*.61,h*.25);road.fillTriangle(w*.08,h,w*.61,h*.25,w*.39,h*.25);road.lineStyle(3,0xf6c453,.75);road.lineBetween(w*.385,h,w*.47,h*.25);road.lineBetween(w*.615,h,w*.53,h*.25);
+    let lane=1,targetX=lanes[1],vy=0,score=0,coins=0,lives=3,speed=250,elapsed=0,ended=false,lastSpawn=0;
+    let player;if(ctx.assets?.playerKey) player=scene.add.sprite(targetX,ground,ctx.assets.playerKey).setDisplaySize(62,86).setDepth(8);else player=scene.add.rectangle(targetX,ground,48,76,0xf59e0b).setDepth(8);
+    const shadow=scene.add.ellipse(targetX,ground+42,58,14,0x000000,.35).setDepth(7),actors=[];
+    const hud=scene.add.text(14,12,'0 m  ·  ◆ 0  ·  ♥ 3',{fontSize:'17px',fontStyle:'bold',color:'#fff',stroke:'#111827',strokeThickness:4}).setDepth(30);
+    const title=scene.add.text(w/2,44,ctx.labels.title,{fontSize:'20px',fontStyle:'bold',color:'#ffe7a3',stroke:'#3b1d0a',strokeThickness:5}).setOrigin(.5).setDepth(30);
+    scene.add.text(w/2,h-24,'Swipe / ← → change lane  ·  tap / ↑ jump',{fontSize:'12px',color:'#e2e8f0',backgroundColor:'#111827aa',padding:{x:8,y:5}}).setOrigin(.5).setDepth(30);
+    scene.tweens.add({targets:title,alpha:.72,duration:900,yoyo:true,repeat:-1});
+    function move(dir){lane=Phaser.Math.Clamp(lane+dir,0,2);targetX=lanes[lane];}function jump(){if(player.y>=ground-2)vy=-520;}
+    let downX=0,downY=0;scene.input.on('pointerdown',p=>{downX=p.x;downY=p.y;});scene.input.on('pointerup',p=>{const dx=p.x-downX,dy=p.y-downY;if(Math.abs(dx)>32)move(dx>0?1:-1);else if(dy<-25||Math.abs(dx)<20)jump();});
+    const kb=scene.input.keyboard,cursors=kb&&kb.createCursorKeys();if(cursors?.left?.on){cursors.left.on('down',()=>move(-1));cursors.right.on('down',()=>move(1));cursors.up.on('down',jump);cursors.space.on('down',jump);}
+    function spawn(kind,laneIndex){const key=kind==='coin'?ctx.assets?.collectibleKey:ctx.assets?.enemyKey;let obj;if(key)obj=scene.add.sprite(lanes[laneIndex],h*.27,key).setDisplaySize(kind==='coin'?34:64,kind==='coin'?34:70);else obj=kind==='coin'?scene.add.circle(lanes[laneIndex],h*.27,14,0xfacc15):scene.add.rectangle(lanes[laneIndex],h*.27,54,62,0xef4444);obj.setDepth(5);actors.push({obj,kind,lane:laneIndex,z:0});}
+    scene.events.on('update',(_time,delta)=>{if(ended)return;const dt=Math.min(delta,40)/1000;elapsed+=dt;speed=Math.min(520,speed+dt*7);score+=dt*speed*.08;player.x=Phaser.Math.Linear(player.x,targetX,Math.min(1,dt*13));shadow.x=player.x;vy+=1180*dt;player.y=Math.min(ground,player.y+vy*dt);if(player.y>=ground)vy=0;shadow.alpha=(player.y<ground-20)?.18:.35;
+      if(elapsed-lastSpawn>Math.max(.48,1.05-speed/850)){lastSpawn=elapsed;const li=Math.floor(ctx.rng()*3);spawn(ctx.rng()<.38?'coin':'hazard',li);if(ctx.rng()<.22)spawn('coin',(li+1+Math.floor(ctx.rng()*2))%3);}
+      for(let i=actors.length-1;i>=0;i--){const a=actors[i];a.z+=dt*speed/410;const scale=.32+a.z*1.05;a.obj.y=h*.25+a.z*(ground-h*.25);a.obj.x=Phaser.Math.Linear(w/2,lanes[a.lane],Math.min(1,a.z));a.obj.setScale(scale);if(a.z>.82&&a.z<1.08&&a.lane===lane&&Math.abs(player.y-ground)<42){if(a.kind==='coin'){coins++;score+=25;ctx.onScore(25);a.obj.destroy();actors.splice(i,1);}else{lives--;scene.cameras.main.shake(150,.012);a.obj.destroy();actors.splice(i,1);if(lives<=0){ended=true;ctx.onEnd(false);}}}else if(a.z>1.15){a.obj.destroy();actors.splice(i,1);}}
+      hud.setText(Math.floor(score)+' m  ·  ◆ '+coins+'  ·  ♥ '+lives);if(elapsed>=65||score>=(ctx.winScore||800)){ended=true;ctx.onEnd(true);}
+    });
+  }};
+}`;
+
 /** 各语义模板离线 Agentic 模块（LLM 失败时仍保留可辨认玩法） */
 const PUZZLE_MATCH3 = `
 function createGame(ctx, Phaser) {
@@ -539,6 +566,7 @@ function createGame(ctx, Phaser) {
 }`;
 
 const BY_TEMPLATE: Partial<Record<GameSpec["templateId"], string>> = {
+  "endless-runner": ENDLESS_RUNNER,
   puzzle: PUZZLE_MATCH3,
   physics: PHYSICS_DUMMY,
   farming: FARMING_GRID,
