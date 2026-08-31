@@ -87,6 +87,12 @@ const runnerSpec: GameSpec = { ...SPEC, templateId: "endless-runner", agenticPla
 const runnerModule = buildTemplateFallbackModule(runnerSpec);
 const runnerPipeline = runDebugSkillPipeline(runnerModule);
 if (!runnerPipeline.ok) failures.push(`runner production scaffold failed debug skill: ${runnerPipeline.reason}`);
+if (runnerModule.source.includes("elapsed>=65||score>=")) {
+  failures.push("runner production scaffold must not end early from generic winScore");
+}
+if (!runnerModule.source.includes("elapsed>=65")) {
+  failures.push("runner production scaffold must sustain a full-minute playtest");
+}
 const runnerVisual = evaluateAgenticVisualContract(runnerSpec, runnerModule);
 if (!runnerVisual.ok) failures.push(`runner production scaffold failed visual contract: ${runnerVisual.blockers.join(",")}`);
 
