@@ -12,11 +12,15 @@ const spec = {
   production: buildDefaultGameProductionContract({ prompt, templateId: base.templateId }),
 };
 
-const editSchema = buildGameEditSchema(spec);
+const editSchema = buildGameEditSchema(spec, prompt);
 assert.equal(editSchema.runtimeStrategy, "independent_agentic_module");
 assert.ok(editSchema.controls.some((control) => control.path === "gameplay.playerSpeed"));
 assert.ok(editSchema.controls.some((control) => control.path === "production.delivery.firstRewardBySecond"));
 assert.ok(editSchema.controls.every((control) => control.gameplayImpact.length > 0));
+assert.ok(editSchema.entities.some((entity) => entity.role === "player"));
+assert.ok(editSchema.entities.some((entity) => entity.role === "system"));
+assert.ok(editSchema.mechanics.some((mechanic) => mechanic.id === "building"));
+assert.ok(editSchema.mechanics.every((mechanic) => mechanic.wishTemplate.includes(mechanic.label)));
 
 const voxelEditSchema = buildGameEditSchema({
   ...spec,

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import type { MusicProfile } from "@/lib/cohesive-presentation";
+import type { GameEditSchema } from "@/lib/game-edit-schema";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
@@ -15,9 +16,14 @@ function normalizeHex6(h: string): string {
   return s.toLowerCase();
 }
 
-type Props = { spec: GameSpec; onChange: (next: GameSpec) => void };
+type Props = {
+  spec: GameSpec;
+  onChange: (next: GameSpec) => void;
+  editorSchema?: GameEditSchema | null;
+  onWish?: (wish: string) => void;
+};
 
-export function SpecQuickTunePanel({ spec, onChange }: Props) {
+export function SpecQuickTunePanel({ spec, onChange, editorSchema, onWish }: Props) {
   const t = useTranslations("specTune");
   const theme = spec.theme;
   const gp = spec.gameplay;
@@ -117,6 +123,42 @@ export function SpecQuickTunePanel({ spec, onChange }: Props) {
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--gc-text-faint)]">{t("desc")}</p>
 
       <div className="mt-4 space-y-5">
+        {editorSchema && (editorSchema.entities.length > 0 || editorSchema.events.length > 0 || editorSchema.mechanics.length > 0) ? (
+          <section className="rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)]/35 p-3">
+            <p className="font-medium text-[var(--gc-text-soft)]">这款游戏的专属控制</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-[var(--gc-text-faint)]">实体、节奏事件和机制均由当前作品生成；选择一个机制会把可执行 wish 带入修改框。</p>
+            {editorSchema.entities.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {editorSchema.entities.map((entity) => (
+                  <span key={entity.id} className="rounded-full border border-[color:var(--gc-border)] px-2 py-0.5 text-[10px] text-[var(--gc-muted)]">
+                    {entity.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {editorSchema.events.length > 0 ? (
+              <div className="mt-2 space-y-1 text-[10px] text-[var(--gc-muted)]">
+                {editorSchema.events.slice(0, 4).map((event) => (
+                  <p key={event.id}>事件 {Math.round(event.at * 100)}%：{event.label}</p>
+                ))}
+              </div>
+            ) : null}
+            {editorSchema.mechanics.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {editorSchema.mechanics.map((mechanic) => (
+                  <button
+                    key={mechanic.id}
+                    type="button"
+                    onClick={() => onWish?.(mechanic.wishTemplate)}
+                    className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] px-2 py-1 text-[10px] text-[color:color-mix(in_srgb,var(--gc-accent)_85%,white)] hover:bg-[color:color-mix(in_srgb,var(--gc-accent)_10%,transparent)]"
+                  >
+                    修改 {mechanic.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         <div>
           <p className="mb-2 font-medium text-[var(--gc-text-soft)]">{t("colors")}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

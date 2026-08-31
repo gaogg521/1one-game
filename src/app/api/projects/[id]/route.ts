@@ -35,6 +35,7 @@ import { evaluateGameDistribution } from "@/lib/game-distribution-loop";
 import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { buildGameEditSchema } from "@/lib/game-edit-schema";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -154,6 +155,9 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...(assetJob?.type === "game_production" ? { productionJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(assetJob?.type === "game_iteration" ? { iterationJob: { id: assetJob.id, status: assetJob.status, attempts: assetJob.attempts, maxAttempts: assetJob.maxAttempts, progress: assetJobProgress } } : {}),
       ...(isOwner ? { playtestAdvice: buildGamePlaytestAdvice(quality.engagement ?? { sampleSize: 0 }) } : {}),
+      // The editor is generated from this game's authored rules and prompt,
+      // instead of exposing a template-wide set of irrelevant controls.
+      ...(isOwner ? { editorSchema: buildGameEditSchema(spec, row.prompt) } : {}),
       ...(isOwner ? { distribution } : {}),
     });
   } catch (error) {

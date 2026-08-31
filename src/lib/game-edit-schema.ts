@@ -1,4 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
+import { detectRequestedAgenticMechanics } from "@/lib/agentic/agentic-mechanics-contract";
 
 export type GameEditControl = {
   id: string;
@@ -20,6 +21,9 @@ export type GameEditSchema = {
   templateId: GameSpec["templateId"];
   runtimeStrategy: "dedicated_runtime" | "independent_agentic_module" | "independent_webgl_runtime";
   controls: GameEditControl[];
+  entities: Array<{ id: string; label: string; role: "player" | "hazard" | "collectible" | "system" }>;
+  events: Array<{ id: string; label: string; at: number; type: string }>;
+  mechanics: Array<{ id: string; label: string; wishTemplate: string }>;
 };
 
 function slider(
@@ -40,7 +44,7 @@ function slider(
  * Build the custom edit surface for one immutable game revision. Controls are
  * derived from the authored spec; they never select or author a template.
  */
-export function buildGameEditSchema(spec: GameSpec): GameEditSchema {
+export function buildGameEditSchema(spec: GameSpec, prompt = ""): GameEditSchema {
   const controls: GameEditControl[] = [
     { id: "title", group: "identity", label: "游戏标题", path: "title", kind: "text", value: spec.title, gameplayImpact: "修改作品身份，不改变规则。" },
     { id: "player_color", group: "visual", label: "玩家主色", path: "theme.playerColor", kind: "color", value: spec.theme.playerColor, gameplayImpact: "改变玩家辨识度。" },
@@ -70,5 +74,21 @@ export function buildGameEditSchema(spec: GameSpec): GameEditSchema {
         ? "independent_agentic_module"
         : "dedicated_runtime",
     controls,
+    entities: [
+      { id: "player", label: spec.labels.player || "玩家", role: "player" },
+      { id: "hazard", label: spec.labels.hazard || "威胁", role: "hazard" },
+      ...(spec.labels.collectible ? [{ id: "collectible", label: spec.labels.collectible, role: "collectible" as const }] : []),
+      { id: "progression", label: "进度与胜负", role: "system" },
+    ],
+    events: (spec.director?.events ?? []).map((event, index) => ({
+      id: `event_${index + 1}`,
+      label: event.title || event.type,
+      at: event.at,
+      type: event.type,
+    })),
+    mechanics: detectRequestedAgenticMechanics(prompt).map((mechanic) => ({
+      ...mechanic,
+      wishTemplate: `调整“${mechanic.label}”机制：请说明触发条件、强度、反馈或胜负影响。`,
+    })),
   };
 }

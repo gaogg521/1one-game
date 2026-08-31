@@ -60,7 +60,20 @@ export const GameAssetJobPayloadSchema = z.object({
 });
 
 /** Full game-production request. Assets are one stage, not the final product. */
-export const GameProductionJobPayloadSchema = GameAssetJobPayloadSchema;
+export const GameProductionJobPayloadSchema = GameAssetJobPayloadSchema.extend({
+  productionRound: z.number().int().min(1).max(5).default(1),
+  maxProductionRounds: z.number().int().min(3).max(5).default(3),
+});
+
+export const GamePreflightIterationJobPayloadSchema = z.object({
+  projectId: z.string().min(1).max(96),
+  ownerKey: z.string().min(1).max(160),
+  sourceRevisionId: z.string().min(1).max(96),
+  productionRound: z.number().int().min(1).max(4),
+  maxProductionRounds: z.number().int().min(3).max(5),
+  blockers: z.array(z.string().min(1).max(160)).min(1).max(32),
+  uiLocale: z.string().min(2).max(16).default("zh-Hans"),
+});
 
 export const GameIterationJobPayloadSchema = z.object({
   projectId: z.string().min(1).max(96),
@@ -86,5 +99,6 @@ export type CreativeArtifactInput = z.infer<typeof CreativeArtifactInputSchema>;
 export type ComicPanelJobPayload = z.infer<typeof ComicPanelJobPayloadSchema>;
 export type GameAssetJobPayload = z.infer<typeof GameAssetJobPayloadSchema>;
 export type GameProductionJobPayload = z.infer<typeof GameProductionJobPayloadSchema>;
+export type GamePreflightIterationJobPayload = z.infer<typeof GamePreflightIterationJobPayloadSchema>;
 export type GameIterationJobPayload = z.infer<typeof GameIterationJobPayloadSchema>;
 export type NovelContinueJobPayload = z.infer<typeof NovelContinueJobPayloadSchema>;

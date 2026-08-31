@@ -1,4 +1,23 @@
 # 项目工作进度快照
+最后更新：2026-08-31（Astrocade 式预发布多 Agent 迭代闭环）
+
+## 当前状态
+- 游戏生产不再将一次 preflight 拒绝当成终点：`game_production` 在候选被拒绝且未达上限时排入 `game_preflight_iteration`；游戏设计 Agent 按持久化 blocker 实际改写 `GameSpec`，生成带父修订关系的不可变子版本，再进入下一轮资产、运行时与候选生产。轮次固定为 3–5 次，末轮失败即止，避免无限自循环。
+- 每轮都持久化 `game_agent_execution_ledger`：设计、玩法、美术、音频、运行时、QA、视觉审查的交付物和真实证据边界可追溯。自动 preflight 与视觉合同仍明确为 `observed:false`，不会伪造截图或真人试玩。
+- `game_edit_schema` 已扩展成每款游戏的实体、导演事件和 prompt 所要求机制；作品页 owner 会看到专属控制，并可一键将该机制的可执行 wish 填入修改框。
+- 发布后的真实小流量留存、诊断与 `game_iteration` 链路沿用既有门禁；预发布修订和发布后数据返工现在是两条明确分开的版本链。
+
+## 本轮验证
+- `npx tsc --noEmit`、`npm run qa:game-preflight-iteration`、`npm run qa:game-production-artifacts`、`npm run qa:game-production-orchestrator` 均通过。
+- 未把 deterministic preflight 描述为自动浏览器试玩；生产 Chromium 驱动的真实操作/截图审查仍是下一项需补的执行能力。
+
+## 下一步
+1. 精确提交并部署本轮生命周期、编辑器与回归检查。
+2. 新建复杂 prompt 的真实作品，验证至少一次可观察的生产版本与 artifact 链；若首次候选被拒绝，确认子修订与下一轮任务均出现。
+3. 为 `qa_agent`/`visual_review_agent` 接入受控浏览器驱动，沉淀真实动作、终局和截图证据，再允许它们以 `observed:true` 参与候选判断。
+
+---
+
 最后更新：2026-08-29（专属游戏生产链产品化）
 
 ## 当前状态

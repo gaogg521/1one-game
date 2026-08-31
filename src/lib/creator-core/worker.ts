@@ -3,6 +3,7 @@ import {
   ComicPanelJobPayloadSchema,
   GameAssetJobPayloadSchema,
   GameProductionJobPayloadSchema,
+  GamePreflightIterationJobPayloadSchema,
   GameIterationJobPayloadSchema,
   NovelContinueJobPayloadSchema,
 } from "@/lib/creator-core/types";
@@ -50,6 +51,7 @@ import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
+import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightIteration } from "@/lib/game-preflight-iteration";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -213,7 +215,7 @@ async function executeGameProductionJob(
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
 
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "gameplay_and_art_review", detail: "reviewing gameplay, art and interaction deliverables" });
-  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest });
+  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest, productionRound: payload.productionRound });
   let lastArtifact = assetArtifact;
   for (let index = 0; index < run.artifacts.length; index += 1) {
     const artifact = run.artifacts[index]!;
@@ -256,8 +258,94 @@ async function executeGameProductionJob(
     await reconcileGamePlaytestEvidenceForRevision({ projectId: payload.projectId, creativeRevisionId: job.creativeRevisionId });
   } else {
     await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
+    if (shouldScheduleGamePreflightIteration({
+      productionRound: payload.productionRound,
+      maxProductionRounds: payload.maxProductionRounds,
+      blockers: run.candidate.blockers,
+    })) {
+      await enqueueGenerationJob({
+        creativeProjectId: job.creativeProjectId,
+        creativeRevisionId: job.creativeRevisionId,
+        type: "game_preflight_iteration",
+        idempotencyKey: `game-preflight-iteration:${job.creativeRevisionId}:${payload.productionRound}`,
+        payload: {
+          projectId: payload.projectId,
+          ownerKey: payload.ownerKey,
+          sourceRevisionId: job.creativeRevisionId,
+          productionRound: payload.productionRound,
+          maxProductionRounds: payload.maxProductionRounds,
+          blockers: run.candidate.blockers,
+          uiLocale: payload.uiLocale,
+        },
+      });
+    }
   }
   return candidateArtifact ?? lastArtifact;
+}
+
+async function executeGamePreflightIterationJob(
+  job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
+  workerId: string,
+) {
+  const payload = GamePreflightIterationJobPayloadSchema.parse(JSON.parse(job.payloadJson));
+  if (job.creativeRevisionId !== payload.sourceRevisionId) throw new Error("game_preflight_iteration_revision_mismatch");
+  const project = await prisma.project.findUnique({ where: { id: payload.projectId } });
+  if (!project || project.ownerKey !== payload.ownerKey) throw new Error("game_preflight_iteration_project_missing");
+  const sourceSpecArtifact = await prisma.creativeArtifact.findFirst({
+    where: { creativeProjectId: job.creativeProjectId, creativeRevisionId: payload.sourceRevisionId, kind: "game_spec", status: "ready" },
+    orderBy: { createdAt: "asc" },
+    select: { contentJson: true },
+  });
+  if (!sourceSpecArtifact?.contentJson) throw new Error("game_preflight_iteration_source_spec_missing");
+  const instruction = buildGamePreflightRevisionInstruction(payload);
+  await heartbeatGenerationJob(job.id, workerId, { percent: 12, stage: "design_agent_revision", detail: `round ${payload.productionRound + 1}/${payload.maxProductionRounds}` });
+  const currentSpec = parseGameSpec(JSON.parse(sourceSpecArtifact.contentJson));
+  const patched = isRefinementStubEnabled()
+    ? { ok: true as const, spec: refineSpecWithStub({ mode: "patch", spec: currentSpec, instruction, currentPrompt: project.prompt }).spec }
+    : await patchGameSpecWithLlm({ instruction, currentSpec, currentPrompt: project.prompt });
+  if (!patched.ok) throw new Error(`game_preflight_iteration_patch_failed:${patched.errorKey}`);
+  const { agenticModule: _staleModule, ...withoutStaleModule } = patched.spec;
+  const expectedRoute = resolveAgenticPlayRoute(project.prompt, withoutStaleModule, { respectPersisted: false });
+  const nextSpec = { ...withoutStaleModule, agenticPlayRoute: expectedRoute };
+  const updated = await prisma.project.update({
+    where: { id: project.id },
+    data: { specJson: JSON.stringify(nextSpec), title: nextSpec.title, featured: false },
+  });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 62, stage: "versioning", detail: "persisting revised immutable candidate" });
+  const core = await mirrorGameToCreatorCore({
+    project: updated,
+    cause: "refine",
+    deferFinalization: true,
+    parentRevisionId: payload.sourceRevisionId,
+    iterationReason: { diagnoses: payload.blockers, targets: ["core_loop", "game_feel"] },
+  });
+  const nextRound = payload.productionRound + 1;
+  const production = await enqueueGenerationJob({
+    creativeProjectId: core.creativeProjectId,
+    creativeRevisionId: core.creativeRevisionId,
+    type: "game_production",
+    idempotencyKey: `game-production:${project.id}:${core.creativeRevisionId}:round-${nextRound}`,
+    payload: {
+      projectId: project.id,
+      ownerKey: project.ownerKey,
+      spec: nextSpec,
+      brief: parseStoredCreativeBrief(project.creativeBriefJson),
+      uiLocale: payload.uiLocale,
+      productionRound: nextRound,
+      maxProductionRounds: payload.maxProductionRounds,
+    },
+  });
+  return createCreativeArtifact({
+    creativeProjectId: core.creativeProjectId,
+    creativeRevisionId: core.creativeRevisionId,
+    idempotencyKey: `game_preflight_iteration:${core.creativeRevisionId}`,
+    artifact: {
+      kind: "game_preflight_iteration",
+      mediaType: "report",
+      content: { version: 1, round: nextRound, maxRounds: payload.maxProductionRounds, sourceRevisionId: payload.sourceRevisionId, blockers: payload.blockers, productionJobId: production.id },
+      metadata: { role: "gameplay_designer", round: nextRound, mutates: ["game_spec", "agentic_runtime"] },
+    },
+  });
 }
 
 async function executeGameIterationJob(
@@ -501,6 +589,11 @@ export async function processNextGenerationJob(workerId: string) {
         }
         if (job.type === "game_production") {
           const artifact = await executeGameProductionJob(job, workerId);
+          await completeGenerationJob(job.id, artifact.id);
+          return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
+        }
+        if (job.type === "game_preflight_iteration") {
+          const artifact = await executeGamePreflightIterationJob(job, workerId);
           await completeGenerationJob(job.id, artifact.id);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }

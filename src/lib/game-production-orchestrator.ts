@@ -55,6 +55,7 @@ export function buildGameProductionRun(input: {
   prompt?: string;
   brief?: CreativeBrief | null;
   assetManifest: unknown;
+  productionRound?: number;
 }): GameProductionRun {
   const verticalSlice = evaluateGameVerticalSlice(input.spec, input.brief ?? undefined);
   const delivery = evaluateGameDeliveryReadiness(input.spec);
@@ -67,7 +68,7 @@ export function buildGameProductionRun(input: {
     sceneCount: sceneGraph.scenes.length,
     behaviorNodeCount: behaviorGraph.nodes.length,
   });
-  const editor = buildGameEditSchema(input.spec);
+  const editor = buildGameEditSchema(input.spec, input.prompt);
   const artDirection = buildGameArtDirection(input.spec, input.brief ?? null);
   const playability = buildGamePlayabilityContract(input.spec);
   const visualContract = evaluateAgenticVisualContract(input.spec, input.spec.agenticModule);
@@ -87,6 +88,25 @@ export function buildGameProductionRun(input: {
   const decision = blockers.length === 0 ? "ready_for_playtest" : "rejected";
 
   const artifacts: GameProductionArtifact[] = [
+    {
+      kind: "game_agent_execution_ledger",
+      mediaType: "report",
+      content: {
+        version: 1,
+        round: input.productionRound ?? 1,
+        agents: [
+          { role: "design_director", mutates: ["game_design_directive", "game_spec"] },
+          { role: "gameplay_designer", mutates: ["gameplay_revision", "scene_graph", "behavior_graph"] },
+          { role: "art_director", mutates: ["asset_manifest", "art_direction_pack"] },
+          { role: "audio_agent", mutates: ["bgm", "bgm_notes"] },
+          { role: "runtime_engineer", mutates: ["agentic_module", "runtime_build_manifest"] },
+          { role: "qa_agent", mutates: ["automated_playtest_preflight", "game_production_candidate"], observed: false },
+          { role: "visual_review_agent", mutates: ["visual_contract"], observedScreenshot: false },
+        ],
+        next: blockers.length === 0 ? "observed_mobile_playtest" : "automatic_preflight_revision",
+      },
+      metadata: { role: "orchestrator", round: input.productionRound ?? 1, truthfulEvidence: true },
+    },
     {
       kind: "game_design_directive",
       mediaType: "json",

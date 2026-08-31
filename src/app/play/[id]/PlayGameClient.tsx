@@ -31,6 +31,7 @@ import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";
 import { getSuperAdminKey } from "@/lib/super-admin-client";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { isSampleGalleryProject } from "@/lib/sample-gallery";
+import type { GameEditSchema } from "@/lib/game-edit-schema";
 
 type CoreArtifact = { kind: string; content: unknown };
 type CoreRevision = { id: string; sequence: number; cause: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
@@ -92,6 +93,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const [assetJob, setAssetJob] = useState<AssetJob | null>(null);
   const [assetJobBusy, setAssetJobBusy] = useState(false);
   const [playRevisionId, setPlayRevisionId] = useState<string | null>(null);
+  const [editorSchema, setEditorSchema] = useState<GameEditSchema | null>(null);
 
   const apiHeaders = (init?: HeadersInit) => {
     const headers = mergeLocaleHeaders(locale, init);
@@ -122,6 +124,7 @@ export function PlayGameClient({ id }: { id: string }) {
           assetJob?: AssetJob;
           playtestAdvice?: PlaytestAdvice[];
           playRevisionId?: string;
+          editorSchema?: GameEditSchema;
           error?: string;
           errorKey?: string;
           errorParams?: Record<string, string | number>;
@@ -167,6 +170,7 @@ export function PlayGameClient({ id }: { id: string }) {
           setAssetJob(data.assetJob ?? null);
           setPlaytestAdvice(Array.isArray(data.playtestAdvice) ? data.playtestAdvice : []);
           setPlayRevisionId(data.playRevisionId ?? null);
+          setEditorSchema(data.editorSchema ?? null);
         }
       } catch {
         if (!cancelled) setError(t("networkError"));
@@ -643,7 +647,19 @@ export function PlayGameClient({ id }: { id: string }) {
             />
             </div>
             <div className="order-3 px-3 sm:px-0">
-            {meta.isOwner ? <SpecQuickTunePanel spec={spec} onChange={(next) => setSpec(next)} /> : null}
+            {meta.isOwner ? (
+              <SpecQuickTunePanel
+                spec={spec}
+                onChange={(next) => setSpec(next)}
+                editorSchema={editorSchema}
+                onWish={(wish) => {
+                  setPatchPrompt(wish);
+                  setPatchError(null);
+                  setSaveMsg(null);
+                  document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              />
+            ) : null}
 
             {/* Runtime AI patch panel */}
             <div className="space-y-3 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] px-4 py-4">

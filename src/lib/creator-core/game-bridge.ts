@@ -37,7 +37,7 @@ export async function mirrorGameToCreatorCore(input: {
     sceneCount: sceneGraph.scenes.length,
     behaviorNodeCount: behaviorGraph.nodes.length,
   });
-  const editSchema = buildGameEditSchema(spec);
+  const editSchema = buildGameEditSchema(spec, input.project.prompt);
   const project = await ensureLegacyCreativeProject({
     ownerKey: input.project.ownerKey,
     kind: "game",
