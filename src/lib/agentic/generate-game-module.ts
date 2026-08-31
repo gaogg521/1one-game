@@ -85,7 +85,10 @@ export async function generateAgenticGameModule(
   orch?: RunTraceRecorder,
   options?: { bounded?: boolean },
 ): Promise<GenerateAgenticModuleResult> {
-  const bespokeRequired = requiresBespokeRuntime(spec);
+  // Complexity routing is authoritative. A short competitor-reference prompt
+  // may not contain the legacy genre keywords, but once routed to an agentic
+  // runtime it must never fall back to the generic template module.
+  const bespokeRequired = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
   if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !bespokeRequired) {
     const mod = buildFallbackAgenticModule(spec.title, spec);
     orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
