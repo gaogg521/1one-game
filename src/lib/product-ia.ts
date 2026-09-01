@@ -73,7 +73,7 @@ export function getCreationModes(locale: AppLocale): Record<
 }
 
 const GAME_HINT =
-  /游戏|塔防|射击|平台|试玩|关卡|玩|收集|生存|躲避|Phaser|Godot|像素|萝卜|蘿蔔|僵尸|tower defense|tower-defense|platformer|shooter|survival game|puzzle game|physics game|arcade|mini-?game|stress-?relief|playable game|pertahanan menara|menara anak panah|ป้องกันฐาน|หอคอย/i;
+  /游戏|塔防|射击|平台|试玩|关卡|玩|收集|生存|躲避|Godot|像素|萝卜|蘿蔔|僵尸|tower defense|tower-defense|platformer|shooter|survival game|puzzle game|physics game|arcade|mini-?game|stress-?relief|playable game|pertahanan menara|menara anak panah|ป้องกันฐาน|หอคอย/i;
 const NOVEL_HINT =
   /小说|小說|章节|章節|长篇|長篇|短篇|故事|正文|续写|續寫|儿童|兒童|童话|童話|听书|聽書|穿越|历史走向|歷史走向|改变历史|改變歷史|novel|chapter|short story|children'?s story|fairy tale|time traveler|historical fiction|write a .*story|cerita pendek|kanak-kanak|pengembara masa|sejarah|นิทาน|เด็ก|ข้ามเวลา|ประวัติศาสตร์/i;
 const COMIC_HINT =

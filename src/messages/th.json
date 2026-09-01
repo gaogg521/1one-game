@@ -49,7 +49,7 @@
     "description": "{appName} - แพลตฟอร์มสร้างสรรค์ด้วย AI สำหรับสร้าง ปรับแต่ง และเผยแพร่เกม นิยาย และการ์ตูน",
     "create": "สร้าง",
     "studio": "เวิร์กสเปซ",
-    "techStack": "Next.js · Phaser · Prisma"
+    "techStack": "Next.js · Independent Runtime · Prisma"
   },
   "account": {
     "login": "เข้าสู่ระบบ",
@@ -1255,11 +1255,11 @@
     "cloudLeaderboardNewBest": "New cloud best"
   },
   "gameRuntime": {
-    "hint": "Try <godot>Godot (online)</godot> first for the full browser build; Phaser is for instant preview. Export from the Godot tab when satisfied.",
+    "hint": "Every playable version is generated as an independent runtime.",
     "engineLabel": "Play engine",
     "godotOnline": "Godot (online)",
     "godotTitle": "Play the full Godot runtime in the browser",
-    "phaserPreview": "Phaser (instant preview)",
+    "independentPreview": "Independent runtime",
     "building": "Building online build…",
     "cached": "Online build cached · same spec won't rebuild",
     "buildingGodot": "Building Godot online play (~10–30s)…",
@@ -1270,8 +1270,8 @@
     "engineShort": "Engine",
     "preferenceTitle": "Default play engine; switch anytime in the preview area",
     "godotOnlineShort": "Godot online",
-    "hintPhaserAstrocade": "สำหรับเทมเพลตนี้ ใช้ Phaser (พรีวิวทันที) สำหรับ Scene เฉพาะระดับ Astrocade; Godot ออนไลน์เป็นการส่งออกแบบสากล (3D ทุกเทมเพลตยังพัฒนาอยู่)",
-    "phaserAstrocadeHint": "สลับไป Phaser (พรีวิวทันที) — Scene เฉพาะเทียบเท่าห้องตัวอย่าง คุณภาพสูงกว่า Godot ทั่วไป"
+    "hintIndependentRuntime": "เกมนี้ใช้รันไทม์เฉพาะที่สร้างขึ้นมา",
+    "independentRuntimeHint": "ไม่มีตัวอย่างทั่วไป"
   },
   "creativeBrief": {
     "summary": "AI deep understanding (expand / revise)",
@@ -1676,7 +1676,7 @@
     "autoCoverReady": "ปกอัตโนมัติจาก Creative Brief พร้อมแล้ว—จะแสดงในคลังงานและศูนย์เกมหลังบันทึก",
     "ingestBusy": "กำลังแยกวิเคราะห์แอสเซต… (ไฟล์ที่อัปโหลดมีลำดับก่อนรูปจากคลิปบอร์ด)",
     "previewAria": "ตัวอย่างที่เล่นได้",
-    "previewHint": "เมื่อกรอกไอเดียและแอสเซตอ้างอิงเสร็จแล้ว ให้สร้างแล้วเล่นด้านล่าง แนะนำให้ลอง Godot เวอร์ชันเต็มก่อน ส่วน Phaser เหมาะกับการพรีวิวทันที",
+    "previewHint": "เมื่อกรอกไอเดียและแอสเซตอ้างอิงเสร็จแล้ว ให้สร้างและเล่นผลลัพธ์เฉพาะด้านล่าง",
     "realtimePreview": "พรีวิวสด",
     "generationEvidence": "หลักฐานการสร้าง",
     "rerunStream": "สตรีมใหม่อีกครั้ง",

@@ -1,4 +1,4 @@
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 
 function fnv1a(str: string): string {

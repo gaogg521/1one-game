@@ -46,7 +46,7 @@ export function upgradeAssetManifest(m: AssetManifestV1 | AssetManifestV2): Asse
   };
 }
 
-/** 从 projectId / 背景 URL / manifest 解析 Phaser 运行时资产包 */
+/** 从 projectId / 背景 URL / manifest 解析独立运行时资产包 */
 export function resolveRuntimeAssets(opts: {
   projectId?: string | null;
   backgroundUrl?: string | null;

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import { GodotBuildActions } from "@/components/GodotBuildActions";
 

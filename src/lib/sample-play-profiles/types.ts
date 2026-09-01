@@ -82,8 +82,8 @@ export const SamplePlayProfileSchema = z.object({
   mood: z.string().max(16).optional(),
   /** 从 prompt 提取的主题词（最多 8 个），用于主题深度注入 */
   themeWords: z.array(z.string().max(16)).max(8).optional(),
-  /** Phaser 程序化绘制 mood（ocean/forest/space/cyber/generic），驱动背景装饰 */
-  phaserMood: z.string().max(16).optional(),
+  /** 场景 mood（ocean/forest/space/cyber/generic） */
+  canvasMood: z.string().max(16).optional(),
 });
 
 export type SamplePlayProfile = z.infer<typeof SamplePlayProfileSchema>;

@@ -1,4 +1,4 @@
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 
 const KEY = "gc:refImagePayloads:v1";
 

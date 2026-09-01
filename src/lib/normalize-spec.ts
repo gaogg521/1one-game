@@ -293,10 +293,7 @@ export function overlaySpec(base: GameSpec, raw: unknown): GameSpec {
     systems: overlaySystems,
     agenticModule:
       typeof r.agenticModule === "object" && r.agenticModule !== null ? r.agenticModule : base.agenticModule,
-    agenticPlayRoute:
-      r.agenticPlayRoute === "dedicated" || r.agenticPlayRoute === "agentic"
-        ? r.agenticPlayRoute
-        : base.agenticPlayRoute,
+    agenticPlayRoute: r.agenticPlayRoute === "independent" ? "independent" : base.agenticPlayRoute,
     presentation:
       typeof r.presentation === "object" && r.presentation !== null
         ? { ...base.presentation, ...(r.presentation as GameSpec["presentation"]) }

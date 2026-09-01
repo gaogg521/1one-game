@@ -49,7 +49,7 @@
     "description": "{appName} - platform penciptaan AI untuk menjana, memperhalusi dan menerbitkan permainan, novel dan komik.",
     "create": "Cipta",
     "studio": "Ruang Kerja",
-    "techStack": "Next.js · Phaser · Prisma"
+    "techStack": "Next.js · Independent Runtime · Prisma"
   },
   "account": {
     "login": "Log Masuk",
@@ -1255,11 +1255,11 @@
     "cloudLeaderboardNewBest": "New cloud best"
   },
   "gameRuntime": {
-    "hint": "Try <godot>Godot (online)</godot> first for the full browser build; Phaser is for instant preview. Export from the Godot tab when satisfied.",
+    "hint": "Every playable version is generated as an independent runtime.",
     "engineLabel": "Play engine",
     "godotOnline": "Godot (online)",
     "godotTitle": "Play the full Godot runtime in the browser",
-    "phaserPreview": "Phaser (instant preview)",
+    "independentPreview": "Independent runtime",
     "building": "Building online build…",
     "cached": "Online build cached · same spec won't rebuild",
     "buildingGodot": "Building Godot online play (~10–30s)…",
@@ -1270,8 +1270,8 @@
     "engineShort": "Engine",
     "preferenceTitle": "Default play engine; switch anytime in the preview area",
     "godotOnlineShort": "Godot online",
-    "hintPhaserAstrocade": "Untuk templat ini, gunakan Phaser (pratinjau segera) untuk Scene khusus setaraf Astrocade; Godot dalam talian ialah eksport universal (3D penuh masih dalam pembangunan).",
-    "phaserAstrocadeHint": "Tukar ke Phaser (pratinjau segera) — Scene khusus setaraf galeri sampel, lebih halus daripada Godot generik."
+    "hintIndependentRuntime": "Game ini menggunakan runtime dijana tersendiri.",
+    "independentRuntimeHint": "Tiada pratonton umum digunakan."
   },
   "creativeBrief": {
     "summary": "AI deep understanding (expand / revise)",
@@ -1676,7 +1676,7 @@
     "autoCoverReady": "Kulit muka auto dari brief kreatif sudah sedia—akan dipaparkan dalam pustaka dan hab permainan selepas simpan.",
     "ingestBusy": "Sedang menghuraikan aset… (fail yang dimuat naik diberi keutamaan berbanding imej papan klip)",
     "previewAria": "Pratonton boleh main",
-    "previewHint": "Selepas melengkapkan idea dan aset rujukan, jana dan main di bawah. Cuba runtime Godot penuh dahulu; Phaser sesuai untuk pratonton segera.",
+    "previewHint": "Selepas melengkapkan idea dan aset rujukan, jana dan mainkan hasil tersendiri di bawah.",
     "realtimePreview": "Pratonton Langsung",
     "generationEvidence": "Bukti Penjanaan",
     "rerunStream": "Jalankan Penstriman Lagi",

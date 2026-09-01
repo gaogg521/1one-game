@@ -1,4 +1,4 @@
-/** 从 Phaser 挂载容器内找到 canvas，缩放后导出 JPEG Data URL（用于作品封面）。 */
+/** 从独立运行时容器内找到画面，缩放后导出 JPEG Data URL（用于作品封面）。 */
 export function captureCanvasAsJpegDataUrl(
   container: HTMLElement,
   maxWidth = 520,

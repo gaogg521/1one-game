@@ -18,7 +18,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { listTemplateDefinitions, type GameTemplateId } from "@/lib/game-templates/registry";
 import { detectTemplateFromPrompt } from "@/lib/template-selector";
 import { fingerprintPrompt } from "@/lib/prompt-fingerprint";
-import { adaptThemeFromFingerprint, type PhaserMood, type ThemeAdaptation } from "@/lib/prompt-theme-adapter";
+import { adaptThemeFromFingerprint, type CanvasMood, type ThemeAdaptation } from "@/lib/prompt-theme-adapter";
 
 export type CreateQuickStartProps = {
   prompt: string;
@@ -168,7 +168,7 @@ const EXTRA_CUSTOM_TEMPLATES: Array<{ id: string; emoji: string; cat: Category }
 ];
 
 // ── mood / music / category → emoji ──
-const MOOD_EMOJI: Record<PhaserMood, string> = {
+const MOOD_EMOJI: Record<CanvasMood, string> = {
   forest: "🌲",
   space: "🌌",
   ocean: "🌊",
@@ -398,8 +398,8 @@ export function CreateQuickStart({ prompt, onPromptChange }: CreateQuickStartPro
             {/* 场景 mood */}
             <PreviewCell
               label={t("previewMood")}
-              emoji={MOOD_EMOJI[preview.adapt.phaserMood]}
-              value={preview.adapt.phaserMood}
+              emoji={MOOD_EMOJI[preview.adapt.canvasMood]}
+              value={preview.adapt.canvasMood}
               decorWords={preview.adapt.sceneDecorWords.slice(0, 3).join(" · ")}
             />
             {/* 音乐 profile */}

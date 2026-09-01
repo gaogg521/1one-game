@@ -49,7 +49,7 @@
     "description": "{appName} — AI 创作平台，支持游戏、小说与漫画的生成、打磨和发布。",
     "create": "创作",
     "studio": "工作室",
-    "techStack": "Next.js · Phaser · Prisma"
+    "techStack": "Next.js · 独立运行时 · Prisma"
   },
   "account": {
     "login": "登录",
@@ -1254,11 +1254,11 @@
     "cloudLeaderboardNewBest": "云端新纪录"
   },
   "gameRuntime": {
-    "hint": "先点 <godot>Godot（在线）</godot> 在浏览器里试完整版；Phaser 用于秒开预览。玩得满意再在 Godot 标签里展开导出。",
+    "hint": "每个可试玩版本都由专属独立运行时生成。",
     "engineLabel": "试玩引擎",
     "godotOnline": "Godot（在线）",
     "godotTitle": "浏览器内在线试玩 Godot 完整运行时",
-    "phaserPreview": "Phaser（秒开预览）",
+    "independentPreview": "独立运行时",
     "building": "正在构建在线版…",
     "cached": "在线版已缓存 · 同规格无需重复构建",
     "buildingGodot": "正在构建 Godot 在线试玩（约 10～30 秒）…",
@@ -1269,8 +1269,8 @@
     "engineShort": "引擎",
     "preferenceTitle": "默认试玩引擎；试玩区可随时切换",
     "godotOnlineShort": "Godot 在线",
-    "hintPhaserAstrocade": "本模板竞对级体验请优先用 Phaser（秒开预览）；Godot 在线版为通用导出，全模板 3D 仍在演进。",
-    "phaserAstrocadeHint": "建议切换到 Phaser（秒开预览）——与样品馆同路由的专用 Scene，体验明显高于当前 Godot 通用版。"
+    "hintIndependentRuntime": "该游戏使用专属生成运行时。",
+    "independentRuntimeHint": "不会使用通用预览。"
   },
   "creativeBrief": {
     "summary": "AI 深度理解（可展开 / 可修订）",
@@ -1675,7 +1675,7 @@
     "autoCoverReady": "Brief 自动封面已生成，保存后可在作品库与广场展示。",
     "ingestBusy": "素材解析进行中…（上传优先于剪贴板）",
     "previewAria": "试玩预览",
-    "previewHint": "完成创意描述与参考素材配置并生成后，在下方试玩；先选 Godot（在线）完整版，Phaser 用于秒开预览。",
+    "previewHint": "完成创意描述与参考素材配置并生成后，在下方试玩专属结果。",
     "realtimePreview": "实时预览",
     "generationEvidence": "生成证据",
     "rerunStream": "重新流式生成",

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { GameSpec } from "@/lib/game-spec";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import {
   readAiSpritesAsReferencePayloads,
   summarizeGodotReferenceManifest,

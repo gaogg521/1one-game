@@ -17,7 +17,7 @@ export type GameGenerationPlan = {
   version: 1;
   prompt: string;
   kernel: GameTemplateId;
-  runtime: ReturnType<typeof resolveTemplateRuntime>["phaser"];
+  runtime: ReturnType<typeof resolveTemplateRuntime>["family"];
   label: string;
   coreLoop: string;
   controls: string;
@@ -37,7 +37,7 @@ const KERNEL_COPY: Partial<Record<GameTemplateId, Pick<GameGenerationPlan, "labe
 };
 
 function defaultCopy(kernel: GameTemplateId): Pick<GameGenerationPlan, "label" | "coreLoop" | "controls"> {
-  const runtime = resolveTemplateRuntime(kernel).phaser;
+  const runtime = resolveTemplateRuntime(kernel).family;
   if (runtime === "arena") {
     return { label: "轻量挑战", coreLoop: "移动、判断风险、完成明确目标", controls: "方向键、滑动或轻触" };
   }
@@ -70,7 +70,7 @@ export function buildGameGenerationPlan(
     version: 1,
     prompt: clean,
     kernel,
-    runtime: resolveTemplateRuntime(kernel).phaser,
+    runtime: resolveTemplateRuntime(kernel).family,
     ...copy,
     production: buildDefaultGameProductionContract({ prompt: clean, templateId: kernel }),
     checks: ["goal", "input", "level-flow", "delivery", "audio", "mix", "end-state", "mobile-runtime"],

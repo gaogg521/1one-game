@@ -53,7 +53,7 @@ function buildEndlessRoadPath(length: number): CoasterPathPoint[] {
   return path;
 }
 
-/** 从 GameSpec / prompt 生成空中过山车轨道（Phaser 伪 3D 与 Godot Path3D 共用） */
+/** 从 GameSpec / prompt 生成空中过山车轨道。 */
 export function buildCoasterBlueprint(opts: {
   prompt?: string;
   spec?: GameSpec;

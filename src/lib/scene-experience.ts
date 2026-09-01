@@ -1,7 +1,6 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { buildCohesivePresentation, type CohesivePresentation } from "@/lib/cohesive-presentation";
 import { setBleepTemperament } from "@/game/audio/webBleeps";
-import { setSharedJuiceStyleFromPresentation } from "@/game/engine/gameJuice";
 
 /**
  * 统一的 Scene 共享体验入口：
@@ -11,7 +10,6 @@ import { setSharedJuiceStyleFromPresentation } from "@/game/engine/gameJuice";
 export function buildSceneCohesion(spec: GameSpec): CohesivePresentation {
   const cohesive = buildCohesivePresentation(spec);
   setBleepTemperament(cohesive.bleepTemperament);
-  setSharedJuiceStyleFromPresentation(cohesive);
   return cohesive;
 }
 

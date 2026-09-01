@@ -94,7 +94,7 @@ export async function setCreatorWorkPublication(input: {
     if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
     if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
     if (productionCandidate?.decision !== "ready_for_playtest") deliveryIssues.push("publication_production_candidate_not_ready");
-    if (requiresBespokeRuntime(finalSpec) && !hasBespokeRuntime(finalSpec)) deliveryIssues.push("publication_generic_phaser_runtime_retired");
+    if (requiresBespokeRuntime(finalSpec) && !hasBespokeRuntime(finalSpec)) deliveryIssues.push("publication_independent_runtime_missing");
     if (!preflight || (preflight.verdict !== "ready" && preflight.verdict !== "needs_review")) {
       deliveryIssues.push("publication_delivery_preflight_not_ready");
     }

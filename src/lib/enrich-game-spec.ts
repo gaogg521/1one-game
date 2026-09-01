@@ -41,7 +41,7 @@ export type EnrichGameSpecOptions = {
 };
 
 /**
- * Phaser / Godot 共用：导出与试玩前补全导演、塔防蓝图、试听与粒子色，
+ * 在生成前补全导演、塔防蓝图、试听与粒子色，
  * 保证双轨从同一份「高质量」GameSpec 起跑。
  */
 export function enrichGameSpecForRuntime(
@@ -253,7 +253,7 @@ export function enrichGameSpecForRuntime(
     };
   }
 
-  if (rt.phaser === "platformer") {
+  if (rt.family === "platformer") {
     const platBp = buildPlatformerBlueprint({ prompt: hint, spec: next });
     const winScore = Math.max(next.gameplay.winScore ?? 0, platBp.suggestedWinScore ?? 0);
     next = {

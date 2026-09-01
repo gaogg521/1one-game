@@ -49,7 +49,7 @@
     "description": "{appName} - an AI creation platform for generating, refining, and publishing games, novels, and comics.",
     "create": "Create",
     "studio": "Workspace",
-    "techStack": "Next.js · Phaser · Prisma"
+    "techStack": "Next.js · Independent Runtime · Prisma"
   },
   "account": {
     "login": "Sign In",
@@ -1255,11 +1255,11 @@
     "cloudLeaderboardNewBest": "New cloud best"
   },
   "gameRuntime": {
-    "hint": "Try <godot>Godot (online)</godot> first for the full browser build; Phaser is for instant preview. Export from the Godot tab when satisfied.",
+    "hint": "Every playable version is generated as an independent runtime.",
     "engineLabel": "Play engine",
     "godotOnline": "Godot (online)",
     "godotTitle": "Play the full Godot runtime in the browser",
-    "phaserPreview": "Phaser (instant preview)",
+    "independentPreview": "Independent runtime",
     "building": "Building online build…",
     "cached": "Online build cached · same spec won't rebuild",
     "buildingGodot": "Building Godot online play (~10–30s)…",
@@ -1270,8 +1270,8 @@
     "engineShort": "Engine",
     "preferenceTitle": "Default play engine; switch anytime in the preview area",
     "godotOnlineShort": "Godot online",
-    "hintPhaserAstrocade": "For this template, use Phaser (instant preview) for Astrocade-grade dedicated scenes; Godot online is the universal export (full-template 3D still evolving).",
-    "phaserAstrocadeHint": "Switch to Phaser (instant preview) for dedicated scenes on par with the sample gallery."
+    "hintIndependentRuntime": "This game uses a dedicated generated runtime.",
+    "independentRuntimeHint": "No generic preview is used."
   },
   "creativeBrief": {
     "summary": "AI deep understanding (expand / revise)",
@@ -1676,7 +1676,7 @@
     "autoCoverReady": "Auto cover from your creative brief is ready—it will appear in your library and on the games hub after save.",
     "ingestBusy": "Parsing assets… (uploaded files take priority over clipboard images)",
     "previewAria": "Playable preview",
-    "previewHint": "After you finish the idea and reference assets, generate it and play below. Try the full Godot online runtime first; Phaser is for instant preview.",
+    "previewHint": "After you finish the idea and reference assets, generate and play the dedicated result below.",
     "realtimePreview": "Live Preview",
     "generationEvidence": "Generation Evidence",
     "rerunStream": "Run Streaming Again",

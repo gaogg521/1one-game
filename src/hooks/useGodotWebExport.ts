@@ -10,7 +10,7 @@ import { buildGodotExportRequestPayload } from "@/lib/godot-export-request.clien
 import { safeJsonStringify } from "@/lib/safe-json";
 import { getPrefetchedGodotBuild, prefetchGodotExport } from "@/lib/godot-prefetch.client";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import type { GodotReferenceBuildSummary } from "@/lib/godot-export-refs";
 import { combinedReferenceDigest } from "@/lib/reference-payloads-digest";

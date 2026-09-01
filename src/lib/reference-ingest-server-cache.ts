@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 
 const CACHE_ROOT = path.join(process.cwd(), "workspaces", "reference-ingest");

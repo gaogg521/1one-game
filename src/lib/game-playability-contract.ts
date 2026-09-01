@@ -12,7 +12,7 @@ export type GamePlayabilityContract = {
 };
 
 /**
- * Product-level acceptance contract.  It sits above individual Phaser scenes:
+ * Product-level acceptance contract. It applies to every independent runtime:
  * a template cannot be admitted to playtest merely because it can mount a canvas.
  */
 export function buildGamePlayabilityContract(spec: GameSpec): GamePlayabilityContract {

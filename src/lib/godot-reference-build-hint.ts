@@ -1,7 +1,7 @@
 import type { AppLocale } from "@/i18n/routing";
 import { godotBuildHintMessage } from "@/lib/i18n/chapter-labels";
 import type { GodotReferenceBuildSummary } from "@/lib/godot-export-refs";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 
 /** 客户端：本次排队可供 Godot 使用的参考图数量（session 像素 + 摄取句柄） */

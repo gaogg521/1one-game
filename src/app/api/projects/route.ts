@@ -23,7 +23,6 @@ import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
-import { stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -100,12 +99,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Persist the maintained genre runtime as the first playable version.
-    // Production must not first snapshot an unreviewed Agentic module and only
-    // later replace the Project row: play revisions are immutable.
-    const directSpec = stripAgenticModuleForDedicatedRoute(
-      prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req)),
-    );
+    // Creation stores only design data. Production later persists the model
+    // generated independent runtime after assets and runtime validation finish.
+    const directSpec = { ...prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req)), agenticPlayRoute: "independent" as const };
     // A newly created user game is not a gallery sample. Keeping a sampled
     // profile here makes the runtime resolve `/game-bg/sample-*` instead of
     // the just-generated project art, which is exactly how a polished scene

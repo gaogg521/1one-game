@@ -1,6 +1,5 @@
 import type { AgenticGameModule } from "@/lib/agentic/game-module";
 import type { GameSpec } from "@/lib/game-spec";
-import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 export type AgenticVisualContract = {
   required: boolean;
@@ -15,18 +14,12 @@ export type AgenticVisualContract = {
  * technically runs while rendering only circles and rectangles.
  */
 export function evaluateAgenticVisualContract(spec: GameSpec, module?: AgenticGameModule | null): AgenticVisualContract {
-  // The complexity router can require an independent runtime even when the
-  // older genre policy does not recognize a short competitor-reference prompt
-  // (for example "做一个神庙逃亡的游戏"). Every agentic route must therefore
-  // consume real visual assets; otherwise a technically valid blank module can
-  // be scored as production-ready.
-  const required = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (!required) return { required: false, ok: true, blockers: [], evidence: ["visual_contract:not_required"] };
+  const required = true;
   const source = module?.source ?? "";
-  const usesBackground = /assets\?\.(?:backgroundKey)|assets\s*&&\s*ctx\.assets\.backgroundKey/.test(source);
-  const usesPlayer = /assets\?\.(?:playerKey)|assets\s*&&\s*ctx\.assets\.playerKey/.test(source);
-  const usesEnemy = /assets\?\.(?:enemyKey)|assets\s*&&\s*ctx\.assets\.enemyKey/.test(source);
-  const usesImageActor = /scene\.add\.(?:image|sprite)\s*\(/.test(source);
+  const usesBackground = /ctx\.assets\.background/.test(source);
+  const usesPlayer = /ctx\.assets\.player/.test(source);
+  const usesEnemy = /ctx\.assets\.enemy/.test(source);
+  const usesImageActor = /(?:new\s+Image\s*\(|\.src\s*=|backgroundImage)/.test(source);
   const blockers = [
     ...(usesBackground ? [] : ["runtime_background_asset_unused"]),
     ...(usesPlayer ? [] : ["runtime_player_asset_unused"]),
@@ -41,7 +34,7 @@ export function evaluateAgenticVisualContract(spec: GameSpec, module?: AgenticGa
       `background_asset:${usesBackground ? "used" : "missing"}`,
       `player_asset:${usesPlayer ? "used" : "missing"}`,
       `enemy_asset:${usesEnemy ? "used" : "missing"}`,
-      `sprite_actor:${usesImageActor ? "used" : "missing"}`,
+      `image_actor:${usesImageActor ? "used" : "missing"}`,
     ],
   };
 }

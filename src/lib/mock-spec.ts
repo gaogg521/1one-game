@@ -129,11 +129,11 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
     /赛博|霓虹|全息|数据线|故障/.test(prompt);
   const city = /城市|夜市|街道|高楼|无人机|通勤/.test(prompt);
 
-  const isTd = rt.phaser === "towerDefense";
-  const isPlatformer = rt.phaser === "platformer";
-  const isShooter = rt.phaser === "shooter";
-  const isCoaster = rt.phaser === "coaster";
-  const isChess = rt.phaser === "chess";
+  const isTd = rt.family === "towerDefense";
+  const isPlatformer = rt.family === "platformer";
+  const isShooter = rt.family === "shooter";
+  const isCoaster = rt.family === "coaster";
+  const isChess = rt.family === "chess";
   const arenaMode = rt.arenaMode ?? "avoider";
   const isSurvivor = arenaMode === "survivor";
   const isCollector = arenaMode === "collector";
@@ -349,7 +349,7 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
   if (isChess && !spec.chess) {
     spec.chess = buildChessBlueprint({ prompt, spec });
   }
-  if (rt.phaser === "platformer" && !spec.platformer) {
+  if (rt.family === "platformer" && !spec.platformer) {
     spec.platformer = buildPlatformerBlueprint({ prompt, spec });
   }
   if (rt.blueprint === "farming" && !spec.farming) {

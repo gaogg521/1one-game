@@ -1,12 +1,3 @@
-import { listTemplateDefinitions } from "@/lib/game-templates/registry";
-
-/** 供 LLM / generate-spec 系统提示：自动随 registry 扩展 */
-export function buildLlmTemplateCatalogLines(): string {
-  return listTemplateDefinitions()
-    .map((d) => `  · ${d.id}：${d.llmSummary ?? d.defaultSubtitle ?? d.id}`)
-    .join("\n");
-}
-
-export function llmTemplateIdEnum(): string[] {
-  return listTemplateDefinitions().map((d) => d.id);
-}
+import { GAME_TEMPLATE_IDS } from "@/lib/game-templates/registry";
+export function buildLlmTemplateCatalogLines(): string { return GAME_TEMPLATE_IDS.join(", "); }
+export function llmTemplateIdEnum(): string[] { return [...GAME_TEMPLATE_IDS]; }

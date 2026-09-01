@@ -134,7 +134,7 @@ export function buildGameProductionPipelineReport(input: {
         `runtime_strategy:${runtimeStrategy}`,
         `agentic_module:${spec.agenticModule ? "attached" : "absent"}`,
         `bespoke_runtime:${bespokeRuntimeReady ? "ready" : "missing"}`,
-        ...(requiresBespokeRuntime(spec) && !bespokeRuntimeReady ? ["generic_phaser_runtime_retired"] : []),
+        ...(requiresBespokeRuntime(spec) && !bespokeRuntimeReady ? ["independent_runtime_missing"] : []),
         `scene_count:${input.sceneCount}`,
         `behavior_node_count:${input.behaviorNodeCount}`,
       ],

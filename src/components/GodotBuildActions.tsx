@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { GameSpec } from "@/lib/game-spec";
 import { buildGodotExportRequestPayload } from "@/lib/godot-export-request.client";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import type { ReferenceImageHandle } from "@/lib/assets/reference-image-storage.types";
 import type { AppLocale } from "@/i18n/routing";
 import { mergeLocaleHeaders } from "@/lib/i18n/client-headers";

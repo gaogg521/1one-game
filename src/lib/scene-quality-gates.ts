@@ -53,7 +53,7 @@ export const SCENE_FAILURE_MODES = [
   },
   {
     mode: "input-not-triggered",
-    symptom: "按键无反应——输入没进 Phaser（canvas 未聚焦 / input.keyboard 未绑 / JustDown 在非 active scene）",
+    symptom: "按键无反应——输入未绑定到独立运行时",
     check: "console 无错但 playerX/qaTouches 不变；pointerdown 事件 canvas 收到但 Scene handler 不触发",
   },
   {
@@ -85,7 +85,7 @@ export const SCENE_FAILURE_MODES = [
 
 export type FailureMode = (typeof SCENE_FAILURE_MODES)[number];
 
-/** 对生成的 spec 做失败模式静态扫描（不跑 Phaser，只看 spec 字段） */
+/** 对生成的 spec 做失败模式静态扫描（不运行游戏，只看 spec 字段） */
 export function scanFailureModes(spec: {
   templateId: string;
   title?: string;

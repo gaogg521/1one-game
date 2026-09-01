@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import { repoPublicPath } from "@/lib/public-path";
 import { classifyReferencePayloads } from "@/lib/reference-classify";
 

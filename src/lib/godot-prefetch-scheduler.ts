@@ -1,5 +1,5 @@
 import type { GameSpec } from "@/lib/game-spec";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import { enrichGameSpecForRuntime } from "@/lib/enrich-game-spec";
 import { exportGameSpecToGodotWeb } from "@/lib/godot-export";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";

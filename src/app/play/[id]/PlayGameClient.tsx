@@ -6,15 +6,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
 import { GamePlayer } from "@/components/GamePlayer";
-import { GameRuntimeTabs } from "@/components/GameRuntimeTabs";
 import { SampleParityTrustBadge } from "@/components/SampleParityTrustBadge";
 import { resolveSampleParityUserInfo } from "@/lib/sample-parity-user";
 import { buildCreatePrefillPath } from "@/lib/sample-create-prefill";
 import { readReferenceImagePayloadsFromSession } from "@/lib/assets/reference-image-payloads.client";
-import { prefetchGodotExport } from "@/lib/godot-prefetch.client";
-import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
-import { PRODUCT } from "@/lib/product-config";
-import { GameRuntimePreferenceControl } from "@/components/GameRuntimePreferenceControl";
 import { SpecQuickTunePanel } from "@/components/SpecQuickTunePanel";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -139,9 +134,6 @@ export function PlayGameClient({ id }: { id: string }) {
         }
         if (!cancelled) {
           setSpec(data.spec);
-          if (PRODUCT.godot.enabled && isGodotExportSupported(data.spec)) {
-            prefetchGodotExport(data.spec, { projectId: id });
-          }
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
@@ -536,7 +528,6 @@ export function PlayGameClient({ id }: { id: string }) {
               actions={
                 <>
                   <WorkEngagementStats kind="game" playCount={playCount} likeCount={likeCount} hideLikes size="md" />
-                  <GameRuntimePreferenceControl />
                   {meta.isOwner && core?.revision?.status === "ready" ? (
                     <PublishWorkButton
                       type="game"
@@ -644,18 +635,13 @@ export function PlayGameClient({ id }: { id: string }) {
             </div>
 
             <div className="order-1 sm:order-2">
-            <GameRuntimeTabs
-              spec={spec}
-              projectId={id}
-              allowOfflineExport={meta.isOwner}
-              phaser={<GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} creativeRevisionId={playRevisionId ?? undefined} onIterate={(instr) => {
+            <GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} creativeRevisionId={playRevisionId ?? undefined} onIterate={(instr) => {
                 setPatchPrompt(instr);
                 setTimeout(() => {
                   document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });
                   document.getElementById("patch-prompt")?.focus();
                 }, 100);
-              }} />}
-            />
+              }} />
             </div>
             <div className="order-3 px-3 sm:px-0">
             {meta.isOwner ? (

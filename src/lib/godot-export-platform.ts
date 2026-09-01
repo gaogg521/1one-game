@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { GameSpec } from "@/lib/game-spec";
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 import { PRODUCT } from "@/lib/product-config";
 import { isGodotExportSupported } from "@/lib/godot-spec-bridge-codegen";
 import {

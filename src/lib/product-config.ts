@@ -115,12 +115,12 @@ export const PRODUCT = {
   },
 
   godot: {
-    /** Phaser-only product surface; Godot export path is retired from CI/product. */
+    /** Secondary exports are disabled; the independent browser runtime is canonical. */
     enabled: false,
     /** 全模板走 ai-mother-universal；列表由 game-templates/registry 驱动 */
     supportedTemplates: godotExportTemplateIds(),
     /** 新用户默认运行时（可被 localStorage 覆盖） */
-    defaultRuntime: "phaser" as "phaser" | "godot",
+    defaultRuntime: "independent" as "independent" | "godot",
     importTimeoutMs: 90_000,
     exportTimeoutMs: 180_000,
     /** 已写入母版 export_presets：Web / Windows Desktop / Android */

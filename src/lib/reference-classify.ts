@@ -1,6 +1,6 @@
-import type { RuntimeReferencePayload } from "@/game/engine/runtime-reference-payload";
+import type { RuntimeReferencePayload } from "@/lib/runtime-reference-payload";
 
-/** Phaser 塔防：payload 下标 → 纹理 key */
+/** 塔防：payload 下标 → 资源角色 */
 export function tdRuntimeTextureKey(i: number): string {
   return `td_user_ref_${i}`;
 }
@@ -12,7 +12,7 @@ export type ClassifiedReferences = {
   towerSkinOrdinals: number[];
 };
 
-/** 与 TowerDefenseScene 一致的参考图用途分类（Phaser / Godot 共用） */
+/** 参考图用途分类。 */
 export function classifyReferencePayloads(payloads: RuntimeReferencePayload[]): ClassifiedReferences {
   const bg: number[] = [];
   const mon: number[] = [];
@@ -49,7 +49,7 @@ export function classifyReferencePayloads(payloads: RuntimeReferencePayload[]): 
   };
 }
 
-/** 塔防 Phaser：将分类结果映射为已加载的 runtime 纹理 key */
+/** 塔防：将分类结果映射为运行时资源角色 */
 export function classifyTdReferenceTextureKeys(payloads: RuntimeReferencePayload[]): {
   bgKey: string | null;
   protagonistKey: string | null;

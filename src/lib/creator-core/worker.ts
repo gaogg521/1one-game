@@ -45,7 +45,6 @@ import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
-import { resolveAgenticPlayRoute, stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
@@ -190,15 +189,14 @@ async function executeGameProductionJob(
     select: { id: true, prompt: true, ownerKey: true },
   });
   if (!sourceProject || sourceProject.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
-  const expectedPlayRoute = resolveAgenticPlayRoute(sourceProject.prompt, spec, { respectPersisted: false });
-  if (spec.agenticPlayRoute !== expectedPlayRoute) spec = { ...spec, agenticPlayRoute: expectedPlayRoute };
+  spec = { ...spec, agenticPlayRoute: "independent" };
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
-  // One-prompt games use the maintained genre renderer for the first playable
-  // build.  This makes delivery predictable and prevents a slow code model
-  // from replacing a polished runtime with an unreviewed sketch.
-  spec = stripAgenticModuleForDedicatedRoute(spec);
+  // Never reuse a previous executable: each production round must receive a
+  // newly generated game-specific independent runtime.
+  const { agenticModule: _previousRuntime, ...withoutPreviousRuntime } = spec;
+  spec = withoutPreviousRuntime;
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
 
   await markCreativeRevisionGenerating(job.creativeRevisionId);
@@ -211,7 +209,12 @@ async function executeGameProductionJob(
   const assetArtifact = await executeGameAssetJob(job, workerId, spec, artDirection);
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
-  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "playable_candidate", detail: "assembling the playable game" });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 60, stage: "runtime_code_agent", detail: "generating an original independent playable runtime" });
+  const generatedRuntime = await generateAgenticGameModule(sourceProject.prompt, spec);
+  if (!generatedRuntime.ok) throw new Error(generatedRuntime.reason);
+  spec = { ...spec, agenticModule: generatedRuntime.module, agenticPlayRoute: "independent" };
+  await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "playable_candidate", detail: "validating independent playable candidate" });
   const run = buildGameProductionRun({
     spec,
     prompt: sourceProject.prompt,
@@ -309,7 +312,7 @@ async function executeGamePreflightIterationJob(
     blocker.startsWith("runtime_") ||
     blocker.startsWith("browser_") ||
     blocker.startsWith("mechanic_missing:") ||
-    blocker === "generic_phaser_runtime_retired",
+    blocker === "independent_runtime_missing",
   );
   // Runtime and browser failures require a new executable, not another design
   // report. Preserve the design contract and invalidate the stale module so
@@ -321,8 +324,7 @@ async function executeGamePreflightIterationJob(
       : await patchGameSpecWithLlm({ instruction, currentSpec, currentPrompt: project.prompt });
   if (!patched.ok) throw new Error(`game_preflight_iteration_patch_failed:${patched.errorKey}`);
   const { agenticModule: _staleModule, ...withoutStaleModule } = patched.spec;
-  const expectedRoute = resolveAgenticPlayRoute(project.prompt, withoutStaleModule, { respectPersisted: false });
-  const nextSpec = { ...withoutStaleModule, agenticPlayRoute: expectedRoute };
+  const nextSpec = { ...withoutStaleModule, agenticPlayRoute: "independent" as const };
   const updated = await prisma.project.update({
     where: { id: project.id },
     data: { specJson: JSON.stringify(nextSpec), title: nextSpec.title, featured: false },
@@ -393,12 +395,12 @@ async function executeGameIterationJob(
   if (shouldUseAgenticRuntime(currentSpec)) {
     const generated = await generateAgenticGameModule(
       project.prompt,
-      { ...nextSpec, agenticPlayRoute: "agentic" },
+      { ...nextSpec, agenticPlayRoute: "independent" },
       undefined,
       { bounded: true },
     );
     if (!generated.ok) throw new Error(`game_iteration_runtime_failed:${generated.reason}`);
-    nextSpec = { ...nextSpec, agenticPlayRoute: "agentic", agenticModule: generated.module };
+    nextSpec = { ...nextSpec, agenticPlayRoute: "independent", agenticModule: generated.module };
   }
   const updated = await prisma.project.update({
     where: { id: project.id },

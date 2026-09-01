@@ -11,7 +11,7 @@ import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-cont
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { buildGamePlayabilityContract } from "@/lib/game-playability-contract";
 import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
-import type { RealAgentExecution } from "@/lib/game-production-agents";
+type RealAgentExecution = { role: "design_director" | "art_director" | "scene_designer" | "runtime_engineer" | "audio_agent" | "visual_review_agent"; status: "succeeded" | "failed"; [key: string]: unknown };
 
 export type GameProductionArtifact = {
   kind: string;
@@ -95,7 +95,7 @@ export function buildGameProductionRun(input: {
     ...(verticalSlice.verdict === "blocked" ? ["vertical_slice_blocked"] : []),
     ...(delivery.verdict === "blocked" ? ["delivery_preflight_blocked"] : []),
     ...(!assets.ok ? assets.evidence.filter((entry) => entry.endsWith("_missing")) : []),
-    ...(requiresBespokeRuntime(input.spec) && !hasBespokeRuntime(input.spec) ? ["generic_phaser_runtime_retired"] : []),
+    ...(requiresBespokeRuntime(input.spec) && !hasBespokeRuntime(input.spec) ? ["independent_runtime_missing"] : []),
     ...visualContract.blockers,
     ...mechanicsContract.blockers,
     ...missingRealRoles.map((role) => `real_agent_missing:${role}`),
@@ -188,7 +188,7 @@ export function buildGameProductionRun(input: {
       content: {
         version: 1,
         runtimeStrategy: pipeline.runtimeStrategy,
-        route: input.spec.agenticPlayRoute ?? "dedicated",
+        route: input.spec.agenticPlayRoute ?? "independent",
         executableModule: input.spec.agenticModule
           ? { version: input.spec.agenticModule.version, entry: input.spec.agenticModule.entry }
           : null,

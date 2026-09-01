@@ -16,16 +16,16 @@
 import type { GameSpec } from "@/lib/game-spec";
 import type { PromptFingerprint, PromptMood } from "@/lib/prompt-fingerprint";
 
-/** Phaser 程序化绘制 mood（与 template-theme-visual.ts ThemeMood 对齐） */
-export type PhaserMood = "ocean" | "forest" | "space" | "cyber" | "generic";
+/** 独立运行时的场景 mood。 */
+export type CanvasMood = "ocean" | "forest" | "space" | "cyber" | "generic";
 
 export interface ThemeAdaptation {
   /** 推荐背景色相偏移（0..1，HSL hue） */
   bgHueBias: number;
-  /** 场景装饰关键词（供 Phaser 程序化绘制参考） */
+  /** 场景装饰关键词（供运行时代码 Agent 使用） */
   sceneDecorWords: string[];
-  /** Phaser 程序化绘制 mood（驱动 paintPlatformerParallax 等） */
-  phaserMood: PhaserMood;
+  /** 场景视觉倾向 */
+  canvasMood: CanvasMood;
   /** 推荐 musicProfile */
   musicProfile: "organic" | "pulse" | "minimal" | "neon";
   /** BGM 标签（映射 public/game-bgm/{templateId}-{profile}.ogg） */
@@ -49,7 +49,7 @@ const THEME_RULES: Array<{
   match: RegExp;
   bgHue: number;
   decor: string[];
-  phaserMood: PhaserMood;
+  canvasMood: CanvasMood;
   music: "organic" | "pulse" | "minimal" | "neon";
   bgm: string;
   level: "explore" | "challenge" | "speedrun";
@@ -64,7 +64,7 @@ const THEME_RULES: Array<{
     // 武侠优先于海洋（"水墨"含"水"会被海洋抢）
     match: /武侠|江湖|剑客|剑仙|水墨|中国风|wuxia|ink\s*wash/i,
     bgHue: 0.08, decor: ["ink-mist", "bamboo", "mountains", "clouds"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "wuxia",
     level: "explore",
     enemyRoot: "邪派", enemyColor: "#9f1239", enemyShape: "sword",
@@ -74,7 +74,7 @@ const THEME_RULES: Array<{
     // 雪山优先于冰（"雪山"含"雪"会被冰抢）
     match: /雪山|山峰|登顶|mountain|peak|summit|alpine/i,
     bgHue: 0.58, decor: ["snow-peaks", "icicles", "pine-trees", "clouds"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "minimal", bgm: "mountain",
     level: "challenge",
     enemyRoot: "雪猿", enemyColor: "#94a3b8", enemyShape: "yeti",
@@ -84,7 +84,7 @@ const THEME_RULES: Array<{
     // 海盗优先于海洋（"海盗"含"海"会被海洋抢）
     match: /海盗|海贼|私掠|pirate|galleon/i,
     bgHue: 0.5, decor: ["ships", "treasure", "waves", "skulls-flag"],
-    phaserMood: "ocean",
+    canvasMood: "ocean",
     music: "pulse", bgm: "pirate",
     level: "explore",
     enemyRoot: "海盗", enemyColor: "#92400e", enemyShape: "pirate",
@@ -94,7 +94,7 @@ const THEME_RULES: Array<{
     // 都市优先于赛博（"都市霓虹"含"霓虹"会被赛博抢）
     match: /都市|城市|街头|街道|urban|city\s*street|downtown/i,
     bgHue: 0.75, decor: ["skyscrapers", "neon-signs", "traffic", "crowds"],
-    phaserMood: "cyber",
+    canvasMood: "cyber",
     music: "neon", bgm: "urban",
     level: "speedrun",
     enemyRoot: "黑帮", enemyColor: "#1e293b", enemyShape: "thug",
@@ -104,7 +104,7 @@ const THEME_RULES: Array<{
   {
     match: /森林|树林|松|枫|丛林|forest|woods|jungle/i,
     bgHue: 0.33, decor: ["trees", "leaves", "mushrooms", "vines"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "forest",
     level: "explore",
     enemyRoot: "刺藤", enemyColor: "#a65f3f", enemyShape: "thorn-vine",
@@ -113,7 +113,7 @@ const THEME_RULES: Array<{
   {
     match: /太空|宇宙|星际|星空|银河|space|galaxy|cosmic|star/i,
     bgHue: 0.66, decor: ["stars", "nebula", "planets", "asteroids"],
-    phaserMood: "space",
+    canvasMood: "space",
     music: "neon", bgm: "space",
     level: "speedrun",
     enemyRoot: "外星", enemyColor: "#9d5838", enemyShape: "alien-ship",
@@ -123,7 +123,7 @@ const THEME_RULES: Array<{
     // 海洋：精确化（去掉单独"水"/"海"，避免抢武侠/海盗）
     match: /海洋|海底|深海|海水|水下|ocean|sea|underwater/i,
     bgHue: 0.55, decor: ["bubbles", "coral", "seaweed", "fish-silhouettes"],
-    phaserMood: "ocean",
+    canvasMood: "ocean",
     music: "organic", bgm: "ocean",
     level: "explore",
     enemyRoot: "海妖", enemyColor: "#0891b2", enemyShape: "tentacle",
@@ -132,7 +132,7 @@ const THEME_RULES: Array<{
   {
     match: /火焰|熔岩|火山|地狱|岩浆|fire|lava|volcano|inferno/i,
     bgHue: 0.05, decor: ["embers", "lava-bubbles", "smoke", "cracks"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "pulse", bgm: "fire",
     level: "challenge",
     enemyRoot: "炎魔", enemyColor: "#dc2626", enemyShape: "flame",
@@ -142,7 +142,7 @@ const THEME_RULES: Array<{
     // 冰：精确化（去掉单独"雪"，避免抢雪山）
     match: /冰川|极地|寒冰|冰冻|ice|frozen|glacier|frost/i,
     bgHue: 0.6, decor: ["snowflakes", "icicles", "frost", "aurora"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "minimal", bgm: "ice",
     level: "speedrun",
     enemyRoot: "冰霜", enemyColor: "#0ea5e9", enemyShape: "ice-shard",
@@ -152,7 +152,7 @@ const THEME_RULES: Array<{
     // 赛博：精确化（去掉单独"霓虹"，避免抢都市）
     match: /赛博|cyber|cyberpunk|电子科技|未来科技|neon\s*city/i,
     bgHue: 0.83, decor: ["grid", "neon-lines", "data-streams", "holograms"],
-    phaserMood: "cyber",
+    canvasMood: "cyber",
     music: "neon", bgm: "cyber",
     level: "challenge",
     enemyRoot: "病毒", enemyColor: "#ec4899", enemyShape: "glitch",
@@ -161,7 +161,7 @@ const THEME_RULES: Array<{
   {
     match: /暗黑|哥特|恶魔|亡灵|地下城|dark|gothic|demon|undead|dungeon/i,
     bgHue: 0.0, decor: ["torches", "skulls", "chains", "fog"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "pulse", bgm: "dark",
     level: "challenge",
     enemyRoot: "亡灵", enemyColor: "#6b21a8", enemyShape: "wraith",
@@ -170,7 +170,7 @@ const THEME_RULES: Array<{
   {
     match: /可爱|萌系|卡通|童趣|cute|kawaii|chibi/i,
     bgHue: 0.92, decor: ["hearts", "stars", "candy", "rainbows"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "cute",
     level: "explore",
     enemyRoot: "淘气", enemyColor: "#f472b6", enemyShape: "blob",
@@ -179,7 +179,7 @@ const THEME_RULES: Array<{
   {
     match: /沙漠|金字塔|沙|desert|sand|pyramid|埃及/i,
     bgHue: 0.12, decor: ["sand-dunes", "cacti", "bones", "sun"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "pulse", bgm: "desert",
     level: "speedrun",
     enemyRoot: "沙蝎", enemyColor: "#b45309", enemyShape: "scorpion",
@@ -188,7 +188,7 @@ const THEME_RULES: Array<{
   {
     match: /雨林|热带|丛林深处|rainforest|tropical/i,
     bgHue: 0.3, decor: ["thick-vines", "exotic-flowers", "waterfalls", "ancient-ruins"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "jungle",
     level: "explore",
     enemyRoot: "毒蛙", enemyColor: "#16a34a", enemyShape: "frog",
@@ -197,7 +197,7 @@ const THEME_RULES: Array<{
   {
     match: /雪山|山峰|登顶|mountain|peak|summit|alpine/i,
     bgHue: 0.58, decor: ["snow-peaks", "icicles", "pine-trees", "clouds"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "minimal", bgm: "mountain",
     level: "challenge",
     enemyRoot: "雪猿", enemyColor: "#94a3b8", enemyShape: "yeti",
@@ -206,7 +206,7 @@ const THEME_RULES: Array<{
   {
     match: /废墟|古|遗迹|神庙|ancient|ruins|temple/i,
     bgHue: 0.1, decor: ["crumbled-pillars", "moss", "glyphs", "dust"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "ruins",
     level: "explore",
     enemyRoot: "石像", enemyColor: "#78716c", enemyShape: "golem",
@@ -215,7 +215,7 @@ const THEME_RULES: Array<{
   {
     match: /天空|浮空|云端|云|sky|floating|cloud/i,
     bgHue: 0.6, decor: ["floating-islands", "clouds", "rainbows", "wind"],
-    phaserMood: "forest",
+    canvasMood: "forest",
     music: "organic", bgm: "sky",
     level: "speedrun",
     enemyRoot: "风灵", enemyColor: "#7dd3fc", enemyShape: "spirit",
@@ -224,7 +224,7 @@ const THEME_RULES: Array<{
   {
     match: /海盗|船|海贼|大海盗|pirate|ship/i,
     bgHue: 0.5, decor: ["ships", "treasure", "waves", "skulls-flag"],
-    phaserMood: "ocean",
+    canvasMood: "ocean",
     music: "pulse", bgm: "pirate",
     level: "explore",
     enemyRoot: "海盗", enemyColor: "#92400e", enemyShape: "pirate",
@@ -233,7 +233,7 @@ const THEME_RULES: Array<{
   {
     match: /机器人|机械|机甲|robot|mech|machine/i,
     bgHue: 0.08, decor: ["gears", "wires", "panels", "sparks"],
-    phaserMood: "cyber",
+    canvasMood: "cyber",
     music: "pulse", bgm: "robot",
     level: "challenge",
     enemyRoot: "故障", enemyColor: "#52525b", enemyShape: "robot",
@@ -242,7 +242,7 @@ const THEME_RULES: Array<{
   {
     match: /节日|庙会|灯笼|春节|中秋|festival|lantern/i,
     bgHue: 0.02, decor: ["lanterns", "fireworks", "streamers", "red-cloth"],
-    phaserMood: "generic",
+    canvasMood: "generic",
     music: "pulse", bgm: "festival",
     level: "explore",
     enemyRoot: "年兽", enemyColor: "#b91c1c", enemyShape: "beast",
@@ -251,7 +251,7 @@ const THEME_RULES: Array<{
   {
     match: /都市|城市|街|霓虹灯|urban|city|street/i,
     bgHue: 0.75, decor: ["skyscrapers", "neon-signs", "traffic", "crowds"],
-    phaserMood: "cyber",
+    canvasMood: "cyber",
     music: "neon", bgm: "urban",
     level: "speedrun",
     enemyRoot: "黑帮", enemyColor: "#1e293b", enemyShape: "thug",
@@ -281,7 +281,7 @@ export function adaptThemeFromFingerprint(fp: PromptFingerprint): ThemeAdaptatio
       return {
         bgHueBias: rule.bgHue,
         sceneDecorWords: rule.decor,
-        phaserMood: rule.phaserMood,
+        canvasMood: rule.canvasMood,
         musicProfile: rule.music,
         bgmTag: rule.bgm,
         levelStyle: rule.level,
@@ -299,7 +299,7 @@ export function adaptThemeFromFingerprint(fp: PromptFingerprint): ThemeAdaptatio
   return {
     bgHueBias: fallback.bgHueBias ?? 0.0,
     sceneDecorWords: [],
-    phaserMood: "generic",
+    canvasMood: "generic",
     musicProfile: fallback.musicProfile ?? "pulse",
     bgmTag: fallback.bgmTag ?? "default",
     levelStyle: fp.mood === "calm" ? "explore" : fp.mood === "dark" ? "challenge" : "speedrun",
@@ -335,14 +335,14 @@ export function applyThemeAdaptation(spec: GameSpec, adaptation: ThemeAdaptation
   const pres = next.presentation ?? {};
   next = { ...next, presentation: { ...pres, musicProfile: adaptation.musicProfile, bgmTag: adaptation.bgmTag } };
 
-  // phaserMood 写入 samplePlayProfile（驱动 Phaser 程序化背景绘制）
+  // canvasMood 写入资料，用于后续运行时代码生成提示。
   if (next.samplePlayProfile) {
     next = {
       ...next,
       samplePlayProfile: {
         ...next.samplePlayProfile,
-        phaserMood: adaptation.phaserMood,
-        // sceneDecorWords 精细化驱动：写入 spec 供 Phaser 按 decorWords 画精细元素
+        canvasMood: adaptation.canvasMood,
+        // sceneDecorWords 写入 spec 供运行时代码 Agent 使用。
         themeWords: adaptation.sceneDecorWords.length > 0 ? adaptation.sceneDecorWords : next.samplePlayProfile.themeWords,
       },
     };

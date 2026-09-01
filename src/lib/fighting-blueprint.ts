@@ -46,7 +46,7 @@ export function inferFightingAiDifficulty(opts: {
 }
 
 /**
- * 构建格斗蓝图。供 FightingScene（Phaser）与 fighting_runtime.gd（Godot）共同消费。
+ * 构建格斗蓝图，供独立运行时代码 Agent 使用。
  *
  * 默认值：rounds=3、playerHp=100、aiDifficulty∈[0.4, 0.7]、moves=DEFAULT_FIGHTING_MOVES。
  */

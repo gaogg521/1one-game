@@ -35,14 +35,14 @@ export function mixHex(a: string, b: string, t: number): string {
   );
 }
 
-export function hexToPhaserUint(hex: string): number | null {
+export function hexToUint(hex: string): number | null {
   const rgb = hexToRgb(hex);
   if (!rgb) return null;
   return (rgb.r << 16) | (rgb.g << 8) | rgb.b;
 }
 
-/** Phaser Graphics 整数色 → `#rrggbb` */
-export function phaserUintToCssHex(u: number): string {
+/** Canvas 整数色 → `#rrggbb` */
+export function uintToCssHex(u: number): string {
   const n = u >>> 0;
   return `#${n.toString(16).padStart(6, "0")}`;
 }
@@ -524,9 +524,9 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
   const qualityTier = specW.presentation?.qualityTier ?? "standard";
 
   const panelHex = mixHex(bg, "#070b10", 0.52);
-  const fillInt = hexToPhaserUint(panelHex) ?? 0x0b1220;
+  const fillInt = hexToUint(panelHex) ?? 0x0b1220;
   const strokeLine = mixHex(accent, "#ffffff", 0.55);
-  const strokeInt = hexToPhaserUint(strokeLine) ?? 0x94a3b8;
+  const strokeInt = hexToUint(strokeLine) ?? 0x94a3b8;
 
   const banner: CohesiveHudBannerStyle = {
     fill: fillInt,
@@ -560,12 +560,12 @@ export function buildCohesivePresentation(spec: GameSpec): CohesivePresentation 
   const platHexMid = mc ? "#5d9b47" : mixHex(mixHex(bg, coll, 0.38), "#1e293b", 0.52);
   const platHexHi = mc ? "#6eb854" : mixHex(platHexMid, mixHex(accent2, "#e2e8f0", 0.55), 0.22);
   const platHexGround = mc ? "#8b6914" : mixHex(mixHex(bg, "#020617", 0.72), platHexMid, 0.35);
-  const platMid = hexToPhaserUint(platHexMid) ?? 0x334155;
-  const platHi = hexToPhaserUint(platHexHi) ?? 0x475569;
-  const platGround = hexToPhaserUint(platHexGround) ?? 0x1e293b;
+  const platMid = hexToUint(platHexMid) ?? 0x334155;
+  const platHi = hexToUint(platHexHi) ?? 0x475569;
+  const platGround = hexToUint(platHexGround) ?? 0x1e293b;
 
-  const panelFill = hexToPhaserUint(mixHex(panelHex, accent, 0.12)) ?? fillInt;
-  const panelStroke = hexToPhaserUint(strokeLine) ?? strokeInt;
+  const panelFill = hexToUint(mixHex(panelHex, accent, 0.12)) ?? fillInt;
+  const panelStroke = hexToUint(strokeLine) ?? strokeInt;
 
   const hud: CohesiveHud = {
     title: fg,

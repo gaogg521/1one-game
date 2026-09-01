@@ -1,7 +1,7 @@
 /**
  * 游戏实体精灵图生成。
  * 用 GameSpec 的 labels + theme 生成文生图 sprite → 落盘 public/game-sprites/{projectId}/
- * Phaser 引擎通过同名 texture 加载（texPlayer/texHazard/texGem/texPower），
+ * 独立运行时通过角色 URL 加载（player/hazard/gem/power），
  * 若 sprites 不存在则回退现有几何体生成，零破坏。
  */
 import fs from "fs";

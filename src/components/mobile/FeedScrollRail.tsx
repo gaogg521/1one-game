@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 
-/** 右侧窄条手势区：Phaser 占满触控时仍可上滑切卡 */
+/** 右侧窄条手势区：独立游戏占满触控时仍可上滑切卡 */
 export function FeedScrollRail({
   onSwipeNext,
   onSwipePrev,

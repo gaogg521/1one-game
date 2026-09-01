@@ -1,7 +1,7 @@
 /**
  * Visual Scorecard — 10 维视觉质量评分（移植自 threejs-game-skills AAA graphics builder）。
  *
- * 对生成的 GameSpec 做静态评分（不跑 Phaser，只看 spec 字段完整性 + template-brief-overrides 对齐度），
+ * 对生成的 GameSpec 做静态评分（不运行游戏，只看规格字段完整性），
  * 低于阈值的维度触发"视觉返工"建议。
  *
  * 10 维（每维 0-3 分，0=缺失/占位，1=基础，2=合格，3=精致）：

@@ -13,7 +13,7 @@ const MECHANIC_RULES: MechanicRule[] = [
   { id: "garage_upgrade", label: "车库升级", requestedBy: /车库|车辆升级|garage|car upgrade/i, implementedBy: /garage|upgrade|车库|升级/i },
   { id: "cup_progression", label: "杯赛进度", requestedBy: /杯赛|奖杯|奖章|cup|trophy/i, implementedBy: /\b(?:cup|trophy|trophies|championship)\b|杯赛|奖杯/i },
   { id: "merge", label: "合成升级", requestedBy: /合成|融合|merge|combine/i, implementedBy: /\b(?:merge|combine|fusion|tier|levelUp)\b|合成|融合/i },
-  { id: "drag_drop", label: "拖放操作", requestedBy: /拖放|拖拽|drag|drop/i, implementedBy: /dragstart|dragend|draggable|setInteractive|pointermove/i },
+  { id: "drag_drop", label: "拖放操作", requestedBy: /拖放|拖拽|drag|drop/i, implementedBy: /dragstart|dragend|draggable|pointermove|touchmove/i },
   { id: "building", label: "建造/放置", requestedBy: /建造|搭建|放置|build|construct|place/i, implementedBy: /\b(?:build|building|construct|place|placement|structure)\b|建造|放置/i },
   { id: "resource_collection", label: "资源采集", requestedBy: /采集|收集|矿石|资源|collect|gather|mine/i, implementedBy: /\b(?:collect|gather|resource|inventory|mine|mining|pickup)\b|采集|收集/i },
   { id: "territory", label: "圈地/领地", requestedBy: /圈地|领地|占领|territory|capture area/i, implementedBy: /\b(?:territory|capture|claimed|polygon|areaFill|trail)\b|圈地|领地/i },

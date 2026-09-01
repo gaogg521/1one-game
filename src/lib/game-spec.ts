@@ -362,10 +362,10 @@ const AvoiderBlueprintSchema = z.object({
 });
 
 const AgenticModuleSchema = z.object({
-  version: z.literal(1),
-  /** 受限 TS/JS 模块源码（由 Agentic Gameplay Agent 生成） */
-  source: z.string().min(8).max(48_000),
-  entry: z.string().min(1).max(32).default("createGame"),
+  version: z.literal(2),
+  /** 每款游戏专属的独立浏览器运行时源码（由 Runtime Code Agent 生成） */
+  source: z.string().min(80).max(64_000),
+  entry: z.literal("mountGame"),
 });
 
 export const DirectorSchema = z.object({
@@ -721,10 +721,10 @@ export const GameSpecSchema = z.object({
   endlessRunner: EndlessRunnerBlueprintSchema.optional(),
   /** 水果忍者：目标分 + 时间 + 抛出间隔 + 炸弹概率 */
   fruitNinja: FruitNinjaBlueprintSchema.optional(),
-  /** Phase 3：Agentic 生成的受限游戏模块（优先于 template 场景） */
+  /** 每款游戏专属的受限独立运行时；没有它就不可进入试玩/发布。 */
   agenticModule: AgenticModuleSchema.optional(),
-  /** OpenGame 试玩路由：dedicated=样品级专用 Scene；agentic=AgenticScene+Skills（复杂 prompt 自动 agentic） */
-  agenticPlayRoute: z.enum(["dedicated", "agentic"]).optional(),
+  /** Legacy records are migrated to the only supported execution surface. */
+  agenticPlayRoute: z.enum(["independent", "agentic", "dedicated"]).optional(),
   /** 通用导演蓝图（可选；缺省则由引擎侧使用默认曲线） */
   director: DirectorSchema.optional(),
   /** 通用系统层（可选；缺省则由引擎侧补齐） */

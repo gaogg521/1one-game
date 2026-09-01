@@ -1,428 +1,51 @@
 import type { GameSpec } from "@/lib/game-spec";
-import {
-  buildFallbackAgenticModule,
-  parseAgenticModule,
-  validateAgenticSource,
-  type AgenticGameModule,
-} from "@/lib/agentic/game-module";
-import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
-import {
-  buildAgenticRepairPrompt,
-  buildAgenticSystemPrompt,
-  buildAgenticUserPrompt,
-  AGENTIC_MODULE_JSON_SCHEMA,
-} from "@/lib/agentic/agentic-prompts";
-import { validateAgenticRunnable } from "@/lib/agentic/agentic-runnable";
-import { buildDebugSkillRepairHints, runDebugSkillPipeline, shouldSkipTemplateFirstForPrompt } from "@/lib/opengame-skills";
-import { maybeVerifyAgenticModuleInBrowser } from "@/lib/opengame-skills/browser-bench-generate";
-import { isOpenGameBrowserBenchRequired } from "@/lib/opengame-skills/browser-bench-env";
-import { probeOpenGameCli, runOpenGameCliHeadless } from "@/lib/opengame-skills/opengame-cli";
-import {
-  bridgeOpenGameCliWorkDir,
-  isOpenGameCliBridgeEnabled,
-} from "@/lib/opengame-skills/opengame-cli-bridge";
-import { resolveAgenticPlayRoute, stampAgenticPlayRoute, stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
+import { parseAgenticModule, validateAgenticSource, type AgenticGameModule } from "@/lib/agentic/game-module";
+import { AGENTIC_MODULE_JSON_SCHEMA, buildAgenticRepairPrompt, buildAgenticSystemPrompt, buildAgenticUserPrompt } from "@/lib/agentic/agentic-prompts";
+import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
+import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
-import { PRODUCT } from "@/lib/product-config";
-import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
-import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
-import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
 
 export type GenerateAgenticModuleResult =
-  | {
-      ok: true;
-      module: AgenticGameModule;
-      source: "llm" | "fallback" | "template_first" | "opengame_cli";
-      lastReason?: string;
-      execution?: { provider: string; model: string; startedAt: string; completedAt: string };
-    }
+  | { ok: true; module: AgenticGameModule; source: "llm"; lastReason?: string; execution: { provider: string; model: string; startedAt: string; completedAt: string } }
   | { ok: false; reason: string };
 
-const REPAIR_ATTEMPTS = 2;
-
-/** OpenGame Debug Skill：proactive + runnable 闭环最大轮次（含 LLM repair） */
-const DEBUG_SKILL_MAX_ROUNDS = 3;
-
-function passesDebugSkill(mod: AgenticGameModule): { ok: true } | { ok: false; reason: string; hints: string[] } {
-  const pipeline = runDebugSkillPipeline(mod);
-  if (pipeline.ok) return { ok: true };
-  const hints = buildDebugSkillRepairHints(pipeline.checks);
-  return { ok: false, reason: `${pipeline.stage}:${pipeline.reason}`, hints };
-}
-
-function agenticGenLimits(bounded = false) {
-  const fast = process.env.AGENTIC_LLM_FAST === "1";
-  return {
-    fast,
-    maxModels: fast || bounded ? 1 : 2,
-    maxRepairs: fast || bounded ? 1 : REPAIR_ATTEMPTS,
-    timeoutMs: fast ? 75_000 : PRODUCT.game.agenticTimeoutMs,
-    repairTimeoutMs: fast ? 55_000 : PRODUCT.game.agenticRepairTimeoutMs,
-  };
-}
-
-function logAgenticProgress(model: string, attempt: number, msg: string) {
-  if (process.env.AGENTIC_GEN_VERBOSE === "1" || process.env.AGENTIC_LLM_FAST === "1") {
-    console.log(`[agentic] ${model} try=${attempt} ${msg}`);
-  }
-}
-
-function parseLlmModule(raw: unknown): AgenticGameModule | null {
-  const o = raw as { source?: string; entry?: string };
-  const source = typeof o?.source === "string" ? o.source : "";
-  const entry = typeof o?.entry === "string" ? o.entry : "createGame";
-  const check = validateAgenticSource(source);
-  if (!check.ok) return null;
-  return parseAgenticModule({ version: 1, source, entry });
-}
-
-/** Phase 3 + Astrocade repair：LLM → 校验 → 沙箱 runnable → repair → template fallback */
-export async function generateAgenticGameModule(
-  prompt: string,
-  spec: GameSpec,
-  orch?: RunTraceRecorder,
-  options?: { bounded?: boolean; requireLlm?: boolean },
-): Promise<GenerateAgenticModuleResult> {
-  // Complexity routing is authoritative. A short competitor-reference prompt
-  // may not contain the legacy genre keywords, but once routed to an agentic
-  // runtime it must never fall back to the generic template module.
-  const bespokeRequired = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !options?.requireLlm) {
-    const mod = buildFallbackAgenticModule(spec.title, spec);
-    orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
-    return { ok: true, module: mod, source: "fallback" };
-  }
-
-  const templateFirst = PRODUCT.game.agenticTemplateFirst;
-  const skipTemplateFirst = shouldSkipTemplateFirstForPrompt(prompt, spec);
-
-  if (process.env.OPENGAME_CLI === "1" && skipTemplateFirst) {
-    const probe = await probeOpenGameCli();
-    const cliRun = await runOpenGameCliHeadless(prompt, { runId: spec.title });
-    orch?.note("opengame_cli_spike", {
-      probeAvailable: probe.available,
-      probeError: probe.error ?? null,
-      ok: cliRun.ok,
-      skipped: cliRun.skipped,
-      dryRun: !cliRun.skipped && "dryRun" in cliRun ? cliRun.dryRun : false,
-      exitCode: !cliRun.skipped && "exitCode" in cliRun ? cliRun.exitCode : null,
-      durationMs: !cliRun.skipped && "durationMs" in cliRun ? cliRun.durationMs : null,
-      workDir: !cliRun.skipped && "workDir" in cliRun ? cliRun.workDir : null,
-      error:
-        cliRun.skipped
-          ? cliRun.reason
-          : !cliRun.ok && "error" in cliRun
-            ? cliRun.error
-            : null,
-    });
-
-    if (
-      isOpenGameCliBridgeEnabled() &&
-      !cliRun.skipped &&
-      cliRun.ok &&
-      "workDir" in cliRun &&
-      !cliRun.dryRun
-    ) {
-      const bridge = bridgeOpenGameCliWorkDir(cliRun.workDir);
-      orch?.note("opengame_cli_bridge", {
-        ok: bridge.ok,
-        reason: bridge.ok ? null : bridge.reason,
-        strategy: bridge.ok ? bridge.strategy : null,
-        files: bridge.files,
-        entry: bridge.ok ? bridge.entry : null,
-      });
-      if (bridge.ok) {
-        const debug = passesDebugSkill(bridge.module);
-        if (debug.ok) {
-          const visual = evaluateAgenticVisualContract(spec, bridge.module);
-          if (!visual.ok) {
-            orch?.note("agentic_visual_contract", { ok: false, source: "opengame_cli", blockers: visual.blockers });
-          } else {
-            const mechanics = evaluateAgenticMechanicsContract(prompt, spec, bridge.module);
-            if (!mechanics.ok) {
-              orch?.note("agentic_mechanics_contract", { ...mechanics, source: "opengame_cli" });
-            } else {
-              const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, bridge.module);
-              orch?.note("agentic_browser_bench", {
-                ok: bench.benchOk,
-                skipped: bench.benchSkipped,
-                source: "opengame_cli",
-              });
-              orch?.note("agentic_gen_result", {
-                source: "opengame_cli",
-                strategy: bridge.strategy,
-                files: bridge.files,
-              });
-              return {
-                ok: true,
-                module: bench.module,
-                source: "opengame_cli",
-                lastReason: bridge.strategy,
-              };
-            }
-          }
-        }
-        orch?.note("opengame_cli_bridge", {
-          ok: false,
-          reason: debug.ok ? "visual_contract_failed" : debug.reason,
-          debugStage: debug.ok ? "visual_contract" : "debug_skill",
-        });
-      }
-    }
-  }
-
-  // Genre production scaffolds are executable code owned by the runtime
-  // engineer, not a publish bypass. They still pass the same static contracts
-  // and real-browser bench, while giving the LLM a reliable base for common
-  // high-value genres instead of asking it to recreate an engine from zero.
-  if (!options?.requireLlm && bespokeRequired && spec.templateId === "endless-runner") {
-    const scaffold = buildTemplateFallbackModule(spec);
-    const debug = passesDebugSkill(scaffold);
-    const visual = evaluateAgenticVisualContract(spec, scaffold);
-    const mechanics = evaluateAgenticMechanicsContract(prompt, spec, scaffold);
-    orch?.note("agentic_production_scaffold", {
-      templateId: spec.templateId,
-      debugOk: debug.ok,
-      visualOk: visual.ok,
-      mechanicsOk: mechanics.ok,
-    });
-    if (debug.ok && visual.ok && mechanics.ok) {
-      const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, scaffold);
-      orch?.note("agentic_browser_bench", { ok: bench.benchOk, skipped: bench.benchSkipped, source: "production_scaffold" });
-      if (bench.benchOk && (!isOpenGameBrowserBenchRequired() || !bench.benchSkipped)) {
-        return { ok: true, module: bench.module, source: "template_first", lastReason: "production_scaffold" };
-      }
-    }
-  }
-
-  if (
-    !options?.requireLlm &&
-    !bespokeRequired &&
-    !skipTemplateFirst &&
-    templateFirst.includes(spec.templateId) &&
-    process.env.AGENTIC_FORCE_LLM !== "1"
-  ) {
-    const mod = buildTemplateFallbackModule(spec);
-    const debug = passesDebugSkill(mod);
-    if (debug.ok) {
-      orch?.note("agentic_gen_result", { source: "template_first", skipTemplateFirst });
-      return { ok: true, module: mod, source: "template_first", lastReason: "template_first" };
-    }
-  }
-
+/** Model-only generation. A failure remains a failure: no template or generic fallback exists. */
+export async function generateAgenticGameModule(prompt: string, spec: GameSpec, orch?: RunTraceRecorder, options?: { bounded?: boolean; requireLlm?: boolean }): Promise<GenerateAgenticModuleResult> {
   const localeGroup = await runtimeLocaleGroupForCurrentRequest();
-  const gameRoute = resolveGameModelRoute({ prompt, localeGroup });
-  const models = options?.requireLlm
-    ? [...gameRoute.models].sort((a, b) => Number(/pro/i.test(b)) - Number(/pro/i.test(a)))
-    : gameRoute.models;
-  if (!models.length || !getActiveProvider()) {
-    orch?.note("agentic_gen_result", { source: "fallback", reason: "no_llm" });
-    if (options?.requireLlm) return { ok: false, reason: "runtime_engineer_model_missing" };
-    return { ok: true, module: buildFallbackAgenticModule(spec.title, spec), source: "fallback" };
+  const route = resolveGameModelRoute({ prompt, localeGroup });
+  if (!getActiveProvider() || !route.models.length) return { ok: false, reason: "runtime_engineer_model_missing" };
+  const attempts = options?.bounded ? 2 : 4;
+  let lastReason = "model_empty";
+  let previous = "";
+  for (const model of route.models.slice(0, 2)) for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const startedAt = new Date().toISOString();
+    const result = await llmJson({ model, scene: route.scene, localeGroup, system: buildAgenticSystemPrompt(), user: attempt === 0 ? buildAgenticUserPrompt(prompt, spec) : buildAgenticRepairPrompt(prompt, spec, previous, lastReason), temperature: attempt === 0 ? 0.48 : 0.22, mode: "json_schema", jsonSchema: AGENTIC_MODULE_JSON_SCHEMA, timeoutMs: attempt === 0 ? 100_000 : 70_000 });
+    if (!result.ok) { lastReason = result.error ?? "model_failed"; continue; }
+    const raw = result.raw as { source?: unknown; entry?: unknown };
+    previous = typeof raw.source === "string" ? raw.source : "";
+    const safety = validateAgenticSource(previous);
+    const module = parseAgenticModule({ version: 2, source: previous, entry: raw.entry });
+    if (!safety.ok || !module) { lastReason = safety.ok ? "module_parse_failed" : safety.reason; continue; }
+    const visual = evaluateAgenticVisualContract(spec, module);
+    const mechanics = evaluateAgenticMechanicsContract(prompt, spec, module);
+    orch?.note("independent_runtime_contract", { visual, mechanics, attempt, model });
+    if (!visual.ok || !mechanics.ok) { lastReason = [...visual.blockers, ...mechanics.blockers].join(",") || "runtime_contract_failed"; continue; }
+    const execution = { provider: result.provider, model: result.model, startedAt, completedAt: new Date().toISOString() };
+    orch?.note("independent_runtime_generated", { source: "llm", attempt, execution });
+    return { ok: true, module, source: "llm", execution };
   }
-
-  const system = buildAgenticSystemPrompt();
-  const productionBaseline = options?.requireLlm ? buildTemplateFallbackModule(spec) : null;
-  let lastSource = "";
-  let lastReason = "invalid";
-  const limits = agenticGenLimits(options?.bounded);
-
-  for (const model of models.slice(0, limits.maxModels)) {
-    for (let attempt = 0; attempt <= limits.maxRepairs; attempt += 1) {
-      logAgenticProgress(model, attempt, attempt === 0 ? "generate" : `repair(${lastReason})`);
-      const user =
-        attempt === 0
-          ? productionBaseline
-            ? buildAgenticRepairPrompt(prompt, spec, productionBaseline.source, "real_runtime_agent_must_transform_baseline", [
-                "Consume every REAL DESIGN/ART/SCENE AGENT OUTPUT included in the request.",
-                "Return a materially changed executable source; an unchanged baseline is a failed agent execution.",
-              ])
-            : buildAgenticUserPrompt(prompt, spec)
-          : buildAgenticRepairPrompt(prompt, spec, lastSource, lastReason);
-
-      const executionStartedAt = new Date().toISOString();
-      try {
-        const result = await llmJson({
-          model,
-          scene: gameRoute.scene,
-          localeGroup,
-          system,
-          user,
-          temperature: attempt === 0 ? 0.52 : 0.35,
-          mode: "json_schema",
-          jsonSchema: AGENTIC_MODULE_JSON_SCHEMA,
-          timeoutMs: attempt === 0 ? limits.timeoutMs : limits.repairTimeoutMs,
-        });
-        if (!result.ok) {
-          lastReason = result.error ?? "llm_empty";
-          logAgenticProgress(model, attempt, `llm_fail: ${lastReason}`);
-          continue;
-        }
-
-        const source =
-          typeof (result.raw as { source?: string })?.source === "string"
-            ? (result.raw as { source: string }).source
-            : "";
-        lastSource = source;
-
-        const forbidden = validateAgenticSource(source);
-        if (!forbidden.ok) {
-          lastReason = forbidden.reason;
-          continue;
-        }
-
-        const mod = parseLlmModule(result.raw);
-        if (!mod) {
-          lastReason = "parse_failed";
-          continue;
-        }
-        if (productionBaseline && mod.source.replace(/\s+/g, "") === productionBaseline.source.replace(/\s+/g, "")) {
-          lastReason = "runtime_agent_returned_unchanged_baseline";
-          continue;
-        }
-
-        let debugRound = 0;
-        let candidate = mod;
-        let debugFail: ReturnType<typeof passesDebugSkill> = passesDebugSkill(candidate);
-        while (!debugFail.ok && debugRound < DEBUG_SKILL_MAX_ROUNDS) {
-          lastReason = debugFail.reason;
-          lastSource = candidate.source;
-          logAgenticProgress(model, attempt, `debug_skill(${lastReason}) round=${debugRound}`);
-          if (debugRound >= DEBUG_SKILL_MAX_ROUNDS - 1 || attempt >= limits.maxRepairs) break;
-          const repairUser = buildAgenticRepairPrompt(
-            prompt,
-            spec,
-            candidate.source,
-            lastReason,
-            debugFail.hints,
-          );
-          try {
-            const repairResult = await llmJson({
-              model,
-              scene: gameRoute.scene,
-              localeGroup,
-              system,
-              user: repairUser,
-              temperature: 0.32,
-              mode: "json_schema",
-              jsonSchema: AGENTIC_MODULE_JSON_SCHEMA,
-              timeoutMs: limits.repairTimeoutMs,
-            });
-            if (!repairResult.ok) break;
-            const repaired = parseLlmModule(repairResult.raw);
-            if (!repaired) break;
-            candidate = repaired;
-            lastSource = candidate.source;
-            debugFail = passesDebugSkill(candidate);
-          } catch {
-            break;
-          }
-          debugRound += 1;
-        }
-
-        if (!debugFail.ok) {
-          lastReason = debugFail.reason;
-          logAgenticProgress(model, attempt, `debug_skill_fail: ${lastReason}`);
-          continue;
-        }
-
-        const runnable = validateAgenticRunnable(candidate);
-        if (!runnable.ok) {
-          lastReason = runnable.reason;
-          logAgenticProgress(model, attempt, `runnable_fail: ${lastReason}`);
-          continue;
-        }
-        const visual = evaluateAgenticVisualContract(spec, candidate);
-        orch?.note("agentic_visual_contract", { ok: visual.ok, blockers: visual.blockers, evidence: visual.evidence });
-        if (!visual.ok) {
-          lastReason = visual.blockers.join(",");
-          logAgenticProgress(model, attempt, `visual_contract_fail: ${lastReason}`);
-          continue;
-        }
-        const mechanics = evaluateAgenticMechanicsContract(prompt, spec, candidate);
-        orch?.note("agentic_mechanics_contract", mechanics);
-        if (!mechanics.ok) {
-          lastReason = mechanics.blockers.join(",");
-          logAgenticProgress(model, attempt, `mechanics_contract_fail: ${lastReason}`);
-          continue;
-        }
-
-        logAgenticProgress(model, attempt, "ok");
-        const bench = await maybeVerifyAgenticModuleInBrowser(prompt, spec, candidate);
-        orch?.note("agentic_browser_bench", {
-          ok: bench.benchOk,
-          skipped: bench.benchSkipped,
-        });
-        if (!bench.benchOk && isOpenGameBrowserBenchRequired()) {
-          lastReason = "browser_bench_failed";
-          continue;
-        }
-        orch?.note("agentic_gen_result", { source: "llm", debugRounds: debugRound, llmAttempt: attempt });
-        return {
-          ok: true,
-          module: bench.module,
-          source: "llm",
-          execution: {
-            provider: result.provider,
-            model: result.model,
-            startedAt: executionStartedAt,
-            completedAt: new Date().toISOString(),
-          },
-        };
-      } catch {
-        lastReason = "llm_error";
-      }
-    }
-  }
-
-  if (bespokeRequired || options?.requireLlm) {
-    orch?.note("agentic_gen_result", { source: "rejected", lastReason, reason: "bespoke_runtime_required" });
-    return { ok: false, reason: `bespoke_runtime_generation_failed:${lastReason}` };
-  }
-  orch?.note("agentic_gen_result", { source: "fallback", lastReason });
-  return {
-    ok: true,
-    module: buildFallbackAgenticModule(spec.title, spec),
-    source: "fallback",
-    lastReason,
-  };
+  orch?.note("independent_runtime_rejected", { reason: lastReason });
+  return { ok: false, reason: `independent_runtime_generation_failed:${lastReason}` };
 }
 
-export function isAgenticModuleEnabled(): boolean {
-  return PRODUCT.game.agenticModuleEnabled;
-}
-
-/** Phase A：dedicated 路由对 Template fallback 跑 Debug Skill proactive/runnable 门禁 */
-export function lintDedicatedRouteDebugSkill(spec: GameSpec) {
-  return runDebugSkillPipeline(buildTemplateFallbackModule(spec));
-}
-
-export async function attachAgenticModuleIfEnabled(
-  prompt: string,
-  spec: GameSpec,
-  enabled = isAgenticModuleEnabled(),
-  orch?: RunTraceRecorder,
-): Promise<GameSpec> {
-  if (!enabled) return stampAgenticPlayRoute(prompt, spec);
-
-  const route = resolveAgenticPlayRoute(prompt, spec, { respectPersisted: false });
-  orch?.note("agentic_attach_route", { route, templateId: spec.templateId });
-
-  if (route === "dedicated") {
-    orch?.note("agentic_attach_skipped", { reason: "dedicated_route" });
-    return stripAgenticModuleForDedicatedRoute({ ...spec, agenticPlayRoute: "dedicated" });
-  }
-
-  const stamped: GameSpec = { ...spec, agenticPlayRoute: "agentic" };
-  const r = await generateAgenticGameModule(prompt, stamped, orch);
-  orch?.note("agentic_attach_result", {
-    ok: r.ok,
-    source: r.ok ? r.source : null,
-    lastReason: r.ok ? r.lastReason ?? null : r.reason,
-  });
-  if (!r.ok) return stamped;
-  return { ...stamped, agenticModule: r.module };
+export function isAgenticModuleEnabled(): boolean { return true; }
+export function lintDedicatedRouteDebugSkill(spec: GameSpec) { return { ok: Boolean(spec.agenticModule), stage: "independent_runtime", reason: spec.agenticModule ? undefined : "independent_runtime_missing" }; }
+export async function attachAgenticModuleIfEnabled(prompt: string, spec: GameSpec, enabled = true, orch?: RunTraceRecorder): Promise<GameSpec> {
+  if (!enabled) return spec;
+  const result = await generateAgenticGameModule(prompt, spec, orch);
+  if (!result.ok) { orch?.note("independent_runtime_attach_failed", { reason: result.reason }); return spec; }
+  return { ...spec, agenticModule: result.module };
 }
