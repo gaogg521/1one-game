@@ -52,11 +52,14 @@ import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
 import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightIteration } from "@/lib/game-preflight-iteration";
+import { runRealGamePlanningAgents, runRealVisualReviewAgent, type RealAgentExecution } from "@/lib/game-production-agents";
+import type { GameArtDirection } from "@/lib/game-art-direction";
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
   workerId: string,
   specOverride?: ReturnType<typeof parseGameSpec>,
+  artDirectionOverride?: GameArtDirection,
 ) {
   const payload = GameAssetJobPayloadSchema.parse(JSON.parse(job.payloadJson));
   const [project, coreProject] = await Promise.all([
@@ -106,7 +109,7 @@ async function executeGameAssetJob(
     stage: "generating",
     detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "procedural BGM fallback ready",
   });
-  const artDirection = buildGameArtDirection(spec, briefResult.data);
+  const artDirection = artDirectionOverride ?? buildGameArtDirection(spec, briefResult.data);
   const result = await runProjectAssetPipeline({
     projectId: project.id,
     spec,
@@ -194,6 +197,11 @@ async function executeGameProductionJob(
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
+  await markCreativeRevisionGenerating(job.creativeRevisionId);
+  await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "design_director", detail: "running independent design, art and scene agents" });
+  const planning = await runRealGamePlanningAgents({ prompt: sourceProject.prompt, spec, brief: briefResult.data });
+  const realAgentExecutions: RealAgentExecution[] = [...planning.executions];
+
   const bespokeRequested = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
   if (bespokeRequested) {
     // Never trust an agenticModule carried over from the prompt preview. That
@@ -202,24 +210,43 @@ async function executeGameProductionJob(
     // round so a failed visual review can actually change code.
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building and browser-reviewing bespoke game runtime" });
     const generated = await generateAgenticGameModule(
-      sourceProject.prompt,
+      planning.augmentedPrompt,
       { ...spec, agenticPlayRoute: "agentic" },
       undefined,
-      { bounded: true },
+      { bounded: true, requireLlm: true },
     );
     if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
+    if (generated.source !== "llm" || !generated.execution) throw new Error("runtime_engineer_not_real_agent");
+    realAgentExecutions.push({
+      role: "runtime_engineer",
+      provider: generated.execution.provider,
+      model: generated.execution.model,
+      status: "succeeded",
+      startedAt: generated.execution.startedAt,
+      completedAt: generated.execution.completedAt,
+      inputDigest: "augmented_design_art_scene_prompt",
+      outputDigest: generated.module.source.slice(0, 0) + String(generated.module.source.length),
+      mutates: ["agentic_module", "runtime_build_manifest"],
+    });
     spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
     await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
   }
 
-  await markCreativeRevisionGenerating(job.creativeRevisionId);
-  await heartbeatGenerationJob(job.id, workerId, { percent: 3, stage: "design_director", detail: "locking player fantasy and first-minute contract" });
-  const assetArtifact = await executeGameAssetJob(job, workerId, spec);
+  const assetArtifact = await executeGameAssetJob(job, workerId, spec, planning.artDirection);
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
+  const audio = (assetManifest as { bgm?: { source?: string; model?: string } } | null)?.bgm;
+  if (audio?.source === "audio_model" && audio.model) {
+    const now = new Date().toISOString();
+    realAgentExecutions.push({ role: "audio_agent", provider: "configured_game_bgm_provider", model: audio.model, status: "succeeded", startedAt: now, completedAt: now, inputDigest: sourceProject.id, outputDigest: audio.model, mutates: ["bgm"] });
+  }
+
+  await heartbeatGenerationJob(job.id, workerId, { percent: 70, stage: "visual_review_agent", detail: "reviewing the actual rendered browser screenshot" });
+  const visualReview = await runRealVisualReviewAgent({ projectId: sourceProject.id, prompt: sourceProject.prompt });
+  realAgentExecutions.push(visualReview.execution);
 
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "gameplay_and_art_review", detail: "reviewing gameplay, art and interaction deliverables" });
-  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest, productionRound: payload.productionRound });
+  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest, productionRound: payload.productionRound, realAgentExecutions, realAgentOutputs: { design: planning.design, artDirection: planning.artDirection, scene: planning.scene, visualReview: visualReview.review } });
   let lastArtifact = assetArtifact;
   for (let index = 0; index < run.artifacts.length; index += 1) {
     const artifact = run.artifacts[index]!;

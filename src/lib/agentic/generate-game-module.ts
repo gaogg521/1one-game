@@ -37,6 +37,7 @@ export type GenerateAgenticModuleResult =
       module: AgenticGameModule;
       source: "llm" | "fallback" | "template_first" | "opengame_cli";
       lastReason?: string;
+      execution?: { provider: string; model: string; startedAt: string; completedAt: string };
     }
   | { ok: false; reason: string };
 
@@ -83,13 +84,13 @@ export async function generateAgenticGameModule(
   prompt: string,
   spec: GameSpec,
   orch?: RunTraceRecorder,
-  options?: { bounded?: boolean },
+  options?: { bounded?: boolean; requireLlm?: boolean },
 ): Promise<GenerateAgenticModuleResult> {
   // Complexity routing is authoritative. A short competitor-reference prompt
   // may not contain the legacy genre keywords, but once routed to an agentic
   // runtime it must never fall back to the generic template module.
   const bespokeRequired = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1") {
+  if (process.env.E2E_AGENTIC_FALLBACK_ONLY === "1" && !options?.requireLlm) {
     const mod = buildFallbackAgenticModule(spec.title, spec);
     orch?.note("agentic_gen_result", { source: "fallback", reason: "E2E_AGENTIC_FALLBACK_ONLY" });
     return { ok: true, module: mod, source: "fallback" };
@@ -177,7 +178,7 @@ export async function generateAgenticGameModule(
   // engineer, not a publish bypass. They still pass the same static contracts
   // and real-browser bench, while giving the LLM a reliable base for common
   // high-value genres instead of asking it to recreate an engine from zero.
-  if (bespokeRequired && spec.templateId === "endless-runner") {
+  if (!options?.requireLlm && bespokeRequired && spec.templateId === "endless-runner") {
     const scaffold = buildTemplateFallbackModule(spec);
     const debug = passesDebugSkill(scaffold);
     const visual = evaluateAgenticVisualContract(spec, scaffold);
@@ -198,6 +199,7 @@ export async function generateAgenticGameModule(
   }
 
   if (
+    !options?.requireLlm &&
     !bespokeRequired &&
     !skipTemplateFirst &&
     templateFirst.includes(spec.templateId) &&
@@ -216,6 +218,7 @@ export async function generateAgenticGameModule(
   const models = gameRoute.models;
   if (!models.length || !getActiveProvider()) {
     orch?.note("agentic_gen_result", { source: "fallback", reason: "no_llm" });
+    if (options?.requireLlm) return { ok: false, reason: "runtime_engineer_model_missing" };
     return { ok: true, module: buildFallbackAgenticModule(spec.title, spec), source: "fallback" };
   }
 
@@ -232,6 +235,7 @@ export async function generateAgenticGameModule(
           ? buildAgenticUserPrompt(prompt, spec)
           : buildAgenticRepairPrompt(prompt, spec, lastSource, lastReason);
 
+      const executionStartedAt = new Date().toISOString();
       try {
         const result = await llmJson({
           model,
@@ -345,14 +349,24 @@ export async function generateAgenticGameModule(
           continue;
         }
         orch?.note("agentic_gen_result", { source: "llm", debugRounds: debugRound, llmAttempt: attempt });
-        return { ok: true, module: bench.module, source: "llm" };
+        return {
+          ok: true,
+          module: bench.module,
+          source: "llm",
+          execution: {
+            provider: result.provider,
+            model: result.model,
+            startedAt: executionStartedAt,
+            completedAt: new Date().toISOString(),
+          },
+        };
       } catch {
         lastReason = "llm_error";
       }
     }
   }
 
-  if (bespokeRequired) {
+  if (bespokeRequired || options?.requireLlm) {
     orch?.note("agentic_gen_result", { source: "rejected", lastReason, reason: "bespoke_runtime_required" });
     return { ok: false, reason: `bespoke_runtime_generation_failed:${lastReason}` };
   }

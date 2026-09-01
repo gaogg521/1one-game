@@ -11,6 +11,7 @@ import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-cont
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { buildGamePlayabilityContract } from "@/lib/game-playability-contract";
 import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
+import type { RealAgentExecution } from "@/lib/game-production-agents";
 
 export type GameProductionArtifact = {
   kind: string;
@@ -56,6 +57,8 @@ export function buildGameProductionRun(input: {
   brief?: CreativeBrief | null;
   assetManifest: unknown;
   productionRound?: number;
+  realAgentExecutions?: RealAgentExecution[];
+  realAgentOutputs?: { design: unknown; artDirection: unknown; scene: unknown; visualReview?: { passed: boolean; score: number; blockers: string[]; revisionInstructions: string[]; screenshotBytes: number } };
 }): GameProductionRun {
   const verticalSlice = evaluateGameVerticalSlice(input.spec, input.brief ?? undefined);
   const delivery = evaluateGameDeliveryReadiness(input.spec);
@@ -73,6 +76,10 @@ export function buildGameProductionRun(input: {
   const playability = buildGamePlayabilityContract(input.spec);
   const visualContract = evaluateAgenticVisualContract(input.spec, input.spec.agenticModule);
   const mechanicsContract = evaluateAgenticMechanicsContract(input.prompt ?? "", input.spec, input.spec.agenticModule);
+  const executions = input.realAgentExecutions ?? [];
+  const succeededRoles = new Set(executions.filter((item) => item.status === "succeeded").map((item) => item.role));
+  const requiredRealRoles: RealAgentExecution["role"][] = ["design_director", "art_director", "scene_designer", "runtime_engineer", "audio_agent", "visual_review_agent"];
+  const missingRealRoles = requiredRealRoles.filter((role) => !succeededRoles.has(role));
   const blockers = [
     ...(pipeline.preflightVerdict === "blocked" ? ["production_preflight_blocked"] : []),
     ...(verticalSlice.verdict === "blocked" ? ["vertical_slice_blocked"] : []),
@@ -81,6 +88,8 @@ export function buildGameProductionRun(input: {
     ...(requiresBespokeRuntime(input.spec) && !hasBespokeRuntime(input.spec) ? ["generic_phaser_runtime_retired"] : []),
     ...visualContract.blockers,
     ...mechanicsContract.blockers,
+    ...missingRealRoles.map((role) => `real_agent_missing:${role}`),
+    ...(input.realAgentOutputs?.visualReview?.passed === true ? [] : ["visual_review_rejected", ...(input.realAgentOutputs?.visualReview?.blockers ?? [])]),
   ];
   const score = Math.max(0, Math.min(100, Math.round(
     verticalSlice.score * 0.45 + delivery.score * 0.35 + (assets.ok ? 20 : 0),
@@ -94,15 +103,9 @@ export function buildGameProductionRun(input: {
       content: {
         version: 1,
         round: input.productionRound ?? 1,
-        agents: [
-          { role: "design_director", mutates: ["game_design_directive", "game_spec"] },
-          { role: "gameplay_designer", mutates: ["gameplay_revision", "scene_graph", "behavior_graph"] },
-          { role: "art_director", mutates: ["asset_manifest", "art_direction_pack"] },
-          { role: "audio_agent", mutates: ["bgm", "bgm_notes"] },
-          { role: "runtime_engineer", mutates: ["agentic_module", "runtime_build_manifest"] },
-          { role: "qa_agent", mutates: ["automated_playtest_preflight", "game_production_candidate"], observed: false },
-          { role: "visual_review_agent", mutates: ["visual_contract"], observedScreenshot: false },
-        ],
+        agents: executions,
+        requiredRoles: requiredRealRoles,
+        missingRoles: missingRealRoles,
         next: blockers.length === 0 ? "observed_mobile_playtest" : "automatic_preflight_revision",
       },
       metadata: { role: "orchestrator", round: input.productionRound ?? 1, truthfulEvidence: true },
@@ -140,7 +143,9 @@ export function buildGameProductionRun(input: {
       mediaType: "json",
       content: {
         version: 1,
-        direction: artDirection,
+        direction: input.realAgentOutputs?.artDirection ?? artDirection,
+        designAgentOutput: input.realAgentOutputs?.design ?? null,
+        sceneAgentOutput: input.realAgentOutputs?.scene ?? null,
         gameplayArtDirection: verticalSlice.artDirection,
         assetManifest: input.assetManifest,
         readiness: assets,
@@ -197,6 +202,12 @@ export function buildGameProductionRun(input: {
         warning: "This is preflight evidence only; real mobile playtest evidence is required for publication.",
       },
       metadata: { role: "qa_agent", verdict: delivery.verdict, observed: false },
+    },
+    {
+      kind: "visual_review_report",
+      mediaType: "report",
+      content: input.realAgentOutputs?.visualReview ?? { passed: false, score: 0, blockers: ["visual_review_missing"], revisionInstructions: [], screenshotBytes: 0 },
+      metadata: { role: "visual_review_agent", observedScreenshot: Boolean(input.realAgentOutputs?.visualReview?.screenshotBytes) },
     },
   ];
   const candidate: GameProductionCandidate = {

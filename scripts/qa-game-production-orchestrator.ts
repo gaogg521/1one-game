@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import type { RealAgentExecution } from "@/lib/game-production-agents";
 
 const prompt = "制作一款有采集、建造、敌人和超能力的体素沙盒游戏";
 const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
@@ -22,9 +23,20 @@ const assetManifest = {
     { slot: "player", url: "/game-sprites/qa/player.webp" },
     { slot: "enemy", url: "/game-sprites/qa/hazard.webp" },
   ] },
+  bgm: { source: "audio_model", model: "qa-audio-model" },
 };
 
-const run = buildGameProductionRun({ spec, assetManifest });
+const now = new Date(0).toISOString();
+const realAgentExecutions: RealAgentExecution[] = (["design_director", "art_director", "scene_designer", "runtime_engineer", "audio_agent", "visual_review_agent"] as const).map((role) => ({
+  role, provider: "qa-provider", model: "qa-model", status: "succeeded", startedAt: now, completedAt: now,
+  inputDigest: `in-${role}`, outputDigest: `out-${role}`, mutates: [role],
+}));
+const realAgentOutputs = { design: {}, artDirection: {}, scene: {}, visualReview: { passed: true, score: 88, blockers: [], revisionInstructions: [], screenshotBytes: 4096 } };
+
+const unlabeled = buildGameProductionRun({ spec, assetManifest });
+assert.equal(unlabeled.candidate.decision, "rejected", "role labels without real model executions must fail closed");
+assert.ok(unlabeled.candidate.blockers.includes("real_agent_missing:art_director"));
+const run = buildGameProductionRun({ spec, assetManifest, realAgentExecutions, realAgentOutputs });
 assert.equal(run.passes.length, 6, "all production roles must execute");
 assert.deepEqual(run.passes.map((pass) => pass.role), [
   "design_director", "gameplay_designer", "art_director", "ux_designer", "runtime_engineer", "qa_agent",
@@ -72,6 +84,8 @@ const semanticReady = buildGameProductionRun({
   prompt: racingPrompt,
   spec: { ...spec, agenticModule: { version: 1, entry: "createGame", source: semanticSource } },
   assetManifest,
+  realAgentExecutions,
+  realAgentOutputs,
 });
 assert.equal(semanticReady.candidate.decision, "ready_for_playtest");
 
