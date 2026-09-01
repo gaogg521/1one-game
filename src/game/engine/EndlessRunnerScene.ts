@@ -20,6 +20,12 @@ import { buildSceneGoalGuidance } from "@/lib/scene-goal-guidance";
 import { runtimeSeedFromSpec } from "@/lib/runtime-seed";
 import { initQaState, setPhaserQaState } from "@/game/engine/phaser-qa-state";
 import { schedulePhaserPlayReady } from "@/game/engine/phaser-play-ready";
+import {
+  assetBackgroundAlpha,
+  bestSpriteKey,
+  fitSpriteDisplay,
+  preloadSpriteSet,
+} from "@/game/engine/phaser-loaded-sprites";
 import { hudEndlessRunnerScore, bannerEndlessRunnerWin } from "@/lib/i18n/game-hud-labels";
 
 type EndPayload = { score: number; won: boolean };
@@ -75,7 +81,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
     lane: number;
     passed: boolean;
   }> = [];
-  private coins: Array<{ obj: Phaser.GameObjects.Text; lane: number; collected: boolean }> = [];
+  private coins: Array<{ obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text; lane: number; collected: boolean }> = [];
 
   // 计分 / 生命
   private score = 0;
@@ -102,6 +108,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
   private bgGraphics!: Phaser.GameObjects.Graphics;
   private roadGraphics!: Phaser.GameObjects.Graphics;
   private scrollGraphics!: Phaser.GameObjects.Graphics;
+  private backdropMounted = false;
 
   // 输入
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -130,6 +137,9 @@ export class EndlessRunnerScene extends Phaser.Scene {
     if (this.backgroundUrl) {
       this.load.image("bgTex", this.backgroundUrl);
     }
+    // The visual agent's output is a delivery input, not merely a file saved
+    // beside the project.  Every runner consumes the generated actor kit.
+    if (this.projectId) preloadSpriteSet(this, this.projectId, ["player", "hazard", "gem"]);
   }
 
   create() {
@@ -164,13 +174,9 @@ export class EndlessRunnerScene extends Phaser.Scene {
     this.bgGraphics = this.add.graphics().setDepth(-20);
     this.paintBackdrop();
 
-    // 文生图背景（贴在天空层）
-    if (this.backgroundUrl && this.textures.exists("bgTex")) {
-      this.add
-        .image(this.viewW / 2, this.roadTopY * 0.5, "bgTex")
-        .setDepth(-15)
-        .setAlpha(0.55);
-    }
+    // 文生图背景必须占满镜头：旧实现只把它当作很淡的小块天空，导致
+    // 美术 Agent 已产出、实际试玩却仍像几何占位画面。
+    this.mountGeneratedBackdrop();
 
     // 道路静态层（梯形透视框 + 道线）
     this.roadGraphics = this.add.graphics().setDepth(-10);
@@ -273,6 +279,35 @@ export class EndlessRunnerScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Keep authored art as the actual scene, rather than a faint decorative
+   * overlay.  A second loader attempt makes the runtime resilient when a
+   * freshly-created project receives its asset URL just after Phaser boot.
+   */
+  private mountGeneratedBackdrop() {
+    const mount = (key: string) => {
+      if (this.backdropMounted || !this.textures.exists(key)) return;
+      this.backdropMounted = true;
+      this.add
+        .image(this.viewW / 2, this.viewH / 2, key)
+        .setOrigin(0.5)
+        .setDisplaySize(this.viewW, this.viewH)
+        .setDepth(-15)
+        .setAlpha(Math.max(0.82, assetBackgroundAlpha(this.projectId, "showcase")));
+    };
+
+    if (this.textures.exists("bgTex")) {
+      mount("bgTex");
+      return;
+    }
+    if (!this.backgroundUrl || this.load.isLoading()) return;
+
+    const retryKey = "runnerGeneratedBackdrop";
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => mount(retryKey));
+    this.load.image(retryKey, this.backgroundUrl);
+    this.load.start();
+  }
+
   private paintRoadFrame() {
     const g = this.roadGraphics;
     const roadColor = parseInt("2d3a4f", 16);
@@ -282,7 +317,8 @@ export class EndlessRunnerScene extends Phaser.Scene {
     const topW = this.laneTopWidth * this.bp.lanes;
     const botW = this.laneBotWidth * this.bp.lanes;
     const cx = this.viewW / 2;
-    g.fillStyle(roadColor, 0.95);
+    // 保留跑道可读性，同时让项目的场景美术穿透，不再盖掉整张生成背景。
+    g.fillStyle(roadColor, 0.72);
     g.beginPath();
     g.moveTo(cx - topW / 2, this.roadTopY);
     g.lineTo(cx + topW / 2, this.roadTopY);
@@ -345,15 +381,18 @@ export class EndlessRunnerScene extends Phaser.Scene {
     container.add(shadow);
     container.setData("shadow", shadow);
 
-    // 跑者：用 emoji 代替矩形+圆头几何形
-    const body = this.add
-      .text(0, -10, "🏃", {
-        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
-        fontSize: "56px",
-      })
-      .setOrigin(0.5)
-      .setTint(playerColor)
-      .setDepth(50);
+    const spriteKey = bestSpriteKey(this, "player");
+    const body = spriteKey
+      ? this.add.image(0, -12, spriteKey).setOrigin(0.5).setDepth(50)
+      : this.add
+          .text(0, -10, "🏃", {
+            fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+            fontSize: "56px",
+          })
+          .setOrigin(0.5)
+          .setTint(playerColor)
+          .setDepth(50);
+    if (body instanceof Phaser.GameObjects.Image) fitSpriteDisplay(body, 64);
     container.add(body);
     container.setData("body", body);
 
@@ -430,16 +469,20 @@ export class EndlessRunnerScene extends Phaser.Scene {
     const hazardCol = parseInt(this.spec.theme.hazardColor.replace("#", ""), 16);
 
     const container = this.add.container(0, 0).setDepth(40);
-    // 障碍用 emoji：路障🚧/高栏🚷/低栏♿，比纯矩形更可读
+    const spriteKey = bestSpriteKey(this, "hazard");
+    // Generated hazard artwork replaces the legacy emoji placeholder.
     const emoji = kind === "barrier" ? "🚧" : kind === "high" ? "🚷" : "♿";
-    const body = this.add
-      .text(0, -20, emoji, {
-        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
-        fontSize: "48px",
-      })
-      .setOrigin(0.5)
-      .setTint(hazardCol)
-      .setDepth(40);
+    const body = spriteKey
+      ? this.add.image(0, -20, spriteKey).setOrigin(0.5).setDepth(40)
+      : this.add
+          .text(0, -20, emoji, {
+            fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+            fontSize: "48px",
+          })
+          .setOrigin(0.5)
+          .setTint(hazardCol)
+          .setDepth(40);
+    if (body instanceof Phaser.GameObjects.Image) fitSpriteDisplay(body, 54);
     container.add(body);
     // 初始 screenX：屏幕右端外
     const initScreenX = this.viewW + 60;
@@ -450,14 +493,14 @@ export class EndlessRunnerScene extends Phaser.Scene {
   private spawnCoin() {
     const seed = runtimeSeedFromSpec(this.spec);
     const lane = Math.floor(rnd(seed, this.score + this.coins.length + 99) * this.bp.lanes);
-    const collectCol = parseInt(
-      (this.spec.theme.collectibleColor ?? "#fcd34d").replace("#", ""),
-      16,
-    );
-    const coin = this.add.text(0, 0, "🪙", {
-      fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
-      fontSize: "28px",
-    }).setOrigin(0.5).setDepth(35);
+    const spriteKey = bestSpriteKey(this, "gem");
+    const coin = spriteKey
+      ? this.add.image(0, 0, spriteKey).setOrigin(0.5).setDepth(35)
+      : this.add.text(0, 0, "🪙", {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif",
+          fontSize: "28px",
+        }).setOrigin(0.5).setDepth(35);
+    if (coin instanceof Phaser.GameObjects.Image) fitSpriteDisplay(coin, 34);
     // 旋转闪烁动画
     this.tweens.add({
       targets: coin,
