@@ -56,9 +56,11 @@ export function buildCanonicalAstrocadeSpec(
         })
       : (opts.persistedSpec ?? mockSpecFromPrompt(trimmed));
 
-  const sampleId =
-    explicitSampleId ??
-    inferredId;
+  // A persisted user project must keep its own asset identity.  Prompt-based
+  // gallery matching is useful only while creating a new spec; applying it
+  // again at play time silently swaps the user's generated background for a
+  // sample profile with a similar prompt (e.g. an endless runner).
+  const sampleId = explicitSampleId ?? (preferPersisted ? persistedVariantId : inferredId);
 
   let result = enrichGameSpecForRuntime(base, trimmed, locale, {
     sampleId,
