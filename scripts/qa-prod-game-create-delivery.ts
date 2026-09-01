@@ -67,13 +67,16 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
     "runtime_build_manifest",
     "game_production_candidate",
     "gameplay_acceptance_contract",
+    "game_agent_execution_ledger",
+    "visual_review_report",
   ];
-  const deadline = Date.now() + 10 * 60_000;
+  const productionWaitMs = Math.max(10 * 60_000, Number(process.env.QA_AGENT_PRODUCTION_WAIT_MS ?? 30 * 60_000));
+  const deadline = Date.now() + productionWaitMs;
   let lastKinds: string[] = [];
   while (Date.now() < deadline) {
     const detail = await readProject(page, projectId);
     const kinds = (detail.core?.revision?.artifacts ?? []).map((item) => item.kind ?? "").filter(Boolean);
-    const bgmReady = kinds.includes("bgm") || kinds.includes("bgm_notes");
+    const bgmReady = kinds.includes("bgm");
     lastKinds = kinds;
     if (detail.core?.revision?.status === "ready" && required.every((kind) => kinds.includes(kind)) && bgmReady && !detail.assetJob) {
       stages.push({ at: new Date().toISOString(), stage: "delivery_artifacts_ready", detail: { kinds } });

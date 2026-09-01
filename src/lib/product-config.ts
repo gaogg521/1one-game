@@ -133,7 +133,7 @@ export const PRODUCT = {
     repairTimeoutMs: 90_000,
     enhanceTimeoutMs: 120_000,
     /** Agentic 模块：完整 JS 源码 JSON，需更长网关超时 */
-    agenticTimeoutMs: 120_000,
+    agenticTimeoutMs: 200_000,
     agenticRepairTimeoutMs: 150_000,
     /** 模型链整段（含 repair / 多模型回退） */
     totalTimeoutMs: 300_000,

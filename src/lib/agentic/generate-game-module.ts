@@ -215,7 +215,9 @@ export async function generateAgenticGameModule(
 
   const localeGroup = await runtimeLocaleGroupForCurrentRequest();
   const gameRoute = resolveGameModelRoute({ prompt, localeGroup });
-  const models = gameRoute.models;
+  const models = options?.requireLlm
+    ? [...gameRoute.models].sort((a, b) => Number(/pro/i.test(b)) - Number(/pro/i.test(a)))
+    : gameRoute.models;
   if (!models.length || !getActiveProvider()) {
     orch?.note("agentic_gen_result", { source: "fallback", reason: "no_llm" });
     if (options?.requireLlm) return { ok: false, reason: "runtime_engineer_model_missing" };
