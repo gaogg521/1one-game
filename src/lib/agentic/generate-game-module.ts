@@ -223,6 +223,7 @@ export async function generateAgenticGameModule(
   }
 
   const system = buildAgenticSystemPrompt();
+  const productionBaseline = options?.requireLlm ? buildTemplateFallbackModule(spec) : null;
   let lastSource = "";
   let lastReason = "invalid";
   const limits = agenticGenLimits(options?.bounded);
@@ -232,7 +233,12 @@ export async function generateAgenticGameModule(
       logAgenticProgress(model, attempt, attempt === 0 ? "generate" : `repair(${lastReason})`);
       const user =
         attempt === 0
-          ? buildAgenticUserPrompt(prompt, spec)
+          ? productionBaseline
+            ? buildAgenticRepairPrompt(prompt, spec, productionBaseline.source, "real_runtime_agent_must_transform_baseline", [
+                "Consume every REAL DESIGN/ART/SCENE AGENT OUTPUT included in the request.",
+                "Return a materially changed executable source; an unchanged baseline is a failed agent execution.",
+              ])
+            : buildAgenticUserPrompt(prompt, spec)
           : buildAgenticRepairPrompt(prompt, spec, lastSource, lastReason);
 
       const executionStartedAt = new Date().toISOString();
@@ -269,6 +275,10 @@ export async function generateAgenticGameModule(
         const mod = parseLlmModule(result.raw);
         if (!mod) {
           lastReason = "parse_failed";
+          continue;
+        }
+        if (productionBaseline && mod.source.replace(/\s+/g, "") === productionBaseline.source.replace(/\s+/g, "")) {
+          lastReason = "runtime_agent_returned_unchanged_baseline";
           continue;
         }
 
