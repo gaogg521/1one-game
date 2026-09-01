@@ -44,13 +44,16 @@ export function buildBackgroundPrompt(spec: GameSpec, brief?: CreativeBrief | nu
   const bgColor = spec.theme.backgroundColor || "#1a1a2e";
   const templateStyle = resolveBackgroundTemplateStyle(spec);
 
+  const runnerScene = spec.templateId === "endless-runner"
+    ? "an ancient jungle temple escape route at sunrise: colossal carved stone gate in the distance, wet mossy ruins, hanging vines, warm god rays through tropical canopy, a wide clear center path with safe negative space for game actors, dramatic layered depth"
+    : templateStyle;
   const base = [
-    `2D game background scene, ${templateStyle}`,
+    `premium mobile game environment concept art, ${runnerScene}`,
     `game title mood: ${mood}`,
     `template: ${spec.templateId}`,
-    `dominant color: ${bgColor}, smooth gradients, atmospheric depth`,
-    `simple clean vector game art style, no text, no UI elements, no characters`,
-    `seamless and tileable, suitable for a casual web game`,
+    `dominant color: ${bgColor}, polished color script, cinematic lighting, rich material detail, clear foreground/midground/background separation`,
+    `production-quality stylized game illustration, no text, no UI elements, no logos, no watermark, no characters`,
+    `landscape 3:2 composition, suitable for a premium mobile web game`,
   ].join(", ");
 
   return appendBriefVisualDirection(
@@ -82,8 +85,8 @@ export async function generateGameBackground(
 
   try {
     const result = await generateImageDetailed(prompt, {
-      size: "1024x1024",
-      quality: "standard",
+      size: "1536x1024",
+      quality: "high",
     });
 
     if (!result.ok || !result.url) {

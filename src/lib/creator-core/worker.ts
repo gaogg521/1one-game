@@ -45,27 +45,13 @@ import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
-import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
-import { resolveAgenticPlayRoute } from "@/lib/opengame-skills/play-route";
+import { resolveAgenticPlayRoute, stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
 import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightIteration } from "@/lib/game-preflight-iteration";
-import { runRealGamePlanningAgents, runRealRuntimeCodeAgent, runRealVisualReviewAgent, type RealAgentExecution } from "@/lib/game-production-agents";
 import type { GameArtDirection } from "@/lib/game-art-direction";
-import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
-
-async function withJobLeaseHeartbeat<T>(jobId: string, workerId: string, stage: string, work: () => Promise<T>): Promise<T> {
-  const timer = setInterval(() => {
-    void heartbeatGenerationJob(jobId, workerId, { percent: 2, stage, detail: `${stage} model call in progress` }, 180_000);
-  }, 30_000);
-  try {
-    return await work();
-  } finally {
-    clearInterval(timer);
-  }
-}
 
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
@@ -209,41 +195,32 @@ async function executeGameProductionJob(
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
 
+  // One-prompt games use the maintained genre renderer for the first playable
+  // build.  This makes delivery predictable and prevents a slow code model
+  // from replacing a polished runtime with an unreviewed sketch.
+  spec = stripAgenticModuleForDedicatedRoute(spec);
+  await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+
   await markCreativeRevisionGenerating(job.creativeRevisionId);
-  await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "design_director", detail: "running independent design, art and scene agents" });
-  const planning = await withJobLeaseHeartbeat(job.id, workerId, "planning_agents", () => runRealGamePlanningAgents({ prompt: sourceProject.prompt, spec, brief: briefResult.data }));
-  const realAgentExecutions: RealAgentExecution[] = [...planning.executions];
-
-  const bespokeRequested = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
-  if (bespokeRequested) {
-    // Never trust an agenticModule carried over from the prompt preview. That
-    // module has not necessarily passed asset usage or real-browser checks.
-    // Production owns the executable and rebuilds it on every bounded repair
-    // round so a failed visual review can actually change code.
-    await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building and browser-reviewing bespoke game runtime" });
-    const productionSpec = { ...spec, agenticPlayRoute: "agentic" as const };
-    const baseline = buildTemplateFallbackModule(productionSpec);
-    const generated = await withJobLeaseHeartbeat(job.id, workerId, "runtime_engineer", () => runRealRuntimeCodeAgent({ prompt: planning.augmentedPrompt, spec: productionSpec, baseline }));
-    realAgentExecutions.push(generated.execution);
-    spec = { ...productionSpec, agenticModule: generated.module };
-    await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
-  }
-
-  const assetArtifact = await executeGameAssetJob(job, workerId, spec, planning.artDirection);
+  // The first playable build must be fast and visually coherent.  Do not make
+  // a user wait for several text agents to rewrite a working runtime: the
+  // deterministic genre scene owns interaction, while one art direction feeds
+  // every generated visual asset.  Review/iteration remains a post-play step.
+  await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "art_direction", detail: "creating one cohesive visual game kit" });
+  const artDirection = buildGameArtDirection(spec, briefResult.data);
+  const assetArtifact = await executeGameAssetJob(job, workerId, spec, artDirection);
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
-  const audio = (assetManifest as { bgm?: { source?: string; model?: string } } | null)?.bgm;
-  if (audio?.source === "audio_model" && audio.model) {
-    const now = new Date().toISOString();
-    realAgentExecutions.push({ role: "audio_agent", provider: "configured_game_bgm_provider", model: audio.model, status: "succeeded", startedAt: now, completedAt: now, inputDigest: sourceProject.id, outputDigest: audio.model, mutates: ["bgm"] });
-  }
-
-  await heartbeatGenerationJob(job.id, workerId, { percent: 70, stage: "visual_review_agent", detail: "reviewing the actual rendered browser screenshot" });
-  const visualReview = await runRealVisualReviewAgent({ projectId: sourceProject.id, prompt: sourceProject.prompt });
-  realAgentExecutions.push(visualReview.execution);
-
-  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "gameplay_and_art_review", detail: "reviewing gameplay, art and interaction deliverables" });
-  const run = buildGameProductionRun({ spec, prompt: sourceProject.prompt, brief: briefResult.data, assetManifest, productionRound: payload.productionRound, realAgentExecutions, realAgentOutputs: { design: planning.design, artDirection: planning.artDirection, scene: planning.scene, visualReview: visualReview.review } });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "playable_candidate", detail: "assembling the playable game" });
+  const run = buildGameProductionRun({
+    spec,
+    prompt: sourceProject.prompt,
+    brief: briefResult.data,
+    assetManifest,
+    productionRound: payload.productionRound,
+    directGeneration: true,
+    realAgentOutputs: { artDirection },
+  });
   let lastArtifact = assetArtifact;
   for (let index = 0; index < run.artifacts.length; index += 1) {
     const artifact = run.artifacts[index]!;

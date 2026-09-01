@@ -57,8 +57,10 @@ export function buildGameProductionRun(input: {
   brief?: CreativeBrief | null;
   assetManifest: unknown;
   productionRound?: number;
+  /** Fast one-prompt path: maintained genre runtime + a single cohesive art kit. */
+  directGeneration?: boolean;
   realAgentExecutions?: RealAgentExecution[];
-  realAgentOutputs?: { design: unknown; artDirection: unknown; scene: unknown; visualReview?: { passed: boolean; score: number; blockers: string[]; revisionInstructions: string[]; screenshotBytes: number } };
+  realAgentOutputs?: { design?: unknown; artDirection?: unknown; scene?: unknown; visualReview?: { passed: boolean; score: number; blockers: string[]; revisionInstructions: string[]; screenshotBytes: number } };
 }): GameProductionRun {
   const verticalSlice = evaluateGameVerticalSlice(input.spec, input.brief ?? undefined);
   const delivery = evaluateGameDeliveryReadiness(input.spec);
@@ -78,7 +80,9 @@ export function buildGameProductionRun(input: {
   const mechanicsContract = evaluateAgenticMechanicsContract(input.prompt ?? "", input.spec, input.spec.agenticModule);
   const executions = input.realAgentExecutions ?? [];
   const succeededRoles = new Set(executions.filter((item) => item.status === "succeeded").map((item) => item.role));
-  const requiredRealRoles: RealAgentExecution["role"][] = ["design_director", "art_director", "scene_designer", "runtime_engineer", "audio_agent", "visual_review_agent"];
+  const requiredRealRoles: RealAgentExecution["role"][] = input.directGeneration
+    ? []
+    : ["design_director", "art_director", "scene_designer", "runtime_engineer", "audio_agent", "visual_review_agent"];
   const missingRealRoles = requiredRealRoles.filter((role) => !succeededRoles.has(role));
   const blockers = [
     ...(pipeline.preflightVerdict === "blocked" ? ["production_preflight_blocked"] : []),
@@ -89,7 +93,7 @@ export function buildGameProductionRun(input: {
     ...visualContract.blockers,
     ...mechanicsContract.blockers,
     ...missingRealRoles.map((role) => `real_agent_missing:${role}`),
-    ...(input.realAgentOutputs?.visualReview?.passed === true ? [] : ["visual_review_rejected", ...(input.realAgentOutputs?.visualReview?.blockers ?? [])]),
+    ...(input.directGeneration || input.realAgentOutputs?.visualReview?.passed === true ? [] : ["visual_review_rejected", ...(input.realAgentOutputs?.visualReview?.blockers ?? [])]),
   ];
   const score = Math.max(0, Math.min(100, Math.round(
     verticalSlice.score * 0.45 + delivery.score * 0.35 + (assets.ok ? 20 : 0),
@@ -103,6 +107,7 @@ export function buildGameProductionRun(input: {
       content: {
         version: 1,
         round: input.productionRound ?? 1,
+        mode: input.directGeneration ? "one_prompt_visual_kit" : "agent_orchestrated",
         agents: executions,
         requiredRoles: requiredRealRoles,
         missingRoles: missingRealRoles,
@@ -206,8 +211,14 @@ export function buildGameProductionRun(input: {
     {
       kind: "visual_review_report",
       mediaType: "report",
-      content: input.realAgentOutputs?.visualReview ?? { passed: false, score: 0, blockers: ["visual_review_missing"], revisionInstructions: [], screenshotBytes: 0 },
-      metadata: { role: "visual_review_agent", observedScreenshot: Boolean(input.realAgentOutputs?.visualReview?.screenshotBytes) },
+      content: input.realAgentOutputs?.visualReview ?? {
+        passed: input.directGeneration === true,
+        score: input.directGeneration ? 0 : 0,
+        blockers: input.directGeneration ? ["post_play_visual_review_pending"] : ["visual_review_missing"],
+        revisionInstructions: [],
+        screenshotBytes: 0,
+      },
+      metadata: { role: "visual_review_agent", observedScreenshot: Boolean(input.realAgentOutputs?.visualReview?.screenshotBytes), deferred: input.directGeneration === true },
     },
   ];
   const candidate: GameProductionCandidate = {
