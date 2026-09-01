@@ -55,6 +55,17 @@ import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightItera
 import { runRealGamePlanningAgents, runRealVisualReviewAgent, type RealAgentExecution } from "@/lib/game-production-agents";
 import type { GameArtDirection } from "@/lib/game-art-direction";
 
+async function withJobLeaseHeartbeat<T>(jobId: string, workerId: string, stage: string, work: () => Promise<T>): Promise<T> {
+  const timer = setInterval(() => {
+    void heartbeatGenerationJob(jobId, workerId, { percent: 2, stage, detail: `${stage} model call in progress` }, 180_000);
+  }, 30_000);
+  try {
+    return await work();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 async function executeGameAssetJob(
   job: { id: string; creativeProjectId: string; creativeRevisionId: string | null; payloadJson: string },
   workerId: string,
@@ -199,7 +210,7 @@ async function executeGameProductionJob(
 
   await markCreativeRevisionGenerating(job.creativeRevisionId);
   await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "design_director", detail: "running independent design, art and scene agents" });
-  const planning = await runRealGamePlanningAgents({ prompt: sourceProject.prompt, spec, brief: briefResult.data });
+  const planning = await withJobLeaseHeartbeat(job.id, workerId, "planning_agents", () => runRealGamePlanningAgents({ prompt: sourceProject.prompt, spec, brief: briefResult.data }));
   const realAgentExecutions: RealAgentExecution[] = [...planning.executions];
 
   const bespokeRequested = spec.agenticPlayRoute === "agentic" || requiresBespokeRuntime(spec);
@@ -209,12 +220,12 @@ async function executeGameProductionJob(
     // Production owns the executable and rebuilds it on every bounded repair
     // round so a failed visual review can actually change code.
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building and browser-reviewing bespoke game runtime" });
-    const generated = await generateAgenticGameModule(
+    const generated = await withJobLeaseHeartbeat(job.id, workerId, "runtime_engineer", () => generateAgenticGameModule(
       planning.augmentedPrompt,
       { ...spec, agenticPlayRoute: "agentic" },
       undefined,
-      { bounded: true, requireLlm: true },
-    );
+      { bounded: false, requireLlm: true },
+    ));
     if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
     if (generated.source !== "llm" || !generated.execution) throw new Error("runtime_engineer_not_real_agent");
     realAgentExecutions.push({
