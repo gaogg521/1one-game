@@ -255,6 +255,13 @@ export class EndlessRunnerScene extends Phaser.Scene {
 
   private paintBackdrop() {
     const g = this.bgGraphics;
+    if (this.backgroundUrl) {
+      // The parent holds the generated scene art; this light veil preserves
+      // HUD contrast without redrawing the old generic mountain silhouettes.
+      g.fillStyle(0x07131b, 0.16);
+      g.fillRect(0, 0, this.viewW, this.viewH);
+      return;
+    }
     const skyTop = parseInt(this.spec.theme.backgroundColor.replace("#", ""), 16);
     const skyBot = phaserUintToCssHex(0x1e293b).replace("#", "");
     const skyBotInt = parseInt(skyBot, 16);

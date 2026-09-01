@@ -80,7 +80,7 @@ export function applySpritesOverAliasMap(
   }
 }
 
-/** Resolve best available sprite texture key (after aliasMap): SVG > PNG > procedural-in-base-key */
+/** Resolve final-art texture first: PNG > SVG > procedural-in-base-key. */
 export function bestSpriteKey(
   scene: Phaser.Scene,
   kind: "player" | "hazard" | "gem" | "power" | "boss",
@@ -94,8 +94,8 @@ export function bestSpriteKey(
   };
   const base = keyMap[kind];
   if (!base) return null;
-  // Check _svg and _png suffixes; base key may be procedural (set by aliasMap)
-  return firstExistingTexture(scene, [`${base}_svg`, `${base}_png`, base]);
+  // PNG is the image agent's final-art output. SVG remains the fast fallback.
+  return firstExistingTexture(scene, [`${base}_png`, `${base}_svg`, base]);
 }
 
 /** 运行时背景图可见度下限：用户生成默认不能像淡水印一样消失。 */

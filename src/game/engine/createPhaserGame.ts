@@ -133,6 +133,18 @@ export function createPhaserGame(
     manifest: typeof window !== "undefined" ? readAssetManifestFromSession() : null,
     themeBackground: specPlay.theme.backgroundColor,
   });
+  // The generated runner environment is the stage itself. Keep a resilient
+  // DOM backdrop underneath Phaser so a texture-cache hand-off cannot turn
+  // a completed visual-Agent asset into a blank geometric scene.
+  const useDomArtBackdrop = specPlay.templateId === "endless-runner" && Boolean(assets.backgroundUrl);
+  const previousBackgroundImage = parent.style.backgroundImage;
+  const previousBackgroundSize = parent.style.backgroundSize;
+  const previousBackgroundPosition = parent.style.backgroundPosition;
+  if (useDomArtBackdrop && assets.backgroundUrl) {
+    parent.style.backgroundImage = `url("${assets.backgroundUrl}")`;
+    parent.style.backgroundSize = "cover";
+    parent.style.backgroundPosition = "center";
+  }
   const blockyAdventure = isMinecraftLikeSpec(specPlay);
   // Old projects are upgraded in-memory; every newly generated project already
   // persists this contract.  Runtime therefore never silently skips levels or sound.
@@ -275,6 +287,7 @@ export function createPhaserGame(
     width: initialSize.width,
     height: initialSize.height,
     backgroundColor: specPlay.theme.backgroundColor,
+    transparent: useDomArtBackdrop,
     resolution: dpr,
     physics: {
       default: "arcade",
@@ -323,6 +336,9 @@ export function createPhaserGame(
     resizeObserver?.disconnect();
     window.removeEventListener("orientationchange", syncScaleToParent);
     clearPhaserQaGame(game);
+    parent.style.backgroundImage = previousBackgroundImage;
+    parent.style.backgroundSize = previousBackgroundSize;
+    parent.style.backgroundPosition = previousBackgroundPosition;
   });
 
   const bootAudio = () => {
