@@ -103,9 +103,14 @@ export async function POST(req: Request) {
     // Persist the maintained genre runtime as the first playable version.
     // Production must not first snapshot an unreviewed Agentic module and only
     // later replace the Project row: play revisions are immutable.
-    const spec = stripAgenticModuleForDedicatedRoute(
+    const directSpec = stripAgenticModuleForDedicatedRoute(
       prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req)),
     );
+    // A newly created user game is not a gallery sample. Keeping a sampled
+    // profile here makes the runtime resolve `/game-bg/sample-*` instead of
+    // the just-generated project art, which is exactly how a polished scene
+    // was replaced by the generic runner backdrop.
+    const { samplePlayProfile: _sampleProfile, ...spec } = directSpec;
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);
