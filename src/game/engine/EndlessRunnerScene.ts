@@ -707,7 +707,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
 
   // ─── 事件 ────────────────────────────────────────────────────────────
 
-  private onCollectCoin(co: { obj: Phaser.GameObjects.Text; lane: number }) {
+  private onCollectCoin(co: { obj: Phaser.GameObjects.Text | Phaser.GameObjects.Image; lane: number }) {
     this.combo += 1;
     this.comboResetAt = this.time.now + 1500;
     const comboBonus = Math.min(this.combo, 5);
