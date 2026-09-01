@@ -52,8 +52,9 @@ import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
 import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightIteration } from "@/lib/game-preflight-iteration";
-import { runRealGamePlanningAgents, runRealVisualReviewAgent, type RealAgentExecution } from "@/lib/game-production-agents";
+import { runRealGamePlanningAgents, runRealRuntimeCodeAgent, runRealVisualReviewAgent, type RealAgentExecution } from "@/lib/game-production-agents";
 import type { GameArtDirection } from "@/lib/game-art-direction";
+import { buildTemplateFallbackModule } from "@/lib/agentic/template-fallback-modules";
 
 async function withJobLeaseHeartbeat<T>(jobId: string, workerId: string, stage: string, work: () => Promise<T>): Promise<T> {
   const timer = setInterval(() => {
@@ -220,26 +221,11 @@ async function executeGameProductionJob(
     // Production owns the executable and rebuilds it on every bounded repair
     // round so a failed visual review can actually change code.
     await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "runtime_generation", detail: "building and browser-reviewing bespoke game runtime" });
-    const generated = await withJobLeaseHeartbeat(job.id, workerId, "runtime_engineer", () => generateAgenticGameModule(
-      planning.augmentedPrompt,
-      { ...spec, agenticPlayRoute: "agentic" },
-      undefined,
-      { bounded: false, requireLlm: true },
-    ));
-    if (!generated.ok) throw new Error(`game_runtime_generation_failed:${generated.reason}`);
-    if (generated.source !== "llm" || !generated.execution) throw new Error("runtime_engineer_not_real_agent");
-    realAgentExecutions.push({
-      role: "runtime_engineer",
-      provider: generated.execution.provider,
-      model: generated.execution.model,
-      status: "succeeded",
-      startedAt: generated.execution.startedAt,
-      completedAt: generated.execution.completedAt,
-      inputDigest: "augmented_design_art_scene_prompt",
-      outputDigest: generated.module.source.slice(0, 0) + String(generated.module.source.length),
-      mutates: ["agentic_module", "runtime_build_manifest"],
-    });
-    spec = { ...spec, agenticPlayRoute: "agentic", agenticModule: generated.module };
+    const productionSpec = { ...spec, agenticPlayRoute: "agentic" as const };
+    const baseline = buildTemplateFallbackModule(productionSpec);
+    const generated = await withJobLeaseHeartbeat(job.id, workerId, "runtime_engineer", () => runRealRuntimeCodeAgent({ prompt: planning.augmentedPrompt, spec: productionSpec, baseline }));
+    realAgentExecutions.push(generated.execution);
+    spec = { ...productionSpec, agenticModule: generated.module };
     await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
   }
 
