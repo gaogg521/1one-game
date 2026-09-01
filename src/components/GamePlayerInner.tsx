@@ -22,6 +22,7 @@ import { recordScore, getHighScore } from "@/game/engine/local-highscore";
 import { evaluateGameVerticalSlice } from "@/lib/game-vertical-slice";
 import { createGameplayTelemetrySession } from "@/lib/gameplay-telemetry.client";
 import { VoxelSandboxPlayer } from "@/components/VoxelSandboxPlayer";
+import { StandaloneRunnerPlayer } from "@/components/StandaloneRunnerPlayer";
 import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 type GamePlayerInnerProps = {
@@ -38,6 +39,10 @@ type GamePlayerInnerProps = {
 };
 
 export default function GamePlayerInner(props: GamePlayerInnerProps) {
+  // New runner productions no longer enter the legacy Phaser template path.
+  if (props.spec.templateId === "endless-runner" && !props.spec.samplePlayProfile?.variantId) {
+    return <StandaloneRunnerPlayer spec={props.spec} projectId={props.projectId} previewMode={props.previewMode} onEnd={props.onEnd} />;
+  }
   if (props.spec.samplePlayProfile?.showcaseRuntime === "voxel-frontier") {
     return <VoxelSandboxPlayer spec={props.spec} projectId={props.projectId} onEnd={props.onEnd} />;
   }
