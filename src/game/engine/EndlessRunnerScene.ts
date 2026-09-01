@@ -627,7 +627,7 @@ export class EndlessRunnerScene extends Phaser.Scene {
    * - scale：近端 1.0，远端 0.4
    */
   private applyPerspective(
-    obj: Phaser.GameObjects.Container | Phaser.GameObjects.Text,
+    obj: Phaser.GameObjects.Container | Phaser.GameObjects.Text | Phaser.GameObjects.Image,
     screenX: number,
     lane: number,
     yLift = 0,
