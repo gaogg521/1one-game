@@ -23,6 +23,7 @@ import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { stripAgenticModuleForDedicatedRoute } from "@/lib/opengame-skills/play-route";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -99,7 +100,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const spec = prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req));
+    // Persist the maintained genre runtime as the first playable version.
+    // Production must not first snapshot an unreviewed Agentic module and only
+    // later replace the Project row: play revisions are immutable.
+    const spec = stripAgenticModuleForDedicatedRoute(
+      prepareGameSpecForPersist(specRaw, trimmed, resolveRequestLocaleSync(req)),
+    );
     const brief = briefRaw !== undefined ? parseCreativeBriefBody(briefRaw) : null;
     const briefJson = brief ? serializeCreativeBrief(brief) : null;
     const { report: quality } = assessGameCreatorQuality(spec, brief);
