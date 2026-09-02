@@ -140,8 +140,15 @@ export async function llmJsonOpenAICompatible(params: {
     try {
       const r = await run(req.mode);
       if (r.raw !== null) return { ok: true, provider: req.provider, model: req.model, mode: r.mode, raw: r.raw };
-    } catch {
-      // fallthrough — 每次 run 使用独立 AbortController
+    } catch (error) {
+      // Retrying JSON Object is only useful when the gateway explicitly does
+      // not support JSON Schema. A timeout/network/auth failure must return
+      // immediately instead of doubling every runtime-generation wait.
+      const summary = safeErrorSummary(error, { gatewayBaseUrl });
+      if (!/response[_ ]format|json[_ ]schema|unsupported.*schema|schema.*unsupported/i.test(summary)) {
+        return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: summary };
+      }
+      // fallthrough — each run uses an independent AbortController
     }
     const fallbackMode: LlmMode = req.mode === "json_schema" ? "json_object" : "json_schema";
     const r2 = await run(fallbackMode);

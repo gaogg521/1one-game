@@ -210,7 +210,22 @@ async function executeGameProductionJob(
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
   await heartbeatGenerationJob(job.id, workerId, { percent: 60, stage: "runtime_code_agent", detail: "generating an original independent playable runtime" });
-  const generatedRuntime = await generateAgenticGameModule(sourceProject.prompt, spec);
+  // Runtime generation can legitimately span several provider attempts. Keep
+  // the durable lease alive while the model is still working so another worker
+  // cannot reclaim the same revision midway through code generation.
+  const runtimeHeartbeat = setInterval(() => {
+    void heartbeatGenerationJob(job.id, workerId, {
+      percent: 60,
+      stage: "runtime_code_agent",
+      detail: "waiting for independent runtime generation",
+    });
+  }, 45_000);
+  let generatedRuntime: Awaited<ReturnType<typeof generateAgenticGameModule>>;
+  try {
+    generatedRuntime = await generateAgenticGameModule(sourceProject.prompt, spec, undefined, { bounded: true });
+  } finally {
+    clearInterval(runtimeHeartbeat);
+  }
   if (!generatedRuntime.ok) throw new Error(generatedRuntime.reason);
   spec = { ...spec, agenticModule: generatedRuntime.module, agenticPlayRoute: "independent" };
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });

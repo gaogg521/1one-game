@@ -5,7 +5,9 @@ import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-cont
 import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
+import { PRODUCT } from "@/lib/product-config";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 import type { RunTraceRecorder } from "@/lib/orchestration/run-trace";
 
 export type GenerateAgenticModuleResult =
@@ -14,15 +16,22 @@ export type GenerateAgenticModuleResult =
 
 /** Model-only generation. A failure remains a failure: no template or generic fallback exists. */
 export async function generateAgenticGameModule(prompt: string, spec: GameSpec, orch?: RunTraceRecorder, options?: { bounded?: boolean; requireLlm?: boolean }): Promise<GenerateAgenticModuleResult> {
+  // Durable workers start in a fresh Node process. Hydrate the encrypted DB
+  // config before resolving a route; otherwise they silently fall back to an
+  // obsolete .env key even though Console shows the newer saved credential.
+  await loadRuntimeConfig();
   const localeGroup = await runtimeLocaleGroupForCurrentRequest();
   const route = resolveGameModelRoute({ prompt, localeGroup });
   if (!getActiveProvider() || !route.models.length) return { ok: false, reason: "runtime_engineer_model_missing" };
-  const attempts = options?.bounded ? 2 : 4;
+  // A production round already has durable preflight retries. Keep each
+  // round bounded to one attempt per configured model so a creator is never
+  // trapped behind repeated long provider timeouts for the same candidate.
+  const attempts = options?.bounded ? 1 : 4;
   let lastReason = "model_empty";
   let previous = "";
   for (const model of route.models.slice(0, 2)) for (let attempt = 0; attempt < attempts; attempt += 1) {
     const startedAt = new Date().toISOString();
-    const result = await llmJson({ model, scene: route.scene, localeGroup, system: buildAgenticSystemPrompt(), user: attempt === 0 ? buildAgenticUserPrompt(prompt, spec) : buildAgenticRepairPrompt(prompt, spec, previous, lastReason), temperature: attempt === 0 ? 0.48 : 0.22, mode: "json_schema", jsonSchema: AGENTIC_MODULE_JSON_SCHEMA, timeoutMs: attempt === 0 ? 100_000 : 70_000 });
+    const result = await llmJson({ model, scene: route.scene, localeGroup, strictSceneModel: true, system: buildAgenticSystemPrompt(), user: attempt === 0 ? buildAgenticUserPrompt(prompt, spec) : buildAgenticRepairPrompt(prompt, spec, previous, lastReason), temperature: attempt === 0 ? 0.48 : 0.22, mode: "json_schema", jsonSchema: AGENTIC_MODULE_JSON_SCHEMA, timeoutMs: options?.bounded ? PRODUCT.game.genTimeoutMs : attempt === 0 ? 100_000 : 70_000 });
     if (!result.ok) { lastReason = result.error ?? "model_failed"; continue; }
     const raw = result.raw as { source?: unknown; entry?: unknown };
     previous = typeof raw.source === "string" ? raw.source : "";

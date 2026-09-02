@@ -6,10 +6,18 @@ import type { RealAgentExecution } from "@/lib/game-production-agents";
 
 const prompt = "制作一款有采集、建造、敌人和超能力的体素沙盒游戏";
 const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
+const independentFixture = `function mountGame(root, ctx) {
+  const canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; root.replaceChildren(canvas);
+  const g = canvas.getContext('2d'); const background = new Image(); const player = new Image(); const enemy = new Image();
+  background.src = ctx.assets.background || ''; player.src = ctx.assets.player || ''; enemy.src = ctx.assets.enemy || '';
+  let resource = 0, structure = 0, energy = 3, finished = false;
+  function draw() { g.fillRect(0, 0, 960, 540); if (background.complete) g.drawImage(background, 0, 0, 960, 540); if (player.complete) g.drawImage(player, 420, 290, 96, 96); if (enemy.complete) g.drawImage(enemy, 690, 280, 96, 96); g.fillText('collect resource build structure power enemy', 40, 60); requestAnimationFrame(draw); }
+  canvas.addEventListener('pointerdown', () => { resource += 1; structure += resource > 2 ? 1 : 0; energy -= 1; if (!finished && structure > 0) { finished = true; ctx.finish(true, resource); } }); draw();
+}`;
 const spec = {
   ...base,
   agenticPlayRoute: "agentic" as const,
-  agenticModule: { version: 1 as const, entry: "createGame", source: "function createGame(ctx){ return { create(scene){ const bg=ctx.assets?.backgroundKey; const player=ctx.assets?.playerKey; const enemy=ctx.assets?.enemyKey; if(bg) scene.add.image(1,1,bg); if(player) scene.add.sprite(2,2,player); if(enemy) scene.add.sprite(3,3,enemy); } }; }" },
+  agenticModule: { version: 2 as const, entry: "mountGame" as const, source: independentFixture },
   production: buildDefaultGameProductionContract({ prompt, templateId: base.templateId }),
 };
 const assetManifest = {
@@ -49,7 +57,7 @@ assert.equal((automated?.content as { observed?: boolean }).observed, false, "pr
 assert.ok(run.passes.every((pass, index) => pass.index === index + 1 && pass.consumes.length > 0 && pass.produces.length > 0));
 
 const genericVisual = buildGameProductionRun({
-  spec: { ...spec, agenticModule: { version: 1, entry: "createGame", source: "function createGame(){ return { create(){} }; }" } },
+  spec: { ...spec, agenticModule: { version: 2, entry: "mountGame", source: "function mountGame(root, ctx) { root.textContent = 'empty'; ctx.finish(false, 0); }" } },
   assetManifest,
 });
 assert.equal(genericVisual.candidate.decision, "rejected");
@@ -61,9 +69,9 @@ const semanticFake = buildGameProductionRun({
   spec: {
     ...spec,
     agenticModule: {
-      version: 1,
-      entry: "createGame",
-      source: "function createGame(ctx){ /* cars train rounds garage cup */ return { create(scene){ const bg=ctx.assets?.backgroundKey; const player=ctx.assets?.playerKey; const enemy=ctx.assets?.enemyKey; if(bg) scene.add.image(1,1,bg); if(player) scene.add.sprite(2,2,player); if(enemy) scene.add.sprite(3,3,enemy); } }; }",
+      version: 2,
+      entry: "mountGame",
+      source: `${independentFixture}\n/* cars train rounds garage cup */`,
     },
   },
   assetManifest,
@@ -71,18 +79,17 @@ const semanticFake = buildGameProductionRun({
 assert.equal(semanticFake.candidate.decision, "rejected", "mechanics named only in comments must not pass");
 assert.ok(semanticFake.candidate.blockers.includes("mechanic_missing:rail_hazard"));
 
-const semanticSource = `function createGame(ctx){
-  let cars=[], train=null, round=1, rank=4, speed=0, eliminated=false, garageUpgrade=0, cup=0;
-  return { create(scene){
-    const bg=ctx.assets?.backgroundKey, player=ctx.assets?.playerKey, enemy=ctx.assets?.enemyKey;
-    if(bg) scene.add.image(1,1,bg); if(player) cars.push(scene.add.sprite(2,2,player)); if(enemy) train=scene.add.sprite(3,3,enemy);
-    scene.input.on('pointerdown',()=>{ speed += 1; }); scene.input.on('pointerup',()=>{ speed -= 1; });
-    if(rank===cars.length){ eliminated=true; } if(round===3){ cup += garageUpgrade + 1; }
-  } };
+const semanticSource = `function mountGame(root, ctx) {
+  const canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; root.replaceChildren(canvas);
+  const g = canvas.getContext('2d'); const background = new Image(); const player = new Image(); const enemy = new Image();
+  background.src = ctx.assets.background || ''; player.src = ctx.assets.player || ''; enemy.src = ctx.assets.enemy || '';
+  let cars = [], train = null, round = 1, rank = 4, speed = 0, eliminated = false, garageUpgrade = 0, cup = 0;
+  canvas.addEventListener('pointerdown', () => { speed += 1; }); canvas.addEventListener('pointerup', () => { speed -= 1; });
+  function draw() { if (background.complete) g.drawImage(background, 0, 0, 960, 540); if (player.complete) cars.push(player); if (enemy.complete) train = enemy; if (rank === cars.length) eliminated = true; if (round === 3) { cup += garageUpgrade + 1; ctx.finish(true, cup); } requestAnimationFrame(draw); } draw();
 }`;
 const semanticReady = buildGameProductionRun({
   prompt: racingPrompt,
-  spec: { ...spec, agenticModule: { version: 1, entry: "createGame", source: semanticSource } },
+  spec: { ...spec, agenticModule: { version: 2, entry: "mountGame", source: semanticSource } },
   assetManifest,
   realAgentExecutions,
   realAgentOutputs,
@@ -99,6 +106,6 @@ const legacyArena = buildGameProductionRun({
   assetManifest,
 });
 assert.equal(legacyArena.candidate.decision, "rejected");
-assert.ok(legacyArena.candidate.blockers.includes("generic_phaser_runtime_retired"));
+assert.ok(legacyArena.candidate.blockers.includes("independent_runtime_missing"));
 
 console.log("[OK] qa-game-production-orchestrator: six material passes, candidate promotion and real-playtest boundary are enforced");

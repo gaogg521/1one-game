@@ -101,19 +101,22 @@ async function observeLlmResult<T extends LlmJsonResult | LlmTextResult>(
 }
 
 export async function llmJson(
-  req: Omit<LlmJsonRequest, "provider"> & { scene?: RuntimeSceneKey; localeGroup?: RuntimeLocaleGroup },
+  req: Omit<LlmJsonRequest, "provider"> & { scene?: RuntimeSceneKey; localeGroup?: RuntimeLocaleGroup; strictSceneModel?: boolean },
   opts?: { novelLongRun?: boolean; lengthTier?: NovelLengthTier },
 ): Promise<LlmJsonResult> {
   return observeLlmResult(req.model, "json", async () => {
-  const { localeGroup: suppliedLocaleGroup, ...request } = req;
+  const { localeGroup: suppliedLocaleGroup, strictSceneModel, ...request } = req;
   const localeGroup = suppliedLocaleGroup ?? await runtimeLocaleGroupForCurrentRequest();
   const scene = request.scene ?? inferSceneForModel(request.model, localeGroup);
   if (scene) {
     const payload = getRuntimeConfigSync().payload;
-    const candidates = preferRequestedModel(
+    const resolvedCandidates = preferRequestedModel(
       resolveSceneRouteCandidates(payload, scene, localeGroup),
       request.model,
     );
+    const candidates = strictSceneModel
+      ? resolvedCandidates.filter((candidate) => candidate.model === request.model)
+      : resolvedCandidates;
     if (!candidates.length) {
       return {
         ok: false,
