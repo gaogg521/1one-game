@@ -578,8 +578,8 @@ function jobUiLocale(payloadJson: string): string | undefined {
  * Durable-job execution boundary. New job types are added here only after
  * their payload schema and idempotency behavior have an integration test.
  */
-export async function processNextGenerationJob(workerId: string) {
-  const job = await claimGenerationJob(workerId);
+export async function processNextGenerationJob(workerId: string, preferredJobId?: string) {
+  const job = await claimGenerationJob(workerId, 90_000, preferredJobId);
   if (!job) return null;
   return withGenerationJobContext(
     job.id,

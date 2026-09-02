@@ -13,7 +13,11 @@ export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 403 });
 
   const workerId = req.headers.get("x-worker-id")?.slice(0, 96) || "api-worker";
-  const generationJob = await processNextGenerationJob(workerId);
+  // A trusted worker may resume one known durable job. This lets an operator
+  // unblock a current creator job without rewriting or cancelling unrelated
+  // jobs that happen to be older in the shared queue.
+  const preferredJobId = req.headers.get("x-generation-job-id")?.trim() || undefined;
+  const generationJob = await processNextGenerationJob(workerId, preferredJobId);
   if (generationJob) {
     return NextResponse.json({ ok: generationJob.status === "completed", processed: true, job: generationJob });
   }

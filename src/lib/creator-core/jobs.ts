@@ -37,14 +37,18 @@ export async function enqueueGenerationJob(input: NewGenerationJob) {
   }
 }
 
-export async function claimGenerationJob(workerId: string, leaseMs = 90_000) {
+export async function claimGenerationJob(workerId: string, leaseMs = 90_000, preferredJobId?: string) {
   const now = new Date();
+  const eligible = {
+    OR: [
+      { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
+      { status: "running", leaseExpiresAt: { lt: now } },
+    ],
+  } as const;
   const candidate = await prisma.generationJob.findFirst({
     where: {
-      OR: [
-        { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
-        { status: "running", leaseExpiresAt: { lt: now } },
-      ],
+      ...eligible,
+      ...(preferredJobId ? { id: preferredJobId } : {}),
     },
     orderBy: { runAfter: "asc" },
   });
@@ -52,10 +56,7 @@ export async function claimGenerationJob(workerId: string, leaseMs = 90_000) {
   const claimed = await prisma.generationJob.updateMany({
     where: {
       id: candidate.id,
-      OR: [
-        { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
-        { status: "running", leaseExpiresAt: { lt: now } },
-      ],
+      ...eligible,
     },
     data: {
       status: "running",
