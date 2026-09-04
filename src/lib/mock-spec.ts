@@ -134,7 +134,7 @@ export function mockSpecFromPrompt(prompt: string, opts: MockSpecOptions = {}): 
   const isShooter = rt.family === "shooter";
   const isCoaster = rt.family === "coaster";
   const isChess = rt.family === "chess";
-  const arenaMode = rt.arenaMode ?? "avoider";
+  const arenaMode: "avoider" | "survivor" | "collector" = rt.arenaMode ?? "avoider";
   const isSurvivor = arenaMode === "survivor";
   const isCollector = arenaMode === "collector";
 
