@@ -39,12 +39,12 @@ export async function enqueueGenerationJob(input: NewGenerationJob) {
 
 export async function claimGenerationJob(workerId: string, leaseMs = 90_000, preferredJobId?: string) {
   const now = new Date();
-  const eligible = {
+  const eligible: Prisma.GenerationJobWhereInput = {
     OR: [
       { status: { in: ["queued", "retrying"] }, runAfter: { lte: now } },
       { status: "running", leaseExpiresAt: { lt: now } },
     ],
-  } as const;
+  };
   const candidate = await prisma.generationJob.findFirst({
     where: {
       ...eligible,
