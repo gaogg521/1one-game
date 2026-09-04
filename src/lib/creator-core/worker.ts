@@ -62,7 +62,7 @@ async function executeGameAssetJob(
   const [project, coreProject] = await Promise.all([
     prisma.project.findUnique({
       where: { id: payload.projectId },
-      select: { id: true, ownerKey: true, coverPath: true },
+      select: { id: true, ownerKey: true, coverPath: true, prompt: true },
     }),
     prisma.creativeProject.findUnique({
       where: { id: job.creativeProjectId },
@@ -106,10 +106,11 @@ async function executeGameAssetJob(
     stage: "generating",
     detail: bgm.source === "audio_model" ? "audio-model BGM ready" : bgm.source === "llm_notes" ? "LLM BGM fallback ready" : "procedural BGM fallback ready",
   });
-  const artDirection = artDirectionOverride ?? buildGameArtDirection(spec, briefResult.data);
+  const artDirection = artDirectionOverride ?? buildGameArtDirection(spec, briefResult.data, project.prompt);
   const result = await runProjectAssetPipeline({
     projectId: project.id,
     spec,
+    prompt: project.prompt,
     brief: briefResult.data,
     uiLocale: payload.uiLocale as import("@/i18n/routing").AppLocale,
     existingCoverPath: project.coverPath,
@@ -205,7 +206,7 @@ async function executeGameProductionJob(
   // deterministic genre scene owns interaction, while one art direction feeds
   // every generated visual asset.  Review/iteration remains a post-play step.
   await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "art_direction", detail: "creating one cohesive visual game kit" });
-  const artDirection = buildGameArtDirection(spec, briefResult.data);
+  const artDirection = buildGameArtDirection(spec, briefResult.data, sourceProject.prompt);
   const assetArtifact = await executeGameAssetJob(job, workerId, spec, artDirection);
   let assetManifest: unknown = null;
   try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
@@ -236,7 +237,6 @@ async function executeGameProductionJob(
     brief: briefResult.data,
     assetManifest,
     productionRound: payload.productionRound,
-    directGeneration: true,
     realAgentOutputs: { artDirection },
   });
   let lastArtifact = assetArtifact;

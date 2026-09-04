@@ -25,6 +25,8 @@ export type ProjectAssetPipelineResult = {
 export type RunProjectAssetPipelineOptions = {
   projectId: string;
   spec: GameSpec;
+  /** Preserve the user's wording when this pipeline is called outside a production worker. */
+  prompt?: string;
   brief?: CreativeBrief | null;
   uiLocale?: AppLocale;
   existingCoverPath?: string | null;
@@ -41,7 +43,7 @@ export async function runProjectAssetPipeline(
 ): Promise<ProjectAssetPipelineResult> {
   const uiLocale = opts.uiLocale ?? "zh-Hans";
   const brief = opts.brief ?? null;
-  const artDirection = opts.artDirection ?? buildGameArtDirection(opts.spec, brief);
+  const artDirection = opts.artDirection ?? buildGameArtDirection(opts.spec, brief, opts.prompt);
 
   // SVG sprites（文本 LLM，快速）与背景/PNG sprites 并行
   const [generatedBackgroundUrl, svgSprites, pngSprites] = await Promise.all([

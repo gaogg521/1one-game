@@ -10,9 +10,11 @@ export type GameArtDirection = {
   requiredAssetSlots: Array<"background" | "player" | "enemy" | "collectible" | "ui">;
   promptSuffix: string;
   negativePrompt: string;
+  /** Original creator intent carried into every asset prompt. */
+  creatorIntent: string | null;
 };
 
-const TEMPLATE_DIRECTION: Partial<Record<GameSpec["templateId"], Omit<GameArtDirection, "version" | "kind" | "promptSuffix">>> = {
+const TEMPLATE_DIRECTION: Partial<Record<GameSpec["templateId"], Omit<GameArtDirection, "version" | "kind" | "promptSuffix" | "creatorIntent">>> = {
   towerDefense: {
     visualLanguage: "premium illustrated casual strategy art with readable silhouettes and layered depth",
     camera: "three-quarter elevated playfield camera",
@@ -44,8 +46,8 @@ const TEMPLATE_DIRECTION: Partial<Record<GameSpec["templateId"], Omit<GameArtDir
 };
 
 /** A durable visual brief created before asset generation, never reconstructed from a finished screenshot. */
-export function buildGameArtDirection(spec: GameSpec, brief?: CreativeBrief | null): GameArtDirection {
-  const fallback: Omit<GameArtDirection, "version" | "kind" | "promptSuffix"> = {
+export function buildGameArtDirection(spec: GameSpec, brief?: CreativeBrief | null, prompt?: string): GameArtDirection {
+  const fallback: Omit<GameArtDirection, "version" | "kind" | "promptSuffix" | "creatorIntent"> = {
     visualLanguage: "premium cohesive game illustration with material depth, directional light and readable silhouettes",
     camera: "gameplay-first camera selected for the interaction plane",
     sceneComposition: "keep the primary interaction area clear and use scenery to frame play rather than cover it",
@@ -55,16 +57,19 @@ export function buildGameArtDirection(spec: GameSpec, brief?: CreativeBrief | nu
   const base = TEMPLATE_DIRECTION[spec.templateId] ?? fallback;
   const briefStyle = brief?.artStyle.filter(Boolean).join(", ").trim();
   const direction = briefStyle ? `${base.visualLanguage}; ${briefStyle}` : base.visualLanguage;
+  const creatorIntent = prompt?.replace(/\s+/g, " ").trim().slice(0, 800) || null;
   return {
     version: 1,
     kind: "game_art_direction",
     ...base,
     visualLanguage: direction,
     promptSuffix: [
+      ...(creatorIntent ? [`non-negotiable creator intent: ${creatorIntent}`] : []),
       `art direction: ${direction}`,
       `camera: ${base.camera}`,
       `composition: ${base.sceneComposition}`,
       "Create a real production game asset, not a concept sheet or a UI screenshot.",
     ].join("; "),
+    creatorIntent,
   };
 }

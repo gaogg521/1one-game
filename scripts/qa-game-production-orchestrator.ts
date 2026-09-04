@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
+import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import type { RealAgentExecution } from "@/lib/game-production-agents";
 
 const prompt = "制作一款有采集、建造、敌人和超能力的体素沙盒游戏";
 const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
+const coffeeDirection = buildGameArtDirection(base, null, "温暖手绘咖啡店，猫咪陪伴玩家完成咖啡订单");
+assert.match(coffeeDirection.promptSuffix, /咖啡店/);
+assert.equal(coffeeDirection.creatorIntent, "温暖手绘咖啡店，猫咪陪伴玩家完成咖啡订单");
 const independentFixture = `function mountGame(root, ctx) {
   const canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; root.replaceChildren(canvas);
   const g = canvas.getContext('2d'); const background = new Image(); const player = new Image(); const enemy = new Image();
