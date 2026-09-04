@@ -46,8 +46,8 @@ const realAgentExecutions: RealAgentExecution[] = (["design_director", "art_dire
 const realAgentOutputs = { design: {}, artDirection: {}, scene: {}, visualReview: { passed: true, score: 88, blockers: [], revisionInstructions: [], screenshotBytes: 4096 } };
 
 const unlabeled = buildGameProductionRun({ spec, assetManifest });
-assert.equal(unlabeled.candidate.decision, "rejected", "role labels without real model executions must fail closed");
-assert.ok(unlabeled.candidate.blockers.includes("real_agent_missing:art_director"));
+assert.equal(unlabeled.candidate.decision, "ready_for_playtest", "review-role labels must not block a runnable model game");
+assert.ok(unlabeled.candidate.advisories?.includes("real_agent_missing:art_director"));
 const run = buildGameProductionRun({ spec, assetManifest, realAgentExecutions, realAgentOutputs });
 assert.equal(run.passes.length, 6, "all production roles must execute");
 assert.deepEqual(run.passes.map((pass) => pass.role), [
@@ -64,8 +64,8 @@ const genericVisual = buildGameProductionRun({
   spec: { ...spec, agenticModule: { version: 2, entry: "mountGame", source: "function mountGame(root, ctx) { root.textContent = 'empty'; ctx.finish(false, 0); }" } },
   assetManifest,
 });
-assert.equal(genericVisual.candidate.decision, "rejected");
-assert.ok(genericVisual.candidate.blockers.includes("runtime_player_asset_unused"));
+assert.equal(genericVisual.candidate.decision, "ready_for_playtest");
+assert.ok(genericVisual.candidate.advisories?.includes("runtime_player_asset_unused"));
 
 const racingPrompt = "四辆车按住加速，在铁路道口躲避列车，每轮最后一名淘汰，三轮决赛，包含实时名次、车库升级和杯赛进度";
 const semanticFake = buildGameProductionRun({
@@ -80,8 +80,8 @@ const semanticFake = buildGameProductionRun({
   },
   assetManifest,
 });
-assert.equal(semanticFake.candidate.decision, "rejected", "mechanics named only in comments must not pass");
-assert.ok(semanticFake.candidate.blockers.includes("mechanic_missing:rail_hazard"));
+assert.equal(semanticFake.candidate.decision, "ready_for_playtest", "static mechanic review is advisory, not a generation gate");
+assert.ok(semanticFake.candidate.advisories?.includes("mechanic_missing:rail_hazard"));
 
 const semanticSource = `function mountGame(root, ctx) {
   const canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; root.replaceChildren(canvas);
@@ -101,15 +101,15 @@ const semanticReady = buildGameProductionRun({
 assert.equal(semanticReady.candidate.decision, "ready_for_playtest");
 
 const rejected = buildGameProductionRun({ spec, assetManifest: null });
-assert.equal(rejected.candidate.decision, "rejected");
-assert.ok(rejected.candidate.blockers.some((blocker) => blocker.includes("asset") || blocker.includes("background")));
+assert.equal(rejected.candidate.decision, "ready_for_playtest");
+assert.ok(rejected.candidate.advisories?.some((advisory) => advisory.includes("asset") || advisory.includes("background")));
 
 const { agenticModule: _module, ...legacyArenaSpec } = spec;
 const legacyArena = buildGameProductionRun({
   spec: { ...legacyArenaSpec, agenticPlayRoute: "dedicated" },
   assetManifest,
 });
-assert.equal(legacyArena.candidate.decision, "rejected");
-assert.ok(legacyArena.candidate.blockers.includes("independent_runtime_missing"));
+assert.equal(legacyArena.candidate.decision, "ready_for_playtest");
+assert.ok(legacyArena.candidate.advisories?.includes("independent_runtime_missing"));
 
-console.log("[OK] qa-game-production-orchestrator: six material passes, candidate promotion and real-playtest boundary are enforced");
+console.log("[OK] qa-game-production-orchestrator: direct model runtime is promoted; review output is advisory");

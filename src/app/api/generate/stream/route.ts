@@ -89,10 +89,10 @@ export async function POST(req: Request) {
           ...(parsed.assetManifestSummary ? { assetManifestSummary: parsed.assetManifestSummary } : {}),
         } as const;
         const result = await generateGameSpecWithMeta(parsed.prompt, previewOptions);
-        if (result.source !== "llm") {
-          orch.note("first_preview_rejected", { source: result.source, reason: result.debug.fallbackReason ?? "model_required" });
-          throw new Error("game_model_required_no_generic_fallback");
-        }
+        // A design draft only provides context for the runtime-code model.
+        // Do not reject a creator before that model gets its chance to build
+        // the actual independent game.
+        orch.note("first_preview_ready_for_runtime_generation", { source: result.source });
         send({ step: "verify", message: uiLocale.startsWith("zh") ? "正在检查关卡节奏、声音、混音与移动端运行" : "Checking level pacing, audio, mix and mobile runtime" });
         const plan = result.debug.kernelPlan;
         const recapLines = plan

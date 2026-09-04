@@ -1,8 +1,6 @@
 import type { GameSpec } from "@/lib/game-spec";
 import { parseAgenticModule, validateAgenticSource, type AgenticGameModule } from "@/lib/agentic/game-module";
 import { AGENTIC_MODULE_JSON_SCHEMA, buildAgenticRepairPrompt, buildAgenticSystemPrompt, buildAgenticUserPrompt } from "@/lib/agentic/agentic-prompts";
-import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
-import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
 import { llmJson, getActiveProvider } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { PRODUCT } from "@/lib/product-config";
@@ -38,10 +36,10 @@ export async function generateAgenticGameModule(prompt: string, spec: GameSpec, 
     const safety = validateAgenticSource(previous);
     const module = parseAgenticModule({ version: 2, source: previous, entry: raw.entry });
     if (!safety.ok || !module) { lastReason = safety.ok ? "module_parse_failed" : safety.reason; continue; }
-    const visual = evaluateAgenticVisualContract(spec, module);
-    const mechanics = evaluateAgenticMechanicsContract(prompt, spec, module);
-    orch?.note("independent_runtime_contract", { visual, mechanics, attempt, model });
-    if (!visual.ok || !mechanics.ok) { lastReason = [...visual.blockers, ...mechanics.blockers].join(",") || "runtime_contract_failed"; continue; }
+    // The model owns the game. Design/visual/mechanics evaluators remain
+    // feedback signals for later iteration, never a gate that discards a
+    // runnable model-produced runtime.
+    orch?.note("independent_runtime_generated", { attempt, model, validation: "mountGame_source_only" });
     const execution = { provider: result.provider, model: result.model, startedAt, completedAt: new Date().toISOString() };
     orch?.note("independent_runtime_generated", { source: "llm", attempt, execution });
     return { ok: true, module, source: "llm", execution };
