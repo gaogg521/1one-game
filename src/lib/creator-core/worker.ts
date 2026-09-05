@@ -201,16 +201,12 @@ async function executeGameProductionJob(
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
 
   await markCreativeRevisionGenerating(job.creativeRevisionId);
-  // The first playable build must be fast and visually coherent.  Do not make
-  // a user wait for several text agents to rewrite a working runtime: the
-  // deterministic genre scene owns interaction, while one art direction feeds
-  // every generated visual asset.  Review/iteration remains a post-play step.
-  await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "art_direction", detail: "creating one cohesive visual game kit" });
+  // The model-generated runtime is the first deliverable.  Assets and BGM may
+  // continue afterwards, but they must never keep a creator from receiving a
+  // playable original game.
+  await heartbeatGenerationJob(job.id, workerId, { percent: 2, stage: "art_direction", detail: "preparing model context" });
   const artDirection = buildGameArtDirection(spec, briefResult.data, sourceProject.prompt);
-  const assetArtifact = await executeGameAssetJob(job, workerId, spec, artDirection);
-  let assetManifest: unknown = null;
-  try { assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null; } catch { /* rejected below */ }
-  await heartbeatGenerationJob(job.id, workerId, { percent: 60, stage: "runtime_code_agent", detail: "generating an original independent playable runtime" });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 12, stage: "runtime_code_agent", detail: "generating an original independent playable runtime" });
   // Runtime generation can legitimately span several provider attempts. Keep
   // the durable lease alive while the model is still working so another worker
   // cannot reclaim the same revision midway through code generation.
@@ -230,6 +226,18 @@ async function executeGameProductionJob(
   if (!generatedRuntime.ok) throw new Error(generatedRuntime.reason);
   spec = { ...spec, agenticModule: generatedRuntime.module, agenticPlayRoute: "independent" };
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "asset_generation", detail: "generating optional visual assets" });
+  let assetArtifact: Awaited<ReturnType<typeof executeGameAssetJob>> | null = null;
+  let assetManifest: unknown = null;
+  try {
+    assetArtifact = await executeGameAssetJob(job, workerId, spec, artDirection);
+    assetManifest = assetArtifact.contentJson ? JSON.parse(assetArtifact.contentJson) : null;
+  } catch (error) {
+    // Asset availability is an iteration signal, not a gate on the runnable
+    // model game. The independent runtime receives its own context and can run
+    // without a generated visual pack.
+    await heartbeatGenerationJob(job.id, workerId, { percent: 82, stage: "asset_generation", detail: `assets deferred: ${error instanceof Error ? error.message.slice(0, 80) : "unknown"}` });
+  }
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "playable_candidate", detail: "validating independent playable candidate" });
   const run = buildGameProductionRun({
     spec,
