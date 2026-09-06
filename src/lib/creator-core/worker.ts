@@ -220,14 +220,34 @@ async function executeGameProductionJob(
     });
   }, 45_000);
   let forgeBuild: Awaited<ReturnType<typeof forgeGameIntoSpec>> | null = null;
+  // Held in a box: the assignment happens inside the forge's art callback,
+  // which TypeScript's control-flow analysis cannot see running, so a plain
+  // `let` would still be narrowed to null at every use below.
+  type ForgeArtRecord = { run: Awaited<ReturnType<typeof runForgeAssetAgent>>; design: Parameters<typeof missingRequiredSlots>[0] };
+  const artState: { current: ForgeArtRecord | null } = { current: null };
   try {
     if (isGameForgeEnabled()) {
       // Multi-agent build: design doc, parallel module code agents, QA audit
       // and module-scoped repair rounds. Each pass changes a real deliverable.
       forgeBuild = await forgeGameIntoSpec(sourceProject.prompt, spec, {
         brief: briefResult.data ? JSON.stringify(briefResult.data).slice(0, 6000) : null,
-        onProgress: async (stage, detail, percent) => {
-          await heartbeatGenerationJob(job.id, workerId, { percent: Math.min(70, percent), stage: `forge_${stage}`, detail });
+        onProgress: async (stage, detail, percent, milestone) => {
+          await heartbeatGenerationJob(job.id, workerId, {
+            percent: Math.min(80, percent),
+            stage: `forge_${stage}`,
+            detail,
+            milestone,
+          });
+        },
+        // Art depends only on the design, so the forge starts it the moment
+        // the design lands and it runs alongside the code agents. Doing it
+        // afterwards added its whole duration to the creator's wait.
+        generateArt: async (design, onSlotDone) => {
+          const run = await runForgeAssetAgent(sourceProject.id, design, {
+            onSlotDone: (slot) => onSlotDone({ key: slot.key, kind: slot.kind, url: slot.url, done: slot.done, total: slot.total }),
+          });
+          artState.current = { run, design };
+          return { generated: run.generated, failed: run.failed, durationMs: run.durationMs };
         },
       });
       if (!forgeBuild.ok) throw new Error(forgeBuild.reason);
@@ -242,45 +262,22 @@ async function executeGameProductionJob(
   }
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
 
-  // Art for the slots the design agent actually declared. Without this the
-  // legacy pipeline below only produces its fixed five kinds, so a design that
-  // asked for bamboo shoots and hunter traps would ship with a generic
-  // "hazard" sprite and no trap art at all — every per-slot prompt the design
-  // agent wrote would be discarded.
-  if (forgeBuild?.ok) {
-    const design = forgeBuild.build.design;
-    await heartbeatGenerationJob(job.id, workerId, {
-      percent: 74,
-      stage: "forge_art",
-      detail: `art agent generating ${design.assets.length} declared slot(s)`,
+  // The art agent already ran in parallel with the code agents inside the
+  // forge; only its report is persisted here.
+  const artRun = artState.current;
+  if (artRun) {
+    const missing = missingRequiredSlots(artRun.design, artRun.run);
+    await createCreativeArtifact({
+      creativeProjectId: job.creativeProjectId,
+      creativeRevisionId: job.creativeRevisionId,
+      idempotencyKey: `forge_art_run:${job.creativeRevisionId}`,
+      artifact: {
+        kind: "game_art_run",
+        mediaType: "report",
+        content: { slots: artRun.run.results, generated: artRun.run.generated, failed: artRun.run.failed, missingRequired: missing },
+        metadata: { role: "art_agent", generated: artRun.run.generated, failed: artRun.run.failed, durationMs: artRun.run.durationMs, parallelWithCode: true },
+      },
     });
-    try {
-      const artRun = await runForgeAssetAgent(sourceProject.id, design, {
-        onProgress: (done, total, key) => {
-          void heartbeatGenerationJob(job.id, workerId, { percent: 74, stage: "forge_art", detail: `slot ${done}/${total}: ${key}` });
-        },
-      });
-      const missing = missingRequiredSlots(design, artRun);
-      await createCreativeArtifact({
-        creativeProjectId: job.creativeProjectId,
-        creativeRevisionId: job.creativeRevisionId,
-        idempotencyKey: `forge_art_run:${job.creativeRevisionId}`,
-        artifact: {
-          kind: "game_art_run",
-          mediaType: "report",
-          content: { slots: artRun.results, generated: artRun.generated, failed: artRun.failed, missingRequired: missing },
-          metadata: { role: "art_agent", generated: artRun.generated, failed: artRun.failed, durationMs: artRun.durationMs },
-        },
-      });
-    } catch (error) {
-      // Art is an iteration signal, never a gate on a runnable game: the SDK
-      // renders a generated placeholder for any slot whose image is absent.
-      await heartbeatGenerationJob(job.id, workerId, {
-        percent: 74,
-        stage: "forge_art",
-        detail: `art deferred: ${error instanceof Error ? error.message.slice(0, 80) : "unknown"}`,
-      });
-    }
   }
 
   await heartbeatGenerationJob(job.id, workerId, { percent: 76, stage: "asset_generation", detail: "generating optional visual assets" });

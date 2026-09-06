@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { appendMilestone, parseJobProgress, type ProgressMilestone } from "@/lib/creator-core/progress-milestones";
 
 export type NewGenerationJob = {
   creativeProjectId: string;
@@ -85,13 +86,24 @@ export async function completeGenerationJob(id: string, outputArtifactId?: strin
   });
 }
 
-/** Extends a long-running worker lease and exposes coarse, owner-safe progress. */
+/**
+ * Extends a long-running worker lease and exposes owner-safe progress.
+ *
+ * `milestone` carries the artefact the pipeline just produced — the design
+ * document, a finished module, a rendered image — so a creator watching a
+ * multi-minute build sees the work appear instead of a percentage. Milestones
+ * accumulate across heartbeats; the caller only ever sends the new one.
+ */
 export async function heartbeatGenerationJob(
   id: string,
   workerId: string,
-  progress: { percent: number; stage: string; detail?: string },
+  progress: { percent: number; stage: string; detail?: string; milestone?: ProgressMilestone },
   leaseMs = 90_000,
 ) {
+  const current = await prisma.generationJob.findUnique({ where: { id }, select: { progressJson: true } });
+  const existing = parseJobProgress(current?.progressJson)?.milestones ?? [];
+  const milestones = progress.milestone ? appendMilestone(existing, progress.milestone) : existing;
+
   const result = await prisma.generationJob.updateMany({
     where: { id, status: "running", workerId },
     data: {
@@ -100,6 +112,7 @@ export async function heartbeatGenerationJob(
         percent: Math.max(1, Math.min(99, Math.round(progress.percent))),
         stage: progress.stage.slice(0, 96),
         ...(progress.detail ? { detail: progress.detail.slice(0, 400) } : {}),
+        milestones,
       }),
     },
   });

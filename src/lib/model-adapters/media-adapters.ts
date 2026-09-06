@@ -12,11 +12,8 @@ import type { AdapterOutcome, ModalityAdapter } from "@/lib/model-adapters/types
  *   TTS    /v1/audio/speech, /v1/audio/speech/generations, /v1/tts,
  *          /api/seedaudio/v1/audio/speech, /api/audio/v1/audio/speech,
  *          /api/volc/v1/audio/speech
- *   video  /v1/video/generations, /v1/videos/generations, /v1/video/generate,
- *          /v1/contents/generations/tasks,
- *          /api/seedance/v1/{video,videos}/generations,
- *          /api/seedance/v1/contents/generations/tasks,
- *          /api/volc/v1/video/generations
+ *
+ * This product has no video line, so no video adapter is registered.
  *
  * So the adapters below are wired and shaped, but deliberately report the
  * probe result instead of pretending to work: the gateway path is the missing
@@ -79,27 +76,5 @@ export const volcTtsAdapter: ModalityAdapter = {
   },
 };
 
-export const openaiVideoAdapter: ModalityAdapter = {
-  id: "video.openai_shape",
-  modality: "video",
-  matches: (model) => /^(seedance|wan[\d.]|joyveo|happyhorse)/i.test(model.trim()),
-  describe: () => `POST /v1/video/generations · ${UNROUTED_HINT}`,
-  async invoke(ctx, input): Promise<AdapterOutcome> {
-    const res = await postJson(ctx.baseUrl, ctx.apiKey, "/v1/video/generations", {
-      model: ctx.model,
-      prompt: input.prompt,
-      ...(input.extra ?? {}),
-    }, ctx.timeoutMs);
-    if (!res.ok) return { ok: false, error: res.error, status: res.status };
-    const url = typeof res.json === "object" && res.json
-      ? ((res.json as { data?: Array<{ url?: string }> }).data?.[0]?.url ?? null)
-      : null;
-    if (!url) return { ok: false, error: "video endpoint returned no url", raw: res.json };
-    return { ok: true, media: { url, mimeType: "video/mp4" }, raw: res.json };
-  },
-};
-
-// Volcengine first: it is the channel that actually works here, and it also
-// claims the seed-audio-* ids that the (unrouted) gateway speech path matches.
 export const TTS_ADAPTERS: ModalityAdapter[] = [volcTtsAdapter, openaiSpeechAdapter];
-export const VIDEO_ADAPTERS: ModalityAdapter[] = [openaiVideoAdapter];
+export const VIDEO_ADAPTERS: ModalityAdapter[] = [];

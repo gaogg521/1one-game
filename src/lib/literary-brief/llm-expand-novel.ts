@@ -3,10 +3,15 @@ import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale
 import { getNovelStyleTextModelCascade, llmJson } from "@/lib/llm";
 import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { PRODUCT } from "@/lib/product-config";
+import { reasoningAwareTimeoutMs } from "@/lib/llm/openai-token-param";
+import { coerceNovelBriefShape } from "@/lib/literary-brief/coerce-novel-brief";
 import {
   NOVEL_CREATIVE_BRIEF_SCHEMA,
   type NovelCreativeBrief,
 } from "@/lib/literary-brief/novel-types";
+
+/** One reasoning-model call for this schema measured ~40s; leave real margin. */
+const BRIEF_EXPAND_REASONING_BUDGET_MS = 75_000;
 
 const LLM_NOVEL_PARTIAL = z.object({
   logline: z.string().optional(),
@@ -111,7 +116,17 @@ export async function llmExpandNovelBrief(
           : locale === "th"
             ? "ภาษาไทย"
             : "English";
-  const timeoutMs = Math.max(4_000, Math.min(28_000, PRODUCT.novel.briefExpandTimeoutMs));
+  /**
+   * Brief expansion is an enhancement with a working fallback: if it does not
+   * land, generation proceeds from the static genre pack. It therefore must
+   * not dominate the creator's wait.
+   *
+   * Measured on this gateway: one minimax-2-7 call for this schema is ~40s,
+   * but the old shape — two models, each retrying a second response_format —
+   * turned that into 3-6 minutes that usually ended in the fallback anyway.
+   * One model, one attempt, a budget that fits a reasoning model, and skip.
+   */
+  const baseTimeoutMs = Math.max(PRODUCT.novel.briefExpandTimeoutMs, BRIEF_EXPAND_REASONING_BUDGET_MS);
   const refBlock = referenceSnippet?.trim()
     ? `\n【参考摘录】\n${referenceSnippet.trim().slice(0, 1200)}\n`
     : "";
@@ -122,7 +137,8 @@ export async function llmExpandNovelBrief(
     "这是小说/网文策划，不是游戏设计：禁止出现 templateId、HUD、关卡、玩家单位、2D 网页小游戏、director 四幕等游戏术语。\n" +
     "侧重：时代背景、人物关系、核心矛盾、情节节拍、章节奏与文风。";
 
-  for (const model of models.slice(0, 2)) {
+  // One candidate only: a second model doubles the wait for an optional step.
+  for (const model of models.slice(0, 1)) {
     try {
       const res = await llmJson({
         model,
@@ -139,15 +155,29 @@ export async function llmExpandNovelBrief(
         temperature: 0.35,
         mode: "json_schema",
         jsonSchema: NOVEL_BRIEF_JSON_SCHEMA,
-        timeoutMs,
+        // Optional step: one mode only. A json_object retry would double the wait.
+        singleModeOnly: true,
+        timeoutMs: reasoningAwareTimeoutMs(model, baseTimeoutMs),
       });
-      if (!res.ok || !res.raw || typeof res.raw !== "object") continue;
-      const parsed = LLM_NOVEL_PARTIAL.safeParse(res.raw);
-      if (!parsed.success) continue;
+      // Every failure below used to `continue` silently, so a brief that never
+      // got LLM-expanded was indistinguishable from one that was — the caller
+      // just saw expandSource="pack". Keep the fallback, but say why.
+      const debug = process.env.LITERARY_DEBUG === "1";
+      if (!res.ok || !res.raw || typeof res.raw !== "object") {
+        if (debug) console.error(`[literary-debug] novel brief model=${model} call failed: ${res.ok ? "empty raw" : res.error}`);
+        continue;
+      }
+      const parsed = LLM_NOVEL_PARTIAL.safeParse(coerceNovelBriefShape(res.raw));
+      if (!parsed.success) {
+        if (debug) console.error(`[literary-debug] novel brief model=${model} partial schema invalid: ${JSON.stringify(parsed.error.issues.slice(0, 5))}`);
+        continue;
+      }
       const merged = mergeNovelBrief(base, parsed.data);
       const checked = NOVEL_CREATIVE_BRIEF_SCHEMA.safeParse(merged);
       if (checked.success) return checked.data;
-    } catch {
+      if (debug) console.error(`[literary-debug] novel brief model=${model} merged brief invalid: ${JSON.stringify(checked.error.issues.slice(0, 5))}`);
+    } catch (e) {
+      if (process.env.LITERARY_DEBUG === "1") console.error(`[literary-debug] novel brief model=${model} threw: ${(e as Error).message}`);
       continue;
     }
   }

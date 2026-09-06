@@ -37,6 +37,30 @@ const DIGEST_SCHEMA = {
   },
 };
 
+/**
+ * Renders a value the schema wanted as text but the model may have nested.
+ * Keeps the model's own labels so "开端：… 发展：…" survives the flattening.
+ */
+function flattenText(value: unknown, depth = 0): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (depth > 2 || value == null) return undefined;
+  if (Array.isArray(value)) {
+    const parts = value.map((v) => flattenText(v, depth + 1)).filter(Boolean);
+    return parts.length ? parts.join("；") : undefined;
+  }
+  if (typeof value === "object") {
+    const parts = Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => {
+        const inner = flattenText(v, depth + 1);
+        return inner ? (/^\d+$/.test(k) ? inner : `${k}：${inner}`) : undefined;
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join("；") : undefined;
+  }
+  return undefined;
+}
+
 export async function fetchComicPlotDigest(params: {
   model: string;
   novelTitle: string;
@@ -68,15 +92,21 @@ ${params.contentExcerpt.slice(0, 20000)}
     keyProps?: string;
     keyBeats?: string[];
   };
-  if (!raw.summary?.trim()) return null;
+  // A model may nest a field the schema asked to be flat (summary as
+  // {act1, act2}, keyProps as a list). `raw.summary?.trim()` then throws
+  // "not a function" and the whole digest is lost, so flatten first.
+  const summary = flattenText(raw.summary);
+  if (!summary) return null;
   return {
     version: 1,
-    summary: raw.summary.trim().slice(0, 1200),
-    emotionalArc: String(raw.emotionalArc ?? "").trim().slice(0, 400),
-    keyProps: String(raw.keyProps ?? "").trim().slice(0, 400),
+    summary: summary.slice(0, 1200),
+    emotionalArc: (flattenText(raw.emotionalArc) ?? "").slice(0, 400),
+    keyProps: (flattenText(raw.keyProps) ?? "").slice(0, 400),
     keyBeats: Array.isArray(raw.keyBeats)
-      ? raw.keyBeats.map((x) => String(x).trim()).filter(Boolean).slice(0, 8)
-      : [],
+      ? raw.keyBeats.map((x) => flattenText(x) ?? "").filter(Boolean).slice(0, 8)
+      : raw.keyBeats && typeof raw.keyBeats === "object"
+        ? Object.values(raw.keyBeats as Record<string, unknown>).map((x) => flattenText(x) ?? "").filter(Boolean).slice(0, 8)
+        : [],
   };
 }
 

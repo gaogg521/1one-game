@@ -83,6 +83,15 @@ mountGame(document.getElementById('game'),ctx);
 }catch(error){ctx.reportError(error);}
 </script></body></html>`;
   fs.writeFileSync(path.join(outDir, "live-build.html"), html, "utf8");
+  console.log(`\n  stage timeline (a stage overlapping another means it ran in parallel):`);
+  for (let i = 0; i < stageTimes.length; i += 1) {
+    const cur = stageTimes[i]!;
+    const next = stageTimes[i + 1];
+    const span = ((next ? next.at : elapsed) - cur.at) / 1000;
+    console.log(`    ${cur.stage.padEnd(10)} started +${(cur.at / 1000).toFixed(1)}s  took ${span.toFixed(1)}s`);
+  }
+  console.log(`    TOTAL ${(elapsed / 1000).toFixed(1)}s`);
+
   console.log(`\n  wrote ${path.join(outDir, "build.json")}`);
   console.log(`  wrote ${path.join(outDir, "live-build.html")}`);
 }

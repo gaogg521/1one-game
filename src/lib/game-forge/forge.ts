@@ -20,6 +20,15 @@ import type { GameBuild, GameDesignDoc, GameModule, QaFinding, QaReport } from "
 
 type Pass = GameBuild["provenance"]["passes"][number];
 
+/** Shape mirrors ProgressMilestone; kept structural so forge stays UI-agnostic. */
+export type ForgeMilestone = {
+  kind: "design" | "module" | "art" | "qa" | "repair" | "ready";
+  label: string;
+  atMs: number;
+  imageUrl?: string;
+  data?: Record<string, unknown>;
+};
+
 export type ForgeOptions = {
   prompt: string;
   title?: string;
@@ -27,10 +36,26 @@ export type ForgeOptions = {
   winScore?: number;
   localeGroup?: RuntimeLocaleGroup;
   trace?: RunTraceRecorder;
-  /** Progress callback for durable job heartbeats. */
-  onProgress?: (stage: string, detail: string, percent: number) => void | Promise<void>;
+  /**
+   * Progress callback for durable job heartbeats.
+   *
+   * `milestone` carries the artefact just produced, so a creator watching a
+   * multi-minute build sees the design document, each finished module and each
+   * rendered image appear as they happen rather than a moving percentage.
+   */
+  onProgress?: (stage: string, detail: string, percent: number, milestone?: ForgeMilestone) => void | Promise<void>;
   /** Skip the model QA review; deterministic checks still run. */
   staticQaOnly?: boolean;
+  /**
+   * Art generation for the design's declared slots. Invoked as soon as the
+   * design lands and awaited at the very end: art depends only on the design,
+   * never on the code, so running it after the code agents added its full
+   * duration to what a creator waits through for no reason.
+   */
+  generateArt?: (
+    design: GameDesignDoc,
+    onSlotDone: (slot: { key: string; kind: string; url: string | null; done: number; total: number }) => void,
+  ) => Promise<{ generated: number; failed: number; durationMs: number }>;
 };
 
 export type ForgeResult =
@@ -49,9 +74,12 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
   const cfg = PRODUCT.gameForge;
   const startedAt = new Date().toISOString();
   const passes: Pass[] = [];
-  const progress = async (stage: string, detail: string, percent: number) => {
+  const runStartedAt = Date.now();
+  const progress = async (stage: string, detail: string, percent: number, milestone?: Omit<ForgeMilestone, "atMs">) => {
     options.trace?.note(`forge_${stage}`, { detail, percent });
-    if (options.onProgress) await options.onProgress(stage, detail, percent);
+    if (options.onProgress) {
+      await options.onProgress(stage, detail, percent, milestone ? { ...milestone, atMs: Date.now() - runStartedAt } : undefined);
+    }
   };
 
   /* ------------------------------------------------------------- design -- */
@@ -74,10 +102,53 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
     durationMs: Date.now() - designStarted,
     note: `${design.design.modules.length} modules, ${design.design.mechanics.length} mechanics, ${design.design.assets.length} asset slots`,
   });
+  await progress("design", `design ready: ${design.design.title}`, 18, {
+    kind: "design",
+    label: `设计完成：${design.design.title}`,
+    data: {
+      title: design.design.title,
+      pitch: design.design.pitch,
+      genre: design.design.genre,
+      mechanics: design.design.mechanics.map((m) => m.summary),
+      winCondition: design.design.progression.winCondition,
+      loseCondition: design.design.progression.loseCondition,
+      controls: design.design.controls.map((c) => `${c.action}：${c.touch}`),
+      assetCount: design.design.assets.length,
+      moduleCount: design.design.modules.length,
+    },
+  });
+
+  /* ----------------------------------------------------------- art (‖) -- */
+  // Started here, awaited at the end. Art and code share only the design, so
+  // overlapping them removes the entire art duration from the creator's wait.
+  const artStarted = Date.now();
+  const artPromise = options.generateArt
+    ? options.generateArt(design.design, (slot) => {
+        void progress("art", `art: ${slot.key}`, 30, {
+          kind: "art",
+          label: slot.url ? `美术完成：${slot.key}` : `美术失败：${slot.key}`,
+          imageUrl: slot.url ?? undefined,
+          data: { key: slot.key, kind: slot.kind, done: slot.done, total: slot.total },
+        });
+      }).catch((e: unknown) => {
+        options.trace?.note("forge_art_failed", { reason: (e as Error).message });
+        return null;
+      })
+    : null;
 
   /* ---------------------------------------------------------------- code -- */
-  await progress("code", `${design.design.modules.length} code agents building modules`, 26);
-  const code = await runCodeAgents(design.design, { prompt: options.prompt, localeGroup });
+  await progress("code", `${design.design.modules.length} code agents building modules (art running in parallel)`, 26);
+  const code = await runCodeAgents(design.design, {
+    prompt: options.prompt,
+    localeGroup,
+    onModuleDone: (info) => {
+      void progress("code", `module ${info.done}/${info.total}: ${info.id}`, 26 + Math.round((info.done / info.total) * 26), {
+        kind: "module",
+        label: info.ok ? `模块完成：${info.id}（${info.chars} 字符）` : `模块失败：${info.id}`,
+        data: { id: info.id, role: info.role, ok: info.ok, chars: info.chars, done: info.done, total: info.total },
+      });
+    },
+  });
   if (!code.modules.length) {
     return { ok: false, reason: `forge_no_modules:${code.failures.map((f) => f.reason).join(",") || "unknown"}`, partial: { design: design.design } };
   }
@@ -182,6 +253,19 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
   }
 
   /* ------------------------------------------------------- final assembly -- */
+  if (artPromise) {
+    await progress("art", "waiting for any art still generating", 88);
+    const art = await artPromise;
+    if (art) {
+      passes.push({
+        agent: "art_agent",
+        changed: [`art:${art.generated} slot(s)`],
+        durationMs: art.durationMs,
+        note: `${art.generated} generated, ${art.failed} failed (ran in parallel with code; wall-clock overlap ${Math.max(0, Date.now() - artStarted - art.durationMs)}ms saved)`,
+      });
+    }
+  }
+
   await progress("assemble", "assembling the runnable build", 92);
   const build: GameBuild = {
     version: 1,

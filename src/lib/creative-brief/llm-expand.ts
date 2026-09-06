@@ -4,6 +4,7 @@ import { getNovelStyleTextModelCascade } from "@/lib/model-config";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { runtimeLocaleGroup } from "@/lib/runtime-locale-routing";
 import { PRODUCT } from "@/lib/product-config";
+import { reasoningAwareTimeoutMs } from "@/lib/llm/openai-token-param";
 import type { CreativeBrief } from "@/lib/creative-brief/types";
 import { detectBriefInputLocale } from "@/lib/creative-brief/detect-input-locale";
 import { buildBriefLlmSystemPrompt } from "@/lib/creative-brief/locale-prompts";
@@ -137,7 +138,9 @@ export async function llmExpandCreativeBrief(
       : getNovelStyleTextModelCascade(localeGroup);
   if (!models.length) return base;
 
-  const timeoutMs = Math.max(4_000, Math.min(28_000, briefExpandTimeoutMs(medium)));
+  // See reasoningAwareTimeoutMs: this cap predates reasoning models and makes
+  // them time out on every candidate, degrading to the static template.
+  const baseTimeoutMs = Math.max(4_000, Math.min(28_000, briefExpandTimeoutMs(medium)));
   const system = buildBriefLlmSystemPrompt(locale, medium);
   const refBlock = referenceSnippet?.trim()
     ? `\n【参考素材摘录】\n${referenceSnippet.trim().slice(0, 1200)}\n`
@@ -160,7 +163,7 @@ export async function llmExpandCreativeBrief(
         temperature: 0.35,
         mode: "json_schema",
         jsonSchema: BRIEF_JSON_SCHEMA,
-        timeoutMs,
+        timeoutMs: reasoningAwareTimeoutMs(model, baseTimeoutMs),
       });
       if (!res.ok || !res.raw || typeof res.raw !== "object") continue;
       const parsed = LLM_BRIEF_PARTIAL.safeParse(res.raw);

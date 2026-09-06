@@ -3,7 +3,7 @@ import type { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParams
 import { safeErrorSummary } from "@/lib/llm/errors";
 import { runWithAbortTimeout } from "@/lib/llm/utils";
 import { PRODUCT } from "@/lib/product-config";
-import { openAiChatOutputTokenLimits } from "@/lib/llm/openai-token-param";
+import { openAiChatOutputTokenLimits, REASONING_HEADROOM_TOKENS } from "@/lib/llm/openai-token-param";
 import type { LlmJsonRequest, LlmJsonResult, LlmMode, LlmProvider, LlmTextRequest, LlmTextResult } from "@/lib/llm/types";
 
 /**
@@ -163,6 +163,18 @@ export async function* llmTextStreamOpenAICompatible(params: {
   }
 }
 
+/** Hard ceiling for an adaptive budget widening. */
+const MAX_JSON_OUTPUT_TOKENS = 32_768;
+
+type RunOutcome = {
+  raw: unknown | null;
+  mode: LlmMode;
+  hadContent: boolean;
+  /** Ran out of budget mid-reasoning with nothing emitted. */
+  starvedByReasoning: boolean;
+  budgetUsed: number;
+};
+
 export async function llmJsonOpenAICompatible(params: {
   client: OpenAI;
   req: Omit<LlmJsonRequest, "provider"> & { provider: LlmProvider };
@@ -174,8 +186,8 @@ export async function llmJsonOpenAICompatible(params: {
     { role: "user" as const, content: req.user },
   ];
 
-  async function run(mode: LlmMode): Promise<{ raw: unknown | null; mode: LlmMode; hadContent: boolean }> {
-    const maxOut = req.maxTokens ?? PRODUCT.llm.jsonMaxOutputTokens;
+  async function run(mode: LlmMode, budgetOverride?: number): Promise<RunOutcome> {
+    const maxOut = budgetOverride ?? req.maxTokens ?? PRODUCT.llm.jsonMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const completionParams: ChatCompletionCreateParamsNonStreaming =
       mode === "json_schema"
@@ -198,13 +210,38 @@ export async function llmJsonOpenAICompatible(params: {
       client.chat.completions.create(completionParams, { signal }),
       req.signal,
     );
-    const content = res.choices[0]?.message?.content;
-    return { raw: parseJsonContent(content), mode, hadContent: Boolean(content?.trim()) };
+    const choice = res.choices[0];
+    const content = choice?.message?.content;
+    const reasoning = (choice?.message as { reasoning_content?: unknown } | undefined)?.reasoning_content;
+    return {
+      raw: parseJsonContent(content),
+      mode,
+      hadContent: Boolean(content?.trim()),
+      // The runtime signature of a model whose reasoning ate the whole budget:
+      // it stopped because it ran out of room, emitted no answer, and spent
+      // what it had on reasoning. Detecting it here means an unrecognised
+      // reasoning model is handled correctly without being on any name list,
+      // and a non-reasoning model never triggers it.
+      starvedByReasoning:
+        !content?.trim() &&
+        choice?.finish_reason === "length" &&
+        typeof reasoning === "string" &&
+        reasoning.trim().length > 0,
+      budgetUsed: maxOut,
+    };
   }
 
   try {
     try {
-      const r = await run(req.mode);
+      let r = await run(req.mode);
+      // A starved reply is not a failure of the model, it is a budget that was
+      // sized for a model that does not think out loud. Retry once with real
+      // headroom instead of falling through to a different response_format,
+      // which would only repeat the same starvation more slowly.
+      if (r.starvedByReasoning) {
+        const widened = Math.min(MAX_JSON_OUTPUT_TOKENS, Math.max(r.budgetUsed * 3, r.budgetUsed + REASONING_HEADROOM_TOKENS * 2));
+        if (widened > r.budgetUsed) r = await run(req.mode, widened);
+      }
       if (r.raw !== null) return { ok: true, provider: req.provider, model: req.model, mode: r.mode, raw: r.raw };
     } catch (error) {
       // Retrying JSON Object is only useful when the gateway explicitly does
@@ -215,6 +252,11 @@ export async function llmJsonOpenAICompatible(params: {
         return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: summary };
       }
       // fallthrough — each run uses an independent AbortController
+    }
+    // An optional step with a working fallback opts out of the second mode:
+    // it would only double the wait before that fallback is taken anyway.
+    if (req.singleModeOnly) {
+      return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: "no parseable JSON in the single attempted mode" };
     }
     const fallbackMode: LlmMode = req.mode === "json_schema" ? "json_object" : "json_schema";
     const r2 = await run(fallbackMode);

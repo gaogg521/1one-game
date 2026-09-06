@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateImageDetailed } from "@/lib/image-generation";
 import { repoPublicPath } from "@/lib/public-path";
+import { PRODUCT } from "@/lib/product-config";
 import type { AssetSlot, GameDesignDoc } from "@/lib/game-forge/types";
 
 /**
@@ -197,17 +198,24 @@ async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<
 export async function runForgeAssetAgent(
   projectId: string,
   design: GameDesignDoc,
-  opts: { concurrency?: number; rootDir?: string; onProgress?: (done: number, total: number, key: string) => void } = {},
+  opts: {
+    concurrency?: number;
+    rootDir?: string;
+    /** Fires per slot as its image lands, with the url so a UI can show it immediately. */
+    onSlotDone?: (slot: ForgeAssetResult & { done: number; total: number }) => void;
+    onProgress?: (done: number, total: number, key: string) => void;
+  } = {},
 ): Promise<ForgeAssetRun> {
   const t0 = Date.now();
   const rootDir = opts.rootDir ?? repoPublicPath();
   const slots = design.assets;
   let done = 0;
 
-  const results = await pooled(slots, opts.concurrency ?? 3, async (slot) => {
+  const results = await pooled(slots, opts.concurrency ?? PRODUCT.gameForge.artConcurrency, async (slot) => {
     const result = await generateSlot(projectId, design, slot, rootDir);
     done += 1;
     opts.onProgress?.(done, slots.length, slot.key);
+    opts.onSlotDone?.({ ...result, done, total: slots.length });
     return result;
   });
 

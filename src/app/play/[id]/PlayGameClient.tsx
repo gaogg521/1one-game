@@ -27,6 +27,8 @@ import { getSuperAdminKey } from "@/lib/super-admin-client";
 import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { isSampleGalleryProject } from "@/lib/sample-gallery";
 import type { GameEditSchema } from "@/lib/game-edit-schema";
+import { ForgeMilestoneFeed } from "@/components/generation/ForgeMilestoneFeed";
+import type { ProgressMilestone } from "@/lib/creator-core/progress-milestones";
 
 type CoreArtifact = { kind: string; content: unknown };
 type CoreRevision = { id: string; sequence: number; cause: string; status?: string; summary: string | null; finalizedAt: string | null; artifacts: CoreArtifact[] };
@@ -40,7 +42,14 @@ type CoreSnapshot = {
   };
 };
 type PlaytestAdvice = { kind: "collect_samples" | "first_action" | "first_minute" | "early_failure" | "retry_friction" | "healthy"; priority: "info" | "warning" | "good" };
-type AssetJob = { id: string; status: "queued" | "running" | "retrying"; attempts: number; maxAttempts: number; progress: { percent?: number; stage?: string } | null };
+type AssetJob = {
+  id: string;
+  status: "queued" | "running" | "retrying";
+  attempts: number;
+  maxAttempts: number;
+  /** `milestones` carries what the build has actually produced so far. */
+  progress: { percent?: number; stage?: string; milestones?: ProgressMilestone[] } | null;
+};
 
 function graphItemCount(revision: CoreRevision | null | undefined, kind: string, key: "scenes" | "nodes"): number | null {
   const content = revision?.artifacts.find((artifact) => artifact.kind === kind)?.content;
@@ -773,7 +782,12 @@ export function PlayGameClient({ id }: { id: string }) {
               {meta.isOwner ? (
                 <div className="rounded-xl border border-violet-400/25 bg-violet-950/20 px-3 py-2 text-[11px] text-violet-100" data-testid="game-asset-job">
                   {assetJob ? (
-                    <p>{t("assetJobActive", { percent: assetJob.progress?.percent ?? 0, stage: assetJob.progress?.stage ?? assetJob.status })}</p>
+                    <>
+                      <p>{t("assetJobActive", { percent: assetJob.progress?.percent ?? 0, stage: assetJob.progress?.stage ?? assetJob.status })}</p>
+                      {assetJob.progress?.milestones?.length ? (
+                        <ForgeMilestoneFeed milestones={assetJob.progress.milestones} className="mt-3" />
+                      ) : null}
+                    </>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <p>{t("assetJobReady")}</p>

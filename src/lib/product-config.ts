@@ -188,8 +188,12 @@ export const PRODUCT = {
     /** Per-module code budget. This is the ceiling that used to cap a whole game. */
     moduleMaxTokens: 16_384,
     moduleTimeoutMs: 240_000,
-    /** How many module completions may run at once. */
-    moduleConcurrency: 3,
+    /**
+     * How many module completions may run at once. A plan is 4-7 modules, so
+     * this covers a whole plan in ONE wave — at 3 a six-module plan took two
+     * waves and doubled the code stage a creator waits through.
+     */
+    moduleConcurrency: 8,
     /** Game-feel pass rewrites whole modules, so it needs the same budget. */
     feelMaxTokens: 16_384,
     feelTimeoutMs: 200_000,
@@ -199,6 +203,8 @@ export const PRODUCT = {
     repairTimeoutMs: 200_000,
     /** Attempts per module before the build gives up on it. */
     moduleAttempts: 3,
+    /** Concurrent image generations. Slots are independent; this is the art stage's whole width. */
+    artConcurrency: 5,
   },
 
   orchestration: {

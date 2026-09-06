@@ -21,6 +21,12 @@ export type LlmJsonRequest = {
    * which silently selects for the simplest possible output.
    */
   maxTokens?: number;
+  /**
+   * Skip the automatic second attempt in the other response_format. For an
+   * optional enhancement that already has a working fallback, that retry only
+   * doubles the creator's wait before the same fallback is taken anyway.
+   */
+  singleModeOnly?: boolean;
   timeoutMs: number;
   /** P1 修复：外部 AbortSignal */
   signal?: AbortSignal;

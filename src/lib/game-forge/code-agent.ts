@@ -258,7 +258,12 @@ export type CodeAgentResult = {
  */
 export async function runCodeAgents(
   design: GameDesignDoc,
-  opts: { prompt: string; localeGroup?: RuntimeLocaleGroup } ,
+  opts: {
+    prompt: string;
+    localeGroup?: RuntimeLocaleGroup;
+    /** Fires per module as it finishes, so a creator sees them arrive one by one. */
+    onModuleDone?: (info: { id: string; role: string; ok: boolean; chars: number; done: number; total: number }) => void;
+  },
 ): Promise<CodeAgentResult> {
   const route = resolveGameModelRoute({ prompt: opts.prompt, localeGroup: opts.localeGroup });
   const startedAt = Date.now();
@@ -268,7 +273,21 @@ export async function runCodeAgents(
     return { modules, failures: [{ moduleId: "*", reason: "code_agent_model_missing" }], durationMs: 0 };
   }
 
-  const run = (plan: ModulePlan) => generateModule(design, plan, route.models, route.scene, opts.localeGroup);
+  let doneCount = 0;
+  const total = design.modules.length;
+  const run = async (plan: ModulePlan) => {
+    const result = await generateModule(design, plan, route.models, route.scene, opts.localeGroup);
+    doneCount += 1;
+    opts.onModuleDone?.({
+      id: plan.id,
+      role: plan.role,
+      ok: result.ok,
+      chars: result.ok ? result.module.source.length : 0,
+      done: doneCount,
+      total,
+    });
+    return result;
+  };
   const collect = (results: ModuleAgentResult[]) => {
     for (const r of results) {
       if (r.ok) modules.push(r.module);

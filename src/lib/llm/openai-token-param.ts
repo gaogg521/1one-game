@@ -41,6 +41,20 @@ export const REASONING_OUTPUT_TOKEN_FLOOR = 2048;
  */
 export const REASONING_HEADROOM_TOKENS = 6144;
 
+/**
+ * Reasoning also costs wall-clock. Brief expansion was written against fast
+ * completion models and capped at 24-28s; on minimax-2-7 the same call needs
+ * 30-60s, so it timed out on every model in the cascade and the caller
+ * silently fell back to its static template — novel briefs were never actually
+ * LLM-expanded, and nothing reported a failure.
+ */
+export const REASONING_MIN_TIMEOUT_MS = 90_000;
+
+/** Widens a timeout budget written for non-reasoning models. */
+export function reasoningAwareTimeoutMs(modelId: string, timeoutMs: number): number {
+  return isReasoningStyleModel(modelId) ? Math.max(timeoutMs, REASONING_MIN_TIMEOUT_MS) : timeoutMs;
+}
+
 export function isReasoningStyleModel(modelId: string): boolean {
   const m = modelId.trim().toLowerCase().replace(/^litellm\//, "");
   return /^(minimax-|glm-|deepseek-|kimi-|qwen-?3|gpt-5|o[0-9]|doubao-seed|claude-(opus|sonnet|fable))/.test(m);

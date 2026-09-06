@@ -1626,3 +1626,49 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 1. 实跑小说与漫画生成，确认围栏修复真的解除了那两条线的卡死（目前只是推断）。
 2. 把手动真机验证（`qa-game-forge-preview` + 浏览器）自动化成 QA 探针，让 `observed` 能真为 true。
 3. 拿到视频 curl 后补 `media-adapters.ts`，跑 `npm run qa:model-adapters:live` 期望 7/7。
+
+---
+
+## 2026-09-06 · 会话 N+6（文学线跑通 · 过程可见 · 并发化）
+
+### 结果
+- **文学线 3/3 全通**（此前 1/3）：`expandNovelCreativeBrief` 68s 返回 `pack+llm`（真扩写，
+  不再静默回退模板）、`fetchComicPlotDigest` 65s、`fetchComicDirectorPack` 63s。
+- 游戏线美术改为**与代码并发**，模块并发 3→8，静态检查干净时跳过模型评审。
+- 新增创作者可见的**里程碑流**：设计文档、每个模块、每张图（带 URL）实时推送到等待界面。
+
+### 本轮定位并修复
+1. **小说 brief 花 6 分钟然后静默回退模板**（最影响体验）
+   根因是三层叠加：markdown 围栏（已在上一轮修）、形状不符（`protagonist` 返回 object）、
+   以及**结构性浪费**——2 个模型 × 各自再试第二种 response_format = 4 次完整调用全废。
+   修：`coerce-novel-brief.ts` 形状归一化 + 只试 1 个模型 1 种模式（`singleModeOnly`）+
+   推理模型感知超时。**6 分钟失败 → 68 秒成功。**
+   产品判断：brief 扩写是有兜底的可选增强，不该占满创作者的耐心预算。
+2. **漫画摘要 `raw.summary?.trim is not a function`**
+   模型把 summary 给成嵌套对象。修：`flattenText` 保留模型自己的标签展平（"开端：… 发展：…"）。
+3. **美术白白排在代码之后**
+   美术只依赖设计，不依赖代码。改为设计一落地就并发启动，最后 await。省掉整个美术时长。
+4. **推理模型判定靠模型名正则太脆**（用户指出）
+   新增**运行时信号驱动**的自适应重试：`finish_reason=length` + 正文空 + 有 reasoning_content
+   → 自动放大预算重试一次。未知新模型也能覆盖，非推理模型完全不触发。
+   回归 `qa:reasoning-budget` 逐项断言非推理模型行为零变化。
+
+### 新增
+- `src/lib/creator-core/progress-milestones.ts` — 里程碑类型 + 滚动累积（上限 40）
+- `src/components/generation/ForgeMilestoneFeed.tsx` — 设计文档卡片 / 模块进度 / 美术缩略图
+- `src/lib/literary-brief/coerce-novel-brief.ts` — 小说 brief 形状归一化
+- `scripts/qa-literary-live.ts`（`npm run qa:literary-live`）、`scripts/qa-reasoning-budget.ts`
+- `heartbeatGenerationJob` 现在累积 milestones 到 `progressJson`；`/api/jobs/[id]` 原样透传
+
+### 移除
+- 视频适配器（用户确认本系统无视频线）
+
+### 仍未完成
+- **质量方差大**：同一 prompt 三次运行 QA blocker 分别为 15/3/0，不能保证每次可玩。
+- **`observed` 仍恒为 false**：真机验证仍靠手动，没有自动探针。
+- **时延仍在分钟级**：并发化已改但**未实测验证**（上次完整跑是改之前的 269-421s）。
+
+## 下次启动清单
+1. 实测并发化后的端到端耗时，与改前的 269-421s 对比。
+2. 做自动真机探针（headless 启动 playable.html + 采集 forge-* 事件），让 `observed` 能真为 true。
+3. 用探针数据驱动质量方差收敛。

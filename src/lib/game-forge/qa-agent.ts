@@ -147,6 +147,8 @@ export type QaAgentOptions = {
   localeGroup?: RuntimeLocaleGroup;
   /** Skip the model review when a caller only needs deterministic facts. */
   staticOnly?: boolean;
+  /** Force the model review even when the deterministic audit found nothing. */
+  alwaysReview?: boolean;
 };
 
 /**
@@ -354,7 +356,14 @@ export async function runQaAgent(
     `static:blockers=${findings.filter((f) => f.severity === "blocker").length}`,
   ];
 
-  if (!opts.staticOnly) {
+  // The model review costs ~30s. When the deterministic audit is completely
+  // clean it has historically had nothing to add, and a creator waiting on a
+  // build feels that half-minute — so spend it only when something already
+  // looks wrong, or when the caller explicitly asks for a full review.
+  const deterministicClean = findings.length === 0;
+  if (deterministicClean && !opts.alwaysReview) {
+    evidence.push("review:skipped=deterministic_audit_clean");
+  } else if (!opts.staticOnly) {
     const route = resolveGameModelRoute({ prompt: opts.prompt, localeGroup: opts.localeGroup });
     if (route.models.length) {
       const result = await llmJson({

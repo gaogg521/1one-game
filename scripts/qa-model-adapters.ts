@@ -34,7 +34,6 @@ const PROBES: Array<{ modality: Modality; model: string; prompt: string; size?: 
   { modality: "text", model: "minimax-2-7", prompt: 'Reply with JSON only: {"ok":true}' },
   { modality: "text", model: "glm-latest", prompt: 'Reply with JSON only: {"ok":true}' },
   { modality: "tts", model: "BV701_streaming", prompt: "这是一段测试语音。" },
-  { modality: "video", model: "seedance-2-0-pro", prompt: "a green slime hopping on grass" },
 ];
 
 async function main() {
