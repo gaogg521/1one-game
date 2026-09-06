@@ -1562,3 +1562,67 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 3. 游戏线未完成项：config 形状契约已加，`g.runState` 类写入型幻觉的确定性检查、
    repair 收敛（2 轮仍剩 blocker）仍需推进；`qa-output/game-forge-live/live-build.html` 可复现。
 4. 小说/漫画线尚未系统排查——图像路由修复后应重跑一次漫画分镜配图，确认不再降级。
+
+---
+
+## 2026-09-06 · 会话 N+5（一句话生成首次跑通可玩游戏）
+
+### 结果
+同一 prompt（熊猫竹林采笋）现在能从一句话跑到**可玩、有真实美术、零错误**的游戏：
+`qa: ok=true findings=0`，真实浏览器 boot → 首帧 → 360 帧运行、5 张图 HTTP 200、零运行时错误。
+这是第一次达成。此前每次都在真机崩溃。
+
+### 本轮定位并修复的缺陷（全部由真实执行暴露，不是静态推断）
+
+1. **markdown 围栏吞掉整条 JSON 链路**（最致命）
+   `minimax-2-7`/`glm-latest` 即使在 `json_schema` 模式下也把 JSON 包在 ```json 围栏里，
+   `parseJsonContent` 直接 `JSON.parse` 抛错 → 返回 null → 报 "empty json output"。
+   **模型答对了，解析器不认**，游戏/小说/漫画三条线同时被卡死，重试全部白烧。
+   修：`parseJsonContent` 容忍围栏与前后散文；错误信息区分"没内容"与"内容不可解析"。
+   回归：`npm run qa:json-parse`。
+2. **推理模型预算被推理吃光**
+   `reasoning_content` 与正文共享同一预算。小预算 → `finish_reason:length` + 空正文。
+   修：`openAiChatOutputTokenLimits` 对推理模型**加** `REASONING_HEADROOM_TOKENS`(6144)，
+   不只是设下限；后台连通性测试的 `max_tokens: 8` 会把健康模型误判为故障，也一并修了。
+3. **截断的残缺 JSON 被我的兜底"抢救"成功**
+   加"最外层对象"提取后，被 token 截断的回复会被切出一个**嵌套片段**并解析成功，
+   于是上层拿到一个字段大量缺失的合法对象。修：提取前先做（忽略字符串内的）分隔符配平校验。
+4. **`json_schema` 在该网关只是建议**
+   `gpt-5-4` 遵守，`minimax-2-7` 不遵守（`controls` 返回 object 而非 array 等）。
+   修：不再依赖服务端强制 —— 提示词里给**完整 JSON 骨架范例** + `design-coerce.ts` 容错归一化
+   （只重塑模型已表达的内容，绝不凭空补内容）。
+5. **`G.config is not a function`（我自己的锅）**
+   我在提示词骨架里给 config 数据对象编了个函数签名，还强制"每个 provides 都要有签名"，
+   于是消费模块照契约去调用数据值。修：签名只给可调用项；契约渲染区分"数据值/可调用"；
+   新增确定性检查 `data_called_as_function`。
+6. **`function G.tickSpawns(dt, g) {}` —— 括号配平但不是合法 JS**
+   浏览器里一个解析错误会**整块 script 失效**，游戏完全不挂载，只剩空白。
+   `checkBalanced` 查不出来。修：新增 `checkSyntax`（`new Function` 只编译不执行），
+   接入代码 Agent 每次尝试 + QA 静态审计 + 装配后整体校验。**这是最便宜也最决定性的一道闸。**
+7. **读取无人提供的 `G.player` → 核心系统每帧静默 return**
+   两个核心系统开头都是 `var p = G.player; if (!p) return;`，而没有任何模块赋值 `G.player`。
+   不崩溃、不报错、画面正常，但游戏什么都不做 —— **静默 no-op 比崩溃更糟，因为 QA 是绿的**。
+   修：新增 `auditSharedStateReads`。
+8. **精灵图 3–6MB / 带白底方块**
+   seedream 返回 2K 不透明图。修：`sharp` 降采样（精灵 512 / 背景 1280）+ **边缘 flood-fill 自动去背**
+   （不用全局色键，避免打穿主体内部同色像素；角点不一致或清除面积 >92% 时放弃）。
+   实测：单精灵 3.74MB → 73KB，整套 36MB → ~1.6MB，白框消失。
+
+### 新增
+- `src/lib/game-forge/asset-agent.ts` — 美术 Agent：按**设计声明的槽位**逐个出图（此前设计写的
+  每条槽位提示词都被丢弃，只生成固定 5 类），含压缩与自动去背；接入 worker 并记 `game_art_run` 产物。
+- `src/lib/game-forge/design-coerce.ts` — 设计回复形状归一化。
+- `scripts/qa-json-parse.ts`（`npm run qa:json-parse`）、`scripts/qa-game-forge-preview.ts`
+  （从 build.json 重建可玩页面，零模型调用，便于反复真机验证）。
+- `.claude/launch.json` 增 `forge-preview` 静态服务（file:// 会被预览面板转成 data: URL，
+  相对路径永远解析不了，必须走 HTTP 才能验证美术真的加载）。
+
+### 仍未完成
+- 视频模态：13+ 条路径全是空 200，仍需一条可用 curl。
+- 小说/漫画线尚未实跑验证（围栏修复对它们同样关键，理应一并解除卡死，但**未经实测**）。
+- `observed` 仍恒为 false：QA 没有自动化真机探针，本轮真机验证是我手动做的。
+
+## 下次启动清单
+1. 实跑小说与漫画生成，确认围栏修复真的解除了那两条线的卡死（目前只是推断）。
+2. 把手动真机验证（`qa-game-forge-preview` + 浏览器）自动化成 QA 探针，让 `observed` 能真为 true。
+3. 拿到视频 curl 后补 `media-adapters.ts`，跑 `npm run qa:model-adapters:live` 期望 7/7。

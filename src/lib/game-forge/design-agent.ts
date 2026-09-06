@@ -3,6 +3,7 @@ import { PRODUCT } from "@/lib/product-config";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import { GameDesignDocSchema, type GameDesignDoc } from "@/lib/game-forge/types";
+import { coerceDesignShape } from "@/lib/game-forge/design-coerce";
 
 /**
  * Design agent.
@@ -146,6 +147,43 @@ Rules that decide whether the build succeeds:
 - configShape: every dotted path the config module will assign onto G.config, e.g. "player.jumpVelocity", "goals.targetShoots", "run.duration". Every path needs at least one dot — group related numbers under a shared top-level namespace (player.*, goals.*, run.*, enemy.*, ...), never a flat top-level field. This is the ONLY place config nesting is decided; every module that reads config is shown this exact list and must use these exact paths, so an inconsistent or flat config is what causes tuning values to silently not apply.
 - Every other free-text field (title, pitch, mechanics, control labels, hints) is written in the player's own language from the request; only the identifiers above must stay ASCII.
 
+## The exact JSON shape
+
+Return an object with EXACTLY these keys and these container types. Arrays are
+arrays, never objects keyed by name; every listed sub-field is required on
+every element. This skeleton is the contract — copy its structure literally and
+replace the values:
+
+{
+  "title": "…", "pitch": "…", "genre": "…",
+  "stage": { "width": 960, "height": 540, "orientation": "landscape", "background": "#0b1020" },
+  "coreLoop": ["step 1", "step 2", "step 3"],
+  "controls": [ { "action": "move", "desktop": "WASD / arrows", "touch": "virtual stick" } ],
+  "mechanics": [ { "id": "flame_decay", "summary": "…", "observable": "…" } ],
+  "progression": {
+    "winCondition": "…", "loseCondition": "…",
+    "beats": [ { "at": 0.35, "label": "…", "change": "…" } ]
+  },
+  "gameFeel": ["…", "…"],
+  "configShape": ["player.moveSpeed", "goals.targetScore", "run.duration"],
+  "assets": [ { "key": "panda_player", "kind": "player", "prompt": "…", "required": true } ],
+  "audio": { "cues": [ { "event": "pickup", "sfx": "coin" } ] },
+  "modules": [
+    { "id": "game_config", "role": "config", "brief": "…", "provides": ["config"], "requires": [],
+      "signatures": [] },
+    { "id": "spawn_system", "role": "system", "brief": "…", "provides": ["spawnShoot", "tickSpawns"], "requires": ["config"],
+      "signatures": [ { "name": "spawnShoot", "params": ["g"] }, { "name": "tickSpawns", "params": ["dt", "g"] } ] },
+    { "id": "main_game", "role": "main", "brief": "…", "provides": ["main"], "requires": ["config", "tickSpawns"],
+      "signatures": [ { "name": "main", "params": ["g"] } ] }
+  ]
+}
+
+Note the empty "signatures" on the config module: "config" is a DATA object
+read as G.config.someField, not something anyone calls. Only list a signature
+for a name that is genuinely a function — a signature tells every other agent
+"call this", and a consumer that calls a data value crashes immediately with
+"G.config is not a function".
+
 ## The module plan
 
 You must split the implementation into 4-7 modules. This is the most important part of the document: each module is written by a separate agent that sees only the shared design and its own brief, so the briefs must be unambiguous and non-overlapping.
@@ -155,7 +193,8 @@ You must split the implementation into 4-7 modules. This is the most important p
 - The rest have role "system": entities, spawning, player control, enemy AI, collision resolution, scoring, level progression, rendering helpers, HUD.
 - "provides" lists the names a module assigns onto the shared G object. "requires" lists the names it reads. Keep this graph acyclic: config provides, systems build on config, main consumes everything.
 - Name things concretely for this game (G.spawnWave, G.updateHooks, G.drawTrack), not abstractly (G.helpers, G.utils).
-- "signatures" is mandatory and is the single most important field for making independent agents interoperate: for EVERY entry in "provides", give its exact parameter list, in call order, using short conventional names — "g" for the engine handle, "dt" for delta time, plain nouns for game objects ("player", "trap", "state"). Every module that calls a sibling's function will be shown this exact signature and told to match it exactly; a module that defines a function must also follow the parameter order it declared here. Fix the convention once, here, rather than leaving each agent to guess: engine-consuming functions take (g, ...) or (..., g) — pick one order and use it for every signature in this design; state-mutating functions take the piece of state they change first.
+- "signatures" is the single most important field for making independent agents interoperate: for every CALLABLE entry in "provides", give its exact parameter list, in call order, using short conventional names — "g" for the engine handle, "dt" for delta time, plain nouns for game objects ("player", "trap", "state"). Every module that calls a sibling's function is shown this exact signature and told to match it; a module that defines one must follow the parameter order it declared here. Fix the convention once, here, rather than leaving each agent to guess: engine-consuming functions take (g, ...) or (..., g) — pick one order and use it for every signature in this design; state-mutating functions take the piece of state they change first.
+- Do NOT give a signature to a data value. "config" (and any shared state object) is listed in "provides" but has no signature, because callers read G.config.player.moveSpeed — they never call G.config(). A signature on a data value makes every consumer call it and crash on the first frame.
 
 Return JSON only.`;
 }
@@ -240,7 +279,10 @@ export async function runDesignAgent(
       });
       if (verbose) console.error(`[forge-debug] design model=${model} attempt=${attempt} scene=${route.scene} elapsed=${Date.now() - attemptStarted}ms ok=${result.ok} ${result.ok ? "" : `error=${result.error}`}`);
       if (!result.ok) { lastReason = result.error ?? "design_model_failed"; break; }
-      const parsed = GameDesignDocSchema.safeParse(result.raw);
+      // json_schema is advisory on this gateway (gpt-5-4 honours it,
+      // minimax-2-7 does not), so re-shape unambiguous deviations before
+      // validating rather than failing a reply that said the right thing.
+      const parsed = GameDesignDocSchema.safeParse(coerceDesignShape(result.raw));
       if (!parsed.success) {
         const issues = parsed.error.issues.slice(0, 8).map((i) => ({ path: i.path as (string | number)[], message: i.message }));
         lastReason = `design_schema_invalid:${issues.slice(0, 3).map((i) => i.path.join(".")).join("|")}`;
@@ -271,9 +313,12 @@ function validateModulePlan(design: GameDesignDoc): { ok: true } | { ok: false; 
   const ids = new Set(design.modules.map((m) => m.id));
   if (ids.size !== design.modules.length) return { ok: false, reason: "design_plan_duplicate_ids" };
   for (const m of design.modules) {
-    const signatureNames = new Set(m.signatures.map((s) => s.name));
-    const missing = m.provides.filter((p) => !signatureNames.has(p));
-    if (missing.length) return { ok: false, reason: `design_plan_signature_missing:${m.id}:${missing.join(",")}` };
+    // A signature is required only for callables. Demanding one for every
+    // `provides` entry pushed the model into inventing `config()` for the
+    // config data object, and consumers then called it and crashed.
+    const provided = new Set(m.provides);
+    const strays = m.signatures.map((s) => s.name).filter((n) => !provided.has(n));
+    if (strays.length) return { ok: false, reason: `design_plan_signature_unprovided:${m.id}:${strays.join(",")}` };
   }
   return { ok: true };
 }

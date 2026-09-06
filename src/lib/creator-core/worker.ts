@@ -45,6 +45,7 @@ import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { forgeGameIntoSpec, isGameForgeEnabled } from "@/lib/game-forge/bridge";
+import { missingRequiredSlots, runForgeAssetAgent } from "@/lib/game-forge/asset-agent";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
@@ -240,7 +241,49 @@ async function executeGameProductionJob(
     clearInterval(runtimeHeartbeat);
   }
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
-  await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "asset_generation", detail: "generating optional visual assets" });
+
+  // Art for the slots the design agent actually declared. Without this the
+  // legacy pipeline below only produces its fixed five kinds, so a design that
+  // asked for bamboo shoots and hunter traps would ship with a generic
+  // "hazard" sprite and no trap art at all — every per-slot prompt the design
+  // agent wrote would be discarded.
+  if (forgeBuild?.ok) {
+    const design = forgeBuild.build.design;
+    await heartbeatGenerationJob(job.id, workerId, {
+      percent: 74,
+      stage: "forge_art",
+      detail: `art agent generating ${design.assets.length} declared slot(s)`,
+    });
+    try {
+      const artRun = await runForgeAssetAgent(sourceProject.id, design, {
+        onProgress: (done, total, key) => {
+          void heartbeatGenerationJob(job.id, workerId, { percent: 74, stage: "forge_art", detail: `slot ${done}/${total}: ${key}` });
+        },
+      });
+      const missing = missingRequiredSlots(design, artRun);
+      await createCreativeArtifact({
+        creativeProjectId: job.creativeProjectId,
+        creativeRevisionId: job.creativeRevisionId,
+        idempotencyKey: `forge_art_run:${job.creativeRevisionId}`,
+        artifact: {
+          kind: "game_art_run",
+          mediaType: "report",
+          content: { slots: artRun.results, generated: artRun.generated, failed: artRun.failed, missingRequired: missing },
+          metadata: { role: "art_agent", generated: artRun.generated, failed: artRun.failed, durationMs: artRun.durationMs },
+        },
+      });
+    } catch (error) {
+      // Art is an iteration signal, never a gate on a runnable game: the SDK
+      // renders a generated placeholder for any slot whose image is absent.
+      await heartbeatGenerationJob(job.id, workerId, {
+        percent: 74,
+        stage: "forge_art",
+        detail: `art deferred: ${error instanceof Error ? error.message.slice(0, 80) : "unknown"}`,
+      });
+    }
+  }
+
+  await heartbeatGenerationJob(job.id, workerId, { percent: 76, stage: "asset_generation", detail: "generating optional visual assets" });
   let assetArtifact: Awaited<ReturnType<typeof executeGameAssetJob>> | null = null;
   let assetManifest: unknown = null;
   try {

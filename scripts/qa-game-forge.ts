@@ -7,8 +7,8 @@
  * keyword in a comment — that was exactly how the previous gates were fooled.
  */
 import assert from "node:assert/strict";
-import { assembleGame, checkBalanced, orderModules, scanForbidden, stripCommentsAndStrings } from "../src/lib/game-forge/assemble";
-import { auditBuildShape, auditCallSignatures, auditConfigPaths, auditSdkUsage, auditStatic } from "../src/lib/game-forge/qa-agent";
+import { assembleGame, checkBalanced, checkSyntax, orderModules, scanForbidden, stripCommentsAndStrings } from "../src/lib/game-forge/assemble";
+import { auditBuildShape, auditCallSignatures, auditConfigPaths, auditSdkUsage, auditSharedStateReads, auditStatic } from "../src/lib/game-forge/qa-agent";
 import { GAME_FORGE_SDK_SOURCE } from "../src/lib/game-forge/runtime-sdk";
 import type { GameDesignDoc, GameModule } from "../src/lib/game-forge/types";
 
@@ -68,6 +68,24 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.equal(scanForbidden("m", "// fetch('/x') is not allowed here\nvar a = 1;").length, 0, "a forbidden call inside a comment is not a violation");
 }
 
+/* --------------------------------------------------- javascript syntax */
+{
+  // The real defect this exists for: balanced braces, valid-looking, and not
+  // parseable — which kills the whole assembled script block in the browser.
+  const bad = checkSyntax("spawn", "function G.tickSpawns(dt, g) { return 1; }", "system");
+  assert.equal(bad.length, 1, "`function G.name(...)` must be reported");
+  assert.equal(bad[0]!.code, "syntax_error");
+  assert.equal(bad[0]!.severity, "blocker");
+  assert.equal(checkBalanced("spawn", "function G.tickSpawns(dt, g) { return 1; }").length, 0, "brace balance alone cannot catch it — which is why the syntax check is needed");
+
+  assert.deepEqual(checkSyntax("spawn", "G.tickSpawns = function (dt, g) { return 1; };", "system"), [], "the correct assignment form must pass");
+  assert.deepEqual(checkSyntax("cfg", "G.config = { a: 1 };", "config"), [], "a config body must pass");
+  // A config body is compiled with (G) only, so referencing g must fail there
+  // and pass in a system module.
+  assert.deepEqual(checkSyntax("sys", "var x = g.width;", "system"), [], "a system body may reference g");
+  assert.equal(checkSyntax("m", "var x = ;", "system").length, 1, "plain malformed code must be reported");
+}
+
 /* -------------------------------------------------------- truncation */
 {
   assert.equal(checkBalanced("m", "function a() { return 1; }").length, 0);
@@ -125,6 +143,20 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("player", "system", "G.updatePlayer = function (player, g) { player.x += g.width; };"),
   ]);
   assert.deepEqual(definitionOnly, [], "a function definition must not be flagged as a mismatched call");
+
+  // A provided name with NO signature is a data value. Calling it is the
+  // "G.config is not a function" first-frame crash.
+  const calledData = auditCallSignatures(signedDesign, [
+    mod("main", "main", "G.main = function (g) { var c = G.config(); };"),
+  ]);
+  assert.equal(calledData.length, 1, "calling a data value must be flagged");
+  assert.equal(calledData[0]!.code, "data_called_as_function");
+  assert.equal(calledData[0]!.severity, "blocker");
+
+  const readData = auditCallSignatures(signedDesign, [
+    mod("main", "main", "G.main = function (g) { var s = G.config.player.speed; };"),
+  ]);
+  assert.deepEqual(readData, [], "reading a data value's fields must not be flagged");
 }
 
 /* ---------------------------------------------------- config path shape */
@@ -154,6 +186,41 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("player", "system", "var v = cfg.jumpVelocity;"),
   ]);
   assert.deepEqual(noShapeDeclared, [], "with no declared shape there is nothing to cross-check against");
+}
+
+/* ------------------------------------------- undeclared shared state read */
+{
+  // The real defect: two core systems opened with `var p = G.player; if (!p) return;`
+  // while nothing ever assigned G.player, so both silently no-oped every frame
+  // and the build still looked green.
+  const planned: GameDesignDoc = {
+    ...design,
+    modules: [
+      { id: "config", role: "config", brief: "tuning", provides: ["config"], requires: [], signatures: [] },
+      { id: "player", role: "system", brief: "movement", provides: ["updatePlayer"], requires: ["config"], signatures: [{ name: "updatePlayer", params: ["dt", "g"] }] },
+      { id: "main", role: "main", brief: "wire", provides: ["main"], requires: ["updatePlayer"], signatures: [{ name: "main", params: ["g"] }] },
+    ],
+  };
+
+  const ghost = auditSharedStateReads(planned, [
+    mod("player", "system", "G.updatePlayer = function (dt, g) { var p = G.player; if (!p) return; p.x += 1; };"),
+  ]);
+  assert.equal(ghost.length, 1, "reading a G name nobody provides must be flagged");
+  assert.equal(ghost[0]!.code, "undeclared_shared_state");
+  assert.equal(ghost[0]!.severity, "blocker");
+  assert.ok(ghost[0]!.message.includes("G.player"));
+
+  // Assigning it in any module makes it legitimate, declared in the plan or not.
+  const assigned = auditSharedStateReads(planned, [
+    mod("player", "system", "G.player = { x: 0 }; G.updatePlayer = function (dt, g) { var p = G.player; p.x += 1; };"),
+  ]);
+  assert.deepEqual(assigned, [], "a name assigned by some module is not undeclared");
+
+  // Names the assembler itself puts on G are always in scope.
+  const builtins = auditSharedStateReads(planned, [
+    mod("main", "main", "G.main = function (g) { var t = G.ctx.title; var c = G.config; var d = G.design; };"),
+  ]);
+  assert.deepEqual(builtins, [], "G.ctx / G.config / G.design are provided by the assembler");
 }
 
 /* ----------------------------------------------------- build shape audit */

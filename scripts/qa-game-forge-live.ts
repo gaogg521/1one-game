@@ -51,6 +51,18 @@ async function main() {
     console.log(`    - ${p.agent} (${p.model ?? "n/a"}) ${p.durationMs}ms : ${p.changed.join(", ")}${p.note ? ` — ${p.note}` : ""}`);
   }
 
+  // Exercise the art agent on the same design the code agents built against.
+  if (process.env.FORGE_LIVE_ART === "1") {
+    const { runForgeAssetAgent } = await import("../src/lib/game-forge/asset-agent");
+    console.log(`
+[art] generating ${build.design.assets.length} declared slot(s)…`);
+    const artRun = await runForgeAssetAgent("forge-live-demo", build.design, {
+      onProgress: (done, total, key) => console.log(`  [art] ${done}/${total} ${key}`),
+    });
+    for (const r of artRun.results) console.log(`  ${r.url ? "OK  " : "FAIL"} ${r.key.padEnd(24)} ${r.url ?? r.error} (${r.durationMs}ms)`);
+    console.log(`[art] ${artRun.generated} generated, ${artRun.failed} failed in ${artRun.durationMs}ms`);
+  }
+
   const outDir = path.join(process.cwd(), "qa-output", "game-forge-live");
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "build.json"), JSON.stringify(build, null, 2), "utf8");

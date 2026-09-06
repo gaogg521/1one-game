@@ -44,10 +44,15 @@ export type AssetSlot = z.infer<typeof AssetSlotSchema>;
 export const MODULE_ROLES = ["config", "system", "main"] as const;
 
 /**
- * The exact call convention for one `provides` entry: its name and parameter
- * list, in order. Independent code agents only ever see this contract, not
- * each other's source, so an unstated parameter order is exactly how the same
- * name ends up called two different ways by two different modules.
+ * The exact call convention for one CALLABLE `provides` entry: its name and
+ * parameter list, in order. Independent code agents only ever see this
+ * contract, not each other's source, so an unstated parameter order is exactly
+ * how the same name ends up called two different ways by two different modules.
+ *
+ * Data values exposed on `G` (config objects, shared state) are listed in
+ * `provides` but must NOT appear here: a signature reads as "this is callable",
+ * and a consumer that sees `G.config()` will call it and crash on
+ * "G.config is not a function".
  */
 export const FunctionSignatureSchema = z.object({
   name: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,40}$/),

@@ -128,6 +128,35 @@ export function checkBalanced(moduleId: string, source: string): QaFinding[] {
 }
 
 /**
+ * Real JavaScript syntax check — the cheapest and most decisive audit here.
+ *
+ * `checkBalanced` only proves the delimiters pair up, which a genuinely
+ * invalid program can still do: an observed build contained
+ * `function G.tickSpawns(dt, g) { … }` (valid-looking, perfectly balanced, and
+ * not parseable). In the browser that takes down the ENTIRE script block, so
+ * the game never mounts and the failure surfaces only as a blank frame.
+ *
+ * `new Function` compiles without executing, so this is safe to run over
+ * untrusted generated source.
+ */
+export function checkSyntax(moduleId: string, source: string, role?: GameModule["role"]): QaFinding[] {
+  try {
+    // Module bodies are compiled with the same parameters the assembler gives
+    // them, so a body that references G/g still parses in isolation.
+    if (role === "config") new Function("G", source);
+    else new Function("G", "g", source);
+    return [];
+  } catch (e) {
+    return [{
+      severity: "blocker",
+      moduleId,
+      code: "syntax_error",
+      message: `${(e as Error).message} — the module is not valid JavaScript. Assign functions as "G.name = function (args) { … }"; "function G.name(args) { … }" is a syntax error that breaks the whole build.`,
+    }];
+  }
+}
+
+/**
  * Orders modules so every `requires` is satisfied by an earlier `provides`.
  * Config always leads and main always trails regardless of declarations.
  */
@@ -193,6 +222,7 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
   for (const m of modules) {
     findings.push(...scanForbidden(m.id, m.source));
     findings.push(...checkBalanced(m.id, m.source));
+    findings.push(...checkSyntax(m.id, m.source, m.role));
   }
 
   const { ordered, findings: orderFindings } = orderModules(modules);
@@ -250,6 +280,20 @@ ${calls}
     throw error;
   }
 }`;
+
+  // One invalid module takes down the whole script block in the browser, so
+  // the assembled program is verified as a unit too.
+  try {
+    new Function(`${source}
+return typeof mountGame;`);
+  } catch (e) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "assembled_syntax_error",
+      message: `the assembled runtime is not valid JavaScript: ${(e as Error).message}`,
+    });
+  }
 
   return { source, findings };
 }

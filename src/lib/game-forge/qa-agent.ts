@@ -2,7 +2,7 @@ import { llmJson } from "@/lib/llm";
 import { PRODUCT } from "@/lib/product-config";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
-import { auditSdkUsage, checkBalanced, scanForbidden, stripCommentsAndStrings } from "@/lib/game-forge/assemble";
+import { auditSdkUsage, checkBalanced, checkSyntax, scanForbidden, stripCommentsAndStrings } from "@/lib/game-forge/assemble";
 import { checkRoleContract } from "@/lib/game-forge/code-agent";
 import type { GameDesignDoc, GameModule, QaFinding, QaReport } from "@/lib/game-forge/types";
 
@@ -180,13 +180,37 @@ function countCallArgs(code: string, openParenIndex: number): number | null {
  */
 export function auditCallSignatures(design: GameDesignDoc, modules: GameModule[]): QaFinding[] {
   const sigByName = new Map<string, { params: string[]; owner: string }>();
+  /** Provided names with no signature: data on G, not callables. */
+  const dataByName = new Map<string, string>();
   for (const plan of design.modules) {
+    const signed = new Set((plan.signatures ?? []).map((s) => s.name));
     for (const sig of plan.signatures ?? []) {
       if (!sigByName.has(sig.name)) sigByName.set(sig.name, { params: sig.params, owner: plan.id });
     }
+    for (const name of plan.provides ?? []) {
+      if (!signed.has(name) && !dataByName.has(name)) dataByName.set(name, plan.id);
+    }
   }
-  if (!sigByName.size) return [];
+
   const findings: QaFinding[] = [];
+
+  // Calling a data value is an immediate first-frame TypeError, and it is what
+  // happens whenever the plan lets `config` look callable.
+  for (const mod of modules) {
+    const code = stripCommentsAndStrings(mod.source);
+    for (const [name, owner] of dataByName) {
+      const called = new RegExp(`G\\s*\\.\\s*${name}\\s*\\(`).test(code);
+      if (!called) continue;
+      findings.push({
+        severity: "blocker",
+        moduleId: mod.id,
+        code: "data_called_as_function",
+        message: `calls G.${name}(...) but ${owner} exposes G.${name} as a data value, not a function — read its fields (G.${name}.someField) instead; calling it throws "G.${name} is not a function" on the first frame`,
+      });
+    }
+  }
+
+  if (!sigByName.size) return findings;
   for (const mod of modules) {
     const code = stripCommentsAndStrings(mod.source);
     for (const [name, sig] of sigByName) {
@@ -252,12 +276,61 @@ export function auditConfigPaths(design: GameDesignDoc, modules: GameModule[]): 
   return findings;
 }
 
+/** Names the assembler itself puts on G, so they are never "undeclared". */
+const ASSEMBLER_PROVIDED = new Set(["ctx", "design", "g", "config", "main"]);
+
+/**
+ * Flags reads of a `G.<name>` that no module in the plan provides.
+ *
+ * This is the mirror image of the signature check, and it catches a failure
+ * that is invisible to every other audit: an observed build had both
+ * `updatePlayer` and `checkCollisions` open with
+ * `var player = G.player; if (!player) return;` while nothing ever assigned
+ * `G.player`. The code parsed, ran, threw nothing, drew a frame — and both
+ * core systems returned immediately on every tick, so the game did nothing at
+ * all. A silent no-op is worse than a crash, because QA sees a green build.
+ */
+export function auditSharedStateReads(design: GameDesignDoc, modules: GameModule[]): QaFinding[] {
+  const provided = new Set<string>(ASSEMBLER_PROVIDED);
+  for (const plan of design.modules) for (const name of plan.provides ?? []) provided.add(name);
+  // A module may also assign onto G directly without declaring it in the plan;
+  // that is untidy but not a defect, so treat it as provided.
+  for (const mod of modules) {
+    const assignRe = /\bG\s*\.\s*([A-Za-z_$][\w$]*)\s*=/g;
+    let m: RegExpExecArray | null = assignRe.exec(stripCommentsAndStrings(mod.source));
+    while (m) { provided.add(m[1]!); m = assignRe.exec(stripCommentsAndStrings(mod.source)); }
+  }
+
+  const findings: QaFinding[] = [];
+  for (const mod of modules) {
+    const code = stripCommentsAndStrings(mod.source);
+    const readRe = /\bG\s*\.\s*([A-Za-z_$][\w$]*)/g;
+    const flagged = new Set<string>();
+    let m: RegExpExecArray | null = readRe.exec(code);
+    while (m) {
+      const name = m[1]!;
+      if (!provided.has(name) && !flagged.has(name)) {
+        flagged.add(name);
+        findings.push({
+          severity: "blocker",
+          moduleId: mod.id,
+          code: "undeclared_shared_state",
+          message: `reads G.${name}, but no module provides or assigns it — it is permanently undefined. Code like "var x = G.${name}; if (!x) return;" then makes this function a silent no-op on every frame instead of failing loudly.`,
+        });
+      }
+      m = readRe.exec(code);
+    }
+  }
+  return findings;
+}
+
 /** Deterministic pass only. Cheap, and safe to run inside unit tests. */
 export function auditStatic(design: GameDesignDoc, modules: GameModule[]): QaFinding[] {
   const findings: QaFinding[] = [];
   for (const m of modules) {
     findings.push(...scanForbidden(m.id, m.source));
     findings.push(...checkBalanced(m.id, m.source));
+    findings.push(...checkSyntax(m.id, m.source, m.role));
     findings.push(...auditSdkUsage(m.id, m.source));
     const plan = design.modules.find((p) => p.id === m.id);
     if (plan) findings.push(...checkRoleContract(plan, m.source));
@@ -265,6 +338,7 @@ export function auditStatic(design: GameDesignDoc, modules: GameModule[]): QaFin
   findings.push(...auditBuildShape(design, modules));
   findings.push(...auditCallSignatures(design, modules));
   findings.push(...auditConfigPaths(design, modules));
+  findings.push(...auditSharedStateReads(design, modules));
   return findings;
 }
 

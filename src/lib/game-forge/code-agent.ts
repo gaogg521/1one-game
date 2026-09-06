@@ -3,7 +3,7 @@ import { PRODUCT } from "@/lib/product-config";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import type { RuntimeLocaleGroup } from "@/lib/runtime-providers";
 import { GAME_FORGE_SDK_REFERENCE } from "@/lib/game-forge/sdk-reference";
-import { auditSdkUsage, checkBalanced, scanForbidden } from "@/lib/game-forge/assemble";
+import { auditSdkUsage, checkBalanced, checkSyntax, scanForbidden } from "@/lib/game-forge/assemble";
 import type { GameDesignDoc, GameModule, ModulePlan, QaFinding } from "@/lib/game-forge/types";
 
 /**
@@ -44,10 +44,15 @@ function designSummary(design: GameDesignDoc): string {
   ].join("\n");
 }
 
-/** Renders one provided name with its exact declared call signature. */
+/**
+ * Renders one provided name. A name with a declared signature is callable and
+ * shown with its exact parameter list; a name without one is a DATA value and
+ * must be shown as such, or a consumer will call it and crash with
+ * "G.x is not a function".
+ */
 function signatureLine(plan: ModulePlan, name: string): string {
   const sig = plan.signatures.find((s) => s.name === name);
-  return sig ? `G.${sig.name}(${sig.params.join(", ")})` : `G.${name}(?)`;
+  return sig ? `G.${sig.name}(${sig.params.join(", ")})` : `G.${name}  (data value — read its fields, never call it)`;
 }
 
 function moduleContract(design: GameDesignDoc, plan: ModulePlan): string {
@@ -85,6 +90,12 @@ You output the BODY of a function. Do not write the function signature, do not w
 - A "main" module body receives (G, g) and must assign G.main = function (g) { ... g.start({ init, update, draw, restart }); }.
 
 G is the shared namespace. Everything you expose goes on G. Everything a sibling exposes is read from G.
+
+CRITICAL syntax rule: expose a function by ASSIGNING it —
+    G.tickSpawns = function (dt, g) { ... };
+Writing "function G.tickSpawns(dt, g) { ... }" is NOT valid JavaScript. It looks
+right and its braces balance, but it fails to parse, and a parse error anywhere
+takes down the entire assembled game, so nothing renders at all.
 
 CRITICAL ordering rule: modules run in dependency order, but sibling functions are late-bound. Read G.somethingFromASibling INSIDE your functions, never at the top level of your body. Top-level code in your module may only touch G.config, ctx and the engine.
 
@@ -173,7 +184,7 @@ async function generateModule(
       // for two rounds. Auditing SDK usage here means a repair attempt is
       // rejected and retried within its OWN attempt budget instead of being
       // accepted and waiting for the next round to notice.
-      findings = [...scanForbidden(plan.id, source), ...checkBalanced(plan.id, source), ...auditSdkUsage(plan.id, source)];
+      findings = [...scanForbidden(plan.id, source), ...checkBalanced(plan.id, source), ...checkSyntax(plan.id, source, plan.role), ...auditSdkUsage(plan.id, source)];
       findings.push(...checkRoleContract(plan, source));
       const blockers = findings.filter((f) => f.severity === "blocker");
       if (blockers.length) { lastReason = blockers.map((b) => b.code).join(","); continue; }

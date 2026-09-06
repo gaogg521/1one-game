@@ -4,8 +4,25 @@
     {
       "name": "next-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 8888
+    },
+    {
+      "name": "forge-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "http-server",
+        ".",
+        "-p",
+        "8123",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 8123
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { normalizeOpenAIBaseURL } from "@/lib/openai-client";
 import type { RuntimeLlmProvider } from "@/lib/runtime-providers";
+import { REASONING_OUTPUT_TOKEN_FLOOR } from "@/lib/llm/openai-token-param";
 
 export type ProviderTestResult = {
   ok: boolean;
@@ -41,9 +42,12 @@ async function testOpenAIChatEndpoint(
   model: string,
 ): Promise<ProviderTestResult> {
   const url = `${base}/chat/completions`;
+  // The capped retry has to leave room for reasoning_content: a reasoning
+  // model given 8 tokens answers 200 with finish_reason=length and no content,
+  // so a healthy model would be reported as broken.
   const bodies: Array<Record<string, unknown>> = [
     { model, messages: [{ role: "user", content: "ping" }] },
-    { model, messages: [{ role: "user", content: "ping" }], max_tokens: 8 },
+    { model, messages: [{ role: "user", content: "ping" }], max_tokens: REASONING_OUTPUT_TOKEN_FLOOR },
   ];
   for (const body of bodies) {
     try {

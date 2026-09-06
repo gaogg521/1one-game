@@ -109,6 +109,7 @@
     "qa:game-production-pipeline": "tsx scripts/qa-game-production-pipeline.ts",
     "qa:game-production-artifacts": "tsx scripts/qa-game-production-artifacts.ts",
     "qa:game-forge": "tsx scripts/qa-game-forge.ts",
+    "qa:json-parse": "tsx scripts/qa-json-parse.ts",
     "qa:model-adapters": "tsx scripts/qa-model-adapters.ts",
     "qa:model-adapters:live": "tsx scripts/qa-model-adapters.ts --live",
     "qa:game-production-orchestrator": "tsx scripts/qa-game-production-orchestrator.ts",
