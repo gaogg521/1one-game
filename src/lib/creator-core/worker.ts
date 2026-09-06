@@ -44,6 +44,7 @@ import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-evidence";
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
+import { forgeGameIntoSpec, isGameForgeEnabled } from "@/lib/game-forge/bridge";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
@@ -217,14 +218,27 @@ async function executeGameProductionJob(
       detail: "waiting for independent runtime generation",
     });
   }, 45_000);
-  let generatedRuntime: Awaited<ReturnType<typeof generateAgenticGameModule>>;
+  let forgeBuild: Awaited<ReturnType<typeof forgeGameIntoSpec>> | null = null;
   try {
-    generatedRuntime = await generateAgenticGameModule(sourceProject.prompt, spec, undefined, { bounded: true });
+    if (isGameForgeEnabled()) {
+      // Multi-agent build: design doc, parallel module code agents, QA audit
+      // and module-scoped repair rounds. Each pass changes a real deliverable.
+      forgeBuild = await forgeGameIntoSpec(sourceProject.prompt, spec, {
+        brief: briefResult.data ? JSON.stringify(briefResult.data).slice(0, 6000) : null,
+        onProgress: async (stage, detail, percent) => {
+          await heartbeatGenerationJob(job.id, workerId, { percent: Math.min(70, percent), stage: `forge_${stage}`, detail });
+        },
+      });
+      if (!forgeBuild.ok) throw new Error(forgeBuild.reason);
+      spec = forgeBuild.spec;
+    } else {
+      const legacy = await generateAgenticGameModule(sourceProject.prompt, spec, undefined, { bounded: true });
+      if (!legacy.ok) throw new Error(legacy.reason);
+      spec = { ...spec, agenticModule: legacy.module, agenticPlayRoute: "independent" };
+    }
   } finally {
     clearInterval(runtimeHeartbeat);
   }
-  if (!generatedRuntime.ok) throw new Error(generatedRuntime.reason);
-  spec = { ...spec, agenticModule: generatedRuntime.module, agenticPlayRoute: "independent" };
   await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "asset_generation", detail: "generating optional visual assets" });
   let assetArtifact: Awaited<ReturnType<typeof executeGameAssetJob>> | null = null;

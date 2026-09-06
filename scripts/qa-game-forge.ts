@@ -1,0 +1,240 @@
+/**
+ * GameForge deterministic regression.
+ *
+ * Covers the parts of the pipeline that must hold without a model in the loop:
+ * assembly, dependency ordering, and every audit that decides whether a build
+ * is allowed to reach a player. No assertion here may be satisfiable by a
+ * keyword in a comment — that was exactly how the previous gates were fooled.
+ */
+import assert from "node:assert/strict";
+import { assembleGame, checkBalanced, orderModules, scanForbidden, stripCommentsAndStrings } from "../src/lib/game-forge/assemble";
+import { auditBuildShape, auditCallSignatures, auditConfigPaths, auditSdkUsage, auditStatic } from "../src/lib/game-forge/qa-agent";
+import { GAME_FORGE_SDK_SOURCE } from "../src/lib/game-forge/runtime-sdk";
+import type { GameDesignDoc, GameModule } from "../src/lib/game-forge/types";
+
+const design: GameDesignDoc = {
+  title: "Lantern Drift",
+  pitch: "Steer a paper lantern through a night river, gathering embers before the wind dies.",
+  genre: "arcade collector",
+  stage: { width: 960, height: 540, orientation: "landscape", background: "#0b1020" },
+  coreLoop: ["Steer the lantern", "Collect embers to refill the flame", "Dodge rain gusts", "Reach the shrine before the flame dies"],
+  controls: [{ action: "steer", desktop: "WASD / arrows", touch: "virtual stick" }],
+  mechanics: [
+    { id: "flame_decay", summary: "The flame drains over time and refills on ember pickup.", observable: "the flame meter shrinks each second" },
+    { id: "gust_hazard", summary: "Rain gusts push the lantern and cost flame on contact.", observable: "the lantern is shoved sideways" },
+  ],
+  progression: {
+    winCondition: "Reach 30 embers before the flame empties",
+    loseCondition: "The flame meter reaches zero",
+    beats: [{ at: 0.3, label: "Wind rises", change: "gusts spawn 40% faster" }, { at: 0.7, label: "Storm", change: "gusts travel diagonally" }],
+  },
+  gameFeel: ["embers pop with a warm burst", "gust impacts shake the camera"],
+  assets: [
+    { key: "background", kind: "background", prompt: "night river", required: false },
+    { key: "lantern", kind: "player", prompt: "paper lantern", required: true },
+    { key: "gust", kind: "enemy", prompt: "rain gust", required: false },
+  ],
+  audio: { cues: [{ event: "pickup", sfx: "coin" }] },
+  modules: [
+    { id: "config", role: "config", brief: "tuning numbers", provides: ["config"], requires: [] },
+    { id: "entities", role: "system", brief: "spawn logic", provides: ["spawnEmber", "spawnGust"], requires: ["config"] },
+    { id: "render", role: "system", brief: "drawing", provides: ["drawScene"], requires: ["config"] },
+    { id: "main", role: "main", brief: "wire it up", provides: ["main"], requires: ["spawnEmber", "drawScene"] },
+  ],
+};
+
+function mod(id: string, role: GameModule["role"], source: string, provides: string[] = [], requires: string[] = []): GameModule {
+  return { id, role, source, provides, requires };
+}
+
+/* ------------------------------------------------- strip comments/strings */
+{
+  const stripped = stripCommentsAndStrings(`
+    // merge combine tier
+    var label = "merge combine tier";
+    /* merge combine tier */
+    var real = 1;
+  `);
+  assert.ok(!stripped.includes("merge"), "a mechanic named only in comments or strings must not read as implemented");
+  assert.ok(stripped.includes("real"), "executable code must survive stripping");
+}
+
+/* ------------------------------------------------------- forbidden APIs */
+{
+  assert.equal(scanForbidden("m", "var d = fetch('/x');").length, 1, "network access must be a blocker");
+  assert.equal(scanForbidden("m", "requestAnimationFrame(tick);").length, 1, "an own game loop must be a blocker");
+  assert.equal(scanForbidden("m", "localStorage.setItem('a', 1);").length, 1, "storage must be a blocker");
+  assert.equal(scanForbidden("m", "root.addEventListener('click', f);").length, 1, "own listeners must be a blocker");
+  assert.equal(scanForbidden("m", "// fetch('/x') is not allowed here\nvar a = 1;").length, 0, "a forbidden call inside a comment is not a violation");
+}
+
+/* -------------------------------------------------------- truncation */
+{
+  assert.equal(checkBalanced("m", "function a() { return 1; }").length, 0);
+  const truncated = checkBalanced("m", "function a() { if (x) { return 1;");
+  assert.equal(truncated.length, 1, "an unclosed block must be reported");
+  assert.equal(truncated[0]!.code, "truncated");
+}
+
+/* ------------------------------------------------- hallucinated SDK APIs */
+{
+  const ok = auditSdkUsage("m", "g.audio.sfx('coin'); g.fx.shake(10, 0.3); g.world.spawn('ember', {});");
+  assert.equal(ok.length, 0, "valid SDK members must not be flagged");
+
+  const bad = auditSdkUsage("m", "g.physics.step(); g.input.onSwipeLeft(f); g.audio.playSound('boom');");
+  const codes = bad.filter((f) => f.code === "unknown_sdk_member").map((f) => f.message);
+  assert.ok(codes.some((m) => m.includes("g.physics")), "an invented engine namespace must be a blocker");
+  assert.ok(codes.some((m) => m.includes("input.onSwipeLeft")), "an invented input method must be a blocker");
+  assert.ok(codes.some((m) => m.includes("audio.playSound")), "an invented audio method must be a blocker");
+  assert.ok(bad.every((f) => f.severity === "blocker" || f.code === "unknown_sfx"));
+
+  const badSfx = auditSdkUsage("m", "g.audio.sfx('kaboom');");
+  assert.equal(badSfx.length, 1);
+  assert.equal(badSfx[0]!.code, "unknown_sfx");
+}
+
+/* -------------------------------------------- cross-module call signatures */
+{
+  // The exact shape of the real bug this check exists for: one module
+  // declares a 1-argument function, a sibling calls it with 2 arguments (or
+  // vice versa) because it only ever saw the bare name, never a signature.
+  const signedDesign: GameDesignDoc = {
+    ...design,
+    modules: [
+      { id: "config", role: "config", brief: "tuning", provides: ["config"], requires: [], signatures: [] },
+      { id: "player", role: "system", brief: "player state", provides: ["updatePlayer"], requires: ["config"], signatures: [{ name: "updatePlayer", params: ["player", "g"] }] },
+      { id: "main", role: "main", brief: "wire it up", provides: ["main"], requires: ["updatePlayer"], signatures: [{ name: "main", params: ["g"] }] },
+    ],
+  };
+  const goodCall = auditCallSignatures(signedDesign, [
+    mod("main", "main", "G.main = function (g) { G.updatePlayer(state, g); };"),
+  ]);
+  assert.deepEqual(goodCall, [], "a call matching the declared arity must not be flagged");
+
+  const wrongArity = auditCallSignatures(signedDesign, [
+    mod("main", "main", "G.main = function (g) { G.updatePlayer(state); };"),
+  ]);
+  assert.equal(wrongArity.length, 1, "a call with the wrong argument count must be flagged");
+  assert.equal(wrongArity[0]!.code, "signature_mismatch");
+  assert.equal(wrongArity[0]!.moduleId, "main", "the finding must attribute to the CALLING module, not the definer");
+  assert.equal(wrongArity[0]!.severity, "blocker");
+
+  // The definition site itself (`G.updatePlayer = function (player, g) {...}`)
+  // must never be mistaken for a call.
+  const definitionOnly = auditCallSignatures(signedDesign, [
+    mod("player", "system", "G.updatePlayer = function (player, g) { player.x += g.width; };"),
+  ]);
+  assert.deepEqual(definitionOnly, [], "a function definition must not be flagged as a mismatched call");
+}
+
+/* ---------------------------------------------------- config path shape */
+{
+  // The real bug this exists for: config.player.jumpVelocity was declared,
+  // but a system module read the leaf name flattened at the top level.
+  const shapedDesign: GameDesignDoc = { ...design, configShape: ["player.jumpVelocity", "player.gravity", "goals.targetShoots"] };
+
+  const flattened = auditConfigPaths(shapedDesign, [
+    mod("player", "system", "var v = cfg.jumpVelocity; var g2 = cfg.gravity;"),
+  ]);
+  assert.equal(flattened.length, 2, "reading a declared leaf name flattened must be flagged once per leaf");
+  assert.ok(flattened.every((f) => f.code === "config_path_flattened"));
+  assert.ok(flattened[0]!.message.includes("player.jumpVelocity"), "the message must name the correct nested path");
+
+  const nested = auditConfigPaths(shapedDesign, [
+    mod("player", "system", "var v = cfg.player.jumpVelocity; var t = cfg.goals.targetShoots;"),
+  ]);
+  assert.deepEqual(nested, [], "reading through the declared nested path must not be flagged");
+
+  const configModuleItself = auditConfigPaths(shapedDesign, [
+    mod("config", "config", "G.config = { jumpVelocity: 1 };"),
+  ]);
+  assert.deepEqual(configModuleItself, [], "the config module defines the shape and is never itself audited against it");
+
+  const noShapeDeclared = auditConfigPaths({ ...design, configShape: [] }, [
+    mod("player", "system", "var v = cfg.jumpVelocity;"),
+  ]);
+  assert.deepEqual(noShapeDeclared, [], "with no declared shape there is nothing to cross-check against");
+}
+
+/* ----------------------------------------------------- build shape audit */
+{
+  const empty = auditBuildShape(design, [mod("main", "main", "G.main = function (g) { g.start({}); };")]);
+  const codes = empty.map((f) => f.code);
+  for (const expected of ["no_win_path", "no_lose_path", "no_artwork", "silent_build", "no_touch_input", "no_hud"]) {
+    assert.ok(codes.includes(expected), `an empty build must report ${expected}`);
+  }
+  assert.ok(codes.includes("required_asset_unused"), "a required asset slot that is never read must be reported");
+
+  const complete = auditBuildShape(design, [mod("main", "main", `
+    var art = g.assets.image(ctx.assets.lantern, 'player', '#f59e0b');
+    G.main = function (g) {
+      g.start({
+        update: function (dt) {
+          var a = g.input.axis();
+          if (a.x) { g.audio.sfx('coin'); g.fx.burst(10, 10, {}); }
+          if (g.state.score >= 30) g.win(g.state.score);
+          if (g.state.time > 90) g.lose(0);
+        },
+        draw: function (r) { r.sprite(art, 10, 10, 32, 32); g.ui.hud([{ label: 'S', value: g.state.score }]); }
+      });
+    };
+  `)]);
+  assert.deepEqual(complete.map((f) => f.code), [], "a complete build must produce no shape findings");
+}
+
+/* ------------------------------------------------------------- ordering */
+{
+  const modules = [
+    mod("main", "main", "G.main = function (g) { g.start({}); };", ["main"], ["drawScene"]),
+    mod("render", "system", "G.drawScene = function () {};", ["drawScene"], ["config"]),
+    mod("config", "config", "G.config = { width: 960 };", ["config"], []),
+  ];
+  const { ordered, findings } = orderModules(modules);
+  assert.deepEqual(ordered.map((m) => m.id), ["config", "render", "main"], "modules must be ordered config -> systems -> main");
+  assert.deepEqual(findings, []);
+}
+
+/* ------------------------------------------------------------- assembly */
+{
+  const modules = [
+    mod("config", "config", "G.config = { width: 960, height: 540, lives: 3 };", ["config"], []),
+    mod("entities", "system", "G.spawnEmber = function () { return g.world.spawn('ember', { x: 10, y: 10 }); };", ["spawnEmber"], ["config"]),
+    mod("main", "main", "G.main = function (g) { g.start({ init: function () { G.spawnEmber(); } }); };", ["main"], ["spawnEmber"]),
+  ];
+  const { source, findings } = assembleGame(design, modules);
+  assert.deepEqual(findings.filter((f) => f.severity === "blocker"), [], "a well formed build must assemble without blockers");
+  assert.ok(/function mountGame\(root, ctx\)/.test(source), "assembly must expose the mountGame entry point");
+  assert.ok(source.indexOf("MOD_config(G);") < source.indexOf("MOD_entities(G, g);"), "config must run before systems");
+  assert.ok(source.includes("G.main(g);"), "assembly must invoke the main module");
+  assert.ok(source.includes("GameForge.create(root,"), "assembly must construct the engine");
+  // The assembled file has to be syntactically valid JavaScript.
+  assert.doesNotThrow(() => new Function(`${GAME_FORGE_SDK_SOURCE.replace("(function (global)", "(function (global_unused)").replace("})(window);", "});")}\n${source}`), "the assembled runtime must parse");
+}
+
+/* --------------------------------------------------- missing main module */
+{
+  const { findings } = assembleGame(design, [mod("config", "config", "G.config = {};", ["config"], [])]);
+  assert.ok(findings.some((f) => f.code === "main_missing"), "a build with no main module must be blocked");
+}
+
+/* -------------------------------------------------- static audit rollup */
+{
+  const modules = [
+    mod("config", "config", "G.config = { width: 960 };", ["config"], []),
+    mod("main", "main", "G.main = function (g) { g.start({}); }; g.nonsense();", ["main"], []),
+  ];
+  const findings = auditStatic(design, modules);
+  assert.ok(findings.some((f) => f.code === "unknown_sdk_member"), "the rollup must include SDK surface violations");
+  assert.ok(findings.some((f) => f.severity === "blocker"), "a hallucinated API must block the build");
+}
+
+/* ------------------------------------------------------------ SDK parses */
+{
+  assert.doesNotThrow(() => new Function(GAME_FORGE_SDK_SOURCE), "the runtime SDK must be valid JavaScript");
+  assert.ok(GAME_FORGE_SDK_SOURCE.includes("global.GameForge ="), "the SDK must publish the GameForge global");
+  for (const forbidden of ["fetch(", "localStorage", "XMLHttpRequest"]) {
+    assert.ok(!GAME_FORGE_SDK_SOURCE.includes(forbidden), `the SDK itself must not use ${forbidden}`);
+  }
+}
+
+console.log("[OK] qa-game-forge: assembly, ordering, SDK-surface audit and build-shape gates hold");

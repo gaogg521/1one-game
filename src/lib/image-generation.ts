@@ -96,11 +96,18 @@ export function isSeedreamImageModel(model: string): boolean {
 }
 
 /**
- * Joy MaaS 的 Seedream API 不兼容 OpenAI images endpoint。仅在显式配置时启用，
- * 防止生产 Ark 等 OpenAI 兼容服务商的同名模型被错误改写到 Joy 路径。
+ * Seedream 不兼容 OpenAI `/v1/images/generations`，必须走 `/api/seedream/...`。
+ *
+ * 这个判断由**模型本身**决定，不再由环境变量开关决定：适配器原先要求
+ * `SEEDREAM_IMAGE_API_MODE=joy`，而该变量只写在 `.env.local`——只有 Next.js
+ * 会自动加载它，durable worker 与独立脚本加载不到，于是 seedream 模型悄悄掉回
+ * OpenAI endpoint 拿到 404，最终静默降级成 LLM 手绘 SVG。若某个服务商确实用
+ * OpenAI 兼容协议提供同名模型，用 `SEEDREAM_IMAGE_API_MODE=openai` 显式关闭。
  */
 export function shouldUseJoySeedreamAdapter(model: string, mode = process.env.SEEDREAM_IMAGE_API_MODE): boolean {
-  return isSeedreamImageModel(model) && mode?.trim().toLowerCase() === "joy";
+  if (!isSeedreamImageModel(model)) return false;
+  const normalized = mode?.trim().toLowerCase();
+  return normalized !== "openai" && normalized !== "off" && normalized !== "0";
 }
 
 /** Joy MaaS Seedream accepts a quality tier, not the OpenAI pixel-dimension enum. */

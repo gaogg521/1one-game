@@ -361,6 +361,26 @@ const AvoiderBlueprintSchema = z.object({
   focusModeEnabled: z.boolean().optional(),
 });
 
+/**
+ * GameForge 构建引用：设计文档 + 模块切分 + QA 结论。
+ * 结构与 `@/lib/game-forge/types` 对齐，这里用宽松校验避免旧记录反序列化失败。
+ */
+const ForgeBuildRefSchema = z.object({
+  version: z.literal(1),
+  design: z.unknown(),
+  modules: z.array(z.object({
+    id: z.string(),
+    role: z.enum(["config", "system", "main"]),
+    source: z.string(),
+    provides: z.array(z.string()).default([]),
+    requires: z.array(z.string()).default([]),
+    model: z.string().optional(),
+  })),
+  qa: z.unknown().optional(),
+  provenance: z.unknown().optional(),
+  sdkVersion: z.number().int().optional(),
+});
+
 const AgenticModuleSchema = z.object({
   version: z.literal(2),
   /** 每款游戏专属的独立浏览器运行时源码（由 Runtime Code Agent 生成） */
@@ -723,6 +743,11 @@ export const GameSpecSchema = z.object({
   fruitNinja: FruitNinjaBlueprintSchema.optional(),
   /** 每款游戏专属的受限独立运行时；没有它就不可进入试玩/发布。 */
   agenticModule: AgenticModuleSchema.optional(),
+  /**
+   * GameForge 多 Agent 构建产物（不含已装配源码，源码在 agenticModule.source）。
+   * 保留设计文档与模块切分，才能让「修改」走单模块补丁而不是整款重摇。
+   */
+  forgeBuild: ForgeBuildRefSchema.optional(),
   /** Legacy records are migrated to the only supported execution surface. */
   agenticPlayRoute: z.enum(["independent", "agentic", "dedicated"]).optional(),
   /** 通用导演蓝图（可选；缺省则由引擎侧使用默认曲线） */

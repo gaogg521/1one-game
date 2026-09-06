@@ -15,6 +15,12 @@ export type LlmJsonRequest = {
    * 其它 provider 可忽略或用于提示词约束。
    */
   jsonSchema?: unknown;
+  /**
+   * Output ceiling for this call. Game runtime code needs far more room than a
+   * short structured reply, and a truncated completion fails JSON parsing --
+   * which silently selects for the simplest possible output.
+   */
+  maxTokens?: number;
   timeoutMs: number;
   /** P1 修复：外部 AbortSignal */
   signal?: AbortSignal;

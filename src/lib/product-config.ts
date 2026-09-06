@@ -174,6 +174,33 @@ export const PRODUCT = {
         : true,
   },
 
+  /**
+   * GameForge: the multi-agent game build pipeline.
+   *
+   * Modules are generated independently so each completion gets a real budget
+   * instead of sharing one 12k ceiling with the whole game.
+   */
+  gameForge: {
+    enabled: process.env.GAME_FORGE === "0" || process.env.GAME_FORGE === "false" ? false : true,
+    /** Design doc: structured, moderate size. */
+    designMaxTokens: 8_192,
+    designTimeoutMs: 150_000,
+    /** Per-module code budget. This is the ceiling that used to cap a whole game. */
+    moduleMaxTokens: 16_384,
+    moduleTimeoutMs: 240_000,
+    /** How many module completions may run at once. */
+    moduleConcurrency: 3,
+    /** Game-feel pass rewrites whole modules, so it needs the same budget. */
+    feelMaxTokens: 16_384,
+    feelTimeoutMs: 200_000,
+    /** Repair rounds driven by QA findings. */
+    maxRepairRounds: 2,
+    repairMaxTokens: 16_384,
+    repairTimeoutMs: 200_000,
+    /** Attempts per module before the build gives up on it. */
+    moduleAttempts: 3,
+  },
+
   orchestration: {
     qualityTier:
       (process.env.ORCHESTRATION_QUALITY_TIER as "fast" | "standard" | "rich" | "astrocade" | undefined) ??

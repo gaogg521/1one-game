@@ -101,3 +101,6 @@ public/covers/debug-*
 public/covers/
 public/game-sprites/
 public/game-bg/
+
+# Local debug gateway credentials (plaintext API key)
+key.txt

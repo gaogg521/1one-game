@@ -110,7 +110,7 @@ export async function llmJsonOpenAICompatible(params: {
   ];
 
   async function run(mode: LlmMode): Promise<{ raw: unknown | null; mode: LlmMode }> {
-    const maxOut = PRODUCT.llm.jsonMaxOutputTokens;
+    const maxOut = req.maxTokens ?? PRODUCT.llm.jsonMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const completionParams: ChatCompletionCreateParamsNonStreaming =
       mode === "json_schema"

@@ -13,6 +13,7 @@ import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 import { rateLimit } from "@/lib/rate-limit";
 import { getThrottleKey } from "@/lib/request-key";
 import { attachAgenticModuleIfEnabled } from "@/lib/agentic/generate-game-module";
+import { editForgeBuild, forgeGameIntoSpec, isGameForgeEnabled } from "@/lib/game-forge/bridge";
 import { PRODUCT } from "@/lib/product-config";
 import { localizedApiErrorPayload, localizedJsonError } from "@/lib/api/localized-error";
 
@@ -93,7 +94,23 @@ export async function POST(req: Request, ctx: RouteContext) {
         }
       }
 
-      if (PRODUCT.game.agenticModuleEnabled) {
+      // An owner edit patches the modules the request actually touches. The
+      // previous behaviour regenerated the whole game from a merged prompt, so
+      // no amount of feedback ever accumulated into a better build.
+      let editedModules: string[] = [];
+      if (isGameForgeEnabled() && nextSpec.forgeBuild) {
+        const edit = await editForgeBuild(row.prompt, nextSpec, instruction);
+        if (edit.ok) {
+          nextSpec = edit.spec;
+          editedModules = edit.edited;
+        } else if (edit.fallbackToFullBuild) {
+          const rebuilt = await forgeGameIntoSpec(mergedPrompt, nextSpec);
+          if (rebuilt.ok) nextSpec = rebuilt.spec;
+        }
+      } else if (isGameForgeEnabled()) {
+        const rebuilt = await forgeGameIntoSpec(mergedPrompt, nextSpec);
+        if (rebuilt.ok) nextSpec = rebuilt.spec;
+      } else if (PRODUCT.game.agenticModuleEnabled) {
         nextSpec = await attachAgenticModuleIfEnabled(mergedPrompt, nextSpec, true);
       }
 
@@ -109,6 +126,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         prompt: mergedPrompt,
         refinementHistory: history,
         agenticPlayRoute: nextSpec.agenticPlayRoute ?? "dedicated",
+        editedModules,
       });
     }
 
