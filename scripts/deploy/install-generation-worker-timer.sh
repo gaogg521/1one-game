@@ -40,7 +40,10 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${ROOT}
 ExecStart=/bin/bash ${ROOT}/scripts/run-generation-worker-once.sh
-TimeoutStartSec=650
+# Must stay above the curl --max-time in run-generation-worker-once.sh
+# (default 1500s), or systemd kills the worker before curl can return the
+# job's own result. See that script for why 640s was too low.
+TimeoutStartSec=1520
 NoNewPrivileges=true
 PrivateTmp=true
 EOF

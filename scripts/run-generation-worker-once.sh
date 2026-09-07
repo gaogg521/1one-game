@@ -24,8 +24,22 @@ if [[ -z "${JOB_WORKER_SECRET:-}" ]]; then
 fi
 
 PORT="${PORT:-80}"
+# Measured on production 2026-09-07: one game_production job runs design (178s)
+# plus code modules in parallel where the slowest single module took ~587s on
+# the configured game_text model -- 765s of critical path before QA, repair or
+# art. The old 640s ceiling therefore killed EVERY such job at exactly 640s
+# while the request handler kept working orphaned in the background, so the job
+# could never reach completeGenerationJob no matter how many times it retried:
+# three attempts, three identical deaths at the same wall, then permanent
+# failure. Local runs never hit this because they call forgeGame directly with
+# no worker and no curl.
+#
+# KNOWN TRADEOFF: this queue is a single serial worker (one job per timer
+# tick), so a long job now blocks every other creator's job for up to this
+# long. That head-of-line blocking is the next thing to fix -- either parallel
+# worker units or a faster model for the game_text scene.
 exec /usr/bin/curl \
-  --fail --silent --show-error --connect-timeout 10 --max-time 640 \
+  --fail --silent --show-error --connect-timeout 10 --max-time "${GENERATION_WORKER_MAX_SECONDS:-1500}" \
   --request POST "http://127.0.0.1:${PORT}/api/jobs/worker" \
   --header "x-job-worker-secret: ${JOB_WORKER_SECRET}" \
   --header "x-worker-id: systemd-generation-worker"

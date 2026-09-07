@@ -386,10 +386,11 @@ export async function runQaAgent(
         // (deepseek-v4-flash-ga-260731) was measured to never terminate on
         // json_object for a real prompt from this pipeline, while json_schema
         // reliably finishes. See design-agent.ts for the isolated production
-        // measurements. Not forcing singleModeOnly leaves the existing
-        // dual-mode fallback available for whichever other model this scene
-        // might route to.
+        // measurements. singleModeOnly because the automatic fallback would
+        // escalate an unparseable json_schema reply into json_object, which on
+        // this model never returns -- see design-agent.ts for the full story.
         mode: "json_schema",
+        singleModeOnly: true,
         jsonSchema: REVIEW_SCHEMA,
         maxTokens: 4_096,
         timeoutMs: PRODUCT.gameForge.reviewTimeoutMs,

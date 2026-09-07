@@ -329,14 +329,22 @@ export async function runDesignAgent(
          * dual-mode fallback in llmJsonOpenAICompatible -- that only fires on a
          * "schema not supported" class of error, never on AbortError.
          *
-         * There is no single mode that is provably best for every model this
-         * cascade might route to, so this now relies on the existing two-mode
-         * fallback (schema first, object second) instead of forcing one
-         * globally. The asset-kind vocabulary coercion added earlier today is
-         * unaffected either way -- it is applied to whatever the model returns
-         * in either mode, so a spelling slip still costs nothing.
+         * singleModeOnly is back, and that reversal needs explaining: the first
+         * revert removed it to "restore the self-healing path", which instead
+         * re-armed the poison. llmJsonOpenAICompatible falls back to the OTHER
+         * response_format whenever the first mode returns something
+         * unparseable, so a json_schema reply that failed to parse escalated
+         * straight into json_object -- the one mode measured never to
+         * terminate on this model -- and burned the remaining budget there.
+         * That is the source of the confusing "json_object timeout after
+         * 90000ms" errors seen on jobs running the supposedly-fixed code.
+         *
+         * A fallback into a mode that cannot finish is not a fallback. The
+         * production cascade for this scene has exactly one model, so there is
+         * nothing for the second mode to rescue anyway.
          */
         mode: "json_schema",
+        singleModeOnly: true,
         jsonSchema: DESIGN_SCHEMA,
         maxTokens: cfg.designMaxTokens,
         timeoutMs: minimal ? cfg.designFallbackTimeoutMs : cfg.designTimeoutMs,

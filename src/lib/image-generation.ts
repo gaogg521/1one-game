@@ -115,8 +115,31 @@ function seedreamSize(): "2K" {
   return "2K";
 }
 
+/**
+ * Where this gateway serves Seedream image generation.
+ *
+ * This used to hardcode the absolute path `/api/seedream/v1/images/generations`,
+ * which is correct for the local litellm proxy (a bare origin that exposes
+ * Seedream under its own dedicated path) and wrong for every gateway whose
+ * base URL already carries a versioned API root: `new URL()` treats a leading
+ * slash as absolute, so production's `https://ark.cn-beijing.volces.com/api/v3`
+ * silently became `.../api/seedream/v1/images/generations` and returned 404 on
+ * every single image. Measured 2026-09-07: every art slot for every zh-locale
+ * creation failed this way in 1-4 seconds, and because asset-agent logs
+ * nothing, it surfaced only as a generic "image_generation_failed" row.
+ *
+ * Same root cause as the json_object regression the same day: a detail that
+ * happened to be true of the local gateway, baked in as if universal. So this
+ * derives from the base URL instead of assuming either shape.
+ */
 export function seedreamGenerationEndpoint(base: string): string {
-  return new URL("/api/seedream/v1/images/generations", base).toString();
+  const url = new URL(base);
+  const root = url.pathname.replace(/\/+$/, "");
+  // A gateway that already exposes a versioned API root (ARK `/api/v3`, an
+  // OpenAI-compatible `/v1`) serves the images path relative to that root.
+  if (root && root !== "/") return new URL(`${root}/images/generations`, url.origin).toString();
+  // A bare-origin proxy (local litellm) exposes Seedream on its own path.
+  return new URL("/api/seedream/v1/images/generations", url.origin).toString();
 }
 
 export function buildSeedreamGenerationRequest(model: string, prompt: string, n: number) {
