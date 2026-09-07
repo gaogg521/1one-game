@@ -1672,3 +1672,102 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 1. 实测并发化后的端到端耗时，与改前的 269-421s 对比。
 2. 做自动真机探针（headless 启动 playable.html + 采集 forge-* 事件），让 `observed` 能真为 true。
 3. 用探针数据驱动质量方差收敛。
+
+---
+
+## 2026-09-07 · 会话 N+7（真机探针进回路 · 时间预算 · 契约歧义）
+
+### 结果
+- 一句话生成首次做到 **`observed=true` 在真实管线成立**：探针在真浏览器里启动构建、采集 forge-* 事件、把行为折进 QA。
+- 端到端实测（带美术，同一 prompt）：**336.8s / 446.4s / 573.0s**，`ok=true observed=true`。改动前基线 269–421s 且 `observed` 恒为 false。
+- 探针在真实管线抓到静态审计完全漏掉的 blocker（见下"契约歧义"）。
+
+### 本轮定位并修复（全部有实测证据）
+
+**1. 单张图挂起能拖死整条创作链（最坏 24 分钟）**
+- 现象：一次带美术的构建跑了 40 分钟没完成，而无美术只要 147s。
+- 根因：`generateImageDetailed` 默认单次超时 **12 分钟**，`asset-agent` 从未传自己的预算；主模型失败还降级第二家再等 12 分钟。健康路径实测 36s（4 张并行），病态路径 24 分钟，差 40 倍。
+- 修复：三层边界 —— `PRODUCT.gameForge.artSlotTimeoutMs=75s`（传进图像层）、`artBudgetMs=150s`（阶段 deadline，池中排队的槽预算耗尽直接拒绝）、`forge.ts` 对外部注入的 `generateArt` 再兜一层。缺图降级为运行时占位图。
+- 证据：实盘日志里 `FAIL bamboo_platform (75009ms)`，构建照常 `ok=true`。护栏：`npm run qa:forge-art-budget`。
+
+**2. 我写的 QA 脚本不 `$disconnect`，进程僵死导致"三次实测"只跑了第一次**
+- 现象：任务列表显示 44 分钟仍在运行，日志早已写完。
+- 根因：图像生成经 `recordProviderUsage` 写 prisma，连接池钉住事件循环；`three-runs.sh` 的循环卡在僵尸进程上，run 2/3 从未执行。仓库既有惯例 `void main().finally(() => prisma.$disconnect())` 我没跟。
+- 复现：只做 `SELECT 1` 的脚本，查询成功后进程永不退出（25s 被 timeout 杀）。
+- 修复：`qa-game-forge-live.ts` / `qa-forge-art-timing.ts` / `qa-forge-art-budget.ts` / `qa-design-latency.ts` 全部加收尾，`process.exit(1)` 改 `process.exitCode = 1` 让 finally 有机会执行。**库层不动**：worker 是长驻进程，复用连接是对的。
+
+**3. `json_schema` 在本网关是纯成本**
+- 实测（同一 design prompt，minimax-2-7，各 3 次）：
+  - `json_schema`：35.8 / 43.0 / **82.0s**，completion 2579–**6555**，reasoning 峰值 **18495 字符**
+  - `json_object`：29.3 / 32.3 / 57.7s，completion 2229–3203，reasoning 峰值 5083 字符
+- 结论：strict 让推理模型把预算花在自查 schema 上，**最坏生成量翻倍**；而它在本网关**不真正强制**（`assets.kind` 照样吐 `item`/`hazard`/`ground`），校验失败还要再赔一整轮 design repair。run 3 的 154.2s 就是"两次调用"叠加，不是单次慢。
+- 修复：设计调用与 QA 模型审查都改 `json_object` + `singleModeOnly`；约束移到本地（同义词表 + Zod + 手工校验）。改 `json_object` 必须配套把输出形状写进 prompt（原来靠 schema 传），QA 审查侧还容忍模型直接返回裸数组。
+- 合规率：0/4 → **12/14**（剩余由既有 design repair 轮兜住）。
+- 注意：**时延数字不可干净归因** —— 一整轮压测把网关打疲，同样的 json_object 调用早批 29–35s、晚批 58–148s 而 token 几乎未变。能归因的只有 token 与合规率。
+
+**4. 模型审查重复烧预算**
+- 实测：一次需要两轮 repair 的构建里，首轮审查 56s 查出 6 findings/3 blockers（很值），后两轮各烧满 60s 返回空 —— 573s 里 120s 学到零。
+- 修复：`reviewTimeoutMs=60s` 独立预算（不再借用 designTimeoutMs 150s）；模型审查**只跑首轮**，repair 后的验证交给 deterministic + 真机探针。
+
+**5. 契约与实现漂移 / 跨模块语义歧义（探针抓到的真 blocker）**
+- 现象：静态审计 `0 findings, 0 blockers`，探针 `booted=true frames=0 errors=1`，报 `input.axis is not a function`。
+- 根因不是幻觉 API（`axis` 在 SDK 里真实存在）：`main_game` 写 `var input = g.input.axis()` 传的是已求值的 `{x,y}`，`player_control` 把同名参数读成 input **系统**又调了一次 `.axis()`。签名 `tickPlayer(dt, g, input)` 的**参数名本身有歧义**，两个并行 agent 各选一种读法；`auditCallSignatures` 只查参数个数，全绿。
+- 修复三层：`design-agent` 的 `validateModulePlan` 拒绝以引擎子系统命名的参数（`AMBIGUOUS_PARAM_NAMES`）；设计 prompt 说明命名规则；`code-agent` prompt 硬性禁止传递/期待引擎子系统。护栏在 `qa:game-forge` 里。
+
+**6. 音效近义词静默降级**
+- 现象：模型写 `explosion` / `fanfare` / `buzzer`，SDK 只有 `explode` / `win` / `lose`，运行时全退化成通用 blip —— 报告里一条 minor，游戏里每次爆炸都听得见。
+- 关键判断：SDK 说明第 69 行早已列全 13 个音效名，**把清单写得更醒目无效**（这是同一模式的第三例，前两例是 `assets.kind` 与歧义参数）。确定性解法是接收端认同义词。
+- 修复：55 条同义词表，运行时 `g.audio.sfx` 解析，审计侧共用同一张表（`resolveSfxName`）。运行时 SDK 那份必须内联（它是注入 iframe 的纯字符串，import 不了任何东西），所以加 `qa:forge-sfx-alias` 断言两边逐键一致、无别名指向不存在的音效、无别名遮蔽真实名。
+
+**7. 探针从"事后报告"变成"回路控制点"**
+- 原来跑在 repair 之后，探针说"起不来"构建照样交付。现在进 `auditBuild`：probe findings 与静态 blocker 同等可修，回滚保护同时覆盖"修完跑不起来了"。静态仍有 blocker 时跳过探针（省 6s，那时它学不到新东西）。
+- 探针等证据不等时钟：等心跳而非 sleep；输入爆发后监听"任何生命迹象"（实体/分数/结束事件），出现即返回。好构建 13.9s → **3.4s**；只有真没动静的才走满 6s `LIFE_MS` 上限。第一版用固定 2s 窗口把已知能玩的构建误判成 inert —— 误判 inert 会把正常构建送进整模块重写的 repair 轮，所以 `qa-runtime-probe` 加了"known-good 不得被判 inert"的断言。
+- 心跳频率 120 帧 → 60 帧：两秒一次太粗，探针看不到自己输入造成的分数变化。
+
+**8. 方差收敛（配合探针数据）**
+- 孤儿共享状态在设计期指定归属（`adoptOrphanState`）：`requires` 里出现但无人 `provides` 的名字挂到 main 并写进 brief —— 这是 `G.player` 让每个系统每帧空转、审计全绿的那个洞。
+- 模块缺口一次并行重试波补齐：一个 agent 挂掉会级联成十几条 findings，因为兄弟模块都照着"承诺存在这些名字"的契约写。
+- `runtime_error` 按符号归属路由 repair，不再一律落 main、重写唯一正常的模块。
+
+**9. 设计阶段是唯一没有降级路径的环节，而它最容易超时**
+- 现象：一次实盘 211s 交白卷（`design_agent_failed`，150s 超时）；诊断样本里已有 148.3s 顶着 150s 天花板。
+- 关键判断：**超时说明这次要写的东西太长写不完；拿同样的 prompt 与同样的预算重试，是唯一保证以同样方式失败的重试。**
+- 修复：`designMinimalPrompt` —— 超时后改为"要求更少"（4 模块、brief 一句话、3 步循环、2 机制、3 素材槽），预算收到 `designFallbackTimeoutMs=90s`。签名与 provides/requires 图必须保持完整，那是模块能拼上的唯一保证。只对超时类错误触发；auth/route 类错误换个问法也会同样失败。
+- **此路径尚未被实测触发验证**（之后几次设计都在预算内返回）。
+
+**10. `g.draw` 从未被审计，别名子系统完全隐身**
+- 现象：静态审计 `0 findings`，探针报 `r.ellipse is not a function`，`no_first_frame`，两轮 repair 都没修好，最终 `ok=false`。
+- 两个洞叠加：① `runtime-sdk` 第 961 行 `draw: r, r: r` —— `g.draw` 与 `g.r` 是同一对象，但 `SDK_SURFACE` 只列了 `r`，所以 `g.draw.<任何成员>` 从不检查；② 所有 `ACCESSOR_PATTERNS` 都锚定 `g.` 前缀，而模块写的是 `const r = g.draw;` 再 `r.ellipse(...)`，别名之后彻底隐身。
+- 修复：`RENDERER_SURFACE` 单一来源同时导出为 `r` 与 `draw`（并在 `qa:game-forge` 里断言两者相等）；`auditSdkUsage` 增加 `SUBSYSTEM_ALIAS_RE`，解析 `var|let|const X = g.<ns>` 后按真实表检查 `X.member`；`var w = g.width` 这类值别名不当表处理。
+- 价值：这类幻觉现在在**模块生成阶段**（`generateModule` 每次尝试都跑 `auditSdkUsage`）就被拦下，agent 当场重试，不必走到探针 + 两轮 repair。
+- 用例用真实出事的代码写进 `qa:game-forge`（6 例，含别名真成员、直接调用、值别名不误报）。
+
+**11. 音效前缀兜底 + 我自己制造的新漂移**
+- `buzzer` 加进表后，下一次构建就要 `buzz` —— 枚举同义词追不上自然语言。加一条前缀规则（≥4 字符且是某 cue/别名的前缀）。
+- **我先只改了审计侧 `resolveSfxName`，没改运行时**，结果比不加更糟：审计从此对 `buzz` 沉默，运行时照样退化成 blip；当时的断言只比对别名表，绿着通过。
+- 修复后把断言改成**真正执行两边逻辑**：按括号配平从 SDK 源码提取 `sfx` 函数体，`new Function` 跑起来，对 347 个名字（每个 cue 与别名的每一个前缀）比对审计答案与运行时实际播放的 cue。
+- 还发现第二层自欺：测试里的 `LIB` 键顺序是我照 `SDK_SFX_NAMES` 排的，而前缀匹配取第一个命中 —— 真实 SDK 的声明顺序若不同，测试永远看不见。改为从源码读真实顺序，并另外断言两者顺序完全一致。
+
+**12. minor findings 不该触发 60s 模型审查**
+- 现象：一次构建唯一的 findings 是两条 `unknown_sfx`（minor），却花掉整个 60s 审查预算，一无所获。
+- 修复：触发条件从"有任何 finding"改为"有 blocker 或 major"。
+
+### 新增
+- `src/lib/game-forge/runtime-probe.ts` —— headless Chromium 探针
+- `scripts/qa-runtime-probe.ts`（`npm run qa:runtime-probe`）—— 好构建须干净，不可解析/抛错/空转须各自报对
+- `scripts/qa-forge-art-budget.ts`（`qa:forge-art-budget`）—— 预算耗尽须立即拒绝且说明原因，不发网络请求
+- `scripts/qa-forge-sfx-alias.ts`（`qa:forge-sfx-alias`）—— 两份别名表逐键一致
+- `scripts/qa-forge-art-timing.ts`（`qa:forge-art-timing`）—— 逐槽计时；用带时间戳的 projectId，否则量的是文件缓存
+- `scripts/qa-design-latency.ts` —— 设计调用的 token/时延/合规率诊断，支持 `json_object` / `json_schema` 对比
+- `PRODUCT.gameForge`：`runtimeProbe`（默认开，`GAME_FORGE_PROBE=0` 关）、`artSlotTimeoutMs`、`artBudgetMs`、`reviewTimeoutMs`
+
+### 已知限制
+- **时延仍在 5–9 分钟**，主要由质量方差驱动：好构建 336s，需两轮 repair 的 573s。repair 轮（~85s/轮）+ 代码阶段（100–256s）是剩下的大头。
+- 生产是否装了 playwright/chromium **未验证**；未装则探针走降级分支返回 `unavailable`，QA 退回纯静态审计，构建照常完成（不会因探针打挂生产）。
+- 探针拿不到真实素材（美术与代码并行，探针跑在美术之前），所以它验行为、不验美术。
+- 本地 litellm 与模型路由**只留本地**，不进生产。
+
+## 下次启动清单
+1. 部署后实测生产上探针能否 `observed=true`；不能则决定是否在服务器装 chromium。
+2. 攻克代码阶段耗时（100–256s，7 模块并发 8）与 repair 轮成本，这是 5–9 分钟里最大的两块。
+3. 若要继续压时延：考虑模型审查与探针并行、repair 轮改为模块级增量补丁而非整模块重写。

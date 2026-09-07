@@ -1,4 +1,4 @@
-import { SDK_SFX_NAMES, SDK_SURFACE } from "@/lib/game-forge/sdk-surface";
+import { resolveSfxName, SDK_SFX_NAMES, SDK_SURFACE } from "@/lib/game-forge/sdk-surface";
 import type { GameDesignDoc, GameModule, QaFinding } from "@/lib/game-forge/types";
 
 /**
@@ -326,7 +326,22 @@ const ACCESSOR_PATTERNS: Array<{ table: keyof typeof SDK_SURFACE; re: RegExp }> 
   { table: "rng", re: /\bg\s*\.\s*rng\s*\.\s*([A-Za-z_$][\w$]*)/g },
   { table: "stage", re: /\bg\s*\.\s*stage\s*\.\s*([A-Za-z_$][\w$]*)/g },
   { table: "camera", re: /\b[gr]\s*\.\s*camera\s*\.\s*([A-Za-z_$][\w$]*)/g },
+  { table: "r", re: /\bg\s*\.\s*r\s*\.\s*([A-Za-z_$][\w$]*)/g },
+  { table: "draw", re: /\bg\s*\.\s*draw\s*\.\s*([A-Za-z_$][\w$]*)/g },
 ];
+
+/**
+ * `var r = g.draw;` — a subsystem parked in a local.
+ *
+ * Every pattern above anchors on `g.`, so an aliased subsystem escapes all of
+ * them. Observed in a real build: `const r = g.draw;` followed by
+ * `r.ellipse(...)`. `ellipse` is not a renderer member, the deterministic
+ * audit reported zero findings, and the game threw before its first frame.
+ * Resolving the alias is what lets that be caught while the module is still
+ * being generated — where the agent simply retries — instead of by the probe
+ * two repair rounds later.
+ */
+const SUBSYSTEM_ALIAS_RE = /\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*g\s*\.\s*([A-Za-z_$][\w$]*)\s*[;,\n]/g;
 
 /**
  * Flags SDK members that do not exist. A hallucinated method is the single
@@ -364,6 +379,26 @@ export function auditSdkUsage(moduleId: string, source: string): QaFinding[] {
     }
   }
 
+  // Aliased subsystems, checked against the table they actually point at.
+  SUBSYSTEM_ALIAS_RE.lastIndex = 0;
+  let alias: RegExpExecArray | null = SUBSYSTEM_ALIAS_RE.exec(code);
+  while (alias) {
+    const local = alias[1]!;
+    const namespace = alias[2]!;
+    const allowed = SDK_SURFACE[namespace];
+    // Only real subsystems matter; `var x = g.width` is a value, not a table.
+    if (allowed && local !== "g") {
+      const memberRe = new RegExp(`\\b${local}\\s*\\.\\s*([A-Za-z_$][\\w$]*)`, "g");
+      let member: RegExpExecArray | null = memberRe.exec(code);
+      while (member) {
+        const name = member[1]!;
+        if (!allowed.includes(name)) report(namespace, name);
+        member = memberRe.exec(code);
+      }
+    }
+    alias = SUBSYSTEM_ALIAS_RE.exec(code);
+  }
+
   // Direct members on the engine handle, excluding the namespaces above.
   const gRe = /\bg\s*\.\s*([A-Za-z_$][\w$]*)/g;
   let gm: RegExpExecArray | null = gRe.exec(code);
@@ -380,7 +415,8 @@ export function auditSdkUsage(moduleId: string, source: string): QaFinding[] {
   let sm: RegExpExecArray | null = sfxRe.exec(literals);
   while (sm) {
     const name = sm[1]!;
-    if (!(SDK_SFX_NAMES as readonly string[]).includes(name)) {
+    // A resolvable synonym is not a defect: the runtime plays the right cue.
+    if (!resolveSfxName(name)) {
       findings.push({ severity: "minor", moduleId, code: "unknown_sfx", message: `sfx '${name}' is not in the SDK library; it will fall back to a generic blip. Use one of ${SDK_SFX_NAMES.join(", ")}` });
     }
     sm = sfxRe.exec(literals);

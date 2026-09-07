@@ -195,7 +195,41 @@ export const GAME_FORGE_SDK_SOURCE = `
 
     return {
       unlock: ensure,
-      sfx: function (name) { var fn = LIB[name]; if (fn) fn(); else LIB.select(); },
+      /* MIRROR of SDK_SFX_ALIASES in sdk-surface.ts. This body cannot import
+         anything -- it is a plain string inlined into the iframe -- so the two
+         copies are kept identical by qa-forge-sfx-alias. Resolving a synonym
+         here is what stops every 'explosion' becoming a generic blip. */
+      sfx: function (name) {
+        var SFX_ALIASES = {
+  explosion: "explode", blast: "explode", boom: "explode", bomb: "explode",
+  fanfare: "win", victory: "win", success: "win", complete: "win", cheer: "win",
+  fail: "lose", death: "lose", gameover: "lose", defeat: "lose", die: "lose",
+  buzzer: "lose", alarm: "lose", siren: "lose", error: "lose", wrong: "lose",
+  collect: "pickup", grab: "pickup", gather: "pickup", get: "pickup",
+  money: "coin", gold: "coin", score: "coin", point: "coin",
+  attack: "shoot", fire: "shoot", laser: "shoot", throw: "shoot",
+  damage: "hurt", ouch: "hurt", pain: "hurt",
+  impact: "hit", thud: "hit", bump: "hit", crash: "hit",
+  buff: "powerup", upgrade: "powerup", boost: "powerup", power: "powerup",
+  click: "select", button: "select", menu: "select", confirm: "select", tap: "select",
+  walk: "step", footstep: "step", run: "step",
+  leap: "jump", hop: "jump", bounce: "jump",
+  sprint: "dash", rush: "dash",
+        };
+        var key = String(name == null ? '' : name).trim().toLowerCase();
+        var fn = LIB[key] || LIB[SFX_ALIASES[key]];
+        /* MIRROR of the prefix rule in resolveSfxName. The explicit table
+           cannot outrun natural language: "buzzer" was listed and the next
+           build asked for "buzz". Four characters minimum, so a short
+           unrelated word cannot match. Adding this here and not in the audit
+           (or the reverse) is worse than not having it at all -- the audit
+           would go quiet while the sound still degraded. */
+        if (!fn && key.length >= 4) {
+          for (var cue in LIB) { if (cue.indexOf(key) === 0) { fn = LIB[cue]; break; } }
+          if (!fn) { for (var alias in SFX_ALIASES) { if (alias.indexOf(key) === 0) { fn = LIB[SFX_ALIASES[alias]]; break; } } }
+        }
+        if (fn) fn(); else LIB.select();
+      },
       tone: blip,
       noise: noise,
       music: function (url, volume) {
@@ -814,7 +848,9 @@ export const GAME_FORGE_SDK_SOURCE = `
         state.frames += 1;
         if (state.frames === 1) { state.firstFrameAt = now(); post('forge-first-frame', { atMs: state.firstFrameAt - state.startedAt }); }
         if (entities > state.maxEntities) state.maxEntities = entities;
-        if (state.frames % 120 === 0) post('forge-heartbeat', { frames: state.frames, entities: entities, score: state.score });
+        /* Once a second at 60fps. Two seconds was too coarse for the runtime
+           probe to see a score change caused by its own input burst. */
+        if (state.frames % 60 === 0) post('forge-heartbeat', { frames: state.frames, entities: entities, score: state.score });
       },
       firstInput: function (at) { if (!state.firstInputAt) { state.firstInputAt = at; post('forge-first-input', { atMs: at - state.startedAt }); } },
       score: function (v) { state.score = v; },

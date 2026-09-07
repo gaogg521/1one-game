@@ -185,6 +185,22 @@ export const PRODUCT = {
     /** Design doc: structured, moderate size. */
     designMaxTokens: 8_192,
     designTimeoutMs: 150_000,
+    /**
+     * Budget for the fallback design attempt.
+     *
+     * The design call is the only stage with no degradation path -- no design,
+     * no game -- and it is the stage most likely to time out: measured p95 on
+     * this gateway is ~148s against a 150s ceiling, and one observed build
+     * spent 211s to deliver nothing at all. Retrying the same prompt with the
+     * same budget is the worst available move, because a timeout means the
+     * reply was too long to finish, and asking again changes neither.
+     *
+     * So the retry asks for LESS: a smaller plan, one-line briefs, no optional
+     * flourishes. A four-module game is a worse game than a seven-module one,
+     * and both are infinitely better than a blank screen after three and a
+     * half minutes.
+     */
+    designFallbackTimeoutMs: 90_000,
     /** Per-module code budget. This is the ceiling that used to cap a whole game. */
     moduleMaxTokens: 16_384,
     moduleTimeoutMs: 240_000,
@@ -205,6 +221,46 @@ export const PRODUCT = {
     moduleAttempts: 3,
     /** Concurrent image generations. Slots are independent; this is the art stage's whole width. */
     artConcurrency: 5,
+    /**
+     * Time budget for the art stage, per slot and in total.
+     *
+     * Measured on this gateway: four slots in parallel finish in ~36s, the
+     * slowest (a background) taking 36s on its own. The image layer's default
+     * ceiling is TWELVE MINUTES per call, and a failed call falls back to a
+     * second provider with the same ceiling -- so one hung request could hold
+     * a slot for 24 minutes. A creator waiting on a one-sentence game will not
+     * wait 24 minutes for a picture, and does not have to: a missing slot
+     * degrades to the runtime's generated placeholder, which is a worse game
+     * but still a game.
+     *
+     * The budget is what turns "the gateway hiccuped" from a 40-minute build
+     * into a build that ships on time with one placeholder in it.
+     */
+    /**
+     * The model review's own budget, separate from the design call's.
+     *
+     * It used to borrow designTimeoutMs (150s) and was measured at 112s on a
+     * build with a single non-blocking finding -- a third of the whole build,
+     * spent having a model read code that a real browser had already run
+     * clean. The review still earns its place for what the probe cannot judge
+     * (whether the game is any good), but not at any price: past this budget
+     * the build ships on the deterministic audit plus observed behaviour.
+     */
+    reviewTimeoutMs: 60_000,
+    artSlotTimeoutMs: 75_000,
+    artBudgetMs: 150_000,
+    /**
+     * Boot the assembled build in a headless browser and fold what it actually
+     * does into QA.
+     *
+     * On by default. The two worst defects this pipeline has shipped -- a
+     * module that balanced but did not parse, and core systems reading an
+     * unprovided shared value -- both passed a green deterministic audit and
+     * were only visible in a running browser. Set GAME_FORGE_PROBE=0 for a
+     * deployment without playwright; the probe degrades to a no-op anyway, so
+     * this is a cost switch, not a correctness one.
+     */
+    runtimeProbe: process.env.GAME_FORGE_PROBE === "0" || process.env.GAME_FORGE_PROBE === "false" ? false : true,
   },
 
   orchestration: {

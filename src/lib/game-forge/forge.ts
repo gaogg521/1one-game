@@ -8,6 +8,7 @@ import { runDesignAgent } from "@/lib/game-forge/design-agent";
 import { generateModule, runCodeAgents } from "@/lib/game-forge/code-agent";
 import { runQaAgent } from "@/lib/game-forge/qa-agent";
 import { assembleGame } from "@/lib/game-forge/assemble";
+import { runRuntimeProbe } from "@/lib/game-forge/runtime-probe";
 import type { GameBuild, GameDesignDoc, GameModule, QaFinding, QaReport } from "@/lib/game-forge/types";
 
 /**
@@ -46,6 +47,14 @@ export type ForgeOptions = {
   onProgress?: (stage: string, detail: string, percent: number, milestone?: ForgeMilestone) => void | Promise<void>;
   /** Skip the model QA review; deterministic checks still run. */
   staticQaOnly?: boolean;
+  /**
+   * Boot the assembled build in a headless browser and fold what it actually
+   * does into QA. Off by default so a deployment without playwright still
+   * builds; on, it is the only thing that can set `observed`.
+   */
+  runtimeProbe?: boolean;
+  /** Asset urls the probe should serve to the build (absolute or data URIs). */
+  probeAssets?: Record<string, string>;
   /**
    * Art generation for the design's declared slots. Invoked as soon as the
    * design lands and awaited at the very end: art depends only on the design,
@@ -161,6 +170,36 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
   });
 
   let modules = code.modules;
+
+  /**
+   * A hole in the module set is the most expensive failure this pipeline can
+   * ship. Every sibling was written against a contract that promised the
+   * missing module's names, so each of them reads a `G.<name>` that now
+   * belongs to nobody, defends against it, and no-ops -- one dead agent turns
+   * into a dozen findings and a game that runs and does nothing.
+   *
+   * Modules are independent, so the whole gap refills in one parallel wave.
+   * That is cheap next to letting the repair loop discover the consequences
+   * one finding at a time.
+   */
+  const routeForRetry = resolveGameModelRoute({ prompt: options.prompt, localeGroup });
+  const missingPlans = design.design.modules.filter((p) => !modules.some((m) => m.id === p.id));
+  if (missingPlans.length && routeForRetry.models.length) {
+    await progress("code", `retrying ${missingPlans.length} module(s) that failed`, 54);
+    const retryStarted = Date.now();
+    const retried = await Promise.all(
+      missingPlans.map((plan) => generateModule(design.design, plan, routeForRetry.models, routeForRetry.scene, localeGroup)),
+    );
+    const recovered = retried.filter((r) => r.ok).map((r) => r.module);
+    if (recovered.length) modules = [...modules, ...recovered];
+    passes.push({
+      agent: "runtime_engineers",
+      changed: recovered.map((m) => `module:${m.id}`),
+      durationMs: Date.now() - retryStarted,
+      note: `retry wave: recovered ${recovered.length}/${missingPlans.length} (${missingPlans.map((p) => p.id).join(", ")})`,
+    });
+  }
+
   const missingMain = !modules.some((m) => m.role === "main");
   if (missingMain) {
     return { ok: false, reason: "forge_main_module_missing", partial: { design: design.design, modules } };
@@ -170,19 +209,99 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
   let assembled = assembleGame(design.design, modules);
 
   /* ------------------------------------------------------------------ qa -- */
+  /**
+   * One audit = deterministic checks + optional model review +, when the
+   * static side is clean, a real browser boot.
+   *
+   * The probe used to run once at the very end, after repair. That made it a
+   * report rather than a control: a build the probe found inert or unbootable
+   * shipped exactly as-is, because nothing downstream could act on the
+   * finding. Auditing this way puts observed behaviour inside the repair loop,
+   * so "it does not boot" and "nothing responds to input" are repairable like
+   * any other blocker -- and a repair that breaks the running build is caught
+   * by the same rollback that guards the static blockers.
+   *
+   * The probe is skipped while static blockers remain: a build that cannot
+   * parse is already known-broken, and booting it costs seconds to learn
+   * nothing new.
+   */
+  const probeEnabled = options.runtimeProbe ?? PRODUCT.gameForge.runtimeProbe;
+  // Bound once: TS drops the union narrowing on `design` inside the closure.
+  const doc = design.design;
+
+  /**
+   * The model review runs once, on the first audit.
+   *
+   * Measured on a build that needed two repair rounds: the first review found
+   * 6 findings including 3 blockers in 56s and was worth every second; the two
+   * that followed each burned their whole 60s budget and returned nothing,
+   * 120s of a 573s build spent learning zero. That is not bad luck -- a repair
+   * round is a targeted fix for named findings, and whether it worked is a
+   * question the deterministic audit and a real browser answer directly. The
+   * model's contribution is judgement about the design as a whole, which does
+   * not change between rounds.
+   */
+  let reviewSpent = false;
+
+  async function auditBuild(mods: GameModule[], source: string, label: string): Promise<QaReport> {
+    const started = Date.now();
+    const staticOnly = options.staticQaOnly || reviewSpent;
+    let report = await runQaAgent(doc, mods, { prompt: options.prompt, localeGroup, staticOnly });
+    reviewSpent = true;
+    report = mergeAssemblyFindings(report, assembled.findings);
+    passes.push({
+      agent: "qa_agent",
+      changed: ["qa_report"],
+      durationMs: Date.now() - started,
+      note: `${label}: ${report.findings.length} findings, ${report.findings.filter((f) => f.severity === "blocker").length} blockers${staticOnly ? " (deterministic only)" : ""}`,
+    });
+
+    if (!probeEnabled) return report;
+    if (report.findings.some((f) => f.severity === "blocker")) {
+      return { ...report, evidence: [...report.evidence, "probe:skipped=static blockers first"] };
+    }
+
+    await progress("probe", "booting the build in a real browser", 78);
+    const probeStarted = Date.now();
+    const probe = await runRuntimeProbe(
+      { version: 1, design: doc, modules: mods, source, qa: report, provenance: { startedAt, completedAt: new Date().toISOString(), passes } },
+      { assets: options.probeAssets },
+    );
+    passes.push({
+      agent: "runtime_probe",
+      changed: ["qa_report"],
+      durationMs: Date.now() - probeStarted,
+      note: probe.observed
+        ? `${label}: booted=${probe.booted} frames=${probe.frames} errors=${probe.errors.length} findings=${probe.findings.length}`
+        : `${label}: not observed: ${probe.unavailable}`,
+    });
+    if (!probe.observed) {
+      return { ...report, evidence: [...report.evidence, `probe:unavailable=${probe.unavailable ?? "unknown"}`] };
+    }
+    const merged = [...report.findings, ...probe.findings];
+    return {
+      ...report,
+      observed: true,
+      findings: merged,
+      ok: !merged.some((f) => f.severity === "blocker"),
+      evidence: [
+        ...report.evidence,
+        `probe:booted=${probe.booted}`,
+        `probe:firstFrameMs=${probe.firstFrameMs ?? "none"}`,
+        `probe:frames=${probe.frames}`,
+        `probe:entities=${probe.maxEntities}`,
+        `probe:scoreAfterInput=${probe.scoreAfterInput ?? "none"}`,
+        `probe:ended=${probe.ended ? (probe.ended.won ? "won" : "lost") : "none"}`,
+        `probe:errors=${probe.errors.length}`,
+      ],
+    };
+  }
+
   await progress("qa", "qa agent auditing the build", 58);
-  let qaStarted = Date.now();
-  let qa = await runQaAgent(design.design, modules, { prompt: options.prompt, localeGroup, staticOnly: options.staticQaOnly });
-  qa = mergeAssemblyFindings(qa, assembled.findings);
-  passes.push({
-    agent: "qa_agent",
-    changed: ["qa_report"],
-    durationMs: Date.now() - qaStarted,
-    note: `${qa.findings.length} findings, ${qa.findings.filter((f) => f.severity === "blocker").length} blockers`,
-  });
+  let qa = await auditBuild(modules, assembled.source, "initial");
 
   /* -------------------------------------------------------------- repair -- */
-  const route = resolveGameModelRoute({ prompt: options.prompt, localeGroup });
+  const route = routeForRetry;
   for (let round = 0; round < cfg.maxRepairRounds; round += 1) {
     const actionable = blockingFindings(qa);
     if (!actionable.length) break;
@@ -224,9 +343,7 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
     if (!repaired.length) break;
 
     assembled = assembleGame(design.design, modules);
-    qaStarted = Date.now();
-    qa = await runQaAgent(design.design, modules, { prompt: options.prompt, localeGroup, staticOnly: options.staticQaOnly });
-    qa = mergeAssemblyFindings(qa, assembled.findings);
+    qa = await auditBuild(modules, assembled.source, `after repair round ${round + 1}`);
     const nextBlockers = qa.findings.filter((f) => f.severity === "blocker").length;
 
     if (nextBlockers > priorBlockers) {
@@ -255,15 +372,31 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
   /* ------------------------------------------------------- final assembly -- */
   if (artPromise) {
     await progress("art", "waiting for any art still generating", 88);
-    const art = await artPromise;
-    if (art) {
-      passes.push({
-        agent: "art_agent",
-        changed: [`art:${art.generated} slot(s)`],
-        durationMs: art.durationMs,
-        note: `${art.generated} generated, ${art.failed} failed (ran in parallel with code; wall-clock overlap ${Math.max(0, Date.now() - artStarted - art.durationMs)}ms saved)`,
-      });
-    }
+    // generateArt is injected by the caller, so the forge cannot assume it
+    // honours a budget of its own. The build's delivery time is the forge's
+    // responsibility: art that has not landed by now is art the game ships
+    // without, and the runtime draws placeholders for the missing slots.
+    const artLeftMs = Math.max(1_000, PRODUCT.gameForge.artBudgetMs - (Date.now() - artStarted));
+    const art = await Promise.race([
+      artPromise,
+      // unref so an abandoned timer never holds a CLI process open.
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), artLeftMs).unref?.()),
+    ]);
+    passes.push(
+      art
+        ? {
+            agent: "art_agent",
+            changed: [`art:${art.generated} slot(s)`],
+            durationMs: art.durationMs,
+            note: `${art.generated} generated, ${art.failed} failed (ran in parallel with code; wall-clock overlap ${Math.max(0, Date.now() - artStarted - art.durationMs)}ms saved)`,
+          }
+        : {
+            agent: "art_agent",
+            changed: [],
+            durationMs: Date.now() - artStarted,
+            note: `art abandoned after ${Math.round((Date.now() - artStarted) / 1000)}s: the build ships with placeholder slots rather than making the creator wait`,
+          },
+    );
   }
 
   await progress("assemble", "assembling the runnable build", 92);
@@ -305,6 +438,19 @@ function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | n
   if (match) {
     const hit = systems.find(match);
     if (hit) return hit.id;
+  }
+
+  // A runtime error names the thing that broke: "G.tickSpawns is not a
+  // function", "cannot read properties of undefined (reading 'x')" on
+  // G.player. Repairing the module that owns that name beats repairing main
+  // by default, which is how a repair round ends up rewriting the one module
+  // that was working.
+  if (finding.code === "runtime_error") {
+    const named = Array.from(finding.message.matchAll(/G\.([A-Za-z][A-Za-z0-9_]{0,40})/g)).map((m) => m[1]!);
+    for (const name of named) {
+      const owner = modules.find((m) => m.provides.includes(name));
+      if (owner) return owner.id;
+    }
   }
   return main?.id ?? systems[0]?.id ?? null;
 }

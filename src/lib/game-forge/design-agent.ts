@@ -194,6 +194,9 @@ You must split the implementation into 4-7 modules. This is the most important p
 - "provides" lists the names a module assigns onto the shared G object. "requires" lists the names it reads. Keep this graph acyclic: config provides, systems build on config, main consumes everything.
 - Name things concretely for this game (G.spawnWave, G.updateHooks, G.drawTrack), not abstractly (G.helpers, G.utils).
 - "signatures" is the single most important field for making independent agents interoperate: for every CALLABLE entry in "provides", give its exact parameter list, in call order, using short conventional names — "g" for the engine handle, "dt" for delta time, plain nouns for game objects ("player", "trap", "state"). Every module that calls a sibling's function is shown this exact signature and told to match it; a module that defines one must follow the parameter order it declared here. Fix the convention once, here, rather than leaving each agent to guess: engine-consuming functions take (g, ...) or (..., g) — pick one order and use it for every signature in this design; state-mutating functions take the piece of state they change first.
+- Never name a signature parameter after an engine subsystem (input, audio, assets, draw, fx, ui, world, rng, ease, stage). Modules reach those through their own engine handle. Name parameters for the VALUE being passed: "axis" or "move" for a movement vector, "player"/"trap" for entities, "dt" for delta time.
+- Shared state needs an owner. If several systems read the same object — the player, the run state, the board — exactly ONE module must list it in "provides" (as a data value, no signature) and every other module must list it in "requires". A name that appears only in "requires" belongs to nobody, and every system that reads it will defensively skip its own work, producing a game that runs and does nothing.
+- "coreLoop" must have at least 3 steps and describe one full cycle of play: what the player does, how the game answers, what pulls them into the next repetition. Two steps is not a loop.
 - Do NOT give a signature to a data value. "config" (and any shared state object) is listed in "provides" but has no signature, because callers read G.config.player.moveSpeed — they never call G.config(). A signature on a data value makes every consumer call it and crash on the first frame.
 
 Return JSON only.`;
@@ -222,6 +225,31 @@ function userPrompt(prompt: string, hints: { title?: string; brief?: string | nu
  * instead of burning the whole attempt budget on a completely different,
  * slower model that has no idea what went wrong.
  */
+/**
+ * The same job, asked smaller, for when the full document could not finish.
+ *
+ * A timeout is not a random failure: it means the reply the model was writing
+ * was too long to complete inside the budget. Re-asking for the same document
+ * is therefore the one retry guaranteed to fail the same way. This trades
+ * ambition for arrival -- fewer modules, one-line briefs, minimum viable
+ * everything -- because the alternative on this stage is no game at all.
+ */
+function designMinimalPrompt(prompt: string, hints: { title?: string; brief?: string | null; winScore?: number }): string {
+  return [
+    userPrompt(prompt, hints),
+    "",
+    "---",
+    "",
+    "IMPORTANT: your previous attempt did not finish inside the time budget, because the document was too long.",
+    "Produce the SMALLEST document that still satisfies every required field:",
+    "  - exactly 4 modules: one config, two systems, one main. No more.",
+    "  - every \"brief\" is ONE sentence.",
+    "  - exactly 3 coreLoop steps, 2 mechanics, 3 asset slots, 2 gameFeel entries, 3 beats.",
+    "  - keep signatures and the provides/requires graph complete and exact — those are what make the modules fit together, and shortening them breaks the build.",
+    "Be terse everywhere else. A short complete document beats a rich unfinished one.",
+  ].join("\n");
+}
+
 function designRepairPrompt(
   prompt: string,
   hints: { title?: string; brief?: string | null; winScore?: number },
@@ -259,6 +287,10 @@ export async function runDesignAgent(
   const verbose = process.env.FORGE_DEBUG === "1";
   for (const model of route.models.slice(0, 2)) {
     let repairUser: string | null = null;
+    // Set when the previous attempt timed out: the retry asks for a smaller
+    // document and must be given a smaller budget to match, or a second slow
+    // reply doubles the wait before the same conclusion.
+    let minimal = false;
     // One repair round per model: a validation failure is almost always a
     // format slip in an otherwise-good document, so it's worth a fast retry
     // on the SAME model before spending a full timeout on a different one.
@@ -272,13 +304,45 @@ export async function runDesignAgent(
         system: systemPrompt(),
         user: repairUser ?? userPrompt(prompt, hints),
         temperature: attempt === 0 ? 0.62 : 0.3,
-        mode: "json_schema",
+        /*
+         * json_object, not json_schema. Measured on minimax-2-7 with the real
+         * design prompt, 3 samples each:
+         *
+         *   json_schema   35.8 / 43.0 / 82.0s   2579-6555 completion tokens
+         *   json_object   29.3 / 32.3 / 57.7s   2229-3203 completion tokens
+         *
+         * Strict mode roughly doubles worst-case generated tokens because the
+         * model spends its reasoning budget checking itself against the schema
+         * (peak reasoning 18495 chars vs 5083) -- and it still did not enforce
+         * the asset-kind enum, so the reply failed validation anyway and cost a
+         * whole repair round on top. That is what turned a ~40s stage into the
+         * observed 154s and one outright timeout.
+         *
+         * The schema is still the contract; it is enforced HERE, by coercion
+         * plus Zod, where a vocabulary slip costs nothing instead of a retry.
+         */
+        mode: "json_object",
         jsonSchema: DESIGN_SCHEMA,
+        // The other mode is the slower one, so escalating into it on a parse
+        // failure would only spend a second timeout to arrive somewhere worse.
+        singleModeOnly: true,
         maxTokens: cfg.designMaxTokens,
-        timeoutMs: cfg.designTimeoutMs,
+        timeoutMs: minimal ? cfg.designFallbackTimeoutMs : cfg.designTimeoutMs,
       });
       if (verbose) console.error(`[forge-debug] design model=${model} attempt=${attempt} scene=${route.scene} elapsed=${Date.now() - attemptStarted}ms ok=${result.ok} ${result.ok ? "" : `error=${result.error}`}`);
-      if (!result.ok) { lastReason = result.error ?? "design_model_failed"; break; }
+      if (!result.ok) {
+        lastReason = result.error ?? "design_model_failed";
+        // A timeout is the one failure worth retrying on the same model, and
+        // only by asking for less. Anything else (auth, route, gateway) will
+        // fail identically however the question is phrased.
+        const timedOut = /timeout|aborted|ETIMEDOUT/i.test(lastReason);
+        if (timedOut && attempt === 0) {
+          minimal = true;
+          repairUser = designMinimalPrompt(prompt, hints);
+          continue;
+        }
+        break;
+      }
       // json_schema is advisory on this gateway (gpt-5-4 honours it,
       // minimax-2-7 does not), so re-shape unambiguous deviations before
       // validating rather than failing a reply that said the right thing.
@@ -305,6 +369,17 @@ export async function runDesignAgent(
 }
 
 /** A plan that cannot assemble is worse than no plan, so check it here. */
+/**
+ * Engine subsystem names, which must never be parameter names.
+ *
+ * Modules reach subsystems through their own "g"; a parameter carrying one of
+ * these names is read as "the system" by one agent and "the value the system
+ * returned" by another.
+ */
+const AMBIGUOUS_PARAM_NAMES = new Set([
+  "input", "audio", "assets", "draw", "fx", "ui", "world", "rng", "ease", "stage", "engine",
+]);
+
 function validateModulePlan(design: GameDesignDoc): { ok: true } | { ok: false; reason: string } {
   const configs = design.modules.filter((m) => m.role === "config");
   const mains = design.modules.filter((m) => m.role === "main");
@@ -319,8 +394,58 @@ function validateModulePlan(design: GameDesignDoc): { ok: true } | { ok: false; 
     const provided = new Set(m.provides);
     const strays = m.signatures.map((s) => s.name).filter((n) => !provided.has(n));
     if (strays.length) return { ok: false, reason: `design_plan_signature_unprovided:${m.id}:${strays.join(",")}` };
+
+    // A parameter named after an engine subsystem is ambiguous, and two agents
+    // working in parallel will read it two ways. Observed: "tickPlayer(dt, g,
+    // input)" -- the caller passed the {x,y} vector from g.input.axis(), the
+    // callee called .axis() on that vector, and the build threw on its first
+    // frame with a completely green static audit. The name is the bug, so
+    // reject it here rather than hoping both agents guess alike.
+    const ambiguous = m.signatures.flatMap((sig) =>
+      sig.params.filter((param) => AMBIGUOUS_PARAM_NAMES.has(param.trim().toLowerCase())).map((param) => `${sig.name}(${param})`),
+    );
+    if (ambiguous.length) return { ok: false, reason: `design_plan_ambiguous_param:${m.id}:${ambiguous.join(",")}` };
   }
   return { ok: true };
+}
+
+/**
+ * Gives every required-but-unprovided name an owner.
+ *
+ * The worst silent failure this pipeline produced came from this gap: two
+ * systems read `G.player`, no module declared it, so every one of them opened
+ * with `if (!G.player) return;` and no-oped on every frame. The build booted,
+ * rendered, threw nothing, and the deterministic audit was green while the
+ * game did nothing at all.
+ *
+ * Rejecting the design over it would cost a full re-roll for something a tech
+ * lead fixes in one line: the shared state belongs to whoever runs init, which
+ * is main. Adopting the orphan there makes the ownership explicit in the
+ * contract every code agent is shown, so main is told to create it and the
+ * others are told where it comes from.
+ */
+function adoptOrphanState(design: GameDesignDoc): GameDesignDoc {
+  const provided = new Set(design.modules.flatMap((m) => m.provides));
+  const orphans = Array.from(new Set(design.modules.flatMap((m) => m.requires).filter((n) => !provided.has(n))));
+  if (!orphans.length) return design;
+
+  const mainId = design.modules.find((m) => m.role === "main")?.id;
+  if (!mainId) return design;
+  return {
+    ...design,
+    modules: design.modules.map((m) =>
+      m.id === mainId
+        ? {
+            ...m,
+            provides: Array.from(new Set([...m.provides, ...orphans])),
+            brief:
+              `${m.brief}
+它还必须在 init 中创建并挂到 G 上的共享状态（其它模块只读取、不创建）：` +
+              orphans.map((n) => `G.${n}`).join("、"),
+          }
+        : m,
+    ),
+  };
 }
 
 /** Clamps a design into what the runtime can actually honour. */
@@ -335,5 +460,9 @@ function normalizeDesign(design: GameDesignDoc): GameDesignDoc {
   const assets = design.assets.some((a) => a.kind === "background")
     ? design.assets
     : [...design.assets, { key: "background", kind: "background" as const, prompt: `Wide establishing background for ${design.title}: ${design.pitch}`, required: false }];
-  return { ...design, stage, assets };
+  return adoptOrphanState({ ...design, stage, assets });
 }
+
+/** Exported for latency diagnostics: the design call is the pipeline's single
+ * biggest source of variance, and measuring it needs the real prompts. */
+export { systemPrompt as buildDesignSystemPrompt, userPrompt as buildDesignUserPrompt, DESIGN_SCHEMA as DESIGN_JSON_SCHEMA, validateModulePlan };

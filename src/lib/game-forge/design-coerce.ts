@@ -88,16 +88,67 @@ function coerceBeats(value: unknown): unknown {
   });
 }
 
+/**
+ * Maps the words a model naturally reaches for onto the runtime's asset kinds.
+ *
+ * Measured on minimax-2-7: asked for a design in plain json_object mode it
+ * returns "item", "decoration", "hazard", "ground" -- every one of them an
+ * unambiguous synonym of a kind the runtime has, and every one of them a
+ * validation failure. The only thing that made the model spell the enum
+ * correctly was strict json_schema, which cost 2.5x the generated tokens and
+ * turned a 35s call into an 82s one, because the model spends its reasoning
+ * budget checking itself against the schema instead of designing a game.
+ *
+ * Translating a synonym is the coercer's job, not the model's. This is a
+ * vocabulary map, never invention: an unrecognised kind falls back to "prop",
+ * which only affects the art wording and the placeholder colour.
+ */
+const ASSET_KIND_SYNONYMS: Record<string, string> = {
+  hero: "player", character: "player", avatar: "player", protagonist: "player", playable: "player",
+  item: "collectible", pickup: "collectible", collectable: "collectible", loot: "collectible",
+  treasure: "collectible", coin: "collectible", reward: "collectible", food: "collectible",
+  hazard: "obstacle", trap: "obstacle", danger: "obstacle", spike: "obstacle", barrier: "obstacle",
+  wall: "obstacle", blocker: "obstacle",
+  ground: "platform", floor: "platform", terrain: "platform", surface: "platform",
+  foe: "enemy", monster: "enemy", villain: "enemy", opponent: "enemy", hunter: "enemy",
+  bullet: "projectile", missile: "projectile", shot: "projectile", arrow: "projectile",
+  powerup: "power", power_up: "power", buff: "power", upgrade: "power", boost: "power",
+  decoration: "prop", decor: "prop", scenery: "prop", ornament: "prop", object: "prop",
+  icon: "ui_icon", ui: "ui_icon", hud: "ui_icon", button: "ui_icon", frame: "ui_icon",
+  bg: "background", backdrop: "background", scene: "background", environment: "background",
+  tileset: "tile", tiles: "tile",
+};
+
+const ASSET_KINDS = new Set([
+  "background", "player", "enemy", "enemy_alt", "boss", "collectible", "power",
+  "projectile", "obstacle", "platform", "prop", "tile", "ui_icon",
+]);
+
+function coerceAssetKind(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (ASSET_KINDS.has(raw)) return raw;
+  if (ASSET_KIND_SYNONYMS[raw]) return ASSET_KIND_SYNONYMS[raw];
+  // "enemy_flying", "collectible_gold": the head word carries the kind.
+  for (const part of raw.split("_")) {
+    if (ASSET_KINDS.has(part)) return part;
+    if (ASSET_KIND_SYNONYMS[part]) return ASSET_KIND_SYNONYMS[part];
+  }
+  return "prop";
+}
+
 function coerceAssets(value: unknown): unknown {
   if (!Array.isArray(value)) return value;
   return value.map((row) => {
     if (!isDict(row)) return row;
     const key = pick(row, "key", "id", "name", "slot");
     const prompt = pick(row, "prompt", "description", "desc", "imagePrompt");
+    const kind = coerceAssetKind(pick(row, "kind", "type", "category"));
     return {
       ...row,
       ...(key ? { key: key.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 40) } : {}),
       ...(prompt ? { prompt } : {}),
+      ...(kind ? { kind } : {}),
       required: typeof row.required === "boolean" ? row.required : false,
     };
   });

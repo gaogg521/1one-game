@@ -121,7 +121,9 @@ Rules:
 - moduleId must be one of the module ids given to you, or "assembled".
 - If the build is sound, return an empty findings array. Do not invent problems to look thorough.
 
-Return JSON only.`;
+Return JSON only, in exactly this shape:
+{"findings": [{"severity": "blocker" | "major" | "minor", "moduleId": "<one of the module ids, or assembled>", "code": "<short_snake_case_code>", "message": "<what is wrong and where>"}]}
+A sound build is {"findings": []}.`;
 }
 
 function reviewUserPrompt(design: GameDesignDoc, modules: GameModule[]): string {
@@ -360,9 +362,14 @@ export async function runQaAgent(
   // clean it has historically had nothing to add, and a creator waiting on a
   // build feels that half-minute — so spend it only when something already
   // looks wrong, or when the caller explicitly asks for a full review.
-  const deterministicClean = findings.length === 0;
+  // Only a blocker or a major is worth 60s of a creator's wait. Observed: a
+  // build whose sole findings were two "unknown_sfx" minors spent a full
+  // review budget and learned nothing -- the review is there to judge whether
+  // the game is any good, not to re-read a cosmetic note the audit already
+  // wrote down precisely.
+  const deterministicClean = !findings.some((f) => f.severity === "blocker" || f.severity === "major");
   if (deterministicClean && !opts.alwaysReview) {
-    evidence.push("review:skipped=deterministic_audit_clean");
+    evidence.push(`review:skipped=no_blocking_findings(${findings.length} minor)`);
   } else if (!opts.staticOnly) {
     const route = resolveGameModelRoute({ prompt: opts.prompt, localeGroup: opts.localeGroup });
     if (route.models.length) {
@@ -374,14 +381,22 @@ export async function runQaAgent(
         system: reviewSystemPrompt(),
         user: reviewUserPrompt(design, modules),
         temperature: 0.2,
-        mode: "json_schema",
+        // json_object for the same reason the design call uses it: measured on
+        // this gateway, strict mode roughly doubles a reasoning model's
+        // generated tokens without actually enforcing the schema. Every field
+        // below is validated by hand anyway, so nothing is lost.
+        mode: "json_object",
         jsonSchema: REVIEW_SCHEMA,
+        singleModeOnly: true,
         maxTokens: 4_096,
-        timeoutMs: PRODUCT.gameForge.designTimeoutMs,
+        timeoutMs: PRODUCT.gameForge.reviewTimeoutMs,
       });
       if (result.ok) {
-        const raw = result.raw as { findings?: unknown };
-        const list = Array.isArray(raw.findings) ? raw.findings : [];
+        // Without a schema to lean on, a model sometimes answers with the bare
+        // array it was asked to fill. That is the same answer, differently
+        // wrapped -- reading it is not the same as inventing it.
+        const raw = result.raw as { findings?: unknown } | unknown[];
+        const list = Array.isArray(raw) ? raw : Array.isArray((raw as { findings?: unknown }).findings) ? ((raw as { findings: unknown[] }).findings) : [];
         const knownIds = new Set([...modules.map((m) => m.id), "assembled"]);
         for (const item of list) {
           const f = item as Partial<QaFinding>;

@@ -4,6 +4,7 @@
  * Not a regression test — a manual probe to see what the agents actually
  * produce before anyone claims the pipeline works.
  */
+import { prisma } from "../src/lib/prisma";
 import fs from "node:fs";
 import path from "node:path";
 import { forgeGame } from "../src/lib/game-forge/forge";
@@ -13,11 +14,30 @@ async function main() {
   console.log(`[live] prompt: ${prompt}`);
   const t0 = Date.now();
 
+  // Stage entry times, so the printed timeline shows which stages overlapped.
+  // A pipeline claiming to be concurrent has to be measurable as concurrent.
+  const stageTimes: Array<{ stage: string; at: number }> = [];
+  const withArt = process.env.FORGE_LIVE_ART === "1";
+
   const result = await forgeGame({
     prompt,
     onProgress: (stage, detail, percent) => {
-      console.log(`  [${String(percent).padStart(3)}%] ${stage}: ${detail}`);
+      if (stageTimes[stageTimes.length - 1]?.stage !== stage) stageTimes.push({ stage, at: Date.now() - t0 });
+      console.log(`  [${String(percent).padStart(3)}%] +${((Date.now() - t0) / 1000).toFixed(1)}s ${stage}: ${detail}`);
     },
+    // Mirror the worker exactly: art is handed to the forge so it runs beside
+    // the code agents. Running it after the build (as this script used to)
+    // measures a pipeline nobody ships.
+    generateArt: withArt
+      ? async (design, onSlotDone) => {
+          const { runForgeAssetAgent } = await import("../src/lib/game-forge/asset-agent");
+          const run = await runForgeAssetAgent("forge-live-demo", design, {
+            onSlotDone: (slot) => onSlotDone({ key: slot.key, kind: slot.kind, url: slot.url, done: slot.done, total: slot.total }),
+          });
+          for (const r of run.results) console.log(`  [art] ${r.url ? "OK  " : "FAIL"} ${r.key.padEnd(24)} ${r.url ?? r.error} (${r.durationMs}ms)`);
+          return { generated: run.generated, failed: run.failed, durationMs: run.durationMs };
+        }
+      : undefined,
   });
 
   const elapsed = Date.now() - t0;
@@ -49,18 +69,6 @@ async function main() {
   console.log(`\n  provenance passes:`);
   for (const p of build.provenance.passes) {
     console.log(`    - ${p.agent} (${p.model ?? "n/a"}) ${p.durationMs}ms : ${p.changed.join(", ")}${p.note ? ` — ${p.note}` : ""}`);
-  }
-
-  // Exercise the art agent on the same design the code agents built against.
-  if (process.env.FORGE_LIVE_ART === "1") {
-    const { runForgeAssetAgent } = await import("../src/lib/game-forge/asset-agent");
-    console.log(`
-[art] generating ${build.design.assets.length} declared slot(s)…`);
-    const artRun = await runForgeAssetAgent("forge-live-demo", build.design, {
-      onProgress: (done, total, key) => console.log(`  [art] ${done}/${total} ${key}`),
-    });
-    for (const r of artRun.results) console.log(`  ${r.url ? "OK  " : "FAIL"} ${r.key.padEnd(24)} ${r.url ?? r.error} (${r.durationMs}ms)`);
-    console.log(`[art] ${artRun.generated} generated, ${artRun.failed} failed in ${artRun.durationMs}ms`);
   }
 
   const outDir = path.join(process.cwd(), "qa-output", "game-forge-live");
@@ -96,7 +104,13 @@ mountGame(document.getElementById('game'),ctx);
   console.log(`  wrote ${path.join(outDir, "live-build.html")}`);
 }
 
-main().catch((err) => {
-  console.error("[FAIL] unhandled error", err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("[FAIL] unhandled error", err);
+    process.exitCode = 1;
+  })
+  // The image layer records provider usage through prisma, whose connection
+  // pool keeps the event loop alive forever. Without this the script prints
+  // its whole report and then hangs -- which is how a three-run measurement
+  // silently only ever ran the first one.
+  .finally(() => prisma.$disconnect());

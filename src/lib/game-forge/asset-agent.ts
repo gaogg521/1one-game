@@ -151,6 +151,31 @@ async function writeImage(targetPath: string, url: string, localPath?: string, i
   await fs.promises.writeFile(targetPath, await compressImage(raw, isBackground));
 }
 
+/**
+ * Runs a slot against a hard wall-clock ceiling.
+ *
+ * The timeout passed into the image layer bounds one provider call, but a
+ * failed call falls back to a second provider and the download after it has a
+ * ceiling of its own, so the only way to bound what a creator waits is to
+ * bound the whole slot. Losing the race abandons the image, not the build: the
+ * runtime draws a generated placeholder for a missing asset.
+ */
+async function withDeadline(slot: AssetSlot, ms: number, work: Promise<ForgeAssetResult>): Promise<ForgeAssetResult> {
+  let timer: NodeJS.Timeout | undefined;
+  const started = Date.now();
+  const expired = new Promise<ForgeAssetResult>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ key: slot.key, kind: slot.kind, url: null, error: `art slot exceeded ${Math.round(ms / 1000)}s budget`, durationMs: Date.now() - started }),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function generateSlot(projectId: string, design: GameDesignDoc, slot: AssetSlot, rootDir: string): Promise<ForgeAssetResult> {
   const t0 = Date.now();
   const isBackground = slot.kind === "background";
@@ -167,6 +192,9 @@ async function generateSlot(projectId: string, design: GameDesignDoc, slot: Asse
     const result = await generateImageDetailed(buildSlotPrompt(design, slot), {
       size: isBackground ? "1536x1024" : "1024x1024",
       quality: "standard",
+      // Without this the call inherits a twelve-minute default meant for
+      // background comic jobs, not for someone watching a build.
+      timeoutMs: PRODUCT.gameForge.artSlotTimeoutMs,
     });
     if (!result.ok || !result.url) {
       return { key: slot.key, kind: slot.kind, url: null, error: result.error ?? "image model returned nothing", durationMs: Date.now() - t0 };
@@ -201,6 +229,8 @@ export async function runForgeAssetAgent(
   opts: {
     concurrency?: number;
     rootDir?: string;
+    /** Wall-clock ceiling for the whole stage; defaults to PRODUCT.gameForge.artBudgetMs. */
+    budgetMs?: number;
     /** Fires per slot as its image lands, with the url so a UI can show it immediately. */
     onSlotDone?: (slot: ForgeAssetResult & { done: number; total: number }) => void;
     onProgress?: (done: number, total: number, key: string) => void;
@@ -211,8 +241,16 @@ export async function runForgeAssetAgent(
   const slots = design.assets;
   let done = 0;
 
+  // One stage-wide deadline on top of the per-slot ceiling. Slots run in a
+  // pool, so a queued slot must not start a fresh 75s attempt when the stage
+  // has already spent its budget.
+  const deadline = t0 + (opts.budgetMs ?? PRODUCT.gameForge.artBudgetMs);
   const results = await pooled(slots, opts.concurrency ?? PRODUCT.gameForge.artConcurrency, async (slot) => {
-    const result = await generateSlot(projectId, design, slot, rootDir);
+    const left = deadline - Date.now();
+    const result =
+      left <= 0
+        ? { key: slot.key, kind: slot.kind, url: null, error: "art budget exhausted before this slot started", durationMs: 0 }
+        : await withDeadline(slot, Math.min(PRODUCT.gameForge.artSlotTimeoutMs * 2, left), generateSlot(projectId, design, slot, rootDir));
     done += 1;
     opts.onProgress?.(done, slots.length, slot.key);
     opts.onSlotDone?.({ ...result, done, total: slots.length });

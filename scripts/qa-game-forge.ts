@@ -9,7 +9,9 @@
 import assert from "node:assert/strict";
 import { assembleGame, checkBalanced, checkSyntax, orderModules, scanForbidden, stripCommentsAndStrings } from "../src/lib/game-forge/assemble";
 import { auditBuildShape, auditCallSignatures, auditConfigPaths, auditSdkUsage, auditSharedStateReads, auditStatic } from "../src/lib/game-forge/qa-agent";
+import { validateModulePlan } from "../src/lib/game-forge/design-agent";
 import { GAME_FORGE_SDK_SOURCE } from "../src/lib/game-forge/runtime-sdk";
+import { SDK_SURFACE } from "../src/lib/game-forge/sdk-surface";
 import type { GameDesignDoc, GameModule } from "../src/lib/game-forge/types";
 
 const design: GameDesignDoc = {
@@ -304,4 +306,59 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   }
 }
 
-console.log("[OK] qa-game-forge: assembly, ordering, SDK-surface audit and build-shape gates hold");
+/* ------------------------------- aliased SDK subsystems ---------------- */
+{
+  // Observed in a real build: `const r = g.draw;` then `r.ellipse(...)`.
+  // Every accessor pattern anchors on "g.", so the alias escaped all of them;
+  // `draw` was not even a listed table despite being the same object as `r`.
+  // The audit reported zero findings and the game threw
+  // "r.ellipse is not a function" before rendering a frame.
+  const flagged = (source: string) =>
+    auditSdkUsage("m", source).some((f) => f.code === "unknown_sdk_member");
+
+  assert.ok(flagged("const r = g.draw;\nr.ellipse(1,2,3,4);"), "a fake member on an aliased subsystem must be caught");
+  assert.ok(flagged("g.draw.ellipse(1,2,3,4);"), "g.draw must be checked, not only g.r");
+  assert.ok(flagged("g.r.ellipse(1,2,3,4);"), "g.r must still be checked");
+  assert.ok(!flagged("const r = g.draw;\nr.circle(1,2,3);\nr.rect(0,0,4,4);"), "real renderer members through an alias must pass");
+  assert.ok(!flagged("var assets = g.assets;\nassets.image('u','player','#fff');"), "real members on any aliased subsystem must pass");
+  // `var w = g.width` aliases a number, not a table; treating it as one would
+  // flag every method call on it.
+  assert.ok(!flagged("var w = g.width;\nw.toFixed(2);"), "a value alias must not be audited as a subsystem");
+
+  // g.draw and g.r are the same object in the SDK, so their surfaces must not
+  // drift apart.
+  assert.deepStrictEqual(SDK_SURFACE.draw, SDK_SURFACE.r, "g.draw and g.r are the same object and must list the same members");
+}
+
+/* ------------------------------- ambiguous signature parameters -------- */
+{
+  // Observed in a real build: the plan declared "tickPlayer(dt, g, input)".
+  // The caller passed the {x,y} vector g.input.axis() returned; the callee
+  // read the same name as the input SYSTEM and called .axis() on the vector.
+  // The game threw on its first frame and every static check stayed green,
+  // because arity matched and both modules used only real SDK members. The
+  // parameter NAME was the defect, so the plan must not survive validation.
+  const plan = (params: string[]) =>
+    ({
+      title: "t", pitch: "p", genre: "arcade",
+      modules: [
+        { id: "cfg", role: "config", brief: "b", provides: ["config"], requires: [], signatures: [] },
+        { id: "sys", role: "system", brief: "b", provides: ["tickPlayer"], requires: ["config"], signatures: [{ name: "tickPlayer", params }] },
+        { id: "main", role: "main", brief: "b", provides: ["main"], requires: ["config", "tickPlayer"], signatures: [{ name: "main", params: ["g"] }] },
+      ],
+    }) as unknown as Parameters<typeof validateModulePlan>[0];
+
+  const rejected = validateModulePlan(plan(["dt", "g", "input"]));
+  assert.ok(!rejected.ok, "a signature parameter named after an engine subsystem must be rejected");
+  assert.match(rejected.ok ? "" : rejected.reason, /ambiguous_param/, "the rejection must name the ambiguity");
+
+  for (const name of ["audio", "assets", "fx", "ui", "world", "draw", "stage", "rng"]) {
+    assert.ok(!validateModulePlan(plan(["dt", "g", name])).ok, `"${name}" is an engine subsystem and must not be a parameter name`);
+  }
+
+  // Naming the value instead of the system is the fix, and must pass.
+  assert.ok(validateModulePlan(plan(["dt", "g", "axis"])).ok, '"axis" names the value being passed and must be accepted');
+  assert.ok(validateModulePlan(plan(["dt", "g", "player"])).ok, "entity parameters must still be accepted");
+}
+
+console.log("[OK] qa-game-forge: assembly, ordering, SDK-surface audit, build-shape and signature-ambiguity gates hold");

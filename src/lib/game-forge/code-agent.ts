@@ -101,6 +101,9 @@ CRITICAL ordering rule: modules run in dependency order, but sibling functions a
 
 CRITICAL signature rule: the prompt below lists an exact signature for everything you must assign and everything you are allowed to call. Match parameter COUNT and ORDER exactly — a sibling module was written against that exact signature and passes arguments positionally, not by name. Do not add, drop, or reorder parameters, and do not invent a call to a name that was not given a signature.
 
+CRITICAL argument rule: NEVER pass an engine subsystem as an argument, and never expect one. Every module reads g.input, g.audio, g.assets, g.draw, g.fx, g.ui, g.world, g.rng and g.stage directly off the "g" it was handed. Pass DATA — numbers, vectors, entities, plain objects — never the systems that produce them.
+This is not a style preference. A signature like "tickPlayer(dt, g, input)" reads two ways: "input" can be the movement vector g.input.axis() returned, or the input system itself. Two agents working in parallel picked one reading each; the caller passed a {x,y} vector, the callee called .axis() on it, and the game threw "input.axis is not a function" on its first frame while every static check stayed green. If you need a movement vector, name the parameter for the value ("axis", "move", "dir") and compute it with g.input.axis() on whichever side owns it.
+
 CRITICAL state rule: there are exactly two places state may live, never a third.
 1. Private state only this module's own functions touch: a plain "var" at the TOP of your module body (outside any function). It survives via closure because your module body runs once at boot; every function you assign onto G that was declared in this same body can still read and write it.
 2. State other modules must also read or write: a field on G itself (e.g. G.runState = {...}, then every module reads/writes G.runState.someField).
