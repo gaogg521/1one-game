@@ -182,8 +182,22 @@ export const PRODUCT = {
    */
   gameForge: {
     enabled: process.env.GAME_FORGE === "0" || process.env.GAME_FORGE === "false" ? false : true,
-    /** Design doc: structured, moderate size. */
-    designMaxTokens: 8_192,
+    /**
+     * Design doc budget.
+     *
+     * Raised 2026-09-07 from 8192 after measuring what production's game_text
+     * model actually spends: one call reported completion_tokens=19968 for an
+     * 8774-character answer, because this provider counts REASONING tokens in
+     * that total and the model produced 61812 characters of reasoning -- seven
+     * times the answer it was asked for. 8192 (plus the 6144 reasoning
+     * headroom the LLM layer adds, so 14336) sits below what the model needs
+     * just to think, which risks the answer being cut off mid-JSON and coming
+     * back unparseable rather than merely late.
+     *
+     * This is an upper bound, not a target: a model that answers concisely is
+     * unaffected, and nothing here makes a fast model slower.
+     */
+    designMaxTokens: 32_768,
     /**
      * Raised 2026-09-07 from 150s after production evidence: production's
      * actual game_text model (deepseek-v4-flash-ga-260731 via Volcengine)

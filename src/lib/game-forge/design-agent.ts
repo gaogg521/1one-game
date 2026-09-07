@@ -352,13 +352,33 @@ export async function runDesignAgent(
       if (verbose) console.error(`[forge-debug] design model=${model} attempt=${attempt} scene=${route.scene} elapsed=${Date.now() - attemptStarted}ms ok=${result.ok} ${result.ok ? "" : `error=${result.error}`}`);
       if (!result.ok) {
         lastReason = result.error ?? "design_model_failed";
-        // A timeout is the one failure worth retrying on the same model, and
-        // only by asking for less. Anything else (auth, route, gateway) will
-        // fail identically however the question is phrased.
-        const timedOut = /timeout|aborted|ETIMEDOUT/i.test(lastReason);
-        if (timedOut && attempt === 0) {
-          minimal = true;
-          repairUser = designMinimalPrompt(prompt, hints);
+        /*
+         * Retry once on anything that could plausibly differ next time, not
+         * only on timeouts.
+         *
+         * The previous version gated the retry on `timedOut`, reasoning that
+         * other failures "will fail identically however the question is
+         * phrased". Production disproved that: a job died outright on
+         * "no parseable JSON in the single attempted mode" with ZERO retries.
+         * That reply is not deterministic -- measured on this model, one call
+         * produced 61812 characters of reasoning against 8774 characters of
+         * answer, with completion_tokens (19968) counting reasoning and
+         * exceeding the budget the app sends. How much of the answer survives
+         * therefore varies run to run, so an unparseable reply is exactly the
+         * kind of failure a second attempt clears.
+         *
+         * A timeout means the reply was too long to finish, so that retry asks
+         * for a smaller document. Anything else gets the same ask again at a
+         * lower temperature (attempt 1 already drops to 0.3). Hard failures
+         * (auth, routing, missing model) still cost only one extra call.
+         */
+        if (attempt === 0) {
+          const timedOut = /timeout|aborted|ETIMEDOUT/i.test(lastReason);
+          if (timedOut) {
+            minimal = true;
+            repairUser = designMinimalPrompt(prompt, hints);
+          }
+          if (verbose) console.error(`[forge-debug] design retrying after: ${lastReason.slice(0, 120)} (minimal=${minimal})`);
           continue;
         }
         break;
