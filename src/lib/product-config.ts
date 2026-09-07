@@ -184,7 +184,18 @@ export const PRODUCT = {
     enabled: process.env.GAME_FORGE === "0" || process.env.GAME_FORGE === "false" ? false : true,
     /** Design doc: structured, moderate size. */
     designMaxTokens: 8_192,
-    designTimeoutMs: 150_000,
+    /**
+     * Raised 2026-09-07 from 150s after production evidence: production's
+     * actual game_text model (deepseek-v4-flash-ga-260731 via Volcengine)
+     * generates a far more verbose design document than the model this budget
+     * was tuned against locally -- 13724-15655 completion tokens observed vs
+     * 2200-6500 locally -- and one isolated, uncontended call timed out at
+     * exactly the old 150000ms ceiling while two others finished at 119s and
+     * 138s. 150s was cutting it too close for this model's real output size;
+     * this budget must fit the slowest model actually routed to it, not the
+     * one most recently benchmarked.
+     */
+    designTimeoutMs: 210_000,
     /**
      * Budget for the fallback design attempt.
      *

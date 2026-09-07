@@ -305,27 +305,39 @@ export async function runDesignAgent(
         user: repairUser ?? userPrompt(prompt, hints),
         temperature: attempt === 0 ? 0.62 : 0.3,
         /*
-         * json_object, not json_schema. Measured on minimax-2-7 with the real
-         * design prompt, 3 samples each:
+         * json_schema, not json_object -- REVERTED 2026-09-07 after this exact
+         * switch broke every real design call in production.
          *
-         *   json_schema   35.8 / 43.0 / 82.0s   2579-6555 completion tokens
-         *   json_object   29.3 / 32.3 / 57.7s   2229-3203 completion tokens
+         * Local testing (minimax-2-7 via a local litellm gateway) showed
+         * json_schema costing roughly double the worst-case tokens with no real
+         * enforcement benefit, so this was switched to json_object earlier
+         * today. That measurement does not generalise: production's actual
+         * game_text model, deepseek-v4-flash-ga-260731 via Volcengine, behaves
+         * the OPPOSITE way on the real ~7.9K-char design prompt, tested in
+         * isolation with no other load:
          *
-         * Strict mode roughly doubles worst-case generated tokens because the
-         * model spends its reasoning budget checking itself against the schema
-         * (peak reasoning 18495 chars vs 5083) -- and it still did not enforce
-         * the asset-kind enum, so the reply failed validation anyway and cost a
-         * whole repair round on top. That is what turned a ~40s stage into the
-         * observed 154s and one outright timeout.
+         *   json_object          2/2 calls never returned before a 160s abort
+         *   no response_format   1/1 call never returned before a 150s abort
+         *   json_schema          1/1 call finished in 119s, 13724 tokens
          *
-         * The schema is still the contract; it is enforced HERE, by coercion
-         * plus Zod, where a vocabulary slip costs nothing instead of a retry.
+         * Without a schema, this model does not reliably converge on this task
+         * at all -- json_schema is not merely cheaper here, it is the only
+         * mode observed to terminate. Every real design_agent_failed job in
+         * production during the json_object window timed out, both on the
+         * primary budget and on the "ask smaller" fallback (which reuses this
+         * same mode), because a plain timeout does not trigger the automatic
+         * dual-mode fallback in llmJsonOpenAICompatible -- that only fires on a
+         * "schema not supported" class of error, never on AbortError.
+         *
+         * There is no single mode that is provably best for every model this
+         * cascade might route to, so this now relies on the existing two-mode
+         * fallback (schema first, object second) instead of forcing one
+         * globally. The asset-kind vocabulary coercion added earlier today is
+         * unaffected either way -- it is applied to whatever the model returns
+         * in either mode, so a spelling slip still costs nothing.
          */
-        mode: "json_object",
+        mode: "json_schema",
         jsonSchema: DESIGN_SCHEMA,
-        // The other mode is the slower one, so escalating into it on a parse
-        // failure would only spend a second timeout to arrive somewhere worse.
-        singleModeOnly: true,
         maxTokens: cfg.designMaxTokens,
         timeoutMs: minimal ? cfg.designFallbackTimeoutMs : cfg.designTimeoutMs,
       });

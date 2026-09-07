@@ -381,13 +381,16 @@ export async function runQaAgent(
         system: reviewSystemPrompt(),
         user: reviewUserPrompt(design, modules),
         temperature: 0.2,
-        // json_object for the same reason the design call uses it: measured on
-        // this gateway, strict mode roughly doubles a reasoning model's
-        // generated tokens without actually enforcing the schema. Every field
-        // below is validated by hand anyway, so nothing is lost.
-        mode: "json_object",
+        // json_schema -- REVERTED 2026-09-07 alongside the design-agent call
+        // for the same reason: this scene's production model
+        // (deepseek-v4-flash-ga-260731) was measured to never terminate on
+        // json_object for a real prompt from this pipeline, while json_schema
+        // reliably finishes. See design-agent.ts for the isolated production
+        // measurements. Not forcing singleModeOnly leaves the existing
+        // dual-mode fallback available for whichever other model this scene
+        // might route to.
+        mode: "json_schema",
         jsonSchema: REVIEW_SCHEMA,
-        singleModeOnly: true,
         maxTokens: 4_096,
         timeoutMs: PRODUCT.gameForge.reviewTimeoutMs,
       });
