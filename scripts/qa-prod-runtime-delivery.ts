@@ -43,6 +43,13 @@ async function main() {
     }
     report.projectId = projectId;
     await fs.writeFile(`${output}/REPORT.json`, JSON.stringify(report, null, 2));
+    if (process.env.QA_RETRY_FAILED === "1") {
+      await page.goto(`${base}/zh-Hans/play/${projectId}`, { waitUntil: "networkidle" });
+      const retry = page.locator('[data-testid="runtime-delivery-status"] button');
+      await retry.waitFor({ timeout: 30_000 });
+      await retry.click();
+      console.log(`[production] requested owner retry for ${projectId}`);
+    }
     const deadline = Date.now() + 4 * 60 * 60_000;
     let detail: Detail = {};
     let lastState = "";
