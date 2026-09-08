@@ -2958,6 +2958,11 @@
     "generatingSameAs": "กำลังสร้างด้วย engine เดียวกับตัวอย่าง “{sample}”…"
   },
   "playGame": {
+    "runtimeUnavailable": "เกมนี้ยังไม่พร้อมให้เล่น",
+    "runtimeVerifying": "กำลังสร้างและตรวจสอบเกม เกมจะเปิดเมื่อพร้อม",
+    "runtimeFailed": "เกมเริ่มทำงานไม่สำเร็จ ระบบเก็บผลงานไว้แล้ว คุณสามารถสร้างใหม่ได้",
+    "runtimeUnverified": "การตรวจสอบยังไม่เสร็จ จึงยังไม่สามารถเล่นได้",
+    "runtimeRetry": "สร้างและตรวจสอบอีกครั้ง",
     "loadFailed": "Failed to load",
     "incompleteData": "Incomplete data",
     "networkError": "Network error",

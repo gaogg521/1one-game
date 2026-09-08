@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
+import { buildGameProductionRun as buildRun } from "@/lib/game-production-orchestrator";
 import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import type { RealAgentExecution } from "@/lib/game-production-agents";
+
+import { runtimeSourceHash } from "@/lib/game-runtime-validation";
+// Synthetic runtime evidence here isolates advisory policy; browser validation has its own real-execution suite.
+const buildGameProductionRun = (input: Parameters<typeof buildRun>[0]) => buildRun({ ...input, runtimeValidation: { version: 1, status: "passed", observed: true, sourceHash: runtimeSourceHash(input.spec), blockers: [], evidence: ["synthetic-policy-fixture"] } });
 
 const prompt = "制作一款有采集、建造、敌人和超能力的体素沙盒游戏";
 const base = mockSpecFromPrompt(prompt, { templateId: "survivor" });
@@ -109,7 +113,7 @@ const legacyArena = buildGameProductionRun({
   spec: { ...legacyArenaSpec, agenticPlayRoute: "dedicated" },
   assetManifest,
 });
-assert.equal(legacyArena.candidate.decision, "ready_for_playtest");
+assert.equal(legacyArena.candidate.decision, "rejected");
 assert.ok(legacyArena.candidate.advisories?.includes("independent_runtime_missing"));
 
 console.log("[OK] qa-game-production-orchestrator: direct model runtime is promoted; review output is advisory");

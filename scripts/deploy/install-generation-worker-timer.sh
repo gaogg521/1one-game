@@ -72,6 +72,27 @@ if [[ "${secret_initialized}" == "1" ]]; then
   systemctl restart operone
   sleep 3
 fi
-systemctl start operone-generation-worker.service
+# Independent slots: a short job can finish and claim again while slot 1 is busy.
+# Keep the original unit name for existing health checks. The application also
+# enforces the configured global limit and project exclusivity in its DB claim.
+for slot in 2 3 4; do
+  sed "s/worker (one job)/worker (slot ${slot})/" /etc/systemd/system/operone-generation-worker.service > "/etc/systemd/system/operone-generation-worker-${slot}.service"
+  sed "s/operone-generation-worker.service/operone-generation-worker-${slot}.service/" /etc/systemd/system/operone-generation-worker.timer > "/etc/systemd/system/operone-generation-worker-${slot}.timer"
+done
+concurrency="$(sed -n 's/^GENERATION_WORKER_CONCURRENCY=//p' "${ENV_FILE}" | tail -1 | tr -d '\"\r')"
+concurrency="${concurrency:-2}"
+if [[ ! "${concurrency}" =~ ^[1-4]$ ]]; then
+  echo "GENERATION_WORKER_CONCURRENCY must be 1..4" >&2
+  exit 1
+fi
+systemctl daemon-reload
+for slot in 2 3 4; do
+  if (( slot <= concurrency )); then
+    systemctl enable --now "operone-generation-worker-${slot}.timer"
+  else
+    systemctl disable --now "operone-generation-worker-${slot}.timer"
+  fi
+done
+systemctl start --no-block operone-generation-worker.service
 systemctl is-active --quiet operone-generation-worker.timer
 echo "[generation-worker] timer active"

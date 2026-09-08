@@ -7,9 +7,11 @@ import {
   GameIterationJobPayloadSchema,
   NovelContinueJobPayloadSchema,
 } from "@/lib/creator-core/types";
+import { createHash, randomUUID } from "node:crypto";
+import { validateGameRuntime, runtimeValidationBlockers } from "@/lib/game-runtime-validation";
 import {
   createCreativeArtifact,
-  finalizeCreativeRevision,
+  writeProductionArtifact,
   markCreativeRevisionFailed,
   markCreativeRevisionGenerating,
 } from "@/lib/creator-core/repository";
@@ -21,6 +23,8 @@ import {
   enqueueGenerationJob,
   failGenerationJob,
   heartbeatGenerationJob,
+  renewGenerationJobLease,
+  assertGenerationJobLease,
 } from "@/lib/creator-core/jobs";
 import { prisma } from "@/lib/prisma";
 import { withGenerationJobContext } from "@/lib/generation-job-context";
@@ -185,6 +189,13 @@ async function executeGameProductionJob(
   workerId: string,
 ) {
   if (!job.creativeRevisionId) throw new Error("game_production_revision_missing");
+  const persistArtifact = (input: Parameters<typeof createCreativeArtifact>[0]) => writeProductionArtifact(input, job.id, workerId);
+  const updateDraft = async (projectId: string, nextSpec: ReturnType<typeof parseGameSpec>) => prisma.$transaction(async tx => {
+    if (!await tx.generationJob.count({ where: { id: job.id, workerId, status: "running", leaseExpiresAt: { gt: new Date() } } })) throw new Error("generation_job_lease_lost");
+    const latest = await tx.creativeRevision.findFirst({ where: { creativeProjectId: job.creativeProjectId }, orderBy: { sequence: "desc" }, select: { id: true } });
+    if (latest?.id !== job.creativeRevisionId) throw new Error("production_revision_superseded");
+    return tx.project.update({ where: { id: projectId }, data: { specJson: JSON.stringify(nextSpec), title: nextSpec.title } });
+  });
   const payload = GameProductionJobPayloadSchema.parse(JSON.parse(job.payloadJson));
   let spec = parseGameSpec(payload.spec);
   const sourceProject = await prisma.project.findUnique({
@@ -192,6 +203,15 @@ async function executeGameProductionJob(
     select: { id: true, prompt: true, ownerKey: true },
   });
   if (!sourceProject || sourceProject.ownerKey !== payload.ownerKey) throw new Error("game_production_project_missing");
+  const revisionState = await prisma.creativeRevision.findUniqueOrThrow({ where: { id: job.creativeRevisionId } });
+  if (revisionState.status === "ready") {
+    const prior = await prisma.creativeArtifact.findMany({ where: { creativeRevisionId: job.creativeRevisionId, kind: { in: ["game_spec", "game_runtime_validation", "game_production_candidate"] } } });
+    const savedSpec = prior.find(a => a.kind === "game_spec");
+    const validation = prior.find(a => a.kind === "game_runtime_validation");
+    const candidate = prior.find(a => a.kind === "game_production_candidate");
+    if (savedSpec?.contentJson && validation?.contentJson && candidate && !runtimeValidationBlockers(parseGameSpec(JSON.parse(savedSpec.contentJson)), JSON.parse(validation.contentJson), sourceProject.id).length) return candidate;
+    throw new Error("production_revision_sealed_without_runtime_verification");
+  }
   spec = { ...spec, agenticPlayRoute: "independent" };
   const briefResult = payload.brief == null ? { success: true as const, data: null } : CREATIVE_BRIEF_SCHEMA.safeParse(payload.brief);
   if (!briefResult.success) throw new Error("game_production_brief_invalid");
@@ -200,7 +220,8 @@ async function executeGameProductionJob(
   // newly generated game-specific independent runtime.
   const { agenticModule: _previousRuntime, ...withoutPreviousRuntime } = spec;
   spec = withoutPreviousRuntime;
-  await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+  await assertGenerationJobLease(job.id, workerId);
+  await updateDraft(sourceProject.id, spec);
 
   await markCreativeRevisionGenerating(job.creativeRevisionId);
   // The model-generated runtime is the first deliverable.  Assets and BGM may
@@ -260,14 +281,15 @@ async function executeGameProductionJob(
   } finally {
     clearInterval(runtimeHeartbeat);
   }
-  await prisma.project.update({ where: { id: sourceProject.id }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+  await assertGenerationJobLease(job.id, workerId);
+  await updateDraft(sourceProject.id, spec);
 
   // The art agent already ran in parallel with the code agents inside the
   // forge; only its report is persisted here.
   const artRun = artState.current;
   if (artRun) {
     const missing = missingRequiredSlots(artRun.design, artRun.run);
-    await createCreativeArtifact({
+    await persistArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId,
       idempotencyKey: `forge_art_run:${job.creativeRevisionId}`,
@@ -298,6 +320,8 @@ async function executeGameProductionJob(
     prompt: sourceProject.prompt,
     brief: briefResult.data,
     assetManifest,
+    projectId: sourceProject.id,
+    runtimeValidation: await validateGameRuntime(spec, sourceProject.id, forgeBuild?.ok ? forgeBuild.build.qa : null),
     productionRound: payload.productionRound,
     realAgentOutputs: { artDirection },
   });
@@ -309,14 +333,14 @@ async function executeGameProductionJob(
       stage: String(artifact.metadata.role ?? "production"),
       detail: `persisting ${artifact.kind}`,
     });
-    lastArtifact = await createCreativeArtifact({
+    lastArtifact = await persistArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId,
       idempotencyKey: `${artifact.kind}:${job.creativeRevisionId}`,
       artifact,
     });
   }
-  await createCreativeArtifact({
+  await persistArtifact({
     creativeProjectId: job.creativeProjectId,
     creativeRevisionId: job.creativeRevisionId,
     idempotencyKey: `game_production_run:${job.creativeRevisionId}`,
@@ -327,7 +351,7 @@ async function executeGameProductionJob(
       metadata: { status: run.status, passes: run.passes.length },
     },
   });
-  const candidateArtifact = await createCreativeArtifact({
+  const candidateArtifact = await persistArtifact({
     creativeProjectId: job.creativeProjectId,
     creativeRevisionId: job.creativeRevisionId,
     idempotencyKey: `game_production_candidate:${job.creativeRevisionId}`,
@@ -339,11 +363,21 @@ async function executeGameProductionJob(
     },
   });
   if (run.candidate.decision === "ready_for_playtest") {
-    await finalizeCreativeRevision(job.creativeRevisionId, `production candidate ${run.candidate.score}/100 · ready for observed playtest`);
-    await reconcileGamePlaytestEvidenceForRevision({ projectId: payload.projectId, creativeRevisionId: job.creativeRevisionId });
+    await assertGenerationJobLease(job.id, workerId);
+    // The revision started with a design-only spec. Seal the actual executable
+    // before marking it ready so publishing cannot select that earlier shell.
+    await prisma.$transaction(async tx => {
+      if (!await tx.generationJob.count({ where: { id: job.id, workerId, status: "running", leaseExpiresAt: { gt: new Date() } } })) throw new Error("generation_job_lease_lost");
+      await tx.creativeArtifact.updateMany({
+        where: { creativeRevisionId: job.creativeRevisionId, kind: "game_spec" },
+        data: { contentJson: JSON.stringify(spec), contentHash: createHash("sha256").update(JSON.stringify(spec)).digest("hex") },
+      });
+      await tx.creativeRevision.update({ where: { id: job.creativeRevisionId!, status: "generating" }, data: { status: "ready", finalizedAt: new Date(), summary: "runtime verified · ready for observed playtest" } });
+    });
+    await reconcileGamePlaytestEvidenceForRevision({ projectId: payload.projectId, creativeRevisionId: job.creativeRevisionId }).catch(() => console.error("[game_playtest_reconcile_deferred]", { jobId: job.id }));
   } else {
     await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
-    if (shouldScheduleGamePreflightIteration({
+    if (!run.candidate.blockers.some(blocker => blocker.includes("verification")) && shouldScheduleGamePreflightIteration({
       productionRound: payload.productionRound,
       maxProductionRounds: payload.maxProductionRounds,
       blockers: run.candidate.blockers,
@@ -364,8 +398,13 @@ async function executeGameProductionJob(
         },
       });
     }
+    throw new GameRuntimeRejectedError(run.candidate.blockers);
   }
   return candidateArtifact ?? lastArtifact;
+}
+
+class GameRuntimeRejectedError extends Error {
+  constructor(readonly blockers: string[]) { super(blockers.join(", ")); }
 }
 
 async function executeGamePreflightIterationJob(
@@ -656,9 +695,14 @@ function jobUiLocale(payloadJson: string): string | undefined {
  * their payload schema and idempotency behavior have an integration test.
  */
 export async function processNextGenerationJob(workerId: string, preferredJobId?: string) {
+  workerId = `${workerId.slice(0, 48)}:${randomUUID()}`;
   const job = await claimGenerationJob(workerId, 90_000, preferredJobId);
   if (!job) return null;
-  return withGenerationJobContext(
+  const leaseTimer = setInterval(() => {
+    void renewGenerationJobLease(job.id, workerId).catch(() => undefined);
+  }, 20_000);
+  try {
+  return await withGenerationJobContext(
     job.id,
     async () => {
       try {
@@ -669,32 +713,32 @@ export async function processNextGenerationJob(workerId: string, preferredJobId?
             creativeRevisionId: job.creativeRevisionId ?? undefined,
             artifact: payload.artifact,
           });
-          await completeGenerationJob(job.id, artifact.id);
+          await completeGenerationJob(job.id, artifact.id, workerId);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
         if (job.type === "comic_panel") {
           await executeComicPanelJob(job, workerId);
-          await completeGenerationJob(job.id);
+          await completeGenerationJob(job.id, undefined, workerId);
           return { id: job.id, type: job.type, status: "completed" as const };
         }
         if (job.type === "game_asset") {
           const artifact = await executeGameAssetJob(job, workerId);
-          await completeGenerationJob(job.id, artifact.id);
+          await completeGenerationJob(job.id, artifact.id, workerId);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
         if (job.type === "game_production") {
           const artifact = await executeGameProductionJob(job, workerId);
-          await completeGenerationJob(job.id, artifact.id);
+          await completeGenerationJob(job.id, artifact.id, workerId);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
         if (job.type === "game_preflight_iteration") {
           const artifact = await executeGamePreflightIterationJob(job, workerId);
-          await completeGenerationJob(job.id, artifact.id);
+          await completeGenerationJob(job.id, artifact.id, workerId);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
         if (job.type === "game_iteration") {
           const artifact = await executeGameIterationJob(job, workerId);
-          await completeGenerationJob(job.id, artifact.id);
+          await completeGenerationJob(job.id, artifact.id, workerId);
           return { id: job.id, type: job.type, status: "completed" as const, outputArtifactId: artifact.id };
         }
         if (job.type === "novel_continue") {
@@ -703,16 +747,18 @@ export async function processNextGenerationJob(workerId: string, preferredJobId?
             const failed = await failGenerationJob(job.id, new Error("novel_continuation_conflict"), {
               retry: false,
               errorCode: "novel_continuation_conflict",
+              workerId,
             });
             return { id: job.id, type: job.type, status: failed.status as "failed" };
           }
           if (result.status !== "completed") throw new Error("novel_continue_all_models_failed");
-          await completeGenerationJob(job.id);
+          await completeGenerationJob(job.id, undefined, workerId);
           return { id: job.id, type: job.type, status: "completed" as const };
         }
         throw new Error(`unsupported_generation_job:${job.type}`);
       } catch (error) {
-        const failed = await failGenerationJob(job.id, error);
+        if (error instanceof Error && error.message === "generation_job_lease_lost") return { id: job.id, type: job.type, status: "failed" as const };
+        const failed = await failGenerationJob(job.id, error, { workerId, ...(error instanceof GameRuntimeRejectedError ? { retry: false, errorCode: error.blockers.some(b => /verification/.test(b)) ? "runtime_verification_unavailable" : "runtime_validation_failed" } : {}) });
         if (job.type === "game_production" && failed.status === "failed" && job.creativeRevisionId) {
           await markCreativeRevisionFailed(job.creativeRevisionId, `production execution failed · ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -721,4 +767,7 @@ export async function processNextGenerationJob(workerId: string, preferredJobId?
     },
     { uiLocale: jobUiLocale(job.payloadJson) },
   );
+  } finally {
+    clearInterval(leaseTimer);
+  }
 }

@@ -111,6 +111,8 @@
     "qa:game-forge": "tsx scripts/qa-game-forge.ts",
     "qa:json-parse": "tsx scripts/qa-json-parse.ts",
     "qa:reasoning-budget": "tsx scripts/qa-reasoning-budget.ts",
+    "qa:runtime-delivery-gate": "tsx scripts/qa-runtime-delivery-gate.ts",
+    "qa:generation-leases": "tsx scripts/qa-generation-leases.ts",
     "qa:runtime-probe": "tsx scripts/qa-runtime-probe.ts",
     "qa:forge-art-budget": "tsx scripts/qa-forge-art-budget.ts",
     "qa:forge-sfx-alias": "tsx scripts/qa-forge-sfx-alias.ts",

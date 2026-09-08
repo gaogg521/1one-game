@@ -11,6 +11,7 @@ import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-cont
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { buildGamePlayabilityContract } from "@/lib/game-playability-contract";
 import { evaluateAgenticMechanicsContract } from "@/lib/agentic/agentic-mechanics-contract";
+import { runtimeValidationBlockers, type GameRuntimeValidation } from "@/lib/game-runtime-validation";
 type RealAgentExecution = { role: "design_director" | "art_director" | "scene_designer" | "runtime_engineer" | "audio_agent" | "visual_review_agent"; status: "succeeded" | "failed"; [key: string]: unknown };
 
 export type GameProductionArtifact = {
@@ -58,6 +59,8 @@ export function buildGameProductionRun(input: {
   prompt?: string;
   brief?: CreativeBrief | null;
   assetManifest: unknown;
+  projectId?: string;
+  runtimeValidation?: GameRuntimeValidation | null;
   productionRound?: number;
   realAgentExecutions?: RealAgentExecution[];
   realAgentOutputs?: { design?: unknown; artDirection?: unknown; scene?: unknown; visualReview?: { passed: boolean; score: number; blockers: string[]; revisionInstructions: string[]; screenshotBytes: number } };
@@ -96,13 +99,20 @@ export function buildGameProductionRun(input: {
   // These evaluators are advisory. A runnable model-produced game is always
   // delivered to playtest; player evidence, not a static gate, decides what
   // gets iterated or retired.
-  const blockers: string[] = [];
+  const blockers = runtimeValidationBlockers(input.spec, input.runtimeValidation, input.projectId);
   const score = Math.max(0, Math.min(100, Math.round(
     verticalSlice.score * 0.45 + delivery.score * 0.35 + (assets.ok ? 20 : 0),
   )));
   const decision = blockers.length === 0 ? "ready_for_playtest" : "rejected";
 
   const artifacts: GameProductionArtifact[] = [
+    { kind: "game_runtime_source", mediaType: "json", content: input.spec, metadata: { role: "runtime_engineer", sourceHash: input.runtimeValidation?.sourceHash ?? null } },
+    {
+      kind: "game_runtime_validation",
+      mediaType: "report",
+      content: input.runtimeValidation ?? { status: "unverified", observed: false },
+      metadata: { role: "qa_agent", observed: input.runtimeValidation?.observed ?? false },
+    },
     {
       kind: "game_agent_execution_ledger",
       mediaType: "report",
@@ -240,7 +250,7 @@ export function buildGameProductionRun(input: {
     { index: 3, role: "art_director", consumes: ["game_design_directive", "asset_manifest"], produces: ["art_direction_pack"], verdict: verdict(!assets.ok), evidence: assets.evidence },
     { index: 4, role: "ux_designer", consumes: ["game_design_directive", "gameplay_revision"], produces: ["ux_interaction_contract"], verdict: "passed", evidence: [`controls:${editor.controls.length}`] },
     { index: 5, role: "runtime_engineer", consumes: ["gameplay_revision", "art_direction_pack", "ux_interaction_contract"], produces: ["runtime_build_manifest"], verdict: verdict(pipeline.preflightVerdict === "blocked" || !assets.ok || !visualContract.ok || !mechanicsContract.ok), evidence: [`runtime:${pipeline.runtimeStrategy}`, `assets:${assets.ok ? "ready" : "blocked"}`, ...visualContract.evidence, ...mechanicsContract.evidence] },
-    { index: 6, role: "qa_agent", consumes: ["runtime_build_manifest", "game_delivery_preflight"], produces: ["automated_playtest_preflight", "game_production_candidate"], verdict: verdict(blockers.length > 0), evidence: [`candidate:${decision}:${score}`, ...blockers] },
+    { index: 6, role: "qa_agent", consumes: ["runtime_build_manifest", "game_delivery_preflight"], produces: ["automated_playtest_preflight", "game_production_candidate"], verdict: blockers.length ? "blocked" : "passed", evidence: [`candidate:${decision}:${score}`, ...blockers] },
   ];
   return { version: 1, kind: "game_production_run", status: decision, passes, candidate, artifacts };
 }

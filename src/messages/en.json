@@ -2981,6 +2981,11 @@
     "generatingSameAs": "Generating with the same engine as sample “{sample}”…"
   },
   "playGame": {
+    "runtimeUnavailable": "This game is not available to play yet.",
+    "runtimeVerifying": "Building and verifying your game. It will open when ready.",
+    "runtimeFailed": "The game could not start. Your generated work is saved; you can generate it again.",
+    "runtimeUnverified": "Runtime verification is incomplete. Play is unavailable.",
+    "runtimeRetry": "Generate and verify again",
     "loadFailed": "Failed to load",
     "incompleteData": "Incomplete data",
     "networkError": "Network error",

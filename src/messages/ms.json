@@ -2958,6 +2958,11 @@
     "generatingSameAs": "Menjana dengan enjin sama seperti sampel “{sample}”…"
   },
   "playGame": {
+    "runtimeUnavailable": "Permainan ini belum boleh dimainkan.",
+    "runtimeVerifying": "Permainan sedang dibina dan disahkan. Ia akan dibuka apabila sedia.",
+    "runtimeFailed": "Permainan tidak dapat dimulakan. Hasil anda disimpan dan boleh dijana semula.",
+    "runtimeUnverified": "Pengesahan belum selesai. Permainan belum tersedia.",
+    "runtimeRetry": "Jana dan sahkan semula",
     "loadFailed": "Failed to load",
     "incompleteData": "Incomplete data",
     "networkError": "Network error",

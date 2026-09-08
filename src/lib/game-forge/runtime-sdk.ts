@@ -844,6 +844,7 @@ export const GAME_FORGE_SDK_SOURCE = `
     return {
       state: state,
       booted: function () { state.booted = true; post('forge-boot', { title: meta.title }); },
+      restarted: function () { state.ended = false; state.firstInputAt = 0; post('forge-restart'); },
       frame: function (entities) {
         state.frames += 1;
         if (state.frames === 1) { state.firstFrameAt = now(); post('forge-first-frame', { atMs: state.firstFrameAt - state.startedAt }); }
@@ -992,6 +993,7 @@ export const GAME_FORGE_SDK_SOURCE = `
         world.clear(); fx.clear(); ui.clear(); timers.clear();
         r.camera.x = 0; r.camera.y = 0; r.camera.zoom = 1;
         try { if (hooks.restart) hooks.restart(api); } catch (err) { telemetry.error(err); }
+        telemetry.restarted();
         audio.sfx('select');
       },
       /** Entry point every generated game calls once it has defined its hooks. */

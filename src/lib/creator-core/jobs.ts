@@ -46,17 +46,35 @@ export async function claimGenerationJob(workerId: string, leaseMs = 90_000, pre
       { status: "running", leaseExpiresAt: { lt: now } },
     ],
   };
-  const candidate = await prisma.generationJob.findFirst({
+  // Exhausted abandoned leases are terminal, and must not monopolize FIFO.
+  const exhaustedWhere = { ...eligible, attempts: { gte: prisma.generationJob.fields.maxAttempts }, ...(preferredJobId ? { id: preferredJobId } : {}) };
+  const exhausted = await prisma.generationJob.findMany({ where: exhaustedWhere, take: 100, select: { id: true, type: true, creativeRevisionId: true } });
+  for (const item of exhausted) await prisma.$transaction(async tx => {
+    const updated = await tx.generationJob.updateMany({
+      where: { ...exhaustedWhere, id: item.id },
+      data: { status: "failed", leaseExpiresAt: null, workerId: null, lastErrorCode: "attempt_limit_exhausted", lastErrorDetail: "The worker lease expired after the final allowed attempt.", progressJson: JSON.stringify({ percent: 0, stage: "failed" }) },
+    });
+    if (updated.count && item.type === "game_production" && item.creativeRevisionId) await tx.creativeRevision.updateMany({ where: { id: item.creativeRevisionId, status: { in: ["preparing", "generating"] } }, data: { status: "failed", summary: "generation attempt limit exhausted", finalizedAt: now } });
+  });
+  return prisma.$transaction(async (tx) => {
+  const configured = Number(process.env.GENERATION_WORKER_CONCURRENCY ?? 2);
+  const limit = Number.isInteger(configured) ? Math.max(1, Math.min(4, configured)) : 2;
+  const active = { status: "running", leaseExpiresAt: { gte: now } };
+  if (await tx.generationJob.count({ where: active }) >= limit) return null;
+  const candidate = await tx.generationJob.findFirst({
     where: {
       ...eligible,
+      attempts: { lt: prisma.generationJob.fields.maxAttempts },
+      project: { jobs: { none: active } },
       ...(preferredJobId ? { id: preferredJobId } : {}),
     },
     orderBy: { runAfter: "asc" },
   });
   if (!candidate) return null;
-  const claimed = await prisma.generationJob.updateMany({
+  const claimed = await tx.generationJob.updateMany({
     where: {
       id: candidate.id,
+      attempts: candidate.attempts,
       ...eligible,
     },
     data: {
@@ -68,12 +86,13 @@ export async function claimGenerationJob(workerId: string, leaseMs = 90_000, pre
     },
   });
   if (claimed.count === 0) return null;
-  return prisma.generationJob.findUniqueOrThrow({ where: { id: candidate.id } });
+  return tx.generationJob.findUniqueOrThrow({ where: { id: candidate.id } });
+  });
 }
 
-export async function completeGenerationJob(id: string, outputArtifactId?: string) {
+export async function completeGenerationJob(id: string, outputArtifactId?: string, workerId?: string) {
   return prisma.generationJob.update({
-    where: { id },
+    where: { id, ...(workerId ? { workerId, status: "running", leaseExpiresAt: { gt: new Date() } } : {}) },
     data: {
       status: "completed",
       outputArtifactId,
@@ -84,6 +103,18 @@ export async function completeGenerationJob(id: string, outputArtifactId?: strin
       lastErrorDetail: null,
     },
   });
+}
+
+export async function renewGenerationJobLease(id: string, workerId: string, leaseMs = 90_000) {
+  const result = await prisma.generationJob.updateMany({
+    where: { id, workerId, status: "running", leaseExpiresAt: { gt: new Date() } },
+    data: { leaseExpiresAt: new Date(Date.now() + leaseMs) },
+  });
+  return result.count === 1;
+}
+
+export async function assertGenerationJobLease(id: string, workerId: string) {
+  if (!await prisma.generationJob.count({ where: { id, workerId, status: "running", leaseExpiresAt: { gt: new Date() } } })) throw new Error("generation_job_lease_lost");
 }
 
 /**
@@ -105,7 +136,7 @@ export async function heartbeatGenerationJob(
   const milestones = progress.milestone ? appendMilestone(existing, progress.milestone) : existing;
 
   const result = await prisma.generationJob.updateMany({
-    where: { id, status: "running", workerId },
+    where: { id, status: "running", workerId, leaseExpiresAt: { gt: new Date() } },
     data: {
       leaseExpiresAt: new Date(Date.now() + leaseMs),
       progressJson: JSON.stringify({
@@ -122,14 +153,14 @@ export async function heartbeatGenerationJob(
 export async function failGenerationJob(
   id: string,
   error: unknown,
-  options?: { retry?: boolean; errorCode?: string },
+  options?: { retry?: boolean; errorCode?: string; workerId?: string },
 ) {
   const current = await prisma.generationJob.findUniqueOrThrow({ where: { id } });
   const detail = error instanceof Error ? error.message : String(error);
-  const retry = options?.retry ?? current.attempts < current.maxAttempts;
+  const retry = options?.retry !== false && current.attempts < current.maxAttempts;
   const backoffMs = Math.min(5 * 60_000, 2 ** Math.max(0, current.attempts - 1) * 5_000);
   return prisma.generationJob.update({
-    where: { id },
+    where: { id, ...(options?.workerId ? { workerId: options.workerId, status: "running", leaseExpiresAt: { gt: new Date() } } : {}) },
     data: {
       status: retry ? "retrying" : "failed",
       runAfter: retry ? new Date(Date.now() + backoffMs) : current.runAfter,

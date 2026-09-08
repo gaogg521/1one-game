@@ -34,10 +34,9 @@ PORT="${PORT:-80}"
 # failure. Local runs never hit this because they call forgeGame directly with
 # no worker and no curl.
 #
-# KNOWN TRADEOFF: this queue is a single serial worker (one job per timer
-# tick), so a long job now blocks every other creator's job for up to this
-# long. That head-of-line blocking is the next thing to fix -- either parallel
-# worker units or a faster model for the game_text scene.
+# Independent timer slots consume the queue concurrently; the database caps
+# active jobs and excludes another job from the same project. The API gives
+# each attempt a unique worker token and renews its lease through every stage.
 exec /usr/bin/curl \
   --fail --silent --show-error --connect-timeout 10 --max-time "${GENERATION_WORKER_MAX_SECONDS:-1500}" \
   --request POST "http://127.0.0.1:${PORT}/api/jobs/worker" \

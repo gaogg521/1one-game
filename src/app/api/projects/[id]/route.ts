@@ -36,6 +36,8 @@ import { canAccessWorkByDirectLink } from "@/lib/literary-safety";
 import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
 import { buildGameEditSchema } from "@/lib/game-edit-schema";
+import { runtimeValidationBlockers, type GameRuntimeValidation } from "@/lib/game-runtime-validation";
+import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -66,7 +68,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const storedSpec = acceptedGameSpec?.content && typeof acceptedGameSpec.content === "object"
       ? acceptedGameSpec.content
       : JSON.parse(row.specJson);
-    const spec = normalizeAstrocadePlaySpec(parseGameSpec(storedSpec));
+    let spec = normalizeAstrocadePlaySpec(parseGameSpec(storedSpec));
 
     let refinementHistory: ReturnType<typeof parseRefinementLog> | undefined;
     let creativeBrief: ReturnType<typeof parseStoredCreativeBrief> = null;
@@ -74,6 +76,18 @@ export async function GET(req: Request, ctx: RouteContext) {
       ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
       : null;
     const playRevisionId = isOwner ? core?.revision?.id ?? null : acceptedGameSpec?.creativeRevisionId ?? null;
+    let runtimeDelivery: { status: string; blockers: string[] } | undefined;
+    if (row.ownerKey !== SAMPLE_GALLERY_OWNER && requiresBespokeRuntime(spec)) {
+      const report = playRevisionId ? await prisma.creativeArtifact.findFirst({ where: { creativeRevisionId: playRevisionId, kind: "game_runtime_validation", status: "ready" }, orderBy: { updatedAt: "desc" } }) : null;
+      let validation: GameRuntimeValidation | null = null;
+      try { validation = JSON.parse(report?.contentJson ?? "null"); } catch { /* fail closed */ }
+      const blockers = runtimeValidationBlockers(parseGameSpec(storedSpec), validation, id);
+      runtimeDelivery = { status: blockers.length ? validation?.status === "failed" || core?.revision?.status === "failed" ? "failed" : "unverified" : "passed", blockers };
+      if (blockers.length) {
+        const { agenticModule: _runtime, forgeBuild: _build, ...design } = spec;
+        spec = { ...design, agenticPlayRoute: "independent" };
+      }
+    }
     const assetJob = isOwner && core
       ? await prisma.generationJob.findFirst({
           where: {
@@ -133,9 +147,9 @@ export async function GET(req: Request, ctx: RouteContext) {
         coverPath: acceptedDisplay?.coverPath?.trim() || row.coverPath,
         likeCount,
         playCount: row.playCount,
-        status: row.status,
+        status: runtimeDelivery && runtimeDelivery.status !== "passed" ? runtimeDelivery.status === "failed" ? "failed" : "generating" : row.status,
         visibility: row.visibility,
-        workflow: { stage: resolveCreatorWorkStage({ status: row.status, visibility: row.visibility, quality }) },
+        workflow: { stage: resolveCreatorWorkStage({ status: runtimeDelivery && runtimeDelivery.status !== "passed" ? runtimeDelivery.status === "failed" ? "failed" : "generating" : row.status, visibility: row.visibility, quality }) },
         quality,
         isOwner: Boolean(isOwner),
         isSampleGallery: row.ownerKey === SAMPLE_GALLERY_OWNER,
@@ -147,6 +161,7 @@ export async function GET(req: Request, ctx: RouteContext) {
           : {}),
       },
       spec,
+      ...(runtimeDelivery ? { runtimeDelivery } : {}),
       ...(playRevisionId ? { playRevisionId } : {}),
       ...(creativeBrief ? { creativeBrief } : {}),
       ...(refinementHistory !== undefined ? { refinementHistory } : {}),

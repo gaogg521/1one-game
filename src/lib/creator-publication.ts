@@ -8,6 +8,7 @@ import { assessGameAssetReadiness } from "@/lib/game-asset-readiness";
 import { hasBespokeRuntime, requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { parseNovelGenerationMeta } from "@/lib/novel-long-pipeline-types";
 import type { CreatorQualityReport } from "@/lib/creator-workflow";
+import { runtimeValidationBlockers, type GameRuntimeValidation } from "@/lib/game-runtime-validation";
 
 export type PublishableWorkType = "game" | "novel" | "comic";
 
@@ -62,7 +63,7 @@ export async function setCreatorWorkPublication(input: {
           where: {
             creativeProjectId: core.id,
             creativeRevisionId: candidateRevisionId,
-            kind: { in: ["game_spec", "asset_manifest", "game_production_pipeline", "game_production_candidate", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
+            kind: { in: ["game_spec", "game_runtime_validation", "asset_manifest", "game_production_pipeline", "game_production_candidate", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
             status: "ready",
           },
           orderBy: { createdAt: "asc" },
@@ -82,6 +83,9 @@ export async function setCreatorWorkPublication(input: {
       assessGameAssetReadiness(assetContent),
     ).report;
     const deliveryIssues: string[] = [];
+    let runtimeValidation: GameRuntimeValidation | null = null;
+    try { runtimeValidation = JSON.parse(artifact("game_runtime_validation")?.contentJson ?? "null"); } catch { /* fail closed */ }
+    if (requiresBespokeRuntime(finalSpec)) deliveryIssues.push(...runtimeValidationBlockers(finalSpec, runtimeValidation, row.id));
     let preflight: { verdict?: unknown } | null = null;
     try { preflight = artifact("game_delivery_preflight")?.contentJson ? JSON.parse(artifact("game_delivery_preflight")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     let pipeline: { preflightVerdict?: unknown } | null = null;

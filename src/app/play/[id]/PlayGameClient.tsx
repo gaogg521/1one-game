@@ -65,6 +65,7 @@ export function PlayGameClient({ id }: { id: string }) {
   const locale = useLocale() as AppLocale;
   const router = useRouter();
   const [spec, setSpec] = useState<GameSpec | null>(null);
+  const [runtimeDelivery, setRuntimeDelivery] = useState<{ status: string; blockers: string[] } | null>(null);
   const [meta, setMeta] = useState<{
     title: string;
     prompt: string;
@@ -113,6 +114,7 @@ export function PlayGameClient({ id }: { id: string }) {
         const res = await fetch(`/api/projects/${id}`, { headers: apiHeaders() });
         const data = (await res.json()) as {
           spec?: GameSpec;
+          runtimeDelivery?: { status: string; blockers: string[] };
           project?: {
             title: string;
             prompt: string;
@@ -143,6 +145,7 @@ export function PlayGameClient({ id }: { id: string }) {
         }
         if (!cancelled) {
           setSpec(data.spec);
+          setRuntimeDelivery(data.runtimeDelivery ?? null);
           setMeta({
             title: data.project.title,
             prompt: data.project.prompt,
@@ -193,6 +196,13 @@ export function PlayGameClient({ id }: { id: string }) {
         if (data.status === "queued" || data.status === "running" || data.status === "retrying") {
           setAssetJob({ id: assetJob.id, status: data.status, attempts: data.attempts ?? assetJob.attempts, maxAttempts: data.maxAttempts ?? assetJob.maxAttempts, progress: data.progress ?? null });
         } else {
+          const refreshed = await fetch(`/api/projects/${id}`, { headers: apiHeaders() });
+          if (!refreshed.ok) return;
+          const current = await refreshed.json();
+          if (cancelled) return;
+          if (current.spec) setSpec(current.spec);
+          setCore(current.core ?? null);
+          setRuntimeDelivery(current.runtimeDelivery ?? null);
           setAssetJob(null);
         }
       } catch { /* retain last visible task state until next poll */ }
@@ -334,6 +344,7 @@ export function PlayGameClient({ id }: { id: string }) {
           return;
         }
         setSpec(data.spec);
+        setRuntimeDelivery({ status: "unverified", blockers: ["runtime_changed"] });
         if (typeof data.prompt === "string" && data.prompt.trim()) {
           setMeta((m) => (m ? { ...m, prompt: data.prompt! } : m));
         }
@@ -361,6 +372,7 @@ export function PlayGameClient({ id }: { id: string }) {
         return;
       }
       setSpec(data.spec);
+      setRuntimeDelivery({ status: "unverified", blockers: ["runtime_changed"] });
       if (typeof data.prompt === "string" && data.prompt.trim()) {
         setMeta((m) => (m ? { ...m, prompt: data.prompt! } : m));
       }
@@ -409,6 +421,7 @@ export function PlayGameClient({ id }: { id: string }) {
           : current);
       }
       setSaveMsg(t("savedToVersion"));
+      window.location.reload();
       window.setTimeout(() => setSaveMsg(null), 2200);
     } catch {
       setPatchError(t("saveNetworkError"));
@@ -510,7 +523,7 @@ export function PlayGameClient({ id }: { id: string }) {
                     </Link>
                   </div>
                 </div>
-                <GamePlayer spec={spec} immersive projectId={id} creativeRevisionId={playRevisionId ?? undefined} promptHint={meta.prompt} />
+                {runtimeDelivery && runtimeDelivery.status !== "passed" ? <p className="p-8 text-center" role="status">{t("runtimeUnavailable")}</p> : <GamePlayer spec={spec} immersive projectId={id} creativeRevisionId={playRevisionId ?? undefined} promptHint={meta.prompt} />}
               </>
             ) : (
               <>
@@ -644,6 +657,13 @@ export function PlayGameClient({ id }: { id: string }) {
             </div>
 
             <div className="order-1 sm:order-2">
+            {runtimeDelivery && runtimeDelivery.status !== "passed" ? (
+              <section className="rounded-2xl border border-amber-300/25 bg-[#08130f] p-8 text-center text-slate-100" data-testid="runtime-delivery-status" role="status">
+                <p>{t(assetJob ? "runtimeVerifying" : runtimeDelivery.status === "failed" ? "runtimeFailed" : "runtimeUnverified")}</p>
+                {assetJob?.progress?.milestones?.length ? <ForgeMilestoneFeed milestones={assetJob.progress.milestones} className="mt-4" /> : null}
+                {meta.isOwner && !assetJob ? <button className="mt-4 rounded-full border px-5 py-2" disabled={saveBusy} onClick={() => void saveProjectSpec()}>{t("runtimeRetry")}</button> : null}
+              </section>
+            ) : (
             <GamePlayer spec={spec} immersive promptHint={meta.prompt} coverCapture={meta.isOwner ? { projectId: id } : null} projectId={id} creativeRevisionId={playRevisionId ?? undefined} onIterate={(instr) => {
                 setPatchPrompt(instr);
                 setTimeout(() => {
@@ -651,12 +671,13 @@ export function PlayGameClient({ id }: { id: string }) {
                   document.getElementById("patch-prompt")?.focus();
                 }, 100);
               }} />
+            )}
             </div>
             <div className="order-3 px-3 sm:px-0">
             {meta.isOwner ? (
               <SpecQuickTunePanel
                 spec={spec}
-                onChange={(next) => setSpec(next)}
+                onChange={(next) => { setSpec(next); setRuntimeDelivery({ status: "unverified", blockers: ["runtime_changed"] }); }}
                 editorSchema={editorSchema}
                 onWish={(wish) => {
                   setPatchPrompt(wish);

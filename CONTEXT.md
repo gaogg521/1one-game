@@ -1914,3 +1914,13 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 事故 4 的 P0 修复：未动手，只完成了根因定位。
 - 事故 3 修复后的一次干净端到端验收：任务已 `completed`，但按上方验收方式检查后发现游戏不能玩（即事故 4），所以**六处修复本身是否真的让管线能稳定产出可玩游戏，仍未有一次成功验证**。
 - 本会话内为了诊断，多次直接用生产真实 API key 对生产真实模型/图片网关发起隔离请求（未经过应用代码），会消耗真实配额/费用，规模不大（个位数到十位数次调用），但用户应该知情。
+
+## 2026-09-08 · P0/P1 执行中（用户已授权全部完成后再停）
+- 已获得明确产品决策：启动失败/无首帧/运行错误/卡死硬拦；缺失或过期运行验证不可标完成；主观质量继续 advisory。
+- 本轮本地修改：共享真实 iframe 页面；新增源码/SDK/上下文哈希绑定的 mobile sandbox 验证；worker rejected 不再 completed；发布与读取接口检查运行报告；失败 UI/重新生成；重试结果只允许改写 generating revision 的证据，封存前补齐真实 game_spec；全任务续租、唯一 workerId、终态 fencing、maxAttempts、项目排他、DB 并发上限默认2和独立 timer slots；图片失败结构化脱敏日志。
+- 已通过：真实浏览器 qa-runtime-delivery-gate（正常、语法异常、启动异常、空壳、缺失/过期验证）；隔离 SQLite qa-generation-leases（并发上限、同项目排他、耗尽租约终结、旧 owner 写入拒绝、续租不覆盖进度、封存后不覆盖报告）；qa:game-production-orchestrator；tsc；一次完整 Next build。末轮变更后 build 再验证中。
+- 生产仍是 9891e5e6，服务健康；本轮尚未部署。事故项目 cmtrfa1rp0005tpj8kcm795a3 导出到 qa-output/runtime-delivery/prod-before.json，新 mobile iframe 探针报告 failed/runtime_inert_build；不能把旧 completed 当可玩。
+- 生产模型阶段评测（不改路由）：deepseek-v4-flash-ga-260731 设计195351ms，结构校验失败；doubao-seed-2-1-turbo-260628 设计167888ms通过，配置模块174164ms通过。只测设计和配置模块，未测完整游戏成功率，成本数据未知；不足以据此更换路由，保留现配置。服务端 /opt/operone/qa-output/model-latency/REPORT.json。
+- 新发现并正在补齐：GamePlayerInner 已简化为独立 iframe，但此前未将真实用户输入/首分钟/结局接回 GameplayEvent。已补绑定 revision 的事件上报和重试事件；需生产真实手机首分钟验证。
+- 下一步：完成末轮 lint/build；只提交本轮精确路径（工作区有大量他人 QA 图片和日志，禁止 git add .）；push；运行 scripts/release-runtime-delivery.py（先检查无运行任务，stop/build/start/health，安装2个timer并以www-data跑实际浏览器）；执行 scripts/qa-prod-runtime-delivery.ts 全新生产一句话流程，必须实际 iframe boot/first frame/输入/结局；验证发布、外部静态资源和并发worker。失败时继续修，不得宣称完成。
+- 自动续接已创建：automation id=p0-p1，每小时唤醒当前任务，额度恢复后继续；完成且验证后暂停。不要创建重复自动化。

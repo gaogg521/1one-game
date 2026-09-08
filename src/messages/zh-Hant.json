@@ -2958,6 +2958,11 @@
     "generatingSameAs": "正在按樣品「{sample}」同款引擎生成，請稍候…"
   },
   "playGame": {
+    "runtimeUnavailable": "遊戲暫不可試玩。",
+    "runtimeVerifying": "遊戲正在建構與驗證，通過後會自動開啟。",
+    "runtimeFailed": "遊戲未能正常啟動，已保留本次生成內容，可以重新生成。",
+    "runtimeUnverified": "執行驗證尚未完成，暫時無法試玩。",
+    "runtimeRetry": "重新生成並驗證",
     "loadFailed": "載入失败",
     "incompleteData": "数据不完整",
     "networkError": "網路异常",

@@ -4,6 +4,11 @@ import { generateImageDetailed } from "@/lib/image-generation";
 import { repoPublicPath } from "@/lib/public-path";
 import { PRODUCT } from "@/lib/product-config";
 import type { AssetSlot, GameDesignDoc } from "@/lib/game-forge/types";
+import { currentGenerationJobId } from "@/lib/generation-job-context";
+
+export function safeAssetError(error: string): string {
+  return error.replace(/https?:\/\/[^\s]+/gi, "[url]").replace(/(?:bearer\s+|sk-)[\w.\-]+/gi, "[redacted]").replace(/((?:api[_-]?key|token|authorization|secret)\s*[=:]\s*)[^\s,;]+/gi, "$1[redacted]").slice(0, 400);
+}
 
 /**
  * Art agent.
@@ -252,6 +257,7 @@ export async function runForgeAssetAgent(
         ? { key: slot.key, kind: slot.kind, url: null, error: "art budget exhausted before this slot started", durationMs: 0 }
         : await withDeadline(slot, Math.min(PRODUCT.gameForge.artSlotTimeoutMs * 2, left), generateSlot(projectId, design, slot, rootDir));
     done += 1;
+    if (!result.url) console.error("[forge_asset_failed]", JSON.stringify({ jobId: currentGenerationJobId(), projectId, slot: slot.key, kind: slot.kind, durationMs: result.durationMs, error: safeAssetError(result.error ?? "image_generation_failed") }));
     opts.onProgress?.(done, slots.length, slot.key);
     opts.onSlotDone?.({ ...result, done, total: slots.length });
     return result;

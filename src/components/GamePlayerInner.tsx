@@ -17,6 +17,6 @@ type GamePlayerInnerProps = {
 };
 
 /** The only player surface: a model-generated, isolated independent runtime. */
-export default function GamePlayerInner({ spec, projectId, onEnd }: GamePlayerInnerProps) {
-  return <IndependentGameRuntime spec={spec} projectId={projectId} onEnd={onEnd} />;
+export default function GamePlayerInner({ spec, projectId, creativeRevisionId, previewMode, onEnd }: GamePlayerInnerProps) {
+  return <IndependentGameRuntime spec={spec} projectId={projectId} creativeRevisionId={creativeRevisionId} previewMode={previewMode} onEnd={onEnd} />;
 }

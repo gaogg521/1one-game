@@ -1,59 +1,55 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GameSpec } from "@/lib/game-spec";
-import { GAME_FORGE_SDK_SOURCE } from "@/lib/game-forge/runtime-sdk";
+import { buildIndependentRuntimePage } from "@/lib/independent-runtime-page";
+import { createGameplayTelemetrySession } from "@/lib/gameplay-telemetry.client";
 
 type Props = {
   spec: GameSpec;
   projectId?: string;
+  creativeRevisionId?: string;
+  previewMode?: boolean;
   onEnd?: (result: { won: boolean; score: number }) => void;
   /** Observable runtime facts, forwarded so QA can judge behaviour not source. */
   onTelemetry?: (event: { type: string; [key: string]: unknown }) => void;
 };
 
-/** Legacy slot names kept so games generated before the forge still resolve. */
-const LEGACY_SLOTS: Array<[string, string]> = [
-  ["player", "player"],
-  ["enemy", "hazard"],
-  ["collectible", "gem"],
-  ["power", "power"],
-  ["boss", "boss"],
-];
-
 /** Runs a game-specific module emitted by the code agents on top of the SDK. */
-export function IndependentGameRuntime({ spec, projectId, onEnd, onTelemetry }: Props) {
+export function IndependentGameRuntime({ spec, projectId, creativeRevisionId, previewMode, onEnd, onTelemetry }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const source = spec.agenticModule?.source?.trim() ?? "";
   const runtimeReady = /\bmountGame\s*[=(]/.test(source) || /function\s+mountGame\s*\(/.test(source);
 
-  const context = useMemo(() => {
-    const assets: Record<string, string> = {};
-    if (projectId) {
-      assets.background = `/game-bg/${projectId}.png`;
-      for (const [key, file] of LEGACY_SLOTS) assets[key] = `/game-sprites/${projectId}/${file}.png`;
-      // Slots the design asked for beyond the legacy five.
-      const design = spec.forgeBuild?.design as { assets?: Array<{ key?: string }> } | undefined;
-      for (const slot of design?.assets ?? []) {
-        if (slot?.key && !assets[slot.key]) assets[slot.key] = `/game-sprites/${projectId}/${slot.key}.png`;
-      }
-      assets.music = `/api/projects/${projectId}/bgm`;
-    }
-    return {
-      title: spec.title,
-      prompt: spec.labels.subtitle ?? "",
-      winScore: spec.gameplay.winScore ?? 100,
-      assets,
-    };
-  }, [projectId, spec.forgeBuild, spec.gameplay.winScore, spec.labels.subtitle, spec.title]);
-
   useEffect(() => {
+    const createSession = () => !previewMode && projectId && creativeRevisionId ? createGameplayTelemetrySession({ spec, projectId, creativeRevisionId, verticalSliceScore: 0 }) : null;
+    let session = createSession();
+    let started = false, ended = false, actions = 0, activeMs = 0, lastBeat = 0, lastTick = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      if (started && !ended && document.visibilityState === "visible" && now - lastBeat < 2000) activeMs += Math.min(1000, now - lastTick);
+      lastTick = now;
+      if (activeMs >= 60_000) session?.firstMinute(Math.round(activeMs), actions);
+    }, 500);
     const receive = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow || !event.data || typeof event.data !== "object") return;
       const data = event.data as { type?: string; won?: unknown; score?: unknown; message?: unknown };
+      if (data.type === "forge-heartbeat" || data.type === "operone-game-heartbeat" || data.type === "operone-game-mounted") {
+        lastBeat = performance.now();
+        started = true;
+        session?.start();
+      }
+      if (data.type === "operone-game-input" && started && !ended) { actions += 1; session?.firstAction(); }
+      if (data.type === "forge-restart") {
+        session?.retry();
+        session = createSession();
+        session?.start();
+        started = true; ended = false; actions = 0; activeMs = 0; lastBeat = performance.now();
+      }
       if (data.type === "operone-game-end" || data.type === "forge-end") {
-        onEnd?.({ won: Boolean(data.won), score: Number(data.score) || 0 });
+        if (!ended) { session?.end(Boolean(data.won), Math.max(0, Math.round(Number(data.score) || 0))); onEnd?.({ won: Boolean(data.won), score: Number(data.score) || 0 }); }
+        ended = true;
       }
       if (data.type === "operone-game-error" || data.type === "forge-error") {
         setFailed(typeof data.message === "string" ? data.message : "runtime error");
@@ -63,8 +59,8 @@ export function IndependentGameRuntime({ spec, projectId, onEnd, onTelemetry }: 
       }
     };
     window.addEventListener("message", receive);
-    return () => window.removeEventListener("message", receive);
-  }, [onEnd, onTelemetry]);
+    return () => { window.removeEventListener("message", receive); window.clearInterval(timer); };
+  }, [onEnd, onTelemetry, creativeRevisionId, previewMode, projectId, spec]);
 
   if (!runtimeReady || failed) {
     return (
@@ -81,9 +77,7 @@ export function IndependentGameRuntime({ spec, projectId, onEnd, onTelemetry }: 
     );
   }
 
-  const safeSource = source.replace(/<\/script/gi, "<\\/script");
-  const safeSdk = GAME_FORGE_SDK_SOURCE.replace(/<\/script/gi, "<\\/script");
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body,#game{margin:0;width:100%;height:100%;overflow:hidden;background:#06130e}*{box-sizing:border-box}</style></head><body><main id="game" aria-label="${spec.title.replace(/["<>]/g, "")}"></main><script>${safeSdk}</script><script>const ctx=${JSON.stringify(context).replace(/</g, "\\u003c")};const post=(t,p)=>{try{parent.postMessage(Object.assign({type:t},p||{}),'*')}catch(e){}};ctx.finish=(won,score=0)=>post('operone-game-end',{won:!!won,score:Number(score)||0});ctx.reportError=(e)=>post('operone-game-error',{message:String(e&&e.message?e.message:e)});try{${safeSource};if(typeof mountGame!=='function')throw new Error('mountGame missing');mountGame(document.getElementById('game'),ctx);}catch(error){ctx.reportError(error);}</script></body></html>`;
+  const srcDoc = buildIndependentRuntimePage(spec, projectId);
 
   return (
     <iframe

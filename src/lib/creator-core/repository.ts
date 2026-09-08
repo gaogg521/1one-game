@@ -123,6 +123,23 @@ export async function createCreativeArtifact(input: {
   }
 }
 
+/** Replace evidence only while a revision is being built; sealed revisions stay immutable. */
+export async function writeProductionArtifact(input: Parameters<typeof createCreativeArtifact>[0], jobId: string, workerId: string) {
+  const artifact = CreativeArtifactInputSchema.parse(input.artifact);
+  return prisma.$transaction(async tx => {
+    const owned = await tx.generationJob.count({ where: { id: jobId, workerId, status: "running", leaseExpiresAt: { gt: new Date() }, creativeRevisionId: input.creativeRevisionId } });
+    if (!owned) throw new Error("generation_job_lease_lost");
+    const revision = await tx.creativeRevision.findUnique({ where: { id: input.creativeRevisionId } });
+    if (!revision || revision.status !== "generating") throw new Error("production_revision_not_generating");
+    const data = { contentJson: stringify(artifact.content), contentHash: artifactHash(artifact), metadataJson: stringify(artifact.metadata), status: "ready" };
+    return tx.creativeArtifact.upsert({
+      where: { idempotencyKey: input.idempotencyKey! },
+      create: { ...data, creativeProjectId: input.creativeProjectId, creativeRevisionId: input.creativeRevisionId, idempotencyKey: input.idempotencyKey, kind: artifact.kind, mediaType: artifact.mediaType },
+      update: data,
+    });
+  });
+}
+
 /** Stores the exact quality decision used for a revision, independently of report artifacts. */
 export async function recordCreativeEvaluation(input: {
   creativeProjectId: string;
