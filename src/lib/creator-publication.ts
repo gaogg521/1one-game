@@ -13,7 +13,10 @@ import { runtimeValidationBlockers, type GameRuntimeValidation } from "@/lib/gam
 export type PublishableWorkType = "game" | "novel" | "comic";
 
 export class CreatorPublicationError extends Error {
-  constructor(public readonly code: "not_found" | "not_owner" | "not_ready" | "quality_blocked" | "revision_not_ready") {
+  constructor(
+    public readonly code: "not_found" | "not_owner" | "not_ready" | "quality_blocked" | "revision_not_ready",
+    public readonly evidence: string[] = [],
+  ) {
     super(code);
     this.name = "CreatorPublicationError";
   }
@@ -63,7 +66,7 @@ export async function setCreatorWorkPublication(input: {
           where: {
             creativeProjectId: core.id,
             creativeRevisionId: candidateRevisionId,
-            kind: { in: ["game_spec", "game_runtime_validation", "asset_manifest", "game_production_pipeline", "game_production_candidate", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
+            kind: { in: ["game_spec", "game_runtime_validation", "asset_manifest", "game_production_candidate", "game_delivery_preflight", "game_playtest_delivery", "bgm", "bgm_notes"] },
             status: "ready",
           },
           orderBy: { createdAt: "asc" },
@@ -88,15 +91,12 @@ export async function setCreatorWorkPublication(input: {
     if (requiresBespokeRuntime(finalSpec)) deliveryIssues.push(...runtimeValidationBlockers(finalSpec, runtimeValidation, row.id));
     let preflight: { verdict?: unknown } | null = null;
     try { preflight = artifact("game_delivery_preflight")?.contentJson ? JSON.parse(artifact("game_delivery_preflight")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
-    let pipeline: { preflightVerdict?: unknown } | null = null;
-    try { pipeline = artifact("game_production_pipeline")?.contentJson ? JSON.parse(artifact("game_production_pipeline")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     let productionCandidate: { decision?: unknown } | null = null;
     try { productionCandidate = artifact("game_production_candidate")?.contentJson ? JSON.parse(artifact("game_production_candidate")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     let playtest: { activeMs?: unknown; actionCount?: unknown; deviceClass?: unknown; touchCapable?: unknown; outcome?: unknown } | null = null;
     try { playtest = artifact("game_playtest_delivery")?.contentJson ? JSON.parse(artifact("game_playtest_delivery")!.contentJson!) : null; } catch { /* corrupted artifact fails closed */ }
     if (!candidateRevisionId) deliveryIssues.push("publication_revision_missing");
     if (!artifact("game_spec")) deliveryIssues.push("publication_game_spec_missing");
-    if (pipeline?.preflightVerdict !== "ready") deliveryIssues.push("publication_production_pipeline_not_ready");
     if (productionCandidate?.decision !== "ready_for_playtest") deliveryIssues.push("publication_production_candidate_not_ready");
     if (requiresBespokeRuntime(finalSpec) && !hasBespokeRuntime(finalSpec)) deliveryIssues.push("publication_independent_runtime_missing");
     if (!preflight || (preflight.verdict !== "ready" && preflight.verdict !== "needs_review")) {
@@ -177,7 +177,7 @@ async function persistPublication(input: {
   selectedRevisionId?: string;
 }): Promise<{ visibility: WorkVisibility; quality: CreatorQualityReport }> {
   if (input.input.action === "publish" && input.quality.verdict === "blocked") {
-    throw new CreatorPublicationError("quality_blocked");
+    throw new CreatorPublicationError("quality_blocked", input.quality.evidence);
   }
   const visibility: WorkVisibility = input.input.action === "publish" ? "public" : "hidden";
   await prisma.$transaction(async (tx) => {

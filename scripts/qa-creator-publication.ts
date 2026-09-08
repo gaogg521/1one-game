@@ -5,6 +5,7 @@ import { createCreativeArtifact, getAcceptedLegacyPublicationDisplay, getLegacyC
 import { prepareGameSpecForPersist } from "../src/lib/spec-patch";
 import { defaultWorkVisibility } from "../src/lib/auth/work-visibility";
 import { canAccessWorkByDirectLink, canReadWorkPublicly } from "../src/lib/literary-safety";
+import { runtimeSourceHash } from "../src/lib/game-runtime-validation";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -25,7 +26,15 @@ async function main() {
   assert(!canAccessWorkByDirectLink({ visibility: "hidden", status: "ready" }), "hidden work must remain owner-only");
   assert(canReadWorkPublicly({ visibility: "public", status: "ready" }), "explicitly published ready work must be listed");
   const ownerKey = `qa-publication-${Date.now()}`;
-  const spec = prepareGameSpecForPersist(undefined, "霓虹飞船穿过机械舰队");
+  const spec = {
+    ...prepareGameSpecForPersist(undefined, "霓虹飞船穿过机械舰队"),
+    agenticPlayRoute: "independent" as const,
+    agenticModule: {
+      version: 2 as const,
+      entry: "mountGame" as const,
+      source: "function mountGame(root,ctx){root.innerHTML='<button>launch</button>';root.firstChild.onclick=function(){ctx.finish(true,1)}}",
+    },
+  };
   const game = await prisma.project.create({
     data: {
       ownerKey, title: spec.title, prompt: "霓虹飞船穿过机械舰队", specJson: JSON.stringify(spec),
@@ -71,6 +80,15 @@ async function main() {
     await createCreativeArtifact({
       creativeProjectId,
       creativeRevisionId,
+      artifact: {
+        kind: "game_runtime_validation",
+        mediaType: "report",
+        content: { version: 1, status: "passed", sourceHash: runtimeSourceHash(spec, game.id), observed: true, blockers: [], evidence: ["qa:observed"] },
+      },
+    });
+    await createCreativeArtifact({
+      creativeProjectId,
+      creativeRevisionId,
       artifact: { kind: "bgm_notes", mediaType: "json", content: { bpm: 112, notes: [{ at: 0, duration: 0.2, frequency: 220 }] } },
     });
     await prisma.creativeArtifact.create({
@@ -92,6 +110,17 @@ async function main() {
       .then(() => { throw new Error("a game without BGM and observed playtest evidence must not publish"); })
       .catch((error) => assert(error instanceof CreatorPublicationError && error.code === "quality_blocked", "delivery evidence must fail closed"));
     await addDeliveryEvidence(mirrored.creativeProjectId, mirrored.creativeRevisionId);
+    // The bridge writes this planning snapshot before the executable runtime
+    // exists. It may therefore remain blocked even after exact-runtime and
+    // observed-play evidence pass, and must not override those newer facts.
+    await prisma.creativeArtifact.updateMany({
+      where: {
+        creativeProjectId: mirrored.creativeProjectId,
+        creativeRevisionId: mirrored.creativeRevisionId,
+        kind: "game_production_pipeline",
+      },
+      data: { contentJson: JSON.stringify({ version: 1, preflightVerdict: "blocked" }) },
+    });
     await prisma.creativeArtifact.updateMany({
       where: {
         creativeProjectId: mirrored.creativeProjectId,
