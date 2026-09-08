@@ -85,10 +85,38 @@ async function main() {
     assert.ok(events.some(e => e.type === "operone-game-input"));
     assert.ok(events.some(e => e.type === "forge-end" || e.type === "operone-game-end"), "No outcome after actual play");
     assert.equal(events.filter(e => e.type === "forge-error" || e.type === "operone-game-error").length, 0);
+    const gameBox = await page.locator("iframe").boundingBox();
+    assert.ok(gameBox);
+    await page.touchscreen.tap(gameBox.x + gameBox.width * 0.5, gameBox.y + gameBox.height * 0.72);
+    await page.waitForFunction("window.runtimeEvents.some(e=>e.type==='forge-restart')", undefined, { timeout: 10_000 });
     await page.screenshot({ path: `${output}/played.png` });
+
+    const publishResponse = await page.request.post(`${base}/api/works/game/${encodeURIComponent(projectId)}/publication`, {
+      data: { action: "publish", revisionId: detail.playRevisionId },
+    });
+    const publishBody = await publishResponse.json().catch(() => ({})) as { visibility?: string };
+    assert.ok(publishResponse.ok(), `Publish rejected: HTTP ${publishResponse.status()} ${JSON.stringify(publishBody)}`);
+    assert.equal(publishBody.visibility, "public");
+
+    const publicContext = await browser.newContext({ viewport: { width: 393, height: 852 }, hasTouch: true, isMobile: true });
+    await publicContext.addInitScript(() => {
+      const store = window as unknown as { runtimeEvents: Event[] };
+      store.runtimeEvents = [];
+      window.addEventListener("message", event => {
+        if (event.source === document.querySelector("iframe")?.contentWindow && event.data?.type) store.runtimeEvents.push(event.data);
+      });
+    });
+    const publicPage = await publicContext.newPage();
+    const publicResponse = await publicPage.goto(`${base}/zh-Hans/play/${projectId}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    assert.ok(publicResponse?.ok(), `Public play failed: HTTP ${publicResponse?.status() ?? "none"}`);
+    await publicPage.frameLocator("iframe").locator("canvas").waitFor({ timeout: 30_000 });
+    await publicPage.waitForFunction("window.runtimeEvents.some(e=>e.type==='forge-first-frame')", undefined, { timeout: 15_000 });
+    assert.equal(await publicPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    await publicContext.close();
     report.pass = true;
     report.playUrl = page.url();
-    console.log(`[OK] real production iframe boot, first frame, mobile input and outcome: ${page.url()}`);
+    report.publicPlayUrl = `${base}/zh-Hans/play/${projectId}`;
+    console.log(`[OK] real production iframe boot, first frame, mobile input, outcome, restart, publication and public mobile play: ${page.url()}`);
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
     await page.screenshot({ path: `${output}/failure.png` }).catch(() => undefined);
