@@ -1924,3 +1924,13 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 新发现并正在补齐：GamePlayerInner 已简化为独立 iframe，但此前未将真实用户输入/首分钟/结局接回 GameplayEvent。已补绑定 revision 的事件上报和重试事件；需生产真实手机首分钟验证。
 - 下一步：完成末轮 lint/build；只提交本轮精确路径（工作区有大量他人 QA 图片和日志，禁止 git add .）；push；运行 scripts/release-runtime-delivery.py（先检查无运行任务，stop/build/start/health，安装2个timer并以www-data跑实际浏览器）；执行 scripts/qa-prod-runtime-delivery.ts 全新生产一句话流程，必须实际 iframe boot/first frame/输入/结局；验证发布、外部静态资源和并发worker。失败时继续修，不得宣称完成。
 - 自动续接已创建：automation id=p0-p1，每小时唤醒当前任务，额度恢复后继续；完成且验证后暂停。不要创建重复自动化。
+
+## 2026-09-08 · P0/P1 完成并通过生产验收
+- 最终提交链：`74522c01`（运行交付门禁、租约/重试上限、并发 worker、图片失败日志、真实玩家遥测）、`8ac3439f`（短窗 inert 启发式不再越权否决最终 iframe 证据）、`2463420d`（发布读取最终交付证据，不再被生成前的旧 pipeline 快照误拦）。生产当前部署 `2463420d9722e00ea33bfcf7b67d0ba47a7a1c32`。
+- P0 判定已拉齐：最终 iframe 的精确源码+SDK+上下文哈希必须有真实 mobile Chromium 报告；未启动、无首帧、运行错误、确认卡死/无响应硬拦；缺失/过期/探针不可用不能标成功；主观美术、角色覆盖、短窗 SDK entity/score 启发式保持 advisory。
+- 修正了一次真实误拦：项目 `cmts7zpfd000qhmuc0hkiixcy` 的旧 Forge 探针因自绘实体不进入 `g.world` 报 `inert_build`，但最终 iframe 同哈希证据为 mounted=true、frames=120、visualChanged=true、errors=0。门禁改为由最终 iframe 自己判断 frame progression 和截图变化，语法错误、启动抛错、纯静态空壳仍会拒绝。
+- 该项目通过完整生产复验：revision `cmtsj9ns9000ca1o03x9ftlgz` 为 ready，runtime validation passed；393×852 触屏运行 67 秒，48 次动作，结局 lost/score 95；随后结算卡重开事件通过；显式发布成功；匿名 mobile 公共页再次收到 forge first frame。公开地址：`https://operone.1oneclaw.com/zh-Hans/play/cmts7zpfd000qhmuc0hkiixcy`。
+- 6 个当前版本素材 URL 逐个 HTTP 200，均无 `X-Operone-Asset-Fallback`；报告在 `qa-output/prod-runtime-assets/REPORT.json`。站点 19 个脚本资源均 200、无 pageerror；生产 smoke 10/10。
+- P1 队列并发有生产实证：长任务 `cmtsj9nwb0010a1o05eibjogn` 运行期间，第二 timer 在 2007ms 内完成短任务 `cmtsjbahn0002vd36o0lman25`，长任务仍 running；报告在 `qa-output/queue-slots/REPORT.json`。两个 worker timer 均 active。租约回收/attempt cap/旧 owner fencing/项目排他另由隔离 SQLite `qa:generation-leases` 覆盖。
+- 图片失败路径现在输出结构化、脱敏的服务日志；`qa:runtime-delivery-gate` 验证 key/token/host 不泄漏。模型性能只完成阶段测量：deepseek 设计 195351ms 且结构失败，doubao 设计+配置模块 342052ms 成功；没有完整游戏成功率和成本证据，因此保持当前生产模型路由，不做猜测性切换。
+- 验证：`qa:runtime-delivery-gate`、`qa:creator-publication`、`qa:generation-leases`、`qa:game-production-orchestrator`、`qa:creator-core`、`qa:runtime-public-assets`、TypeScript、目标 ESLint、两轮完整 Next build；生产发布脚本完成 BUILD_ID/service/TLS health/timers/www-data Chromium gate。自动续接频率已按用户要求改为每 4 小时；全部验收完成后应暂停。
