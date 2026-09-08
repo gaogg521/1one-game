@@ -25,10 +25,14 @@ async function main() {
     if (process.env.QA_RESUME_STATE) await context.addCookies(JSON.parse(await fs.readFile(process.env.QA_RESUME_STATE, "utf8")).cookies);
     let projectId = process.env.QA_PROJECT_ID;
     if (!projectId) {
-      await page.goto(`${base}/zh-Hans/create`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${base}/zh-Hans/create`, { waitUntil: "networkidle" });
       const prompt = "手机竖屏竹林小游戏：手指左右移动小熊猫接住落下的竹子，避开石头。初始30颗心，持续70秒后按分数结算胜负，结算后可以重新开始。";
       const input = page.locator("textarea").first();
       await input.fill(prompt);
+      if (!await page.getByRole("button", { name: /生成可玩版本/ }).isEnabled()) {
+        await input.fill("");
+        await input.pressSequentially(prompt, { delay: 3 });
+      }
       await page.getByRole("button", { name: /生成可玩版本/ }).click();
       console.log("[production] design requested");
       await page.getByRole("button", { name: /保存并打开/ }).waitFor({ timeout: 30 * 60_000 });

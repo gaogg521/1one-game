@@ -16,8 +16,14 @@ export function runtimeSourceHash(spec: GameSpec, projectId?: string): string {
   return createHash("sha256").update(buildIndependentRuntimePage(spec, projectId)).digest("hex");
 }
 
-/** Only objective execution findings qualify; model and aesthetic reviews stay advisory. */
-export const HARD_RUNTIME_FINDINGS = new Set(["did_not_boot", "no_first_frame", "runtime_error", "inert_build", "loop_stalled"]);
+/**
+ * Only findings that prove an objective execution failure may cross from the
+ * earlier Forge probe into the delivery gate. Its inert/stalled findings are
+ * short-window heuristics: generated games may draw their own entities instead
+ * of populating SDK counters, so the exact player iframe probe below owns those
+ * decisions using frame progression and screenshots.
+ */
+export const HARD_RUNTIME_FINDINGS = new Set(["did_not_boot", "no_first_frame", "runtime_error"]);
 
 export function runtimeValidationBlockers(spec: GameSpec, validation?: GameRuntimeValidation | null, projectId?: string): string[] {
   if (!spec.agenticModule?.source?.trim()) return ["independent_runtime_missing"];

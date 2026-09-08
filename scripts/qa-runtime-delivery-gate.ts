@@ -10,6 +10,13 @@ async function main() {
   const good = spec("function mountGame(root,ctx){root.innerHTML='<button style=\"width:100%;height:600px\">收集星星</button>';root.firstChild.onpointerdown=()=>{root.firstChild.textContent='已收集';ctx.finish(true,1)}} // trailing comment");
   const report = await validateGameRuntime(good);
   assert.equal(report.status, "passed", JSON.stringify(report));
+  const heuristicInertReport = await validateGameRuntime(good, undefined, {
+    ok: true,
+    observed: true,
+    findings: [{ severity: "major", moduleId: "assembled", code: "inert_build", message: "SDK counters did not change in the short probe" }],
+    evidence: ["probe:booted=true", "probe:frames=480", "probe:entities=0"],
+  });
+  assert.equal(heuristicInertReport.status, "passed", JSON.stringify(heuristicInertReport));
   const run = buildGameProductionRun({ spec: good, assetManifest: null, runtimeValidation: report });
   assert.equal(run.candidate.decision, "ready_for_playtest");
   assert.ok(run.candidate.advisories?.includes("visual_review_rejected"));
