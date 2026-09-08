@@ -1762,12 +1762,155 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - `PRODUCT.gameForge`：`runtimeProbe`（默认开，`GAME_FORGE_PROBE=0` 关）、`artSlotTimeoutMs`、`artBudgetMs`、`reviewTimeoutMs`
 
 ### 已知限制
-- **时延仍在 5–9 分钟**，主要由质量方差驱动：好构建 336s，需两轮 repair 的 573s。repair 轮（~85s/轮）+ 代码阶段（100–256s）是剩下的大头。
-- 生产是否装了 playwright/chromium **未验证**；未装则探针走降级分支返回 `unavailable`，QA 退回纯静态审计，构建照常完成（不会因探针打挂生产）。
+- **本地时延仍在 5–9 分钟**，主要由质量方差驱动：好构建 336s，需两轮 repair 的 573s。repair 轮（~85s/轮）+ 代码阶段（100–256s）是剩下的大头。这是本地 litellm（`minimax-2-7`）的数字，**不能直接套到生产**——生产 `game_text` 场景走的是完全不同的模型/网关（`deepseek-v4-flash-ga-260731` via 火山方舟），耗时特征也完全不同（见下方事故记录）。
+  - 更正：早前这里写过"生产实测设计阶段 40.9–59.3s，网关明显更快"——**这个判断是错的，已被下方事故推翻**。那 40.9s 测的是 `/create` 页面"生成可玩版本"这一步（旧模板系统的 `/api/generate/stream`，产出 `templateId: avoider`），根本不是 GameForge 的 `runDesignAgent` 调用。GameForge 的设计调用只在用户点"保存并打开"之后，由后台 `game_production` 任务发起，是完全不同的代码路径，实测反而是本次事故里超时到无法收敛的那个。
 - 探针拿不到真实素材（美术与代码并行，探针跑在美术之前），所以它验行为、不验美术。
 - 本地 litellm 与模型路由**只留本地**，不进生产。
 
-## 下次启动清单
-1. 部署后实测生产上探针能否 `observed=true`；不能则决定是否在服务器装 chromium。
-2. 攻克代码阶段耗时（100–256s，7 模块并发 8）与 repair 轮成本，这是 5–9 分钟里最大的两块。
-3. 若要继续压时延：考虑模型审查与探针并行、repair 轮改为模块级增量补丁而非整模块重写。
+### 🔴 生产事故（2026-09-07）：json_object 让 GameForge 设计调用在生产上 100% 超时
+
+**影响**：commit `9a1d9be` 部署后，生产上每一个新建游戏的 `game_production` 后台任务的设计阶段全部超时失败，创作者点"保存并打开"后卡在 `INDEPENDENT RUNTIME REQUIRED` 空屏，永远等不到游戏。已确认至少 2 个真实任务（其中 1 个是本会话自己的测试项目）反复重试 20+ 分钟无一成功，且 FIFO 单线程 worker 队列被这两个失败任务持续占用，可能连带阻塞其后的新任务。
+
+**根因**：commit `9a1d9be` 把 `design-agent.ts` 和 `qa-agent.ts` 的模型调用从 `json_schema` 改成了 `json_object`（含 `singleModeOnly: true`），依据是**本地** `minimax-2-7`（走本地 litellm）的实测：`json_schema` 让该模型多想一倍 token 却不真正管住 `assets.kind` 枚举。这个结论**没有在生产实际使用的模型上验证过**，而生产 `game_text` 场景路由到的是完全不同的模型/网关：`deepseek-v4-flash-ga-260731`（火山方舟 `ark.cn-beijing.volces.com`），行为完全相反。
+
+**隔离验证**（SSH 到生产，脱离一切并发负载，直接用真实 7.9K 字符设计 prompt 打生产真实模型/网关，全程未打印或记录 API key）：
+
+| response_format | 结果 |
+|---|---|
+| `json_object` | 2/2 次挂满 160s 超时，从未返回任何内容 |
+| 无 `response_format` | 1/1 次挂满 150s 超时 |
+| `json_schema` | 3 次中 2 次成功（119s、138s），1 次卡在整 150000ms 超时线 |
+
+`completion_tokens` 高达 13724–15655（本地 minimax 测出的是 2200–6500 的 2–3 倍）——这个模型对这个任务本身就异常啰嗦，没有 schema 约束时甚至**根本不收敛**，不是慢，是不停。而 `llmJsonOpenAICompatible` 现有的双模式自动降级**只在报错命中"schema 不支持"类正则时才触发**，纯粹的 timeout/AbortError 不会触发——所以 `singleModeOnly: true` 加上纯超时的失败模式，让生产没有任何自愈路径。
+
+**修复**（commit `08a5e098`）：
+1. `design-agent.ts`、`qa-agent.ts` 的模型调用改回 `mode: "json_schema"`，去掉 `singleModeOnly: true`（恢复既有的双模式降级，给级联里其它模型留后路）。
+2. `designTimeoutMs` 从 150s 提到 **210s**——即使换回 `json_schema`，生产模型的输出量（13k–15k tokens）也比本地基准大得多，150s 卡得太紧（3 次里有 1 次精确卡线超时）。今天新加的 `designMinimalPrompt` 降级重试逻辑保留，用的也是回滚后的 `json_schema`。
+3. 已推送并部署（`08a5e098`）。**尚未验证**：换回 `json_schema` + 210s 预算后，生产任务能否稳定跑通到底（隔离测试只测了设计这一步，没有跑完整 `game_production` job）；两个卡住的任务里，不相关的那个 `attempts` 已经打满默认上限 3，如果它在修复前的最后一次尝试里失败，会被标记成终态 `failed`，需要用 `POST /api/admin/generation-jobs/[id]/retry`（`requeueFailedGenerationJob`）人工重新排队，而不是直接改数据库。
+
+**教训写入方法论**：
+- **"json_schema 在这个网关上是纯成本"这类结论必须标注是针对哪个模型/网关测的，不能当作对整条生产链路的结论**——生产的模型路由来自加密的 `PlatformRuntimeConfig` 数据库表（`getSceneModelCascade`），和本地 `.env`/`key.txt` 里配的模型完全独立，两边可能是不同厂商、不同行为的模型。任何"哪种调用方式更优"的性能结论，改动前必须在**生产实际会用到的模型**上至少做一次隔离验证，而不是只在本地测试模型上验证后就全局套用。
+- 纯超时（AbortError）和"格式不支持"类错误是两种性质不同的失败，现有代码只对后者做自动降级——引入 `singleModeOnly` 或固定单一 `mode` 时，要先确认目标模型的失败模式里没有纯超时这一种，否则等于把自愈路径焊死。
+
+### 🔴 生产事故 2（2026-09-07，历史遗留，与当天代码改动无关）：zh 语言路由把 comic_image_openai / comic_image_gemini 两个场景的模型对调了
+
+**发现契机**：修完上面的 json_schema 回归后，重排的测试任务设计阶段成功、代码阶段推进，但**全部 6 张美术图都失败**。日志里没有直接命中（`asset-agent.ts` 完全不打 console 日志，失败只落一个泛化的 `errorCode: "image_generation_failed"`，看不到具体原因）；靠另一个更早项目留下的日志行才拿到真实报错：`Seedream HTTP 404；未配置 GEMINI_API_KEY`。
+
+**根因**：生产运行时配置（加密存在 `PlatformRuntimeConfig` 表）里，`comic_image_openai` 和 `comic_image_gemini` 两个场景的 **zh 语言路由被对调了**：
+
+| 场景 | 全局默认 | zh 覆盖（错误） |
+|---|---|---|
+| `comic_image_openai` | `doubao-seedream-5-0-pro-260628` @ 火山方舟 | `openrouter/free` @ OpenRouter |
+| `comic_image_gemini` | `openrouter/free` @ OpenRouter | `doubao-seedream-5-0-pro-260628` @ 火山方舟 |
+
+典型的"配两个字段时手滑对调"。代码层面还有个放大因素：`resolveSeedreamImageConfig()` 用 `resolveSceneRoute()` 取 `baseUrl`/`apiKey`（**不做模型名过滤**），但 `model` 字段来自 `getImageGenOpenAIModel()`——**另一条会用 `isLikelyImageGenerationModel` 过滤的级联**。zh 覆盖的 `openrouter/free` 过不了这个过滤，于是 `model` 摔回全局默认值 `doubao-seedream-5-0-pro-260628`，但 `baseUrl`/`apiKey` 还是 zh 覆盖指向的 OpenRouter——**请求体里的模型名和实际打到的网关对不上**，OpenRouter 找不到这个模型 ID，返回 404。Gemini 降级链路同理：doubao 模型过不了 `isLikelyGeminiNativeImageModel` 过滤，摔到最后一层 `process.env.GEMINI_API_KEY`，而生产压根没配这个变量，直接失败。两条降级路径全灭，游戏/漫画美术在 zh 语言环境下必然失败，只是这次才被我在真实任务里撞见。
+
+**影响范围**：**所有中文语言创作者的游戏美术和漫画分镜生成**，独立于 GameForge、独立于今天任何代码改动，是更早就存在的配置错误。
+
+**修复**（配置层面，非代码，已获用户明确授权执行）：
+1. 写库前把当前 `secretsEnc` 原样备份到本地（未入库，会话临时文件）。
+2. 精确移除 `localeRoutes` 里这两条 `localeGroup: "zh"` 的错误覆盖（`comic_image_openai`、`comic_image_gemini`），**不触碰**其余 11 条路由（`game_vision`/`game_text`/`novel`/`novel_plan`/`comic_storyboard` 的 zh 覆盖原样保留）。写入前后都做了解密回读校验。
+3. `systemctl restart operone` 清掉 `getRuntimeConfigSync()` 的进程内缓存（该缓存只在应用自己的 PATCH 接口里被 `invalidateRuntimeConfigCache()` 主动清除，直接写库不会自动生效，必须重启）。
+4. 隔离验证：两个场景在有/无 zh 覆盖下现在解析出**同一个** model+provider 组合；直接对生产真实网关发一次图片生成请求，**HTTP 200，42.2 秒，返回真实图片 url/b64**，端到端确认修复生效。
+
+**方法论教训**：
+- `asset-agent.ts` 全程零日志，导致这类错误在 journalctl 里完全不可见，只能从数据库 `providerUsageEvent`（也只有泛化 `errorCode`，无详细信息）或巧合留存的旧项目日志里拼线索。**这是一个真实的诊断盲区，值得后续补一条 `console.error`**（不在本次改动范围内，留给下一次会话）。
+- 涉及"生产模型 API 和地址"类配置变更，即使技术上我有能力直接读写，也先呈现根因和具体修法、让用户明确选择处理方式，而不是发现即改。
+
+### 部署后追加验证（2026-09-07，commit 9a1d9be 之后）
+- **生产 playwright 浏览器已装好，探针在生产上可用**：`scripts/check-prod-runtime-probe.py` 实测 `PROBE_AVAILABLE`（`launch chromium` → `LAUNCH_OK`）。
+  - 部署刚完成时浏览器二进制缺失（`Executable doesn't exist at .../chromium_headless_shell-1223/...`），`GAME_FORGE_PROBE` 未设但探针实际走 `unavailable` 降级。
+  - 服务器是 **Rocky Linux 10**（`VM-65-247-rockylinux`），不是 Ubuntu/Debian：`npx playwright install --with-deps chromium` 会失败（`--with-deps` 假设 `apt-get`，Rocky 用 `dnf`，报 `apt-get: command not found`，exit 127）。
+  - 正确做法：`npx playwright install chromium`（不带 `--with-deps`）。下载后直接 `LAUNCH_OK`，Rocky 10 自带的共享库已经够用，**不需要额外装系统依赖**。
+  - 新增 `scripts/check-prod-runtime-probe.py` —— 只读，SSH 到生产查代码版本/`GAME_FORGE_PROBE`/playwright 模块/浏览器二进制/实际 launch，不假设任何一项。
+- 新增 `scripts/qa-prod-one-sentence-quality.ts`（`QA_PROD_ONE_SENTENCE=1` 才会真的调模型）—— 在生产真实站点模拟手机端用户走一句话创作全程，**不发布**（现成的 `qa-prod-game-create-delivery.ts` 会 publish 成 public，判断质量不需要这一步）。取证：两段等待耗时（设计 / 后台构建独立运行时）、canvas 是否渲染、forge 遥测（boot/首帧/帧数/实体/分数）、输入前后是否有变化、运行时与控制台报错。
+  - 生产 UX 发现：创作者要经历**两段等待**，中间那屏预览区最醒目位置是英文警告 `INDEPENDENT RUNTIME REQUIRED`，配合下方一句技术性说明（"该版本没有通过独立运行时生成与验证，因此不会用通用场景代替"）。诚实但生硬——应该用已有的 milestone feed 顶掉这个空盒子，告诉创作者"设计已完成，正在构建，还需约 N 分钟"。
+  - 该脚本自己产出的耗时/质量数字**尚未跑完一次完整验证**（首次运行卡在等待第二段，超过 12 分钟仍未见画面，待确认是超时还是慢）——不要把本文件里任何生产耗时数字当作已验证结论，以脚本实际跑出的 `qa-output/prod-one-sentence-quality/REPORT.json` 为准。
+
+### 🔴 生产事故 3（2026-09-07）：worker 640s 硬顶让长任务永远跑不完；design_agent 零重试；美术端点路径写死本地网关形态
+
+**发现契机**：修完事故 1、2 后重排验收，任务在代码生成阶段卡住不动，用户指出"这肯定不对了，要 12 分钟，用户早就没耐心了"，倒查才发现三个独立缺陷叠在一起。
+
+**A. `run-generation-worker-once.sh` 里 `curl --max-time 640`，systemd unit `TimeoutStartSec=650`**
+- 实测：该任务设计阶段 178s，最慢单个代码模块约 587s，光这两项就 765s，超过 640s 硬顶。任务被 curl 杀死，`executeGameProductionJob` 在后台孤儿续跑（里程碑在 +786s 时仍在写），但请求方永远收不到结果，job 只能标记重试，三次尝试三次死在同一堵墙上，最终永久失败。
+- **本地结构上不可能发现这个问题**：本地是 `npx tsx` 直接调 `forgeGame()`，没有 worker、没有 curl、没有 systemd，307–573s 就跑完了。
+- 修复（commit `e7ecf23e`）：`--max-time` 改为可配置默认 1500s；`scripts/deploy/install-generation-worker-timer.sh` 里 `TimeoutStartSec` 同步改 1520s。**这两处一个在仓库脚本里（git pull 自动更新），一个在服务器的 `/etc/systemd/system/*.service` 里（仓库改动不会自动生效，必须手动 `sed` 该文件 + `systemctl daemon-reload`）**——已在生产手动执行，原 unit 文件备份在服务器 `/root/operone-generation-worker.service.bak-*`。
+- **已知取舍，未解决**：这是单线程串行队列（一次一个 worker tick 处理一个任务），上限提高后一个长任务会堵住其他创作者最多 25 分钟。提上限只是"让它能跑完"，不是"让它变快"。
+
+**B. 我自己两次回滚之间引入的回归**：事故 1 修复时去掉了 `singleModeOnly`，理由是"恢复自愈路径"，结果让 `llmJsonOpenAICompatible` 在 `json_schema` 回复解析失败时自动升级到 `json_object`——而 `json_object` 已经被隔离测试证明在这个模型上永不收敛。这正是"`json_object timeout after 90000ms`"这条报错出现在"已经用上新代码"的任务里的原因。修复（同一 commit）：两处调用都恢复 `singleModeOnly: true`。
+
+**C. `design-agent.ts` 一次不可解析回复 = 零重试直接判死**
+- 原代码只在错误信息命中 `/timeout|aborted/` 时才重试一次，理由是"其他失败换个问法也会同样失败"——这个假设是错的。隔离实测：同一个真实 prompt 单次调用产出 **61812 字符思考链、8774 字符答案，`completion_tokens`（含思考链）达 19968**，超过应用给的预算（8192+6144 headroom=14336），答案被截断成不可解析的 JSON；重新调用一次同一个 prompt 就解析成功。
+- 修复（commit `9891e5e6`）：attempt 0 对任意模型级失败都重试一次（超时→缩小要求版 prompt，其他失败→原样降温重试）；`designMaxTokens` 从 8192 提到 32768。
+
+**D. Seedream 图片端点路径硬编码本地网关形态**
+- `seedreamGenerationEndpoint()` 用 `new URL("/api/seedream/v1/images/generations", base)` 构造绝对路径，本地 litellm 是裸域名所以没问题；生产 baseUrl 是 `https://ark.cn-beijing.volces.com/api/v3`，绝对路径会把 `/api/v3` 整段吃掉，404。
+- 修复（commit `e7ecf23e`）：按 `base` 是否已带版本化 API 根路径分支处理，两种网关形态都覆盖；`qa:seedream-endpoint` 用生产和本地各自验证过的真实 URL 锁死。
+
+**这四处 + 事故 1/2，合计六处，同一天暴露的共同模式**：本地验证过的细节（模型选择、超时、端点路径、语言路由）被当作全局真理，套到生产上全部失效，因为生产是完全独立的模型/网关/部署形态。**任何"我在本地测过"的结论，套到生产前必须重新用生产实际配置隔离验证一次**——这条已经吃了六次亏。
+
+### 🔴 生产事故 4（2026-09-07，架构性问题，尚未修复）：任务标记 `completed`，但游戏在真实浏览器里从未启动过
+
+**发现方式**：事故 3 修复部署后，发起全新一句话创作（prompt「一只小熊猫在竹林里跳跃收集竹子，躲开滚下来的石头」，`legacyId=cmtrfa1rp0005tpj8kcm795a3`，`GenerationJob id=cmtrfa1w5000xtpj8bqs92cbn`）。数据库显示 `status: "completed"`，`attempts: 2`（第 1 次失败原因已随 journald 日志轮转丢失，无法还原）。用 Browser 工具打开真实试玩页 `https://operone.1oneclaw.com/zh-Hans/play/cmtrfa1rp0005tpj8kcm795a3`：
+
+- 页面渲染出真实 HUD（三颗心）和一个真实的 69734 字符的 `iframe[srcdoc]`（不是占位屏），说明构建产物本身是存在的、不是空壳。
+- 但通过 `window.addEventListener('message', ...)` 监听 `postMessage`（这是 forge 运行时上报 `forge-boot`/`forge-first-frame`/`forge-heartbeat` 的唯一渠道，`runtime-sdk.ts:842` 用的是 `targetOrigin: '*'`，不存在跨域丢包问题）：**全新页面加载、监听器导航后立刻装好、连续等 10 秒——零事件，连一次性的 `forge-boot` 都没有**。用 `window.postMessage` 自测确认监听器本身工作正常（立刻收到自测消息），排除监听器问题。键盘输入（Space/方向键）无任何反应。
+- 结论：这个"已完成"的构建，游戏运行时从未启动。
+
+**根因定位（已查到具体代码，未动手修复）**：
+- `src/lib/creator-core/worker.ts:232` 调用 `forgeGameIntoSpec()` 算出 `forgeBuild`，其中 `forgeBuild.build.qa.observed`/`.findings` 就是今天全天在建设的探针真实验证结果（`did_not_boot`/`inert_build`/`runtime_error` 这些 finding 就来自这里）。
+- `worker.ts:296` 调用 `buildGameProductionRun({ spec, prompt, brief, assetManifest, productionRound, realAgentOutputs: { artDirection } })`——**`forgeBuild` 完全没有被传进去**，这个函数看不到探针的任何结论。
+- `src/lib/game-production-orchestrator.ts:99`：`const blockers: string[] = [];`——**硬编码空数组**，上方注释原文："These evaluators are advisory. A runnable model-produced game is always delivered to playtest; player evidence, not a static gate, decides what gets iterated or retired."（这些评估器都是建议性的；模型产出的可跑游戏一律送去试玩，由玩家真实证据而非静态门禁决定去留）
+- `decision = blockers.length === 0 ? "ready_for_playtest" : "rejected"`——`blockers` 永远是空数组，所以 `decision` **永远是 `"ready_for_playtest"`**，`score` 也照样打出 100。`missingRealRoles`（`design_director`/`art_director`/`runtime_engineer`/`audio_agent`/`visual_review_agent` 等六个角色）、`visual_review_rejected` 这些全部只进 `advisories`，从不进 `blockers`。
+- `worker.ts:333` 起：`run.candidate.decision === "ready_for_playtest"` 时调用 `finalizeCreativeRevision(...)`，这就是任务被标记为可交付/`completed` 的地方——**跟游戏到底能不能跑毫无关系**。
+
+**这不是接线遗漏，是一个早于 GameForge 存在的架构决策**：不做预先阻拦，靠上线后的真实玩家遥测（`requiredObservedEvidence: ["mobile_60s","first_action","core_loop","failure_recovery","win_or_loss"]`，`reconcileGamePlaytestEvidenceForRevision`）决定一款游戏的去留。这个哲学本身对"好不好玩""美术够不够好"这类主观质量维度是合理的。但它的前提假设是"游戏至少能跑起来"——从未设想过"连启动都做不到"这种硬性技术失败也该走同一条"建议性、别管它"通道。GameForge 探针给出的 `did_not_boot`/`inert_build`/`runtime_error` 恰恰是唯一应该硬挡的信号，却从未被接进这道门禁。
+
+**已排除的可能性**：不是浏览器后台标签页节流误判（自测消息验证监听器实时工作，10 秒安静期内新鲜导航后连一次性 boot 事件都没有）；不是 postMessage 跨域丢包（`targetOrigin: '*'`）；不是这次任务运气不好凑巧撞上一个坏 build——探针本来就是为了在**构建阶段**抓这类问题设计的，问题是抓到了也没人看。
+
+---
+
+## 交接：一句话生成 · 当前状态与后续方向（2026-09-07 会话结束时）
+
+### 我们的目标
+用户一句话描述玩法，几分钟内（用户原话："用户最多只有几分钟耐心"）拿到一个**真的能在手机浏览器里跑起来、能操作、有胜负判定**的小游戏。质量门禁必须反映真实情况：显示"可以试玩"就必须真的能玩，不能是好看的假象。
+
+### 今天已经查过 / 修过的（六处，按时间顺序，全部已提交并部署到生产 `main` 分支）
+1. `json_object` 在生产 `game_text` 模型（`deepseek-v4-flash-ga-260731` @ 火山方舟）上永不收敛（隔离测试 2/2 挂满 160s 无返回）——回滚为 `json_schema`。
+2. 回滚过程中一度去掉 `singleModeOnly`，导致解析失败自动升级到 `json_object` 重新踩坑——恢复 `singleModeOnly: true`。
+3. `comic_image_openai`/`comic_image_gemini` 两个场景的 zh 语言路由模型对调（配置数据错误，非代码）——已修正运行时配置，隔离验证真实出图（HTTP 200，42.2s）。
+4. worker 的 640s 硬顶 < 管线实际耗时（765s+）——curl `--max-time` 与 systemd `TimeoutStartSec` 都提到 1500/1520s。
+5. `design-agent.ts` 一次不可解析回复零重试直接判死 + 预算不够容纳这个模型的思考链体积（61812 字符思考 vs 8774 字符答案）——改为任意失败重试一次 + 预算提到 32768。
+6. Seedream 图片端点路径硬编码本地网关形态，生产网关（带版本化 API 根路径）404——按 `base` 形态分支处理，加断言锁死两种形态。
+
+以上每一处都有隔离实测数据支撑（见上方"生产事故 1/2/3"三节），不是猜测性修复。已知**尚未做**的：为 1–6 六处修复后的管线跑一次完整的、干净的端到端验收并等到终态（会话结束时最后一次验收任务已进入 `completed`，但如下方事故 4 所述，`completed` 本身不代表游戏能玩，需要用"验收方式"一节的方法重新验证）。
+
+### 后续排查方向（按优先级）
+
+**P0 — 事故 4：质量门禁与探针结论脱节**
+- 需要做：把 `forgeBuild.build.qa`（`observed`、`findings` 里 severity 为 `blocker` 的项，尤其 `did_not_boot`/`inert_build`/`runtime_error`/`no_first_frame`）接入 `buildGameProductionRun` 的入参，让这类硬性技术失败真正进 `blockers` 数组（而不是 `advisories`），使 `decision` 能在这种情况下变成 `"rejected"`。
+- 需要判断：`missingRealRoles`/`visual_review_rejected` 这些既有的"建议性"处理要不要保留原样（大概率保留，那是主观质量维度，产品本来就选择靠玩家证据判断）——**只把"能不能启动"这一类客观技术失败提级成硬阻拦，不要把整套 advisory 哲学推翻**，这是架构决策，不是我能单方面定的，需要和用户对齐。
+- 需要查：`buildGameProductionRun` 目前根本收不到 `forgeBuild`，接入时要确认调用点（`worker.ts:296` 之前 `forgeBuild` 是否已经跑完、其 `qa` 字段是否已经序列化可用；如果 `isGameForgeEnabled()` 为 false 走的是 legacy `generateAgenticGameModule` 分支，`forgeBuild` 会是 `null`，这条路径的"能不能跑"判断需要另外的信号来源，不能假设 `forgeBuild` 一定存在）。
+
+**P1 — 事故 3 系列的收尾**
+- `claimGenerationJob` 的"过期租约回收"分支（`src/lib/creator-core/jobs.ts` 附近）会重新领取一个 `status: "running"` 但租约过期的任务并 `attempts: increment`，**不检查 `maxAttempts`**——今天亲眼见过一个任务 `attempts` 冲到 4（超过默认上限 3）还在跑。这意味着一个反复失败的任务理论上可以无限期占用单线程队列，是排队阻塞问题的放大器。需要确认这是否是有意设计（租约过期通常意味着 worker 进程真的挂了，需要重跑，和"正常失败重试"是两种性质），如果不是，需要在这个分支也加上限检查。
+- `asset-agent.ts` 全程零 `console.log`/`console.error`，任何图片生成失败在 journalctl 里完全不可见，只能从 `providerUsageEvent`（也只有泛化 `errorCode`）或运气好留存的旧日志拼线索。建议至少给失败路径加一行 `console.error`。
+- 单线程串行 worker 队列的排队阻塞（一个任务占用 25 分钟上限期间堵住其他所有创作者）——需要业务决定是否要多 worker 并行，还是接受当前串行模型。
+- `game_text` 场景模型本身速度问题（单模块 4–10 分钟，思考链是答案的 7 倍）——这是模型选型问题，生产模型路由由用户单独管理，需要用户决定是否换模型。
+
+**P2 — 体验优化（不影响能不能跑，只影响观感）**
+- 创作者中间等待屏显示英文技术警告 `INDEPENDENT RUNTIME REQUIRED` + 一句生硬说明，应该换成已有的 milestone feed 或至少一句人话进度提示。
+
+### 验收方式（重要：数据库状态不可信，必须真机验证）
+
+**今天最大的教训**：`GenerationJob.status === "completed"` **不代表游戏能玩**（见事故 4）。`qa-prod-game-create-delivery.ts`/`qa-prod-one-sentence-quality.ts` 这类脚本目前只等到"保存并打开"按钮出现或 canvas 出现就判定，**不会主动验证 forge 遥测**，需要补强。正确的验收步骤：
+
+1. 触发一次全新创作（避免复用之前失败过、状态混乱的旧项目/任务）。
+2. 等 `GenerationJob` 到终态——**不要用固定超时短路等待**，本次会话里生产端到端真实耗时长达 82 分钟（含中间失败重试的退避），脚本里的 `QA_RUNTIME_WAIT_MS`/`QA_GAME_SAVE_WAIT_MS` 类参数目前设的 15–25 分钟不够用，要么调大，要么改成轮询数据库任务状态而不是等前端 UI。
+3. **哪怕 `status === "completed"`**，也要用 Browser 工具打开真实试玩页（`/zh-Hans/play/<legacyId>`），装 `postMessage` 监听器（导航后立刻装，不要等），**先用 `window.postMessage` 自测确认监听器工作**，再干等至少 10 秒安静期检查是否收到 `forge-boot`。收到才算"启动了"；再检查 `forge-heartbeat` 的 `frames`/`entities`、输入前后 `score` 是否变化，判断是否 `inert_build`。
+4. 只有第 3 步全部通过，才能认定这次生成真正达到了"用户能玩"的目标；`score:100`/`decision:ready_for_playtest`/`status:completed` 这些字段目前都不能单独作为验收依据（事故 4 已证明它们可以在游戏完全打不开的情况下同时为真）。
+
+### 未完成的收尾
+- 事故 4 的 P0 修复：未动手，只完成了根因定位。
+- 事故 3 修复后的一次干净端到端验收：任务已 `completed`，但按上方验收方式检查后发现游戏不能玩（即事故 4），所以**六处修复本身是否真的让管线能稳定产出可玩游戏，仍未有一次成功验证**。
+- 本会话内为了诊断，多次直接用生产真实 API key 对生产真实模型/图片网关发起隔离请求（未经过应用代码），会消耗真实配额/费用，规模不大（个位数到十位数次调用），但用户应该知情。
