@@ -23,6 +23,7 @@ import { enqueueGenerationJob } from "@/lib/creator-core/jobs";
 import { recordCreatorFunnelEvent } from "@/lib/creator-funnel";
 import { parseWorkGenerationFromUnknown } from "@/lib/work-generation-meta";
 import { resolveRequestLocaleSync } from "@/lib/i18n/request-locale";
+import { gateGenerationQuota } from "@/lib/commerce/generation-gate";
 
 export async function GET(req: Request) {
   const ownerKey = await getOwnerKey();
@@ -96,6 +97,13 @@ export async function POST(req: Request) {
   const trimmed = prompt.trim();
   if (trimmed.length < 1) {
     return localizedJsonError(req, "missingPrompt", 400);
+  }
+
+  // The current one-sentence flow starts production directly from this route.
+  // Legacy callers with a design spec already consumed quota while generating it.
+  if (specRaw === undefined) {
+    const quotaBlock = await gateGenerationQuota("game", { uiLocale: resolveRequestLocaleSync(req) });
+    if (quotaBlock) return quotaBlock;
   }
 
   try {

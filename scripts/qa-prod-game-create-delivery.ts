@@ -268,7 +268,7 @@ async function main() {
     stages.push({ at: new Date().toISOString(), stage: "create_page_ready", detail: { url: page.url() } });
 
     const promptInput = page.locator("textarea").first();
-    const generateButton = page.getByRole("button", { name: /生成可玩版本/i });
+    const generateButton = page.getByRole("button", { name: /开始生成游戏/i });
     // A production navigation can expose server-rendered controls a fraction
     // before React attaches. A human cannot type that quickly, so wait for the
     // interactive layer and verify the controlled value before submission.
@@ -283,137 +283,24 @@ async function main() {
     assert((await promptInput.inputValue()) === prompt, "创作输入没有进入 React 受控状态");
     assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
 
-    let generationBody = "";
-    const captureSse = (response: { url: () => string; request: () => { method: () => string }; text: () => Promise<string> }) => {
-      if (!response.url().includes("/api/generate/stream") || response.request().method() !== "POST") return;
-      void response.text()
-        .then((text) => {
-          if (text) generationBody = text;
-        })
-        .catch((error) => {
-          stages.push({
-            at: new Date().toISOString(),
-            stage: "sse_body_unavailable",
-            detail: error instanceof Error ? error.message : String(error),
-          });
-        });
-    };
-    page.on("response", captureSse);
-
-    const generationResponsePromise = page.waitForResponse(
-      (response) => response.url().includes("/api/generate/stream") && response.request().method() === "POST",
-      { timeout: 5 * 60_000 },
-    );
-    await generateButton.click();
-    await generationResponsePromise;
-    stages.push({ at: new Date().toISOString(), stage: "generation_started", detail: { promptChars: prompt.length } });
-
-    const saveButton = page.getByRole("button", { name: /保存并打开/i });
-    // Draft/enhance each cap at 300s; brief + critic can add another minute or two.
-    const saveWaitMs = Number(process.env.QA_GAME_SAVE_WAIT_MS) || 12 * 60_000;
-    try {
-      await saveButton.waitFor({ state: "visible", timeout: saveWaitMs });
-    } catch (waitError) {
-      await dumpFailure("save-button-timeout");
-      throw waitError;
-    }
-    assert(await saveButton.isEnabled(), "生成完成但保存按钮不可用");
-    for (let i = 0; i < 20 && !generationBody.includes('"step":"done"'); i += 1) {
-      await page.waitForTimeout(250);
-    }
-    const generationEvents = generationBody
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data: "))
-      .map((line) => {
-        try { return JSON.parse(line.slice(6)) as Record<string, unknown>; } catch { return null; }
-      })
-      .filter((entry): entry is Record<string, unknown> => Boolean(entry));
-    const generationDone = [...generationEvents].reverse().find((entry) => entry.step === "done");
-    const generationDebug = generationDone?.debug as {
-      fallback?: unknown;
-      kernelFallback?: unknown;
-      fallbackReason?: unknown;
-      provider?: unknown;
-      model?: unknown;
-    } | undefined;
-    const routedModel = String(generationDebug?.model ?? "").trim();
-    const modelLooksRouted =
-      routedModel.length > 0 &&
-      routedModel !== "mock" &&
-      routedModel !== "kernel";
-    summary.generation = {
-      source: generationDone?.source ?? null,
-      fallback: generationDebug?.fallback ?? null,
-      kernelFallback: generationDebug?.kernelFallback ?? null,
-      fallbackReason: generationDebug?.fallbackReason ?? null,
-      provider: generationDebug?.provider ?? null,
-      model: generationDebug?.model ?? null,
-    };
-    stages.push({ at: new Date().toISOString(), stage: "model_generation_verified", detail: summary.generation });
-    if (generationBody) {
-      assert(generationDone, "生成 SSE 缺少完成帧");
-      assert(modelLooksRouted, `游戏正文模型未打通：${routedModel || "empty"}`);
-      assert(
-        generationDebug?.fallback !== true || generationDebug?.kernelFallback === true,
-        `游戏正文模型未打通：${String(generationDebug?.fallbackReason ?? "unknown fallback")}`,
-      );
-    } else {
-      stages.push({
-        at: new Date().toISOString(),
-        stage: "sse_body_skipped",
-        detail: "Playwright 无法读取长 SSE 响应体，改在保存后校验落库模型",
-      });
-    }
-    const previewTitle = (await page.locator("main h2").first().textContent())?.trim() ?? "";
-    const deferredRuntime = page.getByTestId("bespoke-runtime-required").first();
-    if (await deferredRuntime.isVisible().catch(() => false)) {
-      // Arena-family games intentionally fail closed before persistence: their
-      // real module is generated in the POST /api/projects production pass.
-      // The creation flow must save and build that module, not require the
-      // retired geometry fallback to render a preview canvas.
-      stages.push({ at: new Date().toISOString(), stage: "bespoke_runtime_build_deferred", detail: { previewTitle } });
-    } else {
-      const previewCanvas = page.locator("canvas").first();
-      if (await previewCanvas.isVisible().catch(() => false)) {
-        stages.push({ at: new Date().toISOString(), stage: "playable_preview_ready", detail: { previewTitle } });
-      } else {
-        // The persisted play URL remains the acceptance surface. Do not block
-        // its production build merely because a client-side preview chunk is
-        // late; public mobile verification below still requires a real canvas.
-        stages.push({ at: new Date().toISOString(), stage: "preview_canvas_deferred", detail: { previewTitle } });
-      }
-    }
-
     await Promise.all([
       page.waitForURL(/\/play\//, { timeout: 90_000 }),
-      saveButton.click(),
+      generateButton.click(),
     ]);
     const projectId = decodeURIComponent(page.url().split("/play/")[1]?.split(/[?#]/)[0] ?? "");
-    assert(projectId, "保存后没有获得项目 ID");
+    assert(projectId, "提交后没有获得项目 ID");
     summary.projectId = projectId;
     summary.playUrl = page.url();
-    stages.push({ at: new Date().toISOString(), stage: "project_saved", detail: { projectId, playUrl: page.url() } });
+    stages.push({ at: new Date().toISOString(), stage: "production_started", detail: { projectId, playUrl: page.url(), promptChars: prompt.length } });
+    assert(await page.getByTestId("game-production-screen").isVisible(), "提交后没有进入统一生成进度页");
+    assert(!(await page.getByText("INDEPENDENT RUNTIME REQUIRED").isVisible().catch(() => false)), "生成进度页仍暴露旧运行时占位");
 
     const created = await readProject(page, projectId);
     let revisionId = created.playRevisionId ?? created.core?.revision?.id;
     assert(revisionId, "项目缺少不可变创意版本");
-    assert(created.project?.generationModel, "游戏 generationModel 未落库，后台将显示未记录");
-    assert(created.project.generationModel !== "mock", "游戏落库模型是 mock，正文模型路由未生效");
-    summary.persistedGeneration = {
-      generationProvider: created.project.generationProvider ?? null,
-      generationModel: created.project.generationModel ?? null,
-    };
-    stages.push({
-      at: new Date().toISOString(),
-      stage: "generation_provenance_persisted",
-      detail: summary.persistedGeneration,
-    });
-    if (!generationBody) {
-      assert(created.project.generationModel !== "kernel", "SSE 丢失后落库模型仍是 kernel，无法证明正文路由生效");
-    }
     summary.revisionId = revisionId;
     summary.templateId = created.spec?.templateId;
-    summary.title = created.project?.title ?? created.spec?.title ?? previewTitle;
+    summary.title = created.project?.title ?? created.spec?.title ?? "";
     stages.push({
       at: new Date().toISOString(),
       stage: "core_revision_ready",

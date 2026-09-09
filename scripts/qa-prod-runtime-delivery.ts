@@ -29,14 +29,12 @@ async function main() {
       const prompt = "手机竖屏竹林小游戏：手指左右移动小熊猫接住落下的竹子，避开石头。初始30颗心，持续70秒后按分数结算胜负，结算后可以重新开始。";
       const input = page.locator("textarea").first();
       await input.fill(prompt);
-      if (!await page.getByRole("button", { name: /生成可玩版本/ }).isEnabled()) {
+      if (!await page.getByRole("button", { name: /开始生成游戏/ }).isEnabled()) {
         await input.fill("");
         await input.pressSequentially(prompt, { delay: 3 });
       }
-      await page.getByRole("button", { name: /生成可玩版本/ }).click();
-      console.log("[production] design requested");
-      await page.getByRole("button", { name: /保存并打开/ }).waitFor({ timeout: 30 * 60_000 });
-      await page.getByRole("button", { name: /保存并打开/ }).click();
+      await page.getByRole("button", { name: /开始生成游戏/ }).click();
+      console.log("[production] build requested");
       await page.waitForURL(/\/play\//, { timeout: 90_000 });
       projectId = page.url().split("/play/")[1]!.split(/[?#]/)[0]!;
       await context.storageState({ path: `${output}/owner-state.json` });

@@ -12,13 +12,13 @@ test("创作台可加载", async ({ page }) => {
   await expect(page.locator("main textarea").first()).toBeVisible();
 });
 
-test("创建项目并在试玩页保存 spec", async ({ page }) => {
+test("创建项目后先进入生产页并可保存 spec", async ({ page }) => {
   await ensureOwnerSession(page);
   const prompt = "收集散落金币躲开尖刺";
   const spec = mockSpecFromPrompt(prompt);
 
   const create = await page.request.post("/api/projects", {
-    data: { prompt, spec },
+    data: { prompt },
   });
   expect(create.ok()).toBeTruthy();
   const { project } = (await create.json()) as { project?: { id?: string } };
@@ -26,7 +26,8 @@ test("创建项目并在试玩页保存 spec", async ({ page }) => {
   const id = project!.id!;
 
   await gotoPlay(page, id);
-  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByTestId("game-production-screen")).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator("canvas")).toHaveCount(0);
 
   const patched = { ...spec, title: `${spec.title}·手测保存` };
   const save = await page.request.patch(`/api/projects/${id}`, {

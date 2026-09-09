@@ -58,6 +58,69 @@ function graphItemCount(revision: CoreRevision | null | undefined, kind: string,
   return Array.isArray(value) ? value.length : null;
 }
 
+const PRODUCTION_STAGES: Record<string, string> = {
+  queued: "等待生产队列",
+  claimed: "生产任务已开始",
+  art_direction: "分析美术方向与玩法结构",
+  design: "设计玩法与关卡",
+  design_agent_revision: "根据验证结果调整设计",
+  runtime: "生成独立游戏运行时",
+  runtime_code_agent: "生成独立游戏运行时",
+  assets: "生成美术与声音",
+  asset_generation: "生成美术与声音",
+  playable_candidate: "检查可玩候选版本",
+  validation: "执行浏览器启动与操作验证",
+  repair: "修复验证发现的问题",
+  retrying: "准备重试未完成的环节",
+};
+
+function GameProductionScreen(props: {
+  title: string;
+  prompt: string;
+  revision: CoreRevision | null | undefined;
+  job: AssetJob | null;
+  deliveryStatus: string;
+  retryBusy: boolean;
+  onRetry: () => void;
+  studioHref: string;
+  createHref: string;
+}) {
+  const failed = props.deliveryStatus === "failed" || props.revision?.status === "failed";
+  const percent = Math.max(0, Math.min(99, props.job?.progress?.percent ?? 0));
+  const stageKey = props.job?.progress?.stage ?? props.job?.status ?? "queued";
+  const stage = PRODUCTION_STAGES[stageKey] ?? "多 Agent 正在协作生成";
+
+  return (
+    <section className="mx-auto w-full max-w-4xl px-4 py-8 sm:py-14" data-testid="game-production-screen">
+      <div className={`relative overflow-hidden rounded-[2rem] border p-6 sm:p-10 ${failed ? "border-rose-400/35 bg-rose-950/15" : "border-[color:color-mix(in_srgb,var(--gc-accent)_30%,var(--gc-border))] bg-[var(--gc-surface-glass)]"}`}>
+        <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[color:color-mix(in_srgb,var(--gc-accent)_16%,transparent)] blur-3xl" />
+        <div className="relative">
+          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${failed ? "text-rose-300" : "text-[var(--gc-accent)]"}`}>{failed ? "BUILD NEEDS ATTENTION" : "GAME PRODUCTION IN PROGRESS"}</p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{failed ? "这次生成没有通过运行验证" : "你的游戏正在被真正构建"}</h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--gc-muted)]">{failed ? "游戏不会对外展示。你可以重新发起构建，系统会从失败证据继续修复。" : "任务已保存在后台，可以放心离开页面。只有通过启动和操作验证后，页面才会切换成可玩的游戏。"}</p>
+
+          <div className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><p className="text-xs text-[var(--gc-muted)]">正在制作</p><h2 className="mt-1 text-xl font-semibold">{props.title}</h2></div>
+              {!failed ? <span className="rounded-full border border-[color:color-mix(in_srgb,var(--gc-accent)_35%,var(--gc-border))] px-3 py-1 text-xs font-medium text-[var(--gc-text-soft)]">{stage}</span> : null}
+            </div>
+            <p className="mt-4 rounded-xl bg-[var(--gc-surface-glass)] px-4 py-3 text-sm leading-6 text-[var(--gc-text-soft)]">“{props.prompt}”</p>
+            {!failed ? <div className="mt-5"><div className="mb-2 flex items-center justify-between text-xs text-[var(--gc-muted)]"><span>{stage}</span><span className="tabular-nums">{percent}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--gc-border)]"><div className="h-full rounded-full bg-[var(--gc-accent)] transition-[width] duration-500" style={{ width: `${Math.max(percent, 3)}%` }} /></div></div> : null}
+          </div>
+
+          {props.job?.progress?.milestones?.length ? <ForgeMilestoneFeed milestones={props.job.progress.milestones} className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-5" /> : !failed ? <div className="mt-8 rounded-2xl border border-dashed border-[color:var(--gc-border)] px-5 py-8 text-center"><p className="text-sm font-medium">生产任务已进入队列</p><p className="mt-2 text-xs text-[var(--gc-muted)]">第一个设计结果生成后，会在这里实时出现。</p></div> : null}
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            {failed ? <button type="button" onClick={props.onRetry} disabled={props.retryBusy} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold disabled:opacity-40">{props.retryBusy ? "正在重新提交…" : "重新构建"}</button> : null}
+            <Link href={props.studioHref} className="rounded-full border border-[color:var(--gc-border)] px-5 py-2.5 text-sm text-[var(--gc-text-soft)] hover:text-[var(--gc-text)]">返回创作者工作台</Link>
+            <Link href={props.createHref} className="rounded-full px-5 py-2.5 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]">再创建一个</Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function PlayGameClient({ id }: { id: string }) {
   const t = useTranslations("playGame");
   const tBanner = useTranslations("resultBanner");
@@ -470,6 +533,18 @@ export function PlayGameClient({ id }: { id: string }) {
             <div className="h-8 w-48 animate-pulse rounded-lg bg-[var(--gc-surface-glass-strong)]" />
             <div className="h-64 animate-pulse rounded-2xl bg-[var(--gc-surface-glass)]" />
           </div>
+        ) : meta.isOwner && !sampleGallery && runtimeDelivery?.status !== "passed" ? (
+          <GameProductionScreen
+            title={meta.title}
+            prompt={meta.prompt}
+            revision={core?.revision}
+            job={assetJob}
+            deliveryStatus={runtimeDelivery?.status ?? "unverified"}
+            retryBusy={saveBusy}
+            onRetry={() => void saveProjectSpec()}
+            studioHref={withLocalePath("/studio", locale)}
+            createHref={withLocalePath("/create", locale)}
+          />
         ) : (
           <>
             {meta.isSampleGallery ? (

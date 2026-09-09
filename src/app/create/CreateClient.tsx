@@ -3,11 +3,6 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import type { GameSpec } from "@/lib/game-spec";
-import { consumeSSE } from "@/lib/read-sse";
-import { prepareGameSpecForPersist } from "@/lib/spec-patch";
-import { GamePlayer } from "@/components/GamePlayer";
-import { requiresBespokeRuntime } from "@/lib/game-runtime-policy";
 import { AppMain, AppPageShell } from "@/components/AppPageShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useQuotaExceededModal } from "@/components/commerce/QuotaExceededModal";
@@ -17,38 +12,30 @@ import { resolveClientApiError } from "@/lib/i18n/resolve-client-api-error";
 import { withLocalePath } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 
-type BuildStatus = { step: "idle" | "kernel" | "verify" | "ready"; message: string; lines: string[] };
-
 const FALLBACK_EXAMPLES = [
   "设计一个开心消消乐游戏",
   "做一个单手操作的太空躲避游戏",
   "做一个种花、收获、升级的小农场",
 ];
 
-/** A single public decision: describe the game, then play it. */
+const BUILD_STEPS = [
+  { number: "01", title: "理解玩法", detail: "设计 Agent 把一句话拆成规则、操作和胜负目标" },
+  { number: "02", title: "构建游戏", detail: "代码、美术和声音 Agent 生成独立运行时" },
+  { number: "03", title: "启动验证", detail: "在真实浏览器中检查启动、操作、胜负和重试" },
+  { number: "04", title: "交付试玩", detail: "通过验证后自动开放试玩与后续修改" },
+];
+
+/** One request creates one durable production job; progress and delivery live on the play route. */
 export default function CreateClient(props: { initialPrompt?: string; replayFromProjectId?: string }) {
   const router = useRouter();
   const locale = useLocale() as AppLocale;
   const t = useTranslations("createFlow");
   const { showQuotaExceeded, QuotaModal } = useQuotaExceededModal();
   const [prompt, setPrompt] = useState(() => props.initialPrompt?.slice(0, 4000) ?? "");
-  const [spec, setSpec] = useState<GameSpec | null>(null);
-  const [generationDebug, setGenerationDebug] = useState<{
-    model?: string;
-    provider?: string;
-    fallback?: boolean;
-    kernelFallback?: boolean;
-    source?: string;
-    templateHint?: string;
-    scene?: string;
-  } | null>(null);
-  const [generationSource, setGenerationSource] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(props.replayFromProjectId?.trim() || null);
-  const [busy, setBusy] = useState<"idle" | "generating" | "saving">("idle");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<BuildStatus>({ step: "idle", message: "", lines: [] });
 
-  // Reopening a project restores its playable revision, without rebuilding the old wizard.
+  // Reuse only the creator's words. Every new run gets fresh production evidence.
   useEffect(() => {
     const id = props.replayFromProjectId?.trim();
     if (!id) return;
@@ -56,14 +43,8 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     void (async () => {
       try {
         const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { headers: mergeLocaleHeaders(locale) });
-        const data = (await res.json()) as { project?: { prompt?: string; id?: string }; spec?: GameSpec };
-        if (cancelled || !res.ok) return;
-        if (data.project?.prompt) setPrompt(data.project.prompt.slice(0, 4000));
-        if (data.project?.id) setProjectId(data.project.id);
-        if (data.spec) {
-          setSpec(data.spec);
-          setStatus({ step: "ready", message: "已恢复可玩的版本", lines: [] });
-        }
+        const data = (await res.json()) as { project?: { prompt?: string } };
+        if (!cancelled && res.ok && data.project?.prompt) setPrompt(data.project.prompt.slice(0, 4000));
       } catch {
         if (!cancelled) setError(t("errors.network"));
       }
@@ -71,175 +52,94 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
     return () => { cancelled = true; };
   }, [locale, props.replayFromProjectId, t]);
 
-  const generate = useCallback(async () => {
-    if (prompt.trim().length < 2 || busy !== "idle") return;
-    setBusy("generating");
+  const startBuild = useCallback(async () => {
+    const trimmed = prompt.trim();
+    if (trimmed.length < 2 || busy) return;
+    setBusy(true);
     setError(null);
-    setSpec(null);
-    setGenerationDebug(null);
-    setGenerationSource(null);
-    setStatus({ step: "kernel", message: "正在确定核心规则与操作方式", lines: [] });
     try {
-      const res = await fetch("/api/generate/stream", {
+      const res = await fetch("/api/projects", {
         method: "POST",
-        headers: mergeLocaleHeaders(locale, {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-        }),
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ prompt: trimmed }),
       });
+      const data = (await res.json().catch(() => ({}))) as {
+        project?: { id?: string };
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string | number>;
+      };
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string; errorKey?: string; errorParams?: Record<string, string | number> };
         const quota = parseQuotaExceeded(data, res.status);
         if (quota) showQuotaExceeded(quota);
-        else setError(resolveClientApiError(locale, data, "generateFailed"));
+        else setError(resolveClientApiError(locale, data, "saveFailed"));
         return;
       }
-      await consumeSSE(res, (event) => {
-        const step = typeof event.step === "string" ? event.step : "";
-        const message = typeof event.message === "string" ? event.message : "";
-        if (step === "kernel") setStatus({ step: "kernel", message, lines: [] });
-        if (step === "verify") setStatus({ step: "verify", message, lines: [] });
-        if (step === "recap") {
-          const lines = Array.isArray(event.lines)
-            ? event.lines.filter((line): line is string => typeof line === "string")
-            : [];
-          setStatus((old) => ({ ...old, lines }));
-        }
-        if (step === "done" && event.spec) {
-          const generatedSpec = event.spec as GameSpec;
-          setSpec(generatedSpec);
-          const debug = event.debug && typeof event.debug === "object"
-            ? (event.debug as {
-                model?: string;
-                provider?: string;
-                fallback?: boolean;
-                kernelFallback?: boolean;
-                source?: string;
-                templateHint?: string;
-                scene?: string;
-              })
-            : null;
-          setGenerationDebug(debug);
-          setGenerationSource(typeof event.source === "string" ? event.source : debug?.source ?? null);
-          setStatus((old) => ({
-            ...old,
-            step: "ready",
-            message: requiresBespokeRuntime(generatedSpec)
-              ? "设计已准备好；保存后将构建独立玩法运行时"
-              : "可玩版本已准备好",
-          }));
-        }
-        if (step === "error") setError(message || t("errors.generateFailed"));
-      }, { locale });
-    } catch {
-      setError(t("errors.network"));
-    } finally {
-      setBusy("idle");
-    }
-  }, [busy, locale, prompt, showQuotaExceeded, t]);
-
-  const saveAndPlay = useCallback(async () => {
-    if (!spec || busy !== "idle") return;
-    setBusy("saving");
-    setError(null);
-    try {
-      const specToSave = prepareGameSpecForPersist(spec, prompt, locale);
-      const updating = Boolean(projectId);
-      const provenanceDebug = generationDebug
-        ? {
-            provider: generationDebug.provider,
-            model: generationDebug.model,
-            source: generationDebug.source ?? generationSource ?? undefined,
-            fallback: generationDebug.fallback,
-            kernelFallback: generationDebug.kernelFallback,
-            templateHint: generationDebug.templateHint,
-            scene: generationDebug.scene,
-          }
-        : null;
-      const res = await fetch(updating ? `/api/projects/${projectId}` : "/api/projects", {
-        method: updating ? "PATCH" : "POST",
-        headers: mergeLocaleHeaders(locale, { "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          prompt,
-          spec: specToSave,
-          debug: provenanceDebug,
-          source: generationSource ?? provenanceDebug?.source,
-        }),
-      });
-      const data = (await res.json()) as { project?: { id?: string }; error?: string; errorKey?: string; errorParams?: Record<string, string | number> };
-      if (!res.ok) {
-        setError(resolveClientApiError(locale, data, "saveFailed"));
-        return;
-      }
-      const id = data.project?.id ?? projectId;
+      const id = data.project?.id;
       if (!id) {
         setError(t("errors.noProjectId"));
         return;
       }
-      setProjectId(id);
-      // Play immediately: generated art can improve later, never block mobile H5.
       router.push(withLocalePath(`/play/${id}`, locale));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("errors.network"));
     } finally {
-      setBusy("idle");
+      setBusy(false);
     }
-  }, [busy, locale, projectId, prompt, router, spec, generationDebug, generationSource, t]);
+  }, [busy, locale, prompt, router, showQuotaExceeded, t]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
-        void generate();
+        void startBuild();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [generate]);
+  }, [startBuild]);
 
   const examples = [t("examples.0"), t("examples.1"), t("examples.2")];
-  const hint = status.step === "kernel" ? "1 / 2" : status.step === "verify" ? "2 / 2" : status.step === "ready" ? "完成" : "";
 
   return (
     <AppPageShell className="text-[var(--gc-text)]">
       <SiteHeader />
       <AppMain>
-        <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:py-12">
-          <header className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--gc-text)]">{t("title")}</h1>
-            <p className="text-sm leading-relaxed text-[var(--gc-muted)]">一句话描述玩法，系统会先建立规则与操作，再交付可以直接玩的版本。</p>
-          </header>
+        <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-16 lg:px-8">
+          <section className="relative overflow-hidden rounded-[2rem] border border-[color:color-mix(in_srgb,var(--gc-accent)_28%,var(--gc-border))] bg-[var(--gc-surface-glass)] px-5 py-8 sm:px-10 sm:py-12 lg:px-14">
+            <div aria-hidden className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-[color:color-mix(in_srgb,var(--gc-accent)_18%,transparent)] blur-3xl" />
+            <div className="relative max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--gc-accent)]">ONE SENTENCE · ONE PLAYABLE GAME</p>
+              <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">一句话，生成一个真的能玩的游戏</h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--gc-muted)] sm:text-base">提交后，多 Agent 会直接完成玩法设计、独立运行时、美术声音和浏览器验证。你可以离开页面，任务会在后台继续。</p>
+            </div>
 
-          <section className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4 sm:p-5">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label htmlFor="prompt" className="text-sm font-medium text-[var(--gc-text-soft)]">{t("promptLabel")}</label>
-              <span className="text-xs tabular-nums text-[var(--gc-text-faint)]">{prompt.length} / 4000</span>
+            <div className="relative mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-3 shadow-2xl shadow-black/10 sm:p-4">
+              <label htmlFor="prompt" className="sr-only">{t("promptLabel")}</label>
+              <textarea id="prompt" rows={5} value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 4000))} placeholder="例如：创建一个开心消消乐游戏，糖果连成三个即可消除" className="min-h-40 w-full resize-y bg-transparent px-2 py-2 text-base leading-7 outline-none placeholder:text-[var(--gc-text-faint)] sm:px-3" />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--gc-border)] pt-3">
+                <span className="text-xs tabular-nums text-[var(--gc-text-faint)]">{prompt.length} / 4000</span>
+                <div className="flex items-center gap-3">
+                  <span className="hidden text-xs text-[var(--gc-text-faint)] sm:inline">Ctrl / ⌘ + Enter</span>
+                  <button type="button" onClick={() => void startBuild()} disabled={busy || prompt.trim().length < 2} className="gc-theme-cta rounded-full px-6 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40">{busy ? "正在创建任务…" : "开始生成游戏"}</button>
+                </div>
+              </div>
             </div>
-            <textarea id="prompt" rows={5} value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 4000))} placeholder={t("promptPlaceholder")} className="min-h-36 w-full resize-y rounded-xl border border-[color:var(--gc-border)] bg-[var(--gc-input-bg)] px-4 py-3 text-sm outline-none placeholder:text-[var(--gc-text-faint)] focus:border-[color:color-mix(in_srgb,var(--gc-accent)_45%,transparent)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--gc-accent)_22%,transparent)]" />
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {examples.map((example, index) => <button key={example} type="button" onClick={() => setPrompt(example || FALLBACK_EXAMPLES[index])} className="gc-chip max-w-full truncate text-left">{(example || FALLBACK_EXAMPLES[index]).slice(0, 22)}</button>)}
+
+            <div className="relative mt-4 flex flex-wrap gap-2">
+              {examples.map((example, index) => <button key={example} type="button" disabled={busy} onClick={() => setPrompt(example || FALLBACK_EXAMPLES[index])} className="gc-chip max-w-full truncate text-left">{(example || FALLBACK_EXAMPLES[index]).slice(0, 24)}</button>)}
             </div>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => void generate()} disabled={busy !== "idle" || prompt.trim().length < 2} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40">{busy === "generating" ? "正在生成…" : "生成可玩版本"}</button>
-              <span className="text-xs text-[var(--gc-text-faint)]">Ctrl / ⌘ + Enter</span>
-            </div>
+            {error ? <p className="relative mt-5 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p> : null}
           </section>
 
-          {status.step !== "idle" ? <section aria-live="polite" className="rounded-2xl border border-[color:color-mix(in_srgb,var(--gc-accent)_30%,var(--gc-border))] bg-[var(--gc-surface-glass)] px-4 py-3">
-            <div className="flex items-center justify-between gap-4"><p className="text-sm font-medium text-[var(--gc-text-soft)]">{status.message}</p><span className="text-xs tabular-nums text-[var(--gc-muted)]">{hint}</span></div>
-            {busy === "generating" ? <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--gc-border)]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[var(--gc-accent)]" /></div> : null}
-            {status.lines.length ? <ul className="mt-3 space-y-1 text-xs leading-relaxed text-[var(--gc-muted)]">{status.lines.map((line) => <li key={line}>· {line}</li>)}</ul> : null}
-          </section> : null}
-
-          {error ? <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p> : null}
-
-          <section className="border-t border-[color:var(--gc-border)] pt-6" aria-label={t("previewAria")}>
-            {spec ? <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{spec.title}</h2><p className="mt-1 text-xs text-[var(--gc-muted)]">{spec.labels.subtitle}</p></div><button type="button" onClick={() => void saveAndPlay()} disabled={busy !== "idle"} className="rounded-full border border-[color:var(--gc-border)] px-5 py-2 text-sm font-medium hover:bg-[var(--gc-surface-glass)] disabled:opacity-40">{busy === "saving" ? "正在保存…" : "保存并打开"}</button></div>
-              <GamePlayer spec={spec} promptHint={prompt} />
-            </div> : <div className="gc-card flex min-h-64 items-center justify-center px-6 text-center text-sm text-[var(--gc-muted)]">输入一句玩法说明后，这里会出现可直接试玩的版本。</div>}
+          <section className="mt-12" aria-labelledby="build-flow-title">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--gc-muted)]">完整生产流程</p><h2 id="build-flow-title" className="mt-2 text-2xl font-semibold">从想法到可玩，只有一次提交</h2></div>
+              <p className="text-xs text-[var(--gc-muted)]">通常需要 10–25 分钟 · 后台自动继续</p>
+            </div>
+            <ol className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {BUILD_STEPS.map((step) => <li key={step.number} className="rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-5"><span className="text-xs font-semibold tabular-nums text-[var(--gc-accent)]">{step.number}</span><h3 className="mt-5 font-semibold">{step.title}</h3><p className="mt-2 text-xs leading-5 text-[var(--gc-muted)]">{step.detail}</p></li>)}
+            </ol>
           </section>
         </main>
         {QuotaModal}
