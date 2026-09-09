@@ -170,6 +170,9 @@ type RunOutcome = {
   raw: unknown | null;
   mode: LlmMode;
   hadContent: boolean;
+  finishReason: string;
+  contentChars: number;
+  reasoningChars: number;
   /** Ran out of budget mid-reasoning with nothing emitted. */
   starvedByReasoning: boolean;
   budgetUsed: number;
@@ -217,6 +220,9 @@ export async function llmJsonOpenAICompatible(params: {
       raw: parseJsonContent(content),
       mode,
       hadContent: Boolean(content?.trim()),
+      finishReason: String(choice?.finish_reason ?? "unknown"),
+      contentChars: typeof content === "string" ? content.length : 0,
+      reasoningChars: typeof reasoning === "string" ? reasoning.length : 0,
       // The runtime signature of a model whose reasoning ate the whole budget:
       // it stopped because it ran out of room, emitted no answer, and spent
       // what it had on reasoning. Detecting it here means an unrecognised
@@ -232,15 +238,20 @@ export async function llmJsonOpenAICompatible(params: {
   }
 
   try {
+    let firstOutcome: RunOutcome | null = null;
     try {
       let r = await run(req.mode);
+      firstOutcome = r;
       // A starved reply is not a failure of the model, it is a budget that was
       // sized for a model that does not think out loud. Retry once with real
       // headroom instead of falling through to a different response_format,
       // which would only repeat the same starvation more slowly.
       if (r.starvedByReasoning) {
         const widened = Math.min(MAX_JSON_OUTPUT_TOKENS, Math.max(r.budgetUsed * 3, r.budgetUsed + REASONING_HEADROOM_TOKENS * 2));
-        if (widened > r.budgetUsed) r = await run(req.mode, widened);
+        if (widened > r.budgetUsed) {
+          r = await run(req.mode, widened);
+          firstOutcome = r;
+        }
       }
       if (r.raw !== null) return { ok: true, provider: req.provider, model: req.model, mode: r.mode, raw: r.raw };
     } catch (error) {
@@ -256,7 +267,10 @@ export async function llmJsonOpenAICompatible(params: {
     // An optional step with a working fallback opts out of the second mode:
     // it would only double the wait before that fallback is taken anyway.
     if (req.singleModeOnly) {
-      return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: "no parseable JSON in the single attempted mode" };
+      const detail = firstOutcome
+        ? `finish=${firstOutcome.finishReason},content_chars=${firstOutcome.contentChars},reasoning_chars=${firstOutcome.reasoningChars}`
+        : "outcome=unavailable";
+      return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: `model reply was not parseable as JSON (${detail})` };
     }
     const fallbackMode: LlmMode = req.mode === "json_schema" ? "json_object" : "json_schema";
     const r2 = await run(fallbackMode);

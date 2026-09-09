@@ -82,6 +82,9 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
       stages.push({ at: new Date().toISOString(), stage: "delivery_artifacts_ready", detail: { kinds } });
       return detail;
     }
+    if (detail.core?.revision?.status === "failed") {
+      throw new Error(`生产任务已失败，停止等待：${kinds.join(",") || "no artifacts"}`);
+    }
     stages.push({
       at: new Date().toISOString(),
       stage: "delivery_artifacts_wait",

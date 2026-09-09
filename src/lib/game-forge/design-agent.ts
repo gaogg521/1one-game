@@ -367,14 +367,13 @@ export async function runDesignAgent(
          * therefore varies run to run, so an unparseable reply is exactly the
          * kind of failure a second attempt clears.
          *
-         * A timeout means the reply was too long to finish, so that retry asks
-         * for a smaller document. Anything else gets the same ask again at a
-         * lower temperature (attempt 1 already drops to 0.3). Hard failures
-         * (auth, routing, missing model) still cost only one extra call.
+         * A timeout or unparseable answer means the reply did not fit or did
+         * not converge, so that retry asks for the smaller document. Hard
+         * failures still cost only the already-bounded second call.
          */
         if (attempt === 0) {
-          const timedOut = /timeout|aborted|ETIMEDOUT/i.test(lastReason);
-          if (timedOut) {
+          const needsSmallerReply = /timeout|aborted|ETIMEDOUT|not parseable|no parseable|empty json|finish=length/i.test(lastReason);
+          if (needsSmallerReply) {
             minimal = true;
             repairUser = designMinimalPrompt(prompt, hints);
           }
