@@ -1948,3 +1948,11 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 创建/生产页面手机截图已检查无横向溢出；新增失败页重试错误回归通过（初次 locator 匹配 Next announcer 修正为限定生产面板后通过）。原4项E2E、tsc、lint（3条旧warning）、最终build通过。自动化已保留现有“发送你好”内容，仅按用户要求改为4小时一次。
 - 生产最终生成成功：该项目 revision cmttrebew000ewvd6ljduro2o ready、runtime passed。两次真实浏览器都通过 boot/first frame/输入/70秒胜利结局/重开，6个素材200且非fallback。发布仍409：明确 evidence=publication_mobile_playtest_delivery_missing。
 - 第一次验收会话实际遥测为 desktop/touch=false（虽脚本配置mobile），不能冒充手机证据。第二次 fresh mobile 会话正确touch=true，但缺 first_minute：70.7秒只跑1554帧（约22fps），Forge每60帧发心跳，IndependentGameRuntime却仅累计距上次心跳<2秒时间，正常低帧率被漏计。当前本地将该遥测宽限改5秒（不改运行验证/启动/卡死门禁），构建中。须部署后沿用同项目再验收；无需重新生成。并清理已生成独立游戏仍误显示“继承样品同引擎”的旧页面提示。
+
+## 2026-09-09 · 新版一句话流程完成并通过生产验收
+- 最终功能部署 `bb5140b813bb853dfe4eae1f464d74aba4877460`：一次提交创建后台任务；生成/失败/可玩页面按实际状态切换；失败可重试且错误可见；参数编辑默认折叠；编辑后保留保存入口；终态同步标题和版本；独立游戏不再误显示旧样品引擎提示。设计阶段限定 DeepSeek V4 关闭深度思考，保持模型路由不变；保留真实模型错误。低帧率手机试玩计时已修。
+- 新建生产项目 `cmttrebdl000awvd6t9spth2x`（竹林接竹），revision `cmttrebew000ewvd6ljduro2o` 最终 ready/runtime passed。最终393×852触屏模拟Chromium完成70.76秒、胜利220分、重开；服务端真实记录 activeMs=60016、actionCount=46、deviceClass=mobile、touchCapable=true、outcome=won，已生成 game_playtest_delivery。
+- 显式发布成功，匿名公开页再次通过 iframe 首帧和移动端无横向溢出。公开试玩：https://operone.1oneclaw.com/zh-Hans/play/cmttrebdl000awvd6t9spth2x 。这是真实浏览器触屏模拟验收，不是实体手机实测。
+- 最终报告 `qa-output/prod-unified-flow-20260909-final/REPORT.json` pass=true，含device和restartObserved；创建/等待页截图及owner-state在 `qa-output/prod-unified-flow-20260909/`。6个素材全部200、无fallback，见 `qa-output/prod-runtime-assets/REPORT.json`。不要把前两份失败报告当最终结论。
+- 生产release gate（语法错误/启动抛错/空壳/过期证据/验证不可用）通过；最终健康ok、15个JS资源200；本地TypeScript、完整build、目标lint（仅既有warning）、4个创建E2E、手机失败重试E2E及单模式模型错误/参数透传测试通过。
+- 本轮请求已完成；无需再部署或重复创建验收任务。原来失败的旧作品没有伪造为成功，可在新版失败页重新构建。自动化id=p0-p1保留用户当前“发送你好”内容，每4小时ACTIVE，未擅自改回研发任务或暂停。
