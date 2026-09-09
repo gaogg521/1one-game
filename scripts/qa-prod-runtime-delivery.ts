@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { chromium } from "playwright";
 
 const base = "https://operone.1oneclaw.com";
-const output = "qa-output/prod-runtime-delivery";
+const output = process.env.QA_OUTPUT_DIR ?? "qa-output/prod-runtime-delivery";
 type Event = { type: string; frames?: number; score?: number; entities?: number; won?: boolean; [key: string]: unknown };
 type Detail = { core?: { revision?: { status?: string; summary?: string } }; assetJob?: { status?: string; progress?: { stage?: string } }; runtimeDelivery?: { status?: string }; playRevisionId?: string };
 
@@ -29,6 +29,7 @@ async function main() {
       const prompt = "手机竖屏竹林小游戏：手指左右移动小熊猫接住落下的竹子，避开石头。初始30颗心，持续70秒后按分数结算胜负，结算后可以重新开始。";
       const input = page.locator("textarea").first();
       await input.fill(prompt);
+      await page.screenshot({ path: `${output}/create-mobile.png`, fullPage: true });
       if (!await page.getByRole("button", { name: /开始生成游戏/ }).isEnabled()) {
         await input.fill("");
         await input.pressSequentially(prompt, { delay: 3 });
@@ -37,13 +38,16 @@ async function main() {
       console.log("[production] build requested");
       await page.waitForURL(/\/play\//, { timeout: 90_000 });
       projectId = page.url().split("/play/")[1]!.split(/[?#]/)[0]!;
+      await page.getByTestId("game-production-screen").waitFor({ timeout: 30_000 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+      await page.screenshot({ path: `${output}/generating-mobile.png`, fullPage: true });
       await context.storageState({ path: `${output}/owner-state.json` });
     }
     report.projectId = projectId;
     await fs.writeFile(`${output}/REPORT.json`, JSON.stringify(report, null, 2));
     if (process.env.QA_RETRY_FAILED === "1") {
       await page.goto(`${base}/zh-Hans/play/${projectId}`, { waitUntil: "networkidle" });
-      const retry = page.locator('[data-testid="runtime-delivery-status"] button');
+      const retry = page.getByRole("button", { name: "重新构建" });
       await retry.waitFor({ timeout: 30_000 });
       await retry.click();
       console.log(`[production] requested owner retry for ${projectId}`);
@@ -64,6 +68,9 @@ async function main() {
     assert.equal(detail.runtimeDelivery?.status, "passed", "No completed runtime verification");
     report.revisionId = detail.playRevisionId;
     await page.goto(`${base}/zh-Hans/play/${projectId}`, { waitUntil: "domcontentloaded" });
+    const device = await page.evaluate(() => ({ touchPoints: navigator.maxTouchPoints, width: innerWidth, height: innerHeight }));
+    report.device = device;
+    assert.ok(device.touchPoints > 0 && Math.min(device.width, device.height) <= 768, "Mobile touch emulation was lost");
     await page.frameLocator("iframe").locator("canvas").waitFor({ timeout: 30_000 });
     await page.waitForFunction("window.runtimeEvents.some(e=>e.type==='forge-first-frame')", undefined, { timeout: 15_000 });
     const started = Date.now();
@@ -87,7 +94,19 @@ async function main() {
     assert.ok(gameBox);
     await page.touchscreen.tap(gameBox.x + gameBox.width * 0.5, gameBox.y + gameBox.height * 0.72);
     await page.waitForFunction("window.runtimeEvents.some(e=>e.type==='forge-restart')", undefined, { timeout: 10_000 });
+    report.restartObserved = true;
     await page.screenshot({ path: `${output}/played.png` });
+
+    // Telemetry evidence is persisted asynchronously after the end event.
+    let mobileEvidence = false;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const response = await page.request.get(`${base}/api/projects/${projectId}`);
+      const current = await response.json();
+      mobileEvidence = current.core?.revision?.artifacts?.some((item: { kind: string }) => item.kind === "game_playtest_delivery") === true;
+      if (mobileEvidence) break;
+      await page.waitForTimeout(1000);
+    }
+    assert.ok(mobileEvidence, "Actual mobile first-minute and outcome evidence was not persisted");
 
     const publishResponse = await page.request.post(`${base}/api/works/game/${encodeURIComponent(projectId)}/publication`, {
       data: { action: "publish", revisionId: detail.playRevisionId },

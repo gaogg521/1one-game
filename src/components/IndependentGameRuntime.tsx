@@ -28,7 +28,9 @@ export function IndependentGameRuntime({ spec, projectId, creativeRevisionId, pr
     let started = false, ended = false, actions = 0, activeMs = 0, lastBeat = 0, lastTick = performance.now();
     const timer = window.setInterval(() => {
       const now = performance.now();
-      if (started && !ended && document.visibilityState === "visible" && now - lastBeat < 2000) activeMs += Math.min(1000, now - lastTick);
+      // Forge reports every 60 frames: at 20fps a healthy game pulses every
+      // 3s. Allow that cadence; the final runtime validator owns freeze gates.
+      if (started && !ended && document.visibilityState === "visible" && now - lastBeat < 5000) activeMs += Math.min(1000, now - lastTick);
       lastTick = now;
       if (activeMs >= 60_000) session?.firstMinute(Math.round(activeMs), actions);
     }, 500);

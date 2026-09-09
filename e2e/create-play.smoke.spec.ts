@@ -39,3 +39,26 @@ test("创建项目后先进入生产页并可保存 spec", async ({ page }) => {
   const data = (await get.json()) as { spec?: { title?: string } };
   expect(data.spec?.title).toContain("·手测保存");
 });
+
+test("手机生成失败页保留重试入口并显示重试错误", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.route("**/api/projects/e2e-failed-build", async route => {
+    if (route.request().method() === "PATCH") {
+      await route.fulfill({ status: 500, json: { error: "重试暂时不可用" } });
+      return;
+    }
+    await route.fulfill({ json: {
+      spec: mockSpecFromPrompt("开心消消乐"),
+      project: { title: "开心消消乐", prompt: "创建一个开心消消乐", isOwner: true },
+      runtimeDelivery: { status: "unverified", blockers: [] },
+      core: { revision: { id: "failed-revision", status: "failed" } },
+      assetJob: null,
+    } });
+  });
+  await gotoPlay(page, "e2e-failed-build");
+  await expect(page.getByRole("heading", { name: "这次生成未能完成" })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await page.getByRole("button", { name: "重新构建" }).click();
+  await expect(page.getByTestId("game-production-screen").getByRole("alert")).toContainText("重试暂时不可用");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

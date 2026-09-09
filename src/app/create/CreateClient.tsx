@@ -19,8 +19,8 @@ const FALLBACK_EXAMPLES = [
 ];
 
 const BUILD_STEPS = [
-  { number: "01", title: "理解玩法", detail: "设计 Agent 把一句话拆成规则、操作和胜负目标" },
-  { number: "02", title: "构建游戏", detail: "代码、美术和声音 Agent 生成独立运行时" },
+  { number: "01", title: "理解玩法", detail: "确定游戏规则、操作方式和胜负目标" },
+  { number: "02", title: "构建游戏", detail: "制作场景、角色、玩法和声音" },
   { number: "03", title: "启动验证", detail: "在真实浏览器中检查启动、操作、胜负和重试" },
   { number: "04", title: "交付试玩", detail: "通过验证后自动开放试玩与后续修改" },
 ];
@@ -111,7 +111,7 @@ export default function CreateClient(props: { initialPrompt?: string; replayFrom
             <div className="relative max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--gc-accent)]">ONE SENTENCE · ONE PLAYABLE GAME</p>
               <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">一句话，生成一个真的能玩的游戏</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--gc-muted)] sm:text-base">提交后，多 Agent 会直接完成玩法设计、独立运行时、美术声音和浏览器验证。你可以离开页面，任务会在后台继续。</p>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--gc-muted)] sm:text-base">描述你想玩的游戏，我们会完成设计、制作和试玩检查。提交后可以离开页面，任务会在后台继续。</p>
             </div>
 
             <div className="relative mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-3 shadow-2xl shadow-black/10 sm:p-4">

@@ -506,7 +506,7 @@ export function PlayGameClient({ id }: { id: string }) {
         : null;
 
   const parityInfo =
-    spec && meta ? resolveSampleParityUserInfo(spec, meta.prompt) : null;
+    spec && meta && !spec.agenticModule?.source ? resolveSampleParityUserInfo(spec, meta.prompt) : null;
 
   const resultTitle =
     parityInfo?.promptAligned

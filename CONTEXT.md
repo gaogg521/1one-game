@@ -1944,3 +1944,7 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 本地还补了失败文案（设计失败不冒称运行验证失败）与终态项目标题、playRevisionId、editorSchema 同步。未部署，需验收并精确提交。
 - 自动化文件当前实读与旧记录不同：id=p0-p1 已变成“发送你好”、prompt=你好、每5小时 ACTIVE。不要根据旧交接盲目覆盖可能来自用户的新设置；当前任务继续自主执行。
 - 剩余：解决本轮设计超时并完成全新生产生成→实际 mobile iframe 启动/输入/结局→公开试玩；检查移动端新页面和终态切换；完成后更新本节。当前共享工作区大量 QA 图片和缓存属于既有改动，禁止 git add .。
+- 续接状态：`41ccf134862ab72e4aa62785917e87d1841398ac` 已部署，BUILD_ID=jEWDMl6JOJKi56UHh-m8j；服务、2个timer、TLS健康、15个JS资源及生产运行门禁通过。隔离诊断脚本已清理。新的唯一在验收项目 `cmttrebdl000awvd6t9spth2x`，attempt1，已过设计，代码与美术生成中；不要重复创建任务或部署。验收命令 QA_PROD_RUNTIME_DELIVERY=1 QA_OUTPUT_DIR=qa-output/prod-unified-flow-20260909 npx tsx scripts/qa-prod-runtime-delivery.ts；owner-state.json 在该目录，可用 QA_PROJECT_ID + QA_RESUME_STATE 恢复验证，不重新生成。
+- 创建/生产页面手机截图已检查无横向溢出；新增失败页重试错误回归通过（初次 locator 匹配 Next announcer 修正为限定生产面板后通过）。原4项E2E、tsc、lint（3条旧warning）、最终build通过。自动化已保留现有“发送你好”内容，仅按用户要求改为4小时一次。
+- 生产最终生成成功：该项目 revision cmttrebew000ewvd6ljduro2o ready、runtime passed。两次真实浏览器都通过 boot/first frame/输入/70秒胜利结局/重开，6个素材200且非fallback。发布仍409：明确 evidence=publication_mobile_playtest_delivery_missing。
+- 第一次验收会话实际遥测为 desktop/touch=false（虽脚本配置mobile），不能冒充手机证据。第二次 fresh mobile 会话正确touch=true，但缺 first_minute：70.7秒只跑1554帧（约22fps），Forge每60帧发心跳，IndependentGameRuntime却仅累计距上次心跳<2秒时间，正常低帧率被漏计。当前本地将该遥测宽限改5秒（不改运行验证/启动/卡死门禁），构建中。须部署后沿用同项目再验收；无需重新生成。并清理已生成独立游戏仍误显示“继承样品同引擎”的旧页面提示。
