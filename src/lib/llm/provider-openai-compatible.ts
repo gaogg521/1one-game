@@ -192,6 +192,7 @@ export async function llmJsonOpenAICompatible(params: {
   async function run(mode: LlmMode, budgetOverride?: number): Promise<RunOutcome> {
     const maxOut = budgetOverride ?? req.maxTokens ?? PRODUCT.llm.jsonMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
+    const thinking = req.thinking ? { thinking: req.thinking } : {};
     const completionParams: ChatCompletionCreateParamsNonStreaming =
       mode === "json_schema"
         ? ({
@@ -199,6 +200,7 @@ export async function llmJsonOpenAICompatible(params: {
             temperature: req.temperature,
             messages,
             response_format: { type: "json_schema", json_schema: req.jsonSchema },
+            ...thinking,
             ...tokenField,
           } as ChatCompletionCreateParamsNonStreaming)
         : ({
@@ -206,6 +208,7 @@ export async function llmJsonOpenAICompatible(params: {
             temperature: req.temperature,
             messages,
             response_format: { type: "json_object" },
+            ...thinking,
             ...tokenField,
           } as ChatCompletionCreateParamsNonStreaming);
 
@@ -259,7 +262,7 @@ export async function llmJsonOpenAICompatible(params: {
       // not support JSON Schema. A timeout/network/auth failure must return
       // immediately instead of doubling every runtime-generation wait.
       const summary = safeErrorSummary(error, { gatewayBaseUrl });
-      if (!/response[_ ]format|json[_ ]schema|unsupported.*schema|schema.*unsupported/i.test(summary)) {
+      if (req.singleModeOnly || !/response[_ ]format|json[_ ]schema|unsupported.*schema|schema.*unsupported/i.test(summary)) {
         return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: summary };
       }
       // fallthrough — each run uses an independent AbortController

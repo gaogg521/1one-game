@@ -345,6 +345,9 @@ export async function runDesignAgent(
          */
         mode: "json_schema",
         singleModeOnly: true,
+        // Production V4 design calls exhaust 210s in default thinking mode.
+        // Keep the same model and schema; bound this planning step explicitly.
+        thinking: /^deepseek-v4-/i.test(model) ? { type: "disabled" } : undefined,
         jsonSchema: DESIGN_SCHEMA,
         maxTokens: cfg.designMaxTokens,
         timeoutMs: minimal ? cfg.designFallbackTimeoutMs : cfg.designTimeoutMs,

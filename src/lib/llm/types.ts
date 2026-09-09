@@ -27,6 +27,8 @@ export type LlmJsonRequest = {
    * doubles the creator's wait before the same fallback is taken anyway.
    */
   singleModeOnly?: boolean;
+  /** Opt-in for compatible gateways; omitted unless verified for the routed model. */
+  thinking?: { type: "enabled" | "disabled" };
   timeoutMs: number;
   /** P1 修复：外部 AbortSignal */
   signal?: AbortSignal;

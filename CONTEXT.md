@@ -1934,3 +1934,13 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - P1 队列并发有生产实证：长任务 `cmtsj9nwb0010a1o05eibjogn` 运行期间，第二 timer 在 2007ms 内完成短任务 `cmtsjbahn0002vd36o0lman25`，长任务仍 running；报告在 `qa-output/queue-slots/REPORT.json`。两个 worker timer 均 active。租约回收/attempt cap/旧 owner fencing/项目排他另由隔离 SQLite `qa:generation-leases` 覆盖。
 - 图片失败路径现在输出结构化、脱敏的服务日志；`qa:runtime-delivery-gate` 验证 key/token/host 不泄漏。模型性能只完成阶段测量：deepseek 设计 195351ms 且结构失败，doubao 设计+配置模块 342052ms 成功；没有完整游戏成功率和成本证据，因此保持当前生产模型路由，不做猜测性切换。
 - 验证：`qa:runtime-delivery-gate`、`qa:creator-publication`、`qa:generation-leases`、`qa:game-production-orchestrator`、`qa:creator-core`、`qa:runtime-public-assets`、TypeScript、目标 ESLint、两轮完整 Next build；生产发布脚本完成 BUILD_ID/service/TLS health/timers/www-data Chromium gate。自动续接频率已按用户要求改为每 4 小时；全部验收完成后应暂停。
+
+## 2026-09-09 · 按真实生成流程重做页面（执行中，尚未完成生产验收）
+- 用户要求解决旧页面与独立运行时流程脱节：一次提交即 POST /api/projects 创建后台生产任务，直接进入项目生成页；不再先生成草稿再要求“保存并打开”。构建/验证期间隐藏旧参数编辑器、分享及评论，通过最终运行验证才展示游戏。生产已部署 `3352f1f9`、`1a931567`、`0a72df6e`；不要重复部署这些提交。
+- 已验证新创建路径的 4 个 E2E、TypeScript、JSON parser、目标 lint、完整 build 和生产 release gate；这些不能代替全新游戏真实可玩验收。
+- 全新生产 QA 项目 `cmtti03ds000apqo05wlx72j2` 已失败，attempts=3，最终错误 `design_agent_failed:model reply was not parseable as JSON (outcome=unavailable)`，更新时间 2026-09-09T03:03:32Z。前两次 QA 项目 cmttgs988000eqqfrx932w9cw、cmttgu0bf001gqqfrok1k7x35 也已终态失败。不要把这些当成正在生成或可玩。
+- 进一步证实错误被误分类：provider catch 的宽泛 json_schema 正则命中了 timeout 标签；singleModeOnly 最后吞掉原始错误。当前未提交修复保留原始异常，新增 qa-llm-single-mode.ts 验证一次调用且错误不失真。生产隔离调用使用同路由/同 schema/32768 tokens，实际结果是 deepseek-v4-flash-ga-260731 在 210000ms 超时，并非已证实 JSON 截断。
+- 隔离测试该模型 thinking disabled：2次均解析成功，第二次完整设计 schema 校验通过，进程总耗时20.961秒；同模型默认参数上一轮210秒超时。已在本地限定 deepseek-v4-* 设计阶段发送该参数，没有更换模型路由，需完整生产验证。临时远端脚本 /opt/operone/scripts/_qa-provider-diagnostic.ts、_qa-design-diagnostic.ts，不影响在线服务；测试结束需清理这两个明确路径。
+- 本地还补了失败文案（设计失败不冒称运行验证失败）与终态项目标题、playRevisionId、editorSchema 同步。未部署，需验收并精确提交。
+- 自动化文件当前实读与旧记录不同：id=p0-p1 已变成“发送你好”、prompt=你好、每5小时 ACTIVE。不要根据旧交接盲目覆盖可能来自用户的新设置；当前任务继续自主执行。
+- 剩余：解决本轮设计超时并完成全新生产生成→实际 mobile iframe 启动/输入/结局→公开试玩；检查移动端新页面和终态切换；完成后更新本节。当前共享工作区大量 QA 图片和缓存属于既有改动，禁止 git add .。

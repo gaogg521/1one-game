@@ -81,11 +81,12 @@ function GameProductionScreen(props: {
   job: AssetJob | null;
   deliveryStatus: string;
   retryBusy: boolean;
+  retryError: string | null;
   onRetry: () => void;
   studioHref: string;
   createHref: string;
 }) {
-  const failed = props.deliveryStatus === "failed" || props.revision?.status === "failed";
+  const failed = props.deliveryStatus === "failed" || props.revision?.status === "failed" || (!props.job && props.revision?.status !== "generating");
   const percent = Math.max(0, Math.min(99, props.job?.progress?.percent ?? 0));
   const stageKey = props.job?.progress?.stage ?? props.job?.status ?? "queued";
   const stage = PRODUCTION_STAGES[stageKey] ?? "多 Agent 正在协作生成";
@@ -96,8 +97,8 @@ function GameProductionScreen(props: {
         <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[color:color-mix(in_srgb,var(--gc-accent)_16%,transparent)] blur-3xl" />
         <div className="relative">
           <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${failed ? "text-rose-300" : "text-[var(--gc-accent)]"}`}>{failed ? "BUILD NEEDS ATTENTION" : "GAME PRODUCTION IN PROGRESS"}</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{failed ? "这次生成没有通过运行验证" : "你的游戏正在被真正构建"}</h1>
-          <p className="mt-3 text-sm leading-6 text-[var(--gc-muted)]">{failed ? "游戏不会对外展示。你可以重新发起构建，系统会从失败证据继续修复。" : "任务已保存在后台，可以放心离开页面。只有通过启动和操作验证后，页面才会切换成可玩的游戏。"}</p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{failed ? props.deliveryStatus === "failed" ? "游戏未通过运行验证" : "这次生成未能完成" : "你的游戏正在制作中"}</h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--gc-muted)]">{failed ? "当前版本尚不可试玩。你可以重新生成，也可以返回工作台稍后再试。" : "任务已保存在后台，可以放心离开页面。通过启动和操作验证后，这里会自动显示可玩的游戏。"}</p>
 
           <div className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -115,6 +116,7 @@ function GameProductionScreen(props: {
             <Link href={props.studioHref} className="rounded-full border border-[color:var(--gc-border)] px-5 py-2.5 text-sm text-[var(--gc-text-soft)] hover:text-[var(--gc-text)]">返回创作者工作台</Link>
             <Link href={props.createHref} className="rounded-full px-5 py-2.5 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]">再创建一个</Link>
           </div>
+          {props.retryError ? <p role="alert" className="mt-4 text-sm text-rose-300">{props.retryError}</p> : null}
         </div>
       </div>
     </section>
@@ -266,7 +268,10 @@ export function PlayGameClient({ id }: { id: string }) {
           if (current.spec) setSpec(current.spec);
           setCore(current.core ?? null);
           setRuntimeDelivery(current.runtimeDelivery ?? null);
-          setAssetJob(null);
+          setPlayRevisionId(current.playRevisionId ?? null);
+          setEditorSchema(current.editorSchema ?? null);
+          if (current.project) setMeta((previous) => previous ? { ...previous, title: current.project.title, prompt: current.project.prompt } : previous);
+          setAssetJob(current.assetJob ?? null);
         }
       } catch { /* retain last visible task state until next poll */ }
     };
@@ -533,7 +538,7 @@ export function PlayGameClient({ id }: { id: string }) {
             <div className="h-8 w-48 animate-pulse rounded-lg bg-[var(--gc-surface-glass-strong)]" />
             <div className="h-64 animate-pulse rounded-2xl bg-[var(--gc-surface-glass)]" />
           </div>
-        ) : meta.isOwner && !sampleGallery && runtimeDelivery?.status !== "passed" ? (
+        ) : meta.isOwner && !sampleGallery && runtimeDelivery?.status !== "passed" && !runtimeDelivery?.blockers.includes("runtime_changed") ? (
           <GameProductionScreen
             title={meta.title}
             prompt={meta.prompt}
@@ -541,6 +546,7 @@ export function PlayGameClient({ id }: { id: string }) {
             job={assetJob}
             deliveryStatus={runtimeDelivery?.status ?? "unverified"}
             retryBusy={saveBusy}
+            retryError={patchError}
             onRetry={() => void saveProjectSpec()}
             studioHref={withLocalePath("/studio", locale)}
             createHref={withLocalePath("/create", locale)}
@@ -750,6 +756,9 @@ export function PlayGameClient({ id }: { id: string }) {
             </div>
             <div className="order-3 px-3 sm:px-0">
             {meta.isOwner ? (
+              <details className="mb-4 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-surface-glass)] p-4">
+                <summary className="cursor-pointer text-sm font-semibold">调整游戏参数</summary>
+                <p className="my-3 text-xs text-[var(--gc-muted)]">修改后需要保存并重新验证，才能试玩新版本。</p>
               <SpecQuickTunePanel
                 spec={spec}
                 onChange={(next) => { setSpec(next); setRuntimeDelivery({ status: "unverified", blockers: ["runtime_changed"] }); }}
@@ -761,6 +770,7 @@ export function PlayGameClient({ id }: { id: string }) {
                   document.getElementById("patch-prompt")?.scrollIntoView({ behavior: "smooth", block: "center" });
                 }}
               />
+              </details>
             ) : null}
 
             {/* Runtime AI patch panel */}
