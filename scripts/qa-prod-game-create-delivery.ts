@@ -292,7 +292,7 @@ async function main() {
     summary.projectId = projectId;
     summary.playUrl = page.url();
     stages.push({ at: new Date().toISOString(), stage: "production_started", detail: { projectId, playUrl: page.url(), promptChars: prompt.length } });
-    assert(await page.getByTestId("game-production-screen").isVisible(), "提交后没有进入统一生成进度页");
+    await page.getByTestId("game-production-screen").waitFor({ state: "visible", timeout: 30_000 });
     assert(!(await page.getByText("INDEPENDENT RUNTIME REQUIRED").isVisible().catch(() => false)), "生成进度页仍暴露旧运行时占位");
 
     const created = await readProject(page, projectId);
@@ -312,9 +312,8 @@ async function main() {
     summary.revisionId = revisionId;
     await verifyRuntimeAssets(page, ready, stages);
     verifyProductionVisualDelivery(ready, stages);
-    // Saving intentionally opens a draft preview immediately. Acceptance must
-    // reload the immutable ready revision after every production Agent has
-    // finished; otherwise the generic preview pollutes playtest telemetry.
+    // Reload the immutable ready revision after every production Agent has
+    // finished so mobile interaction runs against final delivery evidence.
     await page.goto(`${baseUrl}/${locale}/play/${encodeURIComponent(projectId)}`, {
       waitUntil: "domcontentloaded",
       timeout: 45_000,
