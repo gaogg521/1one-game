@@ -242,6 +242,7 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
     .join("\n\n");
 
   const stage = design.stage;
+  const chinese = /[\u3400-\u9fff]/u.test(design.title);
   // Every non-config module body must run so its assignments land on G. The
   // main module is included here: its body is what assigns G.main, which the
   // entry point then invokes.
@@ -267,8 +268,10 @@ ${declarations}
       seed: cfg.seed || 1337,
       fit: cfg.fit || 'contain',
       music: ctx.assets && ctx.assets.music,
-      winTitle: cfg.winTitle,
-      loseTitle: cfg.loseTitle,
+      winTitle: cfg.winTitle || ${JSON.stringify(chinese ? "挑战成功" : "You win")},
+      loseTitle: cfg.loseTitle || ${JSON.stringify(chinese ? "挑战结束" : "Game over")},
+      replayText: cfg.replayText || ${JSON.stringify(chinese ? "再玩一次" : "Play again")},
+      scoreLabel: cfg.scoreLabel || ${JSON.stringify(chinese ? "得分" : "Score")},
       onFinish: ctx.finish
     });
     G.g = g;

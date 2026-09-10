@@ -51,7 +51,7 @@ ALWAYS drawable. \`ctx.assets\` supplies the project urls (any may be undefined)
 - \`r.circle(x, y, radius, color, alpha)\` / \`r.ring(x, y, radius, width, color, alpha)\`
 - \`r.line(x1, y1, x2, y2, color, width, alpha)\` / \`r.poly(points, color, alpha)\`
 - \`r.text(str, x, y, { size, color, align, weight, alpha, stroke, strokeWidth })\`
-- \`r.camera.x / .y / .zoom\` — follow the player by writing these.
+- \`r.camera.x / .y / .zoom\` — camera centre in world coordinates, initially (g.width/2, g.height/2). World (0,0) initially maps to the top-left. Only change the camera for scrolling games.
 - \`r.ui.begin()\` ... \`r.ui.end()\` — draw in screen space, ignoring the camera.
 
 ## Input — g.input
@@ -80,6 +80,8 @@ Music is handled by the \`music\` option on create().
 
 ## Entities — g.world
 - \`g.world.spawn('enemy', { x, y, vx, vy, r, hp })\` -> entity with id/type/dead.
+- Keep the returned entity as the single authoritative object: e.g. G.player = g.world.spawn('player', {...}). Input, collision and drawing MUST use that same reference. Never create a second plain-object player. Reassign the reference on restart.
+- world.step integrates vx/vy automatically. Set velocity OR manually integrate position with velocity zero; never do both.
 - \`g.world.each('enemy', e => {...})\` / \`g.world.get('enemy')\` (raw array)
 - \`g.world.collide('bullet', 'enemy', (b, e) => {...})\` — circle overlap pairs.
 - \`g.world.kill(e)\` — flagged dead, removed at the end of the step.

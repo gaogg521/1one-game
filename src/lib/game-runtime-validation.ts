@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { GameSpec } from "@/lib/game-spec";
 import type { QaReport } from "@/lib/game-forge/types";
 import { buildIndependentRuntimePage } from "@/lib/independent-runtime-page";
+import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
 
 export type GameRuntimeValidation = {
   version: 1;
@@ -52,7 +53,12 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     const frame = page.frames().find((item) => item !== page.mainFrame());
     const before = await page.locator("iframe").screenshot({ timeout: 10_000 });
     await page.locator("iframe").tap({ position: { x: 180, y: 280 } });
-    for (const key of ["Space", "ArrowRight", "ArrowUp", "Space"]) await page.keyboard.press(key);
+    for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp"]) {
+      await page.keyboard.down(key);
+      await page.waitForTimeout(700);
+      await page.keyboard.up(key);
+    }
+    await page.keyboard.press("Space");
     await page.waitForTimeout(2500);
     const after = await page.locator("iframe").screenshot({ timeout: 10_000 });
     const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string }>>("window.events");
@@ -66,6 +72,7 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     if (spec.forgeBuild) {
       if (!events.some(e => e.type === "forge-first-frame")) result.blockers.push("runtime_no_first_frame");
       if (!ended && (!beats.length || (beats.at(-1)?.frames ?? 0) <= (beats[0]?.frames ?? 0))) result.blockers.push("runtime_loop_stalled");
+      result.blockers.push(...playerEvidenceFindings(spec.forgeBuild.design, events).map(finding => `runtime_${finding.code}`));
     }
     // Static DOM/puzzle games need no continuous loop, but must respond to interaction.
     if (booted && !ended && before.equals(after) && !beats.some(e => (e.entities ?? 0) > 0)) result.blockers.push("runtime_inert_build");

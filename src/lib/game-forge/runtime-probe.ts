@@ -1,5 +1,6 @@
 import type { GameBuild, GameDesignDoc, QaFinding } from "@/lib/game-forge/types";
 import { GAME_FORGE_SDK_SOURCE } from "@/lib/game-forge/runtime-sdk";
+import { playerEvidenceFindings } from "./player-evidence";
 
 /**
  * Headless runtime probe.
@@ -146,9 +147,12 @@ export async function runRuntimeProbe(
 
     // A scripted burst across the control surface the SDK exposes. The point
     // is not to play well, it is to prove input reaches gameplay at all.
-    await page.keyboard.down("ArrowRight");
-    await page.waitForTimeout(400);
-    await page.keyboard.up("ArrowRight");
+    if (await page.locator("canvas").count()) await page.locator("canvas").first().click();
+    for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp"]) {
+      await page.keyboard.down(key);
+      await page.waitForTimeout(700);
+      await page.keyboard.up(key);
+    }
     for (const key of ["Space", "ArrowUp", "ArrowLeft", "Space"]) {
       await page.keyboard.press(key);
       await page.waitForTimeout(180);
@@ -218,7 +222,7 @@ function summarise(
 
   const scoreBefore = lastHeartbeat(beforeInput.events)?.score ?? 0;
   const scoreAfter = beat?.score ?? null;
-  const findings: QaFinding[] = [];
+  const findings: QaFinding[] = playerEvidenceFindings(design, events);
 
   if (uniqueErrors.length) {
     for (const message of uniqueErrors.slice(0, 4)) {

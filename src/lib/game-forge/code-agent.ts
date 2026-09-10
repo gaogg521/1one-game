@@ -90,6 +90,8 @@ You output the BODY of a function. Do not write the function signature, do not w
 - A "main" module body receives (G, g) and must assign G.main = function (g) { ... g.start({ init, update, draw, restart }); }.
 
 G is the shared namespace. Everything you expose goes on G. Everything a sibling exposes is read from G.
+For a player-controlled entity, init/restart MUST assign G.player = g.world.spawn('player', ...). Movement, drawing and collision all use that SAME entity. A movement module must not create its own replacement player object. Share authoritative score/lives through g.state, never mirror counters that can diverge. The visible actor must move when input changes, and collision must test its visible position. HUD, hints and end-card labels must use the language of the player request.
+One module owns all HUD fields: put score, lives and timer in ONE g.ui.hud call. Do not draw a second timer or title over the HUD's top 60 pixels. Draw the background first and the player afterwards at a clearly visible size; collision geometry must match the visible sprite. A touch drag must move the same player entity as keyboard input. Restart must recreate that entity and reset every timer, score and spawn accumulator.
 
 CRITICAL syntax rule: expose a function by ASSIGNING it —
     G.tickSpawns = function (dt, g) { ... };

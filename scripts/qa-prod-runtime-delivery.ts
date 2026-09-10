@@ -26,7 +26,7 @@ async function main() {
     let projectId = process.env.QA_PROJECT_ID;
     if (!projectId) {
       await page.goto(`${base}/zh-Hans/create`, { waitUntil: "networkidle" });
-      const prompt = "手机竖屏竹林小游戏：手指左右移动小熊猫接住落下的竹子，避开石头。初始30颗心，持续70秒后按分数结算胜负，结算后可以重新开始。";
+      const prompt = process.env.QA_PROMPT ?? "手机竖屏竹林小游戏：手指左右移动小熊猫接住落下的竹子，避开石头。初始30颗心，持续70秒后按分数结算胜负，结算后可以重新开始。";
       const input = page.locator("textarea").first();
       await input.fill(prompt);
       await page.screenshot({ path: `${output}/create-mobile.png`, fullPage: true });
@@ -67,6 +67,12 @@ async function main() {
     }
     assert.equal(detail.runtimeDelivery?.status, "passed", "No completed runtime verification");
     report.revisionId = detail.playRevisionId;
+    if (process.env.QA_BUILD_ONLY === "1") {
+      await fs.writeFile(`${output}/detail.json`, JSON.stringify(detail, null, 2));
+      report.buildReady = true;
+      console.log(`[production] build ready for separate visual and gameplay acceptance: ${projectId}`);
+      return;
+    }
     await page.goto(`${base}/zh-Hans/play/${projectId}`, { waitUntil: "domcontentloaded" });
     const device = await page.evaluate(() => ({ touchPoints: navigator.maxTouchPoints, width: innerWidth, height: innerHeight }));
     report.device = device;

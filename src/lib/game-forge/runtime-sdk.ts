@@ -367,6 +367,7 @@ export const GAME_FORGE_SDK_SOURCE = `
     }
 
     on(stage.canvas, 'pointerdown', function (e) {
+      stage.canvas.focus({ preventScroll: true });
       if (e.pointerType === 'touch') touchEnabled = true;
       updatePointerFrom(e);
       if (!pointer.down) pointer.justDown = true;
@@ -455,9 +456,11 @@ export const GAME_FORGE_SDK_SOURCE = `
   /* ------------------------------------------------------------- renderer */
   function makeRenderer(stage) {
     var g = stage.g2d;
-    var cam = { x: 0, y: 0, zoom: 1, shakeX: 0, shakeY: 0 };
+    var cam = { x: stage.width / 2, y: stage.height / 2, zoom: 1, shakeX: 0, shakeY: 0 };
+    var playersDrawn = [];
 
     function begin() {
+      playersDrawn.length = 0;
       g.save();
       g.translate(stage.width / 2, stage.height / 2);
       g.scale(cam.zoom, cam.zoom);
@@ -468,6 +471,7 @@ export const GAME_FORGE_SDK_SOURCE = `
     var r = {
       ctx: g,
       camera: cam,
+      playersDrawn: playersDrawn,
       begin: begin,
       end: end,
       get width() { return stage.width; },
@@ -502,6 +506,13 @@ export const GAME_FORGE_SDK_SOURCE = `
         g.translate(x, y);
         if (rot) g.rotate(rot);
         if (flipX) g.scale(-1, 1);
+        if (holder.kind === 'player') {
+          var matrix = g.getTransform();
+          var cx = matrix.e / stage.canvas.width, cy = matrix.f / stage.canvas.height;
+          var bw = (Math.abs(matrix.a * dw) + Math.abs(matrix.c * dh)) / stage.canvas.width;
+          var bh = (Math.abs(matrix.b * dw) + Math.abs(matrix.d * dh)) / stage.canvas.height;
+          playersDrawn.push({ x: x, y: y, screenX: cx, screenY: cy, visible: cx + bw / 2 > 0 && cx - bw / 2 < 1 && cy + bh / 2 > 0 && cy - bh / 2 < 1 && g.globalAlpha > 0.1 });
+        }
         g.drawImage(im, -dw / 2, -dh / 2, dw, dh);
         g.restore();
       },
@@ -551,9 +562,9 @@ export const GAME_FORGE_SDK_SOURCE = `
         g.textBaseline = o.baseline || 'middle';
         if (o.alpha != null) g.globalAlpha = clamp(o.alpha, 0, 1);
         if (o.shadow !== false) { g.fillStyle = 'rgba(0,0,0,.55)'; g.fillText(String(str), x + 2, y + 2); }
+        if (o.stroke) { g.lineWidth = o.strokeWidth || 3; g.strokeStyle = o.stroke; g.strokeText(String(str), x, y); }
         g.fillStyle = o.color || '#ffffff';
         g.fillText(String(str), x, y);
-        if (o.stroke) { g.lineWidth = o.strokeWidth || 3; g.strokeStyle = o.stroke; g.strokeText(String(str), x, y); }
         g.restore();
       },
       /** Screen-space helpers ignore the camera. */
@@ -889,6 +900,7 @@ export const GAME_FORGE_SDK_SOURCE = `
     var hooks = { update: null, draw: null, restart: null };
     var state = { score: 0, lives: o.lives == null ? 3 : o.lives, time: 0, level: 1 };
     var endBtn = null;
+    var lastActorReport = 0;
 
     function loop(t) {
       rafId = global.requestAnimationFrame(loop);
@@ -921,11 +933,15 @@ export const GAME_FORGE_SDK_SOURCE = `
         r.fillScreen(o.background || '#0b1020');
         r.begin();
         if (hooks.draw) hooks.draw(r, api);
+        if (now() - lastActorReport > 250) {
+          lastActorReport = now();
+          global.parent.postMessage({ type: 'forge-player-evidence', players: r.playersDrawn.slice(0, 8), inputActive: input.axis().len > 0 || input.pointer.down }, '*');
+        }
         fx.draw(r);
         r.end();
         fx.drawOverlay(r);
         ui.draw();
-        if (finished) endBtn = ui.endCard(api.won, api.won ? (o.winTitle || 'You win') : (o.loseTitle || 'Game over'), ['Score ' + Math.round(state.score)], o.replayText || 'Play again');
+        if (finished) endBtn = ui.endCard(api.won, api.won ? (o.winTitle || 'You win') : (o.loseTitle || 'Game over'), [(o.scoreLabel || 'Score') + ' ' + Math.round(state.score)], o.replayText || 'Play again');
         var total = 0;
         for (var k in world.groups) if (Object.prototype.hasOwnProperty.call(world.groups, k)) total += world.groups[k].length;
         telemetry.frame(total);
@@ -991,7 +1007,7 @@ export const GAME_FORGE_SDK_SOURCE = `
         finished = false; endBtn = null; api.won = false;
         state.score = 0; state.lives = o.lives == null ? 3 : o.lives; state.time = 0; state.level = 1;
         world.clear(); fx.clear(); ui.clear(); timers.clear();
-        r.camera.x = 0; r.camera.y = 0; r.camera.zoom = 1;
+        r.camera.x = stage.width / 2; r.camera.y = stage.height / 2; r.camera.zoom = 1;
         try { if (hooks.restart) hooks.restart(api); } catch (err) { telemetry.error(err); }
         telemetry.restarted();
         audio.sfx('select');

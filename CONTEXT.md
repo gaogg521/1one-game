@@ -1956,3 +1956,10 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 最终报告 `qa-output/prod-unified-flow-20260909-final/REPORT.json` pass=true，含device和restartObserved；创建/等待页截图及owner-state在 `qa-output/prod-unified-flow-20260909/`。6个素材全部200、无fallback，见 `qa-output/prod-runtime-assets/REPORT.json`。不要把前两份失败报告当最终结论。
 - 生产release gate（语法错误/启动抛错/空壳/过期证据/验证不可用）通过；最终健康ok、15个JS资源200；本地TypeScript、完整build、目标lint（仅既有warning）、4个创建E2E、手机失败重试E2E及单模式模型错误/参数透传测试通过。
 - 本轮请求已完成；无需再部署或重复创建验收任务。原来失败的旧作品没有伪造为成功，可在新版失败页重新构建。自动化id=p0-p1保留用户当前“发送你好”内容，每4小时ACTIVE，未擅自改回研发任务或暂停。
+
+## 2026-09-10 · 撤回旧游戏可玩性验收结论，补齐真实角色验收（进行中）
+- 用户截图证实：上节“本轮请求已完成”仅覆盖流程与事件，不能代表游戏画面和玩法正确。旧项目 cmttrebdl000awvd6t9spth2x 的分数/结局成功记录不足以证明可玩，撤回该游戏质量通过结论。
+- 实测根因：SDK 默认相机中心(0,0)叠加半屏平移，使按左上角坐标生成的主角落在屏外；描边绘制在文字填充之后遮住字面；pointerdown preventDefault 使画布未获得键盘焦点；生成模块的 G.player 与 world player 是不同对象，碰撞/分数变化不等于可见角色移动。
+- 已在本地修正相机初始/重开坐标、描边次序、点击焦点；生成共享实体/状态契约、单一HUD与本地化结算；最终iframe和Forge修复循环共享角色可见/输入期间移动检查。检查是绘制几何证据，不能代替最终像素与玩法人工复核。
+- 回归 scripts/qa-game-player-visibility.ts 已证明好样例通过，屏外主角/脱节主角失败，真实CDP触屏拖动生效，重开位置复原，文字白色字面可见；截图 qa-output/game-player-visibility/engine-restart.png 已人工查看。原始问题游戏源码已只读导出到 qa-output/game-visibility-investigation。
+- 尚未部署。生产仍 bb5140b8，运行任务0；准备按提交精确部署，并用 revalidate-game-runtimes.ts 重验既有ready版本（无模型调用，失败不伪造成功）。随后必须新创作一个生产小游戏，验证真实可见移动、收集/受伤/胜负/重开与公开页后才可收尾。
