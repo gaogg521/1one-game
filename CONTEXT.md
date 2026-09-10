@@ -1982,3 +1982,4 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 新增 `sdk_time_manually_advanced` 与 `invincibility_never_expires` 硬门禁及生成契约；分别精准路由到手工改时钟的模块和玩家/碰撞模块。`qa-game-forge`、TypeScript、目标ESLint明确exit=0。下一步部署、重验撤回第7版并生成第8版。
 - 第8版 `cmtvjyi4o000ekgf5mb0511fc` 生成期零finding，但源码确定性发现 `world.spawn('star'|'meteor')` 由SDK写 `entity.type`，碰撞却检查 `entity.kind`，因此加分/扣血分支永远不可达。新增 `entity_discriminator_mismatch` 跨模块硬门禁、修复路由和回归；qa-game-forge/TypeScript/ESLint exit=0。下一步部署、撤回第8版并生成第9版。
 - 修正重验产物选择：先前用kind倒序期望优先 `game_runtime_source`，但SQLite字典序会先取 `game_spec`，可能审计生成前快照。现显式先查最终runtime artifact，再回退game_spec；TypeScript/ESLint exit=0。
+- 第8版漏检根因进一步确认：生产源码通过包装函数调用 `world.spawn(type, ...)`，旧规则只识别 `world.spawn('literal', ...)`，所以没有采集到任何spawn类型。规则现改为：只要使用SDK `world.spawn` 又读取 `entity.kind`，就必须在实体属性或后续赋值中显式写入同一kind；回归样例已改成与生产相同的变量转发形态，并补充显式kind合法样例。`qa-game-forge`、TypeScript、目标ESLint均exit=0；待部署后重验并生成第9版。

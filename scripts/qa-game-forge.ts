@@ -141,11 +141,19 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
 {
   const mismatched = assembleGame(design, [
     mod("config", "config", "G.config = {};"),
-    mod("spawn", "system", "G.spawnStar=function(g){g.world.spawn('star',{x:10,y:10});};", ["spawnStar"]),
+    mod("spawn", "system", "G.spawnEntity=function(g,type){g.world.spawn(type,{x:10,y:10});}; G.spawnStar=function(g){G.spawnEntity(g,'star');};", ["spawnEntity", "spawnStar"]),
     mod("collision", "system", "G.hit=function(g){g.world.each('star',function(e){if(e.kind==='star')g.addScore(1);});};", ["hit"]),
     mod("main", "main", "G.main=function(g){g.start({init:function(){G.spawnStar(g);},update:function(){G.hit(g);}});};", ["main"], ["spawnStar", "hit"]),
   ]);
   assert.ok(mismatched.findings.some((finding) => finding.code === "entity_discriminator_mismatch"), "spawned entity.type checked as entity.kind must be rejected");
+
+  const explicitKind = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.spawnStar=function(g){g.world.spawn('star',{kind:'star',x:10,y:10});};", ["spawnStar"]),
+    mod("collision", "system", "G.hit=function(g){g.world.each('star',function(e){if(e.kind==='star')g.addScore(1);});};", ["hit"]),
+    mod("main", "main", "G.main=function(g){g.start({init:function(){G.spawnStar(g);},update:function(){G.hit(g);}});};", ["main"], ["spawnStar", "hit"]),
+  ]);
+  assert.ok(!explicitKind.findings.some((finding) => finding.code === "entity_discriminator_mismatch"), "an explicitly populated custom kind field must pass");
 }
 
 /* ------------------------------------------- renderer binding contract */

@@ -276,9 +276,15 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "Damage assigns a positive entity invincibility timer and collision checks it, but no update decrements it by dt. Decrement and clamp the same field every frame so later hits and the lose path remain reachable.",
     });
   }
-  const spawnedTypes = new Set(Array.from(joinedSource.matchAll(/\bworld\s*\.\s*spawn\s*\(\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!));
   const kindChecks = Array.from(joinedSource.matchAll(/\.\s*kind\s*={2,3}\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!);
-  const mismatchedKinds = [...new Set(kindChecks.filter((kind) => spawnedTypes.has(kind)))];
+  const usesWorldSpawn = /\bworld\s*\.\s*spawn\s*\(/.test(joinedSource);
+  const explicitlyAssignedKinds = new Set([
+    ...Array.from(joinedSource.matchAll(/\bkind\s*:\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!),
+    ...Array.from(joinedSource.matchAll(/\.\s*kind\s*=\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!),
+  ]);
+  const mismatchedKinds = usesWorldSpawn
+    ? [...new Set(kindChecks.filter((kind) => !explicitlyAssignedKinds.has(kind)))]
+    : [];
   if (mismatchedKinds.length) {
     findings.push({
       severity: "blocker",
