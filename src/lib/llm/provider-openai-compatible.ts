@@ -184,12 +184,16 @@ export async function llmJsonOpenAICompatible(params: {
   gatewayBaseUrl?: string | null;
 }): Promise<LlmJsonResult> {
   const { client, req, gatewayBaseUrl } = params;
+  // Mode fallback and reasoning-budget widening share one request deadline.
+  const deadline = Date.now() + req.timeoutMs;
   const messages = [
     { role: "system" as const, content: req.system },
     { role: "user" as const, content: req.user },
   ];
 
   async function run(mode: LlmMode, budgetOverride?: number): Promise<RunOutcome> {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new Error(`llm ${req.provider} request timeout after ${req.timeoutMs}ms`);
     const maxOut = budgetOverride ?? req.maxTokens ?? PRODUCT.llm.jsonMaxOutputTokens;
     const tokenField = openAiChatOutputTokenLimits(req.model, maxOut);
     const thinking = req.thinking ? { thinking: req.thinking } : {};
@@ -212,7 +216,7 @@ export async function llmJsonOpenAICompatible(params: {
             ...tokenField,
           } as ChatCompletionCreateParamsNonStreaming);
 
-    const res = await runWithAbortTimeout(req.timeoutMs, `llm ${req.provider} ${mode}`, (signal) =>
+    const res = await runWithAbortTimeout(remainingMs, `llm ${req.provider} ${mode}`, (signal) =>
       client.chat.completions.create(completionParams, { signal }),
       req.signal,
     );
@@ -262,7 +266,9 @@ export async function llmJsonOpenAICompatible(params: {
       // not support JSON Schema. A timeout/network/auth failure must return
       // immediately instead of doubling every runtime-generation wait.
       const summary = safeErrorSummary(error, { gatewayBaseUrl });
-      if (req.singleModeOnly || !/response[_ ]format|json[_ ]schema|unsupported.*schema|schema.*unsupported/i.test(summary)) {
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : null;
+      const unsupportedFormat = (status === 400 || status === 422) && /response[_ ]format|json[_ ]schema|unsupported.*schema|schema.*unsupported/i.test(summary);
+      if (req.singleModeOnly || !unsupportedFormat) {
         return { ok: false, provider: req.provider, model: req.model, modeTried: req.mode, error: summary };
       }
       // fallthrough — each run uses an independent AbortController

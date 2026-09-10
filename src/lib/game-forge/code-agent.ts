@@ -172,6 +172,10 @@ async function generateModule(
         user: isRepair ? repairPrompt(design, plan, previous, findings) : userPrompt(design, plan),
         temperature: attempt === 0 ? 0.45 : 0.24,
         mode: "json_schema",
+        singleModeOnly: true,
+        // V4 can consume the whole module deadline in hidden reasoning. The
+        // bounded module contract is checked by syntax, SDK audit and browser QA.
+        thinking: /^deepseek-v4-/i.test(model) ? { type: "disabled" } : undefined,
         jsonSchema: MODULE_SCHEMA,
         maxTokens: cfg.moduleMaxTokens,
         timeoutMs: cfg.moduleTimeoutMs,

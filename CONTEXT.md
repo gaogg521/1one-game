@@ -1963,3 +1963,6 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 已在本地修正相机初始/重开坐标、描边次序、点击焦点；生成共享实体/状态契约、单一HUD与本地化结算；最终iframe和Forge修复循环共享角色可见/输入期间移动检查。检查是绘制几何证据，不能代替最终像素与玩法人工复核。
 - 回归 scripts/qa-game-player-visibility.ts 已证明好样例通过，屏外主角/脱节主角失败，真实CDP触屏拖动生效，重开位置复原，文字白色字面可见；截图 qa-output/game-player-visibility/engine-restart.png 已人工查看。原始问题游戏源码已只读导出到 qa-output/game-visibility-investigation。
 - 尚未部署。生产仍 bb5140b8，运行任务0；准备按提交精确部署，并用 revalidate-game-runtimes.ts 重验既有ready版本（无模型调用，失败不伪造成功）。随后必须新创作一个生产小游戏，验证真实可见移动、收集/受伤/胜负/重开与公开页后才可收尾。
+- 续接：功能提交 a8b360a74cc40c0230e288d233ac269de129b84f 已部署，RUNTIME_DELIVERY_RELEASE_OK、15个前端JS200。生产已重验两个ready旧版本：cmts7zpfd000qhmuc0hkiixcy 仍通过；用户投诉的 cmttrebdl000awvd6t9spth2x 明确失败 runtime_player_input_no_visible_response，已写入失败证据并置revision失败，不再冒充可玩。备份由重验脚本落在生产qa-output/runtime-revalidation-*。
+- 唯一新验收游戏：星港接星，project cmtuvxiu2000igpqeual743pd，首次生成进行中。已有20.569秒设计结果与4个完成美术；owner-state、REPORT在 qa-output/prod-visible-game-20260910。禁止再创建同类新项目，沿用该ID继续。生成脚本会在buildReady后停止，pass仍false；必须另用 scripts/qa-prod-visible-game.ts 做视觉/双向键盘/触屏/赢输/重开检查，再查看截图与源码确认碰撞规则，不能把buildReady当验收完成。
+- 新游戏本次暴露额外实际耗时问题：ProviderUsageEvent 记录主模块一次 llmJson 失败耗时480006ms，配置 moduleTimeoutMs=240000。代码核实：异常摘要中的 json_schema 被当成“不支持格式”，超时后又走 json_object。正在本地修为仅HTTP400/422明确格式错误可回退，内部调用共享截止时间，模块singleModeOnly=true；V4代码模块和设计一样关闭隐藏思考，仍跑真实SDK/浏览器检查。现有首次任务尚在运行，不并行重建/部署。修改尚未部署。
