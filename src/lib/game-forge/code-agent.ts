@@ -92,6 +92,7 @@ You output the BODY of a function. Do not write the function signature, do not w
 G is the shared namespace. Everything you expose goes on G. Everything a sibling exposes is read from G.
 For a player-controlled entity, init/restart MUST assign G.player = g.world.spawn('player', ...). Movement, drawing and collision all use that SAME entity. A movement module must not create its own replacement player object. Share authoritative score/lives through g.state, never mirror counters that can diverge. The visible actor must move when input changes, and collision must test its visible position. HUD, hints and end-card labels must use the language of the player request.
 One module owns all HUD fields: put score, lives and timer in ONE g.ui.hud call. Do not draw a second timer or title over the HUD's top 60 pixels. Draw the background first and the player afterwards at a clearly visible size; collision geometry must match the visible sprite. A touch drag must move the same player entity as keyboard input. Restart must recreate that entity and reset every timer, score and spawn accumulator.
+Every spawned gameplay object has one authoritative collection. If spawn uses g.world.spawn('star', ...), update, draw and collision MUST read g.world.each/get/collide for that same type. Never spawn into g.world while drawing or colliding a separate private array; never manually integrate x/y for an entity whose vx/vy the SDK already integrates.
 
 CRITICAL syntax rule: expose a function by ASSIGNING it —
     G.tickSpawns = function (dt, g) { ... };
@@ -226,6 +227,14 @@ export function checkRoleContract(plan: ModulePlan, source: string): QaFinding[]
   }
   if (plan.role === "main" && !/\bg\s*\.\s*start\s*\(/.test(source)) {
     out.push({ severity: "blocker", moduleId: plan.id, code: "start_missing", message: "the main module must call g.start({ init, update, draw })" });
+  }
+  if (plan.role === "system" && /\br\s*\./.test(source) && !/(?:var|let|const)\s+r\b|function\s*\([^)]*\br\b[^)]*\)/.test(source)) {
+    out.push({
+      severity: "blocker",
+      moduleId: plan.id,
+      code: "renderer_unbound",
+      message: "this system uses r.* without declaring r; use g.draw.* (and g.draw.ui.*) or receive r as an explicit function parameter",
+    });
   }
   for (const name of plan.provides) {
     const re = new RegExp(`\\bG\\s*\\.\\s*${name}\\s*=`);

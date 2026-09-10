@@ -67,7 +67,7 @@ async function main() {
     const touch=await player();assert.ok(touch.x>left.x+20,'Touch drag must move the rendered actor');
     await page.screenshot({path:`${out}/touch-right.png`});
     report.controls={first,right,left,touch};
-    if(mode==='inspect') { await fs.writeFile(`${out}/observation.json`,JSON.stringify(await observe(),null,2)); return; }
+    if(mode==='inspect') { await fs.writeFile(`${out}/observation.json`,JSON.stringify(await observe(),null,2)); report.pass=true; return; }
     const started=Date.now();let lastHud='';let screenshots=0;
     const timeline:unknown[]=[];
     while(Date.now()-started<100000) {

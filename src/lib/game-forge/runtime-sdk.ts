@@ -457,10 +457,10 @@ export const GAME_FORGE_SDK_SOURCE = `
   function makeRenderer(stage) {
     var g = stage.g2d;
     var cam = { x: stage.width / 2, y: stage.height / 2, zoom: 1, shakeX: 0, shakeY: 0 };
-    var playersDrawn = [];
+    var spritesDrawn = [];
 
     function begin() {
-      playersDrawn.length = 0;
+      spritesDrawn.length = 0;
       g.save();
       g.translate(stage.width / 2, stage.height / 2);
       g.scale(cam.zoom, cam.zoom);
@@ -471,7 +471,7 @@ export const GAME_FORGE_SDK_SOURCE = `
     var r = {
       ctx: g,
       camera: cam,
-      playersDrawn: playersDrawn,
+      spritesDrawn: spritesDrawn,
       begin: begin,
       end: end,
       get width() { return stage.width; },
@@ -506,12 +506,12 @@ export const GAME_FORGE_SDK_SOURCE = `
         g.translate(x, y);
         if (rot) g.rotate(rot);
         if (flipX) g.scale(-1, 1);
-        if (holder.kind === 'player') {
+        if (holder.kind) {
           var matrix = g.getTransform();
           var cx = matrix.e / stage.canvas.width, cy = matrix.f / stage.canvas.height;
           var bw = (Math.abs(matrix.a * dw) + Math.abs(matrix.c * dh)) / stage.canvas.width;
           var bh = (Math.abs(matrix.b * dw) + Math.abs(matrix.d * dh)) / stage.canvas.height;
-          playersDrawn.push({ x: x, y: y, screenX: cx, screenY: cy, visible: cx + bw / 2 > 0 && cx - bw / 2 < 1 && cy + bh / 2 > 0 && cy - bh / 2 < 1 && g.globalAlpha > 0.1 });
+          spritesDrawn.push({ kind: holder.kind, x: x, y: y, screenX: cx, screenY: cy, visible: cx + bw / 2 > 0 && cx - bw / 2 < 1 && cy + bh / 2 > 0 && cy - bh / 2 < 1 && g.globalAlpha > 0.1 });
         }
         g.drawImage(im, -dw / 2, -dh / 2, dw, dh);
         g.restore();
@@ -935,7 +935,8 @@ export const GAME_FORGE_SDK_SOURCE = `
         if (hooks.draw) hooks.draw(r, api);
         if (now() - lastActorReport > 250) {
           lastActorReport = now();
-          global.parent.postMessage({ type: 'forge-player-evidence', players: r.playersDrawn.slice(0, 8), inputActive: input.axis().len > 0 || input.pointer.down }, '*');
+          var visibleSprites = r.spritesDrawn.slice(0, 24);
+          global.parent.postMessage({ type: 'forge-player-evidence', players: visibleSprites.filter(function (s) { return s.kind === 'player'; }).slice(0, 8), sprites: visibleSprites, inputActive: input.axis().len > 0 || input.pointer.down }, '*');
         }
         fx.draw(r);
         r.end();

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { assembleGame, checkBalanced, checkSyntax, orderModules, scanForbidden, stripCommentsAndStrings } from "../src/lib/game-forge/assemble";
 import { auditBuildShape, auditCallSignatures, auditConfigPaths, auditSdkUsage, auditSharedStateReads, auditStatic } from "../src/lib/game-forge/qa-agent";
 import { validateModulePlan } from "../src/lib/game-forge/design-agent";
+import { checkRoleContract } from "../src/lib/game-forge/code-agent";
 import { GAME_FORGE_SDK_SOURCE } from "../src/lib/game-forge/runtime-sdk";
 import { SDK_SURFACE } from "../src/lib/game-forge/sdk-surface";
 import type { GameDesignDoc, GameModule } from "../src/lib/game-forge/types";
@@ -94,6 +95,15 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   const truncated = checkBalanced("m", "function a() { if (x) { return 1;");
   assert.equal(truncated.length, 1, "an unclosed block must be reported");
   assert.equal(truncated[0]!.code, "truncated");
+}
+
+/* ------------------------------------------- renderer binding contract */
+{
+  const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };
+  const bad = checkRoleContract(plan, "G.drawHud=function(g){r.ui.begin();r.text('x',1,1);r.ui.end();};");
+  assert.ok(bad.some(f => f.code === "renderer_unbound" && f.moduleId === "hud"), "an undeclared r must be repaired in its owning system module");
+  assert.ok(!checkRoleContract(plan, "G.drawHud=function(g){g.draw.ui.begin();g.draw.text('x',1,1);g.draw.ui.end();};").some(f => f.code === "renderer_unbound"));
+  assert.ok(!checkRoleContract(plan, "G.drawHud=function(r,g){r.ui.begin();r.ui.end();};").some(f => f.code === "renderer_unbound"));
 }
 
 /* ------------------------------------------------- hallucinated SDK APIs */

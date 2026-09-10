@@ -26,6 +26,10 @@ async function main() {
   assert.ok(hidden.blockers.includes("runtime_player_not_visible"), JSON.stringify(hidden));
   const detached = await validateGameRuntime(fixture("detached"));
   assert.ok(detached.blockers.includes("runtime_player_input_no_visible_response"), JSON.stringify(detached));
+  const noCollectible = fixture("good");
+  noCollectible.forgeBuild!.design.assets.push({ kind: "collectible", key: "star" });
+  const missingPickup = await validateGameRuntime(noCollectible);
+  assert.ok(missingPickup.blockers.includes("runtime_collectible_not_visible"), JSON.stringify(missingPickup));
   const bad = fixture("detached");
   const probe = await runRuntimeProbe({ design: { ...bad.forgeBuild!.design, title: "fixture", pitch: "move", progression: { winCondition: "collect" } }, source: bad.agenticModule!.source } as GameBuild);
   assert.ok(probe.findings.some(f => f.code === "player_input_no_visible_response"), JSON.stringify(probe));
