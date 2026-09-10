@@ -45,7 +45,7 @@ function buildSlotPrompt(design: GameDesignDoc, slot: AssetSlot): string {
   const isBackground = slot.kind === "background";
   const shared = `art direction: cohesive with "${design.title}" — ${design.pitch}; genre ${design.genre}`;
   const framing = isBackground
-    ? "wide establishing background plate, no characters in focus, no UI, no text"
+    ? "background scenery only, with a calm readable playfield; absolutely no player character, vehicle, enemy, hazard, obstacle, collectible, pickup, projectile, heart, target marker, foreground gameplay object, UI or text"
     // A flat, uniform backdrop is what makes the automatic cutout reliable:
     // the fill starts at the border and stops at the subject's silhouette.
     : "single subject centered, full body, front-facing, clean readable silhouette, generous empty margin around the subject, placed on a completely flat uniform solid-colour backdrop with no gradient, no shadow on the backdrop, no scenery, no ground plane, no text, no UI, no watermark";

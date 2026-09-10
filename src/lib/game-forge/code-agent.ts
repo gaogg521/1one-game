@@ -93,6 +93,7 @@ G is the shared namespace. Everything you expose goes on G. Everything a sibling
 For a player-controlled entity, init/restart MUST assign G.player = g.world.spawn('player', ...). Movement, drawing and collision all use that SAME entity. A movement module must not create its own replacement player object. Share authoritative score/lives through g.state, never mirror counters that can diverge. The visible actor must move when input changes, and collision must test its visible position. HUD, hints and end-card labels must use the language of the player request.
 One module owns all HUD fields: put score, lives and timer in ONE g.ui.hud call. Do not draw a second timer or title over the HUD's top 60 pixels. Draw the background first and the player afterwards at a clearly visible size; collision geometry must match the visible sprite. A touch drag must move the same player entity as keyboard input. Restart must recreate that entity and reset every timer, score and spawn accumulator.
 Every spawned gameplay object has one authoritative collection. If spawn uses g.world.spawn('star', ...), update, draw and collision MUST read g.world.each/get/collide for that same type. Never spawn into g.world while drawing or colliding a separate private array; never manually integrate x/y for an entity whose vx/vy the SDK already integrates.
+Spawn coordinates must come from the live stage bounds. For horizontal spawns use g.rng.range(radius, g.width - radius), and for vertical spawns use g.height. Never hard-code or configure an x/y maximum larger than g.width/g.height: that silently creates invisible collectibles and hazards outside the playable screen.
 
 CRITICAL syntax rule: expose a function by ASSIGNING it —
     G.tickSpawns = function (dt, g) { ... };
@@ -129,7 +130,22 @@ function userPrompt(design: GameDesignDoc, plan: ModulePlan): string {
   return [designSummary(design), "", "---", "", moduleContract(design, plan), "", "Write the body of this module now."].join("\n");
 }
 
-function repairPrompt(design: GameDesignDoc, plan: ModulePlan, previous: string, findings: QaFinding[]): string {
+function repairPrompt(
+  design: GameDesignDoc,
+  plan: ModulePlan,
+  previous: string,
+  findings: QaFinding[],
+  siblings: GameModule[] = [],
+): string {
+  const wholeBuildFailure = findings.some((finding) => finding.moduleId === "assembled");
+  const siblingContext = wholeBuildFailure
+    ? [
+        "",
+        "The failure crosses module boundaries. These are the exact sibling implementations in this build.",
+        "Align your collection/state ownership and calls with them; do not guess from the design brief alone:",
+        ...siblings.map((module) => `\n### ${module.id}\n${module.source.slice(0, 6_000)}`),
+      ]
+    : [];
   return [
     userPrompt(design, plan),
     "",
@@ -140,6 +156,7 @@ function repairPrompt(design: GameDesignDoc, plan: ModulePlan, previous: string,
     "",
     "Return the complete corrected body. Previous attempt:",
     previous.slice(0, 24_000),
+    ...siblingContext,
   ].join("\n");
 }
 
@@ -153,7 +170,7 @@ async function generateModule(
   models: string[],
   scene: ReturnType<typeof resolveGameModelRoute>["scene"],
   localeGroup?: RuntimeLocaleGroup,
-  seed?: { previous: string; findings: QaFinding[] },
+  seed?: { previous: string; findings: QaFinding[]; siblings?: GameModule[] },
 ): Promise<ModuleAgentResult> {
   const cfg = PRODUCT.gameForge;
   const startedAt = Date.now();
@@ -170,7 +187,7 @@ async function generateModule(
         localeGroup,
         strictSceneModel: true,
         system: systemPrompt(),
-        user: isRepair ? repairPrompt(design, plan, previous, findings) : userPrompt(design, plan),
+        user: isRepair ? repairPrompt(design, plan, previous, findings, seed?.siblings) : userPrompt(design, plan),
         temperature: attempt === 0 ? 0.45 : 0.24,
         mode: "json_schema",
         singleModeOnly: true,

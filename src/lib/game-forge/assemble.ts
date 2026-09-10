@@ -225,6 +225,21 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
     findings.push(...checkSyntax(m.id, m.source, m.role));
   }
 
+  const hudOwners = modules.filter((module) => {
+    const code = stripCommentsAndStrings(module.source);
+    const usesSdkHud = /\bg\s*\.\s*ui\s*\.\s*hud\s*\(/.test(code);
+    const drawsCustomHud = /hud|interface|ui/i.test(module.id) && /\bg\s*\.\s*draw\s*\./.test(code);
+    return usesSdkHud || drawsCustomHud;
+  });
+  if (hudOwners.length > 1) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "duplicate_hud",
+      message: `Multiple modules render HUD content (${hudOwners.map((module) => module.id).join(", ")}). Keep one HUD owner: main should update state and the HUD module should render it once.`,
+    });
+  }
+
   const { ordered, findings: orderFindings } = orderModules(modules);
   findings.push(...orderFindings);
 

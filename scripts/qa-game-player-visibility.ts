@@ -30,6 +30,16 @@ async function main() {
   noCollectible.forgeBuild!.design.assets.push({ kind: "collectible", key: "star" });
   const missingPickup = await validateGameRuntime(noCollectible);
   assert.ok(missingPickup.blockers.includes("runtime_collectible_not_visible"), JSON.stringify(missingPickup));
+
+  const offscreenPickup = inspectRuntimePlayerEvidence(
+    design,
+    Array.from({ length: 8 }, (_, index) => ({
+      type: "forge-player-evidence",
+      players: [{ kind: "player", x: 270, y: 840, screenX: 0.5, screenY: 0.875, visible: true }],
+      sprites: [{ kind: "collectible", x: index < 4 ? 760 : 270, y: 200, screenX: index < 4 ? 1.41 : 0.5, screenY: 0.2, visible: index >= 4 }],
+    })),
+  );
+  assert.ok(offscreenPickup.blockers.includes("runtime_collectible_spawn_outside_viewport"), JSON.stringify(offscreenPickup));
   const bad = fixture("detached");
   const probe = await runRuntimeProbe({ design: { ...bad.forgeBuild!.design, title: "fixture", pitch: "move", progression: { winCondition: "collect" } }, source: bad.agenticModule!.source } as GameBuild);
   assert.ok(probe.findings.some(f => f.code === "player_input_no_visible_response"), JSON.stringify(probe));

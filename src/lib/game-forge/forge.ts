@@ -323,7 +323,11 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
       const plan = design.design.modules.find((p) => p.id === moduleId);
       const current = modules.find((m) => m.id === moduleId);
       if (!plan || !current) return null;
-      return generateModule(design.design, plan, route.models, route.scene, localeGroup, { previous: current.source, findings });
+      return generateModule(design.design, plan, route.models, route.scene, localeGroup, {
+        previous: current.source,
+        findings,
+        siblings: modules.filter((module) => module.id !== moduleId),
+      });
     }));
 
     // A repair round can make the build worse: it rewrites whole modules, so
@@ -424,6 +428,7 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
 function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | null {
   const main = modules.find((m) => m.role === "main");
   const systems = modules.filter((m) => m.role === "system");
+  if (finding.code === "duplicate_hud") return main?.id ?? systems.find((m) => /hud|ui/i.test(m.id))?.id ?? null;
   const byCode: Record<string, (m: GameModule) => boolean> = {
     no_hud: (m) => /hud|ui|interface/i.test(m.id),
     no_juice: (m) => /render|draw|fx|effect/i.test(m.id),
@@ -433,6 +438,10 @@ function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | n
     no_win_path: (m) => /progress|score|rule|level/i.test(m.id),
     no_lose_path: (m) => /progress|score|rule|level|collision/i.test(m.id),
     required_asset_unused: (m) => /render|draw|entit|sprite/i.test(m.id),
+    collectible_not_visible: (m) => /entit|collect|spawn|render|draw/i.test(m.id),
+    collectible_spawn_outside_viewport: (m) => /spawn|entit|collect/i.test(m.id),
+    player_not_visible: (m) => /player|control|render|draw/i.test(m.id),
+    player_input_no_visible_response: (m) => /player|control|input/i.test(m.id),
   };
   const match = byCode[finding.code];
   if (match) {

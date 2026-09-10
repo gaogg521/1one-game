@@ -64,7 +64,9 @@ async function main() {
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point(left.screenX,left.screenY)]});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(0.7,left.screenY)]});
     await page.waitForTimeout(700);
-    const touch=await player();assert.ok(touch.x>left.x+20,'Touch drag must move the rendered actor');
+    const touch=await player();
+    assert.ok(touch.x>left.x+20,'Touch drag must move the rendered actor');
+    assert.ok(Math.abs(touch.screenX-0.7)<0.2,`Touch drag must follow the finger without overshooting to an edge (target=0.7 actual=${touch.screenX.toFixed(3)})`);
     await page.screenshot({path:`${out}/touch-right.png`});
     report.controls={first,right,left,touch};
     if(mode==='inspect') { await fs.writeFile(`${out}/observation.json`,JSON.stringify(await observe(),null,2)); report.pass=true; return; }

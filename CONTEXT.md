@@ -1968,3 +1968,10 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 新游戏本次暴露额外实际耗时问题：ProviderUsageEvent 记录主模块一次 llmJson 失败耗时480006ms，配置 moduleTimeoutMs=240000。代码核实：异常摘要中的 json_schema 被当成“不支持格式”，超时后又走 json_object。正在本地修为仅HTTP400/422明确格式错误可回退，内部调用共享截止时间，模块singleModeOnly=true；V4代码模块和设计一样关闭隐藏思考，仍跑真实SDK/浏览器检查。现有首次任务尚在运行，不并行重建/部署。修改尚未部署。
 - `554d1b52` 已部署并通过生产 release gate；同项目重建的代码模块从此前主模块单次480秒失败降到全套5模块约45秒。第二版被 `r is not defined` 拦截，根因是 HUD system 使用未声明 `r`，修复器却把 assembled 错误归给 main 重写两次。第三版 revision `cmtv86btp003cuozkw1q6wz40` ready，键盘左右和真实CDP触屏让同一可见player从 x=270→500→87→378。
 - 第三版仍未通过人工玩法验收：源码中 spawn_system 把 star/meteor 放进 g.world，entity_system 却绘制并碰撞从未填充的私有 arrays；背景图里虽然有星星陨石，实际下落物不可见、不可碰撞。主角 `ship_orange` 资产404，当前显示橙色占位三角。不能发布。正在补 system 未绑定 renderer 的静态归因、collectible 可见门禁、同一实体集合生成契约和缺失Forge素材的单槽重试；沿用项目 cmtuvxiu2000igpqeual743pd。
+
+## 2026-09-10 · 星港接星真实画面复核后的平台收口（进行中）
+- 同一项目 `cmtuvxiu2000igpqeual743pd` 第4版 `cmtv94hao0018hwn7ncys5a0f` 被新门禁拒绝：`spawn_system` 写 `g.world`，`entity_system` 仍绘制私有空数组，实际无收集物。修复器过去只看本模块旧源码，看不到兄弟模块实现；现为整局故障附带兄弟模块源码，并将收集物/角色可见性问题路由到对应职责模块。
+- 第5版 `cmtv999cw004hhwn72rfvyzin` 运行门禁通过，真实393×852浏览器验证角色可见、键盘左右与CDP触屏移动；70.25秒真实追星得到50分、胜利结算和重开。仍不发布：配置把横向生成上限写成900而实际舞台宽540，约一半收集物/陨石在屏外；触屏跟随把坐标差再次乘速度并叠加SDK积分，实际拖到0.7会冲到0.957边缘；main与hud模块重复绘制HUD；背景图烘焙了大飞船/星星/陨石，造成假目标。
+- 新平台门禁/契约：收集物观测中横向出界比例>=40%硬拦；触屏验收需跟随目标位置而非只证明移动；重复HUD owner硬拦；跨模块修复读取真实兄弟源码；生成坐标必须取live `g.width/g.height`；背景提示严格禁止玩家、载具、敌人、障碍、收集物、UI等前景对象。
+- 第5版失败路径实测确实发生生命3→2，伤害链路存在，但自动追陨石最终仍以50分胜利，未达到预期失败结局，因此该版本不算双向验收通过。
+- 回归通过：`qa-game-forge`、`qa-game-player-visibility`、TypeScript、目标ESLint、完整Next build（仅既有Turbopack宽glob警告）。下一步：精确部署本批平台修复；用已生成的纯背景plate替换该项目背景；同项目生成新revision；重新完成首屏、双向键盘、触屏位置跟随、赢/输/重开、素材HTTP和匿名公开页验收。
