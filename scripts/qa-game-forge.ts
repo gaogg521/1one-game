@@ -137,6 +137,17 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.ok(!expiring.findings.some((finding) => finding.code === "sdk_time_manually_advanced" || finding.code === "invincibility_never_expires"), "SDK-owned time plus an expiring immunity timer must pass");
 }
 
+/* --------------------------------------- entity discriminator consistency */
+{
+  const mismatched = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.spawnStar=function(g){g.world.spawn('star',{x:10,y:10});};", ["spawnStar"]),
+    mod("collision", "system", "G.hit=function(g){g.world.each('star',function(e){if(e.kind==='star')g.addScore(1);});};", ["hit"]),
+    mod("main", "main", "G.main=function(g){g.start({init:function(){G.spawnStar(g);},update:function(){G.hit(g);}});};", ["main"], ["spawnStar", "hit"]),
+  ]);
+  assert.ok(mismatched.findings.some((finding) => finding.code === "entity_discriminator_mismatch"), "spawned entity.type checked as entity.kind must be rejected");
+}
+
 /* ------------------------------------------- renderer binding contract */
 {
   const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };

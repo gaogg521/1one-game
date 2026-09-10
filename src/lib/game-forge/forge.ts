@@ -448,6 +448,9 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
     const target = systems.find((module) => /player|control|collision|damage/i.test(module.id));
     return [target?.id ?? main?.id].filter((id): id is string => Boolean(id));
   }
+  if (finding.code === "entity_discriminator_mismatch") {
+    return modules.filter((module) => /\.\s*kind\s*={2,3}\s*['"]/.test(module.source)).map((module) => module.id);
+  }
   const byCode: Record<string, (m: GameModule) => boolean> = {
     no_hud: (m) => /hud|ui|interface/i.test(m.id),
     no_juice: (m) => /render|draw|fx|effect/i.test(m.id),

@@ -1980,3 +1980,4 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 发现历史重验脚本只重跑短浏览器探针，没有用当前代码重新装配并执行静态跨模块审计；因此第6版双状态在重验时误报passed。现修为以最终 `game_runtime_source` 为首选产物，并在 `validateGameRuntime` 对存储的design/modules重新运行 `assembleGame` blocker审计后再合并真实浏览器证据。回归脚本修正后明确exit=0，TypeScript/ESLint exit=0。
 - 第7版 `cmtvjmtnd000el3wthuoig3gv` 首屏/坐标/触屏通过，状态统一到 `g.state`；真实追星在35.07秒以80分胜利，暴露其手工 `g.state.time += dt` 与SDK自动计时叠加，70秒局只跑35秒。源码另有伤害无敌值设为1.2后从未递减，首撞后永久免疫，失败路径不可达。
 - 新增 `sdk_time_manually_advanced` 与 `invincibility_never_expires` 硬门禁及生成契约；分别精准路由到手工改时钟的模块和玩家/碰撞模块。`qa-game-forge`、TypeScript、目标ESLint明确exit=0。下一步部署、重验撤回第7版并生成第8版。
+- 第8版 `cmtvjyi4o000ekgf5mb0511fc` 生成期零finding，但源码确定性发现 `world.spawn('star'|'meteor')` 由SDK写 `entity.type`，碰撞却检查 `entity.kind`，因此加分/扣血分支永远不可达。新增 `entity_discriminator_mismatch` 跨模块硬门禁、修复路由和回归；qa-game-forge/TypeScript/ESLint exit=0。下一步部署、撤回第8版并生成第9版。

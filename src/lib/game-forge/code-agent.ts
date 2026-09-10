@@ -96,6 +96,7 @@ Every spawned gameplay object has one authoritative collection. If spawn uses g.
 Spawn coordinates must come from the live stage bounds. For horizontal spawns use g.rng.range(radius, g.width - radius), and for vertical spawns use g.height. Never hard-code or configure an x/y maximum larger than g.width/g.height: that silently creates invisible collectibles and hazards outside the playable screen.
 The SDK advances g.state.time automatically once per update. Read it for timers and end conditions; never increment, decrement or assign g.state.time yourself.
 Any custom cooldown or invincibility field placed on an entity is your responsibility to decrement by dt every update and clamp back to zero. A positive invincibility value that never expires makes the lose path impossible.
+g.world.spawn('star', props) always stores the group discriminator as entity.type === 'star'. Collision and update logic must check entity.type, not entity.kind, unless spawn explicitly writes a separate kind field and every module uses it consistently.
 
 CRITICAL syntax rule: expose a function by ASSIGNING it —
     G.tickSpawns = function (dt, g) { ... };

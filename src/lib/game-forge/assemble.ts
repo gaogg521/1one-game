@@ -276,6 +276,17 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "Damage assigns a positive entity invincibility timer and collision checks it, but no update decrements it by dt. Decrement and clamp the same field every frame so later hits and the lose path remain reachable.",
     });
   }
+  const spawnedTypes = new Set(Array.from(joinedSource.matchAll(/\bworld\s*\.\s*spawn\s*\(\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!));
+  const kindChecks = Array.from(joinedSource.matchAll(/\.\s*kind\s*={2,3}\s*['"]([A-Za-z0-9_-]+)['"]/g), (match) => match[1]!);
+  const mismatchedKinds = [...new Set(kindChecks.filter((kind) => spawnedTypes.has(kind)))];
+  if (mismatchedKinds.length) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "entity_discriminator_mismatch",
+      message: `g.world.spawn(type, ...) stores the discriminator on entity.type, but collision/update code checks entity.kind for: ${mismatchedKinds.join(", ")}. Read entity.type consistently or explicitly set and use one shared field.`,
+    });
+  }
 
   const { ordered, findings: orderFindings } = orderModules(modules);
   findings.push(...orderFindings);
