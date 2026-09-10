@@ -308,11 +308,13 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
 
     const byModule = new Map<string, QaFinding[]>();
     for (const f of actionable) {
-      const target = f.moduleId === "assembled" ? pickRepairTarget(modules, f) : f.moduleId;
-      if (!target) continue;
-      const list = byModule.get(target) ?? [];
-      list.push(f);
-      byModule.set(target, list);
+      const targets = f.moduleId === "assembled" ? pickRepairTargets(modules, f) : [f.moduleId];
+      for (const target of targets) {
+        if (!target) continue;
+        const list = byModule.get(target) ?? [];
+        list.push(f);
+        byModule.set(target, list);
+      }
     }
     if (!byModule.size) break;
 
@@ -425,10 +427,20 @@ export async function forgeGame(options: ForgeOptions): Promise<ForgeResult> {
  * A whole-build finding has to be repaired somewhere. Route it to the module
  * whose declared responsibility covers it, defaulting to main.
  */
-function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | null {
+function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] {
   const main = modules.find((m) => m.role === "main");
   const systems = modules.filter((m) => m.role === "system");
-  if (finding.code === "duplicate_hud") return main?.id ?? systems.find((m) => /hud|ui/i.test(m.id))?.id ?? null;
+  if (finding.code === "duplicate_hud") return [main?.id ?? systems.find((m) => /hud|ui/i.test(m.id))?.id].filter((id): id is string => Boolean(id));
+  if (finding.code === "score_state_split" || finding.code === "lives_state_split") {
+    const field = finding.code === "score_state_split" ? "score" : "lives";
+    const relevant = modules.filter((module) => {
+      if (module.role === "config") return false;
+      const code = module.source;
+      return new RegExp(`\\b(?:G\\s*\\.\\s*state|state)\\s*\\.\\s*${field}\\b`).test(code)
+        || (field === "score" ? /\bg\s*\.\s*addScore\s*\(/.test(code) : /\bg\s*\.\s*loseLife\s*\(/.test(code));
+    });
+    return relevant.map((module) => module.id);
+  }
   const byCode: Record<string, (m: GameModule) => boolean> = {
     no_hud: (m) => /hud|ui|interface/i.test(m.id),
     no_juice: (m) => /render|draw|fx|effect/i.test(m.id),
@@ -446,7 +458,7 @@ function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | n
   const match = byCode[finding.code];
   if (match) {
     const hit = systems.find(match);
-    if (hit) return hit.id;
+    if (hit) return [hit.id];
   }
 
   // A runtime error names the thing that broke: "G.tickSpawns is not a
@@ -458,10 +470,11 @@ function pickRepairTarget(modules: GameModule[], finding: QaFinding): string | n
     const named = Array.from(finding.message.matchAll(/G\.([A-Za-z][A-Za-z0-9_]{0,40})/g)).map((m) => m[1]!);
     for (const name of named) {
       const owner = modules.find((m) => m.provides.includes(name));
-      if (owner) return owner.id;
+      if (owner) return [owner.id];
     }
   }
-  return main?.id ?? systems[0]?.id ?? null;
+  const fallback = main?.id ?? systems[0]?.id;
+  return fallback ? [fallback] : [];
 }
 
 function mergeAssemblyFindings(report: QaReport, findings: QaFinding[]): QaReport {

@@ -240,6 +240,24 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
     });
   }
 
+  const joinedSource = modules.map((module) => module.source).join("\n");
+  if (/\bg\s*\.\s*addScore\s*\(/.test(joinedSource) && /\bG\s*\.\s*state\s*\.\s*score\b/.test(joinedSource)) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "score_state_split",
+      message: "The SDK updates g.state.score through g.addScore(), but another module reads G.state.score. Use g.state.score as the single score value in collision, HUD and win checks; never mirror it on G.state.",
+    });
+  }
+  if (/\bg\s*\.\s*loseLife\s*\(/.test(joinedSource) && /\bG\s*\.\s*state\s*\.\s*lives\b/.test(joinedSource)) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "lives_state_split",
+      message: "The SDK updates g.state.lives through g.loseLife(), but another module reads G.state.lives. Use g.state.lives as the single lives value in collision, HUD and lose checks; never mirror it on G.state.",
+    });
+  }
+
   const { ordered, findings: orderFindings } = orderModules(modules);
   findings.push(...orderFindings);
 

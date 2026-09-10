@@ -1975,3 +1975,5 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 新平台门禁/契约：收集物观测中横向出界比例>=40%硬拦；触屏验收需跟随目标位置而非只证明移动；重复HUD owner硬拦；跨模块修复读取真实兄弟源码；生成坐标必须取live `g.width/g.height`；背景提示严格禁止玩家、载具、敌人、障碍、收集物、UI等前景对象。
 - 第5版失败路径实测确实发生生命3→2，伤害链路存在，但自动追陨石最终仍以50分胜利，未达到预期失败结局，因此该版本不算双向验收通过。
 - 回归通过：`qa-game-forge`、`qa-game-player-visibility`、TypeScript、目标ESLint、完整Next build（仅既有Turbopack宽glob警告）。下一步：精确部署本批平台修复；用已生成的纯背景plate替换该项目背景；同项目生成新revision；重新完成首屏、双向键盘、触屏位置跟随、赢/输/重开、素材HTTP和匿名公开页验收。
+- 第6版 `cmtviyakr00tkh3m8c2wfa6ak` 视觉改进已实测：纯背景无假目标，所有星星横向在屏内，角色位于底部；键盘左右与触屏目标0.7（实际screenX=0.627）通过。但源码发现碰撞调用 `g.addScore/g.loseLife`，HUD和结算读取 `G.state.score/lives`，双状态会让分数/生命显示和结算脱节，继续拒绝发布。
+- 新增 `score_state_split` / `lives_state_split` 硬门禁；这类整局状态故障会同时修复所有引用相关状态或SDK mutator的模块，并携带兄弟模块源码，要求统一到 `g.state`。回归、TypeScript和目标ESLint通过。下一步部署并重验第6版，随后沿用项目生成第7版。

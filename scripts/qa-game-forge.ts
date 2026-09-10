@@ -97,6 +97,28 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.equal(truncated[0]!.code, "truncated");
 }
 
+/* ------------------------------------------------ duplicate HUD owners */
+{
+  const duplicate = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("hud", "system", "G.drawHUD = function(g) { g.draw.text('Score', 10, 10); };", ["drawHUD"]),
+    mod("main", "main", "G.main = function(g) { g.ui.hud([{ label: 'Score', value: 0 }]); g.start({ draw: function(r,g) { G.drawHUD(g); } }); };", ["main"], ["drawHUD"]),
+  ]);
+  assert.ok(duplicate.findings.some((finding) => finding.code === "duplicate_hud"), "two HUD owners must be rejected before they draw duplicate labels");
+}
+
+/* ------------------------------------------ SDK state must stay singular */
+{
+  const splitState = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("collision", "system", "G.hit = function(g) { g.addScore(10); g.loseLife(); };", ["hit"]),
+    mod("hud", "system", "G.drawHUD = function(g) { g.draw.text(String(G.state.score) + String(G.state.lives), 10, 10); };", ["drawHUD"]),
+    mod("main", "main", "G.main = function(g) { G.state = { score: 0, lives: 3 }; g.start({ draw: function(r,g) { G.drawHUD(g); } }); };", ["main"], ["drawHUD"]),
+  ]);
+  assert.ok(splitState.findings.some((finding) => finding.code === "score_state_split"), "g.addScore with G.state.score must be rejected");
+  assert.ok(splitState.findings.some((finding) => finding.code === "lives_state_split"), "g.loseLife with G.state.lives must be rejected");
+}
+
 /* ------------------------------------------- renderer binding contract */
 {
   const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };
