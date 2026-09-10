@@ -257,6 +257,25 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "The SDK updates g.state.lives through g.loseLife(), but another module reads G.state.lives. Use g.state.lives as the single lives value in collision, HUD and lose checks; never mirror it on G.state.",
     });
   }
+  if (/\bg\s*\.\s*state\s*\.\s*time\s*(?:\+\+|--|\+=|-=|=\s*g\s*\.\s*state\s*\.\s*time\s*[+-])/.test(joinedSource)) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "sdk_time_manually_advanced",
+      message: "The SDK already advances g.state.time once per frame. Read it for timers and end conditions; remove every manual increment/decrement or the game clock runs at the wrong speed.",
+    });
+  }
+  const setsInvincibility = /\.[Ii]nvincible\s*=\s*[^;]*(?:AfterHit|invincib|[1-9]\d*(?:\.\d+)?)/.test(joinedSource);
+  const gatesOnInvincibility = /\.[Ii]nvincible\s*>\s*0/.test(joinedSource);
+  const expiresInvincibility = /\.[Ii]nvincible\s*(?:-=|=\s*Math\.max\s*\(\s*0\s*,[^;]*-\s*dt)/.test(joinedSource);
+  if (setsInvincibility && gatesOnInvincibility && !expiresInvincibility) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "invincibility_never_expires",
+      message: "Damage assigns a positive entity invincibility timer and collision checks it, but no update decrements it by dt. Decrement and clamp the same field every frame so later hits and the lose path remain reachable.",
+    });
+  }
 
   const { ordered, findings: orderFindings } = orderModules(modules);
   findings.push(...orderFindings);

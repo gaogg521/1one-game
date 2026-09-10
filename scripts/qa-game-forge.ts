@@ -119,6 +119,24 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.ok(splitState.findings.some((finding) => finding.code === "lives_state_split"), "g.loseLife with G.state.lives must be rejected");
 }
 
+/* -------------------------------------------- timers must actually expire */
+{
+  const brokenTimers = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("collision", "system", "G.hit = function(g) { var player=G.player; if(player.invincible>0)return; player.invincible=1.2; };", ["hit"]),
+    mod("main", "main", "G.main = function(g) { g.start({ update: function(dt,g) { g.state.time += dt; } }); };", ["main"]),
+  ]);
+  assert.ok(brokenTimers.findings.some((finding) => finding.code === "sdk_time_manually_advanced"), "manual SDK time advancement must be rejected");
+  assert.ok(brokenTimers.findings.some((finding) => finding.code === "invincibility_never_expires"), "a permanent damage immunity timer must be rejected");
+
+  const expiring = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("collision", "system", "G.hit = function(g) { var player=G.player; if(player.invincible>0)return; player.invincible=1.2; }; G.tick=function(dt){if(G.player.invincible>0)G.player.invincible-=dt;};", ["hit", "tick"]),
+    mod("main", "main", "G.main = function(g) { g.start({ update: function(dt,g) { var elapsed=g.state.time; G.tick(dt); } }); };", ["main"], ["tick"]),
+  ]);
+  assert.ok(!expiring.findings.some((finding) => finding.code === "sdk_time_manually_advanced" || finding.code === "invincibility_never_expires"), "SDK-owned time plus an expiring immunity timer must pass");
+}
+
 /* ------------------------------------------- renderer binding contract */
 {
   const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };

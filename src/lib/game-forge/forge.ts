@@ -441,6 +441,13 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
     });
     return relevant.map((module) => module.id);
   }
+  if (finding.code === "sdk_time_manually_advanced") {
+    return modules.filter((module) => /\bg\s*\.\s*state\s*\.\s*time\s*(?:\+\+|--|\+=|-=|=\s*g\s*\.\s*state\s*\.\s*time\s*[+-])/.test(module.source)).map((module) => module.id);
+  }
+  if (finding.code === "invincibility_never_expires") {
+    const target = systems.find((module) => /player|control|collision|damage/i.test(module.id));
+    return [target?.id ?? main?.id].filter((id): id is string => Boolean(id));
+  }
   const byCode: Record<string, (m: GameModule) => boolean> = {
     no_hud: (m) => /hud|ui|interface/i.test(m.id),
     no_juice: (m) => /render|draw|fx|effect/i.test(m.id),

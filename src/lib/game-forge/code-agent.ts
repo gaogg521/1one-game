@@ -94,6 +94,8 @@ For a player-controlled entity, init/restart MUST assign G.player = g.world.spaw
 One module owns all HUD fields: put score, lives and timer in ONE g.ui.hud call. Do not draw a second timer or title over the HUD's top 60 pixels. Draw the background first and the player afterwards at a clearly visible size; collision geometry must match the visible sprite. A touch drag must move the same player entity as keyboard input. Restart must recreate that entity and reset every timer, score and spawn accumulator.
 Every spawned gameplay object has one authoritative collection. If spawn uses g.world.spawn('star', ...), update, draw and collision MUST read g.world.each/get/collide for that same type. Never spawn into g.world while drawing or colliding a separate private array; never manually integrate x/y for an entity whose vx/vy the SDK already integrates.
 Spawn coordinates must come from the live stage bounds. For horizontal spawns use g.rng.range(radius, g.width - radius), and for vertical spawns use g.height. Never hard-code or configure an x/y maximum larger than g.width/g.height: that silently creates invisible collectibles and hazards outside the playable screen.
+The SDK advances g.state.time automatically once per update. Read it for timers and end conditions; never increment, decrement or assign g.state.time yourself.
+Any custom cooldown or invincibility field placed on an entity is your responsibility to decrement by dt every update and clamp back to zero. A positive invincibility value that never expires makes the lose path impossible.
 
 CRITICAL syntax rule: expose a function by ASSIGNING it —
     G.tickSpawns = function (dt, g) { ... };
