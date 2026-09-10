@@ -47,7 +47,11 @@ async function main() {
     await canvas.scrollIntoViewIfNeeded();
     await page.waitForFunction("window.events.some(e=>e.type==='forge-player-evidence')",undefined,{timeout:15000});
     const frame=page.frames().find(f=>f!==page.mainFrame())!;
-    const player=()=>page.evaluate("window.events.filter(e=>e.type==='forge-player-evidence').at(-1)?.players?.find(p=>p.visible)") as Promise<NonNullable<Event['players']>[number]>;
+    const player=async()=>{
+      const visible=await page.evaluate("window.events.filter(e=>e.type==='forge-player-evidence').flatMap(e=>e.players||[]).filter(p=>p.visible).at(-1)") as NonNullable<Event['players']>[number] | undefined;
+      assert.ok(visible,'A current visible player observation is required');
+      return visible;
+    };
     const observe=()=>frame.evaluate<Observation>("({draws:window.observation.draws.filter(d=>d.at>performance.now()-100),text:window.observation.text.filter(d=>d.at>performance.now()-100)})");
     const first=await player();assert.ok(first?.visible,'Player must be drawn inside viewport');
     await page.screenshot({path:`${out}/initial.png`});
@@ -73,22 +77,39 @@ async function main() {
     const started=Date.now();let lastHud='';let screenshots=0;
     const timeline:unknown[]=[];
     while(Date.now()-started<100000) {
-      const obs=await observe();const p=await player();
+      if(await page.evaluate("window.events.some(e=>e.type==='forge-end'||e.type==='operone-game-end')"))break;
+      const obs=await observe();
+      const observedShip=obs.draws.filter(d=>/ship_orange|player/i.test(d.src)).at(-1);
+      const evidencedPlayer=await player();
+      const p=observedShip
+        ? {...evidencedPlayer,screenX:observedShip.x,screenY:observedShip.y,visible:true}
+        : evidencedPlayer;
       const falling=obs.draws.filter(d=>d.y>0.1 && d.y<p.screenY+0.04);
       const hazards=falling.filter(d=>/meteor|hazard|rock|enemy/i.test(d.src));
       const stars=falling.filter(d=>/star|collectible|gem/i.test(d.src));
       const targets=(mode==='lose'?hazards:stars).sort((a,b)=>b.y-a.y);
       let x=targets[0]?.x ?? p.screenX;
       if(mode==='win') {
-        const near=hazards.filter(d=>d.y>p.screenY-0.2 && Math.abs(d.x-x)<0.13);
-        if(near.length)x=near[0]!.x<0.5?0.85:0.15;
+        const score=await page.evaluate("window.events.filter(e=>e.type==='forge-heartbeat').at(-1)?.score||0") as number;
+        const nearHazards=hazards.filter(d=>d.y>p.screenY-0.28 && d.y<p.screenY+0.08);
+        const lanes=Array.from({length:23},(_,index)=>0.06+index*0.04);
+        const clearance=(lane:number)=>nearHazards.length?Math.min(...nearHazards.map(h=>Math.abs(lane-h.x))):1;
+        const safeLane=clearance(p.screenX)>=0.15
+          ? p.screenX
+          : (lanes.filter(lane=>clearance(lane)>=0.15).sort((a,b)=>Math.abs(a-p.screenX)-Math.abs(b-p.screenX))[0]
+            ?? lanes.sort((a,b)=>clearance(b)-clearance(a))[0]!);
+        if(score>=50) {
+          x=safeLane;
+        } else {
+          const safeStars=stars.filter(star=>star.y>0.2 && nearHazards.every(hazard=>Math.abs(hazard.x-star.x)>0.16));
+          x=safeStars.sort((a,b)=>b.y-a.y)[0]?.x ?? safeLane;
+        }
       }
       x=Math.max(0.08,Math.min(0.92,x));
       await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(x,p.screenY)]});
       const hud=[...new Set(obs.text.map(t=>t.text))].join(' | ');
       if(hud!==lastHud){timeline.push({ms:Date.now()-started,hud,player:p,targets:targets.slice(0,2)});lastHud=hud;}
       if(Date.now()-started>(screenshots+1)*12000 && screenshots<5){screenshots++;await page.screenshot({path:`${out}/playing-${screenshots}.png`});}
-      if(await page.evaluate("window.events.some(e=>e.type==='forge-end'||e.type==='operone-game-end')"))break;
       await page.waitForTimeout(180);
     }
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});

@@ -156,6 +156,23 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.ok(!explicitKind.findings.some((finding) => finding.code === "entity_discriminator_mismatch"), "an explicitly populated custom kind field must pass");
 }
 
+/* ---------------------------------------------- restart state consistency */
+{
+  const staleRestart = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("control", "system", "var targetX=null; G.move=function(g){if(g.input.pointer.down)targetX=g.input.pointer.x;};", ["move"]),
+    mod("main", "main", "G.main=function(g){function init(){G.player=g.world.spawn('player',{x:10,y:10});}g.start({init:init,update:function(){G.move(g);},draw:function(r){r.circle(G.player.x,G.player.y,5);},restart:init});};", ["main"], ["move"]),
+  ]);
+  assert.ok(staleRestart.findings.some((finding) => finding.code === "restart_state_not_reset"), "module closure input targets that survive replay must be rejected");
+
+  const cleanRestart = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("control", "system", "G.move=function(g){if(g.input.pointer.down)G.run.targetX=g.input.pointer.x;};", ["move"]),
+    mod("main", "main", "G.main=function(g){function init(){G.run={targetX:null};G.player=g.world.spawn('player',{x:10,y:10});}g.start({init:init,update:function(){G.move(g);},draw:function(r){r.circle(G.player.x,G.player.y,5);},restart:init});};", ["main"], ["move"]),
+  ]);
+  assert.ok(!cleanRestart.findings.some((finding) => finding.code === "restart_state_not_reset"), "restart state recreated by init must pass");
+}
+
 /* ------------------------------------------- renderer binding contract */
 {
   const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };

@@ -294,6 +294,26 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
     });
   }
 
+  const restartSensitiveName = /(?:timer|cooldown|target|elapsed|accum|spawn|count|phase|wave|combo|streak|invinc)/i;
+  const privateRestartState = modules.flatMap((module) => {
+    if (module.role !== "system") return [];
+    const names = Array.from(module.source.matchAll(/^(?:var|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/gm), (match) => match[1]!);
+    return names.filter((name) => {
+      if (!restartSensitiveName.test(name)) return false;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const writes = module.source.match(new RegExp(`\\b${escaped}\\s*(?:\\+\\+|--|\\+=|-=|\\*=|\\/=|=(?!=))`, "g")) ?? [];
+      return writes.length > 1;
+    }).map((name) => `${module.id}.${name}`);
+  });
+  if (privateRestartState.length) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "restart_state_not_reset",
+      message: `Restart-sensitive state is trapped in module closures and survives replay: ${privateRestartState.join(", ")}. Store it on G in a shared state object and reset every field from init/restart so a new run starts cleanly.`,
+    });
+  }
+
   const { ordered, findings: orderFindings } = orderModules(modules);
   findings.push(...orderFindings);
 
