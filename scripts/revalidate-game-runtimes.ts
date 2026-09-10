@@ -13,7 +13,10 @@ async function main() {
     await fs.mkdir(backup, { recursive: true });
     for (const row of rows) {
       if (!row.creativeRevisionId || !row.project.legacyId) continue;
-      const artifact = await db.creativeArtifact.findFirst({ where: { creativeRevisionId: row.creativeRevisionId, kind: "game_spec" } });
+      const artifact = await db.creativeArtifact.findFirst({
+        where: { creativeRevisionId: row.creativeRevisionId, kind: { in: ["game_runtime_source", "game_spec"] } },
+        orderBy: [{ kind: "desc" }, { createdAt: "desc" }],
+      });
       if (!artifact?.contentJson) continue;
       const spec = parseGameSpec(JSON.parse(artifact.contentJson));
       const validation = await validateGameRuntime(spec, row.project.legacyId);

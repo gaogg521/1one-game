@@ -1977,3 +1977,4 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 回归通过：`qa-game-forge`、`qa-game-player-visibility`、TypeScript、目标ESLint、完整Next build（仅既有Turbopack宽glob警告）。下一步：精确部署本批平台修复；用已生成的纯背景plate替换该项目背景；同项目生成新revision；重新完成首屏、双向键盘、触屏位置跟随、赢/输/重开、素材HTTP和匿名公开页验收。
 - 第6版 `cmtviyakr00tkh3m8c2wfa6ak` 视觉改进已实测：纯背景无假目标，所有星星横向在屏内，角色位于底部；键盘左右与触屏目标0.7（实际screenX=0.627）通过。但源码发现碰撞调用 `g.addScore/g.loseLife`，HUD和结算读取 `G.state.score/lives`，双状态会让分数/生命显示和结算脱节，继续拒绝发布。
 - 新增 `score_state_split` / `lives_state_split` 硬门禁；这类整局状态故障会同时修复所有引用相关状态或SDK mutator的模块，并携带兄弟模块源码，要求统一到 `g.state`。回归、TypeScript和目标ESLint通过。下一步部署并重验第6版，随后沿用项目生成第7版。
+- 发现历史重验脚本只重跑短浏览器探针，没有用当前代码重新装配并执行静态跨模块审计；因此第6版双状态在重验时误报passed。现修为以最终 `game_runtime_source` 为首选产物，并在 `validateGameRuntime` 对存储的design/modules重新运行 `assembleGame` blocker审计后再合并真实浏览器证据。回归脚本修正后明确exit=0，TypeScript/ESLint exit=0。

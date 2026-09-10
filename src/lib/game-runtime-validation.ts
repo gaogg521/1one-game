@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { GameSpec } from "@/lib/game-spec";
-import type { QaReport } from "@/lib/game-forge/types";
+import { GameDesignDocSchema, type GameModule, type QaReport } from "@/lib/game-forge/types";
 import { buildIndependentRuntimePage } from "@/lib/independent-runtime-page";
 import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
+import { assembleGame } from "@/lib/game-forge/assemble";
 
 export type GameRuntimeValidation = {
   version: 1;
@@ -38,6 +39,15 @@ export function runtimeValidationBlockers(spec: GameSpec, validation?: GameRunti
 export async function validateGameRuntime(spec: GameSpec, projectId?: string, forgeQa?: QaReport | null): Promise<GameRuntimeValidation> {
   const sourceHash = runtimeSourceHash(spec, projectId);
   const result: GameRuntimeValidation = { version: 1, status: "unverified", sourceHash, observed: false, blockers: [], evidence: [] };
+  if (spec.forgeBuild) {
+    const parsedDesign = GameDesignDocSchema.safeParse(spec.forgeBuild.design);
+    const storedModules = Array.isArray(spec.forgeBuild.modules) ? spec.forgeBuild.modules as GameModule[] : [];
+    if (parsedDesign.success && storedModules.length) {
+      const currentStaticFindings = assembleGame(parsedDesign.data, storedModules).findings.filter((finding) => finding.severity === "blocker");
+      result.blockers.push(...currentStaticFindings.map((finding) => `runtime_${finding.code}`));
+      result.evidence.push(`staticBlockers:${currentStaticFindings.length}`);
+    }
+  }
   let browser: import("playwright").Browser | undefined;
   try {
     const { chromium } = await import("playwright");
