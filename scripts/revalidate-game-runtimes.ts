@@ -13,9 +13,16 @@ async function main() {
     await fs.mkdir(backup, { recursive: true });
     for (const row of rows) {
       if (!row.creativeRevisionId || !row.project.legacyId) continue;
+      // The immutable runtime artifact is the exact source delivered to the
+      // iframe. Do not rely on lexical kind ordering here (`game_spec` sorts
+      // after `game_runtime_source` in SQLite and can contain the pre-forge
+      // snapshot), or a revalidation silently audits the wrong program.
       const artifact = await db.creativeArtifact.findFirst({
-        where: { creativeRevisionId: row.creativeRevisionId, kind: { in: ["game_runtime_source", "game_spec"] } },
-        orderBy: [{ kind: "desc" }, { createdAt: "desc" }],
+        where: { creativeRevisionId: row.creativeRevisionId, kind: "game_runtime_source" },
+        orderBy: { createdAt: "desc" },
+      }) ?? await db.creativeArtifact.findFirst({
+        where: { creativeRevisionId: row.creativeRevisionId, kind: "game_spec" },
+        orderBy: { createdAt: "desc" },
       });
       if (!artifact?.contentJson) continue;
       const spec = parseGameSpec(JSON.parse(artifact.contentJson));
