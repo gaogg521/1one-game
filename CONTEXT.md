@@ -1989,3 +1989,10 @@ GameForge 签名契约修复完结且已验证生效；配置形状契约与 rep
 - 生产重验脚本原先只扫描ready，无法恢复被旧规则误标failed的版本。现仅将summary以 `Runtime revalidation failed:` 开头的脚本失败版本纳入再次重验：新规则通过则原子恢复ready，仍失败则保持；普通生成失败不在范围内。待部署后同时验证旧样例恢复与星港接星继续失败。
 - 修复恢复路径部署后重验：旧健康样例恢复passed；旧竹林游戏继续因主角无响应失败；星港接星历史版本保留各自blocker。新revision `cmtwbnq0j000ie1g7sfu017wg` 将spawner/输入视觉状态迁到每局重建的 `G.runState`，静态和短浏览器探针通过，但真实首屏/触屏截图显示主角仍为橙色三角占位。直接HTTP证据：required `ship_player.png` 404；`star_collectible.png`、`meteor_enemy.png`、背景及既有 `ship_orange.png` 均200非fallback。根因是最终runtime按design key寻址，而持久asset_manifest只证明通用semantic `player.png` 存在，两个系统再次脱钩。现将所有Forge required素材的真实HTTP 200、image content-type且无 `X-Operone-Asset-Fallback` 接入 `validateGameRuntime` 硬门禁；缺任一项报 `runtime_required_asset_missing` 并记录具体key/status证据。
 - required素材门禁部署后将该revision明确置为failed；把人工生成并审过的 `ship_orange.png` 以相同SHA-256安装为runtime实际引用的 `ship_player.png` 后，公网200 PNG无fallback，重验恢复passed。首屏确认是真飞船，键盘与触屏目标0.70/实际0.7000通过。但真实“70秒”胜利只用35.23秒：main和spawner都执行 `G.runState.elapsed += dt`，HUD读SDK `g.state.time`，形成双时钟。新增 `time_state_split` 硬门禁：使用SDK时间时不得再推进任何G time/elapsed；修复路由覆盖所有读写两套时间的模块，提示词要求唯一时钟。
+
+## 2026-09-11 · 星港接星最终交付与平台门禁收尾
+- 沿用唯一项目 `cmtuvxiu2000igpqeual743pd`，未新建重复项目。最终修订 `cmtwpwhdo007t4abz0gw92ia1` 为 ready/runtime passed，并已显式发布为 public。
+- 追加平台硬门禁：双时钟（含 `timeLeft` 和局部别名）、重开未复位的共享 `G.*State`、update 阶段绘图、`restart` 中无绑定的 `this.init()`；历史问题修订均经生产 revalidation 降为 failed，不能冒充可玩。
+- 393×852 Chromium 实玩：键盘左右与触控移动通过；胜利局 70.04 秒/200 分，失败局 23.18 秒/120 分；两条路径结算后重开均将主角精确恢复到 `(270,880)`。报告：`qa-output/prod-visible-game-20260910/{inspect,win,lose}/REPORT.json`。
+- 匿名公开页收到 boot/mounted/first-frame/player-evidence/heartbeat，pageerror=0、console error=0、无横向溢出；报告与截图：`qa-output/prod-visible-game-20260910/public-final/`。公开地址：`https://operone.1oneclaw.com/zh-Hans/play/cmtuvxiu2000igpqeual743pd`。
+- 运行代码最终生产部署为 `054d9529c9a40b8faa79da4121091ef63b518931`，release gate 输出 `RUNTIME_DELIVERY_RELEASE_OK`。随后 `988de6e5` 仅更新真实试玩控制器，不影响线上应用。自动续接 `p0-p1` 已在最终验收完成后删除。
