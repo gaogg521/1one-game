@@ -192,6 +192,12 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("main", "main", "G.main=function(g){function init(){G.spawnState={timer:1};}g.start({init:init,update:function(dt){G.tick(dt);},draw:function(){},restart:init});};", ["main"], ["tick"]),
   ]);
   assert.ok(!cleanSharedState.findings.some((finding) => finding.code === "restart_shared_state_not_reset"), "shared system state recreated by init must pass");
+
+  const invalidThisRestart = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("main", "main", "G.main=function(g){g.start({init:function(g){G.player=g.world.spawn('player',{x:10,y:10});},restart:function(g){this.init(g);},draw:function(r){r.circle(G.player.x,G.player.y,5);}});};", ["main"]),
+  ]);
+  assert.ok(invalidThisRestart.findings.some((finding) => finding.code === "restart_this_init_invalid"), "restart must not call an unbound this.init");
 }
 
 /* ------------------------------------------------------ draw phase owner */

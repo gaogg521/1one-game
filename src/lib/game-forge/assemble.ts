@@ -241,6 +241,14 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
   }
 
   const joinedSource = modules.map((module) => module.source).join("\n");
+  if (/\brestart\s*:\s*function\b[\s\S]{0,500}?\bthis\s*\.\s*init\s*\(/i.test(joinedSource)) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "restart_this_init_invalid",
+      message: "A restart callback calls this.init(), but the SDK invokes restart as a plain function so this is not the start config. Define a named init/reset function and call it directly from both init and restart.",
+    });
+  }
   const updatePhaseDrawers = modules.filter((module) => {
     if (module.role !== "system") return false;
     const assignsUpdateHook = /\bG\.(?:update|tick|move|control)[A-Za-z0-9_$]*\s*=\s*function\b/i.test(module.source);

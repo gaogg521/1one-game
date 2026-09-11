@@ -431,6 +431,7 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
   const main = modules.find((m) => m.role === "main");
   const systems = modules.filter((m) => m.role === "system");
   if (finding.code === "duplicate_hud") return [main?.id ?? systems.find((m) => /hud|ui/i.test(m.id))?.id].filter((id): id is string => Boolean(id));
+  if (finding.code === "restart_this_init_invalid") return [main?.id].filter((id): id is string => Boolean(id));
   if (finding.code === "draw_outside_draw_phase") {
     const affected = modules.filter((module) => finding.message.includes(module.id));
     return [...affected.map((module) => module.id), main?.id].filter((id): id is string => Boolean(id));
