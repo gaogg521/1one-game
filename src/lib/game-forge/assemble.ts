@@ -265,6 +265,15 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "The SDK already advances g.state.time once per frame. Read it for timers and end conditions; remove every manual increment/decrement or the game clock runs at the wrong speed.",
     });
   }
+  const advancesSecondaryClock = /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(joinedSource);
+  if (/\bg\s*\.\s*state\s*\.\s*time\b/.test(joinedSource) && advancesSecondaryClock) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "time_state_split",
+      message: "The SDK already owns g.state.time, but modules also advance a G time/elapsed field. Use g.state.time as the single run clock in spawning, HUD and win checks so a 70-second game lasts 70 seconds.",
+    });
+  }
   const setsInvincibility = /\.[Ii]nvincible\s*=\s*[^;]*(?:AfterHit|invincib|[1-9]\d*(?:\.\d+)?)/.test(joinedSource);
   const gatesOnInvincibility = /\.[Ii]nvincible\s*>\s*0/.test(joinedSource);
   const expiresInvincibility = /\.[Ii]nvincible\s*(?:-=|=\s*Math\.max\s*\(\s*0\s*,[^;]*-\s*dt)/.test(joinedSource);

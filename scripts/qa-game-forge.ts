@@ -180,6 +180,24 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.ok(!resetHook.findings.some((finding) => finding.code === "restart_state_not_reset"), "private state reset by a called module hook must pass");
 }
 
+/* ----------------------------------------------------- single clock owner */
+{
+  const splitClock = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.tick=function(dt){G.run.elapsed+=dt;};", ["tick"]),
+    mod("hud", "system", "G.drawHud=function(g){g.draw.text(String(g.state.time),1,1);};", ["drawHud"]),
+    mod("main", "main", "G.main=function(g){G.run={elapsed:0};g.start({update:function(dt){G.tick(dt);},draw:function(){G.drawHud(g);}});};", ["main"], ["tick", "drawHud"]),
+  ]);
+  assert.ok(splitClock.findings.some((finding) => finding.code === "time_state_split"), "SDK time and a manually advanced G clock must be rejected");
+
+  const sdkClock = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("hud", "system", "G.drawHud=function(g){g.draw.text(String(g.state.time),1,1);};", ["drawHud"]),
+    mod("main", "main", "G.main=function(g){g.start({update:function(){if(g.state.time>60)g.win(1);},draw:function(){G.drawHud(g);}});};", ["main"], ["drawHud"]),
+  ]);
+  assert.ok(!sdkClock.findings.some((finding) => finding.code === "time_state_split"), "one SDK-owned clock must pass");
+}
+
 /* ------------------------------------------- renderer binding contract */
 {
   const plan = { id: "hud", role: "system" as const, brief: "draw hud", provides: ["drawHud"], requires: [], signatures: [{ name: "drawHud", params: ["g"] }] };
