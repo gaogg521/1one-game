@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { GameSpec } from "@/lib/game-spec";
 import { GameDesignDocSchema, type GameModule, type QaReport } from "@/lib/game-forge/types";
-import { buildIndependentRuntimePage } from "@/lib/independent-runtime-page";
+import { buildIndependentRuntimePage, independentRuntimeContext } from "@/lib/independent-runtime-page";
 import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
 import { assembleGame } from "@/lib/game-forge/assemble";
 
@@ -74,6 +74,25 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string }>>("window.events");
     const errors = events.filter(e => e.type === "operone-game-error" || e.type === "forge-error");
     result.observed = true;
+    if (projectId && spec.forgeBuild) {
+      const assetContext = independentRuntimeContext(spec, projectId).assets;
+      const parsedAssetDesign = GameDesignDocSchema.safeParse(spec.forgeBuild.design);
+      const requiredSlots = parsedAssetDesign.success ? parsedAssetDesign.data.assets.filter((slot) => slot.required) : [];
+      for (const slot of requiredSlots) {
+        const assetPath = assetContext[slot.key];
+        if (!assetPath) {
+          result.blockers.push("runtime_required_asset_missing");
+          result.evidence.push(`asset:${slot.key}:unmapped`);
+          continue;
+        }
+        const response = await page.request.get(new URL(assetPath, probeUrl).toString(), { timeout: 10_000 }).catch(() => null);
+        const contentType = response?.headers()["content-type"] ?? "";
+        const fallback = response?.headers()["x-operone-asset-fallback"] === "1";
+        const ready = Boolean(response?.ok() && contentType.startsWith("image/") && !fallback);
+        result.evidence.push(`asset:${slot.key}:${response?.status() ?? "error"}:${fallback ? "fallback" : contentType.split(";")[0] || "unknown"}`);
+        if (!ready) result.blockers.push("runtime_required_asset_missing");
+      }
+    }
     if (errors.length) result.blockers.push("runtime_error");
     const booted = events.some(e => e.type === "operone-game-mounted");
     if (!booted) result.blockers.push("runtime_did_not_boot");
