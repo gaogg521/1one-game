@@ -452,7 +452,7 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
     return modules.filter((module) => /\.\s*kind\s*={2,3}\s*['"]/.test(module.source)).map((module) => module.id);
   }
   if (finding.code === "restart_state_not_reset") {
-    const affected = modules.filter((module) => module.role === "system" && /^(?:var|let)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*=/m.test(module.source));
+    const affected = modules.filter((module) => finding.message.includes(`${module.id}.`));
     return [...affected.map((module) => module.id), main?.id].filter((id): id is string => Boolean(id));
   }
   const byCode: Record<string, (m: GameModule) => boolean> = {

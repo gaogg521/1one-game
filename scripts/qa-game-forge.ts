@@ -171,6 +171,13 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("main", "main", "G.main=function(g){function init(){G.run={targetX:null};G.player=g.world.spawn('player',{x:10,y:10});}g.start({init:init,update:function(){G.move(g);},draw:function(r){r.circle(G.player.x,G.player.y,5);},restart:init});};", ["main"], ["move"]),
   ]);
   assert.ok(!cleanRestart.findings.some((finding) => finding.code === "restart_state_not_reset"), "restart state recreated by init must pass");
+
+  const resetHook = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "var spawnTimer=1; G.clearItems=function(){spawnTimer=1;}; G.tick=function(dt){spawnTimer-=dt;};", ["clearItems", "tick"]),
+    mod("main", "main", "G.main=function(g){function init(){G.clearItems();}g.start({init:init,update:function(dt){G.tick(dt);},draw:function(){},restart:init});};", ["main"], ["clearItems", "tick"]),
+  ]);
+  assert.ok(!resetHook.findings.some((finding) => finding.code === "restart_state_not_reset"), "private state reset by a called module hook must pass");
 }
 
 /* ------------------------------------------- renderer binding contract */

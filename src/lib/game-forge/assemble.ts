@@ -295,14 +295,24 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
   }
 
   const restartSensitiveName = /(?:timer|cooldown|target|elapsed|accum|spawn|count|phase|wave|combo|streak|invinc)/i;
+  const mainSourceForRestartAudit = modules.find((module) => module.role === "main")?.source ?? "";
   const privateRestartState = modules.flatMap((module) => {
-    if (module.role !== "system") return [];
+    if (module.role !== "system" || /(?:hud|render|draw|audio|fx|effect)/i.test(module.id)) return [];
     const names = Array.from(module.source.matchAll(/^(?:var|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/gm), (match) => match[1]!);
     return names.filter((name) => {
       if (!restartSensitiveName.test(name)) return false;
       const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const writes = module.source.match(new RegExp(`\\b${escaped}\\s*(?:\\+\\+|--|\\+=|-=|\\*=|\\/=|=(?!=))`, "g")) ?? [];
-      return writes.length > 1;
+      if (writes.length <= 1) return false;
+      const resetters = Array.from(module.source.matchAll(/\bG\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*function\b[^\{]*\{([\s\S]*?)\}\s*;/gi))
+        .filter((match) => /(?:reset|clear|init)/i.test(match[1]!));
+      const resetByCalledHook = resetters.some((match) => {
+        const resetName = match[1]!;
+        const body = match[2] ?? "";
+        return new RegExp(`\\b${escaped}\\s*=(?!=)`).test(body)
+          && new RegExp(`\\bG\\.${resetName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`).test(mainSourceForRestartAudit);
+      });
+      return !resetByCalledHook;
     }).map((name) => `${module.id}.${name}`);
   });
   if (privateRestartState.length) {
