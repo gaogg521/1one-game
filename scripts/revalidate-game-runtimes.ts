@@ -8,7 +8,18 @@ import { validateGameRuntime } from "@/lib/game-runtime-validation";
 async function main() {
   const db = new PrismaClient();
   try {
-    const rows = await db.creativeArtifact.findMany({ where: { kind: "game_runtime_validation", revision: { status: "ready" } }, include: { project: true } });
+    const rows = await db.creativeArtifact.findMany({
+      where: {
+        kind: "game_runtime_validation",
+        revision: {
+          OR: [
+            { status: "ready" },
+            { status: "failed", summary: { startsWith: "Runtime revalidation failed:" } },
+          ],
+        },
+      },
+      include: { project: true, revision: true },
+    });
     const backup = `qa-output/runtime-revalidation-${Date.now()}`;
     await fs.mkdir(backup, { recursive: true });
     for (const row of rows) {
@@ -34,7 +45,14 @@ async function main() {
           const contentJson = JSON.stringify(validation);
           const updated = await tx.creativeArtifact.updateMany({ where: { id: row.id, updatedAt: row.updatedAt }, data: { contentJson, contentHash: createHash("sha256").update(contentJson).digest("hex") } });
           if (updated.count !== 1) throw new Error("Evidence changed during validation");
-          if (validation.status === "failed") await tx.creativeRevision.updateMany({ where: { id: row.creativeRevisionId!, status: "ready" }, data: { status: "failed", summary: `Runtime revalidation failed: ${validation.blockers.join(", ")}` } });
+          if (validation.status === "failed") {
+            await tx.creativeRevision.updateMany({ where: { id: row.creativeRevisionId!, status: "ready" }, data: { status: "failed", summary: `Runtime revalidation failed: ${validation.blockers.join(", ")}` } });
+          } else if (validation.status === "passed" && row.revision?.status === "failed" && row.revision.summary?.startsWith("Runtime revalidation failed:")) {
+            await tx.creativeRevision.updateMany({
+              where: { id: row.creativeRevisionId!, status: "failed", summary: row.revision.summary },
+              data: { status: "ready", summary: "runtime verified · ready for observed playtest" },
+            });
+          }
         });
       }
       console.log(JSON.stringify({ projectId: row.project.legacyId, revisionId: row.creativeRevisionId, status: validation.status, blockers: validation.blockers, applied: process.env.APPLY_RUNTIME_REVALIDATION === "1" }));
