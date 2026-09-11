@@ -74,6 +74,8 @@ async function main() {
     await page.screenshot({path:`${out}/touch-right.png`});
     report.controls={first,right,left,touch};
     if(mode==='inspect') { await fs.writeFile(`${out}/observation.json`,JSON.stringify(await observe(),null,2)); report.pass=true; return; }
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point(0.6,touch.screenY)]});
     const started=Date.now();let lastHud='';let screenshots=0;
     const timeline:unknown[]=[];
     while(Date.now()-started<100000) {
@@ -106,12 +108,7 @@ async function main() {
         }
       }
       x=Math.max(0.08,Math.min(0.92,x));
-      // The runtime exposes a virtual stick whose base is the touchStart point.
-      // Steer relative to that base; sending an absolute target keeps the stick
-      // held right and drives the player into the edge.
-      const stickBase=left.screenX;
-      const stickX=x>p.screenX+0.035 ? stickBase+0.18 : x<p.screenX-0.035 ? stickBase-0.18 : stickBase;
-      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(stickX,p.screenY)]});
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(x,p.screenY)]});
       const hud=[...new Set(obs.text.map(t=>t.text))].join(' | ');
       if(hud!==lastHud){timeline.push({ms:Date.now()-started,hud,player:p,targets:targets.slice(0,2)});lastHud=hud;}
       if(Date.now()-started>(screenshots+1)*12000 && screenshots<5){screenshots++;await page.screenshot({path:`${out}/playing-${screenshots}.png`});}
