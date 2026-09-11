@@ -450,7 +450,7 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
   }
   if (finding.code === "time_state_split") {
     return modules.filter((module) => /\bg\s*\.\s*state\s*\.\s*time\b/.test(module.source)
-      || /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(module.source)).map((module) => module.id);
+      || /\b(?:G(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*|[A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(module.source)).map((module) => module.id);
   }
   if (finding.code === "invincibility_never_expires") {
     const target = systems.find((module) => /player|control|collision|damage/i.test(module.id));

@@ -228,6 +228,13 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   ]);
   assert.ok(countdownSplit.findings.some((finding) => finding.code === "time_state_split"), "SDK time plus a separately advanced countdown must be rejected");
 
+  const aliasedClock = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("run", "system", "G.tick=function(dt,g){var rs=G.runState;rs.elapsed+=dt;if(g.state.time>60)g.win(1);};", ["tick"]),
+    mod("main", "main", "G.main=function(g){G.runState={elapsed:0};g.start({update:function(dt){G.tick(dt,g);},draw:function(){}});};", ["main"], ["tick"]),
+  ]);
+  assert.ok(aliasedClock.findings.some((finding) => finding.code === "time_state_split"), "a local alias that advances a second clock must be rejected");
+
   const sdkClock = assembleGame(design, [
     mod("config", "config", "G.config = {};"),
     mod("hud", "system", "G.drawHud=function(g){g.draw.text(String(g.state.time),1,1);};", ["drawHud"]),

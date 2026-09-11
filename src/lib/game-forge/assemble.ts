@@ -279,7 +279,7 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "The SDK already advances g.state.time once per frame. Read it for timers and end conditions; remove every manual increment/decrement or the game clock runs at the wrong speed.",
     });
   }
-  const advancesSecondaryClock = /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(joinedSource);
+  const advancesSecondaryClock = /\b(?:G(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*|[A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(joinedSource);
   if (/\bg\s*\.\s*state\s*\.\s*time\b/.test(joinedSource) && advancesSecondaryClock) {
     findings.push({
       severity: "blocker",
