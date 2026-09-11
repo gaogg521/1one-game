@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
-import { validateGameRuntime, runtimeValidationBlockers, runtimeSourceHash } from "@/lib/game-runtime-validation";
+import { HARD_PLAYER_FINDINGS, validateGameRuntime, runtimeValidationBlockers, runtimeSourceHash } from "@/lib/game-runtime-validation";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { safeAssetError } from "@/lib/game-forge/asset-agent";
 
@@ -17,6 +17,10 @@ async function main() {
     evidence: ["probe:booted=true", "probe:frames=480", "probe:entities=0"],
   });
   assert.equal(heuristicInertReport.status, "passed", JSON.stringify(heuristicInertReport));
+  assert.equal(HARD_PLAYER_FINDINGS.has("player_not_visible"), true);
+  assert.equal(HARD_PLAYER_FINDINGS.has("player_input_no_visible_response"), true);
+  assert.equal(HARD_PLAYER_FINDINGS.has("collectible_not_visible"), false);
+  assert.equal(HARD_PLAYER_FINDINGS.has("collectible_spawn_outside_viewport"), false);
   const run = buildGameProductionRun({ spec: good, assetManifest: null, runtimeValidation: report });
   assert.equal(run.candidate.decision, "ready_for_playtest");
   assert.ok(run.candidate.advisories?.includes("visual_review_rejected"));
@@ -36,6 +40,6 @@ async function main() {
   assert.ok(runtimeValidationBlockers(good, { ...report, observed: false, status: "unverified" }).length);
   assert.notEqual(runtimeSourceHash(good, "a"), runtimeSourceHash(good, "b"));
   assert.doesNotMatch(safeAssetError("HTTP 401 api_key=abc123 https://example.com/?token=123 Bearer token123"), /abc123|token123|example/);
-  console.log("[OK] real iframe delivery: good/bad/stale/unavailable; advisory quality stays advisory; asset errors redacted");
+  console.log("[OK] real iframe delivery: fatal runtime/player failures block; repairable quality stays advisory; asset errors redacted");
 }
 void main();

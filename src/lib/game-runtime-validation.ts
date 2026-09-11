@@ -26,6 +26,7 @@ export function runtimeSourceHash(spec: GameSpec, projectId?: string): string {
  * decisions using frame progression and screenshots.
  */
 export const HARD_RUNTIME_FINDINGS = new Set(["did_not_boot", "no_first_frame", "runtime_error"]);
+export const HARD_PLAYER_FINDINGS = new Set(["player_not_visible", "player_input_no_visible_response"]);
 
 export function runtimeValidationBlockers(spec: GameSpec, validation?: GameRuntimeValidation | null, projectId?: string): string[] {
   if (!spec.agenticModule?.source?.trim()) return ["independent_runtime_missing"];
@@ -44,8 +45,11 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     const storedModules = Array.isArray(spec.forgeBuild.modules) ? spec.forgeBuild.modules as GameModule[] : [];
     if (parsedDesign.success && storedModules.length) {
       const currentStaticFindings = assembleGame(parsedDesign.data, storedModules).findings.filter((finding) => finding.severity === "blocker");
-      result.blockers.push(...currentStaticFindings.map((finding) => `runtime_${finding.code}`));
-      result.evidence.push(`staticBlockers:${currentStaticFindings.length}`);
+      // Forge still uses these findings to repair the build. Final delivery is
+      // decided by the exact player iframe below, so static quality heuristics
+      // remain visible evidence instead of becoming a second hard gate.
+      result.evidence.push(`staticAdvisories:${currentStaticFindings.length}`);
+      result.evidence.push(...currentStaticFindings.map((finding) => `advisory:${finding.code}`));
     }
   }
   let browser: import("playwright").Browser | undefined;
@@ -81,8 +85,8 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
       for (const slot of requiredSlots) {
         const assetPath = assetContext[slot.key];
         if (!assetPath) {
-          result.blockers.push("runtime_required_asset_missing");
           result.evidence.push(`asset:${slot.key}:unmapped`);
+          result.evidence.push(`advisory:required_asset_missing:${slot.key}`);
           continue;
         }
         const response = await page.request.get(new URL(assetPath, probeUrl).toString(), { timeout: 10_000 }).catch(() => null);
@@ -90,7 +94,7 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
         const fallback = response?.headers()["x-operone-asset-fallback"] === "1";
         const ready = Boolean(response?.ok() && contentType.startsWith("image/") && !fallback);
         result.evidence.push(`asset:${slot.key}:${response?.status() ?? "error"}:${fallback ? "fallback" : contentType.split(";")[0] || "unknown"}`);
-        if (!ready) result.blockers.push("runtime_required_asset_missing");
+        if (!ready) result.evidence.push(`advisory:required_asset_missing:${slot.key}`);
       }
     }
     if (errors.length) result.blockers.push("runtime_error");
@@ -101,7 +105,10 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     if (spec.forgeBuild) {
       if (!events.some(e => e.type === "forge-first-frame")) result.blockers.push("runtime_no_first_frame");
       if (!ended && (!beats.length || (beats.at(-1)?.frames ?? 0) <= (beats[0]?.frames ?? 0))) result.blockers.push("runtime_loop_stalled");
-      result.blockers.push(...playerEvidenceFindings(spec.forgeBuild.design, events).map(finding => `runtime_${finding.code}`));
+      for (const finding of playerEvidenceFindings(spec.forgeBuild.design, events)) {
+        if (HARD_PLAYER_FINDINGS.has(finding.code)) result.blockers.push(`runtime_${finding.code}`);
+        else result.evidence.push(`advisory:${finding.code}`);
+      }
     }
     // Static DOM/puzzle games need no continuous loop, but must respond to interaction.
     if (booted && !ended && before.equals(after) && !beats.some(e => (e.entities ?? 0) > 0)) result.blockers.push("runtime_inert_build");
@@ -111,7 +118,7 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
       }
     }
     result.blockers = [...new Set(result.blockers)];
-    result.evidence = [`sandbox:allow-scripts`, `viewport:393x852`, `mounted:${booted}`, `frames:${beats.at(-1)?.frames ?? 0}`, `visualChanged:${!before.equals(after)}`, `ended:${ended}`, `frameAttached:${Boolean(frame)}`, ...errors.slice(0, 4).map(e => `error:${String(e.message).slice(0, 240)}`)];
+    result.evidence = [...result.evidence, `sandbox:allow-scripts`, `viewport:393x852`, `mounted:${booted}`, `frames:${beats.at(-1)?.frames ?? 0}`, `visualChanged:${!before.equals(after)}`, `ended:${ended}`, `frameAttached:${Boolean(frame)}`, ...errors.slice(0, 4).map(e => `error:${String(e.message).slice(0, 240)}`)];
     result.status = result.blockers.length ? "failed" : "passed";
   } catch (error) {
     result.evidence.push(`probe_unavailable:${error instanceof Error ? error.message.split("\n")[0]?.slice(0, 200) : "unknown"}`);

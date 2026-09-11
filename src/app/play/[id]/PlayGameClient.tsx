@@ -71,7 +71,7 @@ const PRODUCTION_STAGES: Record<string, string> = {
   playable_candidate: "检查可玩候选版本",
   validation: "执行浏览器启动与操作验证",
   repair: "修复验证发现的问题",
-  retrying: "准备重试未完成的环节",
+  retrying: "正在自动优化可玩版本",
 };
 
 function GameProductionScreen(props: {
@@ -86,7 +86,10 @@ function GameProductionScreen(props: {
   studioHref: string;
   createHref: string;
 }) {
-  const failed = props.deliveryStatus === "failed" || props.revision?.status === "failed" || (!props.job && props.revision?.status !== "generating");
+  // An active job is the current truth. Its previous revision may have failed,
+  // but showing a terminal error while an automatic repair is already running
+  // makes a recoverable build look permanently broken.
+  const failed = !props.job && (props.deliveryStatus === "failed" || props.revision?.status === "failed" || props.revision?.status !== "generating");
   const percent = Math.max(0, Math.min(99, props.job?.progress?.percent ?? 0));
   const stageKey = props.job?.progress?.stage ?? props.job?.status ?? "queued";
   const stage = PRODUCTION_STAGES[stageKey] ?? "多 Agent 正在协作生成";
@@ -96,9 +99,9 @@ function GameProductionScreen(props: {
       <div className={`relative overflow-hidden rounded-[2rem] border p-6 sm:p-10 ${failed ? "border-rose-400/35 bg-rose-950/15" : "border-[color:color-mix(in_srgb,var(--gc-accent)_30%,var(--gc-border))] bg-[var(--gc-surface-glass)]"}`}>
         <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[color:color-mix(in_srgb,var(--gc-accent)_16%,transparent)] blur-3xl" />
         <div className="relative">
-          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${failed ? "text-rose-300" : "text-[var(--gc-accent)]"}`}>{failed ? "BUILD NEEDS ATTENTION" : "GAME PRODUCTION IN PROGRESS"}</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{failed ? props.deliveryStatus === "failed" ? "游戏未通过运行验证" : "这次生成未能完成" : "你的游戏正在制作中"}</h1>
-          <p className="mt-3 text-sm leading-6 text-[var(--gc-muted)]">{failed ? "当前版本尚不可试玩。你可以重新生成，也可以返回工作台稍后再试。" : "任务已保存在后台，可以放心离开页面。通过启动和操作验证后，这里会自动显示可玩的游戏。"}</p>
+          <p className={`text-xs font-semibold tracking-[0.2em] ${failed ? "text-rose-300" : "text-[var(--gc-accent)]"}`}>{failed ? "这次还需要再优化" : props.job?.status === "retrying" ? "正在自动优化" : "游戏制作中"}</p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{failed ? "这次生成还没达到可玩状态" : props.job?.status === "retrying" ? "正在修好后重新验证" : "你的游戏正在制作中"}</h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--gc-muted)]">{failed ? "系统没有把打不开的版本交给你。你可以继续优化当前作品，也可以返回工作台稍后再试。" : props.job?.status === "retrying" ? "上一个版本的问题正在自动修复，不需要重新提交。修复并通过启动验证后，这里会自动打开游戏。" : "任务已保存在后台，可以放心离开页面。通过启动和操作验证后，这里会自动显示可玩的游戏。"}</p>
 
           <div className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -112,7 +115,7 @@ function GameProductionScreen(props: {
           {props.job?.progress?.milestones?.length ? <ForgeMilestoneFeed milestones={props.job.progress.milestones} className="mt-8 rounded-2xl border border-[color:var(--gc-border)] bg-[var(--gc-bg-elevated)] p-5" /> : !failed ? <div className="mt-8 rounded-2xl border border-dashed border-[color:var(--gc-border)] px-5 py-8 text-center"><p className="text-sm font-medium">生产任务已进入队列</p><p className="mt-2 text-xs text-[var(--gc-muted)]">第一个设计结果生成后，会在这里实时出现。</p></div> : null}
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            {failed ? <button type="button" onClick={props.onRetry} disabled={props.retryBusy} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold disabled:opacity-40">{props.retryBusy ? "正在重新提交…" : "重新构建"}</button> : null}
+            {failed ? <button type="button" onClick={props.onRetry} disabled={props.retryBusy} className="gc-theme-cta rounded-full px-6 py-2.5 text-sm font-semibold disabled:opacity-40">{props.retryBusy ? "正在提交优化…" : "继续优化"}</button> : null}
             <Link href={props.studioHref} className="rounded-full border border-[color:var(--gc-border)] px-5 py-2.5 text-sm text-[var(--gc-text-soft)] hover:text-[var(--gc-text)]">返回创作者工作台</Link>
             <Link href={props.createHref} className="rounded-full px-5 py-2.5 text-sm text-[var(--gc-muted)] hover:text-[var(--gc-text)]">再创建一个</Link>
           </div>
