@@ -194,6 +194,23 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
   assert.ok(!cleanSharedState.findings.some((finding) => finding.code === "restart_shared_state_not_reset"), "shared system state recreated by init must pass");
 }
 
+/* ------------------------------------------------------ draw phase owner */
+{
+  const updateDraw = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("player_control", "system", "G.updatePlayer=function(g){var r=g.draw;r.sprite(G.ship,G.player.x,G.player.y,20,20);};", ["updatePlayer"]),
+    mod("main", "main", "G.main=function(g){g.start({update:function(){G.updatePlayer(g);},draw:function(){}});};", ["main"], ["updatePlayer"]),
+  ]);
+  assert.ok(updateDraw.findings.some((finding) => finding.code === "draw_outside_draw_phase"), "drawing from an update-only module must be rejected because the frame is cleared before draw");
+
+  const properDraw = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("player", "system", "G.updatePlayer=function(){};G.drawPlayer=function(g){g.draw.sprite(G.ship,G.player.x,G.player.y,20,20);};", ["updatePlayer", "drawPlayer"]),
+    mod("main", "main", "G.main=function(g){g.start({update:function(){G.updatePlayer(g);},draw:function(){G.drawPlayer(g);}});};", ["main"], ["updatePlayer", "drawPlayer"]),
+  ]);
+  assert.ok(!properDraw.findings.some((finding) => finding.code === "draw_outside_draw_phase"), "a dedicated draw function invoked by main draw must pass");
+}
+
 /* ----------------------------------------------------- single clock owner */
 {
   const splitClock = assembleGame(design, [

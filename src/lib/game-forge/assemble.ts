@@ -241,6 +241,20 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
   }
 
   const joinedSource = modules.map((module) => module.source).join("\n");
+  const updatePhaseDrawers = modules.filter((module) => {
+    if (module.role !== "system") return false;
+    const assignsUpdateHook = /\bG\.(?:update|tick|move|control)[A-Za-z0-9_$]*\s*=\s*function\b/i.test(module.source);
+    const assignsDrawHook = /\bG\.(?:draw|render)[A-Za-z0-9_$]*\s*=\s*function\b/i.test(module.source);
+    return assignsUpdateHook && !assignsDrawHook && /\bg\s*\.\s*draw\b|\b(?:var|let|const)\s+r\s*=\s*g\s*\.\s*draw\b/.test(module.source);
+  });
+  if (updatePhaseDrawers.length) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "draw_outside_draw_phase",
+      message: `Rendering is performed from an update/input hook in: ${updatePhaseDrawers.map((module) => module.id).join(", ")}. The engine clears the canvas before draw, so expose a draw/render function and call it from the main draw callback.`,
+    });
+  }
   if (/\bg\s*\.\s*addScore\s*\(/.test(joinedSource) && /\bG\s*\.\s*state\s*\.\s*score\b/.test(joinedSource)) {
     findings.push({
       severity: "blocker",
