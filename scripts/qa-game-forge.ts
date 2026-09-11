@@ -178,6 +178,20 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("main", "main", "G.main=function(g){function init(){G.clearItems();}g.start({init:init,update:function(dt){G.tick(dt);},draw:function(){},restart:init});};", ["main"], ["clearItems", "tick"]),
   ]);
   assert.ok(!resetHook.findings.some((finding) => finding.code === "restart_state_not_reset"), "private state reset by a called module hook must pass");
+
+  const staleSharedState = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.spawnState=null; G.tick=function(dt){if(!G.spawnState)G.spawnState={timer:1};G.spawnState.timer-=dt;};", ["tick"]),
+    mod("main", "main", "G.main=function(g){function init(){}g.start({init:init,update:function(dt){G.tick(dt);},draw:function(){},restart:init});};", ["main"], ["tick"]),
+  ]);
+  assert.ok(staleSharedState.findings.some((finding) => finding.code === "restart_shared_state_not_reset"), "shared system state initialized only at module load must be rejected");
+
+  const cleanSharedState = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.spawnState=null; G.tick=function(dt){G.spawnState.timer-=dt;};", ["tick"]),
+    mod("main", "main", "G.main=function(g){function init(){G.spawnState={timer:1};}g.start({init:init,update:function(dt){G.tick(dt);},draw:function(){},restart:init});};", ["main"], ["tick"]),
+  ]);
+  assert.ok(!cleanSharedState.findings.some((finding) => finding.code === "restart_shared_state_not_reset"), "shared system state recreated by init must pass");
 }
 
 /* ----------------------------------------------------- single clock owner */
@@ -189,6 +203,13 @@ function mod(id: string, role: GameModule["role"], source: string, provides: str
     mod("main", "main", "G.main=function(g){G.run={elapsed:0};g.start({update:function(dt){G.tick(dt);},draw:function(){G.drawHud(g);}});};", ["main"], ["tick", "drawHud"]),
   ]);
   assert.ok(splitClock.findings.some((finding) => finding.code === "time_state_split"), "SDK time and a manually advanced G clock must be rejected");
+
+  const countdownSplit = assembleGame(design, [
+    mod("config", "config", "G.config = {};"),
+    mod("spawn", "system", "G.spawn=function(g){if(g.state.time>10)g.world.spawn('star',{});};", ["spawn"]),
+    mod("main", "main", "G.main=function(g){G.timeLeft=70;g.start({update:function(dt){G.timeLeft-=dt;G.spawn(g);},draw:function(){}});};", ["main"], ["spawn"]),
+  ]);
+  assert.ok(countdownSplit.findings.some((finding) => finding.code === "time_state_split"), "SDK time plus a separately advanced countdown must be rejected");
 
   const sdkClock = assembleGame(design, [
     mod("config", "config", "G.config = {};"),

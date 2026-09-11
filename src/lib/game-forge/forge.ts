@@ -446,7 +446,7 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
   }
   if (finding.code === "time_state_split") {
     return modules.filter((module) => /\bg\s*\.\s*state\s*\.\s*time\b/.test(module.source)
-      || /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(module.source)).map((module) => module.id);
+      || /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(module.source)).map((module) => module.id);
   }
   if (finding.code === "invincibility_never_expires") {
     const target = systems.find((module) => /player|control|collision|damage/i.test(module.id));
@@ -457,6 +457,10 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
   }
   if (finding.code === "restart_state_not_reset") {
     const affected = modules.filter((module) => finding.message.includes(`${module.id}.`));
+    return [...affected.map((module) => module.id), main?.id].filter((id): id is string => Boolean(id));
+  }
+  if (finding.code === "restart_shared_state_not_reset") {
+    const affected = modules.filter((module) => finding.message.includes(`${module.id}.G.`));
     return [...affected.map((module) => module.id), main?.id].filter((id): id is string => Boolean(id));
   }
   const byCode: Record<string, (m: GameModule) => boolean> = {

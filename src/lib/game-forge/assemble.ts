@@ -265,7 +265,7 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: "The SDK already advances g.state.time once per frame. Read it for timers and end conditions; remove every manual increment/decrement or the game clock runs at the wrong speed.",
     });
   }
-  const advancesSecondaryClock = /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(joinedSource);
+  const advancesSecondaryClock = /\bG(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*\s*\.\s*(?:time|elapsed|timeLeft|timeRemaining)\s*(?:\+\+|--|\+=\s*dt\b|-=\s*dt\b)/i.test(joinedSource);
   if (/\bg\s*\.\s*state\s*\.\s*time\b/.test(joinedSource) && advancesSecondaryClock) {
     findings.push({
       severity: "blocker",
@@ -330,6 +330,33 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       moduleId: "assembled",
       code: "restart_state_not_reset",
       message: `Restart-sensitive state is trapped in module closures and survives replay: ${privateRestartState.join(", ")}. Store it on G in a shared state object and reset every field from init/restart so a new run starts cleanly.`,
+    });
+  }
+
+  const sharedRestartState = modules.flatMap((module) => {
+    if (module.role !== "system" || /(?:hud|render|draw|audio|fx|effect)/i.test(module.id)) return [];
+    const names = Array.from(module.source.matchAll(/^\s*G\.([A-Za-z_$][A-Za-z0-9_$]*State)\s*=/gmi), (match) => match[1]!);
+    return names.filter((name) => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const nestedWrites = module.source.match(new RegExp(`\\bG\\.${escaped}\\.[A-Za-z_$][A-Za-z0-9_$]*\\s*(?:\\+\\+|--|\\+=|-=|\\*=|\\/=|=(?!=))`, "g")) ?? [];
+      if (!nestedWrites.length) return false;
+      if (new RegExp(`\\bG\\.${escaped}\\s*=(?!=)`).test(mainSourceForRestartAudit)) return false;
+      const resetters = Array.from(module.source.matchAll(/\bG\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*function\b[^\{]*\{([\s\S]*?)\}\s*;/gi))
+        .filter((match) => /(?:reset|clear|init)/i.test(match[1]!));
+      return !resetters.some((match) => {
+        const resetName = match[1]!;
+        const body = match[2] ?? "";
+        return new RegExp(`\\bG\\.${escaped}(?:\\s*=|\\.[A-Za-z_$][A-Za-z0-9_$]*\\s*=)`).test(body)
+          && new RegExp(`\\bG\\.${resetName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`).test(mainSourceForRestartAudit);
+      });
+    }).map((name) => `${module.id}.G.${name}`);
+  });
+  if (sharedRestartState.length) {
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: "restart_shared_state_not_reset",
+      message: `Restart-sensitive shared state is initialized only when its module loads and survives replay: ${sharedRestartState.join(", ")}. Recreate it from init/restart or call an explicit reset hook on every run.`,
     });
   }
 

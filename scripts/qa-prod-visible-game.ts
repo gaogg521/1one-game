@@ -123,9 +123,12 @@ async function main() {
     await page.touchscreen.tap(replay.x,replay.y);
     await page.waitForFunction("window.events.some(e=>e.type==='forge-restart')",undefined,{timeout:10000});
     await page.waitForTimeout(500);
-    assert.ok((await player())?.visible,'Restart must restore visible player');
+    const restarted=await player();
+    assert.ok(restarted?.visible,'Restart must restore visible player');
+    assert.ok(Math.abs(restarted.screenX-first.screenX)<0.08 && Math.abs(restarted.screenY-first.screenY)<0.08,
+      `Restart must restore the initial player position (initial=${first.screenX.toFixed(3)},${first.screenY.toFixed(3)} restarted=${restarted.screenX.toFixed(3)},${restarted.screenY.toFixed(3)})`);
     await page.screenshot({path:`${out}/restart.png`});
-    report.restart=true;report.pass=true;
+    report.restart={player:restarted,initialPlayer:first};report.pass=true;
     console.log(JSON.stringify({projectId:id,mode,end,restart:true}));
   } catch(error) {
     report.error=error instanceof Error?error.message:String(error);
