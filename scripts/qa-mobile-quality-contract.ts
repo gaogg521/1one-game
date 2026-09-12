@@ -300,6 +300,29 @@ async function main() {
   ]);
   assert.equal(agreeing.findings.some((f) => f.code === "entity_group_never_spawned"), false, JSON.stringify(agreeing.findings.map((f) => f.code)));
 
+  // 13. A private score/lives mirror reads correctly to a human and reports zero
+  // to the platform. Measured on a shipped build: score and lives lived on
+  // G.state, g.state.time was never advanced, so the timeout branch was dead
+  // code and the run could not end.
+  const mirrored = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "spawn_system", role: "system", source: "G.tickSpawns = function (dt, g) { g.world.spawn('star', { x: 1, y: 2 }); };", provides: ["tickSpawns"], requires: [] },
+    { id: "collision_system", role: "system", source: "G.checkCollisions = function (g) { g.world.each('star', function (s) { g.world.kill(s); G.state.score += 1; G.state.lives -= 0; }); };", provides: ["checkCollisions"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { G.state = { score: 0, lives: 3 }; g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  const codes = mirrored.findings.map((f) => f.code);
+  assert.ok(codes.includes("private_score_counter"), JSON.stringify(codes));
+  assert.ok(codes.includes("private_lives_counter"), JSON.stringify(codes));
+  assert.match(mirrored.findings.find((f) => f.code === "private_score_counter")!.message, /g\.addScore/);
+  // Using the SDK counter raises nothing, even alongside other G state.
+  const sdkCounters = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "spawn_system", role: "system", source: "G.tickSpawns = function (dt, g) { g.world.spawn('star', { x: 1, y: 2 }); };", provides: ["tickSpawns"], requires: [] },
+    { id: "collision_system", role: "system", source: "G.checkCollisions = function (g) { g.world.each('star', function (s) { g.world.kill(s); g.addScore(1, s.x, s.y); g.loseLife(0); }); };", provides: ["checkCollisions"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  assert.equal(sdkCounters.findings.some((f) => /^private_(score|lives)_counter$/.test(f.code)), false, JSON.stringify(sdkCounters.findings.map((f) => f.code)));
+
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
 

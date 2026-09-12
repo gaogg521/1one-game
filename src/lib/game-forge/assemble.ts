@@ -300,6 +300,31 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
       message: `Rendering is performed from an update/input hook in: ${updatePhaseDrawers.map((module) => module.id).join(", ")}. The engine clears the canvas before draw, so expose a draw/render function and call it from the main draw callback.`,
     });
   }
+  /*
+   * The existing split checks below only fire when a build uses BOTH the SDK
+   * counter and a private mirror. A build that uses ONLY the mirror slipped
+   * through all of them -- and that is worse, not better.
+   *
+   * Measured on a shipped game: score, lives and time lived entirely on a
+   * private G.state. It scored correctly into that object, so it looked right,
+   * while g.state.score stayed 0 for telemetry and the quality probe, and
+   * g.state.time -- the clock the SDK advances -- was never read, so the
+   * 60-second timeout branch was dead code and the run could never end.
+   */
+  const privateCounters: Array<{ counter: "score" | "lives"; sdk: RegExp; how: string }> = [
+    { counter: "score", sdk: /\bg\s*\.\s*addScore\s*\(|\bg\s*\.\s*state\s*\.\s*score\b/, how: "g.addScore(n, x, y)" },
+    { counter: "lives", sdk: /\bg\s*\.\s*loseLife\s*\(|\bg\s*\.\s*state\s*\.\s*lives\b/, how: "g.loseLife(n)" },
+  ];
+  for (const { counter, sdk, how } of privateCounters) {
+    const privateUse = new RegExp(`\\bG\\s*\\.\\s*[A-Za-z_$][\\w$]*\\s*\\.\\s*${counter}\\b`).test(joinedSource);
+    if (!privateUse || sdk.test(joinedSource)) continue;
+    findings.push({
+      severity: "blocker",
+      moduleId: "assembled",
+      code: `private_${counter}_counter`,
+      message: `${counter} is tracked only on a private G object; the build never calls ${how} and never reads g.state.${counter}. The engine owns that counter and reports it, so a private mirror leaves the HUD and the platform's telemetry reading zero no matter how well the game plays. Keep ${counter} on g.state and update it through ${how}.`,
+    });
+  }
   if (/\bg\s*\.\s*addScore\s*\(/.test(joinedSource) && /\bG\s*\.\s*state\s*\.\s*score\b/.test(joinedSource)) {
     findings.push({
       severity: "blocker",
