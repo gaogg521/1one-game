@@ -448,6 +448,14 @@ async function executeGameProductionJob(
     }
   } else {
     await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
+    /*
+     * An iteration replaces the project's live spec before this round is known
+     * to work, so a rejected candidate leaves the player holding an unvalidated
+     * build. That was harmless while iteration only ran on already-broken games;
+     * once a passing game could be picked up for a quality round, the same path
+     * could take a working game offline. Put the last accepted build back.
+     */
+    await restoreLastReadyProjectSpec(job.creativeProjectId, payload.projectId, job.creativeRevisionId);
     if (!run.candidate.blockers.some(blocker => blocker.includes("verification")) && shouldScheduleGamePreflightIteration({
       productionRound: payload.productionRound,
       maxProductionRounds: payload.maxProductionRounds,
@@ -476,6 +484,36 @@ async function executeGameProductionJob(
 
 class GameRuntimeRejectedError extends Error {
   constructor(readonly blockers: string[]) { super(blockers.join(", ")); }
+}
+
+/**
+ * Puts the project back on the newest revision that actually passed, so a
+ * failed automatic round never leaves a playable game unplayable. No-op when
+ * the project is already serving that spec, or when nothing has ever passed.
+ */
+async function restoreLastReadyProjectSpec(creativeProjectId: string, projectId: string, failedRevisionId: string | null) {
+  try {
+    const lastReady = await prisma.creativeRevision.findFirst({
+      where: { creativeProjectId, status: "ready", ...(failedRevisionId ? { id: { not: failedRevisionId } } : {}) },
+      orderBy: { sequence: "desc" },
+      select: { id: true, sequence: true },
+    });
+    if (!lastReady) return;
+    const artifact = await prisma.creativeArtifact.findFirst({
+      where: { creativeRevisionId: lastReady.id, kind: "game_spec", status: "ready" },
+      orderBy: { createdAt: "asc" },
+      select: { contentJson: true },
+    });
+    if (!artifact?.contentJson) return;
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { specJson: true } });
+    if (!project || project.specJson === artifact.contentJson) return;
+    const spec = parseGameSpec(JSON.parse(artifact.contentJson));
+    await prisma.project.update({ where: { id: projectId }, data: { specJson: JSON.stringify(spec), title: spec.title } });
+    console.error("[game_spec_rolled_back]", { projectId, restoredSequence: lastReady.sequence });
+  } catch (error) {
+    // Never let the rollback mask the rejection that triggered it.
+    console.error("[game_spec_rollback_failed]", { projectId, reason: error instanceof Error ? error.message.slice(0, 120) : "unknown" });
+  }
 }
 
 async function executeGamePreflightIterationJob(
