@@ -1,6 +1,38 @@
 # Operone 创作者平台交接（2026-08-22）
 
-## 最新接续入口：一句话游戏门禁体验与“太空快递”生产验收（2026-09-12）
+## 最新接续入口：平台级手机质量合同与真实美术验收（2026-09-12 下午）
+
+上一节记录的四类缺陷全部是**生成链路通病**，不是「太空快递」那一款的问题。本轮按平台能力修，不按单游戏修。
+
+### 已交付、已推送、已部署
+
+| 提交 | 修的是什么 | 影响面 |
+|---|---|---|
+| `4d33820f` | `spec-patch` 改用 `json_schema`（生产模型上 `json_object` 实测不收敛）、一次有界重试、脱敏日志；patch 结果**合并**到现有规格而不是整份替换 | 全平台 owner 局部修改此前必然 503；合并还顺带堵住了「一次编辑把 forgeBuild 丢掉」 |
+| `4d33820f` | 设计提示词骨架与 Zod 默认值改为竖屏；`orientation: "either"` 解析为竖屏 | 每款新游戏不再把横屏舞台塞进竖屏播放器 |
+| `4d33820f` | 视觉合同接受 `g.assets.image` / `r.sprite` | 此前**每个正确的 Forge 构建**都被误报 `runtime_sprite_actor_missing` |
+| `4d33820f` | Forge 自修复探针改跑 393×852 手机 | 此前跑 960×540 桌面窗口，修复循环看不见它该修的手机问题 |
+| `207cc2cf` | 可玩但不达标的构建触发**恰好一轮**后台质量打磨 | 此前质量发现只写进 evidence，没有任何消费者 |
+| `42876d4f` | 主角尺寸改为真实测量（渲染器本就算了精灵屏幕尺寸，只是丢掉了） | 9% 下限此前只是提示词散文 |
+| `6d97bf7b` | 真实美术审查：把交付帧交给视觉模型，封闭代码表 | `visual_review_agent` 此前**没有任何生产者**，`visual_review_rejected` 是 100% 噪声 |
+| `2cc01699` | CONTEXT.md 快照 | — |
+
+### 必须保留的设计取舍
+
+1. **不新增硬门禁。** 质量不达标照常交付、玩家照常能玩，平台后台补一轮。不要把这些 advisory 改成 blocker。
+2. **打磨严格一轮。** `shouldScheduleGameQualityPolish` 只在 `productionRound === 1` 触发，产出的是第 2 轮，结构上不可能自循环。每轮约 10 分钟模型时间，`POLISHABLE_ADVISORIES` 白名单要保持窄；`visual_review_unavailable`、`real_agent_missing:*` 被刻意排除。
+3. **能测量的不要靠提示词。** 主角尺寸走 `forge-player-evidence` 的 `w`/`h`，不需要视觉模型。
+4. **没跑过的审查不许下结论。** 视觉审查跑不了返回 null，候选写 `visual_review_unavailable`。`qa-runtime-delivery-gate.ts` 原先断言的是旧的「永远 rejected」行为，即断言了 bug，已改。
+
+### 下一位的缺口
+
+1. **质量发现对人不可见。** `game_production_candidate.advisories` 没有进 `creator-quality.ts` 的作品质量报告，也没有进后台。创作者看不到「平台正在自动优化：主角过小 / 画面留白」。`assessGameCreatorQuality` 目前只接 spec，需要把候选 advisories 从详情 API 透传进去。
+2. **既有失败（非本轮回归，均已隔离复现）**：`qa:agentic-persist-coerce`（`coerceGameSpec` 单独调用即丢 `agenticModule`，`normalize-spec.ts`/`game-spec.ts` 本轮未改）、`qa:creator-core`（CONTEXT 早已记载的共享库 job 抢占）、`scripts/qa-game-forge-browser.ts`（未注册进 package.json，手写参考构建签名检查失败）。
+3. 工作区仍有大量非本轮所有的改动，**禁止 `git add .`**，只按精确路径暂存。
+
+---
+
+## 上一轮入口：一句话游戏门禁体验与“太空快递”生产验收（2026-09-12 上午）
 
 ### 本轮目标与产品决定
 
