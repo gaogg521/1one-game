@@ -75,9 +75,15 @@ export async function reviewGameVisuals(params: {
   timeoutMs?: number;
 }): Promise<GameVisualReview | null> {
   const { screenshot, artDirection } = params;
-  if (!screenshot?.length) return null;
+  if (!screenshot?.length) {
+    console.error("[visual-review] skipped reason=no_frame");
+    return null;
+  }
   const models = getGameModelCascade("vision", params.localeGroup);
-  if (!models.length) return null;
+  if (!models.length) {
+    console.error("[visual-review] skipped reason=no_vision_model_routed");
+    return null;
+  }
 
   const user = [
     `Game: ${params.title}`,
@@ -92,7 +98,9 @@ export async function reviewGameVisuals(params: {
     .join("\n");
   const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
 
+  let lastReason = "no_attempt";
   for (const model of models.slice(0, 2)) {
+    const startedAt = Date.now();
     const result = await llmJson({
       model,
       scene: "game_vision",
@@ -106,8 +114,18 @@ export async function reviewGameVisuals(params: {
       singleModeOnly: true,
       maxTokens: 1_024,
       timeoutMs: params.timeoutMs ?? 60_000,
-    }).catch(() => null);
-    if (!result?.ok || !result.raw || typeof result.raw !== "object") continue;
+    }).catch((error) => {
+      lastReason = error instanceof Error ? error.message : "threw";
+      return null;
+    });
+    if (!result?.ok || !result.raw || typeof result.raw !== "object") {
+      if (result && !result.ok) lastReason = result.error ?? "model_failed";
+      else if (result) lastReason = "reply_not_an_object";
+      // Swallowing this is how the platform ended up with an art review that
+      // nobody could tell was silent. Say which model failed and why.
+      console.error(`[visual-review] model=${model} ok=false reason=${lastReason.slice(0, 160)} ms=${Date.now() - startedAt}`);
+      continue;
+    }
 
     const raw = result.raw as { passed?: unknown; score?: unknown; blockers?: unknown; revisionInstructions?: unknown };
     const allowed = new Set<string>(REVIEW_CODES);
@@ -128,5 +146,6 @@ export async function reviewGameVisuals(params: {
       screenshotBytes: screenshot.length,
     };
   }
+  console.error(`[visual-review] unavailable models=${models.length} reason=${lastReason.slice(0, 160)}`);
   return null;
 }
