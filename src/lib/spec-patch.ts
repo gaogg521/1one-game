@@ -1,7 +1,7 @@
 import { llmJson } from "@/lib/llm";
 import { resolveGameModelRoute } from "@/lib/game-model-route";
 import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
-import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { applyExplicitPromptColors, mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec, overlaySpec } from "@/lib/normalize-spec";
 import { sanitizeSpecRaw } from "@/lib/sanitize-spec-raw";
 import type { AppLocale } from "@/i18n/routing";
@@ -83,6 +83,9 @@ export function finalizePatchedSpec(prompt: string, spec: GameSpec): GameSpec {
   if (!next.systems) {
     next = { ...next, systems: buildSystems({ prompt, spec: next }) };
   }
+  // Colours the creator named apply on every persisted spec, not only on a
+  // first generation: a later edit must not quietly repaint the blue ship.
+  next = applyExplicitPromptColors(next, prompt);
   return applyHardQualityDefaults(withPresentationDefaults(applyMinecraftThemeOverlay(next)), prompt);
 }
 
