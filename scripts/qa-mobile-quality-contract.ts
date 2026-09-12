@@ -163,8 +163,19 @@ async function main() {
     "runtime_sprite_actor_missing",
     "vertical_slice_blocked",
   ];
-  const findings = selectGameQualityPolishFindings([...observed, "advisory:player_too_small"]);
+  const findings = selectGameQualityPolishFindings([...observed.filter((e) => !e.includes("required_asset_missing")), "advisory:player_too_small"]);
   assert.deepEqual(findings.sort(), ["player_too_small", "runtime_letterboxed", "runtime_sprite_actor_missing", "vertical_slice_blocked"], JSON.stringify(findings));
+
+  // Observed in production: ordering the runtime to draw a 404'd sprite made
+  // the next build draw an invisible player. A missing slot is an asset repair.
+  const withMissingAsset = selectGameQualityPolishFindings([
+    "runtime_background_asset_unused",
+    "runtime_player_asset_unused",
+    "runtime_sprite_actor_missing",
+    "advisory:runtime_letterboxed",
+    "advisory:required_asset_missing:ship_blue",
+  ]);
+  assert.deepEqual(withMissingAsset, ["runtime_letterboxed"], JSON.stringify(withMissingAsset));
   assert.equal(selectGameQualityPolishFindings(["visual_review_rejected", "real_agent_missing:audio_agent"]).length, 0, "noisy advisories must not burn a production round");
 
   assert.equal(shouldScheduleGameQualityPolish({ productionRound: 1, maxProductionRounds: 3, findings }), true);

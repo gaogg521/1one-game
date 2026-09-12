@@ -44,11 +44,29 @@ const POLISHABLE_ADVISORIES = new Set([
   "low_contrast_subject",
 ]);
 
+/**
+ * Telling the code agent to draw artwork that does not exist is worse than
+ * leaving it alone. Observed in production: a required player sprite 404'd, the
+ * polish round ordered the runtime to use it anyway, and the next build drew a
+ * player nobody could see. When a slot is missing, the repair belongs in asset
+ * generation, so the "asset unused" findings are dropped for that round.
+ */
+const ASSET_MISSING_PREFIX = "required_asset_missing";
+const ASSET_USE_FINDINGS = new Set([
+  "runtime_background_asset_unused",
+  "runtime_player_asset_unused",
+  "runtime_enemy_asset_unused",
+  "runtime_sprite_actor_missing",
+]);
+
 export function selectGameQualityPolishFindings(advisories: readonly string[]): string[] {
+  const codes = advisories.map((entry) => (entry.startsWith("advisory:") ? entry.slice("advisory:".length) : entry));
+  const assetsMissing = codes.some((code) => code.startsWith(ASSET_MISSING_PREFIX));
   const seen = new Set<string>();
-  for (const entry of advisories) {
-    const code = entry.startsWith("advisory:") ? entry.slice("advisory:".length) : entry;
-    if (POLISHABLE_ADVISORIES.has(code)) seen.add(code);
+  for (const code of codes) {
+    if (!POLISHABLE_ADVISORIES.has(code)) continue;
+    if (assetsMissing && ASSET_USE_FINDINGS.has(code)) continue;
+    seen.add(code);
   }
   return [...seen];
 }
