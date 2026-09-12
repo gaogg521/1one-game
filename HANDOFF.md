@@ -1,5 +1,68 @@
 # Operone 创作者平台交接（2026-08-22）
 
+## 最新接续入口：一句话游戏门禁体验与“太空快递”生产验收（2026-09-12）
+
+### 本轮目标与产品决定
+
+用户指出“动不动搞门禁”会伤害体验。本轮把最终交付门禁收缩为**客观不可玩故障**，并保留 Forge 自动修复能力：
+
+- 继续硬拦：独立运行时缺失或验证缺失、运行报错、未启动、无首帧、循环卡死、交互无变化、主角不可见、主角不响应操作。
+- 不再单独硬拦：静态质量发现、生成素材缺失但已有可用兜底、收集物不可见/越界等可修复质量项。这些仍写入 evidence、仍由 Forge 尝试修复。
+- 活动 job（`queued` / `running` / `retrying`）优先于旧失败 revision。后台已经自动修复时，用户看到“游戏制作中/正在自动优化”，不再先看到红色终态失败页。
+- 只有任务已经结束且仍有致命运行故障时，才显示较柔和的“这次生成还没达到可玩状态 / 继续优化”。
+
+### 已完成、已提交、已部署
+
+- 代码提交：`b283716d fix(game): keep repairable builds in progress`，已推送 `origin/main`，生产 `/opt/operone` 当前也是 `b283716d`。
+- 页面状态与文案：`src/app/play/[id]/PlayGameClient.tsx:74,92,103`。
+- 交付软硬分类：`src/lib/game-runtime-validation.ts:28-29,51,89-109`。
+- 修复 validation evidence 被最终探针摘要覆盖：`src/lib/game-runtime-validation.ts:121`。
+- 本地通过：`npm run qa:runtime-delivery-gate`、`npx tsc --noEmit`、目标 ESLint（0 error）、`npm run build`。
+- 生产发布脚本通过：正确 HEAD、迁移、Prisma、Next BUILD_ID、service、TLS health、worker timer、www-data 真实 Chromium；日志终态 `RUNTIME_DELIVERY_RELEASE_OK`。
+- 当前生产状态：`operone=active`、`operone-generation-worker.timer=active`、活动生成队列为空。
+
+### 为什么用户截图会先显示失败
+
+“开心消消乐”项目 `cmtwtjyli00on4abzhpx6xqgl` 前两版失败后，后台已经自动创建下一次修复，第三版最终 ready。旧页面却优先读失败 revision，而没有让活动 job 覆盖它，于是把可恢复的中间状态展示成了终态失败。本轮已修正这一状态优先级。
+
+### 全新生产游戏实测：太空快递
+
+- 试玩项目（legacy Project）：`cmtwv5zla000e8w6tkzc8jmmt`。
+- CreativeProject：`cmtwv5zm2000g8w6tapko5laz`。
+- revision：`cmtwv5zmk000i8w6tsj4kx6ph`，sequence 1，`ready`。
+- job：`cmtwv5zqe00168w6tgg7l5tgi`，attempts 1/3，2026-09-11 19:19:23 至 19:29:04（约 9 分 41 秒），`completed`。
+- prompt：手机单手拖动蓝色飞船，躲避红色陨石，收集黄色能量星，60 秒 30 分胜利，碰撞三次失败并可重试。
+- 设计约 22.9 秒完成；6 个代码模块约 47.4 秒完成。`ship_blue` 与 `bg_space` 模型素材各在 150 秒预算超时，平台继续生成/使用可用兜底，没有因此把整个游戏判死。
+- `game_runtime_validation`：`passed`，`blockers=[]`。生产资源检查：背景、player、hazard URL 均 HTTP 200 image。
+- 393×852 Chromium 真实页面：独立 iframe/canvas 启动；蓝色飞船主角可见；触控输入产生 `first_action`；结局和 Canvas 内“再玩一次”均产生真实 `end` / `retry` 事件。
+- 截图：`qa-output/prod-game-create-delivery/playing-start.png`、`playing-active.png`、`play-timeout.png`。报告：同目录 `REPORT.md`、`summary.json`。
+- 项目当前 `visibility=pending_review`，**尚未发布**，不能给匿名用户当公开成品链接。
+
+### 真实未完成项与风险（按优先级）
+
+1. **P0：局部 AI 修改在生产必然失败的概率很高。** 对“太空快递”定向修改连续 3 次 HTTP 503 `patchFailed`，没有产生第二个 revision/job。`src/lib/spec-patch.ts:105-159` 仍强制 `mode: "json_object"`、单模型 22 秒，并吞掉每次异常；这与此前生产 `game_text` 模型上已经证实不收敛的 `json_object` 问题同类。应改成该模型支持的 `json_schema`/统一结构化调用，加入一次有界重试和脱敏失败日志，再重跑同一项目的局部优化。
+2. **P0：新游戏能玩，但首分钟难度不合格。** 多个真实回合在 6–42 秒内因三次碰撞失败，得分 0–7；虽然主角、输入、结局、重试都正常，但没有任何单局产生 `first_minute`。不要通过放宽发布硬门禁掩盖这个问题；应让真实试玩证据触发一次有界自动质量迭代，调整前 60 秒敌人密度、速度、无敌时间和奖励可达性。
+3. **P1：移动端画面利用率和主角尺寸仍差。** 游戏使用横屏舞台塞进竖屏 iframe，上下留白明显；蓝色飞船可见但偏小。应把“移动端竖屏填充、主角最小可视尺寸”放进生成/修复提示与 advisory 质量合同，触发修复但不要变成新的终态硬门禁。
+4. **P1：视觉合同与实际运行脱节。** `runtime_build_manifest.visualContract.ok=false`，报告 `runtime_*_asset_unused`/`runtime_sprite_actor_missing`；运行时仍可用且资源 URL 200，但模型运行时代码没有使用生成素材。这些应进入自动修复和后台质量说明，不能静默，也不应因为有可用程序化画面就立即红屏。
+5. **P1：refine 可观测性缺失。** `/api/projects/[id]/refine` 最外层 catch 和 `patchGameSpecWithLlm` 的循环都吞异常，生产 journal 对这三次 503 没有对应原因。至少记录 scene/model/attempt/errorCode/duration 的脱敏日志。
+6. **P1：真实试玩脚本此前按主文档查 canvas，独立运行时在 iframe 内，造成假阴性；还把 `bgm_notes` 误当成 BGM 未完成。** 当前工作区已修：允许复用项目、恢复 owner 会话、识别 `bgm_notes`、进入 iframe canvas、记录开局/操作截图、按 forge 观测驱动输入和 Canvas 重试。TypeScript 与目标 ESLint 通过，但最终验收仍因产品确实未产生 `first_minute` 而失败。
+7. **P2：页面有未定位的 404 console error。** 目前脚本只保存了浏览器错误文本，没有保存失败资源 URL；下一步给 `response` 事件加 URL/status 取证后定位。
+
+### 当前工作区与提交边界
+
+- 当前 HEAD：`b283716d`。生产与仓库已经包含产品修复。
+- `scripts/qa-prod-game-create-delivery.ts` 有本轮尚未提交的验收器改进；应与本交接文档精确提交。
+- 工作区还有大量既有 `.qa-cache/`、`qa-output/sample-gameplay-interaction/`、`.dream/`、PPT、临时脚本改动，所有权不明。**禁止 `git add .`，只按精确路径暂存。**
+- 当前没有活动 Codex 自动续接 automation；此前 `p0-p1` 在上一阶段验收完成后已删除。生产生成队列当前也为空。
+
+### 下一位直接执行顺序
+
+1. 修 `src/lib/spec-patch.ts` 的生产结构化模型调用、一次有界重试和脱敏日志；补隔离 QA，部署。
+2. 对现有 `cmtwv5zla000e8w6tkzc8jmmt` 做局部 patch：主角至少放大 2 倍；前 60 秒同屏陨石最多 2 个、速度减半、碰撞后 2 秒无敌；提高能量星可达率；重开完全复位。
+3. 保存后等待同一项目的新 revision/job，不要再创建第二个游戏。
+4. 用修过的 `qa-prod-game-create-delivery.ts` 复用该项目，要求 iframe canvas、player visible、first_action、单局 `first_minute >= 60000`、明确 end、retry、无 pageerror；人工查看 `playing-start.png` 和 `playing-active.png`。
+5. 通过后再显式发布并用匿名 393×852 浏览器复验；失败则保留 `pending_review`，不得宣称完成。
+
 ## 先读这段
 
 本轮最重要的纠偏是：产品应按**创作者平台**重构，而不是继续围绕单个小游戏做表现层打磨。

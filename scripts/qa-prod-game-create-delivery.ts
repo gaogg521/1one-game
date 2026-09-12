@@ -6,6 +6,7 @@ const baseUrl = (process.env.QA_BASE_URL ?? "https://operone.1oneclaw.com").repl
 const locale = process.env.QA_LOCALE?.trim() || "zh-Hans";
 const prompt = process.env.QA_GAME_PROMPT?.trim() ||
   "做一个手机单手玩的萤火虫护送小游戏：手指左右移动，引导萤火虫穿过夜森林，避开蜘蛛网，收集三颗月光种子，前60秒友好且有三次容错，随后进入高潮并在90秒内明确胜负；环境有虫鸣和风声，越接近终点音乐越紧张，胜利时转为温暖旋律。";
+const resumeProjectId = process.env.QA_PROD_GAME_PROJECT_ID?.trim() || "";
 const outputDir = path.join(process.cwd(), "qa-output", "prod-game-create-delivery");
 
 type StageRecord = { at: string; stage: string; detail: unknown };
@@ -76,7 +77,7 @@ async function waitForDeliveryArtifacts(page: Page, projectId: string, stages: S
   while (Date.now() < deadline) {
     const detail = await readProject(page, projectId);
     const kinds = (detail.core?.revision?.artifacts ?? []).map((item) => item.kind ?? "").filter(Boolean);
-    const bgmReady = kinds.includes("bgm");
+    const bgmReady = kinds.includes("bgm") || kinds.includes("bgm_notes");
     lastKinds = kinds;
     if (detail.core?.revision?.status === "ready" && required.every((kind) => kinds.includes(kind)) && bgmReady && !detail.assetJob) {
       stages.push({ at: new Date().toISOString(), stage: "delivery_artifacts_ready", detail: { kinds } });
@@ -182,11 +183,18 @@ async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[], temp
     }
   });
 
-  await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30_000 });
+  const pageCanvas = page.locator("canvas").first();
+  const iframeCanvas = page.frameLocator("iframe").locator("canvas").first();
+  await Promise.race([
+    pageCanvas.waitFor({ state: "visible", timeout: 30_000 }),
+    iframeCanvas.waitFor({ state: "visible", timeout: 30_000 }),
+  ]);
+  const canvas = await iframeCanvas.isVisible().catch(() => false) ? iframeCanvas : pageCanvas;
+  await fs.mkdir(outputDir, { recursive: true });
+  await page.screenshot({ path: path.join(outputDir, "playing-start.png"), fullPage: false });
   const startedAt = Date.now();
   let outcome: string | null = null;
   while (Date.now() - startedAt < 150_000) {
-    const canvas = page.locator("canvas").first();
     const box = await canvas.boundingBox();
     if (box) {
       if (templateId === "dou-dizhu") {
@@ -203,20 +211,42 @@ async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[], temp
         }
       } else {
         const phase = Math.floor((Date.now() - startedAt) / 1_200) % 4;
-        const x = box.x + box.width * ([0.22, 0.78, 0.35, 0.65][phase] ?? 0.5);
+        const observation = await page.evaluate(() => {
+          const list = (window as typeof window & { __qaForgeEvents?: Array<Record<string, unknown>> }).__qaForgeEvents ?? [];
+          return [...list].reverse().find((entry) => entry.type === "forge-player-evidence") ?? null;
+        }) as { players?: Array<{ screenY?: number }>; sprites?: Array<{ kind?: string; screenX?: number; screenY?: number; visible?: boolean }> } | null;
+        const playerY = observation?.players?.[0]?.screenY ?? 0.78;
+        const hazards = (observation?.sprites ?? []).filter((sprite) => sprite.kind === "enemy" && sprite.visible && typeof sprite.screenX === "number" && typeof sprite.screenY === "number" && Math.abs(sprite.screenY - playerY) < 0.24);
+        const collectibles = (observation?.sprites ?? []).filter((sprite) => sprite.kind === "collectible" && sprite.visible && typeof sprite.screenX === "number");
+        const choices = [0.12, 0.3, 0.5, 0.7, 0.88];
+        const safest = choices.reduce((best, choice) => {
+          const clearance = hazards.length ? Math.min(...hazards.map((sprite) => Math.abs(choice - sprite.screenX!))) : 1;
+          const bestClearance = hazards.length ? Math.min(...hazards.map((sprite) => Math.abs(best - sprite.screenX!))) : 1;
+          return clearance > bestClearance ? choice : best;
+        }, choices[phase] ?? 0.5);
+        const targetX = hazards.length ? safest : collectibles[0]?.screenX ?? ([0.22, 0.78, 0.35, 0.65][phase] ?? 0.5);
+        const x = box.x + box.width * Math.max(0.08, Math.min(0.92, targetX));
         const y = box.y + box.height * (phase % 2 === 0 ? 0.72 : 0.45);
         await page.touchscreen.tap(x, y).catch(() => undefined);
-        await page.mouse.move(x, y).catch(() => undefined);
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.75).catch(() => undefined);
+        await page.mouse.down().catch(() => undefined);
+        await page.mouse.move(x, box.y + box.height * 0.75, { steps: 6 }).catch(() => undefined);
+        await page.mouse.up().catch(() => undefined);
         await page.keyboard.press(phase % 2 === 0 ? "ArrowLeft" : "ArrowRight").catch(() => undefined);
       }
     }
-    const result = page.locator("[data-outcome]").first();
-    if (await result.isVisible().catch(() => false)) {
-      outcome = await result.getAttribute("data-outcome");
+    if (Date.now() - startedAt >= 5_000 && !stages.some((entry) => entry.stage === "active_play_screenshot")) {
+      await page.screenshot({ path: path.join(outputDir, "playing-active.png"), fullPage: false });
+      stages.push({ at: new Date().toISOString(), stage: "active_play_screenshot", detail: { path: "playing-active.png" } });
+    }
+    const latestEnd = [...events].reverse().find((event) => event.event === "end");
+    const latestRetry = [...events].reverse().find((event) => event.event === "retry");
+    if (latestEnd && (!latestRetry || Number(latestRetry.elapsedMs ?? 0) < Number(latestEnd.elapsedMs ?? 0))) {
+      outcome = latestEnd.won === true ? "won" : "lost";
       const hasMinute = events.some((event) => event.event === "first_minute");
       if (hasMinute) break;
-      const retry = page.getByTestId("game-result-restart").or(page.getByRole("button", { name: /再来一局|重开|重试|再来一次|重新开始|retry/i })).first();
-      if (await retry.isVisible().catch(() => false)) await retry.click();
+      const retryBox = await canvas.boundingBox();
+      if (retryBox) await page.touchscreen.tap(retryBox.x + retryBox.width * 0.5, retryBox.y + retryBox.height * 0.63).catch(() => undefined);
     }
     await page.waitForTimeout(1_000);
   }
@@ -232,14 +262,37 @@ async function playUntilDeliveryEvidence(page: Page, stages: StageRecord[], temp
 }
 
 async function main() {
-  if (process.env.QA_PROD_GAME_CREATE !== "1") {
-    throw new Error("拒绝调用真实模型和发布：请显式设置 QA_PROD_GAME_CREATE=1");
+  if (process.env.QA_PROD_GAME_CREATE !== "1" && (!resumeProjectId || process.env.QA_PROD_GAME_RESUME !== "1")) {
+    throw new Error("拒绝调用真实模型和发布：创建需设置 QA_PROD_GAME_CREATE=1；复用项目需设置 QA_PROD_GAME_RESUME=1 和 QA_PROD_GAME_PROJECT_ID");
   }
 
   const stages: StageRecord[] = [];
   const summary: Record<string, unknown> = { pass: false, baseUrl, prompt };
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+  await context.addInitScript(() => {
+    const target = window as typeof window & { __qaForgeEvents?: Array<Record<string, unknown>> };
+    target.__qaForgeEvents = [];
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (data && typeof data === "object" && typeof data.type === "string" && data.type.startsWith("forge-")) {
+        target.__qaForgeEvents?.push(data as Record<string, unknown>);
+      }
+    });
+  });
+  const ownerKey = process.env.QA_OWNER_KEY?.trim();
+  if (ownerKey) {
+    const site = new URL(baseUrl);
+    await context.addCookies([{ name: "gcreator_owner", value: ownerKey, domain: site.hostname, path: "/", secure: site.protocol === "https:", httpOnly: true, sameSite: "Lax" }]);
+  }
+  const superAdminKey = process.env.QA_SUPER_ADMIN_KEY?.trim();
+  if (superAdminKey) {
+    await context.setExtraHTTPHeaders({ "X-Super-Admin-Key": superAdminKey });
+    await context.addInitScript((key) => {
+      localStorage.setItem("gc_super_admin_key", key);
+      sessionStorage.setItem("gc_super_admin_key", key);
+    }, superAdminKey);
+  }
   const page = await context.newPage();
   page.on("console", (message) => {
     if (message.type() === "error") stages.push({ at: new Date().toISOString(), stage: "browser_console_error", detail: message.text() });
@@ -265,38 +318,44 @@ async function main() {
   };
 
   try {
-    await page.goto(`${baseUrl}/${locale}/create`, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    assert(await page.locator("textarea").first().isVisible(), "创作输入框不可见");
-    assert((await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)), "创作页手机端横向溢出");
-    stages.push({ at: new Date().toISOString(), stage: "create_page_ready", detail: { url: page.url() } });
+    let projectId = resumeProjectId;
+    if (projectId) {
+      await page.goto(`${baseUrl}/${locale}/play/${encodeURIComponent(projectId)}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      stages.push({ at: new Date().toISOString(), stage: "existing_project_resumed", detail: { projectId, playUrl: page.url() } });
+    } else {
+      await page.goto(`${baseUrl}/${locale}/create`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      assert(await page.locator("textarea").first().isVisible(), "创作输入框不可见");
+      assert((await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)), "创作页手机端横向溢出");
+      stages.push({ at: new Date().toISOString(), stage: "create_page_ready", detail: { url: page.url() } });
 
-    const promptInput = page.locator("textarea").first();
-    const generateButton = page.getByRole("button", { name: /开始生成游戏/i });
-    // A production navigation can expose server-rendered controls a fraction
-    // before React attaches. A human cannot type that quickly, so wait for the
-    // interactive layer and verify the controlled value before submission.
-    await page.waitForTimeout(1_200);
-    await promptInput.fill(prompt);
-    if (!(await generateButton.isEnabled())) {
-      await page.waitForTimeout(800);
-      await promptInput.click();
-      await promptInput.fill("");
-      await promptInput.pressSequentially(prompt, { delay: 1 });
+      const promptInput = page.locator("textarea").first();
+      const generateButton = page.getByRole("button", { name: /开始生成游戏/i });
+      // A production navigation can expose server-rendered controls a fraction
+      // before React attaches. A human cannot type that quickly, so wait for the
+      // interactive layer and verify the controlled value before submission.
+      await page.waitForTimeout(1_200);
+      await promptInput.fill(prompt);
+      if (!(await generateButton.isEnabled())) {
+        await page.waitForTimeout(800);
+        await promptInput.click();
+        await promptInput.fill("");
+        await promptInput.pressSequentially(prompt, { delay: 1 });
+      }
+      assert((await promptInput.inputValue()) === prompt, "创作输入没有进入 React 受控状态");
+      assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
+
+      await Promise.all([
+        page.waitForURL(/\/play\//, { timeout: 90_000 }),
+        generateButton.click(),
+      ]);
+      projectId = decodeURIComponent(page.url().split("/play/")[1]?.split(/[?#]/)[0] ?? "");
+      assert(projectId, "提交后没有获得项目 ID");
+      stages.push({ at: new Date().toISOString(), stage: "production_started", detail: { projectId, playUrl: page.url(), promptChars: prompt.length } });
+      await page.getByTestId("game-production-screen").waitFor({ state: "visible", timeout: 30_000 });
+      assert(!(await page.getByText("INDEPENDENT RUNTIME REQUIRED").isVisible().catch(() => false)), "生成进度页仍暴露旧运行时占位");
     }
-    assert((await promptInput.inputValue()) === prompt, "创作输入没有进入 React 受控状态");
-    assert(await generateButton.isEnabled(), "输入有效创意后生成按钮仍不可用");
-
-    await Promise.all([
-      page.waitForURL(/\/play\//, { timeout: 90_000 }),
-      generateButton.click(),
-    ]);
-    const projectId = decodeURIComponent(page.url().split("/play/")[1]?.split(/[?#]/)[0] ?? "");
-    assert(projectId, "提交后没有获得项目 ID");
     summary.projectId = projectId;
     summary.playUrl = page.url();
-    stages.push({ at: new Date().toISOString(), stage: "production_started", detail: { projectId, playUrl: page.url(), promptChars: prompt.length } });
-    await page.getByTestId("game-production-screen").waitFor({ state: "visible", timeout: 30_000 });
-    assert(!(await page.getByText("INDEPENDENT RUNTIME REQUIRED").isVisible().catch(() => false)), "生成进度页仍暴露旧运行时占位");
 
     const created = await readProject(page, projectId);
     let revisionId = created.playRevisionId ?? created.core?.revision?.id;
