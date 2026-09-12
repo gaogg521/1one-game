@@ -75,7 +75,23 @@ export async function GET(req: Request, ctx: RouteContext) {
     const core = isOwner
       ? await getLegacyCreativeProjectSnapshot({ ownerKey: ownerKey!, legacyType: "project", legacyId: id })
       : null;
-    const playRevisionId = isOwner ? core?.revision?.id ?? null : acceptedGameSpec?.creativeRevisionId ?? null;
+    /*
+     * The delivery verdict must describe the build the player actually gets.
+     * When the newest revision failed, the worker puts the project back on the
+     * newest one that passed, so reading the failed revision's report would
+     * report a working game as unplayable -- which is exactly what a failed
+     * automatic optimisation round used to do to a game that was fine.
+     */
+    let servedRevisionId = core?.revision?.id ?? null;
+    if (isOwner && core?.revision?.status === "failed") {
+      const lastReady = await prisma.creativeRevision.findFirst({
+        where: { creativeProjectId: core.project.id, status: "ready" },
+        orderBy: { sequence: "desc" },
+        select: { id: true },
+      });
+      if (lastReady) servedRevisionId = lastReady.id;
+    }
+    const playRevisionId = isOwner ? servedRevisionId : acceptedGameSpec?.creativeRevisionId ?? null;
     let runtimeDelivery: { status: string; blockers: string[] } | undefined;
     if (row.ownerKey !== SAMPLE_GALLERY_OWNER && requiresBespokeRuntime(spec)) {
       const report = playRevisionId ? await prisma.creativeArtifact.findFirst({ where: { creativeRevisionId: playRevisionId, kind: "game_runtime_validation", status: "ready" }, orderBy: { updatedAt: "desc" } }) : null;
