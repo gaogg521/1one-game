@@ -65,7 +65,7 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     page.setDefaultTimeout(10_000);
     // Parent listener precedes iframe navigation. Messages from other frames are ignored.
     const probeUrl = `http://127.0.0.1:${process.env.PORT || 8888}/__runtime_validation`;
-    await page.route(probeUrl, route => route.fulfill({ contentType: "text/html", body: '<html><body style="margin:0"><script>window.events=[];window.addEventListener("message",e=>{if(e.source===document.querySelector("iframe")?.contentWindow)window.events.push(e.data)})</script><iframe sandbox="allow-scripts" style="width:393px;height:700px;border:0"></iframe></body></html>' }));
+    await page.route(probeUrl, route => route.fulfill({ contentType: "text/html", body: '<html><body style="margin:0"><script>window.events=[];window.addEventListener("message",e=>{if(e.source===document.querySelector("iframe")?.contentWindow)window.events.push(e.data)})</script><iframe sandbox="allow-scripts" style="width:393px;height:852px;border:0"></iframe></body></html>' }));
     await page.goto(probeUrl);
     await page.locator("iframe").evaluate((element, src) => { (element as HTMLIFrameElement).srcdoc = src; }, buildIndependentRuntimePage(spec, projectId));
     await page.waitForFunction("window.events.some(e=>e.type==='forge-heartbeat'||e.type==='operone-game-error'||e.type==='operone-game-mounted')", undefined, { timeout: 10_000 }).catch(() => undefined);
@@ -101,6 +101,10 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
         await page.waitForTimeout(70);
       }
       await page.mouse.up();
+      // A drag across a DOM-based build selects its text, and that highlight is
+      // a pixel change -- which would let a completely inert build pass the
+      // before/after comparison below on the strength of the probe's own input.
+      await frame?.evaluate(() => window.getSelection()?.removeAllRanges()).catch(() => undefined);
     }
     const after = await page.locator("iframe").screenshot({ timeout: 10_000 });
     if (onFrame) {

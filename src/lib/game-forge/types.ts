@@ -85,7 +85,7 @@ export const GameDesignDocSchema = z.object({
   stage: z.object({
     // Delivery is a 393x852 phone, so an omitted stage defaults upright.
     width: z.number().int().min(320).max(1920).default(540),
-    height: z.number().int().min(320).max(1920).default(960),
+    height: z.number().int().min(320).max(1920).default(1170),
     orientation: z.enum(["landscape", "portrait", "either"]).default("portrait"),
     background: z.string().min(4).max(24).default("#0b1020"),
   }),

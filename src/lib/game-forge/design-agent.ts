@@ -143,7 +143,7 @@ Rules that decide whether the build succeeds:
 
 Every game is played in a 393x852 portrait viewport. These are measured requirements, not preferences — a design that ignores them ships a game nobody can see or survive.
 
-6. stage.orientation is "portrait" and the stage is tall, 540x960 unless the request needs otherwise. A landscape stage is scaled to fit a portrait screen, which wastes the top and bottom of the phone and shrinks everything the player must read. Choose "landscape" only when the request genuinely demands a wide field (a side-scrolling racer, a horizontal platformer); then say so in the pitch.
+6. stage.orientation is "portrait" and the stage is 540x1170 unless the request needs otherwise. That is the shape of the phone it ships on: the runtime scales the stage to fit, so a 16:9 stage still leaves empty bands on a modern phone, and a landscape one wastes most of the screen. Choose "landscape" only when the request genuinely demands a wide field (a side-scrolling racer, a horizontal platformer); then say so in the pitch.
 7. The player actor is drawn at least 9% of the stage's shorter axis, and never below 48 virtual pixels. Enemies, hazards and collectibles are at least 32. State these sizes as numbers in configShape (player.size, enemy.size, ...) so they are tunable.
 8. The first 60 seconds must be survivable. A first-time player on a phone, reacting correctly, reaches 60 seconds on their first or second attempt:
    - 0-10s: at most ONE threat on screen at a time, and no threat may demand a reaction faster than 1.2 seconds.
@@ -169,7 +169,7 @@ replace the values:
 
 {
   "title": "…", "pitch": "…", "genre": "…",
-  "stage": { "width": 540, "height": 960, "orientation": "portrait", "background": "#0b1020" },
+  "stage": { "width": 540, "height": 1170, "orientation": "portrait", "background": "#0b1020" },
   "coreLoop": ["step 1", "step 2", "step 3"],
   "controls": [ { "action": "move", "desktop": "WASD / arrows", "touch": "virtual stick" } ],
   "mechanics": [ { "id": "flame_decay", "summary": "…", "observable": "…" } ],

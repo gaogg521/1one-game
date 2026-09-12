@@ -54,6 +54,11 @@ async function main() {
   const defaults = designDoc({ background: "#0b1020" }).stage;
   assert.equal(defaults.orientation, "portrait", JSON.stringify(defaults));
   assert.ok(defaults.height > defaults.width, "an omitted stage must default upright");
+  // The runtime scales the stage to fit, so a 16:9 stage still bands a modern
+  // phone. Measured on a real 393x852 run: a 540x960 stage filled only 82%.
+  const phoneAspect = 393 / 852;
+  const defaultAspect = defaults.width / defaults.height;
+  assert.ok(Math.abs(defaultAspect - phoneAspect) < 0.02, `default stage ${defaults.width}x${defaults.height} must match the delivery phone aspect ${phoneAspect.toFixed(3)}, got ${defaultAspect.toFixed(3)}`);
 
   // 2. "either" is a hedge; delivery resolves it to the phone it ships on.
   const hedged = normalizeDesign(designDoc({ width: 960, height: 540, orientation: "either", background: "#0b1020" })).stage;
