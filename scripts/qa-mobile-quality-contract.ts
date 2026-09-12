@@ -430,6 +430,23 @@ async function main() {
   ]);
   assert.equal(dynamicSpawn.findings.some((f) => f.code === "entity_group_never_spawned"), false, "an unresolvable spawn argument is not evidence of absence");
 
+  // 19. Every defect that made a generated game unplayable today had one shape:
+  // a system written, wired, drawn -- and never doing anything. Zombies that
+  // spawned and stood still for 45 seconds while the entity count sat at its
+  // cap. The evidence stream already carries every sprite's position, so a
+  // hazard that never changes position is a dead system, reported as such.
+  const motionFindings = selectGameQualityPolishFindings(["advisory:entities_never_move:enemy"]);
+  assert.deepEqual(motionFindings, ["entities_never_move"], JSON.stringify(motionFindings));
+  assert.match(buildGameQualityPolishInstruction(motionFindings), /从不移动/);
+  assert.match(buildGameQualityPolishInstruction(motionFindings), /dt/);
+  // The suffix-stripping must not break the asset-missing suppression.
+  const withMissing = selectGameQualityPolishFindings([
+    "runtime_player_asset_unused",
+    "advisory:runtime_letterboxed",
+    "advisory:required_asset_missing:ship_blue",
+  ]);
+  assert.deepEqual(withMissing, ["runtime_letterboxed"], JSON.stringify(withMissing));
+
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
 

@@ -131,6 +131,42 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
         result.evidence.push("advisory:core_loop_unresolved");
       }
     }
+
+    /*
+     * Every defect that made a generated game unplayable today had the same
+     * shape: a system was written, wired and drawn, and never actually did
+     * anything. Zombies that spawned and stood still; a collision loop reading
+     * an empty group; peas that never left the barrel. None of it errors, so
+     * every structural check passes and the player watches a diorama.
+     *
+     * The evidence stream already carries every drawn sprite's position four
+     * times a second. Hazards and projectiles are the actors whose whole job is
+     * to move, so a kind that is on screen throughout and never changes
+     * position is reporting a dead system.
+     */
+    const MOTION_KINDS = new Set(["enemy", "enemy_alt", "projectile"]);
+    const seenByKind = new Map<string, { samples: number; xs: number[]; ys: number[] }>();
+    for (const event of events) {
+      const drawn = (event as { sprites?: Array<{ kind?: string; x?: number; y?: number }> }).sprites;
+      if (event.type !== "forge-player-evidence" || !Array.isArray(drawn)) continue;
+      for (const sprite of drawn) {
+        const kind = typeof sprite?.kind === "string" ? sprite.kind : "";
+        if (!MOTION_KINDS.has(kind) || typeof sprite.x !== "number" || typeof sprite.y !== "number") continue;
+        const entry = seenByKind.get(kind) ?? { samples: 0, xs: [], ys: [] };
+        entry.samples += 1;
+        entry.xs.push(sprite.x);
+        entry.ys.push(sprite.y);
+        seenByKind.set(kind, entry);
+      }
+    }
+    for (const [kind, entry] of seenByKind) {
+      // Needs a few seconds of presence before silence means anything.
+      if (entry.samples < 12) continue;
+      const spread = Math.max(Math.max(...entry.xs) - Math.min(...entry.xs), Math.max(...entry.ys) - Math.min(...entry.ys));
+      result.evidence.push(`motion:${kind}:${Math.round(spread)}`);
+      if (spread < 2) result.evidence.push(`advisory:entities_never_move:${kind}`);
+    }
+
     /*
      * A landscape stage scaled into this portrait iframe leaves empty bands top
      * and bottom, which is what makes a generated game look unfinished on a
