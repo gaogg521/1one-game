@@ -33,6 +33,13 @@ export type RunProjectAssetPipelineOptions = {
   /** 是否尝试 Brief 封面（默认读 PRODUCT.game.autoCoverFromBrief） */
   generateCover?: boolean;
   artDirection?: GameArtDirection;
+  /**
+   * A Forge build already produced the artwork it actually draws, keyed by the
+   * names its own design chose. Regenerating the legacy template set on top is
+   * not merely wasted time -- the background lands on the same path, so the
+   * generic one overwrites the game's own.
+   */
+  skipRuntimeArt?: boolean;
 };
 
 /**
@@ -47,9 +54,9 @@ export async function runProjectAssetPipeline(
 
   // SVG sprites（文本 LLM，快速）与背景/PNG sprites 并行
   const [generatedBackgroundUrl, svgSprites, pngSprites] = await Promise.all([
-    generateGameBackground(opts.projectId, opts.spec, brief, artDirection),
+    opts.skipRuntimeArt ? Promise.resolve(null) : generateGameBackground(opts.projectId, opts.spec, brief, artDirection),
     generateSvgSprites(opts.projectId, opts.spec).catch(() => []), // SVG first — no image API needed
-    generateGameSprites(opts.projectId, opts.spec, uiLocale, brief, artDirection),
+    opts.skipRuntimeArt ? Promise.resolve([]) : generateGameSprites(opts.projectId, opts.spec, uiLocale, brief, artDirection),
   ]);
   const completed = await completeRequiredGameAssets({
     projectId: opts.projectId,

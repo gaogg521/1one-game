@@ -124,6 +124,13 @@ async function executeGameAssetJob(
     uiLocale: payload.uiLocale as import("@/i18n/routing").AppLocale,
     existingCoverPath: project.coverPath,
     artDirection,
+    /*
+     * Measured on a real generation: design finished at 21s, all seven modules
+     * at 53s, all five art slots at 121s -- and the job then spent thirteen
+     * more minutes here, silently, regenerating a template asset set the Forge
+     * runtime never reads. The cover is still wanted; the runtime art is not.
+     */
+    skipRuntimeArt: Boolean(spec.forgeBuild),
   });
   await createCreativeArtifact({
     creativeProjectId: job.creativeProjectId,
