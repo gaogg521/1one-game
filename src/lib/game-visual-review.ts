@@ -113,7 +113,13 @@ export async function reviewGameVisuals(params: {
       jsonSchema: REVIEW_SCHEMA,
       singleModeOnly: true,
       maxTokens: 1_024,
-      timeoutMs: params.timeoutMs ?? 60_000,
+      /*
+       * Measured in production: the routed vision model was cancelled by this
+       * app's own AbortSignal at exactly 60002ms on a real screenshot, so every
+       * review reported "unavailable" and no art finding could ever be raised.
+       * Reading an image costs more than the short-reply budget assumed.
+       */
+      timeoutMs: params.timeoutMs ?? 120_000,
     }).catch((error) => {
       lastReason = error instanceof Error ? error.message : "threw";
       return null;
