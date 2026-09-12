@@ -104,6 +104,40 @@ async function main() {
   assert.deepEqual(forge.blockers, [], JSON.stringify(forge));
   assert.equal(forge.ok, true);
 
+  // A real design names its own keys. Observed in production: a build drawing
+  // ctx.assets.ship_blue was reported as not using its player art, three times
+  // over, and those false findings consumed a repair round.
+  const namedSpec = {
+    ...spec,
+    forgeBuild: {
+      design: {
+        assets: [
+          { key: "bg_space", kind: "background" },
+          { key: "ship_blue", kind: "player" },
+          { key: "meteor_red", kind: "enemy" },
+        ],
+      },
+    },
+  } as unknown as typeof spec;
+  const named = evaluateAgenticVisualContract(namedSpec, {
+    version: 2,
+    entry: "mountGame",
+    source: [
+      "var sky = g.assets.image(ctx.assets.bg_space, 'background', '#0b1020');",
+      "var ship = g.assets.image(ctx.assets.ship_blue, 'player', '#4fc3f7');",
+      "var rock = g.assets.image(ctx.assets.meteor_red, 'enemy', '#ff4444');",
+      "r.sprite(ship, p.x, p.y, 64, 64);",
+    ].join("\n"),
+  });
+  assert.deepEqual(named.blockers, [], JSON.stringify(named));
+  // Declaring the keys and then not drawing them is still a real finding.
+  const declaredUnused = evaluateAgenticVisualContract(namedSpec, {
+    version: 2,
+    entry: "mountGame",
+    source: "var sky = g.assets.image(ctx.assets.bg_space, 'background', '#0b1020'); r.sprite(sky, 0, 0, 1, 1);",
+  });
+  assert.ok(declaredUnused.blockers.includes("runtime_player_asset_unused"), JSON.stringify(declaredUnused));
+
   // The legacy DOM idiom still passes, and geometry-only still fails.
   const legacy = evaluateAgenticVisualContract(spec, {
     version: 2,
