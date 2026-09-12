@@ -24,8 +24,18 @@
 3. **能测量的不要靠提示词。** 主角尺寸走 `forge-player-evidence` 的 `w`/`h`，不需要视觉模型。
 4. **没跑过的审查不许下结论。** 视觉审查跑不了返回 null，候选写 `visual_review_unavailable`。`qa-runtime-delivery-gate.ts` 原先断言的是旧的「永远 rejected」行为，即断言了 bug，已改。
 
+### 生产实测结论（项目 `cmtwv5zla000e8w6tkzc8jmmt`，未新建游戏）
+
+对现有项目驱动一次 owner 定向修改。`refine` 返回 200、110 秒、实际编辑 5 个模块（此前同一项目连续 3 次 503）。新修订 `screenFillPct:100`、`viewport:393x852`、无 `runtime_letterboxed`。seq1 有 `runtime_sprite_actor_missing`、seq2 没有，假阳性修复在真实构建上确认。打磨轮在一个 `ready`/`passed`/零 blocker 的构建上触发，`round 2/3`、`role=gameplay_designer`，严格一轮。
+
+实测还暴露并修了两个问题：
+
+- `4c0b0bba`：打磨轮把构建改坏过一次。`ship_blue` 404 → 打磨轮命令运行时必须使用该素材 → 主角变不可见。素材缺失时的修复属于素材生成，不是模块重写，已在 `selectGameQualityPolishFindings` 里加了抑制。
+- `2ca88bb2`：必需素材失败从不重试，`missingRequiredSlots` 算了却无人消费。现在做一次窄重试。
+
 ### 下一位的缺口
 
+0. **美术审查在生产上是哑的（最高优先级，且不需要改代码）。** 生产实测返回 `visual_review_unavailable`。`game_vision` 默认回落到 `PRODUCT.models.gameVisionPrimary`（`gpt-5-4`），生产网关不提供该模型。**在后台把 `game_vision` 路由到网关上真实存在的视觉模型即可**，随后 `[visual-review]` 日志会给出结果或失败原因（`dee360f2` 起有脱敏日志）。在此之前，`art_direction_mismatch` / `hud_unreadable` / `low_contrast_subject` 这三类美术发现永远不会产生。
 1. **质量发现对人不可见。** `game_production_candidate.advisories` 没有进 `creator-quality.ts` 的作品质量报告，也没有进后台。创作者看不到「平台正在自动优化：主角过小 / 画面留白」。`assessGameCreatorQuality` 目前只接 spec，需要把候选 advisories 从详情 API 透传进去。
 2. **既有失败（非本轮回归，均已隔离复现）**：`qa:agentic-persist-coerce`（`coerceGameSpec` 单独调用即丢 `agenticModule`，`normalize-spec.ts`/`game-spec.ts` 本轮未改）、`qa:creator-core`（CONTEXT 早已记载的共享库 job 抢占）、`scripts/qa-game-forge-browser.ts`（未注册进 package.json，手写参考构建签名检查失败）。
 3. 工作区仍有大量非本轮所有的改动，**禁止 `git add .`**，只按精确路径暂存。

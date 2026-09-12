@@ -30,9 +30,35 @@
 - `scripts/qa-mobile-quality-contract.ts`（`npm run qa:mobile-quality-contract`）— 覆盖竖屏、主角下限、首分钟合同、Forge 素材消费、patch 不丢运行时、一轮打磨、审查缺席行为。
 - `scripts/refine-prod-game.ts` — 对**现有**生产项目驱动一次 owner 定向修改并等待新修订（不新建游戏）。
 
-### 已验证
+### 已验证（本地）
 
 `npx tsc --noEmit`、目标 ESLint（0 error）、`npm run build`、`qa:mobile-quality-contract`、`qa:runtime-delivery-gate`、`qa:game-forge`、`qa:game-production-orchestrator`、`qa:game-production-artifacts`、`qa:game-preflight-iteration`、`qa:game-vertical-slice`、`qa:creator-quality` 全部通过。
+
+### 生产实测（项目 `cmtwv5zla000e8w6tkzc8jmmt`，未新建游戏）
+
+对现有项目驱动一次 owner 定向修改，修订链：
+
+```
+seq1 ready  (原始，旧代码)  adv: …runtime_sprite_actor_missing, visual_review_rejected  ← 两条都是假的
+seq2 ready  (本轮 refine)   adv: …visual_review_unavailable, required_asset_missing:ship_blue
+                            evidence: screenFillPct:100, viewport:393x852
+seq3 failed (本轮打磨轮 round 2/3, blockers=3×asset_unused) → 候选被拒 runtime_player_not_visible
+seq4        (既有 blocker 修复轮 round 3/3 接手)
+```
+
+- **P0 解除**：`refine` 返回 200、耗时 110 秒、实际编辑 5 个模块（`game_config` / `player_control` / `spawn_system` / `collision_system` / `main_game`）。此前同一项目连续 3 次 503。
+- **竖屏留白解决**：`screenFillPct:100`，无 `advisory:runtime_letterboxed`。
+- **视觉合同假阳性消失**：seq1 有 `runtime_sprite_actor_missing`，seq2 没有；剩下三条 `*_asset_unused` 是真缺陷。
+- **打磨轮确实触发**：在一个 `ready` / `passed` / 零 blocker 的构建上触发，`round 2/3`，`role=gameplay_designer`、`mutates=[game_spec, agentic_runtime]`（证明 `runtimeRepairOnly` 对打磨路径被正确强制为 false）。严格一轮，seq4 是既有 blocker 修复接管，不是打磨自循环。
+
+### 实测暴露并已修的两个问题
+
+1. **打磨轮把构建改坏了**（`4c0b0bba`）。`ship_blue` 素材 404 → 模块无法使用主角素材 → 打磨轮命令它必须使用 → 主角变不可见（硬 blocker）。素材本身缺失时，修复属于素材生成，不是模块重写；`selectGameQualityPolishFindings` 现在在有 `required_asset_missing` 时丢弃 `*_asset_unused` 类发现。安全网全程有效：被拒修订没有覆盖 seq2 的 ready 版本。
+2. **必需素材失败从不重试**（`2ca88bb2`）。`missingRequiredSlots` 本来就算出来并存进 `game_art_run.missingRequired`，但无人消费。现在对失败的必需槽位做一次窄重试。
+
+### 仍未解决
+
+- **美术审查在生产上是哑的**：`visual_review_unavailable`。`game_vision` 默认回落到 `PRODUCT.models.gameVisionPrimary`（`gpt-5-4`），生产网关不提供该模型。需要在后台把 `game_vision` 路由到网关上真实存在的视觉模型，代码侧无需再改。`dee360f2` 已补上脱敏日志（`[visual-review] ... reason=`），可据此确认。
 
 ### 既有失败（非本轮回归，已隔离复现）
 
