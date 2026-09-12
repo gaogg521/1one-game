@@ -12,6 +12,9 @@ import { generateGameCoverFromBrief } from "@/lib/game-brief-comfy-cover";
 import { buildRuntimeAssetManifest } from "@/lib/assets/asset-runtime-resolver";
 import { PRODUCT } from "@/lib/product-config";
 import { completeRequiredGameAssets } from "@/lib/game-asset-fallback";
+import { repoPublicPath } from "@/lib/public-path";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 export type ProjectAssetPipelineResult = {
   backgroundUrl: string | null;
@@ -58,10 +61,20 @@ export async function runProjectAssetPipeline(
     generateSvgSprites(opts.projectId, opts.spec).catch(() => []), // SVG first — no image API needed
     opts.skipRuntimeArt ? Promise.resolve([]) : generateGameSprites(opts.projectId, opts.spec, uiLocale, brief, artDirection),
   ]);
+  /*
+   * Skipping the legacy background generation leaves this null, and the
+   * completion step then writes a procedural background to the very path the
+   * Forge art agent already filled -- trading a generic photo for a generic
+   * gradient, either way on top of the lawn this game actually drew. Claim the
+   * existing file when it is there.
+   */
+  const forgeBackground = opts.skipRuntimeArt && existsSync(path.join(repoPublicPath("game-bg"), `${opts.projectId}.png`))
+    ? `/game-bg/${opts.projectId}.png`
+    : generatedBackgroundUrl;
   const completed = await completeRequiredGameAssets({
     projectId: opts.projectId,
     spec: opts.spec,
-    backgroundUrl: generatedBackgroundUrl,
+    backgroundUrl: forgeBackground,
     pngSprites,
     svgSprites,
   });
