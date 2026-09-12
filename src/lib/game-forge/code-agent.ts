@@ -31,6 +31,7 @@ function designSummary(design: GameDesignDoc): string {
     `PITCH: ${design.pitch}`,
     `GENRE: ${design.genre}`,
     `STAGE: ${design.stage.width}x${design.stage.height} ${design.stage.orientation}, background ${design.stage.background}`,
+    `PHONE DELIVERY: played on a 393x852 upright phone. Player actor >= ${Math.max(48, Math.round(Math.min(design.stage.width, design.stage.height) * 0.09))}px, hazards/collectibles >= 32px, laid out against the full ${design.stage.width}x${design.stage.height} stage. First 60s survivable: <=1 threat before 10s, <=2 before 30s, hazard speed <=60% of peak before 30s, >=1.5s invulnerability after each life lost.`,
     `CORE LOOP:\n${design.coreLoop.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`,
     `CONTROLS:\n${design.controls.map((c) => `  - ${c.action}: desktop=${c.desktop} touch=${c.touch}`).join("\n")}`,
     `MECHANICS:\n${design.mechanics.map((m) => `  - ${m.id}: ${m.summary} (observable: ${m.observable})`).join("\n")}`,
@@ -125,6 +126,15 @@ Write the module as if it ships. Specifically:
 - Add juice where the design asks for it: g.fx.burst on impacts, g.fx.shake on damage, g.fx.popText on scoring, g.fx.freeze on heavy hits, tweens on UI.
 - Handle the touch path. If the design says an action is a tap or a swipe, implement it from g.input, and draw its on-screen affordance.
 - Guard against divide-by-zero, empty arrays and entities being killed mid-iteration.
+
+## Phone delivery bar (measured, not a preference)
+
+This game is played on a 393x852 phone held upright. These are the numbers a build is checked against:
+- The player entity is drawn at least 9% of Math.min(g.width, g.height), and never smaller than 48 virtual pixels. Hazards and collectibles are at least 32. Derive them from the stage, e.g. var size = Math.max(48, Math.min(g.width, g.height) * 0.09) — never a hard-coded 16 or 24.
+- Lay the play area out against the FULL stage. Read g.width/g.height for every bound, spawn edge and HUD anchor so the game fills the screen instead of hugging a strip in the middle.
+- The first 60 seconds must be survivable by a first-time player: at most ONE threat on screen before 10s, at most TWO before 30s, and hazard speed at or below 60% of peak before 30s. Ramp from g.state.time; do not start at full difficulty.
+- Losing takes at least 3 mistakes, and every life lost grants at least 1.5s of invulnerability with a visible blink. Decrement that timer by dt and clamp it at zero.
+- Something the player can score must be reachable, without risk, within the first 5 seconds.
 
 Return JSON only: {"source": "<the function body>"}.`;
 }
@@ -344,4 +354,4 @@ export async function runCodeAgents(
   return { modules, failures, durationMs: Date.now() - startedAt };
 }
 
-export { generateModule, systemPrompt as buildModuleSystemPrompt, userPrompt as buildModuleUserPrompt, repairPrompt as buildModuleRepairPrompt };
+export { generateModule, systemPrompt as buildModuleSystemPrompt, userPrompt as buildModuleUserPrompt, repairPrompt as buildModuleRepairPrompt, designSummary as buildModuleDesignSummary };

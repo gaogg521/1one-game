@@ -83,9 +83,10 @@ export const GameDesignDocSchema = z.object({
   genre: z.string().min(2).max(60),
   /** Virtual stage the game is authored against. */
   stage: z.object({
-    width: z.number().int().min(320).max(1920).default(960),
-    height: z.number().int().min(320).max(1920).default(540),
-    orientation: z.enum(["landscape", "portrait", "either"]).default("landscape"),
+    // Delivery is a 393x852 phone, so an omitted stage defaults upright.
+    width: z.number().int().min(320).max(1920).default(540),
+    height: z.number().int().min(320).max(1920).default(960),
+    orientation: z.enum(["landscape", "portrait", "either"]).default("portrait"),
     background: z.string().min(4).max(24).default("#0b1020"),
   }),
   /** The 30-90 second loop, step by step. */

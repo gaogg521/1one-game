@@ -76,6 +76,27 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     await page.waitForTimeout(2500);
     const after = await page.locator("iframe").screenshot({ timeout: 10_000 });
     const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string }>>("window.events");
+    /*
+     * A landscape stage scaled into this portrait iframe leaves empty bands top
+     * and bottom, which is what makes a generated game look unfinished on a
+     * phone and shrinks the actor the player must track. Measure the drawn
+     * surface against the screen it was delivered on. Advisory: a letterboxed
+     * game is still playable, so this is repair evidence, not a publish gate.
+     */
+    const fill = await frame
+      ?.evaluate(() => {
+        const canvas = document.querySelector("canvas");
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const area = window.innerWidth * window.innerHeight;
+        if (!area || !rect.width || !rect.height) return null;
+        return Math.round(((rect.width * rect.height) / area) * 100);
+      })
+      .catch(() => null);
+    if (typeof fill === "number") {
+      result.evidence.push(`screenFillPct:${fill}`);
+      if (fill < 70) result.evidence.push("advisory:runtime_letterboxed");
+    }
     const errors = events.filter(e => e.type === "operone-game-error" || e.type === "forge-error");
     result.observed = true;
     if (projectId && spec.forgeBuild) {

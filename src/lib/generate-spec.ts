@@ -365,7 +365,7 @@ const PRESENTATION_SCHEMA_FRAGMENT = {
   required: ["musicProfile", "assetStyle", "hudFontStyle"],
 } as const;
 
-function getActiveGameSpecJsonSchema() {
+export function getActiveGameSpecJsonSchema() {
   const includeDirector = PRODUCT.game.jsonSchemaIncludeDirector;
   const coreProperties = {
     version: { type: "integer", enum: [1] },

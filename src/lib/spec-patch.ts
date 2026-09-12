@@ -15,6 +15,8 @@ import { applyHardQualityDefaults } from "@/lib/game-quality";
 import { applyMinecraftThemeOverlay } from "@/lib/minecraft-franchise";
 import { buildFarmingBlueprint } from "@/lib/farming-blueprint";
 import { buildDefaultGameProductionContract } from "@/lib/game-production-contract";
+import { getActiveGameSpecJsonSchema } from "@/lib/generate-spec";
+import { PRODUCT } from "@/lib/product-config";
 
 /** 与 `/api/generate/patch` 共用；修改规则时请同步验收「director / systems 不被无损删掉」。 */
 export const SPEC_PATCH_SYSTEM = `你是「游戏规格修改器」。根据用户的一句话修改指令，在现有 GameSpec 基础上做出精准修改。
@@ -100,7 +102,52 @@ export type PatchGameSpecResult =
   | { ok: false; errorKey: string; status: number };
 
 /**
+ * 结构化补丁只覆盖 schema 覆盖到的核心字段，其余（forgeBuild / production /
+ * systems / 各模板蓝图）按原值保留。模型物理上无法删掉它没被要求输出的东西。
+ */
+export function mergePatchedCoreSpec(base: GameSpec, raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const obj = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+  const theme = obj(r.theme);
+  const gameplay = obj(r.gameplay);
+  const labels = obj(r.labels);
+  const presentation = obj(r.presentation);
+  const director = obj(r.director);
+
+  return {
+    ...base,
+    // 合同：局部修改不换模板，否则已生成的运行时与蓝图会与规格失配。
+    templateId: base.templateId,
+    title: typeof r.title === "string" && r.title.trim() ? r.title.trim().slice(0, 80) : base.title,
+    theme: theme ? { ...base.theme, ...theme } : base.theme,
+    gameplay: gameplay ? { ...base.gameplay, ...gameplay } : base.gameplay,
+    labels: labels ? { ...base.labels, ...labels } : base.labels,
+    presentation: presentation ? { ...base.presentation, ...presentation } : base.presentation,
+    director: director ?? base.director,
+  };
+}
+
+/** 只保留可诊断的短代码，不带指令、规格或网关地址。 */
+function patchFailureCode(reason: string): string {
+  const r = reason.toLowerCase();
+  if (/timeout|aborted|etimedout/.test(r)) return "timeout";
+  if (/not parseable|no parseable|empty json/.test(r)) return "unparseable";
+  if (/response[_ ]format|json[_ ]schema|schema/.test(r)) return "schema_unsupported";
+  if (/401|403|api key|unauthor/.test(r)) return "auth";
+  if (/429|rate/.test(r)) return "rate_limited";
+  if (/5\d\d|upstream|bad gateway/.test(r)) return "upstream";
+  return "model_failed";
+}
+
+/**
  * 调用 LLM 对规格打补丁（与 HTTP 路由解耦，供 refine 等多入口复用）。
+ *
+ * 生产 `game_text` 模型（deepseek-v4-flash）在 `json_object` 上被实测为不收敛：
+ * 每次调用都会耗尽预算而不返回，因此这里与主生成链路统一为 `json_schema`，
+ * 并禁止回退到另一种 response_format —— 回退只会把剩余预算烧在同一个死模式里。
  */
 export async function patchGameSpecWithLlm(params: {
   instruction: string;
@@ -128,33 +175,51 @@ export async function patchGameSpecWithLlm(params: {
     return { ok: false, errorKey: "patchNoModel", status: 503 };
   }
 
-  const userMsg = `修改指令：${prompt}\n\n现有游戏规格（请在此基础上修改）：\n${JSON.stringify(coerced.spec).slice(0, 8000)}`;
+  const baseUser = `修改指令：${prompt}\n\n现有游戏规格（请在此基础上修改）：\n${JSON.stringify(coerced.spec).slice(0, 8000)}`;
+  const retryUser = `${baseUser}\n\n上一次回复没有产生可解析的结果。请只输出 schema 要求的核心字段，不要解释、不要 markdown。`;
 
+  let lastReason = "no_attempt";
   for (const model of models) {
-    try {
-      const res = await llmJson({
-        model,
-        scene: gameRoute.scene,
-        localeGroup,
-        system: SPEC_PATCH_SYSTEM,
-        user: userMsg,
-        temperature: 0.3,
-        mode: "json_object",
-        timeoutMs: 22000,
-      });
-      if (!res.ok) continue;
-      const patched = coerceGameSpec(res.raw);
-      if (patched.ok) {
-        const finalized = syncFarmingStartingCoins(finalizePatchedSpec(prompt, patched.spec), prompt);
-        const mergedPrompt = currentPrompt
-          ? `${currentPrompt}\n\n【后续修改】${prompt}`.slice(0, 4000)
-          : undefined;
-        return { ok: true, spec: finalized, mergedPrompt };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const startedAt = Date.now();
+      let reason = "";
+      try {
+        const res = await llmJson({
+          model,
+          scene: gameRoute.scene,
+          localeGroup,
+          system: SPEC_PATCH_SYSTEM,
+          user: attempt === 0 ? baseUser : retryUser,
+          temperature: attempt === 0 ? 0.3 : 0.15,
+          mode: "json_schema",
+          jsonSchema: getActiveGameSpecJsonSchema(),
+          singleModeOnly: true,
+          thinking: /^deepseek-v4-/i.test(model) ? { type: "disabled" } : undefined,
+          timeoutMs: PRODUCT.game.repairTimeoutMs,
+        });
+        if (res.ok) {
+          const patched = coerceGameSpec(mergePatchedCoreSpec(coerced.spec, res.raw));
+          if (patched.ok) {
+            const finalized = syncFarmingStartingCoins(finalizePatchedSpec(prompt, patched.spec), prompt);
+            const mergedPrompt = currentPrompt
+              ? `${currentPrompt}\n\n【后续修改】${prompt}`.slice(0, 4000)
+              : undefined;
+            return { ok: true, spec: finalized, mergedPrompt };
+          }
+          reason = "merged spec not parseable";
+        } else {
+          reason = res.error ?? "model_failed";
+        }
+      } catch (error) {
+        reason = error instanceof Error ? error.message : String(error);
       }
-    } catch {
-      continue;
+      lastReason = reason;
+      console.error(
+        `[spec-patch] scene=${gameRoute.scene} model=${model} attempt=${attempt} ok=false code=${patchFailureCode(reason)} ms=${Date.now() - startedAt}`,
+      );
     }
   }
 
+  console.error(`[spec-patch] exhausted models=${models.length} code=${patchFailureCode(lastReason)}`);
   return { ok: false, errorKey: "patchFailed", status: 503 };
 }

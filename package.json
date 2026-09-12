@@ -111,6 +111,7 @@
     "qa:game-forge": "tsx scripts/qa-game-forge.ts",
     "qa:json-parse": "tsx scripts/qa-json-parse.ts",
     "qa:reasoning-budget": "tsx scripts/qa-reasoning-budget.ts",
+    "qa:mobile-quality-contract": "tsx scripts/qa-mobile-quality-contract.ts",
     "qa:runtime-delivery-gate": "tsx scripts/qa-runtime-delivery-gate.ts",
     "qa:generation-leases": "tsx scripts/qa-generation-leases.ts",
     "qa:runtime-probe": "tsx scripts/qa-runtime-probe.ts",

@@ -19,7 +19,18 @@ export function evaluateAgenticVisualContract(spec: GameSpec, module?: AgenticGa
   const usesBackground = /ctx\.assets\.background/.test(source);
   const usesPlayer = /ctx\.assets\.player/.test(source);
   const usesEnemy = /ctx\.assets\.enemy/.test(source);
-  const usesImageActor = /(?:new\s+Image\s*\(|\.src\s*=|backgroundImage)/.test(source);
+  /*
+   * Two runtimes reach a textured actor by different APIs. The legacy agentic
+   * module builds a DOM image itself; a Forge module cannot -- it loads through
+   * `g.assets.image(url, ...)` and draws the returned holder with `r.sprite(...)`.
+   * Matching only the DOM idiom reported `runtime_sprite_actor_missing` against
+   * every correct Forge build, which is how a passing game still shipped with
+   * `visualContract.ok=false`.
+   */
+  const usesImageActor =
+    /(?:new\s+Image\s*\(|\.src\s*=|backgroundImage)/.test(source) ||
+    /\bassets\s*\.\s*image\s*\(/.test(source) ||
+    /\.\s*sprite\s*\(/.test(source);
   const blockers = [
     ...(usesBackground ? [] : ["runtime_background_asset_unused"]),
     ...(usesPlayer ? [] : ["runtime_player_asset_unused"]),

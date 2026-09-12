@@ -139,6 +139,19 @@ Rules that decide whether the build succeeds:
 4. Controls must work on a phone. Every action needs a touch binding: virtual stick, tap, swipe, hold, or an on-screen button.
 5. Asset slots: request only what the game actually draws, 4-12 slots is typical. Write each prompt for an image generator — subject, style, view angle, transparent background for actors. Mark "required" only for slots the game cannot read as intended without.
 
+## The delivery surface is a phone held upright
+
+Every game is played in a 393x852 portrait viewport. These are measured requirements, not preferences — a design that ignores them ships a game nobody can see or survive.
+
+6. stage.orientation is "portrait" and the stage is tall, 540x960 unless the request needs otherwise. A landscape stage is scaled to fit a portrait screen, which wastes the top and bottom of the phone and shrinks everything the player must read. Choose "landscape" only when the request genuinely demands a wide field (a side-scrolling racer, a horizontal platformer); then say so in the pitch.
+7. The player actor is drawn at least 9% of the stage's shorter axis, and never below 48 virtual pixels. Enemies, hazards and collectibles are at least 32. State these sizes as numbers in configShape (player.size, enemy.size, ...) so they are tunable.
+8. The first 60 seconds must be survivable. A first-time player on a phone, reacting correctly, reaches 60 seconds on their first or second attempt:
+   - 0-10s: at most ONE threat on screen at a time, and no threat may demand a reaction faster than 1.2 seconds.
+   - 10-30s: at most TWO simultaneous threats; hazard speed stays at or below 60% of its peak.
+   - Losing takes at least 3 separate mistakes. After every life lost, the player is invulnerable for at least 1.5 seconds with a visible blink.
+   - The first reward or score is reachable within the first 5 seconds, without risk.
+   - Peak difficulty belongs near the end of the run, never at the start. Express the ramp in progression.beats.
+
 ## Exact field formats (violating these fails validation, not taste)
 
 - stage.background: a CSS color only, e.g. "#0b1020" or "#132a4a" — 24 characters max. Never a scene description; describe the scene in the asset prompt for the background slot instead.
@@ -156,7 +169,7 @@ replace the values:
 
 {
   "title": "…", "pitch": "…", "genre": "…",
-  "stage": { "width": 960, "height": 540, "orientation": "landscape", "background": "#0b1020" },
+  "stage": { "width": 540, "height": 960, "orientation": "portrait", "background": "#0b1020" },
   "coreLoop": ["step 1", "step 2", "step 3"],
   "controls": [ { "action": "move", "desktop": "WASD / arrows", "touch": "virtual stick" } ],
   "mechanics": [ { "id": "flame_decay", "summary": "…", "observable": "…" } ],
@@ -493,9 +506,12 @@ function adoptOrphanState(design: GameDesignDoc): GameDesignDoc {
 /** Clamps a design into what the runtime can actually honour. */
 function normalizeDesign(design: GameDesignDoc): GameDesignDoc {
   const stage = { ...design.stage };
+  // "either" is a hedge, and it used to resolve to whatever numbers the model
+  // happened to emit. Delivery is always a portrait phone, so resolve it there.
+  if (stage.orientation === "either") stage.orientation = "portrait";
   if (stage.orientation === "portrait") {
     if (stage.width > stage.height) { const w = stage.width; stage.width = stage.height; stage.height = w; }
-  } else if (stage.orientation === "landscape") {
+  } else {
     if (stage.height > stage.width) { const h = stage.height; stage.height = stage.width; stage.width = h; }
   }
   // A background slot always exists so the runtime never renders onto bare colour.
@@ -507,4 +523,4 @@ function normalizeDesign(design: GameDesignDoc): GameDesignDoc {
 
 /** Exported for latency diagnostics: the design call is the pipeline's single
  * biggest source of variance, and measuring it needs the real prompts. */
-export { systemPrompt as buildDesignSystemPrompt, userPrompt as buildDesignUserPrompt, DESIGN_SCHEMA as DESIGN_JSON_SCHEMA, validateModulePlan };
+export { systemPrompt as buildDesignSystemPrompt, userPrompt as buildDesignUserPrompt, DESIGN_SCHEMA as DESIGN_JSON_SCHEMA, validateModulePlan, normalizeDesign };

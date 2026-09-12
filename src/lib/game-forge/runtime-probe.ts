@@ -124,7 +124,14 @@ export async function runRuntimeProbe(
   let browser: import("playwright").Browser | null = null;
   try {
     browser = await chromium.launch({ headless: opts.headless !== false });
-    const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+    /*
+     * The repair loop has to observe what the delivery gate and real players
+     * observe. Probing a 960x540 desktop window while delivery runs a 393x852
+     * phone meant every phone-shaped defect -- a landscape stage letterboxed
+     * into a portrait screen, an actor too small to see, a first minute tuned
+     * for a wide field -- was invisible to the only loop that could repair it.
+     */
+    const page = await browser.newPage({ viewport: { width: 393, height: 852 }, hasTouch: true, isMobile: true });
     await page.setContent(buildProbePage(build, opts.assets ?? {}), { waitUntil: "load" });
 
     // Never assume the harness is there: if the generated block failed to
@@ -147,7 +154,7 @@ export async function runRuntimeProbe(
 
     // A scripted burst across the control surface the SDK exposes. The point
     // is not to play well, it is to prove input reaches gameplay at all.
-    if (await page.locator("canvas").count()) await page.locator("canvas").first().click();
+    if (await page.locator("canvas").count()) await page.locator("canvas").first().tap();
     for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp"]) {
       await page.keyboard.down(key);
       await page.waitForTimeout(700);
@@ -157,9 +164,9 @@ export async function runRuntimeProbe(
       await page.keyboard.press(key);
       await page.waitForTimeout(180);
     }
-    await page.mouse.move(300, 300);
+    await page.mouse.move(140, 560);
     await page.mouse.down();
-    await page.mouse.move(500, 260, { steps: 8 });
+    await page.mouse.move(280, 440, { steps: 8 });
     await page.mouse.up();
 
     // Watch for the game to do something -- anything. Resolves immediately on
