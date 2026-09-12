@@ -186,9 +186,18 @@ export async function llmJsonOpenAICompatible(params: {
   const { client, req, gatewayBaseUrl } = params;
   // Mode fallback and reasoning-budget widening share one request deadline.
   const deadline = Date.now() + req.timeoutMs;
+  const images = (req.images ?? []).filter((url) => typeof url === "string" && url.length > 0).slice(0, 4);
   const messages = [
     { role: "system" as const, content: req.system },
-    { role: "user" as const, content: req.user },
+    images.length
+      ? {
+          role: "user" as const,
+          content: [
+            { type: "text" as const, text: req.user },
+            ...images.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+          ],
+        }
+      : { role: "user" as const, content: req.user },
   ];
 
   async function run(mode: LlmMode, budgetOverride?: number): Promise<RunOutcome> {

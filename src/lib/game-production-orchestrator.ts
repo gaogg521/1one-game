@@ -94,7 +94,15 @@ export function buildGameProductionRun(input: {
     ...visualContract.blockers,
     ...mechanicsContract.blockers,
     ...missingRealRoles.map((role) => `real_agent_missing:${role}`),
-    ...(input.realAgentOutputs?.visualReview?.passed === true ? [] : ["visual_review_rejected", ...(input.realAgentOutputs?.visualReview?.blockers ?? [])]),
+    /*
+     * Only a review that actually ran can reject anything. This used to emit
+     * visual_review_rejected on every build, because nothing populated
+     * visualReview at all -- so the one signal meant to represent art quality
+     * was pure noise, and no consumer could ever trust it.
+     */
+    ...(input.realAgentOutputs?.visualReview
+      ? (input.realAgentOutputs.visualReview.passed ? [] : ["visual_review_rejected", ...input.realAgentOutputs.visualReview.blockers])
+      : ["visual_review_unavailable"]),
     // What the real phone probe saw. These were recorded as evidence only, so
     // nothing downstream could act on a game that ran but read badly on a
     // device -- the exact class of defect players report.

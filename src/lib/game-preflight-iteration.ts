@@ -38,6 +38,10 @@ const POLISHABLE_ADVISORIES = new Set([
   // Things the player is asked to chase that they cannot see or reach.
   "collectible_not_visible",
   "collectible_spawn_outside_viewport",
+  // What the art director saw in the delivered frame.
+  "art_direction_mismatch",
+  "hud_unreadable",
+  "low_contrast_subject",
 ]);
 
 export function selectGameQualityPolishFindings(advisories: readonly string[]): string[] {
@@ -77,6 +81,9 @@ export function buildGameQualityPolishInstruction(findings: readonly string[]): 
     vertical_slice_blocked: "重做前 60 秒节奏：10 秒内同屏最多 1 个威胁，30 秒内最多 2 个且速度不超过峰值的 60%，失败至少需要 3 次失误，每次掉血后至少 1.5 秒无敌并有闪烁提示，开局 5 秒内必须有一个无风险可拿的得分。",
     collectible_not_visible: "收集物必须在画面内可见，且不小于 32 像素。",
     collectible_spawn_outside_viewport: "收集物出生点必须限制在 g.width / g.height 之内。",
+    art_direction_mismatch: "画面与既定美术方向不符：按 art direction 的画风、镜头和构图重做背景与角色素材描述，保持创作者原始意图。",
+    hud_unreadable: "HUD 重做：分数、生命、计时集中在一次 g.ui.hud 调用里，不要与玩法元素重叠或被裁切，必要时加深色底衬提高可读性。",
+    low_contrast_subject: "提高主角与障碍相对背景的对比度：调整配色或加描边/投影，让玩家一眼能分辨可操作对象。",
   };
   return [
     "这是交付后的一轮自动质量打磨。游戏已经可以玩，不要推翻创意、玩法或美术方向。",

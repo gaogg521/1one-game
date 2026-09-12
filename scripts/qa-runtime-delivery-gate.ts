@@ -23,7 +23,10 @@ async function main() {
   assert.equal(HARD_PLAYER_FINDINGS.has("collectible_spawn_outside_viewport"), false);
   const run = buildGameProductionRun({ spec: good, assetManifest: null, runtimeValidation: report });
   assert.equal(run.candidate.decision, "ready_for_playtest");
-  assert.ok(run.candidate.advisories?.includes("visual_review_rejected"));
+  // No art review ran for this fixture, so the candidate says so rather than
+  // claiming a rejection from a reviewer that never looked.
+  assert.ok(run.candidate.advisories?.includes("visual_review_unavailable"));
+  assert.equal(run.candidate.advisories?.includes("visual_review_rejected"), false);
   assert.equal(buildGameProductionRun({ spec: good, assetManifest: null }).candidate.decision, "rejected");
   for (const [name, source] of [
     ["syntax", "function mountGame(root,ctx){ broken !!! }"],

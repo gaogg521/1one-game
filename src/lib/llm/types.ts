@@ -27,6 +27,12 @@ export type LlmJsonRequest = {
    * doubles the creator's wait before the same fallback is taken anyway.
    */
   singleModeOnly?: boolean;
+  /**
+   * Images attached to the user message, as data: or https: URLs. Only the
+   * OpenAI-compatible path sends them; other providers ignore them, so a caller
+   * must still make sense without the picture.
+   */
+  images?: string[];
   /** Opt-in for compatible gateways; omitted unless verified for the routed model. */
   thinking?: { type: "enabled" | "disabled" };
   timeoutMs: number;

@@ -56,6 +56,8 @@ import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
 import { buildGamePreflightRevisionInstruction, buildGameQualityPolishInstruction, selectGameQualityPolishFindings, shouldScheduleGamePreflightIteration, shouldScheduleGameQualityPolish } from "@/lib/game-preflight-iteration";
+import { reviewGameVisuals } from "@/lib/game-visual-review";
+import { runtimeLocaleGroupForCurrentRequest } from "@/lib/runtime-locale-routing";
 import type { GameArtDirection } from "@/lib/game-art-direction";
 
 async function executeGameAssetJob(
@@ -315,15 +317,27 @@ async function executeGameProductionJob(
     await heartbeatGenerationJob(job.id, workerId, { percent: 82, stage: "asset_generation", detail: `assets deferred: ${error instanceof Error ? error.message.slice(0, 80) : "unknown"}` });
   }
   await heartbeatGenerationJob(job.id, workerId, { percent: 72, stage: "playable_candidate", detail: "validating independent playable candidate" });
+  let deliveredFrame: Buffer | null = null;
+  const runtimeValidation = await validateGameRuntime(spec, sourceProject.id, forgeBuild?.ok ? forgeBuild.build.qa : null, (png) => { deliveredFrame = png; });
+  // The art director now actually looks at the delivered frame. A review that
+  // cannot run returns null and the build is judged exactly as before, so a
+  // missing vision route never turns into an invented verdict.
+  await heartbeatGenerationJob(job.id, workerId, { percent: 76, stage: "visual_review_agent", detail: "reviewing the delivered frame" });
+  const visualReview = await reviewGameVisuals({
+    screenshot: deliveredFrame,
+    artDirection,
+    title: spec.title,
+    localeGroup: await runtimeLocaleGroupForCurrentRequest(),
+  }).catch(() => null);
   const run = buildGameProductionRun({
     spec,
     prompt: sourceProject.prompt,
     brief: briefResult.data,
     assetManifest,
     projectId: sourceProject.id,
-    runtimeValidation: await validateGameRuntime(spec, sourceProject.id, forgeBuild?.ok ? forgeBuild.build.qa : null),
+    runtimeValidation,
     productionRound: payload.productionRound,
-    realAgentOutputs: { artDirection },
+    realAgentOutputs: { artDirection, ...(visualReview ? { visualReview } : {}) },
   });
   let lastArtifact = assetArtifact;
   for (let index = 0; index < run.artifacts.length; index += 1) {

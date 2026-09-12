@@ -6,6 +6,9 @@ import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-cont
 import { mergePatchedCoreSpec } from "@/lib/spec-patch";
 import { buildGameQualityPolishInstruction, selectGameQualityPolishFindings, shouldScheduleGameQualityPolish } from "@/lib/game-preflight-iteration";
 import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
+import { reviewGameVisuals } from "@/lib/game-visual-review";
+import { buildGameArtDirection } from "@/lib/game-art-direction";
+import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 
@@ -46,7 +49,7 @@ function designDoc(stage: Record<string, unknown>) {
   });
 }
 
-function main() {
+async function main() {
   // 1. Portrait is the default framing, not landscape.
   const defaults = designDoc({ background: "#0b1020" }).stage;
   assert.equal(defaults.orientation, "portrait", JSON.stringify(defaults));
@@ -178,7 +181,31 @@ function main() {
   assert.match(polishInstruction, /9%/);
   assert.doesNotMatch(polishInstruction, /vertical_slice_blocked/, "raw codes must be translated into an actionable ask");
 
-  console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round");
+  // 10. The art review must stay silent when it cannot actually look. It had no
+  // producer at all before, so every build carried a rejection from a review
+  // that never ran.
+  const artDirection = buildGameArtDirection(spec, null, "太空快递");
+  const noFrame = await reviewGameVisuals({ screenshot: null, artDirection, title: spec.title });
+  assert.equal(noFrame, null, "no screenshot means no verdict");
+  assert.equal(await reviewGameVisuals({ screenshot: Buffer.alloc(0), artDirection, title: spec.title }), null);
+
+  // A build with no review is "unavailable", never "rejected".
+  const unreviewed = buildGameProductionRun({ spec, assetManifest: null, runtimeValidation: null });
+  assert.ok(unreviewed.candidate.advisories?.includes("visual_review_unavailable"), JSON.stringify(unreviewed.candidate.advisories));
+  assert.equal(unreviewed.candidate.advisories?.includes("visual_review_rejected"), false);
+  assert.equal(selectGameQualityPolishFindings(["visual_review_unavailable"]).length, 0, "an absent review must not burn a production round");
+
+  const reviewed = buildGameProductionRun({
+    spec,
+    assetManifest: null,
+    runtimeValidation: null,
+    realAgentOutputs: { visualReview: { passed: false, score: 40, blockers: ["hud_unreadable"], revisionInstructions: ["HUD 被裁切"], screenshotBytes: 1234 } },
+  });
+  assert.ok(reviewed.candidate.advisories?.includes("visual_review_rejected"));
+  assert.ok(selectGameQualityPolishFindings(reviewed.candidate.advisories ?? []).includes("hud_unreadable"), "an art finding must reach the polish round");
+  assert.match(buildGameQualityPolishInstruction(["hud_unreadable"]), /g\.ui\.hud/);
+
+  console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
 
-main();
+void main();

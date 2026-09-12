@@ -37,7 +37,12 @@ export function runtimeValidationBlockers(spec: GameSpec, validation?: GameRunti
 }
 
 /** Exercises the exact sandboxed iframe sent to players, for Forge and legacy builds. */
-export async function validateGameRuntime(spec: GameSpec, projectId?: string, forgeQa?: QaReport | null): Promise<GameRuntimeValidation> {
+/**
+ * `onFrame` receives the post-interaction frame of the real delivery iframe.
+ * It is handed out rather than returned because this report is persisted as an
+ * artifact, and a screenshot has no business being stored inside it.
+ */
+export async function validateGameRuntime(spec: GameSpec, projectId?: string, forgeQa?: QaReport | null, onFrame?: (png: Buffer) => void): Promise<GameRuntimeValidation> {
   const sourceHash = runtimeSourceHash(spec, projectId);
   const result: GameRuntimeValidation = { version: 1, status: "unverified", sourceHash, observed: false, blockers: [], evidence: [] };
   if (spec.forgeBuild) {
@@ -75,6 +80,9 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     await page.keyboard.press("Space");
     await page.waitForTimeout(2500);
     const after = await page.locator("iframe").screenshot({ timeout: 10_000 });
+    if (onFrame) {
+      try { onFrame(after); } catch { /* a reviewer failing must not fail delivery */ }
+    }
     const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string }>>("window.events");
     /*
      * A landscape stage scaled into this portrait iframe leaves empty bands top
