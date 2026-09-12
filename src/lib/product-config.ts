@@ -272,8 +272,20 @@ export const PRODUCT = {
      * the build ships on the deterministic audit plus observed behaviour.
      */
     reviewTimeoutMs: 60_000,
-    artSlotTimeoutMs: 75_000,
-    artBudgetMs: 150_000,
+    /*
+     * Measured 2026-09-12: every sprite slot of a freshly generated game was
+     * aborted at exactly 75001ms by this budget, so the games shipped with no
+     * character art and the runtime fell back to primitives. The comic line
+     * calls the same Seedream model through the same gateway and succeeds --
+     * because it passes no timeout and gets the 12-minute image default. The
+     * budget was an order of magnitude under what the model needs, and the
+     * abort surfaced as a generic failure joined to an unrelated Gemini hint,
+     * which read as a missing credential.
+     *
+     * Slots run five at a time, so the stage budget covers two waves.
+     */
+    artSlotTimeoutMs: 180_000,
+    artBudgetMs: 420_000,
     /**
      * Boot the assembled build in a headless browser and fold what it actually
      * does into QA.

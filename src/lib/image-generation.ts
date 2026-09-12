@@ -7,6 +7,7 @@ import {
   loadStyleReferenceImages,
 } from "@/lib/comic-style-reference";
 import { panelLooksHistoricalOrPeriod } from "@/lib/comic-panel-prompt-urban";
+import { safeAssetError } from "@/lib/game-forge/asset-agent";
 import type { CoverGenre } from "@/lib/cover-genre";
 import { isLikelyGeminiNativeImageModel, isLikelyImageGenerationModel } from "@/lib/image-model-guard";
 import { getImageGenDefaultSize, getImageGenGeminiModel, getImageGenOpenAIModel } from "@/lib/model-config";
@@ -274,8 +275,20 @@ async function generateImageWithSeedreamDetail(
     const hit = imageItemToResult(payload.data?.[0], `seedream-${Date.now()}`);
     if (!hit) return { ok: false, model: cfg.model, error: "Seedream 响应无 url 或 b64_json", durationMs: Date.now() - t0 };
     return { ok: true, url: hit.url, localPath: hit.localPath, provider: "seedream", model: cfg.model, durationMs: Date.now() - t0 };
-  } catch {
-    return { ok: false, model: cfg.model, error: "Seedream 图片请求失败", durationMs: Date.now() - t0 };
+  } catch (error) {
+    /*
+     * Swallowing this made a timeout indistinguishable from a bad key. Game
+     * sprites were aborted by their own 75s budget, the generic message was
+     * joined with the Gemini fallback hint, and the result read as "未配置
+     * GEMINI_API_KEY" -- sending the reader after a credential that was never
+     * the problem.
+     */
+    const elapsed = Date.now() - t0;
+    const name = error instanceof Error ? error.name : "";
+    const reason = /abort|timeout/i.test(name) || /abort|timeout/i.test(String(error))
+      ? `Seedream 请求超时（${elapsed}ms，预算 ${resolveImageGenTimeoutMs(options?.timeoutMs)}ms）`
+      : `Seedream 图片请求失败：${safeAssetError(error instanceof Error ? error.message : String(error))}`;
+    return { ok: false, model: cfg.model, error: reason, durationMs: elapsed };
   }
 }
 
