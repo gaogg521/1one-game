@@ -323,3 +323,38 @@ curl -fsS --connect-timeout 10 \
 - 小说生成：`src/app/api/novel/generate/route.ts`、`src/app/api/novel/generate/stream/route.ts`。
 - 漫画生成：`src/lib/comic-generate-run.ts`、`src/app/api/comic/generate/route.ts`。
 - 发布脚本：`scripts/deploy-prod-with-assets.py`、`scripts/deploy-prod-cee8b1d.py`。
+
+---
+
+## 2026-09-12 收尾 · 两个根因与一个品类解锁
+
+生产 `main` 头部 `a42bfde8`，已部署。文档同步见 `CONTEXT.md` 同日章节。
+
+### 交出去的两个根因
+
+**生成的游戏没有角色美术 = 超时，不是密钥。** 错误信息 `未配置 GEMINI_API_KEY` 是回退链末尾的红鲱鱼，会把下一任带偏。真实原因是游戏精灵传了 `artSlotTimeoutMs = 75_000`，而漫画线不传超时、拿 12 分钟默认值；同模型同网关同密钥，差别只在预算。已提到 3 分钟（`3d2e85eb`），并让超时自报耗时与预算（不再被 `catch {}` 吞掉）。
+
+**一次生成 15 分钟里有 13 分钟是无用功。** Forge 在 121 秒完成全部美术，之后 worker 又跑旧模板素材管线生成 Forge 不读的一套精灵，且旧背景会覆盖 Forge 的背景。有 forgeBuild 时已跳过（`876a3358`），封面保留。
+
+### 解锁的品类
+
+硬门禁 `player_not_visible` 此前假设所有游戏都有常驻主角，塔防/种田/建造类**结构性无法交付**。现在当设计自身的 controls/mechanics 描述"种植/放置/建造/召唤"时，空场地降为可修复观测进打磨轮；直接操控型（"拖动飞船"）仍然硬拦，两个对照断言锁住区分（`7f2108e8`）。
+
+### 两条新静态检查（生成期 blocker）
+
+- `entity_group_never_spawned`：读了没人 `world.spawn` 的组。太空快递的碰撞遍历 `'enemy'` 而生成方是 `'meteor'`，导致永远不掉血；**两轮人工精确指令都没改到那个名字，是这条检查驱动 Agent 自己修好的**。
+- `private_score_counter` / `private_lives_counter`：分数与生命只存在私有 `G` 对象，SDK 计数器从没被碰过，遥测恒为 0 且 `g.state.time` 不推进使超时分支成为死代码。既有的 split 检查要求两者同时出现才报，只用私有的反而漏过——而那是更坏的情况。
+
+### 仍未解决（按优先级）
+
+1. **`undeclared_shared_state` 会被放行**：植物大战僵尸的 `main_game` 读 `G.zombieKills` 但无人提供，Forge 修复轮跑了两轮没修好即交付，结果"击退 12 只僵尸"的胜利条件永远不成立、实测得分恒为 0。检查存在、修复失败、照样发布——这是当前最该收口的一处。
+2. **视觉审查不稳定**：120 秒仍会超时（曾成功产出 `player_too_small` / `art_direction_mismatch`）。先判断是慢还是卡住，不要继续加时间。
+3. **部署有全站 500 窗口**：`.next` 原地重建，`/api/health` 仍 200 但页面 500。应构建到临时目录再原子切换。
+4. **质量发现对人不可见**：`game_production_candidate.advisories` 未进创作者质量报告与后台。
+
+### 工具与坑
+
+- 判可玩性：`npx tsx scripts/playtest-local-runtime.ts <url> <秒> <输出目录>`。**不要**用 Claude 浏览器面板下结论：窗口被遮挡时 rAF 节流到约 1/5 速，据此得出的"碰撞坏了"是假结论（本会话踩过）。
+- 该脚本的 `addInitScript` 必须传字符串；内联箭头函数会被 tsx/esbuild 注入 `__name`，页面无此符号，整段探针静默失败。
+- 新建游戏：`scripts/create-prod-game.ts`（只创建与等待，**不发布**）。定向修改：`scripts/refine-prod-game.ts`。
+- 本会话四次被同一个反模式误导：`catch {}` 吞掉异常导致误诊（`spec-patch`、美术审查、素材重试、图片生成）。遇到"通用失败信息"先怀疑它吞了原因。
