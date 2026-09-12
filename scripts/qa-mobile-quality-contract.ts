@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { GameDesignDocSchema } from "@/lib/game-forge/types";
 import { assembleGame } from "@/lib/game-forge/assemble";
+import { auditSharedStateReads } from "@/lib/game-forge/qa-agent";
 import { buildDesignSystemPrompt, normalizeDesign } from "@/lib/game-forge/design-agent";
 import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-forge/code-agent";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
@@ -345,6 +346,37 @@ async function main() {
   const avatar = playerEvidenceFindings(avatarDesign, [{ type: "forge-player-evidence", players: [], sprites: [] }]);
   assert.deepEqual(avatar.map((f) => f.code), ["player_not_visible"], JSON.stringify(avatar));
   assert.equal(avatar[0]!.severity, "blocker");
+
+  // 15. A counter nobody owns must send the repair to the module that produces
+  // the events, not the one that reads the number. Measured on a shipped
+  // tower-defence build: main_game read G.zombieKills to decide the win, no
+  // module had been given that counter, and two repair rounds rewrote the
+  // reader while the number still never came into existence.
+  const ownerDoc = GameDesignDocSchema.parse({
+    ...designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }),
+    modules: [
+      { id: "game_config", role: "config", brief: "assign G.config with the stage size and tuning numbers for the run", provides: ["config"], requires: [], signatures: [] },
+      { id: "zombie_system", role: "system", brief: "spawn zombies on each lane, march them left and resolve their deaths", provides: ["zombies", "spawnZombie", "hitZombie"], requires: ["config"], signatures: [{ name: "spawnZombie", params: ["g"] }] },
+      { id: "main_game", role: "main", brief: "wire the modules together and own the init/update/draw/restart callbacks", provides: ["main"], requires: ["config"], signatures: [{ name: "main", params: ["g"] }] },
+    ],
+  });
+  const orphan = auditSharedStateReads(ownerDoc, [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "zombie_system", role: "system", source: "G.spawnZombie = function (g) { g.world.spawn('zombie', { x: 1, y: 2 }); };", provides: ["spawnZombie"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { if (G.zombieKills >= 12) g.win(G.zombieKills); };", provides: ["main"], requires: [] },
+  ]);
+  const orphanFinding = orphan.find((f) => f.code === "undeclared_shared_state");
+  assert.ok(orphanFinding, JSON.stringify(orphan));
+  assert.equal(orphanFinding!.moduleId, "zombie_system", "the repair belongs where the kills happen, not where the number is read");
+  assert.match(orphanFinding!.message, /main_game reads G\.zombieKills/);
+  // With no plausible owner the reader is still told, and told what to do.
+  const noOwner = auditSharedStateReads(ownerDoc, [
+    { id: "game_config", role: "config", source: "G.config = {};", provides: ["config"], requires: [] },
+    { id: "zombie_system", role: "system", source: "G.spawnZombie = function () {};", provides: ["spawnZombie"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function () { return G.qqqWidget; };", provides: ["main"], requires: [] },
+  ]).find((f) => f.code === "undeclared_shared_state");
+  assert.equal(noOwner!.moduleId, "main_game", JSON.stringify(noOwner));
+  assert.match(noOwner!.message, /drop the dependency/);
 
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }

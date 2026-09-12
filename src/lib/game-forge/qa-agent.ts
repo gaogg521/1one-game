@@ -294,6 +294,32 @@ const ASSEMBLER_PROVIDED = new Set(["ctx", "design", "g", "config", "main"]);
  * core systems returned immediately on every tick, so the game did nothing at
  * all. A silent no-op is worse than a crash, because QA sees a green build.
  */
+/**
+ * Which module should own a `G.<name>` nobody provides.
+ *
+ * Observed on a shipped tower-defence build: main_game read G.zombieKills to
+ * decide the win, the design plan had given that counter to no one, and two
+ * repair rounds rewrote main_game -- the reader -- without ever creating the
+ * number. Matching the name's own words against module ids and their declared
+ * provides puts the repair in zombie_system, where the kills happen.
+ */
+function likelyOwnerModule(name: string, design: GameDesignDoc, readerId: string): string | null {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .map((word) => word.toLowerCase())
+    .filter((word) => word.length > 2);
+  if (!words.length) return null;
+  let best: { id: string; score: number } | null = null;
+  for (const plan of design.modules) {
+    if (plan.id === readerId) continue;
+    const haystack = `${plan.id} ${(plan.provides ?? []).join(" ")}`.toLowerCase();
+    const score = words.filter((word) => haystack.includes(word)).length;
+    if (score > 0 && (!best || score > best.score)) best = { id: plan.id, score };
+  }
+  return best?.id ?? null;
+}
+
 export function auditSharedStateReads(design: GameDesignDoc, modules: GameModule[]): QaFinding[] {
   const provided = new Set<string>(ASSEMBLER_PROVIDED);
   for (const plan of design.modules) for (const name of plan.provides ?? []) provided.add(name);
@@ -315,11 +341,18 @@ export function auditSharedStateReads(design: GameDesignDoc, modules: GameModule
       const name = m[1]!;
       if (!provided.has(name) && !flagged.has(name)) {
         flagged.add(name);
+        const owner = likelyOwnerModule(name, design, mod.id);
         findings.push({
           severity: "blocker",
-          moduleId: mod.id,
+          // Repair rewrites the module this names. Blaming the reader sent two
+          // rounds into rewriting main_game while the counter it wanted still
+          // had no owner; the module that produces the event is the one that
+          // has to keep the number.
+          moduleId: owner ?? mod.id,
           code: "undeclared_shared_state",
-          message: `reads G.${name}, but no module provides or assigns it — it is permanently undefined. Code like "var x = G.${name}; if (!x) return;" then makes this function a silent no-op on every frame instead of failing loudly.`,
+          message: owner
+            ? `${mod.id} reads G.${name}, but no module provides or assigns it — it is permanently undefined, so that code is a silent no-op on every frame. ${owner} owns the events this value counts: assign G.${name} there (initialise it, update it where the event happens) and list it in that module's provides.`
+            : `reads G.${name}, but no module provides or assigns it — it is permanently undefined. Code like "var x = G.${name}; if (!x) return;" then makes this function a silent no-op on every frame instead of failing loudly. Either assign G.${name} in this module, or drop the dependency.`,
         });
       }
       m = readRe.exec(code);
