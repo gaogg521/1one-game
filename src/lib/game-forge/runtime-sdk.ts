@@ -511,7 +511,10 @@ export const GAME_FORGE_SDK_SOURCE = `
           var cx = matrix.e / stage.canvas.width, cy = matrix.f / stage.canvas.height;
           var bw = (Math.abs(matrix.a * dw) + Math.abs(matrix.c * dh)) / stage.canvas.width;
           var bh = (Math.abs(matrix.b * dw) + Math.abs(matrix.d * dh)) / stage.canvas.height;
-          spritesDrawn.push({ kind: holder.kind, x: x, y: y, screenX: cx, screenY: cy, visible: cx + bw / 2 > 0 && cx - bw / 2 < 1 && cy + bh / 2 > 0 && cy - bh / 2 < 1 && g.globalAlpha > 0.1 });
+          // bw/bh are the drawn size as a fraction of the canvas. Reporting them
+          // is what lets delivery measure "is the protagonist big enough to see
+          // on a phone" instead of asking the generator to promise it.
+          spritesDrawn.push({ kind: holder.kind, x: x, y: y, screenX: cx, screenY: cy, w: bw, h: bh, visible: cx + bw / 2 > 0 && cx - bw / 2 < 1 && cy + bh / 2 > 0 && cy - bh / 2 < 1 && g.globalAlpha > 0.1 });
         }
         g.drawImage(im, -dw / 2, -dh / 2, dw, dh);
         g.restore();

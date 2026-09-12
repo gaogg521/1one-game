@@ -31,6 +31,8 @@ const POLISHABLE_ADVISORIES = new Set([
   "runtime_player_asset_unused",
   "runtime_enemy_asset_unused",
   "runtime_sprite_actor_missing",
+  // The protagonist is too small to track on a phone.
+  "player_too_small",
   // The first minute does not hold together.
   "vertical_slice_blocked",
   // Things the player is asked to chase that they cannot see or reach.
@@ -71,6 +73,7 @@ export function buildGameQualityPolishInstruction(findings: readonly string[]): 
     runtime_player_asset_unused: "主角必须绘制项目生成的主角素材。",
     runtime_enemy_asset_unused: "敌人/障碍必须绘制项目生成的素材。",
     runtime_sprite_actor_missing: "用 g.assets.image 加载素材并用 r.sprite 绘制角色，不要用矩形和圆形代替角色。",
+    player_too_small: "放大主角：绘制尺寸按 Math.max(48, Math.min(g.width, g.height) * 0.09) 从舞台推导，不要用固定小数值；碰撞体要跟着可见尺寸一起改。",
     vertical_slice_blocked: "重做前 60 秒节奏：10 秒内同屏最多 1 个威胁，30 秒内最多 2 个且速度不超过峰值的 60%，失败至少需要 3 次失误，每次掉血后至少 1.5 秒无敌并有闪烁提示，开局 5 秒内必须有一个无风险可拿的得分。",
     collectible_not_visible: "收集物必须在画面内可见，且不小于 32 像素。",
     collectible_spawn_outside_viewport: "收集物出生点必须限制在 g.width / g.height 之内。",

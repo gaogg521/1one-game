@@ -5,6 +5,7 @@ import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-fo
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
 import { mergePatchedCoreSpec } from "@/lib/spec-patch";
 import { buildGameQualityPolishInstruction, selectGameQualityPolishFindings, shouldScheduleGameQualityPolish } from "@/lib/game-preflight-iteration";
+import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 
@@ -132,7 +133,24 @@ function main() {
   assert.deepEqual(merged.production, withForge.production);
   assert.equal(mergePatchedCoreSpec(withForge, "not an object"), null);
 
-  // 8. A playable-but-poor build must trigger exactly one background polish
+  // 8. Actor size is measured from what the runtime actually drew, not promised
+  // by a prompt. bw/bh are the sprite's size as a fraction of the canvas.
+  const evidenceDesign = { assets: [{ kind: "player" }], controls: [{ action: "move", desktop: "WASD" }] };
+  const samples = (fraction: number) =>
+    Array.from({ length: 6 }, (_, i) => ({
+      type: "forge-player-evidence",
+      inputActive: true,
+      players: [{ kind: "player", x: 100 + i * 20, y: 200, screenX: 0.5, screenY: 0.6, w: fraction, h: fraction * 0.55, visible: true }],
+    }));
+  const tiny = playerEvidenceFindings(evidenceDesign, samples(0.03));
+  assert.ok(tiny.some((f) => f.code === "player_too_small"), JSON.stringify(tiny));
+  assert.equal(tiny.find((f) => f.code === "player_too_small")?.severity, "major", "an unreadable actor is repairable, not a publish gate");
+  assert.equal(playerEvidenceFindings(evidenceDesign, samples(0.12)).some((f) => f.code === "player_too_small"), false);
+  // Older runtimes report no size; absence of data must not invent a finding.
+  const unmeasured = samples(0.03).map((s) => ({ ...s, players: s.players.map(({ w: _w, h: _h, ...rest }) => rest) }));
+  assert.equal(playerEvidenceFindings(evidenceDesign, unmeasured).some((f) => f.code === "player_too_small"), false);
+
+  // 9. A playable-but-poor build must trigger exactly one background polish
   // round. Before this, every quality finding died as evidence nobody read.
   const observed = [
     "visual_review_rejected",
@@ -142,8 +160,8 @@ function main() {
     "runtime_sprite_actor_missing",
     "vertical_slice_blocked",
   ];
-  const findings = selectGameQualityPolishFindings(observed);
-  assert.deepEqual(findings.sort(), ["runtime_letterboxed", "runtime_sprite_actor_missing", "vertical_slice_blocked"], JSON.stringify(findings));
+  const findings = selectGameQualityPolishFindings([...observed, "advisory:player_too_small"]);
+  assert.deepEqual(findings.sort(), ["player_too_small", "runtime_letterboxed", "runtime_sprite_actor_missing", "vertical_slice_blocked"], JSON.stringify(findings));
   assert.equal(selectGameQualityPolishFindings(["visual_review_rejected", "real_agent_missing:audio_agent"]).length, 0, "noisy advisories must not burn a production round");
 
   assert.equal(shouldScheduleGameQualityPolish({ productionRound: 1, maxProductionRounds: 3, findings }), true);

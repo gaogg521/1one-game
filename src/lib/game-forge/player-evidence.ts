@@ -1,6 +1,13 @@
 import type { QaFinding } from "./types";
 
-type Actor = { kind?: string; x: number; y: number; screenX?: number; screenY?: number; visible: boolean };
+type Actor = { kind?: string; x: number; y: number; screenX?: number; screenY?: number; w?: number; h?: number; visible: boolean };
+
+/**
+ * The protagonist must occupy at least 9% of its own axis on screen. Measured
+ * against the axis it is widest on, so the floor holds on any stage aspect
+ * without needing the canvas pixel size here.
+ */
+const MIN_PLAYER_SCREEN_FRACTION = 0.09;
 export type PlayerEvidenceEvent = { type: string; inputActive?: boolean; players?: Actor[]; sprites?: Actor[] };
 
 /** Draw observations, independent of score/collision counters. Pixel review is still required. */
@@ -16,6 +23,19 @@ export function playerEvidenceFindings(design: unknown, events: PlayerEvidenceEv
   const moved = active.some((actor, i) => i > 0 && Math.hypot(actor.x - active[i - 1]!.x, actor.y - active[i - 1]!.y) > 4);
   if (movementRequired && !moved) return [{ severity: "blocker", moduleId: "assembled", code: "player_input_no_visible_response", message: "Held movement input did not move the rendered player. Init, movement, collision and draw must share G.player = g.world.spawn('player', ...); do not move a detached object." }];
   const findings: QaFinding[] = [];
+  const measured = visible.filter(actor => typeof actor.w === "number" && typeof actor.h === "number");
+  if (measured.length >= 4) {
+    const sizes = measured.map(actor => Math.max(actor.w!, actor.h!)).sort((a, b) => a - b);
+    const median = sizes[Math.floor(sizes.length / 2)]!;
+    if (median < MIN_PLAYER_SCREEN_FRACTION) {
+      findings.push({
+        severity: "major",
+        moduleId: "assembled",
+        code: "player_too_small",
+        message: `The player was drawn at ${(median * 100).toFixed(1)}% of the screen, below the ${MIN_PLAYER_SCREEN_FRACTION * 100}% a phone player can track. Size the sprite from the live stage, e.g. Math.max(48, Math.min(g.width, g.height) * 0.09), not a fixed small number.`,
+      });
+    }
+  }
   const collectibleRequired = doc.assets.some(asset => asset?.kind === "collectible");
   const collectibleSamples = samples.flatMap(event => event.sprites ?? []).filter(sprite => sprite.kind === "collectible");
   const visibleCollectible = collectibleSamples.some(sprite => sprite.visible);
