@@ -252,17 +252,34 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
    */
   const spawnedGroups = new Set<string>();
   const readGroups = new Map<string, string>();
+  /*
+   * A group name reached through a constant is still a group name. The first
+   * version of this check matched only string literals and reported 'pea' as
+   * never spawned against a module holding `var peaType = 'pea'` -- a false
+   * blocker that then consumed two repair rounds. Resolve simple bindings, and
+   * when a spawn argument cannot be resolved at all, say nothing rather than
+   * accuse: absence of proof is not proof of absence.
+   */
+  let spawnGroupUnknowable = false;
   for (const built of modules) {
     // Comments only: the group name IS a string literal, so stripping strings
     // would erase the very thing being compared.
     const code = stripComments(built.source);
-    for (const match of code.matchAll(/\bworld\s*\.\s*spawn\s*\(\s*["'`]([A-Za-z_][\w-]*)["'`]/g)) {
-      spawnedGroups.add(match[1]!);
+    const constants = new Map<string, string>();
+    for (const match of code.matchAll(/\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*[\x22'`]([A-Za-z_][\w-]*)[\x22'`]/g)) {
+      constants.set(match[1]!, match[2]!);
     }
-    for (const match of code.matchAll(/\bworld\s*\.\s*(?:each|get|collide|count|kill_?all|clearGroup)\s*\(\s*["'`]([A-Za-z_][\w-]*)["'`]/g)) {
+    for (const match of code.matchAll(/\bworld\s*\.\s*spawn\s*\(\s*([^,)]+)/g)) {
+      const arg = match[1]!.trim();
+      const literal = /^[\x22'`]([A-Za-z_][\w-]*)[\x22'`]$/.exec(arg)?.[1] ?? constants.get(arg);
+      if (literal) spawnedGroups.add(literal);
+      else spawnGroupUnknowable = true;
+    }
+    for (const match of code.matchAll(/\bworld\s*\.\s*(?:each|get|collide|count|kill_?all|clearGroup)\s*\(\s*[\x22'`]([A-Za-z_][\w-]*)[\x22'`]/g)) {
       if (!readGroups.has(match[1]!)) readGroups.set(match[1]!, built.id);
     }
   }
+  if (spawnGroupUnknowable) readGroups.clear();
   // Only meaningful once something was spawned by name; a build that spawns
   // nothing is a different finding.
   if (spawnedGroups.size) {

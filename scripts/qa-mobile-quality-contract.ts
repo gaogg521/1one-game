@@ -412,6 +412,24 @@ async function main() {
   ]).filter((f) => f.code === "no_touch_input");
   assert.equal(realInput.length, 0, JSON.stringify(realInput));
 
+  // 18. A group reached through a constant is still spawned. The first version
+  // of the group check matched only literals and reported 'pea' as never
+  // spawned against `var peaType = 'pea'` -- a false blocker that consumed two
+  // real repair rounds before anyone noticed the check was wrong.
+  const viaConstant = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "pea_system", role: "system", source: "var peaType = 'pea'; G.firePea = function (g) { g.world.spawn(peaType, { x: 1, y: 2 }); };", provides: ["firePea"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { g.world.each('pea', function (p) { return p; }); g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  assert.equal(viaConstant.findings.some((f) => f.code === "entity_group_never_spawned"), false, JSON.stringify(viaConstant.findings.map((f) => f.code)));
+  // An argument this cannot resolve means it must not accuse at all.
+  const dynamicSpawn = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = {};", provides: ["config"], requires: [] },
+    { id: "spawn_system", role: "system", source: "G.spawnAny = function (g, kind) { g.world.spawn(kind, {}); };", provides: ["spawnAny"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { g.world.each('ghost', function (x) { return x; }); g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  assert.equal(dynamicSpawn.findings.some((f) => f.code === "entity_group_never_spawned"), false, "an unresolvable spawn argument is not evidence of absence");
+
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
 
