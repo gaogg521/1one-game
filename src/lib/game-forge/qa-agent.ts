@@ -40,9 +40,16 @@ export function auditBuildShape(design: GameDesignDoc, modules: GameModule[]): Q
   if (!/\baudio\s*\.\s*sfx\s*\(/.test(code)) {
     findings.push({ severity: "major", moduleId: "assembled", code: "silent_build", message: "no sound effects are triggered; the game will play silently" });
   }
-  const touchAware = /\binput\s*\.\s*(?:axis|pointer|swipe|stick|button|touch)\b/.test(code);
+  /*
+   * `input.touch` answers "is this a touch device", not "did the player do
+   * something. Counting it as input let a tower defence ship that read the
+   * flag once, to decide whether to draw a hint, and never read a tap: sunlight
+   * accumulated to 175 with nothing plantable, because nothing was listening.
+   * Only the members that actually return player action count.
+   */
+  const touchAware = /\binput\s*\.\s*(?:axis|pointer|swipe|stick|button|buttons|pressed|released|down)\b/.test(code);
   if (!touchAware) {
-    findings.push({ severity: "blocker", moduleId: "assembled", code: "no_touch_input", message: "the build reads no pointer, swipe, stick or axis input; it cannot be played on a phone" });
+    findings.push({ severity: "blocker", moduleId: "assembled", code: "no_touch_input", message: "the build reads no pointer, tap, swipe, stick or axis input, so the player cannot act on it. g.input.touch only reports whether the device has a touchscreen — read g.input.pointer / g.input.axis / g.input.pressed to receive what the player actually does." });
   }
   if (!/\bfx\s*\.\s*(?:burst|shake|popText|flash|trail)\s*\(/.test(code)) {
     findings.push({ severity: "minor", moduleId: "assembled", code: "no_juice", message: "no particles, shake or floating text; impacts will read as flat" });

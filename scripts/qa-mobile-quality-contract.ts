@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { GameDesignDocSchema } from "@/lib/game-forge/types";
 import { assembleGame } from "@/lib/game-forge/assemble";
-import { auditSharedStateReads } from "@/lib/game-forge/qa-agent";
+import { auditSharedStateReads, auditStatic } from "@/lib/game-forge/qa-agent";
 import { GAME_FORGE_SDK_SOURCE } from "@/lib/game-forge/runtime-sdk";
 import { buildDesignSystemPrompt, normalizeDesign } from "@/lib/game-forge/design-agent";
 import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-forge/code-agent";
@@ -391,6 +391,26 @@ async function main() {
   const sdk = GAME_FORGE_SDK_SOURCE;
   assert.match(sdk, /forge-hud-not-a-number/);
   assert.match(sdk, /NaN\|undefined\|null\|Infinity/);
+
+  // 17. g.input.touch answers "is this a touchscreen", not "did the player act".
+  // Counting it as input shipped a tower defence that read the flag once to
+  // decide whether to draw a hint, never read a tap, and let sunlight reach 175
+  // with nothing plantable -- while passing the hard input gate.
+  const deviceFlagOnly = auditStatic(ownerDoc, [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "zombie_system", role: "system", source: "G.spawnZombie = function (g) { g.world.spawn('zombie', { x: 1, y: 2 }); g.assets.image(ctx.assets.ship, 'player', '#fff'); g.audio.sfx('hit'); g.ui.hud([]); };", provides: ["spawnZombie"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { if (g.input.touch) { g.ui.hint('tap'); } g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]).filter((f) => f.code === "no_touch_input");
+  assert.equal(deviceFlagOnly.length, 1, "reading only the device flag is not reading input");
+  assert.equal(deviceFlagOnly[0]!.severity, "blocker");
+  assert.match(deviceFlagOnly[0]!.message, /g\.input\.touch only reports/);
+  // Reading an actual input member is accepted.
+  const realInput = auditStatic(ownerDoc, [
+    { id: "game_config", role: "config", source: "G.config = {};", provides: ["config"], requires: [] },
+    { id: "zombie_system", role: "system", source: "G.spawnZombie = function (g) { g.world.spawn('zombie', {}); };", provides: ["spawnZombie"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { if (g.input.pointer.down) { G.spawnZombie(g); } g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]).filter((f) => f.code === "no_touch_input");
+  assert.equal(realInput.length, 0, JSON.stringify(realInput));
 
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
