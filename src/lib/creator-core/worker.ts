@@ -50,6 +50,7 @@ import { reconcileGamePlaytestEvidenceForRevision } from "@/lib/game-playtest-ev
 import { generateAgenticGameModule } from "@/lib/agentic/generate-game-module";
 import { forgeGameIntoSpec, isGameForgeEnabled } from "@/lib/game-forge/bridge";
 import { missingRequiredSlots, runForgeAssetAgent } from "@/lib/game-forge/asset-agent";
+import { PRODUCT } from "@/lib/product-config";
 import { shouldUseAgenticRuntime } from "@/lib/agentic/game-module";
 import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
@@ -290,7 +291,31 @@ async function executeGameProductionJob(
   // forge; only its report is persisted here.
   const artRun = artState.current;
   if (artRun) {
-    const missing = missingRequiredSlots(artRun.design, artRun.run);
+    let run = artRun.run;
+    let missing = missingRequiredSlots(artRun.design, run);
+    let retried = 0;
+    /*
+     * A required slot that failed used to stay failed forever: the game shipped
+     * serving 404 for its own protagonist, the runtime fell back to a primitive,
+     * and the quality report blamed the runtime for "not using the artwork".
+     * Image generation is flaky enough that one narrow retry is worth it -- and
+     * it runs only for the slots that failed, so it costs nothing on a clean run.
+     */
+    if (missing.length) {
+      await heartbeatGenerationJob(job.id, workerId, { percent: 75, stage: "asset_generation", detail: `retrying ${missing.length} required art slot(s)` });
+      const retryDesign = { ...artRun.design, assets: artRun.design.assets.filter((slot) => missing.includes(slot.key)) };
+      const retry = await runForgeAssetAgent(sourceProject.id, retryDesign, { budgetMs: PRODUCT.gameForge.artBudgetMs }).catch((error) => {
+        console.error("[forge_art_retry_failed]", { jobId: job.id, reason: error instanceof Error ? error.message.slice(0, 120) : "unknown" });
+        return null;
+      });
+      if (retry) {
+        retried = retry.results.filter((slot) => slot.url).length;
+        const recovered = new Map(retry.results.filter((slot) => slot.url).map((slot) => [slot.key, slot]));
+        const results = run.results.map((slot) => recovered.get(slot.key) ?? slot);
+        run = { ...run, results, generated: results.filter((slot) => slot.url).length, failed: results.filter((slot) => !slot.url).length };
+        missing = missingRequiredSlots(artRun.design, run);
+      }
+    }
     await persistArtifact({
       creativeProjectId: job.creativeProjectId,
       creativeRevisionId: job.creativeRevisionId,
@@ -298,8 +323,8 @@ async function executeGameProductionJob(
       artifact: {
         kind: "game_art_run",
         mediaType: "report",
-        content: { slots: artRun.run.results, generated: artRun.run.generated, failed: artRun.run.failed, missingRequired: missing },
-        metadata: { role: "art_agent", generated: artRun.run.generated, failed: artRun.run.failed, durationMs: artRun.run.durationMs, parallelWithCode: true },
+        content: { slots: run.results, generated: run.generated, failed: run.failed, missingRequired: missing, retriedRequiredSlots: retried },
+        metadata: { role: "art_agent", generated: run.generated, failed: run.failed, durationMs: run.durationMs, parallelWithCode: true, retriedRequiredSlots: retried },
       },
     });
   }
