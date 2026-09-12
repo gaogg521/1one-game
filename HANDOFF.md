@@ -33,6 +33,29 @@
 - `4c0b0bba`：打磨轮把构建改坏过一次。`ship_blue` 404 → 打磨轮命令运行时必须使用该素材 → 主角变不可见。素材缺失时的修复属于素材生成，不是模块重写，已在 `selectGameQualityPolishFindings` 里加了抑制。
 - `2ca88bb2`：必需素材失败从不重试，`missingRequiredSlots` 算了却无人消费。现在做一次窄重试。
 
+### 真机实操试玩结论（最重要的一节）
+
+用 `scripts/playtest-local-runtime.ts` 在 393×852 headless Chromium 上把生产构建（seq2）真实玩了 70 秒：
+
+- 61fps（4320 帧 / 70 秒）、AudioContext 建立 1 个（音效真响）、15 个实体在生成、触控转向有效、素材真实加载。
+- **分数 0、生命 3、时间归零不结算。** 收集物碰到不加分，陨石碰到不掉血，计时结束不产生胜负。最终 HUD：`分数 0 · 生命 3 · 时间 0`。
+
+**平台给这个构建判了 `passed`、零 blocker。** 因为所有既有检查问的都是「它动不动」：booted / first frame / loop not stalled / player visible / player responds / pixels changed——全为真。`runtime_inert_build` 也不触发，实体一直在动。
+
+> **质量门分不出「游戏」和「屏保」。** 这是本轮最重要的发现。
+
+已修 `a8ed4077`：探针横扫飞船 12 秒并读心跳 `score`；设计声明了数值胜负条件、而分数从不变化也不结算时，记 `advisory:core_loop_unresolved` 并进打磨轮。仍是 advisory。
+
+配套 `c602663a`：竖屏默认改为 540×1170（实测 540×960 在真机只填 82%，上下各 73px 黑边），门禁内层 iframe 从 393×700 改为 393×852（此前它是 16:9 盒子，正好把要测的黑边藏掉了，所以报 100%）。
+
+**注意**：`scripts/playtest-local-runtime.ts` 的 `addInitScript` 必须传字符串。用内联箭头函数会被 tsx/esbuild 注入 `__name` 辅助函数，页面里不存在，整段初始化脚本静默失败、所有探针返回空。
+
+**另一个坑**：在 Claude 的浏览器面板里跑游戏，窗口被遮挡时 rAF 会被节流到约 1/5 速（28 秒真实时间只走 5 游戏秒），据此下的任何可玩性结论都是错的。要判可玩性用上面那个 Playwright 脚本。
+
+### 运维发现（未修）
+
+部署脚本在服务运行时**原地重建 `.next`**，所以每次 `deploy-prod-with-assets.py` 都有一个真实的全站 500 窗口（首页也 500，`/api/health` 仍 200）。应改为构建到临时目录再原子切换。
+
 ### 下一位的缺口
 
 0. **美术审查在生产上是哑的（最高优先级，且不需要改代码）。** 生产实测返回 `visual_review_unavailable`。`game_vision` 默认回落到 `PRODUCT.models.gameVisionPrimary`（`gpt-5-4`），生产网关不提供该模型。**在后台把 `game_vision` 路由到网关上真实存在的视觉模型即可**，随后 `[visual-review]` 日志会给出结果或失败原因（`dee360f2` 起有脱敏日志）。在此之前，`art_direction_mismatch` / `hud_unreadable` / `low_contrast_subject` 这三类美术发现永远不会产生。
