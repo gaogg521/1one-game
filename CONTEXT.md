@@ -1,4 +1,47 @@
 # 项目工作进度快照
+最后更新：2026-09-12（平台级手机质量合同与真实美术验收）
+
+## 本轮定位
+
+用户明确：**不是修单个游戏，是解决平台能力**。上一轮在「太空快递」上观测到的四类缺陷全部是生成链路的通病，不是那一款的问题。
+
+## 已交付并部署（4 个提交，均已 push + `deploy-prod-with-assets.py`）
+
+| 提交 | 平台缺口 | 影响面 |
+|---|---|---|
+| `4d33820f` | `spec-patch` 用生产模型上实测不收敛的 `json_object`，且吞掉所有异常 | **全平台 owner 局部修改必然 503** |
+| `4d33820f` | 设计提示词骨架硬编码横屏舞台，Zod 默认值也是横屏 | 每款生成游戏在竖屏播放器里留白 |
+| `4d33820f` | 视觉合同只匹配 `new Image()`，不认 Forge 的 `g.assets.image`/`r.sprite` | **每个正确的 Forge 构建**都被误报 `runtime_sprite_actor_missing` |
+| `4d33820f` | Forge 自修复探针跑 960×540 桌面窗口，交付门跑 393×852 手机 | 修复循环永远看不见它该修的手机问题 |
+| `207cc2cf` | 质量发现没有任何消费者，自动迭代只在硬 blocker 触发 | 只要能跑就交付，无论手机上多难看 |
+| `42876d4f` | 「主角画得足够大」只是提示词散文 | 主角尺寸从未被检查 |
+| `6d97bf7b` | `visual_review_agent` **没有任何生产者** | 每个构建都带着一条从未运行的视觉审查（`visual_review_rejected` 是 100% 噪声） |
+
+### 关键设计取舍
+
+- **不新增硬门禁**。用户已指出「动不动搞门禁」伤体验。质量不达标的游戏照常交付、玩家照常能玩，平台在后台花**恰好一轮**做定向打磨（`productionRound === 1` 触发，产出的是第 2 轮，结构上不可能循环）。
+- **能测量的就不要靠提示词**。渲染器本来就为了判可见性算出了精灵的屏幕归一化尺寸，只是丢掉了；现在上报，主角 9% 下限变成真实测量，零额外成本、不需要视觉模型。
+- **没跑过的审查不许下结论**。视觉审查跑不了就返回 null，候选写 `visual_review_unavailable`，不再伪造 `visual_review_rejected`。
+
+### 新增能力文件
+
+- `src/lib/game-visual-review.ts` — 对真实交付帧做美术审查，封闭代码表（`player_too_small` / `runtime_letterboxed` / `runtime_sprite_actor_missing` / `art_direction_mismatch` / `hud_unreadable` / `low_contrast_subject`）。
+- `src/lib/llm/types.ts` + `provider-openai-compatible.ts` — LLM 层支持 `images`（仅 OpenAI 兼容路径发送）。
+- `scripts/qa-mobile-quality-contract.ts`（`npm run qa:mobile-quality-contract`）— 覆盖竖屏、主角下限、首分钟合同、Forge 素材消费、patch 不丢运行时、一轮打磨、审查缺席行为。
+- `scripts/refine-prod-game.ts` — 对**现有**生产项目驱动一次 owner 定向修改并等待新修订（不新建游戏）。
+
+### 已验证
+
+`npx tsc --noEmit`、目标 ESLint（0 error）、`npm run build`、`qa:mobile-quality-contract`、`qa:runtime-delivery-gate`、`qa:game-forge`、`qa:game-production-orchestrator`、`qa:game-production-artifacts`、`qa:game-preflight-iteration`、`qa:game-vertical-slice`、`qa:creator-quality` 全部通过。
+
+### 既有失败（非本轮回归，已隔离复现）
+
+- `qa:agentic-persist-coerce`：`coerceGameSpec` 单独调用即丢 `agenticModule`，`normalize-spec.ts` / `game-spec.ts` 本轮未改动。属遗留路径（生产走 `forgeBuild`）。
+- `qa:creator-core`：仍是 CONTEXT 早已记载的共享数据库 job 抢占导致的 `artifact must preserve revision lineage`。
+- `scripts/qa-game-forge-browser.ts`：未注册进 `package.json`，在手写参考构建的签名检查上失败，与本轮改动无关。
+
+---
+
 最后更新：2026-08-31（神庙逃亡生产验收与假阳性修复）
 
 ## 生产验收结论
