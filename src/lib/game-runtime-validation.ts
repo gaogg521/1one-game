@@ -79,11 +79,54 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     }
     await page.keyboard.press("Space");
     await page.waitForTimeout(2500);
+    /*
+     * Everything above proves the game MOVES. None of it proves the game can be
+     * PLAYED. A build was shipped that ran at 60fps with correct art, spawned
+     * entities, played sound, and let the player steer -- and whose score never
+     * changed, whose hazards never hurt, and whose clock reached zero without
+     * resolving. Every existing check passed it. So drive the ship across the
+     * play area and watch whether the core loop ever resolves.
+     */
+    const sweepUntil = Date.now() + 12_000;
+    const iframeBox = await page.locator("iframe").boundingBox();
+    if (iframeBox) {
+      const y = iframeBox.y + iframeBox.height * 0.82;
+      let phase = 0;
+      await page.mouse.move(iframeBox.x + iframeBox.width / 2, y);
+      await page.mouse.down();
+      while (Date.now() < sweepUntil) {
+        phase += 0.22;
+        const x = iframeBox.x + iframeBox.width * (0.5 + Math.sin(phase) * 0.42);
+        await page.mouse.move(x, y);
+        await page.waitForTimeout(70);
+      }
+      await page.mouse.up();
+    }
     const after = await page.locator("iframe").screenshot({ timeout: 10_000 });
     if (onFrame) {
       try { onFrame(after); } catch { /* a reviewer failing must not fail delivery */ }
     }
-    const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string }>>("window.events");
+    const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string; score?: number }>>("window.events");
+    /*
+     * "It moved" is not "it played". A game whose design declares a score to
+     * reach and a way to lose must, under driven input, either move its score or
+     * reach an ending. Neither happening means the core loop never resolves --
+     * the player steers a pretty screensaver. Advisory, because the build is
+     * still worth shipping while the platform repairs it.
+     */
+    if (spec.forgeBuild) {
+      const parsedDesign = GameDesignDocSchema.safeParse(spec.forgeBuild.design);
+      const progression = parsedDesign.success ? parsedDesign.data.progression : null;
+      const scoreDriven = Boolean(progression && /\d/.test(`${progression.winCondition}${progression.loseCondition}`));
+      const beats = events.filter((e) => e.type === "forge-heartbeat");
+      const scores = beats.map((e) => Number(e.score ?? 0)).filter((n) => Number.isFinite(n));
+      const scoreMoved = scores.length > 1 && Math.max(...scores) > Math.min(...scores);
+      const resolved = events.some((e) => e.type === "forge-end" || e.type === "operone-game-end");
+      result.evidence.push(`scoreObserved:${scores.length ? Math.max(...scores) : "none"}`);
+      if (scoreDriven && beats.length >= 4 && !scoreMoved && !resolved) {
+        result.evidence.push("advisory:core_loop_unresolved");
+      }
+    }
     /*
      * A landscape stage scaled into this portrait iframe leaves empty bands top
      * and bottom, which is what makes a generated game look unfinished on a

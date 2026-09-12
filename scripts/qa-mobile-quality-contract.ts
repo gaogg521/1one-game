@@ -185,6 +185,11 @@ async function main() {
   assert.equal(shouldScheduleGameQualityPolish({ productionRound: 2, maxProductionRounds: 3, findings }), false, "polish is one round deep");
   assert.equal(shouldScheduleGameQualityPolish({ productionRound: 3, maxProductionRounds: 5, findings }), false);
 
+  // A game that runs but never scores, hurts or ends is the defect every other
+  // check passed. It must reach the polish round.
+  assert.ok(selectGameQualityPolishFindings(["advisory:core_loop_unresolved"]).includes("core_loop_unresolved"));
+  assert.match(buildGameQualityPolishInstruction(["core_loop_unresolved"]), /结算|加分|扣血/);
+
   const polishInstruction = buildGameQualityPolishInstruction(findings);
   assert.match(polishInstruction, /已经可以玩/, "polish must not read as a failure");
   assert.match(polishInstruction, /g\.width \/ g\.height/);
