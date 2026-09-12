@@ -668,8 +668,10 @@ export const GAME_FORGE_SDK_SOURCE = `
     var banner = null;
     var toasts = [];
     var hint = null;
+    var badHud = {};
 
     return {
+      // Report each broken HUD field once, not sixty times a second.
       hud: function (fields) {
         r.ui.begin();
         var pad = 16, x = pad, y = pad;
@@ -678,6 +680,17 @@ export const GAME_FORGE_SDK_SOURCE = `
           if (f == null) continue;
           var label = f.label == null ? '' : String(f.label);
           var value = f.value == null ? '' : String(f.value);
+          /*
+           * A HUD reading "NaN" is the most visible way a generated game can be
+           * broken while passing every structural check: observed on a shipped
+           * tower defence whose sun counter was NaN, so nothing was ever
+           * affordable, nothing could be planted, and the run was unwinnable by
+           * construction. Report it once per field so QA can see it.
+           */
+          if (/^(?:NaN|undefined|null|Infinity|-Infinity)$/.test(value) && !badHud[label + '|' + i]) {
+            badHud[label + '|' + i] = 1;
+            try { global.parent.postMessage({ type: 'forge-hud-not-a-number', forge: 1, label: label, value: value }, '*'); } catch (e) { /* host may be absent */ }
+          }
           var str = label ? label + ' ' + value : value;
           var w = Math.max(72, str.length * 11 + 26);
           r.roundRect(x, y, w, 34, 10, f.bg || 'rgba(6,14,24,.62)');

@@ -110,7 +110,7 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     if (onFrame) {
       try { onFrame(after); } catch { /* a reviewer failing must not fail delivery */ }
     }
-    const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string; score?: number }>>("window.events");
+    const events = await page.evaluate<Array<{ type: string; frames?: number; entities?: number; message?: string; score?: number; label?: string }>>("window.events");
     /*
      * "It moved" is not "it played". A game whose design declares a score to
      * reach and a way to lose must, under driven input, either move its score or
@@ -151,6 +151,17 @@ export async function validateGameRuntime(spec: GameSpec, projectId?: string, fo
     if (typeof fill === "number") {
       result.evidence.push(`screenFillPct:${fill}`);
       if (fill < 70) result.evidence.push("advisory:runtime_letterboxed");
+    }
+    /*
+     * The most visible way a generated game breaks while passing every
+     * structural check. Observed on a shipped tower defence: the sun counter
+     * read NaN, so nothing was ever affordable, nothing could be planted, and
+     * the run was unwinnable by construction -- while booting, rendering its
+     * own artwork and accepting input perfectly.
+     */
+    const brokenHud = events.filter(e => e.type === "forge-hud-not-a-number");
+    if (brokenHud.length) {
+      result.evidence.push(`advisory:hud_value_not_a_number:${brokenHud.map(e => (e as { label?: string }).label || "?").slice(0, 3).join(",")}`);
     }
     const errors = events.filter(e => e.type === "operone-game-error" || e.type === "forge-error");
     result.observed = true;

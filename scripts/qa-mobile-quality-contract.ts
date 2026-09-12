@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { GameDesignDocSchema } from "@/lib/game-forge/types";
 import { assembleGame } from "@/lib/game-forge/assemble";
 import { auditSharedStateReads } from "@/lib/game-forge/qa-agent";
+import { GAME_FORGE_SDK_SOURCE } from "@/lib/game-forge/runtime-sdk";
 import { buildDesignSystemPrompt, normalizeDesign } from "@/lib/game-forge/design-agent";
 import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-forge/code-agent";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
@@ -377,6 +378,19 @@ async function main() {
   ]).find((f) => f.code === "undeclared_shared_state");
   assert.equal(noOwner!.moduleId, "main_game", JSON.stringify(noOwner));
   assert.match(noOwner!.message, /drop the dependency/);
+
+  // 16. A HUD reading NaN is the most visible way a generated game breaks while
+  // passing every structural check. Measured: a tower defence whose sun counter
+  // was NaN could never afford a plant, so the run was unwinnable by
+  // construction -- while booting, drawing its own art and taking input.
+  const hudFindings = selectGameQualityPolishFindings(["advisory:hud_value_not_a_number:阳光"]);
+  assert.deepEqual(hudFindings, ["hud_value_not_a_number"], JSON.stringify(hudFindings));
+  assert.match(buildGameQualityPolishInstruction(hudFindings), /NaN/);
+  assert.match(buildGameQualityPolishInstruction(hudFindings), /init 与 restart/);
+  // The SDK must actually emit it, and only for a broken value.
+  const sdk = GAME_FORGE_SDK_SOURCE;
+  assert.match(sdk, /forge-hud-not-a-number/);
+  assert.match(sdk, /NaN\|undefined\|null\|Infinity/);
 
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
