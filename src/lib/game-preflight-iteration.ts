@@ -33,6 +33,8 @@ const POLISHABLE_ADVISORIES = new Set([
   "runtime_sprite_actor_missing",
   // The protagonist is too small to track on a phone.
   "player_too_small",
+  // A placement game where the probe never saw a unit reach the field.
+  "player_not_placed_yet",
   // It runs, but it cannot actually be played to a conclusion.
   "core_loop_unresolved",
   // The first minute does not hold together.
@@ -97,6 +99,7 @@ export function buildGameQualityPolishInstruction(findings: readonly string[]): 
     runtime_player_asset_unused: "主角必须绘制项目生成的主角素材。",
     runtime_enemy_asset_unused: "敌人/障碍必须绘制项目生成的素材。",
     runtime_sprite_actor_missing: "用 g.assets.image 加载素材并用 r.sprite 绘制角色，不要用矩形和圆形代替角色。",
+    player_not_placed_yet: "确认放置流程可用：开局 5 秒内玩家应当负担得起第一次放置，放置后单位必须立刻画在被点击的格子上并开始工作；如果资源门槛太高，降低首个单位的成本或提高开局资源。",
     player_too_small: "放大主角：绘制尺寸按 Math.max(48, Math.min(g.width, g.height) * 0.09) 从舞台推导，不要用固定小数值；碰撞体要跟着可见尺寸一起改。",
     core_loop_unresolved: "核心循环没有闭合：真实试玩中分数从未变化、也没有产生胜负结算。请修好收集/受伤判定与结束条件——碰到收集物必须加分，碰到障碍必须扣血，计时归零或达成目标必须走 g.start 的结束流程并显示结算卡。碰撞判定必须使用可见精灵的位置和尺寸。",
     vertical_slice_blocked: "重做前 60 秒节奏：10 秒内同屏最多 1 个威胁，30 秒内最多 2 个且速度不超过峰值的 60%，失败至少需要 3 次失误，每次掉血后至少 1.5 秒无敌并有闪烁提示，开局 5 秒内必须有一个无风险可拿的得分。",

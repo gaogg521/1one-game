@@ -30,7 +30,11 @@ async function main() {
   const noCollectible = fixture("good");
   noCollectible.forgeBuild!.design.assets.push({ kind: "collectible", key: "star" });
   const missingPickup = await validateGameRuntime(noCollectible);
-  assert.ok(missingPickup.blockers.includes("runtime_collectible_not_visible"), JSON.stringify(missingPickup));
+  // A collectible nobody can see is repairable, not a reason to refuse delivery:
+  // the hard set is only the failures that make a game unplayable. This script
+  // predates that split and was asserting the old behaviour.
+  assert.ok(missingPickup.evidence.includes("advisory:collectible_not_visible"), JSON.stringify(missingPickup));
+  assert.equal(missingPickup.blockers.includes("runtime_collectible_not_visible"), false);
 
   const offscreenPickup = playerEvidenceFindings(
     noCollectible.forgeBuild!.design,

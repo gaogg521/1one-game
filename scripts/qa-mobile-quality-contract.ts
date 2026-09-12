@@ -323,6 +323,29 @@ async function main() {
   ]);
   assert.equal(sdkCounters.findings.some((f) => /^private_(score|lives)_counter$/.test(f.code)), false, JSON.stringify(sdkCounters.findings.map((f) => f.code)));
 
+  // 14. A placement game has no protagonist on the field until one is bought.
+  // Treating that as fatal made tower-defence and farming games impossible to
+  // ship: a plants-vs-zombies build ran ten minutes and was rejected because
+  // the probe tapped before any sun had accumulated.
+  const placementDesign = {
+    assets: [{ kind: "player" }],
+    controls: [{ action: "种植豌豆射手", desktop: "click", touch: "点击草坪格子种下豌豆射手" }],
+    mechanics: [{ id: "plant", summary: "消耗阳光在草坪上种下豌豆射手" }],
+  };
+  const placement = playerEvidenceFindings(placementDesign, [{ type: "forge-player-evidence", players: [], sprites: [] }]);
+  assert.deepEqual(placement.map((f) => f.code), ["player_not_placed_yet"], JSON.stringify(placement));
+  assert.equal(placement[0]!.severity, "major", "a placement game must not be refused for an empty field");
+  assert.ok(selectGameQualityPolishFindings(["advisory:player_not_placed_yet"]).includes("player_not_placed_yet"));
+  // A directly controlled avatar is still refused when it never renders.
+  const avatarDesign = {
+    assets: [{ kind: "player" }],
+    controls: [{ action: "移动飞船", desktop: "WASD", touch: "拖动" }],
+    mechanics: [{ id: "dodge", summary: "拖动飞船躲开陨石" }],
+  };
+  const avatar = playerEvidenceFindings(avatarDesign, [{ type: "forge-player-evidence", players: [], sprites: [] }]);
+  assert.deepEqual(avatar.map((f) => f.code), ["player_not_visible"], JSON.stringify(avatar));
+  assert.equal(avatar[0]!.severity, "blocker");
+
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
 

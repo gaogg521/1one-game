@@ -13,11 +13,34 @@ export type PlayerEvidenceEvent = { type: string; inputActive?: boolean; players
 /** Draw observations, independent of score/collision counters. Pixel review is still required. */
 export function playerEvidenceFindings(design: unknown, events: PlayerEvidenceEvent[]): QaFinding[] {
   if (!design || typeof design !== "object") return [];
-  const doc = design as { assets?: Array<{ kind?: string }>; controls?: Array<{ action?: string; desktop?: string }> };
+  const doc = design as {
+    assets?: Array<{ kind?: string }>;
+    controls?: Array<{ action?: string; desktop?: string; touch?: string }>;
+    mechanics?: Array<{ id?: string; summary?: string }>;
+  };
   if (!Array.isArray(doc.assets) || !doc.assets.some(asset => asset?.kind === "player")) return [];
   const samples = events.filter(event => event.type === "forge-player-evidence");
   const visible = samples.flatMap(event => event.players ?? []).filter(actor => actor.visible);
-  if (!visible.length) return [{ severity: "blocker", moduleId: "assembled", code: "player_not_visible", message: "No player sprite was drawn inside the viewport. Check camera centre, spawn coordinates and draw calls." }];
+  /*
+   * Not every game has a protagonist standing on the field at boot. In a
+   * placement game -- a tower defence, a farm, a builder -- the "player" asset
+   * is the thing you put down, and it does not exist until the player spends a
+   * resource to place it. A probe that taps once in the first seconds will
+   * never see one, so treating its absence as fatal made an entire genre
+   * impossible to ship: measured on a plants-vs-zombies build that ran for ten
+   * minutes and was rejected because no plant had been bought yet.
+   */
+  const placementControlled = [
+    ...(doc.controls ?? []).map(control => `${control?.action} ${control?.desktop} ${control?.touch}`),
+    ...(doc.mechanics ?? []).map(mechanic => `${mechanic?.id} ${mechanic?.summary}`),
+  ].some(text => /种植|放置|建造|布置|召唤|部署|摆放|plant|place|build|deploy|summon|tower/i.test(text));
+  if (!visible.length) {
+    return [
+      placementControlled
+        ? { severity: "major", moduleId: "assembled", code: "player_not_placed_yet", message: "No player-kind sprite was drawn during the probe. This design places its units, so that may simply mean nothing was affordable yet — but confirm a unit can be placed and is drawn where it was placed." }
+        : { severity: "blocker", moduleId: "assembled", code: "player_not_visible", message: "No player sprite was drawn inside the viewport. Check camera centre, spawn coordinates and draw calls." },
+    ];
+  }
   const movementRequired = Array.isArray(doc.controls) && doc.controls.some(control => /移动|左右|方向键|摇杆|move|arrow|wasd|stick/i.test(`${control?.action} ${control?.desktop}`));
   const active = samples.filter(event => event.inputActive).flatMap(event => event.players ?? []).filter(actor => actor.visible);
   const moved = active.some((actor, i) => i > 0 && Math.hypot(actor.x - active[i - 1]!.x, actor.y - active[i - 1]!.y) > 4);
