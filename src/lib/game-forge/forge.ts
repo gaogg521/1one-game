@@ -477,6 +477,7 @@ function pickRepairTargets(modules: GameModule[], finding: QaFinding): string[] 
     no_win_path: (m) => /progress|score|rule|level/i.test(m.id),
     no_lose_path: (m) => /progress|score|rule|level|collision/i.test(m.id),
     required_asset_unused: (m) => /render|draw|entit|sprite/i.test(m.id),
+    entity_group_never_spawned: (m) => /collision|entit|spawn|render|draw/i.test(m.id),
     collectible_not_visible: (m) => /entit|collect|spawn|render|draw/i.test(m.id),
     collectible_spawn_outside_viewport: (m) => /spawn|entit|collect/i.test(m.id),
     player_not_visible: (m) => /player|control|render|draw/i.test(m.id),

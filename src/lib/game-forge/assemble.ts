@@ -240,6 +240,43 @@ export function assembleGame(design: GameDesignDoc, modules: GameModule[]): Asse
     });
   }
 
+  /*
+   * Entity groups are strings, so a mismatch between the module that spawns and
+   * the module that reads is invisible to every syntax and signature check --
+   * and it silently switches off whatever that group was for.
+   *
+   * Measured on a shipped game: spawn_system spawned 'meteor', main_game drew
+   * 'meteor', and collision_system iterated 'enemy'. Hazards therefore never
+   * collided with anything, the player could not lose, and the build passed
+   * delivery because it still rendered, moved and accepted input.
+   */
+  const spawnedGroups = new Set<string>();
+  const readGroups = new Map<string, string>();
+  for (const built of modules) {
+    // Comments only: the group name IS a string literal, so stripping strings
+    // would erase the very thing being compared.
+    const code = stripComments(built.source);
+    for (const match of code.matchAll(/\bworld\s*\.\s*spawn\s*\(\s*["'`]([A-Za-z_][\w-]*)["'`]/g)) {
+      spawnedGroups.add(match[1]!);
+    }
+    for (const match of code.matchAll(/\bworld\s*\.\s*(?:each|get|collide|count|kill_?all|clearGroup)\s*\(\s*["'`]([A-Za-z_][\w-]*)["'`]/g)) {
+      if (!readGroups.has(match[1]!)) readGroups.set(match[1]!, built.id);
+    }
+  }
+  // Only meaningful once something was spawned by name; a build that spawns
+  // nothing is a different finding.
+  if (spawnedGroups.size) {
+    for (const [group, moduleId] of readGroups) {
+      if (spawnedGroups.has(group)) continue;
+      findings.push({
+        severity: "blocker",
+        moduleId,
+        code: "entity_group_never_spawned",
+        message: `${moduleId} reads the entity group '${group}', but nothing spawns it — the groups actually spawned are ${[...spawnedGroups].map((name) => `'${name}'`).join(", ")}. Iterating a group no one fills silently disables that system: use the exact name g.world.spawn was called with.`,
+      });
+    }
+  }
+
   const joinedSource = modules.map((module) => module.source).join("\n");
   if (/\brestart\s*:\s*function\b[\s\S]{0,500}?\bthis\s*\.\s*init\s*\(/i.test(joinedSource)) {
     findings.push({

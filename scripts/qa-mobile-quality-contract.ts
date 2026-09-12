@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { GameDesignDocSchema } from "@/lib/game-forge/types";
+import { assembleGame } from "@/lib/game-forge/assemble";
 import { buildDesignSystemPrompt, normalizeDesign } from "@/lib/game-forge/design-agent";
 import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-forge/code-agent";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
@@ -275,6 +276,29 @@ async function main() {
   // A colour must bind to the actor it was written next to, not the whole prompt.
   const crossed = applyExplicitPromptColors(spec, "红色的背景音乐很吵，主角是一艘蓝色飞船");
   assert.equal(crossed.theme.playerColor, "#3b82f6");
+
+  // 12. A group read but never spawned silently switches off whatever system
+  // reads it. Measured on a shipped game: collision iterated 'enemy' while the
+  // spawner filled 'meteor', so hazards never hurt and the player could not lose.
+  const mismatched = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "spawn_system", role: "system", source: "G.tickSpawns = function (dt, g) { g.world.spawn('meteor', { x: 10, y: 10 }); g.world.spawn('star', { x: 20, y: 20 }); };", provides: ["tickSpawns"], requires: [] },
+    { id: "collision_system", role: "system", source: "G.checkCollisions = function (g) { g.world.each('enemy', function (e) { return e; }); g.world.each('star', function (s) { return s; }); };", provides: ["checkCollisions"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  const groupFinding = mismatched.findings.find((f) => f.code === "entity_group_never_spawned");
+  assert.ok(groupFinding, JSON.stringify(mismatched.findings.map((f) => f.code)));
+  assert.equal(groupFinding!.moduleId, "collision_system", "the finding must name the module that reads the empty group");
+  assert.equal(groupFinding!.severity, "blocker", "a system wired to nothing must be repaired before delivery");
+  assert.match(groupFinding!.message, /'meteor'/, "the message must name the group that is actually spawned");
+  // A build whose names agree raises nothing.
+  const agreeing = assembleGame(designDoc({ width: 540, height: 1170, orientation: "portrait", background: "#0b1020" }), [
+    { id: "game_config", role: "config", source: "G.config = { player: { size: 49 } };", provides: ["config"], requires: [] },
+    { id: "spawn_system", role: "system", source: "G.tickSpawns = function (dt, g) { g.world.spawn('meteor', { x: 10, y: 10 }); };", provides: ["tickSpawns"], requires: [] },
+    { id: "collision_system", role: "system", source: "G.checkCollisions = function (g) { g.world.each('meteor', function (e) { return e; }); };", provides: ["checkCollisions"], requires: [] },
+    { id: "main_game", role: "main", source: "G.main = function (g) { g.start({ init: function () {}, update: function () {}, draw: function () {}, restart: function () {} }); };", provides: ["main"], requires: [] },
+  ]);
+  assert.equal(agreeing.findings.some((f) => f.code === "entity_group_never_spawned"), false, JSON.stringify(agreeing.findings.map((f) => f.code)));
 
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
