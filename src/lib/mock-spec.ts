@@ -83,7 +83,57 @@ export type MockSpecOptions = {
   sampleId?: string;
 };
 
+/**
+ * Bright, readable values. A creator who writes "明亮的蓝色飞船" means a ship
+ * they can pick out on a phone, not a desaturated tint the generator preferred.
+ */
+const PROMPT_COLORS: Array<{ match: RegExp; hex: string }> = [
+  { match: /红色?|rose|\bred\b/i, hex: "#ef4444" },
+  { match: /橙色?|\borange\b/i, hex: "#f97316" },
+  { match: /黄色?|金色?|\byellow\b|\bgold(?:en)?\b/i, hex: "#facc15" },
+  { match: /绿色?|\bgreen\b/i, hex: "#22c55e" },
+  { match: /青色?|\bcyan\b|\bteal\b/i, hex: "#06b6d4" },
+  { match: /蓝色?|\bblue\b/i, hex: "#3b82f6" },
+  { match: /紫色?|\bpurple\b|\bviolet\b/i, hex: "#a855f7" },
+  { match: /粉色?|\bpink\b/i, hex: "#ec4899" },
+  { match: /白色?|\bwhite\b/i, hex: "#f8fafc" },
+];
+
+/** Nouns that identify which actor a colour was attached to. */
+const COLOR_ROLES: Array<{ slot: "playerColor" | "hazardColor" | "collectibleColor"; match: RegExp }> = [
+  { slot: "playerColor", match: /飞船|主角|角色|玩家|小人|战机|赛车|ship|player|hero|character/i },
+  { slot: "hazardColor", match: /陨石|敌人|障碍|炸弹|子弹|怪物|尖刺|meteor|enemy|hazard|obstacle|bomb|spike/i },
+  { slot: "collectibleColor", match: /能量星|星星|金币|道具|收集物|宝石|水果|star|coin|gem|collectible|pickup/i },
+];
+
+/**
+ * A colour the creator wrote down is a requirement, not a suggestion. Observed
+ * in production: a prompt asking for a bright blue ship, red meteors and yellow
+ * stars generated a lavender ship and brick hazards on a near-black background.
+ */
+export function applyExplicitPromptColors(spec: GameSpec, prompt: string): GameSpec {
+  if (!prompt.trim()) return spec;
+  const theme: Record<string, string> = { ...spec.theme };
+  let changed = false;
+  // Scan colour-then-noun within a short window so "蓝色飞船" binds but a colour
+  // mentioned a sentence away from an actor does not.
+  for (const { slot, match: roleMatch } of COLOR_ROLES) {
+    for (const { match: colorMatch, hex } of PROMPT_COLORS) {
+      const colorSource = colorMatch.source.replace(/^\/|\/$/g, "");
+      const bound = new RegExp(`(?:${colorSource})(?:的)?[^，。；,.;\\n]{0,6}?(?:${roleMatch.source})`, "i");
+      if (!bound.test(prompt)) continue;
+      if (theme[slot] !== hex) {
+        theme[slot] = hex;
+        changed = true;
+      }
+      break;
+    }
+  }
+  return changed ? { ...spec, theme: theme as GameSpec["theme"] } : spec;
+}
+
 export function applyExplicitPromptGoals(spec: GameSpec, prompt: string): GameSpec {
+  spec = applyExplicitPromptColors(spec, prompt);
   const countToken = /(?:收集|捡起|拾取)([一二三四五六七八九十两\d]{1,3})(?:颗|个|枚|件|朵|只)/.exec(prompt)?.[1];
   const chineseSmallNumbers: Record<string, number> = {
     一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,

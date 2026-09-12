@@ -9,7 +9,7 @@ import { playerEvidenceFindings } from "@/lib/game-forge/player-evidence";
 import { reviewGameVisuals } from "@/lib/game-visual-review";
 import { buildGameArtDirection } from "@/lib/game-art-direction";
 import { buildGameProductionRun } from "@/lib/game-production-orchestrator";
-import { mockSpecFromPrompt } from "@/lib/mock-spec";
+import { applyExplicitPromptColors, mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 
 /**
@@ -215,6 +215,22 @@ async function main() {
   assert.ok(reviewed.candidate.advisories?.includes("visual_review_rejected"));
   assert.ok(selectGameQualityPolishFindings(reviewed.candidate.advisories ?? []).includes("hud_unreadable"), "an art finding must reach the polish round");
   assert.match(buildGameQualityPolishInstruction(["hud_unreadable"]), /g\.ui\.hud/);
+
+  // 11. A colour the creator wrote down is a requirement. Observed in
+  // production: this exact prompt produced a lavender ship (#9b8cb2) on a
+  // near-black background, with brick hazards.
+  const askedFor = "做一个手机单手玩的太空快递小游戏：主角是一艘明亮的蓝色飞船，拖动左右躲开红色陨石，收集黄色能量星";
+  const themed = applyExplicitPromptColors({ ...spec, theme: { ...spec.theme, playerColor: "#9b8cb2", hazardColor: "#a85c40", collectibleColor: "#c4a882" } }, askedFor);
+  assert.equal(themed.theme.playerColor, "#3b82f6", "a blue ship must come out blue");
+  assert.equal(themed.theme.hazardColor, "#ef4444", "red meteors must come out red");
+  assert.equal(themed.theme.collectibleColor, "#facc15", "yellow stars must come out yellow");
+  // An unrelated prompt leaves the generated palette alone.
+  const untouched = applyExplicitPromptColors(spec, "做一个安静的农场游戏");
+  assert.equal(untouched.theme.playerColor, spec.theme.playerColor);
+  assert.equal(untouched, spec, "no colour claim means no rewrite at all");
+  // A colour must bind to the actor it was written next to, not the whole prompt.
+  const crossed = applyExplicitPromptColors(spec, "红色的背景音乐很吵，主角是一艘蓝色飞船");
+  assert.equal(crossed.theme.playerColor, "#3b82f6");
 
   console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round, art review only speaks when it ran");
 }
