@@ -298,12 +298,24 @@ async function executeGameProductionJob(
      * A required slot that failed used to stay failed forever: the game shipped
      * serving 404 for its own protagonist, the runtime fell back to a primitive,
      * and the quality report blamed the runtime for "not using the artwork".
-     * Image generation is flaky enough that one narrow retry is worth it -- and
-     * it runs only for the slots that failed, so it costs nothing on a clean run.
+     * Image generation is flaky enough that one narrow retry is worth it.
+     *
+     * But only a flaky failure. Observed in production: every sprite slot failed
+     * with "未配置 GEMINI_API_KEY", and retrying spent another 75 seconds per
+     * slot to be told the same thing. A missing credential does not differ on a
+     * second attempt, so those slots are reported, not retried.
      */
-    if (missing.length) {
-      await heartbeatGenerationJob(job.id, workerId, { percent: 75, stage: "asset_generation", detail: `retrying ${missing.length} required art slot(s)` });
-      const retryDesign = { ...artRun.design, assets: artRun.design.assets.filter((slot) => missing.includes(slot.key)) };
+    const deterministicFailure = /未配置|not configured|missing .*key|invalid.*api[_ ]?key|401|403/i;
+    const retryable = missing.filter((key) => {
+      const failure = run.results.find((slot) => slot.key === key);
+      return !failure?.error || !deterministicFailure.test(failure.error);
+    });
+    if (missing.length && !retryable.length) {
+      console.error("[forge_art_retry_skipped]", { jobId: job.id, slots: missing.length, reason: "deterministic_failure" });
+    }
+    if (retryable.length) {
+      await heartbeatGenerationJob(job.id, workerId, { percent: 75, stage: "asset_generation", detail: `retrying ${retryable.length} required art slot(s)` });
+      const retryDesign = { ...artRun.design, assets: artRun.design.assets.filter((slot) => retryable.includes(slot.key)) };
       const retry = await runForgeAssetAgent(sourceProject.id, retryDesign, { budgetMs: PRODUCT.gameForge.artBudgetMs }).catch((error) => {
         console.error("[forge_art_retry_failed]", { jobId: job.id, reason: error instanceof Error ? error.message.slice(0, 120) : "unknown" });
         return null;
