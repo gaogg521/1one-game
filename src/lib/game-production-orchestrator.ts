@@ -95,6 +95,10 @@ export function buildGameProductionRun(input: {
     ...mechanicsContract.blockers,
     ...missingRealRoles.map((role) => `real_agent_missing:${role}`),
     ...(input.realAgentOutputs?.visualReview?.passed === true ? [] : ["visual_review_rejected", ...(input.realAgentOutputs?.visualReview?.blockers ?? [])]),
+    // What the real phone probe saw. These were recorded as evidence only, so
+    // nothing downstream could act on a game that ran but read badly on a
+    // device -- the exact class of defect players report.
+    ...(input.runtimeValidation?.evidence ?? []).filter((entry) => entry.startsWith("advisory:")),
   ];
   // These evaluators are advisory. A runnable model-produced game is always
   // delivered to playtest; player evidence, not a static gate, decides what

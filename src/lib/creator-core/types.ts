@@ -72,6 +72,12 @@ export const GamePreflightIterationJobPayloadSchema = z.object({
   productionRound: z.number().int().min(1).max(4),
   maxProductionRounds: z.number().int().min(3).max(5),
   blockers: z.array(z.string().min(1).max(160)).min(1).max(32),
+  /**
+   * "blocker_repair" reacts to a rejected candidate. "quality_polish" runs once
+   * against a build that already shipped, so it must not be treated as a
+   * runtime-only rebuild -- its findings are design-level.
+   */
+  mode: z.enum(["blocker_repair", "quality_polish"]).default("blocker_repair"),
   uiLocale: z.string().min(2).max(16).default("zh-Hans"),
 });
 

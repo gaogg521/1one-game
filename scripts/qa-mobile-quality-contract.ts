@@ -4,6 +4,7 @@ import { buildDesignSystemPrompt, normalizeDesign } from "@/lib/game-forge/desig
 import { buildModuleDesignSummary, buildModuleSystemPrompt } from "@/lib/game-forge/code-agent";
 import { evaluateAgenticVisualContract } from "@/lib/agentic/agentic-visual-contract";
 import { mergePatchedCoreSpec } from "@/lib/spec-patch";
+import { buildGameQualityPolishInstruction, selectGameQualityPolishFindings, shouldScheduleGameQualityPolish } from "@/lib/game-preflight-iteration";
 import { mockSpecFromPrompt } from "@/lib/mock-spec";
 import { coerceGameSpec } from "@/lib/normalize-spec";
 
@@ -131,7 +132,35 @@ function main() {
   assert.deepEqual(merged.production, withForge.production);
   assert.equal(mergePatchedCoreSpec(withForge, "not an object"), null);
 
-  console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime");
+  // 8. A playable-but-poor build must trigger exactly one background polish
+  // round. Before this, every quality finding died as evidence nobody read.
+  const observed = [
+    "visual_review_rejected",
+    "real_agent_missing:audio_agent",
+    "advisory:runtime_letterboxed",
+    "advisory:required_asset_missing:ship",
+    "runtime_sprite_actor_missing",
+    "vertical_slice_blocked",
+  ];
+  const findings = selectGameQualityPolishFindings(observed);
+  assert.deepEqual(findings.sort(), ["runtime_letterboxed", "runtime_sprite_actor_missing", "vertical_slice_blocked"], JSON.stringify(findings));
+  assert.equal(selectGameQualityPolishFindings(["visual_review_rejected", "real_agent_missing:audio_agent"]).length, 0, "noisy advisories must not burn a production round");
+
+  assert.equal(shouldScheduleGameQualityPolish({ productionRound: 1, maxProductionRounds: 3, findings }), true);
+  assert.equal(shouldScheduleGameQualityPolish({ productionRound: 1, maxProductionRounds: 3, findings: [] }), false, "a clean build is left alone");
+  // The polish job produces a round-2 build; polish must not fire again there,
+  // or a single game would regenerate itself forever.
+  assert.equal(shouldScheduleGameQualityPolish({ productionRound: 2, maxProductionRounds: 3, findings }), false, "polish is one round deep");
+  assert.equal(shouldScheduleGameQualityPolish({ productionRound: 3, maxProductionRounds: 5, findings }), false);
+
+  const polishInstruction = buildGameQualityPolishInstruction(findings);
+  assert.match(polishInstruction, /已经可以玩/, "polish must not read as a failure");
+  assert.match(polishInstruction, /g\.width \/ g\.height/);
+  assert.match(polishInstruction, /1\.5 秒无敌/);
+  assert.match(polishInstruction, /9%/);
+  assert.doesNotMatch(polishInstruction, /vertical_slice_blocked/, "raw codes must be translated into an actionable ask");
+
+  console.log("[OK] mobile quality contract: portrait framing, actor floor, first-minute envelope, forge asset use, patch preserves the built runtime, one bounded polish round");
 }
 
 main();

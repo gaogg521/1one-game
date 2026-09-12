@@ -55,7 +55,7 @@ import { patchGameSpecWithLlm } from "@/lib/spec-patch";
 import { mirrorGameToCreatorCore } from "@/lib/creator-core/game-bridge";
 import { parseStoredCreativeBrief } from "@/lib/project-creative-brief-db";
 import { isRefinementStubEnabled, refineSpecWithStub } from "@/lib/refinement-stub";
-import { buildGamePreflightRevisionInstruction, shouldScheduleGamePreflightIteration } from "@/lib/game-preflight-iteration";
+import { buildGamePreflightRevisionInstruction, buildGameQualityPolishInstruction, selectGameQualityPolishFindings, shouldScheduleGamePreflightIteration, shouldScheduleGameQualityPolish } from "@/lib/game-preflight-iteration";
 import type { GameArtDirection } from "@/lib/game-art-direction";
 
 async function executeGameAssetJob(
@@ -375,6 +375,38 @@ async function executeGameProductionJob(
       await tx.creativeRevision.update({ where: { id: job.creativeRevisionId!, status: "generating" }, data: { status: "ready", finalizedAt: new Date(), summary: "runtime verified · ready for observed playtest" } });
     });
     await reconcileGamePlaytestEvidenceForRevision({ projectId: payload.projectId, creativeRevisionId: job.creativeRevisionId }).catch(() => console.error("[game_playtest_reconcile_deferred]", { jobId: job.id }));
+    /*
+     * The build ships either way -- it is already marked ready above and the
+     * player can open it now. But a game that runs is not automatically a game
+     * worth playing, and every quality finding here used to die as evidence
+     * nobody consumed. Spend exactly one more round on the findings an agent
+     * can actually act on, in the background, without gating anything.
+     */
+    const polishFindings = selectGameQualityPolishFindings(run.candidate.advisories ?? []);
+    if (shouldScheduleGameQualityPolish({
+      productionRound: payload.productionRound,
+      maxProductionRounds: payload.maxProductionRounds,
+      findings: polishFindings,
+    })) {
+      await enqueueGenerationJob({
+        creativeProjectId: job.creativeProjectId,
+        creativeRevisionId: job.creativeRevisionId,
+        type: "game_preflight_iteration",
+        idempotencyKey: `game-quality-polish:${job.creativeRevisionId}`,
+        payload: {
+          projectId: payload.projectId,
+          ownerKey: payload.ownerKey,
+          sourceRevisionId: job.creativeRevisionId,
+          // The round it produces is productionRound + 1, and polish only fires
+          // at round 1, so this chain is exactly one round deep by construction.
+          productionRound: payload.productionRound,
+          maxProductionRounds: payload.maxProductionRounds,
+          blockers: polishFindings,
+          mode: "quality_polish",
+          uiLocale: payload.uiLocale,
+        },
+      }).catch((error) => console.error("[game_quality_polish_enqueue_failed]", { jobId: job.id, reason: error instanceof Error ? error.message : "unknown" }));
+    }
   } else {
     await markCreativeRevisionFailed(job.creativeRevisionId, `production candidate rejected · ${run.candidate.blockers.join(", ")}`);
     if (!run.candidate.blockers.some(blocker => blocker.includes("verification")) && shouldScheduleGamePreflightIteration({
@@ -421,10 +453,15 @@ async function executeGamePreflightIterationJob(
     select: { contentJson: true },
   });
   if (!sourceSpecArtifact?.contentJson) throw new Error("game_preflight_iteration_source_spec_missing");
-  const instruction = buildGamePreflightRevisionInstruction(payload);
-  await heartbeatGenerationJob(job.id, workerId, { percent: 12, stage: "design_agent_revision", detail: `round ${payload.productionRound + 1}/${payload.maxProductionRounds}` });
+  const isQualityPolish = payload.mode === "quality_polish";
+  const instruction = isQualityPolish
+    ? buildGameQualityPolishInstruction(payload.blockers)
+    : buildGamePreflightRevisionInstruction(payload);
+  await heartbeatGenerationJob(job.id, workerId, { percent: 12, stage: isQualityPolish ? "quality_polish_revision" : "design_agent_revision", detail: `round ${payload.productionRound + 1}/${payload.maxProductionRounds}` });
   const currentSpec = parseGameSpec(JSON.parse(sourceSpecArtifact.contentJson));
-  const runtimeRepairOnly = payload.blockers.every((blocker) =>
+  // A polish finding such as a letterboxed stage is a design change, not a
+  // rebuild of the same design, so it must go through the spec patch.
+  const runtimeRepairOnly = !isQualityPolish && payload.blockers.every((blocker) =>
     blocker.startsWith("runtime_") ||
     blocker.startsWith("browser_") ||
     blocker.startsWith("mechanic_missing:") ||
